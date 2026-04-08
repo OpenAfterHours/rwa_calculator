@@ -231,7 +231,7 @@ class ComparisonBundle:
 @dataclass(frozen=True)
 class TransitionalScheduleBundle:
     """Transitional floor schedule modelling (M3.3).
-    Models the year-by-year output floor from 50% (2027) to 72.5% (2032+)."""
+    Models the year-by-year output floor from 60% (2027) to 72.5% (2030+)."""
     timeline: pl.LazyFrame                         # Year-by-year floor impact summary
     yearly_results: dict[int, AggregatedResultBundle] = field(default_factory=dict)
     errors: list = field(default_factory=list)

@@ -382,7 +382,7 @@ contingents = pl.DataFrame({
 | Value | Description |
 |-------|-------------|
 | `cash` | Cash collateral (0% haircut) |
-| `gold` | Gold collateral (15% haircut) |
+| `gold` | Gold collateral (CRR 15% / B31 20% haircut) |
 | `bond` | Bond securities — haircut depends on `issuer_type`, `issuer_cqs`, and `residual_maturity_years` |
 | `equity` | Equity securities |
 | `real_estate` | Real estate — use `property_type` for residential/commercial classification |

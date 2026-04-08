@@ -156,6 +156,9 @@ class IRBCalculator:
 
         EL = PD × LGD × EAD
 
+        Emits IRB004/IRB005 warnings when PD/LGD columns are absent and
+        supervisory defaults (PD=1%, LGD=45%) are substituted.
+
         Args:
             data: CRM-adjusted exposures
             config: Calculation configuration
@@ -164,13 +167,46 @@ class IRBCalculator:
             LazyFrameResult with expected loss calculations
         """
         exposures = data.irb_exposures
+        errors: list[CalculationError] = []
 
-        # Ensure required columns
+        # Ensure required columns — emit warnings when absent
         schema = exposures.collect_schema()
         if "pd" not in schema.names():
             exposures = exposures.with_columns(pl.lit(0.01).alias("pd"))
+            errors.append(
+                CalculationError(
+                    code="IRB004",
+                    message=(
+                        "PD column absent from IRB exposures; defaulting to 1%. "
+                        "Expected loss figures may be unreliable. "
+                        "Ensure PD is computed upstream (IRB namespace prepare_columns)."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="CRR Art. 160 / PRA Art. 160",
+                    field_name="pd",
+                    expected_value="PD from internal model or supervisory floor",
+                    actual_value="default 0.01",
+                )
+            )
         if "lgd" not in schema.names():
             exposures = exposures.with_columns(pl.lit(0.45).alias("lgd"))
+            errors.append(
+                CalculationError(
+                    code="IRB005",
+                    message=(
+                        "LGD column absent from IRB exposures; defaulting to 45%. "
+                        "Expected loss figures may be unreliable. "
+                        "Ensure LGD is computed upstream (F-IRB supervisory or A-IRB own estimate)."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="CRR Art. 161 / PRA Art. 161",
+                    field_name="lgd",
+                    expected_value="LGD from supervisory table or own estimate",
+                    actual_value="default 0.45",
+                )
+            )
 
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
 
@@ -180,7 +216,7 @@ class IRBCalculator:
 
         return LazyFrameResult(
             frame=exposures.select("exposure_reference", "pd", "lgd", ead_col, "expected_loss"),
-            errors=[],
+            errors=errors,
         )
 
     def _run_irb_chain(

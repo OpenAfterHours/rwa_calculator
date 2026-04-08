@@ -5,7 +5,89 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.177] — 2026-04-08
+
+### Added
+- **COREP**: Reporting basis conditionality for output floor (P1.38(c)). `COREPGenerator` now accepts `output_floor_config: OutputFloorConfig` to gate floor-related COREP template content on entity-type applicability per Art. 92 para 2A:
+  - **OF 02.00 rows 0034-0036** (floor activated/multiplier/OF-ADJ) show 0.0 for exempt entities (international subsidiaries, ring-fenced bodies on individual basis, etc.)
+  - **OF 02.01** (output floor comparison) returns None for exempt entities — only applicable entities report the floor comparison
+  - **C 08.07 materiality columns 0160-0180** documented as consolidated-basis-only (Art. 150(1A)), threaded with `is_consolidated` flag for future population
+  - **COREPTemplateBundle** extended with `reporting_basis` and `institution_type` metadata fields
+  - **ResultExporterProtocol** and **ResultExporter** accept `output_floor_config` keyword parameter
+- **Tests**: 38 new tests in `tests/unit/test_corep_reporting_basis.py` across 7 test classes: COREPTemplateBundleMetadata (7), OF0201FloorApplicability (6), OF0200FloorIndicatorRows (7), C0807MaterialityColumns (4), BackwardCompatibility (3), EntityTypeCombinations (9 parametrized), ExporterProtocolCompliance (2). Total: 5,125 (was 5,087). Contract tests: 145.
+
+## [0.1.176] — 2026-04-08
+
+### Fixed
+- **Docs**: Documentation accuracy sweep correcting wrong regulatory values across 13 files (P4.5, P4.6, P4.22):
+  - **PD floors (P4.5)**: Retail mortgage Basel 3.1 PD floor corrected from 0.05% to **0.10%** (Art. 163(1)(b)) in 5 files. QRRE transactor Basel 3.1 PD floor corrected from 0.03% to **0.05%** (Art. 163(1)(c)) in 5 files. Affected: `api/configuration.md`, `user-guide/configuration.md`, `user-guide/exposure-classes/retail.md`, `data-model/regulatory-tables.md`.
+  - **LGD floors (P4.6)**: Corporate LGD floor code example corrected (RECEIVABLES 15%→10%, CRE 15%→10%, OTHER_PHYSICAL 20%→15%) in `user-guide/configuration.md`. Corporate `residential_real_estate` field corrected from 0.05 to **0.10** (Art. 161(5)) in `api/configuration.md` — was showing retail floor instead of corporate floor.
+  - **Output floor schedule (P4.22)**: BCBS 6-year schedule (50%/55%/60%/65%/70%/72.5%, 2027–2032) replaced with PRA 4-year schedule (**60%/65%/70%/72.5%**, 2027–2030) across 12 files. Affected: `plans/implementation-plan.md`, `api/engine.md`, `api/contracts.md`, `framework-comparison/reporting-differences.md`, `plans/prd.md`, `specifications/index.md`, `features/index.md`, `specifications/regulatory-compliance.md`, `framework-comparison/index.md`, `appendix/index.md`, `framework-comparison/impact-analysis.md`, `user-guide/configuration.md`.
+
+## [0.1.175] — 2026-04-08
+
+### Fixed
+- **CRM**: Decoupled `is_main_index` from `is_eligible_financial_collateral` for equity collateral haircuts (P6.21). Added `is_main_index` Boolean field to `COLLATERAL_SCHEMA`. When present, drives haircut lookup directly: `True` = main-index (CRR 15%, B31 20%), `False` = other-listed (CRR 25%, B31 30%). When absent, falls back to `is_eligible_financial_collateral` for backward compatibility. Previously all eligible equity was forced to the main-index haircut tier.
+
+### Added
+- **Tests**: 26 new tests in `tests/unit/crm/test_equity_main_index.py` across 7 test classes: schema validation, CRR/B31 haircut verification for main-index and other-listed, backward compatibility, precedence over eligibility flag, mixed collateral, and full pipeline end-to-end (other-listed EAD = 625k vs main-index EAD = 575k on 1M exposure with 500k equity collateral). Total: 5,087 (was 5,061).
+
+## [0.1.174] — 2026-04-08
+
+### Added
+- **Tests**: 36 new CRM acceptance tests in `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` across 13 test classes covering advanced CRM scenarios not tested by the basic D1-D6/G1-G3 groups: non-beneficial guarantee (guarantor RW = borrower RW), sovereign guarantee 0% substitution, CDS restructuring exclusion (40% haircut, Art. 216(1)/233(2)), CDS with restructuring (no haircut contrast), gold collateral (15% CRR haircut), equity collateral (main-index 15%), overcollateralisation (EAD=0), full CRM chain (provision+collateral+guarantee), mixed collateral types (cash+bond), SA provision EAD deduction, multiple provisions summed, provision+collateral combined, and structural baseline validation. CRR acceptance: 169 (was 133). Total: 5,061 (was 5,025). (P5.3)
+
+### Found
+- **CRM**: Equity collateral `is_eligible_financial_collateral` was overloaded as `is_main_index` proxy in haircut lookup (`haircuts.py:282-285`). Fixed in v0.1.175 (P6.21).
+
+## [0.1.173] — 2026-04-08
+
+### Fixed
+- **COREP**: OF 02.00 IRB sub-row splits — rows 0295-0297 (FSE/large, SME, non-SME corporates), 0355-0356 (retail RE SME/non-SME), 0382-0385 (corporate RE sub-splits), 0400/0410 (other retail SME/non-SME) now populated from pipeline data instead of hardcoded 0.0. Uses finer-grained aggregation keyed by (approach, exposure_class, is_sme, apply_fi_scalar, property_type).
+- **COREP**: OF 02.00 floor indicator rows 0035/0036 — floor_pct and of_adj now populated from `OutputFloorSummary` when provided, instead of hardcoded 0.0.
+- **COREP**: `_filter_re()` fallback chain — gracefully degrades from `materially_dependent_on_property` → `has_income_cover` → `is_income_producing` when pipeline columns vary. Null handling corrected: only fallback columns use `fill_null(False)`, preserving null-as-unclassified semantics for the primary column.
+- **Equity**: `_apply_transitional_floor()` now emits `equity_transitional_approach` and `equity_higher_risk` annotation columns for COREP OF 07.00 rows 0371-0374.
+- **Tests**: 24 new COREP tests across 4 classes (IRB sub-row splits, floor indicators, RE fallback, equity transitional columns). COREP tests: 687 (was 663). Total: 5,025 (was 5,001). (P2.5)
+
+## [0.1.170] — 2026-04-08
+
+### Added
+- **COREP**: C 09.01 / OF 09.01 — CR GB 1 geographical breakdown SA. One DataFrame per country code + TOTAL. CRR: 13 columns (0010-0090 incl. supporting factors), 23 rows. Basel 3.1: 10 columns (removes supporting factors), 29 rows (adds SL sub-rows 0071-0073, RE sub-rows 0091-0094, removes short-term row). Uses `cp_country_code` from counterparty schema. Template definitions, generator methods, class maps, framework selectors.
+- **COREP**: C 09.02 / OF 09.02 — CR GB 2 geographical breakdown IRB. One DataFrame per country code + TOTAL. CRR: 17 columns (incl. PD, LGD, EL, supporting factors), 16 rows (incl. equity). Basel 3.1: 15 columns (adds 0107 defaulted EV, removes supporting factors), 19 rows (adds corporate sub-rows, restructures retail RE, removes equity).
+- **Tests**: 80 new COREP tests for C 09.01/09.02 across 10 test classes. COREP tests: 635 (was 555). Total: 4,953 (was 4,873). (P2.3)
+
+## [0.1.169] — 2026-04-08
+
+### Added
+- **COREP**: C 08.04 / OF 08.04 — CR IRB RWEA flow statements. 1 column (RWEA) × 9 rows (opening, 7 movement drivers, closing) per IRB exposure class. Closing RWEA (row 0090) populated from pipeline; opening and drivers null (require prior-period data). Slotting excluded. CRR column names "after supporting factors"; Basel 3.1 removes supporting factors reference. Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`, `C08_04_COLUMN_REFS`, `get_c08_04_columns()`. Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`. `COREPTemplateBundle.c08_04` field (dict[str, pl.DataFrame]). Excel export with C 08.04 / OF 08.04 prefix.
+- **Tests**: 41 new COREP tests for C 08.04 across 6 test classes (TestC0804TemplateDefinitions: 13, TestC0804Generation: 5, TestC0804ClosingRWEA: 4, TestC0804NullDriverRows: 9, TestC0804B31Features: 3, TestC0804EdgeCases: 7). COREP tests: 555 (was 514). (P2.2)
+
+## [0.1.168] — 2026-04-08
+
+### Added
+- **Pillar III**: UKB CR9 — IRB PD backtesting per exposure class (Art. 452(h)). 8 columns × 17 PD buckets + total row. Basel 3.1 only. Separate F-IRB and A-IRB template sets. Uses `irb_pd_original` for bucket allocation (beginning-of-period proxy). Includes obligor count, default count, observed default rate, EAD-weighted average PD, arithmetic mean PD, historical annual default rate.
+- **Pillar III**: UKB CR9.1 — ECAI mapping PD backtesting (Art. 180(1)(f)). Template definitions only; generation deferred until pipeline provides firm-specific ECAI mapping data.
+- **Pillar III**: `Pillar3TemplateBundle.cr9` field added (dict of approach–class keyed DataFrames)
+- **Pillar III**: CR9 Excel export via `export_to_excel()` with human-readable sheet names (e.g., "UKB CR9 F-IRB Corp")
+- **Tests**: 44 new tests for CR9/CR9.1 across 7 test classes (definitions, generation, column values, PD allocation, edge cases, bundle integration, Excel export). Total: 4,832 (was 4,788). (P3.2)
+
 ## [Unreleased]
+
+### Added
+- **Pillar III**: CMS1 — Output floor comparison by risk type (Art. 456(1)(a)). 4 columns × 8 rows. Basel 3.1 only. Only credit risk row populated from pipeline.
+- **Pillar III**: CMS2 — Output floor comparison by asset class (Art. 456(1)(b)). 4 columns × 17 rows. Basel 3.1 only. Full asset class breakdown with FIRB/AIRB/slotting sub-rows.
+- **Pillar III**: `Pillar3TemplateBundle.cms1` and `.cms2` fields added
+- **Pillar III**: CMS1/CMS2 Excel export via `export_to_excel()` (UKB CMS1, UKB CMS2 sheets)
+- **Tests**: 47 new tests for CMS1/CMS2 (7 CMS1 definition, 13 CMS1 generation, 8 CMS2 definition, 16 CMS2 generation, 3 end-to-end). Total: 4,687 (was 4,640). (P3.4)
+
+### Added
+- **SA**: Implement Art. 110A due diligence risk weight override (Basel 3.1 only). Two new optional schema fields (`due_diligence_performed`, `due_diligence_override_rw`) allow firms to flag DD assessment status and override SA risk weights upward where due diligence reveals higher risk. Override uses max(calculated_rw, override_rw) — can only increase, never decrease. SA004 warning emitted when DD assessment status is absent under B31. 25 new unit tests (P1.49)
+
+### Fixed
+- **IRB**: `IRBCalculator.calculate_expected_loss()` now emits IRB004/IRB005 warnings when PD/LGD columns are absent, instead of silently defaulting to PD=1%/LGD=45% with no error reporting (P1.88)
+- **Spec**: Fix CCF spec incorrect F-IRB Basel 3.1 table values (75%→50%, 40%→10% per Art. 166C), add missing Table A1 rows (P4.13)
+- **Spec**: Fix key-differences.md stale implementation status — currency mismatch, SA specialised lending, provision-based defaulted treatment now correctly shown as implemented (P4.14)
+- **Spec**: Fix SA risk weights spec stale Basel 3.1 status markers for completed features
 
 ### Added
 - **CRM**: Implement Financial Collateral Simple Method (Art. 222) — `CRMCollateralMethod` enum (`COMPREHENSIVE`/`SIMPLE`) on `CalculationConfig`, new `engine/crm/simple_method.py` module with collateral RW derivation by type/CQS, Art. 222(4) zero-RW exceptions, multi-level allocation, 20% RW floor, blended secured/unsecured risk weight substitution in SA calculator, COREP row 0070 reporting. 49 new unit tests

@@ -43,7 +43,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, EquityApproach
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -98,7 +98,7 @@ class EquityCalculator:
 
         exposures = self._prepare_columns(exposures, config)
 
-        if approach == "irb_simple":
+        if approach == EquityApproach.IRB_SIMPLE:
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
@@ -171,7 +171,7 @@ class EquityCalculator:
             return EquityResultBundle(
                 results=empty_frame,
                 calculation_audit=empty_frame,
-                approach="sa",
+                approach=EquityApproach.SA,
                 errors=[],
             )
 
@@ -180,7 +180,7 @@ class EquityCalculator:
         exposures = self._prepare_columns(exposures, config)
         exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
 
-        if approach == "irb_simple":
+        if approach == EquityApproach.IRB_SIMPLE:
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
         else:
             exposures = self._apply_equity_weights_sa(exposures, config)
@@ -197,7 +197,7 @@ class EquityCalculator:
             errors=errors,
         )
 
-    def _determine_approach(self, config: CalculationConfig) -> str:
+    def _determine_approach(self, config: CalculationConfig) -> EquityApproach:
         """
         Determine SA vs IRB_SIMPLE based on config.
 
@@ -213,23 +213,23 @@ class EquityCalculator:
             config: Calculation configuration
 
         Returns:
-            "sa" for Article 133, "irb_simple" for Article 155
+            EquityApproach.SA for Article 133, EquityApproach.IRB_SIMPLE for Article 155
         """
         # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62)
         if config.is_basel_3_1:
-            return "sa"
+            return EquityApproach.SA
 
         # CRR: Check if firm has any IRB permissions beyond SA
         # If permissions dict is empty, it's SA-only
         if not config.irb_permissions.permissions:
-            return "sa"
+            return EquityApproach.SA
 
         # Check if any exposure class has FIRB or AIRB permission
         for _exposure_class, approaches in config.irb_permissions.permissions.items():
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
-                return "irb_simple"
+                return EquityApproach.IRB_SIMPLE
 
-        return "sa"
+        return EquityApproach.SA
 
     def _prepare_columns(
         self,
@@ -539,10 +539,13 @@ class EquityCalculator:
         Risk weights (in priority order per classification decision tree):
         1. Central bank: 0%  (Art. 133(6))
         2. Subordinated debt / non-equity own funds: 150%  (Art. 133(1))
-        3. Speculative / higher risk: 400%  (Art. 133(4))
-        4. Government-supported (legislative programme): 100%
-        5. CIU: approach-dependent  (Art. 132-132C)
-        6. All other standard equity: 250%  (Art. 133(3))
+        3. Speculative / higher risk: 400%  (Art. 133(4)/(5))
+        4. PE / VC (always higher risk): 400%  (Art. 133(5))
+        5. Government-supported (legislative programme): 100%
+        6. CIU: approach-dependent  (Art. 132-132C)
+           - CIU fallback listed: 250%  (Art. 132(2) + Art. 133(3))
+           - CIU fallback unlisted: 400%  (Art. 132(2) + Art. 133(5))
+        7. All other standard equity: 250%  (Art. 133(3))
         """
         return exposures.with_columns(
             [
@@ -555,16 +558,28 @@ class EquityCalculator:
                 .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
                 .when(pl.col("equity_type").str.to_lowercase() == "speculative")
                 .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
+                # Art. 133(5): PE/VC is always higher risk (400%)
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
+                .then(pl.lit(4.00))  # Art. 133(5): 400% PE/VC higher risk
+                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
+                .then(pl.lit(4.00))  # Art. 133(5): 400% PE/VC higher risk
                 .when(pl.col("is_government_supported") == True)  # noqa: E712
                 .then(pl.lit(1.00))  # Legislative programme: 100%
                 .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
                 .then(pl.lit(1.00))  # Legislative programme: 100%
                 # CIU: approach-aware risk weights (B31 Art. 132-132C)
+                # CIU fallback: listed = 250% (Art. 133(3)), unlisted = 400% (Art. 133(5))
+                .when(
+                    (pl.col("equity_type").str.to_lowercase() == "ciu")
+                    & (pl.col("ciu_approach") == "fallback")
+                    & (pl.col("is_exchange_traded").fill_null(False))
+                )
+                .then(pl.lit(2.50))  # B31 Art. 132(2)/133(3): 250% listed CIU fallback
                 .when(
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
                     & (pl.col("ciu_approach") == "fallback")
                 )
-                .then(pl.lit(2.50))  # B31 Art. 132(2): 250% fallback (was 150% CRR)
+                .then(pl.lit(4.00))  # B31 Art. 132(2)/133(5): 400% unlisted CIU fallback
                 .when(
                     (pl.col("equity_type").str.to_lowercase() == "ciu")
                     & (pl.col("ciu_approach") == "mandate_based")
@@ -654,17 +669,23 @@ class EquityCalculator:
             return exposures
 
         schema = exposures.collect_schema()
-        is_hr = (
+        is_hr_speculative = (
             pl.col("is_speculative").fill_null(False)
             if "is_speculative" in schema.names()
             else pl.lit(False)
         )
+        # PE/VC is always higher-risk under Art. 133(5)
+        eq_type_for_hr = pl.col("equity_type").str.to_lowercase()
+        is_hr_pe = (eq_type_for_hr == "private_equity") | (
+            eq_type_for_hr == "private_equity_diversified"
+        )
+        is_hr = is_hr_speculative | is_hr_pe
 
         # PRA Rule 4.3: transitional does NOT apply to legislative equity
         # (always 100%) or subordinated debt (always 150%).
         # CIU look-through/mandate-based RWs are derived from underlying assets
         # (Art. 132a/132b), not from Art. 133 equity weights — exclude from floor.
-        # CIU fallback (250%) is already >= transitional max, so exclusion is moot.
+        # CIU fallback (250%/400%) is already >= transitional max, so exclusion is moot.
         eq_type_lower = pl.col("equity_type").str.to_lowercase()
         is_ciu_non_fallback = (eq_type_lower == "ciu") & (
             (pl.col("ciu_approach") == "look_through") | (pl.col("ciu_approach") == "mandate_based")
@@ -686,8 +707,24 @@ class EquityCalculator:
             .otherwise(pl.lit(float(std_rw)))
         )
 
+        # Determine transitional approach type for COREP reporting (OF 07.00
+        # rows 0371-0374).  CRR firms with prior IRB equity permission use
+        # "irb_transitional"; all others use "sa_transitional".
+        approach_label = (
+            "irb_transitional"
+            if not config.is_basel_3_1
+            and any(
+                ApproachType.FIRB in a or ApproachType.AIRB in a
+                for a in config.irb_permissions.permissions.values()
+            )
+            else "sa_transitional"
+        )
+
         return exposures.with_columns(
             pl.max_horizontal(pl.col("risk_weight"), transitional_rw).alias("risk_weight"),
+            # Annotation columns for COREP OF 07.00 equity transitional rows
+            pl.lit(approach_label).alias("equity_transitional_approach"),
+            is_hr.alias("equity_higher_risk"),
         )
 
     def _calculate_rwa(
@@ -705,7 +742,7 @@ class EquityCalculator:
     def _build_audit(
         self,
         exposures: pl.LazyFrame,
-        approach: str,
+        approach: EquityApproach,
     ) -> pl.LazyFrame:
         """Build equity calculation audit trail."""
         schema = exposures.collect_schema()
@@ -730,7 +767,7 @@ class EquityCalculator:
 
         audit = exposures.select(select_cols)
 
-        article = "Art. 133 SA" if approach == "sa" else "Art. 155 IRB Simple"
+        article = "Art. 133 SA" if approach == EquityApproach.SA else "Art. 155 IRB Simple"
 
         audit = audit.with_columns(
             [

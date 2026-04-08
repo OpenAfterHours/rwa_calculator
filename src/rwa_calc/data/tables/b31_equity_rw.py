@@ -6,14 +6,18 @@ Under Basel 3.1, all equity exposures must use the Standardised Approach
 
 PRA PS1/26 Art. 133 SA equity risk weights:
 - Art. 133(3): Standard equity = 250%
-- Art. 133(4): Higher risk (speculative / venture capital) = 400%
-- Art. 133(5): Subordinated debt / non-equity own funds = 150%
+- Art. 133(4)/(5): Higher risk (speculative / PE / VC / unlisted <5yr) = 400%
+- Art. 133(1): Subordinated debt / non-equity own funds = 150%
 - Art. 133(6): Central bank equity = 0%
 - Legislative programme equity = 100%
 
 Key PRA deviation from BCBS:
     PRA does not use BCBS CQS-differentiated speculative tiers.
     All higher-risk equity gets a flat 400% under PRA.
+
+Note: PE/VC is always higher-risk under Art. 133(5) regardless of
+diversification status. The 190% diversified PE rate only applied
+under IRB Simple (Art. 155), which is removed under Basel 3.1.
 
 References:
     - PRA PS1/26 Art. 133(3)-(6)
@@ -40,8 +44,8 @@ B31_SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),  # Legislative programme: 100%
     EquityType.UNLISTED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.SPECULATIVE: Decimal("4.00"),  # Art. 133(4): 400% higher risk
-    EquityType.PRIVATE_EQUITY: Decimal("2.50"),  # Art. 133(3): 250% standard
-    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("2.50"),  # Art. 133(3): 250% standard
+    EquityType.PRIVATE_EQUITY: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
+    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
     EquityType.CIU: Decimal("2.50"),  # Art. 132(2): 250% fallback (B31)
     EquityType.OTHER: Decimal("2.50"),  # Art. 133(3): 250% standard
 }
@@ -70,7 +74,8 @@ def lookup_b31_equity_rw(
     Args:
         equity_type: Equity type as string or EquityType enum
         is_diversified: For private_equity, whether in diversified portfolio
-                        (both map to 250% under B31, unlike CRR IRB Simple)
+                        (both map to 400% under B31 as PE/VC is always higher-risk;
+                        the 190% diversified rate only applied under CRR IRB Simple)
 
     Returns:
         Risk weight as Decimal

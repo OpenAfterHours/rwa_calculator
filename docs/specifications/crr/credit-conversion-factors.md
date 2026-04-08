@@ -1,8 +1,8 @@
 # Credit Conversion Factors Specification
 
-CCF application for off-balance sheet exposures under SA and F-IRB.
+CCF application for off-balance sheet exposures under SA, F-IRB, and A-IRB.
 
-**Regulatory Reference:** CRR Articles 111, 166
+**Regulatory Reference:** CRR Articles 111, 166; PRA PS1/26 Art. 111 Table A1, Art. 166C, Art. 166D
 
 **Test Group:** CRR-D (partial)
 
@@ -33,15 +33,23 @@ CCF application for off-balance sheet exposures under SA and F-IRB.
 
 | Row | CCF Category | CRR | Basel 3.1 | Description |
 |-----|-------------|-----|-----------|-------------|
-| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances, credit derivatives |
-| 2 | Full Risk Commitment (FRC) | 100% | **100%** | Certain-drawdown commitments: factoring, repos, forward deposits/purchases, partly-paid shares |
-| 3 | Other OBS | — | **50%** | Other off-balance sheet items (NIFs, RUFs, UK resi mortgage commitments) |
-| 4 | Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
-| 5 | Other commitments | 0% | **40%** | All other commitments not in other categories |
+| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances, endorsements, credit derivatives, standby LCs serving as financial guarantees |
+| 2 | Certain Drawdown (FRC) | 100% | **100%** | Commitments with certain drawdown: factoring facilities, outright forward asset purchases, repos, forward deposits, partly-paid shares/securities |
+| 3 | Other OBS (MR) | 50% | **50%** | Other issued OBS items not of credit-substitute character: NIFs, RUFs, UK residential mortgage commitments |
+| 4 | Medium-Low Risk (MLR) | 20% | 20% | Short-term self-liquidating trade LCs arising from movement of goods |
+| 5 | Other Commitments (OC) | 50%/20%* | **40%** | All other commitments not falling into another category |
 | 6 | Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
 
-!!! note "B31 Maturity Distinction Removed"
-    CRR distinguished between commitments > 1 year (50% MR) and ≤ 1 year (20% MLR). Basel 3.1 removes this maturity-based distinction — the commitment type determines the CCF category, not its maturity.
+*\* Under CRR, "other commitments" were split by maturity: 50% for >1 year (MR), 20% for <=1 year (MLR). Basel 3.1 replaces this with a flat 40% regardless of maturity.*
+
+!!! warning "B31 Maturity Distinction Removed"
+    CRR distinguished between commitments > 1 year (50% MR) and ≤ 1 year (20% MLR). Basel 3.1 **removes** this maturity-based split entirely. The commitment type alone determines the CCF category, not its maturity. All commitments not classified in another row receive the 40% "Other Commitments" CCF (Row 5).
+
+!!! note "Row 2 — Certain Drawdown Commitments"
+    Row 2 captures commitments where drawdown is certain (e.g., factoring facilities, forward asset purchases, repos, partly-paid shares). These receive 100% CCF because the credit exposure will materialise with certainty. Under CRR these were classified as FRC in Annex I para 2; Basel 3.1 Table A1 Row 2 carries forward the same treatment.
+
+!!! note "Row 3 — Other OBS Items"
+    Row 3 captures off-balance sheet items issued by the firm that are not direct credit substitutes (Row 1) and not commitments. This includes note issuance facilities (NIFs), revolving underwriting facilities (RUFs), and UK residential mortgage commitments. Under CRR these were the 50% "Medium Risk" category; Basel 3.1 retains the 50% CCF.
 
 ### Commitment-to-Issue Lower-Of Rule (Art. 111(1)(c))
 
@@ -77,19 +85,22 @@ Where:
 
 Under Basel 3.1, F-IRB CCFs are aligned to **SA CCFs** (Art. 166C). The separate higher F-IRB CCFs from CRR are removed:
 
-| CCF Category | CRR F-IRB | Basel 3.1 F-IRB | Description |
-|-------------|-----------|-----------------|-------------|
-| Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances |
-| Full Risk Commitment (FRC) | 100% | **100%** | Certain-drawdown commitments: factoring, repos, forward deposits/purchases, partly-paid shares |
-| Medium Risk (MR) | 75% | **50%** | NIFs, RUFs, UK resi mortgage commitments |
-| Medium-Low Risk (MLR) | 20% | 20% | Trade-related LCs, performance bonds |
-| Other commitments | — | **40%** | All other commitments not in other categories |
-| Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
+| Row | CCF Category | CRR F-IRB | Basel 3.1 F-IRB | Description |
+|-----|-------------|-----------|-----------------|-------------|
+| 1 | Full Risk (FR) | 100% | 100% | Direct credit substitutes, guarantees, acceptances, endorsements |
+| 2 | Certain Drawdown (FRC) | 100% | **100%** | Commitments with certain drawdown: factoring, repos, forward purchases, partly-paid shares |
+| 3 | Other OBS (MR) | 75% | **50%** | Other issued OBS items: NIFs, RUFs, UK residential mortgage commitments |
+| 4 | Medium-Low Risk (MLR) | 75%/20%* | **20%** | Short-term self-liquidating trade LCs arising from movement of goods |
+| 5 | Other Commitments (OC) | 0% | **40%** | All other commitments not falling into another category |
+| 6 | Low Risk (LR) | 0% | **10%** | Unconditionally cancellable commitments |
 
-!!! warning "Critical Change"
-    The CRR F-IRB 75% medium risk CCF is replaced by SA-aligned values under Basel 3.1. F-IRB no longer has its own distinct CCF schedule — it uses SA Table A1 values per Art. 166C.
+*\* Under CRR F-IRB, MLR was 75% for the general case (Art. 166(8)), with a 20% exception for short-term trade LCs arising from goods movement (Art. 166(9)). Basel 3.1 blanks Art. 166(9) and applies the SA Table A1 MLR value of 20% uniformly.*
 
-**Note:** Art. 166(9) trade LC exception: PS1/26 blanks the trade LC exception text. The 20% MLR rate for trade-related LCs continues under the general SA Table A1 MLR category.
+!!! warning "Critical Change — F-IRB CCFs Aligned to SA"
+    Under Basel 3.1, Art. 166C states: *"the conversion factor for each type [of off-balance sheet item] shall be the same as the value set out in Article 111(1)"* (i.e., SA Table A1). F-IRB no longer has its own distinct CCF schedule. The CRR F-IRB 75% rate for MR and MLR commitments is eliminated. All six rows above match the SA Table A1 values exactly.
+
+!!! warning "Art. 166(9) Trade LC Exception — Removed"
+    CRR Art. 166(9) provided a 20% CCF exception for short-term trade LCs under F-IRB (overriding the general 75% rate). PRA PS1/26 **blanks Art. 166(9)** — the exception text is removed. Under Basel 3.1, the 20% MLR rate for trade-related LCs is retained, but it now comes from SA Table A1 Row 4 (applied uniformly via Art. 166C), not from a separate F-IRB exception.
 
 ## Basel 3.1 A-IRB Changes (PRA PS1/26 Art. 166D / CRE32.27)
 
@@ -152,10 +163,24 @@ This ensures that provisions reduce the nominal amount before the CCF multiplier
 
 ## Key Scenarios
 
+### CRR Scenarios
+
 | Scenario ID | Description |
 |-------------|-------------|
 | CRR-D | Full risk CCF (100%) on guarantee |
 | CRR-D | Medium risk undrawn commitment (50% SA, 75% F-IRB) |
-| CRR-D | Trade LC at 20% under F-IRB exception |
-| CRR-D | Unconditionally cancellable (0%) |
-| CRR-D | Commitment-to-issue: OC to issue FR → min(40%,100%) = 40% (Art. 111(1)(c)) |
+| CRR-D | Trade LC at 20% under F-IRB Art. 166(9) exception |
+| CRR-D | Unconditionally cancellable (0% SA, 0% F-IRB) |
+
+### Basel 3.1 Scenarios
+
+| Scenario ID | Description |
+|-------------|-------------|
+| B31-D | Full risk CCF (100%) on guarantee — unchanged from CRR |
+| B31-D | Other OBS (MR) at 50% — NIFs, RUFs (same as CRR SA; F-IRB aligned down from 75%) |
+| B31-D | Trade LC (MLR) at 20% — from Table A1 Row 4 (no separate F-IRB exception) |
+| B31-D | Other commitments (OC) at 40% — replaces CRR maturity-based 50%/20% split |
+| B31-D | Unconditionally cancellable (LR) at 10% — up from CRR 0% |
+| B31-D | F-IRB uses SA CCFs — Art. 166C alignment (no distinct F-IRB schedule) |
+| B31-D | Certain drawdown (FRC) at 100% — factoring, repos, forward purchases |
+| B31-D | Commitment-to-issue: OC to issue FR → min(40%,100%) = 40% (Art. 111(1)(c)) |

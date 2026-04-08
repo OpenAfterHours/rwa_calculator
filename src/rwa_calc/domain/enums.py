@@ -111,6 +111,9 @@ class ApproachType(StrEnum):
     SLOTTING = "slotting"
     """Slotting approach for specialised lending (CRE33)"""
 
+    EQUITY = "equity"
+    """Equity approach - routes to equity calculator or SA equity risk weights"""
+
 
 class CQS(IntEnum):
     """
@@ -451,16 +454,16 @@ class EquityType(StrEnum):
     """Speculative unlisted - 100% CRR SA (Art. 133(2)) / 400% B31 SA / 370% IRB Simple"""
 
     PRIVATE_EQUITY = "private_equity"
-    """Private equity holdings - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""
+    """Private equity holdings - 100% CRR SA (Art. 133(2)) / 400% B31 SA (Art. 133(5)) / 370% IRB Simple"""
 
     PRIVATE_EQUITY_DIVERSIFIED = "private_equity_diversified"
-    """PE in diversified portfolio - 100% CRR SA / 250% B31 SA / 190% IRB Simple"""
+    """PE in diversified portfolio - 100% CRR SA / 400% B31 SA (Art. 133(5)) / 190% IRB Simple"""
 
     SUBORDINATED_DEBT = "subordinated_debt"
     """Subordinated debt / non-equity own funds - 100% CRR SA / 150% B31 SA (Art. 133(1))"""
 
     CIU = "ciu"
-    """Collective investment undertakings - 150% CRR SA (Art. 132(2)) / 250% B31 SA"""
+    """Collective investment undertakings - 150% CRR SA (Art. 132(2)) / 250% listed or 400% unlisted B31 SA"""
 
     OTHER = "other"
     """Other equity exposures - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""

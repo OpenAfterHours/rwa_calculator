@@ -619,3 +619,130 @@ class TestValidateBundleValues:
         errors = validate_bundle_values(bundle, constraints=custom)
 
         assert errors == []
+
+    def test_valid_ciu_approach_accepted(self):
+        """Valid ciu_approach values should return no errors."""
+        bundle = self._make_bundle(
+            equity_exposures=pl.LazyFrame(
+                {"ciu_approach": ["look_through", "mandate_based", "fallback"]}
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert errors == []
+
+    def test_invalid_ciu_approach_detected(self):
+        """Invalid ciu_approach should produce error."""
+        bundle = self._make_bundle(
+            equity_exposures=pl.LazyFrame(
+                {"ciu_approach": ["look_through", "INVALID_APPROACH"]}
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert len(errors) == 1
+        assert errors[0].field_name is not None
+        assert "ciu_approach" in errors[0].field_name
+        assert "INVALID_APPROACH" in errors[0].message
+
+    def test_valid_adc_property_type_accepted(self):
+        """ADC property type should be accepted as a valid value."""
+        bundle = self._make_bundle(
+            collateral=pl.LazyFrame(
+                {"property_type": ["residential", "commercial", "adc"]}
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert errors == []
+
+    def test_invalid_property_type_detected(self):
+        """Invalid property_type should produce error."""
+        bundle = self._make_bundle(
+            collateral=pl.LazyFrame({"property_type": ["residential", "INVALID"]}),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert len(errors) == 1
+        assert errors[0].field_name is not None
+        assert "property_type" in errors[0].field_name
+        assert "INVALID" in errors[0].message
+
+    def test_valid_risk_type_accepted(self):
+        """Valid risk_type values should return no errors."""
+        bundle = self._make_bundle(
+            facilities=pl.LazyFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert errors == []
+
+    def test_invalid_risk_type_detected(self):
+        """Invalid risk_type should produce error."""
+        bundle = self._make_bundle(
+            facilities=pl.LazyFrame({"risk_type": ["FR", "BAD_TYPE"]}),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert len(errors) == 1
+        assert errors[0].field_name is not None
+        assert "risk_type" in errors[0].field_name
+        assert "BAD_TYPE" in errors[0].message
+
+    def test_valid_scra_grade_accepted(self):
+        """Valid scra_grade values should return no errors."""
+        bundle = self._make_bundle(
+            counterparties=pl.LazyFrame({"scra_grade": ["A", "A_ENHANCED", "B", "C"]}),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert errors == []
+
+    def test_invalid_scra_grade_detected(self):
+        """Invalid scra_grade should produce error."""
+        bundle = self._make_bundle(
+            counterparties=pl.LazyFrame({"scra_grade": ["A", "D"]}),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert len(errors) == 1
+        assert errors[0].field_name is not None
+        assert "scra_grade" in errors[0].field_name
+
+    def test_null_ciu_approach_skipped(self):
+        """Null ciu_approach values should not produce errors (nullable field)."""
+        bundle = self._make_bundle(
+            equity_exposures=pl.LazyFrame(
+                {"ciu_approach": pl.Series([None, "look_through"], dtype=pl.String)}
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert errors == []
+
+    def test_equity_exposures_multiple_constraints(self):
+        """Both equity_type and ciu_approach validated on equity_exposures."""
+        bundle = self._make_bundle(
+            equity_exposures=pl.LazyFrame(
+                {
+                    "equity_type": ["listed", "BAD_EQ"],
+                    "ciu_approach": ["look_through", "BAD_CIU"],
+                }
+            ),
+        )
+
+        errors = validate_bundle_values(bundle)
+
+        assert len(errors) == 2
+        fields = {e.field_name for e in errors}
+        assert any("equity_type" in f for f in fields if f)
+        assert any("ciu_approach" in f for f in fields if f)

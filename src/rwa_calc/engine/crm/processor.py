@@ -436,8 +436,10 @@ class CRMProcessor:
         # Step 4: Apply collateral (if available and valid)
         # Under Simple Method, the Comprehensive pipeline still runs for IRB LGD
         # adjustment. SA EAD reduction is undone in Step 4b.
+        collateral_applied = False
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
+            collateral_applied = True
         else:
             if collateral is not None:
                 errors.append(
@@ -550,7 +552,9 @@ class CRMProcessor:
             equity_exposures=data.equity_exposures,  # Pass through equity (no CRM)
             ciu_holdings=data.ciu_holdings,
             crm_audit=self._build_crm_audit(exposures),
-            collateral_allocation=None,  # Would be populated from collateral processing
+            collateral_allocation=(
+                self._build_collateral_allocation(exposures) if collateral_applied else None
+            ),
             crm_errors=errors,
         )
 
@@ -607,8 +611,10 @@ class CRMProcessor:
         else:
             exposures = exposures.with_columns(pl.lit(0.0).alias("on_bs_netting_amount"))
 
+        collateral_applied = False
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             exposures = self.apply_collateral(exposures, collateral, config)
+            collateral_applied = True
         else:
             if collateral is not None:
                 errors.append(
@@ -691,7 +697,9 @@ class CRMProcessor:
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
             crm_audit=None,  # Audit computed at collect time if needed
-            collateral_allocation=None,
+            collateral_allocation=(
+                self._build_collateral_allocation(exposures) if collateral_applied else None
+            ),
             crm_errors=errors,
         )
 
@@ -856,6 +864,7 @@ class CRMProcessor:
                 pl.col("ccf").alias("ccf_unguaranteed"),
                 pl.lit(0.0).alias("guarantee_ratio"),
                 pl.lit("").alias("guarantor_approach"),
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                 # Unfunded protection type (guarantee vs credit_derivative)
                 pl.lit(None).cast(pl.String).alias("protection_type"),
                 # FX mismatch haircut on guarantees (Art. 233(3-4))
@@ -908,6 +917,54 @@ class CRMProcessor:
             ]
         )
 
+    def _build_collateral_allocation(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Build per-exposure collateral allocation summary.
+
+        Extracts allocation details produced by the Art. 231 sequential
+        waterfall.  Each row shows how much EAD each collateral category
+        absorbed and the resulting LGD impact for a single exposure.
+
+        Only called when ``apply_collateral`` actually ran (i.e. valid
+        collateral data was present).  When no collateral exists the
+        bundle field remains ``None``.
+
+        References:
+            CRR Art. 230-231, PRA PS1/26 Art. 230-231
+        """
+        from rwa_calc.engine.crm.constants import CRM_ALLOC_COLUMNS
+
+        alloc_cols = list(CRM_ALLOC_COLUMNS.values())
+        return exposures.select(
+            [
+                pl.col("exposure_reference"),
+                pl.col("counterparty_reference"),
+                pl.col("approach"),
+                pl.col("ead_gross"),
+                # Per-type Art. 231 waterfall allocations (EAD absorbed)
+                *[pl.col(c) for c in alloc_cols],
+                # Totals and coverage
+                pl.col("total_collateral_for_lgd"),
+                pl.col("collateral_coverage_pct"),
+                # Financial collateral values (post-haircut, for SA EAD reduction)
+                pl.col("collateral_adjusted_value"),
+                pl.col("collateral_market_value"),
+                # Per-type collateral values (post-haircut)
+                pl.col("collateral_financial_value"),
+                pl.col("collateral_cash_value"),
+                pl.col("collateral_re_value"),
+                pl.col("collateral_receivables_value"),
+                pl.col("collateral_other_physical_value"),
+                # LGD impact
+                pl.col("lgd_secured"),
+                pl.col("lgd_unsecured"),
+                pl.col("lgd_post_crm"),
+                pl.col("ead_after_collateral"),
+            ]
+        )
+
     def _build_crm_audit(
         self,
         exposures: pl.LazyFrame,
@@ -943,6 +1000,7 @@ class CRMProcessor:
                 pl.col("ccf_unguaranteed"),
                 pl.col("guarantee_ratio"),
                 pl.col("guarantor_approach"),
+                pl.col("guarantor_rating_type"),
                 pl.col("protection_type"),
             ]
         )

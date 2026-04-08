@@ -157,12 +157,14 @@ breakdown, risk weight breakdown, memorandum items).
 - `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf` — Basel 3.1 reporting instructions
 
 ### Status
-- Generator: Needs rework — current implementation uses simplified column set and one-row-per-class structure. Covers C 07.00, C 08.01, C 08.02 only. Templates 08.03–09.02 are documented but not yet implemented in the generator.
-- Template definitions: Needs rework — column refs and row structure don't match actual EBA/PRA templates.
-- Excel export: Needs update to match per-exposure-class template structure.
+- Generator: Complete — all 10 COREP template families implemented: C/OF 02.00, 07.00, 08.01, 08.02, 08.03, 08.04, 08.05, 08.06, 08.07, 09.01, 09.02, and OF 02.01.
+- OF 02.01: Complete — `COREPGenerator._generate_of_02_01()` populates credit risk row (0010) and Total row (0080); other rows null (CCR/market/op risk out of scope).
+- Template definitions: Complete — all templates use correct 4-digit COREP column references and multi-section row structures matching EBA/PRA layouts.
+- Excel export: Complete — produces per-exposure-class sheets for all templates.
 - Integration: Done (`ResultExporter.export_to_corep()`, `CalculationResponse.to_corep()`)
-- Tests: Need rewrite to validate correct template structure.
-- Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 9 templates documented)
+- Tests: Complete — 700+ COREP tests across multiple test files covering all template families.
+- Known sub-gaps: C 08.01 col 0120 ("Of which: off balance sheet") still null; B31 CIU sub-rows 0284/0285 not populated; CCR rows null (out of scope).
+- Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 10 template families documented)
 
 ## Pillar III Disclosure Templates
 
@@ -180,7 +182,11 @@ COREP supervisory returns with publicly available credit risk data.
 - **CR7** — Credit derivatives effect on RWEA (Art. 453(j))
 - **CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
 - **CR8** — RWEA flow statements for IRB (Art. 438(h))
+- **CR9** — IRB PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
+- **CR9.1** — IRB PD back-testing for ECAI mapping (Art. 452(h), Art. 180(1)(f)) — Basel 3.1 only (template defined, generation requires ECAI data)
 - **CR10** — Slotting approach exposures (Art. 438(e))
+- **CMS1** — Output floor comparison by risk type (Art. 456(1)(a), Art. 2a) — Basel 3.1 only
+- **CMS2** — Output floor comparison by asset class (Art. 456(1)(b), Art. 2a) — Basel 3.1 only
 
 ### Reference Documents
 - CRR: `docs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF`, `crr-pillar3-irb-credit-risk-instructions.pdf`, `crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf`, `crr-pillar3-specialised-lending-instructions.pdf`
@@ -188,7 +194,7 @@ COREP supervisory returns with publicly available credit risk data.
 
 ### Status
 - Documentation: Done — see [Pillar III Disclosures](../features/pillar3-disclosures.md)
-- Code implementation: Not started
+- Code implementation: Done — 13 templates (OV1, CR4-CR10, CR9/CR9.1, CMS1/CMS2) in `reporting/pillar3/`
 
 ## Export
 

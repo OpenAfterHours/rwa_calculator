@@ -199,6 +199,14 @@ def apply_guarantees(
             .then(pl.lit("sa"))
             .otherwise(pl.lit(""))
             .alias("guarantor_approach"),
+            # Audit: track whether guarantor approach was derived from internal or
+            # external rating (spec output field per CRR Art. 153(3) / Art. 233A).
+            pl.when(pl.col("guarantor_internal_pd").is_not_null())
+            .then(pl.lit("internal"))
+            .when(pl.col("guarantor_cqs").is_not_null())
+            .then(pl.lit("external"))
+            .otherwise(pl.lit(None).cast(pl.String))
+            .alias("guarantor_rating_type"),
         ]
     )
 

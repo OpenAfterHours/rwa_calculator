@@ -42,6 +42,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.errors import (
     ERROR_QRRE_COLUMNS_MISSING,
+    ERROR_RETAIL_POOL_MGMT_MISSING,
     CalculationError,
     classification_warning,
 )
@@ -224,6 +225,29 @@ class ExposureClassifier:
                 )
             )
 
+        # Art. 123A(1)(b)(iii): Under Basel 3.1, non-SME retail qualification
+        # requires pool management attestation (is_managed_as_retail).  When the
+        # column is absent from the ORIGINAL counterparty data, condition 3 cannot
+        # be enforced and all non-SME retail exposures default to qualifying.
+        # Check the counterparty source (not schema_names, which always has
+        # the column after Phase 1 adds a null default).
+        cp_has_managed_flag = "is_managed_as_retail" in set(
+            data.counterparty_lookup.counterparties.collect_schema().names()
+        )
+        if config.is_basel_3_1 and not cp_has_managed_flag:
+            classification_errors.append(
+                classification_warning(
+                    code=ERROR_RETAIL_POOL_MGMT_MISSING,
+                    message=(
+                        "Art. 123A(1)(b)(iii) pool management condition cannot be "
+                        "enforced — 'is_managed_as_retail' column missing from "
+                        "counterparty data. Non-SME retail exposures will default "
+                        "to qualifying status (75% RW) without verification."
+                    ),
+                    regulatory_reference="PRA PS1/26 Art. 123A(1)(b)(iii)",
+                )
+            )
+
         # Step 2: Derive all independent flags (1 .with_columns)
         classified = self._derive_independent_flags(exposures, config, schema_names)
 
@@ -255,7 +279,9 @@ class ExposureClassifier:
         )
 
         # Step 6: Split by approach (filter/select — no depth added)
-        sa_exposures = classified.filter(pl.col("approach") == ApproachType.SA.value)
+        sa_exposures = classified.filter(
+            pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
+        )
         irb_exposures = classified.filter(
             pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
         )
@@ -309,8 +335,14 @@ class ExposureClassifier:
             pl.col("total_assets").alias("cp_total_assets"),
             pl.col("default_status").alias("cp_default_status"),
             pl.col("apply_fi_scalar").alias("cp_apply_fi_scalar"),
-            pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"),
         ]
+
+        # is_managed_as_retail — optional; used by Art. 123A(1)(b)(iii) condition 3
+        # and SME retail treatment (Art. 123).  When absent, defaults handled downstream.
+        if "is_managed_as_retail" in cp_col_names:
+            select_cols.append(
+                pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail")
+            )
 
         # Natural person flag — Art. 124H CRE counterparty type (optional in input data)
         if "is_natural_person" in cp_col_names:
@@ -354,11 +386,22 @@ class ExposureClassifier:
 
         cp_cols = counterparties.select(select_cols)
 
-        return exposures.join(
+        joined = exposures.join(
             cp_cols,
             on="counterparty_reference",
             how="left",
         )
+
+        # Ensure cp_is_managed_as_retail always exists — nullable Boolean.
+        # When absent from counterparty data, defaults to null (downstream
+        # fill_null(True) preserves backward-compatible qualifying behavior).
+        joined_schema = joined.collect_schema()
+        if "cp_is_managed_as_retail" not in joined_schema.names():
+            joined = joined.with_columns(
+                pl.lit(None).cast(pl.Boolean).alias("cp_is_managed_as_retail")
+            )
+
+        return joined
 
     # =========================================================================
     # Phase 2: Independent flags (1 .with_columns — 11 expressions)
@@ -381,6 +424,14 @@ class ExposureClassifier:
         Sets: exposure_class_sa, exposure_class_irb, exposure_class, is_mortgage,
               is_defaulted, exposure_class_for_sa, is_infrastructure,
               qualifies_as_retail, retail_threshold_exclusion_applied
+
+        Art. 123A enforcement (Basel 3.1 only):
+        - Art. 123A(1)(a): SME entities (revenue > 0 and < threshold) auto-qualify
+          for retail treatment without needing conditions 1/3.
+        - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
+          retail pool (cp_is_managed_as_retail=True). Null defaults to True for
+          backward compatibility.
+        - CRR: threshold check only (no Art. 123A).
         """
         max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
 
@@ -449,21 +500,10 @@ class ExposureClassifier:
                 .alias("exposure_class_for_sa"),
                 # --- Infrastructure flag (uses _pt_upper) ---
                 pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
-                # --- Retail threshold check ---
-                pl.when(pl.col("lending_group_adjusted_exposure") > max_retail_exposure)
-                .then(pl.lit(False))
-                .when(
-                    (
-                        pl.col("lending_group_adjusted_exposure")
-                        .cast(pl.Float64, strict=False)
-                        .abs()
-                        < 1e-10
-                    )
-                    & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
-                )
-                .then(pl.lit(False))
-                .otherwise(pl.lit(True))
-                .alias("qualifies_as_retail"),
+                # --- Retail threshold check + Art. 123A conditions (B31) ---
+                self._build_qualifies_as_retail_expr(
+                    config, schema_names, max_retail_exposure
+                ),
                 pl.when(pl.col("residential_collateral_value") > 0)
                 .then(pl.lit(True))
                 .otherwise(pl.lit(False))
@@ -894,12 +934,33 @@ class ExposureClassifier:
                 pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
             ).fill_null(False)
 
-            _b31_airb_blocked = _is_fse | _is_large_corp
+            # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
+            # Supplements full_irb_b31() org-wide restriction; needed when
+            # model_permissions grant AIRB for institutions.
+            _b31_institution_no_airb = (
+                pl.col("exposure_class") == ExposureClass.INSTITUTION.value
+            )
 
-            # Remove AIRB eligibility for B31-restricted exposures
-            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked
+            _b31_airb_blocked = _is_fse | _is_large_corp | _b31_institution_no_airb
+
+            # Art. 147A(1)(a): CGCB, PSE, MDB, RGLA → SA only (no IRB at all)
+            # Supplements full_irb_b31() org-wide restriction; ensures these
+            # classes use SA even when model_permissions attempt to grant IRB.
+            _b31_sa_only = pl.col("exposure_class").is_in(
+                [
+                    ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+                    ExposureClass.PSE.value,
+                    ExposureClass.MDB.value,
+                    ExposureClass.RGLA.value,
+                ]
+            )
+
+            # Remove AIRB eligibility for B31-restricted exposures and SA-only classes
+            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked & ~_b31_sa_only
             # Expand FIRB LGD clearing to include exposures whose AIRB was blocked
             firb_clear_expr = firb_clear_expr | (firb_permitted_expr & _b31_airb_blocked)
+            # Remove FIRB eligibility for SA-only classes
+            firb_permitted_expr = firb_permitted_expr & ~_b31_sa_only
 
         # --- Approach expression ---
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
@@ -935,6 +996,10 @@ class ExposureClassifier:
             # F-IRB (model or org-wide)
             .when(firb_permitted_expr)
             .then(pl.lit(ApproachType.FIRB.value))
+            # Equity exposure class → EQUITY approach (routes to SA equity RW logic;
+            # full equity treatment requires the dedicated equity_exposures table)
+            .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
+            .then(pl.lit(ApproachType.EQUITY.value))
             .otherwise(pl.lit(ApproachType.SA.value))
             .alias("approach")
         )
@@ -1009,6 +1074,73 @@ class ExposureClassifier:
         if "property_collateral_value" in schema_names:
             return (base | (pl.col("property_collateral_value") > 0)).alias("is_mortgage")
         return base.alias("is_mortgage")
+
+    @staticmethod
+    def _build_qualifies_as_retail_expr(
+        config: CalculationConfig,
+        schema_names: set[str],
+        max_retail_exposure: float,
+    ) -> pl.Expr:
+        """Build qualifies_as_retail expression with Art. 123A enforcement.
+
+        CRR: Threshold check only — aggregated exposure ≤ EUR 1m.
+
+        Basel 3.1 Art. 123A adds two-path qualifying criteria:
+        - Art. 123A(1)(a): SME entities (revenue > 0 and < GBP 44m) auto-qualify
+          without needing pool management attestation.
+        - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
+          retail pool (cp_is_managed_as_retail=True) to qualify.  Null values
+          default to True for backward compatibility.
+
+        References:
+            PRA PS1/26 Art. 123A(1)(a)-(b), CRR Art. 123
+        """
+        # Base conditions: lending group threshold check (CRR + B31)
+        threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
+        zero_lending_group_fail = (
+            pl.col("lending_group_adjusted_exposure")
+            .cast(pl.Float64, strict=False)
+            .abs()
+            < 1e-10
+        ) & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
+
+        if not config.is_basel_3_1:
+            # CRR: threshold check only
+            return (
+                pl.when(threshold_fail)
+                .then(pl.lit(False))
+                .when(zero_lending_group_fail)
+                .then(pl.lit(False))
+                .otherwise(pl.lit(True))
+                .alias("qualifies_as_retail")
+            )
+
+        # Basel 3.1: Art. 123A two-path qualifying criteria
+        # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
+        sme_threshold = 44_000_000.0
+
+        # Art. 123A(1)(a): SME auto-qualification — revenue > 0 and < threshold
+        is_sme_for_art_123a = (pl.col("cp_annual_revenue").fill_null(0.0) > 0) & (
+            pl.col("cp_annual_revenue") < sme_threshold
+        )
+
+        expr = (
+            pl.when(threshold_fail)
+            .then(pl.lit(False))
+            .when(zero_lending_group_fail)
+            .then(pl.lit(False))
+            # Art. 123A(1)(a): SMEs auto-qualify — no condition 3 needed
+            .when(is_sme_for_art_123a)
+            .then(pl.lit(True))
+        )
+
+        # Art. 123A(1)(b)(iii): Non-SME must be managed as retail pool
+        if "cp_is_managed_as_retail" in schema_names:
+            expr = expr.when(
+                pl.col("cp_is_managed_as_retail").fill_null(True) == False  # noqa: E712
+            ).then(pl.lit(False))
+
+        return expr.otherwise(pl.lit(True)).alias("qualifies_as_retail")
 
     @staticmethod
     def _build_has_property_expr(schema_names: set[str]) -> pl.Expr:

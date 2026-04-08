@@ -73,6 +73,53 @@ flowchart TD
 
 ---
 
+## OF 02.01 — Output Floor Comparison (Basel 3.1 only)
+
+OF 02.01 is a Basel 3.1-only template with no CRR equivalent. It provides a dedicated output
+floor comparison for internal-model firms, showing modelled versus standardised total risk
+exposure amounts side by side by risk type. The template supplies the raw comparison data
+consumed by OF 02.00 to apply the floor multiplier.
+
+**Reference:** PRA PS1/26 Art. 92 para 2A / 3A
+
+### Column Structure
+
+| Column | Label | Description |
+|--------|-------|-------------|
+| **0010** | Modelled RWA | RWEA using internal models (IRB, IMM, IMA, SEC-IRBA, etc.) |
+| **0020** | SA RWA | RWEA calculated under the Standardised Approach equivalent portfolio |
+| **0030** | U-TREA | Un-floored Total Risk Exposure Amount (Art. 92 para 3) |
+| **0040** | S-TREA | Standardised Total Risk Exposure Amount (Art. 92 para 3A) — calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA |
+
+### Row Structure
+
+| Row | Risk Type | Current Scope |
+|-----|-----------|---------------|
+| **0010** | Credit risk | Populated — SA and IRB credit RWA from pipeline output |
+| **0020** | Counterparty credit risk (CCR) | Null — CCR out of scope |
+| **0030** | CVA | Null — CVA out of scope |
+| **0040** | Securitisation | Null — securitisation out of scope |
+| **0050** | Market risk | Null — market risk out of scope |
+| **0060** | Operational risk | Null — operational risk out of scope |
+| **0070** | Other risk | Null — no other risk types in scope |
+| **0080** | Total | Populated — sum of all in-scope risk types (currently credit risk only) |
+
+!!! note "Scope"
+    Only the credit risk row (0010) and Total row (0080) are populated. All other rows
+    (CCR, CVA, securitisation, market risk, operational risk, other) are null because those
+    risk types are outside the current scope of the calculator.
+
+### Implementation
+
+| Item | Detail |
+|------|--------|
+| Generator method | `COREPGenerator._generate_of_02_01()` |
+| Bundle field | `COREPTemplateBundle.of_02_01` |
+| Framework | Basel 3.1 only — not generated for CRR frameworks |
+| Status | **Complete** |
+
+---
+
 ## C 07.00 / OF 07.00 — CR SA
 
 ### Column Structure
@@ -819,6 +866,22 @@ once per IRB exposure class.
     | **RWEA column** | "After supporting factors" | "RWEA" — supporting factors removed |
     | **Rows** | 9 rows (0010–0090) | Identical — no changes |
     | **Overall** | Virtually identical between frameworks |  |
+
+### Implementation Notes
+
+C 08.04 / OF 08.04 is implemented in v0.1.169. The pipeline provides current-period
+data only, so:
+
+- **Row 0090** (closing RWEA) is populated from `rwa_final` per exposure class
+- **Row 0010** (opening RWEA) and **rows 0020–0080** (movement drivers) are null —
+  they require prior-period comparison data that a single pipeline run cannot produce
+- Slotting exposures are excluded (C 08.06 covers specialised lending separately)
+- Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`
+- Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`
+- Bundle field: `COREPTemplateBundle.c08_04: dict[str, pl.DataFrame]`
+
+To populate the full flow statement, callers can supply prior-period RWEA externally
+and merge it with the generated template.
 
 ---
 

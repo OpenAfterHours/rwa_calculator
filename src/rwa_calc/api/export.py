@@ -26,6 +26,7 @@ import polars as pl
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import CalculationResponse
+    from rwa_calc.contracts.config import OutputFloorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,8 @@ class ResultExporter:
         self,
         response: CalculationResponse,
         output_path: Path,
+        *,
+        output_floor_config: OutputFloorConfig | None = None,
     ) -> ExportResult:
         """
         Export results as COREP regulatory reporting templates.
@@ -264,6 +267,9 @@ class ResultExporter:
         Args:
             response: CalculationResponse with cached results
             output_path: Path for the .xlsx output file
+            output_floor_config: Optional floor config for reporting
+                basis conditionality (Art. 92 para 2A). Gates floor
+                indicators and materiality columns on entity type.
 
         Returns:
             ExportResult with the written file path and row count
@@ -274,5 +280,19 @@ class ResultExporter:
         from rwa_calc.reporting.corep.generator import COREPGenerator
 
         generator = COREPGenerator()
+        bundle = generator.generate(
+            response, output_floor_config=output_floor_config,
+        )
+        return generator.export_to_excel(bundle, output_path)
+
+    def export_to_pillar3(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """Export results as Pillar III public disclosure templates."""
+        from rwa_calc.reporting.pillar3.generator import Pillar3Generator
+
+        generator = Pillar3Generator()
         bundle = generator.generate(response)
         return generator.export_to_excel(bundle, output_path)

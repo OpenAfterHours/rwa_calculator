@@ -43,12 +43,13 @@ RWA_final = max(RWA_IRB, 0.725 × RWA_SA_equivalent)
 
 | Year | Floor Percentage |
 |------|------------------|
-| 2027 | 50% |
-| 2028 | 55% |
-| 2029 | 60% |
-| 2030 | 65% |
-| 2031 | 70% |
-| 2032+ | 72.5% |
+| 2027 | 60% |
+| 2028 | 65% |
+| 2029 | 70% |
+| 2030+ | 72.5% |
+
+Note: The PRA compressed the BCBS 6-year phase-in to 4 years.
+Art. 92 para 5: transitional rates are permissive — firms may use 72.5% from day one.
 
 !!! warning "Impact"
     For exposures with significant IRB benefit (RWA_IRB < 72.5% × RWA_SA), this floor will increase capital requirements.
@@ -71,8 +72,8 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 | Corporate | 0.03% | **0.05%** |
 | Large Corporate | 0.03% | **0.05%** |
 | Bank | 0.03% | **0.05%** |
-| Retail Mortgage | 0.03% | **0.05%** |
-| Retail QRRE (transactor) | 0.03% | 0.03% |
+| Retail Mortgage | 0.03% | **0.10%** |
+| Retail QRRE (transactor) | 0.03% | **0.05%** |
 | Retail QRRE (revolver) | 0.03% | **0.10%** |
 | Retail Other | 0.03% | **0.05%** |
 
@@ -313,9 +314,9 @@ for equities and long-dated bonds. Maturity bands expand from 3 (CRR) to 5 (Base
 
 | Collateral Type | CRR Haircut | Basel 3.1 Haircut | Change |
 |-----------------|-------------|-------------------|--------|
-| Main index equities | 15% | **25%** | +10pp |
-| Other listed equities | 25% | **35%** | +10pp |
-| Gold | 15% | 15% | — |
+| Main index equities | 15% | **20%** | +5pp |
+| Other listed equities | 25% | **30%** | +5pp |
+| Gold | 15% | **20%** | +5pp |
 | Cash | 0% | 0% | — |
 | Govt bonds CQS 2-3 (10y+) | 6% | **12%** | +6pp |
 | Corp bonds CQS 1 (5-10y) | 8% | **10%** | +2pp |
@@ -415,13 +416,11 @@ gantt
     PRA PS1/26 Published     :done,    2024-09-01, 2024-09-30
     Industry Preparation     :active,  2025-01-01, 2026-12-31
     Basel 3.1 Go-Live        :         2027-01-01, 2027-01-01
-    section Output Floor
-    50% Floor                :         2027-01-01, 2027-12-31
-    55% Floor                :         2028-01-01, 2028-12-31
-    60% Floor                :         2029-01-01, 2029-12-31
-    65% Floor                :         2030-01-01, 2030-12-31
-    70% Floor                :         2031-01-01, 2031-12-31
-    72.5% Floor (Final)      :         2032-01-01, 2032-12-31
+    section Output Floor (PRA 4-year)
+    60% Floor                :         2027-01-01, 2027-12-31
+    65% Floor                :         2028-01-01, 2028-12-31
+    70% Floor                :         2029-01-01, 2029-12-31
+    72.5% Floor (Final)      :         2030-01-01, 2030-12-31
 ```
 
 ## Regulatory References

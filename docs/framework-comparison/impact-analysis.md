@@ -138,7 +138,7 @@ The final `cumulative_rwa` equals the total Basel 3.1 RWA.
 
 ## Transitional Floor Schedule (M3.3)
 
-`TransitionalScheduleRunner` models the output floor phase-in from 2027 to 2032 by running
+`TransitionalScheduleRunner` models the output floor phase-in from 2027 to 2030 by running
 the Basel 3.1 pipeline at each transitional reporting date.
 
 ### PRA Output Floor Phase-In Schedule

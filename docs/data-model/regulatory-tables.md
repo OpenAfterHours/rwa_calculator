@@ -192,9 +192,9 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 | Government CQS 2-3 | 1% | 3% | 4% | 6% | 12% |
 | Corporate CQS 1-2 | 1% | 4% | 6% | 10% | 12% |
 | Corporate CQS 3 | 2% | 6% | 8% | 15% | 15% |
-| Equity (main index) | **25%** | — | — | — | — |
-| Equity (other) | **35%** | — | — | — | — |
-| Gold | 15% | — | — | — | — |
+| Equity (main index) | **20%** | — | — | — | — |
+| Equity (other) | **30%** | — | — | — | — |
+| Gold | **20%** | — | — | — | — |
 
 ### Non-Financial Collateral Haircuts
 
@@ -331,8 +331,8 @@ Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
 | Institution | 0.03% | 0.05% |
-| Retail Mortgage | 0.03% | 0.05% |
-| Retail QRRE (transactor) | 0.03% | 0.03% |
+| Retail Mortgage | 0.03% | 0.10% |
+| Retail QRRE (transactor) | 0.03% | 0.05% |
 | Retail QRRE (revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
 

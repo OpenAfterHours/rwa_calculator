@@ -103,6 +103,8 @@ LOAN_SCHEMA = {
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
     "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
+    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
+    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -129,6 +131,8 @@ CONTINGENTS_SCHEMA = {
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
+    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
+    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
 }
 
 COUNTERPARTY_SCHEMA = {
@@ -211,6 +215,8 @@ COLLATERAL_SCHEMA = {
     # Eligibility flags
     "is_eligible_financial_collateral": pl.Boolean,  # Meets SA eligibility (CRR Art 197, CRE22.40)
     "is_eligible_irb_collateral": pl.Boolean,  # Meets IRB eligibility - wider pool (CRR Art 199)
+    # Equity index membership (Art. 224 Table 3/4)
+    "is_main_index": pl.Boolean,  # True = main-index equity (CRR 15%, B31 20%); False = other listed (CRR 25%, B31 30%)
     # Valuation requirements (CRE22.75-78)
     "valuation_date": pl.Date,  # Date of last valuation
     "valuation_type": pl.String,  # market, indexed, independent - RE must be independent
@@ -496,7 +502,7 @@ VALID_COLLATERAL_TYPES = {
     "credit_linked_note",
 }
 
-VALID_PROPERTY_TYPES = {"residential", "commercial"}
+VALID_PROPERTY_TYPES = {"residential", "commercial", "adc"}
 
 VALID_ISSUER_TYPES = {"sovereign", "pse", "corporate", "securitisation"}
 
@@ -546,6 +552,8 @@ VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
 VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
 
+VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
+
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
@@ -588,6 +596,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "equity_exposures": {
         "equity_type": VALID_EQUITY_TYPES,
+        "ciu_approach": VALID_CIU_APPROACHES,
     },
     "guarantees": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,

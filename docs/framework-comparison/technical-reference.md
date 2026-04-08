@@ -24,14 +24,16 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 
 ## Differentiated PD Floors (Basel 3.1)
 
-| Exposure Class | PD Floor |
-|---------------|----------|
-| Corporate | 0.05% |
-| Corporate SME | 0.05% |
-| Retail Mortgage | 0.05% |
-| Retail Other | 0.05% |
-| QRRE (Transactors) | 0.03% |
-| QRRE (Revolvers) | 0.10% |
+PRA PS1/26 Art. 163(1):
+
+| Exposure Class | PD Floor | Reference |
+|---------------|----------|-----------|
+| Corporate | 0.05% | Art. 160(1) |
+| Corporate SME | 0.05% | Art. 160(1) |
+| Retail Mortgage | 0.10% | Art. 163(1)(b) |
+| Retail Other | 0.05% | Art. 163(1)(c) |
+| QRRE (Transactors) | 0.05% | Art. 163(1)(c) |
+| QRRE (Revolvers) | 0.10% | Art. 163(1)(a) |
 
 ## A-IRB LGD Floors (Basel 3.1)
 
@@ -66,16 +68,19 @@ The output floor ensures IRB RWA cannot fall below a percentage of what the SA w
 RWA_final = max(RWA_IRB, floor_percentage x RWA_SA)
 ```
 
-### Transitional Schedule
+### Transitional Schedule (PRA PS1/26 Art. 92 para 5)
+
+The PRA compressed the BCBS 6-year phase-in to a 4-year schedule:
 
 | Year | Floor Percentage |
 |------|-----------------|
-| 2027 | 50.0% |
-| 2028 | 55.0% |
-| 2029 | 60.0% |
-| 2030 | 65.0% |
-| 2031 | 70.0% |
-| 2032+ | 72.5% |
+| 2027 | 60.0% |
+| 2028 | 65.0% |
+| 2029 | 70.0% |
+| 2030+ | 72.5% |
+
+Note: Art. 92 para 5 says institutions "may apply" these transitional rates — they are
+permissive. Firms can voluntarily use 72.5% from day one.
 
 ### Output Floor Adjustment (OF-ADJ)
 
@@ -115,15 +120,17 @@ basis.
 
 ### Basel 3.1 Haircuts (5 maturity bands)
 
+PRA PS1/26 Art. 224 Table 3 (10-day holding period):
+
 | Collateral Type | 0-1y | 1-3y | 3-5y | 5-10y | 10y+ |
 |-----------------|------|------|------|-------|------|
 | Govt bonds CQS 1 | 0.5% | 2% | 2% | 4% | 4% |
 | Govt bonds CQS 2-3 | 1% | 3% | 4% | 6% | **12%** |
 | Corp bonds CQS 1 | 1% | 4% | 6% | **10%** | **12%** |
 | Corp bonds CQS 2-3 | 2% | 6% | 8% | **15%** | **15%** |
-| Main index equities | **25%** | — | — | — | — |
-| Other equities | **35%** | — | — | — | — |
-| Gold | 15% | — | — | — | — |
+| Main index equities | **20%** | — | — | — | — |
+| Other equities | **30%** | — | — | — | — |
+| Gold | **20%** | — | — | — | — |
 | Cash | 0% | — | — | — | — |
 
 Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22.54).

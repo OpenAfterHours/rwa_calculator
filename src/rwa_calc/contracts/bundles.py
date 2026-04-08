@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from rwa_calc.domain.enums import EquityApproach
+
 if TYPE_CHECKING:
     import polars as pl
 
@@ -270,13 +272,13 @@ class EquityResultBundle:
     Attributes:
         results: Equity calculation results with risk weights and RWA
         calculation_audit: Detailed calculation breakdown
-        approach: The approach used ("sa" or "irb_simple")
+        approach: The equity approach used (EquityApproach.SA or EquityApproach.IRB_SIMPLE)
         errors: Any errors during equity calculation
     """
 
     results: pl.LazyFrame
     calculation_audit: pl.LazyFrame | None = None
-    approach: str = "sa"
+    approach: EquityApproach = EquityApproach.SA
     errors: list[CalculationError] = field(default_factory=list)
 
 

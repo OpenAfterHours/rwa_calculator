@@ -42,6 +42,8 @@ flowchart TD
     IRB --> CR7["<b>CR7</b><br/>Credit Derivatives Effect"]
     IRB --> CR7A["<b>CR7-A</b><br/>CRM Technique Extent"]
     IRB --> CR8["<b>CR8</b><br/>RWEA Flow Statements"]
+    IRB --> CR9["<b>CR9</b><br/>PD Back-Testing"]
+    IRB --> CR9_1["<b>CR9.1</b><br/>PD Back-Testing (ECAI)"]
 
     P --> SL["Slotting"]
     SL --> CR10["<b>CR10</b><br/>Slotting Exposures"]
@@ -54,6 +56,8 @@ flowchart TD
     style CR7 fill:#e3f2fd,stroke:#1e88e5
     style CR7A fill:#e3f2fd,stroke:#1e88e5
     style CR8 fill:#e3f2fd,stroke:#1e88e5
+    style CR9 fill:#e3f2fd,stroke:#1e88e5
+    style CR9_1 fill:#e3f2fd,stroke:#1e88e5
     style CR10 fill:#f3e5f5,stroke:#8e24aa
 ```
 
@@ -67,6 +71,8 @@ flowchart TD
 | **CR7** | UK CR7 | UKB CR7 | Credit derivatives effect on RWEA | Fixed | Art. 453(j) |
 | **CR7-A** | UK CR7-A | UKB CR7-A | Extent of CRM techniques (IRB) | Fixed | Art. 453(g) |
 | **CR8** | UK CR8 | UKB CR8 | RWEA flow statements (IRB) | Fixed | Art. 438(h) |
+| **CR9** | --- | UKB CR9 | IRB PD back-testing per exposure class | Fixed | Art. 452(h) |
+| **CR9.1** | --- | UKB CR9.1 | IRB PD back-testing for ECAI mapping | Fixed | Art. 452(h), Art. 180(1)(f) |
 | **CR10** | UK CR10 | UKB CR10 | Slotting approach exposures | Fixed | Art. 438(e) |
 
 ---
@@ -561,6 +567,98 @@ Basel 3.1 RWEAs in rows 1 and 9 no longer include supporting factor adjustments
 
 ---
 
+## CR9 — IRB PD Back-Testing per Exposure Class
+
+CR9 is a **mandatory Basel 3.1 disclosure** (Art. 452(h)) with no CRR equivalent. It provides
+PD back-testing data per exposure class, showing how well the institution's PD estimates
+predicted actual defaults. Separate templates are disclosed for F-IRB and A-IRB approaches,
+with one template per exposure class within each approach.
+
+### Column Structure
+
+| Col | Column | Description |
+|-----|--------|-------------|
+| a | Exposure class | AIRB or FIRB exposure class label |
+| b | PD range | Fixed PD range (same 17 buckets as CR6). Allocation based on PD at **beginning of disclosure period** |
+| c | Number of obligors at end of previous year | Legal entities separately rated at end of previous year |
+| d | Of which: defaulted during the year | Subset of col c defaulted per Art. 178. Each defaulted obligor counted only once |
+| e | Observed average default rate (%) | Arithmetic average of one-year default rates (col d / col c) |
+| f | Exposure-weighted average PD (%) | Same as CR6 col f — post-input-floor PDs (Art. 160(1), 163(1)) |
+| g | Average PD at disclosure date (%) | Arithmetic average PD of obligors, obligor-weighted (post input floors) |
+| h | Average historical annual default rate (%) | Simple average of annual default rates over the 5 most recent years |
+
+### Row Structure — Exposure Class Breakdown
+
+=== "Basel 3.1 (UKB CR9) — A-IRB"
+
+    Separate template per exposure class:
+
+    1. **Corporates**: specialised lending, other general corporates (SME/non-SME)
+    2. **Retail**: secured by residential immovable property (SME/non-SME),
+       secured by commercial immovable property (SME/non-SME),
+       qualifying revolving, other (SME/non-SME)
+    3. **Total**
+
+=== "Basel 3.1 (UKB CR9) — F-IRB"
+
+    Separate template per exposure class:
+
+    1. **Institutions**
+    2. **Corporates**: specialised lending (including slotting),
+       financial corporates and large corporates,
+       other general corporates (SME/non-SME)
+    3. **Total**
+
+### Key Differences from CR6
+
+- **PD allocation**: CR9 uses PD at the **beginning of the disclosure period**,
+  while CR6 uses the **pre-input-floor** PD. The pipeline approximates
+  beginning-of-period PD with `irb_pd_original` (pre-floor model output).
+- **Back-testing focus**: CR9 is about model validation (predicted vs actual defaults),
+  not risk parameter disclosure.
+- **Historical data**: Col h requires a 5-year lookback of annual default rates.
+  When historical data is absent, the current-period observed rate is used as a
+  single-period approximation.
+
+### Known Approximations
+
+- Beginning-of-period PD (col b allocation) approximated by `irb_pd_original`
+- Historical annual default rate (col h) falls back to current-period observed rate
+- Prior-year obligor count (col c) falls back to current-period count
+
+### Reference Documents
+
+- Basel 3.1: `docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf` (paras 12-15)
+
+---
+
+## CR9.1 — IRB PD Back-Testing for ECAI Mapping
+
+CR9.1 is supplementary to CR9, required only when an institution uses Art. 180(1)(f)
+of the Credit Risk: IRB Part for PD estimation based on ECAI mappings. **Basel 3.1 only**.
+
+### Structure
+
+Same as CR9 with the following exceptions:
+
+- **Col b**: PD ranges based on the firm's **internal grades** mapped to the ECAI scale
+  (variable-width, not the fixed 17-bucket structure)
+- **Additional columns**: One column per ECAI considered, showing the external rating
+  to which internal PD ranges are mapped
+
+### Implementation Status
+
+CR9.1 template definitions are in place but generation requires ECAI mapping data
+not currently available in the pipeline. The template will return no data until
+the pipeline provides firm-defined PD range to internal grade mapping and ECAI
+names with their rating scale mappings.
+
+### Reference Documents
+
+- Basel 3.1: `docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf` (para 15)
+
+---
+
 ## CR10 — Slotting Approach Exposures
 
 CR10 discloses specialised lending exposures under the slotting approach (and, under
@@ -632,6 +730,96 @@ CRR only, equity exposures under the simple risk-weighted approach).
 
 - CRR: `docs/assets/crr-pillar3-specialised-lending-instructions.pdf` (Annex XXIV)
 - Basel 3.1: `docs/assets/ps1-26-annex-xxiv-credit-risk-irb-disclosure-instructions.pdf`
+
+---
+
+## UKB CMS1 — Output Floor Comparison by Risk Type (Art. 456(1)(a))
+
+Basel 3.1 only — no CRR equivalent. Institutions subject to the output floor must disclose a
+comparison between full standardised RWA and modelled RWA by risk type.
+
+**Regulatory basis:** PRA PS1/26 Art. 456(1)(a), Art. 2a(1)
+
+### Column Structure
+
+| Col | Title |
+|-----|-------|
+| a | RWA for modelled approaches |
+| b | RWA for portfolios where standardised approaches are used |
+| c | Total actual RWA |
+| d | RWA calculated using full standardised approach |
+
+### Row Structure
+
+| Row | Description |
+|-----|-------------|
+| 0010 | Credit risk (excluding CCR) |
+| 0020 | Counterparty credit risk |
+| 0030 | Credit valuation adjustment |
+| 0040 | Securitisation exposures in the banking book |
+| 0050 | Market risk |
+| 0060 | Operational risk |
+| 0070 | Residual RWA |
+| 0080 | Total |
+
+### Implementation Notes
+
+- Only row 0010 (credit risk) and 0080 (total) are populated from the pipeline
+- Rows 0020–0070 (CCR, CVA, securitisation, market risk, op risk, residual) are null — require
+  data beyond credit risk scope
+- Col a: RWA from IRB + slotting exposures (modelled approaches)
+- Col b: RWA from SA-only portfolios
+- Col c: Sum of cols a and b
+- Col d: sa_rwa for all exposures (full SA recalculation)
+
+---
+
+## UKB CMS2 — Output Floor Comparison by Asset Class (Art. 456(1)(b))
+
+Basel 3.1 only — no CRR equivalent. Breaks down the credit risk comparison at asset class level.
+
+**Regulatory basis:** PRA PS1/26 Art. 456(1)(b), Art. 2a(2)
+
+### Column Structure
+
+| Col | Title |
+|-----|-------|
+| a | RWA for modelled approaches (IRB incl. slotting) |
+| b | RWA for column (a) re-computed using SA |
+| c | Total actual RWA |
+| d | RWA calculated using full standardised approach |
+
+### Row Structure
+
+| Row | Description |
+|-----|-------------|
+| 0010 | Sovereign |
+| 0011 | Of which: MDB/PSE in SA |
+| 0020 | Institutions |
+| 0030 | Subordinated debt, equity and other own funds |
+| 0040 | Corporates |
+| 0041 | Of which are FIRB |
+| 0042 | Of which are AIRB |
+| 0043 | Of which: specialised lending |
+| 0044 | Of which: IPRE and HVCRE |
+| 0045 | Of which: purchased receivables |
+| 0050 | Retail |
+| 0051 | Of which: qualifying revolving retail |
+| 0052 | Of which: other retail |
+| 0053 | Of which: retail secured by residential immovable property |
+| 0054 | Of which: purchased receivables |
+| 0060 | Others (non-credit obligation assets) |
+| 0070 | Total |
+
+### Implementation Notes
+
+- Col a: IRB + slotting RWA per exposure class
+- Col b: sa_rwa for modelled exposures (SA-equivalent recalculation)
+- Col c: Modelled RWA + SA portfolio RWA per class
+- Col d: sa_rwa for all exposures in each class
+- Sub-rows 0041/0042 filter by approach (F-IRB/A-IRB within corporates)
+- Sub-rows 0044, 0045, 0054 are null (require pipeline data not yet available)
+- Excludes CCR, CVA, and securitisation exposures
 
 ---
 

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
         RawDataBundle,
         ResolvedHierarchyBundle,
     )
-    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
     from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
 
 
@@ -645,7 +645,8 @@ class ResultExporterProtocol(Protocol):
 
     Why: Firms need calculation results in formats consumable by
     downstream systems — Parquet for analytics pipelines, CSV for
-    ad-hoc analysis, Excel for stakeholder reporting.
+    ad-hoc analysis, Excel for stakeholder reporting, and COREP
+    templates for quarterly regulatory submissions to the PRA.
     """
 
     def export_to_parquet(
@@ -689,6 +690,70 @@ class ResultExporterProtocol(Protocol):
     ) -> ExportResult:
         """
         Export results to a multi-sheet Excel workbook.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+        """
+        ...
+
+    def export_to_corep(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+        *,
+        output_floor_config: OutputFloorConfig | None = None,
+    ) -> ExportResult:
+        """
+        Export results as COREP regulatory reporting templates.
+
+        Generates C 07.00 (SA credit risk), C 08.01 (IRB totals),
+        and C 08.02 (IRB PD grade breakdown) in a multi-sheet Excel
+        workbook following EBA/PRA COREP template structure.
+
+        Why: CRR firms must submit quarterly COREP returns to the PRA.
+        This reshapes the calculator's exposure-level results into the
+        fixed-format regulatory templates (Regulation (EU) 2021/451).
+
+        References:
+            - CRR Art. 99: COREP reporting obligation
+            - PRA PS1/26: Basel 3.1 OF-variant templates
+            - PRA PS1/26 Art. 92 para 2A: entity-type floor applicability
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+            output_floor_config: Optional floor config for reporting
+                basis conditionality. Gates floor indicators and
+                materiality columns on entity type and reporting basis.
+
+        Returns:
+            ExportResult with the written file path and row count
+        """
+        ...
+
+    def export_to_pillar3(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """
+        Export results as Pillar III public disclosure templates.
+
+        Generates 9 quantitative credit risk templates (OV1, CR4, CR5,
+        CR6, CR6-A, CR7, CR7-A, CR8, CR10) in a multi-sheet Excel
+        workbook following CRR Part 8 / Disclosure (CRR) Part structure.
+
+        Why: CRR firms must publish Pillar III disclosures for market
+        transparency. CRR templates use the UK prefix; Basel 3.1
+        templates use UKB prefix.
+
+        References:
+            - CRR Part 8 (Art. 438, 444, 452, 453)
+            - PRA PS1/26 Disclosure (CRR) Part
 
         Args:
             response: CalculationResponse with cached results

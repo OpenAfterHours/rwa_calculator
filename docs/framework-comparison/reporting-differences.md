@@ -401,7 +401,7 @@ happens in OF 02.00 column 0030.
 
 The floor is then calculated externally:
 `TREA = max(row 0080 col 0030, x × row 0080 col 0040 + OF-ADJ)` where `x` is the
-transitional floor percentage (50% in 2027 → 72.5% in 2032+).
+transitional floor percentage (60% in 2027 → 72.5% in 2030+).
 
 ### Relationship to Pillar III Disclosure
 

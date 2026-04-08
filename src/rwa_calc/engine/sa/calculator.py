@@ -45,6 +45,8 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SAResultBundle
 from rwa_calc.contracts.errors import (
+    ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+    ERROR_EQUITY_IN_MAIN_TABLE,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
@@ -226,10 +228,15 @@ class SACalculator:
         Returns:
             SAResultBundle with results and audit trail
         """
-        errors: list = []
+        errors: list[CalculationError] = []
 
         # Get SA exposures
         exposures = data.sa_exposures
+
+        # Warn if equity-class rows are present in the main exposure table.
+        # These get correct SA equity RW (250% B31, 100% CRR) but miss
+        # full equity treatment (CIU approaches, transitional floor, IRB Simple).
+        self._warn_equity_in_main_table(exposures, errors)
 
         # Step 1: Look up risk weights
         exposures = self._apply_risk_weights(exposures, config)
@@ -245,6 +252,13 @@ class SACalculator:
 
         # Step 2b: Apply currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
+        # Step 2c: Apply due diligence override (Basel 3.1 Art. 110A)
+        dd_errors: list[CalculationError] = []
+        exposures = self._apply_due_diligence_override(
+            exposures, config, errors=dd_errors
+        )
+        errors.extend(dd_errors)
 
         # Step 3: Calculate pre-factor RWA
         exposures = self._calculate_rwa(exposures)
@@ -305,6 +319,9 @@ class SACalculator:
 
         # Step 3a: Currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
+        # Step 3a2: Due diligence override (Basel 3.1 Art. 110A)
+        exposures = self._apply_due_diligence_override(exposures, config)
 
         # Step 3b: Store SA-equivalent RWA for ALL rows before IRB calculator
         # overwrites risk_weight. The output floor needs: floor_rwa = floor_pct × sa_rwa.
@@ -367,6 +384,9 @@ class SACalculator:
 
         # Step 3b: Currency mismatch multiplier (Basel 3.1 Art. 123B)
         exposures = self._apply_currency_mismatch_multiplier(exposures, config)
+
+        # Step 3c: Due diligence override (Basel 3.1 Art. 110A)
+        exposures = self._apply_due_diligence_override(exposures, config)
 
         # Step 4: Calculate pre-factor RWA (all rows are SA — no guard needed)
         schema = exposures.collect_schema()
@@ -872,6 +892,12 @@ class SACalculator:
                     # 12d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
                     .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
+                    # 13. Equity (Art. 133(3)): 250% standard equity
+                    # Equity-class rows from main exposure tables get SA equity RW.
+                    # For full equity treatment (CIU approaches, transitional floor,
+                    # type-specific weights), use the dedicated equity_exposures table.
+                    .when(_uc == "EQUITY")
+                    .then(pl.lit(2.50))
                     # Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
@@ -1048,7 +1074,12 @@ class SACalculator:
                     # 8d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
                     .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
-                    # 9. Default: CQS-based or 100%
+                    # 9. Equity (Art. 133(2)): flat 100%
+                    # Equity-class rows from main exposure tables get CRR SA equity RW.
+                    # For full equity treatment (CIU, IRB Simple), use equity_exposures.
+                    .when(_uc == "EQUITY")
+                    .then(pl.lit(1.00))
+                    # 10. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]
@@ -1736,6 +1767,128 @@ class SACalculator:
         )
 
         return exposures
+
+    def _apply_due_diligence_override(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Apply due diligence risk weight override (Basel 3.1 Art. 110A).
+
+        Under Basel 3.1, firms must perform due diligence on all SA exposures.
+        Where due diligence reveals that the risk weight does not adequately
+        reflect the risk, the firm must apply a higher risk weight.
+
+        The override only increases the risk weight — it can never reduce it.
+        This is applied as the final risk weight modification before RWA
+        calculation, after all standard RW determination, CRM, and currency
+        mismatch adjustments.
+
+        Args:
+            exposures: Exposures with risk_weight column
+            config: Calculation configuration
+            errors: Optional error list to append warnings to
+
+        Returns:
+            Exposures with due diligence override applied where applicable
+        """
+        if not config.is_basel_3_1:
+            return exposures
+
+        schema = exposures.collect_schema()
+        cols = schema.names()
+
+        # Warn if due_diligence_performed column is absent under Basel 3.1
+        if "due_diligence_performed" not in cols:
+            if errors is not None:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+                        message=(
+                            "Due diligence assessment status not provided "
+                            "(due_diligence_performed column absent). "
+                            "Art. 110A requires firms to perform due diligence "
+                            "on all SA exposures to ensure risk weights "
+                            "appropriately reflect exposure risk."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.DATA_QUALITY,
+                        regulatory_reference="PRA PS1/26 Art. 110A",
+                        field_name="due_diligence_performed",
+                    )
+                )
+
+        # Apply override RW where provided and higher than calculated RW
+        if "due_diligence_override_rw" not in cols:
+            return exposures
+
+        override_applies = pl.col("due_diligence_override_rw").is_not_null() & (
+            pl.col("due_diligence_override_rw") > pl.col("risk_weight")
+        )
+
+        exposures = exposures.with_columns(
+            [
+                pl.when(override_applies)
+                .then(pl.col("due_diligence_override_rw"))
+                .otherwise(pl.col("risk_weight"))
+                .alias("risk_weight"),
+                override_applies.alias("due_diligence_override_applied"),
+            ]
+        )
+
+        return exposures
+
+    @staticmethod
+    def _warn_equity_in_main_table(
+        exposures: pl.LazyFrame,
+        errors: list[CalculationError],
+    ) -> None:
+        """Emit SA005 info if equity-class rows may be in main exposure table.
+
+        Equity exposures in the main loan/contingent tables receive correct SA
+        equity risk weights (250% Basel 3.1, 100% CRR) but miss full equity
+        treatment available via the dedicated equity_exposures input table:
+        CIU look-through/mandate-based approaches, transitional floor schedule,
+        type-specific weights (central_bank 0%, subordinated_debt 150%,
+        speculative 400%), and IRB Simple method (CRR).
+
+        The check is based on the approach column containing equity values,
+        which is set by the classifier for equity-class rows.
+        """
+        schema = exposures.collect_schema()
+        if "approach" not in schema.names():
+            return
+        # Approach == "equity" is only set for equity-class rows from the main
+        # tables. We detect this via a lightweight one-row collect to avoid
+        # materialising the full frame.
+        has_equity = (
+            exposures.filter(pl.col("approach") == ApproachType.EQUITY.value)
+            .head(1)
+            .collect()
+            .height
+            > 0
+        )
+        if has_equity:
+            errors.append(
+                CalculationError(
+                    code=ERROR_EQUITY_IN_MAIN_TABLE,
+                    message=(
+                        "Equity-class exposures detected in main exposure table. "
+                        "These receive default SA equity risk weights (250% Basel 3.1 "
+                        "Art. 133(3), 100% CRR Art. 133(2)). For type-specific weights "
+                        "(central_bank 0%, subordinated_debt 150%, speculative 400%), "
+                        "CIU approaches, transitional floor, or IRB Simple, "
+                        "use the dedicated equity_exposures input table."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="CRR Art. 133 / PRA PS1/26 Art. 133",
+                    field_name="exposure_class",
+                )
+            )
 
     def _calculate_rwa(
         self,

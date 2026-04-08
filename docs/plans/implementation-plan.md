@@ -164,18 +164,16 @@ These scenarios test the Basel 3.1 implementation per PRA PS1/26, effective 1 Ja
 |----|-------------|------------|--------------|-------|
 | B31-F1 | Floor binding | IRB=£50m, SA=£100m | £72.5m | 72.5% floor |
 | B31-F2 | Floor not binding | IRB=£80m, SA=£100m | £80m | IRB > floor |
-| B31-F3 | Transitional 2027 | Year 2027, 50% floor | Phased floor | PRA PS1/26 |
+| B31-F3 | Transitional 2027 | Year 2027, 60% floor | Phased floor | PRA PS1/26 |
 
 **Output Floor Phase-In:**
 
 | Year | Floor % |
 |------|---------|
-| 2027 | 50% |
-| 2028 | 55% |
-| 2029 | 60% |
-| 2030 | 65% |
-| 2031 | 70% |
-| 2032+ | 72.5% |
+| 2027 | 60% |
+| 2028 | 65% |
+| 2029 | 70% |
+| 2030+ | 72.5% |
 
 ---
 

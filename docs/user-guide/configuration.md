@@ -172,8 +172,8 @@ pd_floor = 0.0003  # 0.03%
 pd_floors = {
     "CORPORATE": 0.0005,           # 0.05%
     "INSTITUTION": 0.0005,         # 0.05%
-    "RETAIL_MORTGAGE": 0.0005,     # 0.05%
-    "RETAIL_QRRE_TRANSACTOR": 0.0003,  # 0.03%
+    "RETAIL_MORTGAGE": 0.0010,     # 0.10%
+    "RETAIL_QRRE_TRANSACTOR": 0.0005,  # 0.05%
     "RETAIL_QRRE_REVOLVER": 0.0010,    # 0.10%
     "RETAIL_OTHER": 0.0005,        # 0.05%
 }
@@ -186,10 +186,10 @@ lgd_floors = {
     "UNSECURED_SENIOR": 0.25,      # 25%
     "UNSECURED_SUBORDINATED": 0.50, # 50%
     "FINANCIAL_COLLATERAL": 0.00,  # 0%
-    "RECEIVABLES": 0.15,           # 15%
-    "CRE": 0.15,                   # 15%
-    "RRE": 0.10,                   # 10%
-    "OTHER_PHYSICAL": 0.20,        # 20%
+    "RECEIVABLES": 0.10,           # 10%
+    "CRE": 0.10,                   # 10%
+    "RRE": 0.10,                   # 10% (corporate, Art. 161(5); retail RRE is 5%, Art. 164(4)(a))
+    "OTHER_PHYSICAL": 0.15,        # 15%
 }
 ```
 
@@ -199,12 +199,13 @@ lgd_floors = {
 
 | Year | Floor Percentage |
 |------|------------------|
-| 2027 | 50.0% |
-| 2028 | 55.0% |
-| 2029 | 60.0% |
-| 2030 | 65.0% |
-| 2031 | 70.0% |
-| 2032+ | 72.5% |
+| 2027 | 60.0% |
+| 2028 | 65.0% |
+| 2029 | 70.0% |
+| 2030+ | 72.5% |
+
+Note: PRA compressed the BCBS 6-year schedule to 4 years. Transitional rates are
+permissive (Art. 92 para 5) — firms may use 72.5% from day one.
 
 ### Transitional Configuration
 
@@ -212,13 +213,13 @@ lgd_floors = {
 # Automatically calculate transitional floor
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2028, 6, 30),
-    transitional_floor_year=2028  # Uses 55% floor
+    transitional_floor_year=2028  # Uses 65% floor (PRA 4-year schedule)
 )
 
 # Or specify exact percentage
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2028, 6, 30),
-    output_floor_percentage=0.55  # Explicit 55%
+    output_floor_percentage=0.65  # Explicit 65%
 )
 ```
 
@@ -309,7 +310,7 @@ from rwa_calc.contracts.config import PDFloors
 custom_pd_floors = PDFloors(
     corporate=0.0006,        # 0.06%
     institution=0.0005,      # 0.05%
-    retail_mortgage=0.0005,  # 0.05%
+    retail_mortgage=0.0010,  # 0.10%
     retail_qrre=0.0003,      # 0.03%
     retail_other=0.0005      # 0.05%
 )

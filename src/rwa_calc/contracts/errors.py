@@ -66,7 +66,7 @@ class CalculationError:
 
         return " | ".join(parts)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str | None]:
         """Convert to dictionary for serialization."""
         return {
             "code": self.code,
@@ -174,6 +174,7 @@ ERROR_UNKNOWN_EXPOSURE_CLASS = "CLS001"
 ERROR_APPROACH_NOT_PERMITTED = "CLS002"
 ERROR_MISSING_RATING = "CLS003"
 ERROR_QRRE_COLUMNS_MISSING = "CLS004"
+ERROR_RETAIL_POOL_MGMT_MISSING = "CLS005"
 
 # CRM error codes
 ERROR_INELIGIBLE_COLLATERAL = "CRM001"
@@ -194,6 +195,8 @@ ERROR_MISSING_EXPECTED_LOSS = "IRB006"
 ERROR_INVALID_CQS = "SA001"
 ERROR_MISSING_RISK_WEIGHT = "SA002"
 ERROR_INVALID_LTV = "SA003"
+ERROR_DUE_DILIGENCE_NOT_PERFORMED = "SA004"
+ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"

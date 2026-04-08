@@ -127,14 +127,14 @@ Basel 3.1 scenarios mirror the CRR structure with additional framework-specific 
 
 - B31-A through B31-H: Same structure as CRR groups with Basel 3.1 rule changes
 - B31-D7: Parameter substitution (guarantee-driven IRB→SA CCF/RW substitution)
-- B31-F: Output floor phase-in (50%–72.5%, 2027–2032)
+- B31-F: Output floor phase-in (60%–72.5%, 2027–2030)
 
 ### Comparison Groups
 Dual-framework comparison scenarios:
 
 - M3.1: Side-by-side CRR vs Basel 3.1 RWA comparison
 - M3.2: Capital impact analysis with delta decomposition by driver
-- M3.3: Transitional floor schedule modelling (2027–2032)
+- M3.3: Transitional floor schedule modelling (2027–2030)
 
 ## Scenario ID Convention
 

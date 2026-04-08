@@ -21,6 +21,35 @@ Standardised Approach risk weights by exposure class and credit quality step.
 
 Under Basel 3.1, firms must perform due diligence to ensure they understand the risk profile of their counterparties. Where due diligence is inadequate, the firm must apply a **higher risk weight** than would otherwise apply. This applies to all SA exposure classes and is a precondition for reliance on external ratings.
 
+### Implementation
+
+Two optional input fields support Art. 110A:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `due_diligence_performed` | Boolean | Whether the firm has completed its DD assessment for this exposure |
+| `due_diligence_override_rw` | Float64 | Override risk weight (as decimal, e.g. 1.50 = 150%) when DD reveals higher risk |
+
+**Override behaviour:**
+- The override is applied as the **final risk weight modification** — after all standard RW determination, CRM adjustments, and currency mismatch multiplier
+- The override can only **increase** the risk weight: `RW_final = max(RW_calculated, RW_override)`
+- Null override values are silently ignored (no override applied)
+- The override is a **floor**, not a replacement — if the calculated RW already exceeds the override, the calculated RW is retained
+
+**Validation:**
+- Under Basel 3.1, if the `due_diligence_performed` column is absent from the input data, a `SA004` warning is emitted (severity: WARNING, category: DATA_QUALITY)
+- Under CRR, no warning is emitted (Art. 110A does not exist under CRR)
+
+**Audit:**
+- When the override column is present, a `due_diligence_override_applied` Boolean audit column is added to the output, indicating which exposures had their risk weight overridden
+
+**Sequencing in the SA calculator:**
+1. Standard risk weight determination (CQS lookup, class-specific rules)
+2. FCSM / life insurance / guarantee substitution (CRM)
+3. Currency mismatch multiplier (Art. 123B)
+4. **Due diligence override (Art. 110A)** ← applied here
+5. RWA calculation (EAD × RW)
+
 ## Sovereign Exposures (CRR Art. 114)
 
 | CQS | Rating Equivalent | Risk Weight |
@@ -322,7 +351,7 @@ RW = 0.20 × secured_share + counterparty_RW × (1.0 - secured_share)
 | Social housing | max(75%, unsecured RW) |
 | Other | Unsecured counterparty RW |
 
-**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. The effective secured portion decreases, increasing the blended risk weight. Not yet modelled.
+**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists, the 55% threshold is reduced by the amount of the prior charge. The effective secured portion decreases, increasing the blended risk weight.
 
 ### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
 
@@ -338,7 +367,7 @@ Materially dependent on cash flows from the property (e.g., buy-to-let). Whole-l
 | 90-100% | 75% |
 | > 100% | 105% |
 
-**Junior charge multiplier** (Art. 124G(2)): **1.25x** applied to the whole-loan risk weight when LTV > 50% and prior/pari passu charges exist. Not yet modelled.
+**Junior charge multiplier** (Art. 124G(2)): **1.25x** applied to the whole-loan risk weight when LTV > 50% and prior/pari passu charges exist.
 
 ### Commercial RE — General, Loan-Splitting (Art. 124H)
 
@@ -521,13 +550,13 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 
 ## Basel 3.1 Changes Summary
 
-- **Due diligence obligation** (Art. 110A): New prerequisite for all SA risk weight assignments — Pending
+- **Due diligence obligation** (Art. 110A): New prerequisite for all SA risk weight assignments — Done
 - **Residential RE loan-splitting** (Art. 124F): 20% on ≤55% LTV, counterparty RW on residual — Done
 - **Residential RE income-producing** (Art. 124G): Whole-loan LTV table (30%-105%) — Done
 - **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
-- **Commercial RE other counterparties** (Art. 124H(3)): max/min formula — Pending
+- **Commercial RE other counterparties** (Art. 124H(3)): max/min formula — Done
 - **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
-- **Junior charge multipliers** (Art. 124F/G/I): 1.25x / 1.375x for subordinate liens — Pending
+- **Junior charge multipliers** (Art. 124F/G/I): 1.25x / 1.375x for subordinate liens — Done
 - **Other Real Estate** (Art. 124J): 150% income-dependent, counterparty RW otherwise — Done
 - **Revised corporate CQS mapping** (Art. 122(2) Table 6): CQS 3 from 100% to 75% — Done. **Note:** PRA retains CQS 5 = 150% (BCBS CRE20.42 reduced to 100%, but PRA did not adopt this reduction)
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done
@@ -537,10 +566,10 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **SME corporate** (CRE20.47): 85% flat weight, replaces CRR 100% + supporting factor — Done
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
-- **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Pending
+- **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done
 - **Payroll/pension loans** (Art. 123): 35% — Done
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
-- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Pending
+- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
 - **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
 - **Covered bonds** (Art. 129/129A): CQS-based risk weights, eligibility criteria — Added

@@ -261,10 +261,21 @@ class HaircutCalculator:
 
         # Art. 227: determine whether zero-haircut flag column is available
         has_zero_haircut_col = "qualifies_for_zero_haircut" in schema.names()
+        # Art. 224 Table 3/4: is_main_index distinguishes main-index vs other-listed equity
+        has_main_index_col = "is_main_index" in schema.names()
 
         # Normalize collateral type and build sentinel join keys
         bond_types = pl.col("_lookup_type").is_in(["govt_bond", "corp_bond"])
         is_equity = pl.col("_lookup_type") == "equity"
+
+        # Equity main-index lookup: prefer is_main_index when available,
+        # fall back to is_eligible_financial_collateral for backward compatibility.
+        if has_main_index_col:
+            _equity_main_index_expr = pl.col("is_main_index").fill_null(True).cast(pl.Int8)
+        else:
+            _equity_main_index_expr = (
+                pl.col("is_eligible_financial_collateral").fill_null(False).cast(pl.Int8)
+            )
 
         collateral = collateral.with_columns(
             [self._normalize_collateral_type_expr().alias("_lookup_type")]
@@ -280,7 +291,7 @@ class HaircutCalculator:
                 .otherwise(pl.lit("__none__"))
                 .alias("_lookup_maturity_band"),
                 pl.when(is_equity)
-                .then(pl.col("is_eligible_financial_collateral").fill_null(False).cast(pl.Int8))
+                .then(_equity_main_index_expr)
                 .otherwise(pl.lit(-1).cast(pl.Int8))
                 .alias("_lookup_is_main_index"),
             ]

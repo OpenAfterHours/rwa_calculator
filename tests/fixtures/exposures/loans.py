@@ -107,6 +107,7 @@ def create_loans() -> pl.DataFrame:
         *_supporting_factor_scenario_loans(),
         *_provision_scenario_loans(),
         *_complex_scenario_loans(),
+        *_dedicated_test_loans(),
     ]
 
     return pl.DataFrame([ln.to_dict() for ln in loans], schema=LOAN_SCHEMA)
@@ -1481,6 +1482,207 @@ def _complex_scenario_loans() -> list[Loan]:
             maturity_date=date(2029, 12, 31),
             currency="GBP",
             drawn_amount=2_000_000.0,  # £2m gross
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+    ]
+
+
+def _dedicated_test_loans() -> list[Loan]:
+    """
+    Dedicated test loans for CRM fixture referential integrity.
+
+    These loans exist solely as beneficiaries for collateral, guarantee, and provision
+    fixtures that were intentionally separated from other scenario loans to avoid
+    affecting CRR acceptance tests. Each loan is sized to match the CRM amounts
+    described in the corresponding collateral/guarantee/provision fixture comments.
+
+    References:
+    - Collateral: COLL_CASH_001/002, COLL_GILT_001, COLL_EQ_001, COLL_REC_002
+    - Guarantees: GUAR_SOV_001, GUAR_BANK_001/002, GUAR_CORP_003
+    - Provisions: PROV_S1_CORP_001, PROV_S2_CORP_001, PROV_S2_SME_001
+    """
+    return [
+        # --- Collateral test loans ---
+        # Target for COLL_GILT_001 (UK Gilt bond collateral, £600k)
+        Loan(
+            loan_reference="LOAN_COLL_TEST_CORP_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for COLL_EQ_001 (listed equity collateral, £400k)
+        Loan(
+            loan_reference="LOAN_COLL_TEST_CORP_002",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for COLL_CASH_001 (cash collateral, £500k)
+        Loan(
+            loan_reference="LOAN_COLL_TEST_CORP_003",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for COLL_CASH_002 (SME cash collateral, £200k)
+        Loan(
+            loan_reference="LOAN_COLL_TEST_SME_001",
+            product_type="SME_TERM_LOAN",
+            book_code="SME_LENDING",
+            counterparty_reference="CORP_SME_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=500_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for COLL_REC_002 (receivables collateral for retail SME, £100k)
+        Loan(
+            loan_reference="LOAN_COLL_TEST_RTL_001",
+            product_type="SME_LOAN",
+            book_code="SME_RETAIL",
+            counterparty_reference="RTL_SME_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=200_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # --- Guarantee test loans ---
+        # Target for GUAR_SOV_001 (UK Government guarantee, £5m at 100%)
+        Loan(
+            loan_reference="LOAN_GUAR_TEST_SOV_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for GUAR_BANK_001 (Barclays guarantee, £600k at 60% of £1m)
+        Loan(
+            loan_reference="LOAN_GUAR_TEST_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for GUAR_BANK_002 (HSBC guarantee, £1m at 50% of £2m SME)
+        Loan(
+            loan_reference="LOAN_GUAR_TEST_002",
+            product_type="SME_TERM_LOAN",
+            book_code="SME_LENDING",
+            counterparty_reference="CORP_SME_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=2_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for GUAR_CORP_003 (BP guarantee on retail SME, £400k at 80% of £500k)
+        Loan(
+            loan_reference="LOAN_GUAR_TEST_RTL_001",
+            product_type="SME_LOAN",
+            book_code="SME_RETAIL",
+            counterparty_reference="RTL_SME_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=500_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # --- Provision test loans ---
+        # Target for PROV_S2_CORP_001 (stage 2, £50k = 5% of £1m unrated corporate)
+        Loan(
+            loan_reference="LOAN_PROV_TEST_CORP_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for PROV_S1_CORP_001 (stage 1, £25k = 0.1% of £25m corporate)
+        Loan(
+            loan_reference="LOAN_PROV_TEST_CORP_002",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=25_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # Target for PROV_S2_SME_001 (stage 2, £25k = 5% of £500k SME retail)
+        Loan(
+            loan_reference="LOAN_PROV_TEST_SME_001",
+            product_type="SME_LOAN",
+            book_code="SME_RETAIL",
+            counterparty_reference="RTL_SME_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2029, 12, 31),
+            currency="GBP",
+            drawn_amount=500_000.0,
             interest=0.0,
             lgd=0.45,
             beel=0.0,

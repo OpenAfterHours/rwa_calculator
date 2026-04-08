@@ -864,6 +864,7 @@ class CRMProcessor:
                 pl.col("ccf").alias("ccf_unguaranteed"),
                 pl.lit(0.0).alias("guarantee_ratio"),
                 pl.lit("").alias("guarantor_approach"),
+                pl.lit(None).cast(pl.String).alias("guarantor_rating_type"),
                 # Unfunded protection type (guarantee vs credit_derivative)
                 pl.lit(None).cast(pl.String).alias("protection_type"),
                 # FX mismatch haircut on guarantees (Art. 233(3-4))
@@ -999,6 +1000,7 @@ class CRMProcessor:
                 pl.col("ccf_unguaranteed"),
                 pl.col("guarantee_ratio"),
                 pl.col("guarantor_approach"),
+                pl.col("guarantor_rating_type"),
                 pl.col("protection_type"),
             ]
         )

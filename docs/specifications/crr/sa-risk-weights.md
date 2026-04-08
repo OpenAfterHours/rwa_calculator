@@ -310,13 +310,36 @@ Under Basel 3.1, covered bond risk weights are reduced and the CQS mapping is si
     B31 unrated derivation uses SCRA grade → institution RW → CB RW chain
     per Art. 129(5) with values traced to COVERED_BOND_UNRATED_DERIVATION table.
 
-## High-Risk Exposures (CRR Art. 128)
+## High-Risk Exposures (Art. 128)
 
-Exposures associated with particularly high risk receive **150%** risk weight, including:
+Exposures associated with particularly high risk receive **150%** risk weight. Assessment
+criteria per Art. 128(3): (a) high risk of loss from obligor default; (b) impossible to
+adequately assess whether (a) applies.
 
-- Investments in venture capital firms or private equity
-- Speculative immovable property financing
-- Other exposures designated as high-risk by the PRA
+Examples of high-risk items include speculative immovable property financing and other
+exposures designated by the PRA. Under the Art. 112 Table A2 exposure class waterfall,
+equity (priority 3) takes precedence over high-risk items (priority 4) — venture capital
+and private equity exposures are classified as equity under Art. 133, not as high-risk
+items under Art. 128.
+
+!!! warning "Art. 128 Omitted from UK CRR (SI 2021/1078)"
+    Art. 128 was **omitted from UK onshored CRR** by The Capital Requirements Regulation
+    (Amendment) Regulations 2021 (SI 2021/1078), reg. 6(3)(a), effective 1 January 2022.
+    The high-risk exposure class is a **dead letter under current UK CRR** (pre-2027).
+    Exposures that would otherwise be classified as high-risk should fall through to
+    their counterparty's standard exposure class (e.g., equity at 100% per Art. 133(2),
+    or corporate at the applicable CQS weight).
+
+    Under **PRA PS1/26** (Basel 3.1, effective 1 January 2027), Art. 128 is **re-introduced**
+    with paragraphs 1 and 3 retained (paragraph 2 left blank — the original EU CRR
+    Art. 128(2) list of specific categories such as venture capital and speculative RE
+    is not carried forward). The 150% risk weight applies from 2027.
+
+!!! bug "Code Note (D3.12)"
+    The calculator's CRR engine path currently applies Art. 128 (150%) to HIGH_RISK
+    exposures despite the UK CRR omission. Under strict UK CRR treatment, these
+    exposures should fall through to their standard exposure class. The Basel 3.1
+    engine path correctly applies Art. 128.
 
 ## Residential Mortgage Exposures (CRR Art. 125)
 

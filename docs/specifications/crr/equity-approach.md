@@ -39,7 +39,10 @@ as high risk items in accordance with Article 128."
     (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were
     fabricated. CRR Art. 133 has only 3 paragraphs and assigns a **flat 100%** to all equity.
     The 150%/190% values are from Art. 155 (IRB Simple Method), not Art. 133.
-    PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133.
+    Under the Art. 112 Table A2 waterfall, equity (priority 3) takes precedence over
+    high-risk items (priority 4). PE/VC is classified as equity under Art. 133, not
+    as a high-risk item under Art. 128. Note: Art. 128 was omitted from UK CRR by
+    SI 2021/1078 (effective 1 Jan 2022) and is only active under Basel 3.1 (from 2027).
 
 ## Basel 3.1 SA Equity Risk Weights (PRA PS1/26 Art. 133)
 

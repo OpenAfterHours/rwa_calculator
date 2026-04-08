@@ -40,6 +40,12 @@ of secured corporate or retail exposures under CRR Art. 125/126.
 
 Where an exposure meets multiple criteria, the highest-priority class applies.
 
+!!! info "Art. 128 Re-introduction"
+    Priority 4 (high-risk items) was omitted from UK CRR by SI 2021/1078 effective
+    1 January 2022. Basel 3.1 re-introduces Art. 128 with paragraphs 1 and 3 retained
+    (paragraph 2 left blank). The 150% risk weight for particularly high risk
+    exposures applies from 1 January 2027.
+
 ## IRB Treatment
 
 ### Scaling Factor
@@ -395,7 +401,7 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 |------|-----|--------------------------|--------|
 | Standard listed equities | 100% | **250%** | +150pp |
 | Higher-risk (unlisted, PE, etc.) | 100% | **400%** | +300pp |
-| Speculative / venture capital | 100% (or 150% if Art. 128 high-risk) | **400%** | +250-300pp |
+| Speculative / venture capital | 100% (Art. 133(2)) | **400%** | +300pp |
 
 IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
 is blanked in the final rules.

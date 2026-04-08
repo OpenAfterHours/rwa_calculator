@@ -267,6 +267,23 @@ config = CalculationConfig.crr(
 )
 ```
 
+## Omitted Provisions
+
+The following CRR articles were omitted from UK onshored CRR by SI 2021/1078
+(effective 1 January 2022) and moved to the PRA Rulebook (CRR Part) or removed
+entirely. They are **not active** under current UK CRR:
+
+| Article | Subject | Status |
+|---------|---------|--------|
+| Art. 128 | Items associated with particularly high risk (150%) | Omitted; re-introduced under Basel 3.1 (PRA PS1/26) |
+| Art. 132 | CIU treatment | Omitted; moved to PRA Rulebook (CRR Part) |
+
+!!! note
+    Art. 128 exposures (e.g., speculative RE financing) should fall through to their
+    standard exposure class under current UK CRR — e.g., equity at 100% (Art. 133(2))
+    or corporate at the applicable CQS weight. Under Basel 3.1, Art. 128 is re-introduced
+    with a flat 150% risk weight. See [Basel 3.1](basel31.md) for details.
+
 ## Regulatory References
 
 | Topic | Article |

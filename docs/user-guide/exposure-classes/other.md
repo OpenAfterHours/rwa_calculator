@@ -246,14 +246,34 @@ Securitisation has dedicated rules (outside scope of this calculator):
 
 ## Items Associated with High Risk
 
-### Categories
+!!! warning "Art. 128 Omitted from UK CRR — Active Under Basel 3.1 Only"
+    Art. 128 was **omitted from UK CRR** by SI 2021/1078, reg. 6(3)(a), effective
+    1 January 2022. Under current UK CRR, there is no separate high-risk exposure
+    class — these exposures are classified under their standard counterparty class
+    (e.g., equity at 100% per Art. 133(2), or corporate at the applicable CQS weight).
 
-| Type | Risk Weight |
-|------|-------------|
-| Private equity (Basel 3.1) | 400% |
-| Speculative RE financing | 150% |
-| Venture capital investments | 400% |
-| Speculative unlisted equity | 400% |
+    Art. 128 is **re-introduced under Basel 3.1** (PRA PS1/26, effective 1 January 2027),
+    but with paragraph 2 left blank (the original EU CRR list of specific categories
+    is not carried forward). Institutions must assess high risk per Art. 128(3):
+    (a) high risk of loss from obligor default; (b) impossible to adequately assess
+    whether (a) applies.
+
+Under Basel 3.1 Art. 128(1), exposures assessed as particularly high risk receive
+a flat **150%** risk weight.
+
+!!! note "Exposure Class Waterfall"
+    Under Art. 112 Table A2, equity (priority 3) takes precedence over high-risk
+    items (priority 4). Private equity, venture capital, and speculative unlisted
+    equity are classified as **equity** under Art. 133 (250% standard / 400% higher
+    risk), not as high-risk items. Art. 128 applies to non-equity exposures such
+    as speculative immovable property financing.
+
+### Art. 128 High-Risk Items (Basel 3.1 only)
+
+| Type | Risk Weight | Reference |
+|------|-------------|-----------|
+| Speculative immovable property financing | 150% | Art. 128(1) |
+| Other PRA-designated high-risk items | 150% | Art. 128(1), (3) |
 
 ## Other Items
 
@@ -290,7 +310,7 @@ Securitisation has dedicated rules (outside scope of this calculator):
 | RGLA | 0-150% | Yes |
 | International Org | 0% | N/A |
 | Covered Bonds | 10-50% | Varies |
-| High Risk Items | 150-400% | Varies |
+| High Risk Items (B31 only) | 150% | No |
 
 ## Regulatory References
 

@@ -340,9 +340,7 @@ class ExposureClassifier:
         # is_managed_as_retail — optional; used by Art. 123A(1)(b)(iii) condition 3
         # and SME retail treatment (Art. 123).  When absent, defaults handled downstream.
         if "is_managed_as_retail" in cp_col_names:
-            select_cols.append(
-                pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail")
-            )
+            select_cols.append(pl.col("is_managed_as_retail").alias("cp_is_managed_as_retail"))
 
         # Natural person flag — Art. 124H CRE counterparty type (optional in input data)
         if "is_natural_person" in cp_col_names:
@@ -501,9 +499,7 @@ class ExposureClassifier:
                 # --- Infrastructure flag (uses _pt_upper) ---
                 pl.col("_pt_upper").str.contains("INFRASTRUCTURE").alias("is_infrastructure"),
                 # --- Retail threshold check + Art. 123A conditions (B31) ---
-                self._build_qualifies_as_retail_expr(
-                    config, schema_names, max_retail_exposure
-                ),
+                self._build_qualifies_as_retail_expr(config, schema_names, max_retail_exposure),
                 pl.when(pl.col("residential_collateral_value") > 0)
                 .then(pl.lit(True))
                 .otherwise(pl.lit(False))
@@ -937,9 +933,7 @@ class ExposureClassifier:
             # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
             # Supplements full_irb_b31() org-wide restriction; needed when
             # model_permissions grant AIRB for institutions.
-            _b31_institution_no_airb = (
-                pl.col("exposure_class") == ExposureClass.INSTITUTION.value
-            )
+            _b31_institution_no_airb = pl.col("exposure_class") == ExposureClass.INSTITUTION.value
 
             _b31_airb_blocked = _is_fse | _is_large_corp | _b31_institution_no_airb
 
@@ -1098,10 +1092,7 @@ class ExposureClassifier:
         # Base conditions: lending group threshold check (CRR + B31)
         threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
         zero_lending_group_fail = (
-            pl.col("lending_group_adjusted_exposure")
-            .cast(pl.Float64, strict=False)
-            .abs()
-            < 1e-10
+            pl.col("lending_group_adjusted_exposure").cast(pl.Float64, strict=False).abs() < 1e-10
         ) & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
 
         if not config.is_basel_3_1:

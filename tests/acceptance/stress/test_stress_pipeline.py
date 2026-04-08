@@ -68,9 +68,7 @@ class TestRowCountPreservation:
     So output rows = n_loans + n_contingents + n_facility_undrawn.
     """
 
-    def _get_expected_counts(
-        self, dataset: dict[str, pl.LazyFrame]
-    ) -> tuple[int, int]:
+    def _get_expected_counts(self, dataset: dict[str, pl.LazyFrame]) -> tuple[int, int]:
         """Return (n_loans, n_contingents) from dataset."""
         n_loans = dataset["loans"].select(pl.len()).collect().item()
         n_contingents = dataset["contingents"].select(pl.len()).collect().item()
@@ -451,9 +449,7 @@ class TestOutputFloorAtScale:
         assert ofs is not None
         assert 0.50 <= ofs.floor_pct <= 0.725, f"Floor pct out of range: {ofs.floor_pct}"
 
-    def test_total_rwa_post_floor_gte_u_trea(
-        self, b31_irb_result_10k: AggregatedResultBundle
-    ):
+    def test_total_rwa_post_floor_gte_u_trea(self, b31_irb_result_10k: AggregatedResultBundle):
         """Post-floor RWA >= U-TREA (floor can only increase capital)."""
         ofs = b31_irb_result_10k.output_floor_summary
         assert ofs is not None
@@ -677,9 +673,7 @@ class TestLargeScale100K:
         n_loans = stress_dataset_100k["loans"].select(pl.len()).collect().item()
         results_df = result.results.collect()
         output_loans = results_df.filter(pl.col("exposure_type") == "loan").height
-        assert output_loans == n_loans, (
-            f"Loan count: {output_loans} output vs {n_loans} input"
-        )
+        assert output_loans == n_loans, f"Loan count: {output_loans} output vs {n_loans} input"
 
     def test_numerical_stability_100k(
         self,

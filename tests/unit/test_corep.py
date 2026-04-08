@@ -3809,9 +3809,7 @@ class TestSection3CalculationApproaches:
     def test_row_0190_not_present_in_crr(self) -> None:
         """Row 0190 does not exist in CRR template (B31 only)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_b31_unrated_corporates(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_b31_unrated_corporates(), framework="CRR")
         corp = bundle.c08_01["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0190" not in row_refs
@@ -3843,9 +3841,7 @@ class TestSection3CalculationApproaches:
     def test_row_0200_not_present_in_crr(self) -> None:
         """Row 0200 does not exist in CRR template (B31 only)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_b31_unrated_corporates(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_b31_unrated_corporates(), framework="CRR")
         corp = bundle.c08_01["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0200" not in row_refs
@@ -3882,9 +3878,7 @@ class TestSection3CalculationApproaches:
     def test_b31_section3_has_0175_row(self) -> None:
         """B31 template includes row 0175 (Purchased receivables)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_slotting(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_slotting(), framework="BASEL_3_1")
         corp = bundle.c08_01["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0175" in row_refs
@@ -3892,9 +3886,7 @@ class TestSection3CalculationApproaches:
     def test_crr_section3_has_0160_row(self) -> None:
         """CRR template includes row 0160 (Alternative RE treatment)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_slotting(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_slotting(), framework="CRR")
         corp = bundle.c08_01["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0160" in row_refs
@@ -4011,17 +4003,13 @@ class TestOF0201Generation:
     def test_generated_under_b31(self) -> None:
         """OF 02.01 is generated when framework is BASEL_3_1."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         assert bundle.of_02_01 is not None
 
     def test_none_under_crr(self) -> None:
         """OF 02.01 is None when framework is CRR (no output floor)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="CRR")
         assert bundle.of_02_01 is None
 
     def test_none_without_floor_columns(self) -> None:
@@ -4057,25 +4045,19 @@ class TestOF0201Generation:
     def test_is_dataframe(self) -> None:
         """OF 02.01 output is a Polars DataFrame."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         assert isinstance(bundle.of_02_01, pl.DataFrame)
 
     def test_row_count(self) -> None:
         """OF 02.01 has 8 rows (one per risk type)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         assert len(bundle.of_02_01) == 8
 
     def test_column_structure(self) -> None:
         """DataFrame has row_ref, row_name, and 4 data columns."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cols = set(bundle.of_02_01.columns)
         assert "row_ref" in cols
         assert "row_name" in cols
@@ -4091,9 +4073,7 @@ class TestOF0201CreditRiskRow:
     def test_modelled_rwa(self) -> None:
         """Col 0010 = sum of rwa_pre_floor for all exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         # E1=500, E2=1500, E3=100, E4=900 → 3000
         assert cr_row["0010"][0] == pytest.approx(3000.0)
@@ -4101,9 +4081,7 @@ class TestOF0201CreditRiskRow:
     def test_sa_rwa(self) -> None:
         """Col 0020 = sum of sa_rwa for all exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         # E1=700, E2=1400, E3=100, E4=1050 → 3250
         assert cr_row["0020"][0] == pytest.approx(3250.0)
@@ -4111,27 +4089,21 @@ class TestOF0201CreditRiskRow:
     def test_u_trea_equals_modelled(self) -> None:
         """Col 0030 (U-TREA) equals col 0010 for credit-risk-only calculator."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0030"][0] == cr_row["0010"][0]
 
     def test_s_trea_equals_sa(self) -> None:
         """Col 0040 (S-TREA) equals col 0020 for credit-risk-only calculator."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0040"][0] == cr_row["0020"][0]
 
     def test_floor_binding_scenario(self) -> None:
         """Floor binding: modelled < SA (modelled=1100 < SA=2200)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_floor_binding(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_floor_binding(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         assert cr_row["0010"][0] == pytest.approx(1100.0)  # 300+800
         assert cr_row["0020"][0] == pytest.approx(2200.0)  # 600+1600
@@ -4153,9 +4125,7 @@ class TestOF0201TotalRow:
     def test_total_equals_credit_risk(self) -> None:
         """Total row equals credit risk row (credit-risk-only calculator)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         for col_ref in ["0010", "0020", "0030", "0040"]:
@@ -4164,18 +4134,14 @@ class TestOF0201TotalRow:
     def test_total_modelled_rwa(self) -> None:
         """Total row col 0010 matches credit risk sum."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         assert total_row["0010"][0] == pytest.approx(3000.0)
 
     def test_total_row_name(self) -> None:
         """Total row is named 'Total'."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         total_row = bundle.of_02_01.filter(pl.col("row_ref") == "0080")
         assert total_row["row_name"][0] == "Total"
 
@@ -4197,9 +4163,7 @@ class TestOF0201NullRows:
     def test_out_of_scope_row_is_null(self, row_ref: str, row_name: str) -> None:
         """Out-of-scope risk types have null values in all data columns."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         row = bundle.of_02_01.filter(pl.col("row_ref") == row_ref)
         assert len(row) == 1
         assert row["row_name"][0] == row_name
@@ -4209,9 +4173,7 @@ class TestOF0201NullRows:
     def test_null_rows_present(self) -> None:
         """All 6 out-of-scope rows are present."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         null_refs = {"0020", "0030", "0040", "0050", "0060", "0070"}
         actual_refs = set(bundle.of_02_01["row_ref"].to_list())
         assert null_refs.issubset(actual_refs)
@@ -4262,34 +4224,26 @@ class TestOF0201EdgeCases:
     def test_data_columns_are_float64(self) -> None:
         """All 4 data columns are Float64 type."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         for col_ref in ["0010", "0020", "0030", "0040"]:
             assert bundle.of_02_01[col_ref].dtype == pl.Float64
 
     def test_row_ref_and_name_are_string(self) -> None:
         """row_ref and row_name columns are String type."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         assert bundle.of_02_01["row_ref"].dtype == pl.String
         assert bundle.of_02_01["row_name"].dtype == pl.String
 
     def test_no_errors_on_success(self) -> None:
         """No OF 02.01 errors when generation succeeds."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         assert not any("OF 02.01" in e for e in bundle.errors)
 
     def test_bundle_field_none_by_default(self) -> None:
         """COREPTemplateBundle.of_02_01 defaults to None."""
-        bundle = COREPTemplateBundle(
-            c07_00={}, c08_01={}, c08_02={}
-        )
+        bundle = COREPTemplateBundle(c07_00={}, c08_01={}, c08_02={})
         assert bundle.of_02_01 is None
 
     def test_large_rwa_values(self) -> None:
@@ -4314,9 +4268,7 @@ class TestOF0201EdgeCases:
     def test_row_order_preserved(self) -> None:
         """Rows are in the correct order: 0010, 0020, ..., 0080."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         refs = bundle.of_02_01["row_ref"].to_list()
         assert refs == ["0010", "0020", "0030", "0040", "0050", "0060", "0070", "0080"]
 
@@ -4733,9 +4685,7 @@ class TestC0803B31Features:
         fall in '0.20 to < 0.25%' (row 0060).
         """
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_range_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
         corp = bundle.c08_03["corporate"]
         # E1: pd_original=0.001 → "0.10 to < 0.15%" (row 0040)
         row = corp.filter(pl.col("row_ref") == "0040")
@@ -4748,9 +4698,7 @@ class TestC0803B31Features:
         col 0050 should report floored PD 0.002.
         """
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_range_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
         corp = bundle.c08_03["corporate"]
         row = corp.filter(pl.col("row_ref") == "0040")
         # E1: post-floor PD=0.002
@@ -4762,9 +4710,7 @@ class TestC0803B31Features:
         E1 has irb_pd_floored=0.002 (0.20%) → '0.20 to < 0.25%' bucket (row 0060).
         """
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_range_results(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="CRR")
         corp = bundle.c08_03["corporate"]
         # E1: pd_floored=0.002 → "0.20 to < 0.25%" (row 0060)
         row = corp.filter(pl.col("row_ref") == "0060")
@@ -4773,9 +4719,7 @@ class TestC0803B31Features:
     def test_b31_has_11_columns(self) -> None:
         """Basel 3.1 C 08.03 still produces 11 data columns + 2 metadata."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_range_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_range_results(), framework="BASEL_3_1")
         corp = bundle.c08_03["corporate"]
         assert len(corp.columns) == 13
 
@@ -4888,32 +4832,42 @@ def _irb_flow_results() -> pl.LazyFrame:
     Corporate total RWEA: 2750 + 1800 + 780 = 5330.
     Institution RWEA: 600. Retail mortgage RWEA: 1200.
     """
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
-        "approach_applied": [
-            "foundation_irb", "foundation_irb", "foundation_irb",
-            "foundation_irb", "advanced_irb",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "corporate_sme",
-            "institution", "retail_mortgage",
-        ],
-        "ead_final": [5500.0, 3000.0, 1200.0, 2000.0, 4000.0],
-        "rwa_final": [2750.0, 1800.0, 780.0, 600.0, 1200.0],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "advanced_irb",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate_sme",
+                "institution",
+                "retail_mortgage",
+            ],
+            "ead_final": [5500.0, 3000.0, 1200.0, 2000.0, 4000.0],
+            "rwa_final": [2750.0, 1800.0, 780.0, 600.0, 1200.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
+        }
+    )
 
 
 def _irb_flow_with_slotting() -> pl.LazyFrame:
     """IRB results including slotting exposures for exclusion testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3"],
-        "approach_applied": ["foundation_irb", "slotting", "advanced_irb"],
-        "exposure_class": ["corporate", "specialised_lending", "corporate"],
-        "ead_final": [5000.0, 3000.0, 2000.0],
-        "rwa_final": [3500.0, 2100.0, 1400.0],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3"],
+            "approach_applied": ["foundation_irb", "slotting", "advanced_irb"],
+            "exposure_class": ["corporate", "specialised_lending", "corporate"],
+            "ead_final": [5000.0, 3000.0, 2000.0],
+            "rwa_final": [3500.0, 2100.0, 1400.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C"],
+        }
+    )
 
 
 class TestC0804TemplateDefinitions:
@@ -4921,54 +4875,69 @@ class TestC0804TemplateDefinitions:
 
     def test_crr_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_04_COLUMNS
+
         assert len(CRR_C08_04_COLUMNS) == 1
 
     def test_b31_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C08_04_COLUMNS
+
         assert len(B31_C08_04_COLUMNS) == 1
 
     def test_crr_column_ref(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_04_COLUMNS
+
         assert CRR_C08_04_COLUMNS[0].ref == "0010"
 
     def test_crr_column_includes_supporting_factors(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_04_COLUMNS
+
         assert "supporting factors" in CRR_C08_04_COLUMNS[0].name.lower()
 
     def test_b31_column_excludes_supporting_factors(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C08_04_COLUMNS
+
         assert "supporting factors" not in B31_C08_04_COLUMNS[0].name.lower()
 
     def test_column_refs_list(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_04_COLUMN_REFS
+
         assert C08_04_COLUMN_REFS == ["0010"]
 
     def test_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_04_ROWS
+
         assert len(C08_04_ROWS) == 9
 
     def test_rows_refs_sequential(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_04_ROWS
+
         expected_refs = [f"00{i}0" for i in range(1, 10)]
         assert [r.ref for r in C08_04_ROWS] == expected_refs
 
     def test_first_row_is_opening(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_04_ROWS
+
         assert "previous" in C08_04_ROWS[0].name.lower()
 
     def test_last_row_is_closing(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_04_ROWS
+
         assert "end of the reporting period" in C08_04_ROWS[8].name.lower()
 
     def test_movement_driver_rows(self) -> None:
         """7 movement driver rows between opening and closing."""
         from rwa_calc.reporting.corep.templates import C08_04_ROWS
+
         drivers = C08_04_ROWS[1:8]
         assert len(drivers) == 7
         expected_names = [
-            "Asset size", "Asset quality", "Model updates",
-            "Methodology and policy", "Acquisitions and disposals",
-            "Foreign exchange movements", "Other",
+            "Asset size",
+            "Asset quality",
+            "Model updates",
+            "Methodology and policy",
+            "Acquisitions and disposals",
+            "Foreign exchange movements",
+            "Other",
         ]
         for row, expected in zip(drivers, expected_names):
             assert expected.lower() in row.name.lower()
@@ -4978,6 +4947,7 @@ class TestC0804TemplateDefinitions:
             CRR_C08_04_COLUMNS,
             get_c08_04_columns,
         )
+
         assert get_c08_04_columns("CRR") is CRR_C08_04_COLUMNS
 
     def test_get_columns_b31(self) -> None:
@@ -4985,6 +4955,7 @@ class TestC0804TemplateDefinitions:
             B31_C08_04_COLUMNS,
             get_c08_04_columns,
         )
+
         assert get_c08_04_columns("BASEL_3_1") is B31_C08_04_COLUMNS
 
 
@@ -5020,13 +4991,15 @@ class TestC0804Generation:
     def test_empty_irb_returns_empty_dict(self) -> None:
         """No IRB data produces empty dict."""
         gen = COREPGenerator()
-        sa_only = pl.LazyFrame({
-            "exposure_reference": ["SA1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [1000.0],
-        })
+        sa_only = pl.LazyFrame(
+            {
+                "exposure_reference": ["SA1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [1000.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(sa_only)
         assert bundle.c08_04 == {}
 
@@ -5181,24 +5154,28 @@ class TestC0804EdgeCases:
 
     def test_missing_exposure_class_returns_empty(self) -> None:
         gen = COREPGenerator()
-        no_ec = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-        })
+        no_ec = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(no_ec)
         assert bundle.c08_04 == {}
 
     def test_missing_rwa_column(self) -> None:
         """Missing rwa_final still generates template with null closing."""
         gen = COREPGenerator()
-        no_rwa = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-        })
+        no_rwa = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(no_rwa)
         corp = bundle.c08_04["corporate"]
         closing = corp.filter(pl.col("row_ref") == "0090")
@@ -5207,13 +5184,15 @@ class TestC0804EdgeCases:
     def test_zero_rwa(self) -> None:
         """Zero RWEA is reported as 0.0, not null."""
         gen = COREPGenerator()
-        zero_rwa = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [0.0],
-        })
+        zero_rwa = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [0.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(zero_rwa)
         corp = bundle.c08_04["corporate"]
         closing = corp.filter(pl.col("row_ref") == "0090")
@@ -5250,20 +5229,25 @@ def _irb_pd_backtest_results() -> pl.LazyFrame:
     - E4: PD 0.03, not defaulted
     - E5: PD 1.0, defaulted
     """
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
-        "approach_applied": [
-            "foundation_irb", "foundation_irb", "advanced_irb",
-            "foundation_irb", "foundation_irb",
-        ],
-        "exposure_class": ["corporate", "corporate", "corporate", "corporate", "corporate"],
-        "ead_final": [5500.0, 3000.0, 2200.0, 1000.0, 500.0],
-        "rwa_final": [2750.0, 1800.0, 1540.0, 750.0, 0.0],
-        "irb_pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
-        "irb_pd_original": [0.001, 0.004, 0.01, 0.03, 1.0],
-        "is_defaulted": [False, False, False, False, True],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "advanced_irb",
+                "foundation_irb",
+                "foundation_irb",
+            ],
+            "exposure_class": ["corporate", "corporate", "corporate", "corporate", "corporate"],
+            "ead_final": [5500.0, 3000.0, 2200.0, 1000.0, 500.0],
+            "rwa_final": [2750.0, 1800.0, 1540.0, 750.0, 0.0],
+            "irb_pd_floored": [0.002, 0.005, 0.01, 0.03, 1.0],
+            "irb_pd_original": [0.001, 0.004, 0.01, 0.03, 1.0],
+            "is_defaulted": [False, False, False, False, True],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D", "CP_E"],
+        }
+    )
 
 
 def _irb_backtest_multi_class() -> pl.LazyFrame:
@@ -5271,18 +5255,23 @@ def _irb_backtest_multi_class() -> pl.LazyFrame:
 
     Corporate (3 exposures, 1 defaulted) + Institution (1 exposure, 0 defaults).
     """
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3", "E4"],
-        "approach_applied": [
-            "foundation_irb", "foundation_irb", "foundation_irb", "foundation_irb",
-        ],
-        "exposure_class": ["corporate", "corporate", "corporate", "institution"],
-        "ead_final": [1000.0, 2000.0, 500.0, 3000.0],
-        "rwa_final": [500.0, 1200.0, 0.0, 900.0],
-        "irb_pd_floored": [0.005, 0.01, 1.0, 0.002],
-        "is_defaulted": [False, False, True, False],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4"],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+            ],
+            "exposure_class": ["corporate", "corporate", "corporate", "institution"],
+            "ead_final": [1000.0, 2000.0, 500.0, 3000.0],
+            "rwa_final": [500.0, 1200.0, 0.0, 900.0],
+            "irb_pd_floored": [0.005, 0.01, 1.0, 0.002],
+            "is_defaulted": [False, False, True, False],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+        }
+    )
 
 
 class TestC0805TemplateDefinitions:
@@ -5290,41 +5279,50 @@ class TestC0805TemplateDefinitions:
 
     def test_crr_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_05_COLUMNS
+
         assert len(CRR_C08_05_COLUMNS) == 5
 
     def test_b31_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C08_05_COLUMNS
+
         assert len(B31_C08_05_COLUMNS) == 5
 
     def test_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_05_COLUMN_REFS, CRR_C08_05_COLUMNS
+
         assert C08_05_COLUMN_REFS == [c.ref for c in CRR_C08_05_COLUMNS]
 
     def test_column_refs_values(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_05_COLUMN_REFS
+
         assert C08_05_COLUMN_REFS == ["0010", "0020", "0030", "0040", "0050"]
 
     def test_crr_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_05_COLUMNS, get_c08_05_columns
+
         assert get_c08_05_columns("CRR") is CRR_C08_05_COLUMNS
 
     def test_b31_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C08_05_COLUMNS, get_c08_05_columns
+
         assert get_c08_05_columns("BASEL_3_1") is B31_C08_05_COLUMNS
 
     def test_b31_col_0010_post_input_floor(self) -> None:
         from rwa_calc.reporting.corep.templates import get_c08_05_columns
+
         cols = get_c08_05_columns("BASEL_3_1")
         assert "post input floor" in cols[0].name
 
     def test_crr_col_0010_no_post_input_floor(self) -> None:
         from rwa_calc.reporting.corep.templates import get_c08_05_columns
+
         cols = get_c08_05_columns("CRR")
         assert "post input floor" not in cols[0].name
 
     def test_reuses_c08_03_pd_ranges(self) -> None:
         """C 08.05 uses the same 17 PD range buckets as C 08.03."""
         from rwa_calc.reporting.corep.templates import C08_03_PD_RANGES
+
         assert len(C08_03_PD_RANGES) == 17
 
 
@@ -5351,28 +5349,32 @@ class TestC0805Generation:
         assert len(corp.columns) == 7
 
     def test_sa_only_returns_empty(self) -> None:
-        sa_data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-            "irb_pd_floored": [0.005],
-        })
+        sa_data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+                "irb_pd_floored": [0.005],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(sa_data, framework="CRR")
         assert bundle.c08_05 == {}
 
     def test_slotting_excluded(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["slotting", "foundation_irb"],
-            "exposure_class": ["specialised_lending", "corporate"],
-            "ead_final": [1000.0, 2000.0],
-            "rwa_final": [700.0, 1000.0],
-            "irb_pd_floored": [0.005, 0.01],
-            "counterparty_reference": ["CP_A", "CP_B"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["slotting", "foundation_irb"],
+                "exposure_class": ["specialised_lending", "corporate"],
+                "ead_final": [1000.0, 2000.0],
+                "rwa_final": [700.0, 1000.0],
+                "irb_pd_floored": [0.005, 0.01],
+                "counterparty_reference": ["CP_A", "CP_B"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         # Slotting excluded — only corporate appears
@@ -5526,17 +5528,19 @@ class TestC0805ColumnValues:
 
     def test_obligor_count_unique_counterparties(self) -> None:
         """Obligor count uses n_unique on counterparty_reference."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2", "E3"],
-            "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
-            "exposure_class": ["corporate", "corporate", "corporate"],
-            "ead_final": [1000.0, 2000.0, 1500.0],
-            "rwa_final": [500.0, 1000.0, 750.0],
-            "irb_pd_floored": [0.005, 0.006, 0.007],
-            "is_defaulted": [False, False, False],
-            # E1 and E3 share a counterparty
-            "counterparty_reference": ["CP_A", "CP_B", "CP_A"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2", "E3"],
+                "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate", "corporate"],
+                "ead_final": [1000.0, 2000.0, 1500.0],
+                "rwa_final": [500.0, 1000.0, 750.0],
+                "irb_pd_floored": [0.005, 0.006, 0.007],
+                "is_defaulted": [False, False, False],
+                # E1 and E3 share a counterparty
+                "counterparty_reference": ["CP_A", "CP_B", "CP_A"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         corp = bundle.c08_05["corporate"]
@@ -5569,9 +5573,7 @@ class TestC0805B31Features:
 
     def test_b31_still_5_columns(self) -> None:
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_backtest_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         corp = bundle.c08_05["corporate"]
         # 5 data + row_ref + row_name = 7
         assert len(corp.columns) == 7
@@ -5579,12 +5581,8 @@ class TestC0805B31Features:
     def test_b31_different_row_count_from_crr(self) -> None:
         """B31 may produce different row counts due to pre-floor PD allocation."""
         gen = COREPGenerator()
-        crr_bundle = gen.generate_from_lazyframe(
-            _irb_pd_backtest_results(), framework="CRR"
-        )
-        b31_bundle = gen.generate_from_lazyframe(
-            _irb_pd_backtest_results(), framework="BASEL_3_1"
-        )
+        crr_bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="CRR")
+        b31_bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         crr_corp = crr_bundle.c08_05["corporate"]
         b31_corp = b31_bundle.c08_05["corporate"]
         # E1 has different original (0.001) vs floored (0.002) PD
@@ -5603,28 +5601,32 @@ class TestC0805EdgeCases:
     """Test C 08.05 edge cases and boundary conditions."""
 
     def test_no_pd_column_returns_empty(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert bundle.c08_05 == {}
 
     def test_null_pd_goes_to_unassigned(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["foundation_irb", "foundation_irb"],
-            "exposure_class": ["corporate", "corporate"],
-            "ead_final": [1000.0, 2000.0],
-            "rwa_final": [500.0, 1000.0],
-            "irb_pd_floored": [None, 0.005],
-            "is_defaulted": [False, False],
-            "counterparty_reference": ["CP_A", "CP_B"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 2000.0],
+                "rwa_final": [500.0, 1000.0],
+                "irb_pd_floored": [None, 0.005],
+                "is_defaulted": [False, False],
+                "counterparty_reference": ["CP_A", "CP_B"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         corp = bundle.c08_05["corporate"]
@@ -5639,15 +5641,17 @@ class TestC0805EdgeCases:
 
     def test_no_is_defaulted_uses_pd_fallback(self) -> None:
         """Without is_defaulted column, defaults detected by PD >= 1.0."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["foundation_irb", "foundation_irb"],
-            "exposure_class": ["corporate", "corporate"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_final": [500.0, 0.0],
-            "irb_pd_floored": [0.005, 1.0],
-            "counterparty_reference": ["CP_A", "CP_B"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [500.0, 0.0],
+                "irb_pd_floored": [0.005, 1.0],
+                "counterparty_reference": ["CP_A", "CP_B"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         corp = bundle.c08_05["corporate"]
@@ -5658,15 +5662,17 @@ class TestC0805EdgeCases:
 
     def test_no_counterparty_reference_uses_row_count(self) -> None:
         """Without counterparty_reference, obligor count = row count."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2", "E3"],
-            "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
-            "exposure_class": ["corporate", "corporate", "corporate"],
-            "ead_final": [1000.0, 2000.0, 3000.0],
-            "rwa_final": [500.0, 1000.0, 1500.0],
-            "irb_pd_floored": [0.005, 0.006, 0.007],
-            "is_defaulted": [False, False, False],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2", "E3"],
+                "approach_applied": ["foundation_irb", "foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate", "corporate"],
+                "ead_final": [1000.0, 2000.0, 3000.0],
+                "rwa_final": [500.0, 1000.0, 1500.0],
+                "irb_pd_floored": [0.005, 0.006, 0.007],
+                "is_defaulted": [False, False, False],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         corp = bundle.c08_05["corporate"]
@@ -5685,9 +5691,7 @@ class TestC0805EdgeCases:
     def test_excel_export_prefix_b31(self) -> None:
         """Basel 3.1 export uses 'OF 08.05' prefix."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_pd_backtest_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_pd_backtest_results(), framework="BASEL_3_1")
         assert bundle.framework == "BASEL_3_1"
         assert len(bundle.c08_05) > 0
 
@@ -5712,31 +5716,60 @@ def _irb_scope_of_use_results() -> pl.LazyFrame:
     Total SA EAD: 3000 + 4000 + 500 = 7500
     Grand total EAD: 18500
     """
-    return pl.LazyFrame({
-        "exposure_reference": [
-            "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8",
-        ],
-        "approach_applied": [
-            "foundation_irb", "standardised", "foundation_irb",
-            "standardised", "advanced_irb", "slotting", "standardised",
-            "standardised",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "institution",
-            "retail_mortgage", "retail_qrre", "specialised_lending",
-            "equity", "equity",
-        ],
-        "ead_final": [
-            5000.0, 3000.0, 2000.0,
-            4000.0, 1000.0, 3000.0,
-            300.0, 200.0,
-        ],
-        "rwa_final": [
-            2500.0, 1500.0, 800.0,
-            1200.0, 200.0, 2100.0,
-            750.0, 500.0,
-        ],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "E1",
+                "E2",
+                "E3",
+                "E4",
+                "E5",
+                "E6",
+                "E7",
+                "E8",
+            ],
+            "approach_applied": [
+                "foundation_irb",
+                "standardised",
+                "foundation_irb",
+                "standardised",
+                "advanced_irb",
+                "slotting",
+                "standardised",
+                "standardised",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "institution",
+                "retail_mortgage",
+                "retail_qrre",
+                "specialised_lending",
+                "equity",
+                "equity",
+            ],
+            "ead_final": [
+                5000.0,
+                3000.0,
+                2000.0,
+                4000.0,
+                1000.0,
+                3000.0,
+                300.0,
+                200.0,
+            ],
+            "rwa_final": [
+                2500.0,
+                1500.0,
+                800.0,
+                1200.0,
+                200.0,
+                2100.0,
+                750.0,
+                500.0,
+            ],
+        }
+    )
 
 
 class TestC0807TemplateDefinitions:
@@ -5869,9 +5902,7 @@ class TestC0807Generation:
 
     def test_c0807_b31_has_correct_column_count(self) -> None:
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         # 18 data columns + row_ref + row_name = 20
@@ -5885,9 +5916,7 @@ class TestC0807Generation:
 
     def test_c0807_b31_has_11_rows(self) -> None:
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         assert bundle.c08_07 is not None
         assert len(bundle.c08_07) == 11
 
@@ -5909,10 +5938,12 @@ class TestC0807Generation:
     def test_c0807_none_for_missing_columns(self) -> None:
         """Returns None with error when required columns missing."""
         gen = COREPGenerator()
-        no_ead = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-        })
+        no_ead = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+            }
+        )
         bundle = gen.generate_from_lazyframe(no_ead)
         assert bundle.c08_07 is None
         assert any("C 08.07" in e for e in bundle.errors)
@@ -6049,9 +6080,7 @@ class TestC0807B31Features:
     def test_b31_total_rwea(self) -> None:
         """Col 0060 (total RWEA) present and correct under B31."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
@@ -6061,9 +6090,7 @@ class TestC0807B31Features:
     def test_b31_irb_rwea(self) -> None:
         """Col 0150 (IRB RWEA) correct under B31."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
@@ -6073,9 +6100,7 @@ class TestC0807B31Features:
     def test_b31_sa_rwea_other(self) -> None:
         """Col 0140 (SA RWEA: other) = total SA RWEA when no sa_use_reason."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
@@ -6085,9 +6110,7 @@ class TestC0807B31Features:
     def test_b31_materiality_columns_null_for_total(self) -> None:
         """Materiality cols 0160-0180 are null (requires institutional config)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
@@ -6098,9 +6121,7 @@ class TestC0807B31Features:
     def test_b31_materiality_row_present(self) -> None:
         """B31 has an aggregate immateriality % row (0280)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         mat_row = df.filter(pl.col("row_ref") == "0280")
@@ -6109,9 +6130,7 @@ class TestC0807B31Features:
     def test_b31_corporate_class_row(self) -> None:
         """B31 row 0200 (Corporate — other) maps to corporate class."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0200")
@@ -6121,9 +6140,7 @@ class TestC0807B31Features:
     def test_b31_sa_breakdown_cols_zero_without_reason(self) -> None:
         """SA RWEA breakdown cols 0070-0130 are 0 without sa_use_reason data."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
@@ -6133,14 +6150,13 @@ class TestC0807B31Features:
     def test_b31_rwea_additive(self) -> None:
         """Col 0060 = sum of SA RWEA breakdown (0070-0140) + IRB RWEA (0150)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         total = df.filter(pl.col("row_ref") == "0270")
         sa_breakdown = sum(
-            total[ref][0] for ref in ["0070", "0080", "0090", "0100", "0110", "0120", "0130", "0140"]
+            total[ref][0]
+            for ref in ["0070", "0080", "0090", "0100", "0110", "0120", "0130", "0140"]
         )
         irb = total["0150"][0]
         assert total["0060"][0] == pytest.approx(sa_breakdown + irb, rel=1e-4)
@@ -6157,13 +6173,15 @@ class TestC0807EdgeCases:
     def test_c0807_single_irb_class(self) -> None:
         """Works with a single IRB class."""
         gen = COREPGenerator()
-        results = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-        })
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(results)
         assert bundle.c08_07 is not None
         total = bundle.c08_07.filter(pl.col("row_ref") == "0170")
@@ -6173,13 +6191,15 @@ class TestC0807EdgeCases:
     def test_c0807_all_sa(self) -> None:
         """All SA exposures: IRB EAD = 0, IRB% = 0 everywhere."""
         gen = COREPGenerator()
-        results = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["standardised", "standardised"],
-            "exposure_class": ["corporate", "institution"],
-            "ead_final": [1000.0, 2000.0],
-            "rwa_final": [500.0, 800.0],
-        })
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["standardised", "standardised"],
+                "exposure_class": ["corporate", "institution"],
+                "ead_final": [1000.0, 2000.0],
+                "rwa_final": [500.0, 800.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(results)
         assert bundle.c08_07 is not None
         total = bundle.c08_07.filter(pl.col("row_ref") == "0170")
@@ -6191,25 +6211,29 @@ class TestC0807EdgeCases:
     def test_c0807_without_rwa_column(self) -> None:
         """Works even when rwa_final column is absent (CRR only needs EAD)."""
         gen = COREPGenerator()
-        results = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-        })
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(results)
         assert bundle.c08_07 is not None
 
     def test_c0807_zero_ead_class(self) -> None:
         """Class with zero total EAD has 0% for both SA and IRB."""
         gen = COREPGenerator()
-        results = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [0.0],
-            "rwa_final": [0.0],
-        })
+        results = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [0.0],
+                "rwa_final": [0.0],
+            }
+        )
         bundle = gen.generate_from_lazyframe(results)
         assert bundle.c08_07 is not None
         row = bundle.c08_07.filter(pl.col("row_ref") == "0050")
@@ -6230,9 +6254,7 @@ class TestC0807EdgeCases:
     def test_c0807_b31_preserves_row_order(self) -> None:
         """B31 rows are emitted in the order defined by the template."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_scope_of_use_results(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_scope_of_use_results(), framework="BASEL_3_1")
         df = bundle.c08_07
         assert df is not None
         refs = df["row_ref"].to_list()
@@ -6512,9 +6534,7 @@ class TestC0200TotalRow:
     def test_b31_total_row_three_columns(self) -> None:
         """B31 total row has all 3 columns populated."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0010")
@@ -6525,9 +6545,7 @@ class TestC0200TotalRow:
     def test_b31_total_rwa_matches(self) -> None:
         """B31 col 0010 total = sum of all rwa_final."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0010")
@@ -6647,9 +6665,7 @@ class TestC0200IRBBreakdown:
     def test_b31_slotting_by_type(self) -> None:
         """Basel 3.1 breaks slotting into per-SL-type rows."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         # SL1 is project_finance → row 0412
@@ -6686,9 +6702,7 @@ class TestC0200B31Features:
     def test_sa_equivalent_column(self) -> None:
         """Col 0020 (SA-equivalent) is populated from sa_rwa."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0010")
@@ -6698,9 +6712,7 @@ class TestC0200B31Features:
     def test_floor_indicator_row(self) -> None:
         """Row 0034 indicates whether floor is activated."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0034")
@@ -6711,9 +6723,7 @@ class TestC0200B31Features:
     def test_floor_binding_indicator(self) -> None:
         """Row 0034 = 1 when floor is binding."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_floor_binding(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_floor_binding(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0034")
@@ -6722,9 +6732,7 @@ class TestC0200B31Features:
     def test_b31_firb_institution_row(self) -> None:
         """B31 has F-IRB institution detail row 0271."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         row = df.filter(pl.col("row_ref") == "0271")
@@ -6827,9 +6835,7 @@ class TestC0200EdgeCases:
     def test_b31_row_order_preserved(self) -> None:
         """Basel 3.1 rows appear in the order defined by row sections."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _c02_b31_results_with_floor(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_c02_b31_results_with_floor(), framework="BASEL_3_1")
         df = bundle.c_02_00
         assert df is not None
         refs = df["row_ref"].to_list()
@@ -6862,35 +6868,49 @@ class TestC0200EdgeCases:
 
 def _sa_geo_results() -> pl.LazyFrame:
     """Synthetic SA results with country codes for C 09.01 testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
-        "approach_applied": ["standardised"] * 5,
-        "exposure_class": [
-            "corporate", "corporate", "institution", "retail_mortgage", "defaulted",
-        ],
-        "ead_final": [1000.0, 500.0, 2000.0, 3000.0, 200.0],
-        "ead_gross": [1200.0, 600.0, 2100.0, 3200.0, 300.0],
-        "rwa_final": [1000.0, 500.0, 400.0, 1050.0, 300.0],
-        "cp_country_code": ["GB", "US", "GB", "GB", "US"],
-        "default_status": [False, False, False, False, True],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
+            "approach_applied": ["standardised"] * 5,
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "institution",
+                "retail_mortgage",
+                "defaulted",
+            ],
+            "ead_final": [1000.0, 500.0, 2000.0, 3000.0, 200.0],
+            "ead_gross": [1200.0, 600.0, 2100.0, 3200.0, 300.0],
+            "rwa_final": [1000.0, 500.0, 400.0, 1050.0, 300.0],
+            "cp_country_code": ["GB", "US", "GB", "GB", "US"],
+            "default_status": [False, False, False, False, True],
+        }
+    )
 
 
 def _sa_geo_multi_class() -> pl.LazyFrame:
     """Multi-class SA results with multiple countries."""
-    return pl.LazyFrame({
-        "exposure_reference": [f"E{i}" for i in range(1, 9)],
-        "approach_applied": ["standardised"] * 8,
-        "exposure_class": [
-            "corporate", "corporate", "institution", "retail_other",
-            "retail_mortgage", "defaulted", "pse", "covered_bond",
-        ],
-        "ead_final": [1000.0, 500.0, 2000.0, 800.0, 3000.0, 200.0, 400.0, 600.0],
-        "ead_gross": [1200.0, 600.0, 2100.0, 900.0, 3200.0, 300.0, 500.0, 700.0],
-        "rwa_final": [1000.0, 500.0, 400.0, 600.0, 1050.0, 300.0, 80.0, 60.0],
-        "cp_country_code": ["GB", "US", "GB", "DE", "GB", "US", "GB", "DE"],
-        "default_status": [False, False, False, False, False, True, False, False],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [f"E{i}" for i in range(1, 9)],
+            "approach_applied": ["standardised"] * 8,
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "institution",
+                "retail_other",
+                "retail_mortgage",
+                "defaulted",
+                "pse",
+                "covered_bond",
+            ],
+            "ead_final": [1000.0, 500.0, 2000.0, 800.0, 3000.0, 200.0, 400.0, 600.0],
+            "ead_gross": [1200.0, 600.0, 2100.0, 900.0, 3200.0, 300.0, 500.0, 700.0],
+            "rwa_final": [1000.0, 500.0, 400.0, 600.0, 1050.0, 300.0, 80.0, 60.0],
+            "cp_country_code": ["GB", "US", "GB", "DE", "GB", "US", "GB", "DE"],
+            "default_status": [False, False, False, False, False, True, False, False],
+        }
+    )
 
 
 class TestC0901TemplateDefinitions:
@@ -6898,52 +6918,81 @@ class TestC0901TemplateDefinitions:
 
     def test_crr_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_COLUMNS
+
         assert len(CRR_C09_01_COLUMNS) == 13
 
     def test_b31_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_COLUMNS
+
         assert len(B31_C09_01_COLUMNS) == 10
 
     def test_crr_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import C09_01_COLUMN_REFS
+
         assert C09_01_COLUMN_REFS == [
-            "0010", "0020", "0040", "0050", "0055", "0060", "0061",
-            "0070", "0075", "0080", "0081", "0082", "0090",
+            "0010",
+            "0020",
+            "0040",
+            "0050",
+            "0055",
+            "0060",
+            "0061",
+            "0070",
+            "0075",
+            "0080",
+            "0081",
+            "0082",
+            "0090",
         ]
 
     def test_b31_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_COLUMN_REFS
+
         assert B31_C09_01_COLUMN_REFS == [
-            "0010", "0020", "0040", "0050", "0055", "0060", "0061",
-            "0070", "0075", "0090",
+            "0010",
+            "0020",
+            "0040",
+            "0050",
+            "0055",
+            "0060",
+            "0061",
+            "0070",
+            "0075",
+            "0090",
         ]
 
     def test_b31_removes_supporting_factor_columns(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_COLUMN_REFS
+
         assert "0080" not in B31_C09_01_COLUMN_REFS
         assert "0081" not in B31_C09_01_COLUMN_REFS
         assert "0082" not in B31_C09_01_COLUMN_REFS
 
     def test_crr_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_ROWS
+
         assert len(CRR_C09_01_ROWS) == 23
 
     def test_b31_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_ROWS
+
         assert len(B31_C09_01_ROWS) == 29
 
     def test_crr_has_short_term_row(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_ROWS
+
         refs = [r.ref for r in CRR_C09_01_ROWS]
         assert "0130" in refs
 
     def test_b31_removes_short_term_row(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_ROWS
+
         refs = [r.ref for r in B31_C09_01_ROWS]
         assert "0130" not in refs
 
     def test_b31_adds_sl_sub_rows(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_ROWS
+
         refs = [r.ref for r in B31_C09_01_ROWS]
         assert "0071" in refs  # object finance
         assert "0072" in refs  # commodities finance
@@ -6951,6 +7000,7 @@ class TestC0901TemplateDefinitions:
 
     def test_b31_adds_re_sub_rows(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_ROWS
+
         refs = [r.ref for r in B31_C09_01_ROWS]
         assert "0091" in refs  # residential RE
         assert "0092" in refs  # commercial RE
@@ -6959,27 +7009,33 @@ class TestC0901TemplateDefinitions:
 
     def test_crr_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_COLUMNS, get_c09_01_columns
+
         assert get_c09_01_columns("CRR") is CRR_C09_01_COLUMNS
 
     def test_b31_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_COLUMNS, get_c09_01_columns
+
         assert get_c09_01_columns("BASEL_3_1") is B31_C09_01_COLUMNS
 
     def test_row_selector_crr(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_ROWS, get_c09_01_rows
+
         assert get_c09_01_rows("CRR") is CRR_C09_01_ROWS
 
     def test_row_selector_b31(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_01_ROWS, get_c09_01_rows
+
         assert get_c09_01_rows("BASEL_3_1") is B31_C09_01_ROWS
 
     def test_total_row_is_last(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_01_ROWS
+
         assert CRR_C09_01_ROWS[-1].ref == "0170"
         assert CRR_C09_01_ROWS[-1].exposure_class_value is None
 
     def test_sa_class_map_covers_main_classes(self) -> None:
         from rwa_calc.reporting.corep.templates import C09_01_SA_CLASS_MAP
+
         assert "corporate" in C09_01_SA_CLASS_MAP
         assert "institution" in C09_01_SA_CLASS_MAP
         assert "retail_mortgage" in C09_01_SA_CLASS_MAP
@@ -7025,26 +7081,30 @@ class TestC0901Generation:
         assert len(total.columns) == 12  # 10 data + 2 meta
 
     def test_missing_country_code_returns_empty(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert bundle.c09_01 == {}
 
     def test_sa_only_no_irb_in_c09_01(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["foundation_irb", "standardised"],
-            "exposure_class": ["corporate", "corporate"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_final": [500.0, 250.0],
-            "cp_country_code": ["GB", "GB"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["foundation_irb", "standardised"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [500.0, 250.0],
+                "cp_country_code": ["GB", "GB"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         # C 09.01 is SA only — IRB exposures excluded
@@ -7155,14 +7215,10 @@ class TestC0901B31Features:
 
     def test_b31_has_more_rows(self) -> None:
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_geo_multi_class(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_geo_multi_class(), framework="BASEL_3_1")
         total_b31 = bundle.c09_01["TOTAL"]
         gen2 = COREPGenerator()
-        bundle2 = gen2.generate_from_lazyframe(
-            _sa_geo_multi_class(), framework="CRR"
-        )
+        bundle2 = gen2.generate_from_lazyframe(_sa_geo_multi_class(), framework="CRR")
         total_crr = bundle2.c09_01["TOTAL"]
         # B31 has more rows due to SL and RE sub-rows
         assert len(total_b31) >= len(total_crr)
@@ -7172,27 +7228,31 @@ class TestC0901EdgeCases:
     """Test C 09.01 edge cases."""
 
     def test_empty_sa_data_returns_empty_dict(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-            "cp_country_code": ["GB"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+                "cp_country_code": ["GB"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert bundle.c09_01 == {}
 
     def test_null_country_code_excluded_from_per_country(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["standardised", "standardised"],
-            "exposure_class": ["corporate", "corporate"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_final": [500.0, 250.0],
-            "cp_country_code": ["GB", None],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["standardised", "standardised"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [500.0, 250.0],
+                "cp_country_code": ["GB", None],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         # TOTAL includes both, but only GB gets its own sheet
@@ -7201,51 +7261,45 @@ class TestC0901EdgeCases:
         assert None not in bundle.c09_01
 
     def test_single_country_produces_total_and_country(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "ead_gross": [1200.0],
-            "rwa_final": [500.0],
-            "cp_country_code": ["GB"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "ead_gross": [1200.0],
+                "rwa_final": [500.0],
+                "cp_country_code": ["GB"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert len(bundle.c09_01) == 2  # TOTAL + GB
         # TOTAL and GB should have same values
-        total_rwa = bundle.c09_01["TOTAL"].filter(
-            pl.col("row_ref") == "0170"
-        )["0090"][0]
-        gb_rwa = bundle.c09_01["GB"].filter(
-            pl.col("row_ref") == "0170"
-        )["0090"][0]
+        total_rwa = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0170")["0090"][0]
+        gb_rwa = bundle.c09_01["GB"].filter(pl.col("row_ref") == "0170")["0090"][0]
         assert total_rwa == pytest.approx(gb_rwa)
 
     def test_total_equals_sum_of_countries(self) -> None:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_geo_results(), framework="CRR")
-        total_rwa = bundle.c09_01["TOTAL"].filter(
-            pl.col("row_ref") == "0170"
-        )["0090"][0]
-        gb_rwa = bundle.c09_01["GB"].filter(
-            pl.col("row_ref") == "0170"
-        )["0090"][0]
-        us_rwa = bundle.c09_01["US"].filter(
-            pl.col("row_ref") == "0170"
-        )["0090"][0]
+        total_rwa = bundle.c09_01["TOTAL"].filter(pl.col("row_ref") == "0170")["0090"][0]
+        gb_rwa = bundle.c09_01["GB"].filter(pl.col("row_ref") == "0170")["0090"][0]
+        us_rwa = bundle.c09_01["US"].filter(pl.col("row_ref") == "0170")["0090"][0]
         assert total_rwa == pytest.approx(gb_rwa + us_rwa)
 
     def test_zero_ead_exposure(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [0.0],
-            "ead_gross": [0.0],
-            "rwa_final": [0.0],
-            "cp_country_code": ["GB"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [0.0],
+                "ead_gross": [0.0],
+                "rwa_final": [0.0],
+                "cp_country_code": ["GB"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         total = bundle.c09_01["TOTAL"]
@@ -7253,9 +7307,7 @@ class TestC0901EdgeCases:
         assert total_row["0075"][0] == pytest.approx(0.0)
 
     def test_bundle_field_default_empty(self) -> None:
-        bundle = COREPTemplateBundle(
-            c07_00={}, c08_01={}, c08_02={}
-        )
+        bundle = COREPTemplateBundle(c07_00={}, c08_01={}, c08_02={})
         assert bundle.c09_01 == {}
         assert bundle.c09_02 == {}
 
@@ -7267,24 +7319,33 @@ class TestC0901EdgeCases:
 
 def _irb_geo_results() -> pl.LazyFrame:
     """Synthetic IRB results with country codes for C 09.02 testing."""
-    return pl.LazyFrame({
-        "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
-        "approach_applied": [
-            "foundation_irb", "foundation_irb", "advanced_irb",
-            "advanced_irb", "foundation_irb",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "retail_mortgage", "retail_qrre", "institution",
-        ],
-        "ead_final": [1000.0, 500.0, 2000.0, 800.0, 1500.0],
-        "ead_gross": [1200.0, 600.0, 2200.0, 900.0, 1700.0],
-        "rwa_final": [700.0, 350.0, 600.0, 200.0, 300.0],
-        "cp_country_code": ["GB", "US", "GB", "GB", "US"],
-        "default_status": [False, False, False, False, False],
-        "irb_pd_floored": [0.01, 0.02, 0.005, 0.03, 0.008],
-        "lgd_post_crm": [0.45, 0.45, 0.20, 0.75, 0.45],
-        "expected_loss": [4.5, 4.5, 2.0, 18.0, 5.4],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["E1", "E2", "E3", "E4", "E5"],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "foundation_irb",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "retail_mortgage",
+                "retail_qrre",
+                "institution",
+            ],
+            "ead_final": [1000.0, 500.0, 2000.0, 800.0, 1500.0],
+            "ead_gross": [1200.0, 600.0, 2200.0, 900.0, 1700.0],
+            "rwa_final": [700.0, 350.0, 600.0, 200.0, 300.0],
+            "cp_country_code": ["GB", "US", "GB", "GB", "US"],
+            "default_status": [False, False, False, False, False],
+            "irb_pd_floored": [0.01, 0.02, 0.005, 0.03, 0.008],
+            "lgd_post_crm": [0.45, 0.45, 0.20, 0.75, 0.45],
+            "expected_loss": [4.5, 4.5, 2.0, 18.0, 5.4],
+        }
+    )
 
 
 class TestC0902TemplateDefinitions:
@@ -7292,57 +7353,95 @@ class TestC0902TemplateDefinitions:
 
     def test_crr_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_COLUMNS
+
         assert len(CRR_C09_02_COLUMNS) == 17
 
     def test_b31_columns_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMNS
+
         assert len(B31_C09_02_COLUMNS) == 15
 
     def test_crr_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import C09_02_COLUMN_REFS
+
         assert C09_02_COLUMN_REFS == [
-            "0010", "0030", "0040", "0050", "0055", "0060", "0070",
-            "0080", "0090", "0100", "0105", "0110", "0120",
-            "0121", "0122", "0125", "0130",
+            "0010",
+            "0030",
+            "0040",
+            "0050",
+            "0055",
+            "0060",
+            "0070",
+            "0080",
+            "0090",
+            "0100",
+            "0105",
+            "0110",
+            "0120",
+            "0121",
+            "0122",
+            "0125",
+            "0130",
         ]
 
     def test_b31_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMN_REFS
+
         assert B31_C09_02_COLUMN_REFS == [
-            "0010", "0030", "0040", "0050", "0055", "0060", "0070",
-            "0080", "0090", "0100", "0105", "0107", "0120", "0125", "0130",
+            "0010",
+            "0030",
+            "0040",
+            "0050",
+            "0055",
+            "0060",
+            "0070",
+            "0080",
+            "0090",
+            "0100",
+            "0105",
+            "0107",
+            "0120",
+            "0125",
+            "0130",
         ]
 
     def test_b31_adds_col_0107(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMN_REFS
+
         assert "0107" in B31_C09_02_COLUMN_REFS
 
     def test_b31_removes_supporting_factor_columns(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMN_REFS
+
         assert "0110" not in B31_C09_02_COLUMN_REFS
         assert "0121" not in B31_C09_02_COLUMN_REFS
         assert "0122" not in B31_C09_02_COLUMN_REFS
 
     def test_crr_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_ROWS
+
         assert len(CRR_C09_02_ROWS) == 16
 
     def test_b31_rows_count(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_ROWS
+
         assert len(B31_C09_02_ROWS) == 19
 
     def test_crr_has_equity_row(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_ROWS
+
         refs = [r.ref for r in CRR_C09_02_ROWS]
         assert "0140" in refs
 
     def test_b31_removes_equity_row(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_ROWS
+
         refs = [r.ref for r in B31_C09_02_ROWS]
         assert "0140" not in refs
 
     def test_b31_adds_corporate_sub_rows(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_ROWS
+
         refs = [r.ref for r in B31_C09_02_ROWS]
         assert "0048" in refs  # FSE/large corporates
         assert "0049" in refs  # purchased receivables
@@ -7350,6 +7449,7 @@ class TestC0902TemplateDefinitions:
 
     def test_b31_restructures_retail_re(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_ROWS
+
         refs = [r.ref for r in B31_C09_02_ROWS]
         assert "0071" in refs  # resi RE SME
         assert "0072" in refs  # resi RE non-SME
@@ -7358,18 +7458,22 @@ class TestC0902TemplateDefinitions:
 
     def test_crr_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_COLUMNS, get_c09_02_columns
+
         assert get_c09_02_columns("CRR") is CRR_C09_02_COLUMNS
 
     def test_b31_selector(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C09_02_COLUMNS, get_c09_02_columns
+
         assert get_c09_02_columns("BASEL_3_1") is B31_C09_02_COLUMNS
 
     def test_total_row_is_last(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_ROWS
+
         assert CRR_C09_02_ROWS[-1].ref == "0150"
 
     def test_irb_class_map(self) -> None:
         from rwa_calc.reporting.corep.templates import C09_02_IRB_CLASS_MAP
+
         assert C09_02_IRB_CLASS_MAP["corporate"] == "corporate"
         assert C09_02_IRB_CLASS_MAP["retail_mortgage"] == "retail"
         assert C09_02_IRB_CLASS_MAP["institution"] == "institution"
@@ -7405,27 +7509,31 @@ class TestC0902Generation:
         assert len(total.columns) == 17  # 15 data + 2 meta
 
     def test_sa_only_returns_empty(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-            "cp_country_code": ["GB"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+                "cp_country_code": ["GB"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert bundle.c09_02 == {}
 
     def test_missing_country_code_returns_empty(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "rwa_final": [500.0],
-            "irb_pd_floored": [0.01],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "rwa_final": [500.0],
+                "irb_pd_floored": [0.01],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert bundle.c09_02 == {}
@@ -7532,70 +7640,64 @@ class TestC0902EdgeCases:
     def test_total_equals_sum_of_countries(self) -> None:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_geo_results(), framework="CRR")
-        total_rwa = bundle.c09_02["TOTAL"].filter(
-            pl.col("row_ref") == "0150"
-        )["0125"][0]
-        gb_rwa = bundle.c09_02["GB"].filter(
-            pl.col("row_ref") == "0150"
-        )["0125"][0]
-        us_rwa = bundle.c09_02["US"].filter(
-            pl.col("row_ref") == "0150"
-        )["0125"][0]
+        total_rwa = bundle.c09_02["TOTAL"].filter(pl.col("row_ref") == "0150")["0125"][0]
+        gb_rwa = bundle.c09_02["GB"].filter(pl.col("row_ref") == "0150")["0125"][0]
+        us_rwa = bundle.c09_02["US"].filter(pl.col("row_ref") == "0150")["0125"][0]
         assert total_rwa == pytest.approx(gb_rwa + us_rwa)
 
     def test_single_country_total_matches(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [1000.0],
-            "ead_gross": [1200.0],
-            "rwa_final": [500.0],
-            "cp_country_code": ["GB"],
-            "irb_pd_floored": [0.01],
-            "lgd_post_crm": [0.45],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [1000.0],
+                "ead_gross": [1200.0],
+                "rwa_final": [500.0],
+                "cp_country_code": ["GB"],
+                "irb_pd_floored": [0.01],
+                "lgd_post_crm": [0.45],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
-        total_rwa = bundle.c09_02["TOTAL"].filter(
-            pl.col("row_ref") == "0150"
-        )["0125"][0]
-        gb_rwa = bundle.c09_02["GB"].filter(
-            pl.col("row_ref") == "0150"
-        )["0125"][0]
+        total_rwa = bundle.c09_02["TOTAL"].filter(pl.col("row_ref") == "0150")["0125"][0]
+        gb_rwa = bundle.c09_02["GB"].filter(pl.col("row_ref") == "0150")["0125"][0]
         assert total_rwa == pytest.approx(gb_rwa)
 
     def test_null_country_in_total_but_not_per_country(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["foundation_irb", "foundation_irb"],
-            "exposure_class": ["corporate", "corporate"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_final": [500.0, 250.0],
-            "cp_country_code": ["GB", None],
-            "irb_pd_floored": [0.01, 0.02],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["foundation_irb", "foundation_irb"],
+                "exposure_class": ["corporate", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [500.0, 250.0],
+                "cp_country_code": ["GB", None],
+                "irb_pd_floored": [0.01, 0.02],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         assert "TOTAL" in bundle.c09_02
         assert "GB" in bundle.c09_02
-        total_ead = bundle.c09_02["TOTAL"].filter(
-            pl.col("row_ref") == "0150"
-        )["0105"][0]
+        total_ead = bundle.c09_02["TOTAL"].filter(pl.col("row_ref") == "0150")["0105"][0]
         # Total includes both (1000 + 500 = 1500)
         assert total_ead == pytest.approx(1500.0)
 
     def test_slotting_included_in_corporate(self) -> None:
         """Slotting exposures classified under corporate in geographical breakdown."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1", "E2"],
-            "approach_applied": ["slotting", "foundation_irb"],
-            "exposure_class": ["specialised_lending", "corporate"],
-            "ead_final": [1000.0, 500.0],
-            "rwa_final": [700.0, 250.0],
-            "cp_country_code": ["GB", "GB"],
-            "irb_pd_floored": [0.005, 0.01],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1", "E2"],
+                "approach_applied": ["slotting", "foundation_irb"],
+                "exposure_class": ["specialised_lending", "corporate"],
+                "ead_final": [1000.0, 500.0],
+                "rwa_final": [700.0, 250.0],
+                "cp_country_code": ["GB", "GB"],
+                "irb_pd_floored": [0.005, 0.01],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         total = bundle.c09_02["TOTAL"]
@@ -7604,16 +7706,18 @@ class TestC0902EdgeCases:
         assert corp_row["0105"][0] == pytest.approx(1500.0)
 
     def test_zero_ead_exposure(self) -> None:
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["foundation_irb"],
-            "exposure_class": ["corporate"],
-            "ead_final": [0.0],
-            "ead_gross": [0.0],
-            "rwa_final": [0.0],
-            "cp_country_code": ["GB"],
-            "irb_pd_floored": [0.01],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["foundation_irb"],
+                "exposure_class": ["corporate"],
+                "ead_final": [0.0],
+                "ead_gross": [0.0],
+                "rwa_final": [0.0],
+                "cp_country_code": ["GB"],
+                "irb_pd_floored": [0.01],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         total = bundle.c09_02["TOTAL"]
@@ -7634,27 +7738,38 @@ def _sa_results_with_defaulted() -> pl.LazyFrame:
     - 1 non-defaulted corporate (RW 100%) to verify filtering
     - 1 defaulted retail at RW 150%
     """
-    return pl.LazyFrame({
-        "exposure_reference": [
-            "SA_DEF_100", "SA_DEF_150", "SA_CORP_LIVE", "SA_RET_DEF",
-        ],
-        "approach_applied": [
-            "standardised", "standardised", "standardised", "standardised",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "corporate", "retail_other",
-        ],
-        "drawn_amount": [1000.0, 2000.0, 3000.0, 500.0],
-        "undrawn_amount": [0.0, 0.0, 500.0, 0.0],
-        "ead_final": [1000.0, 2000.0, 3200.0, 500.0],
-        "rwa_final": [1000.0, 3000.0, 3200.0, 750.0],
-        "risk_weight": [1.00, 1.50, 1.00, 1.50],
-        "default_status": [True, True, False, True],
-        "scra_provision_amount": [50.0, 100.0, 10.0, 25.0],
-        "gcra_provision_amount": [0.0, 0.0, 5.0, 0.0],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
-        "sa_cqs": [None, None, 3, None],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_DEF_100",
+                "SA_DEF_150",
+                "SA_CORP_LIVE",
+                "SA_RET_DEF",
+            ],
+            "approach_applied": [
+                "standardised",
+                "standardised",
+                "standardised",
+                "standardised",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate",
+                "retail_other",
+            ],
+            "drawn_amount": [1000.0, 2000.0, 3000.0, 500.0],
+            "undrawn_amount": [0.0, 0.0, 500.0, 0.0],
+            "ead_final": [1000.0, 2000.0, 3200.0, 500.0],
+            "rwa_final": [1000.0, 3000.0, 3200.0, 750.0],
+            "risk_weight": [1.00, 1.50, 1.00, 1.50],
+            "default_status": [True, True, False, True],
+            "scra_provision_amount": [50.0, 100.0, 10.0, 25.0],
+            "gcra_provision_amount": [0.0, 0.0, 5.0, 0.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+            "sa_cqs": [None, None, 3, None],
+        }
+    )
 
 
 def _sa_results_with_re_memorandum() -> pl.LazyFrame:
@@ -7665,28 +7780,38 @@ def _sa_results_with_re_memorandum() -> pl.LazyFrame:
     - 1 residential RE-secured exposure (EAD 3000)
     - 1 non-RE exposure
     """
-    return pl.LazyFrame({
-        "exposure_reference": [
-            "SA_CRE_1", "SA_CRE_2", "SA_RRE_1", "SA_PLAIN",
-        ],
-        "approach_applied": [
-            "standardised", "standardised", "standardised", "standardised",
-        ],
-        "exposure_class": [
-            "secured_by_re_property", "secured_by_re_property",
-            "secured_by_re_property", "corporate",
-        ],
-        "drawn_amount": [1000.0, 2000.0, 3000.0, 4000.0],
-        "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
-        "ead_final": [1000.0, 2000.0, 3000.0, 4000.0],
-        "rwa_final": [500.0, 1000.0, 1050.0, 4000.0],
-        "risk_weight": [0.50, 0.50, 0.35, 1.00],
-        "property_type": ["commercial", "commercial", "residential", None],
-        "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
-        "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
-        "sa_cqs": [None, None, None, 3],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_CRE_1",
+                "SA_CRE_2",
+                "SA_RRE_1",
+                "SA_PLAIN",
+            ],
+            "approach_applied": [
+                "standardised",
+                "standardised",
+                "standardised",
+                "standardised",
+            ],
+            "exposure_class": [
+                "secured_by_re_property",
+                "secured_by_re_property",
+                "secured_by_re_property",
+                "corporate",
+            ],
+            "drawn_amount": [1000.0, 2000.0, 3000.0, 4000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 0.0],
+            "ead_final": [1000.0, 2000.0, 3000.0, 4000.0],
+            "rwa_final": [500.0, 1000.0, 1050.0, 4000.0],
+            "risk_weight": [0.50, 0.50, 0.35, 1.00],
+            "property_type": ["commercial", "commercial", "residential", None],
+            "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+            "sa_cqs": [None, None, None, 3],
+        }
+    )
 
 
 def _sa_results_with_supporting_factors() -> pl.LazyFrame:
@@ -7701,30 +7826,41 @@ def _sa_results_with_supporting_factors() -> pl.LazyFrame:
     - 1 infrastructure corporate exposure with supporting factor applied
     - 1 plain corporate (no factor)
     """
-    return pl.LazyFrame({
-        "exposure_reference": [
-            "SA_SME_1", "SA_SME_2", "SA_INFRA_1", "SA_CORP_1",
-        ],
-        "approach_applied": [
-            "standardised", "standardised", "standardised", "standardised",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "corporate", "corporate",
-        ],
-        "drawn_amount": [1000.0, 2000.0, 5000.0, 3000.0],
-        "undrawn_amount": [0.0, 0.0, 0.0, 500.0],
-        "ead_final": [1000.0, 2000.0, 5000.0, 3200.0],
-        "rwa_final": [700.0, 1400.0, 3750.0, 3200.0],
-        "risk_weight": [1.00, 1.00, 1.00, 1.00],
-        "rwa_pre_factor": [1000.0, 2000.0, 5000.0, 3200.0],
-        "supporting_factor_applied": [True, True, True, False],
-        "is_sme": [True, True, False, False],
-        "is_infrastructure": [False, False, True, False],
-        "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
-        "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
-        "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
-        "sa_cqs": [3, 3, 3, 3],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "SA_SME_1",
+                "SA_SME_2",
+                "SA_INFRA_1",
+                "SA_CORP_1",
+            ],
+            "approach_applied": [
+                "standardised",
+                "standardised",
+                "standardised",
+                "standardised",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate",
+                "corporate",
+            ],
+            "drawn_amount": [1000.0, 2000.0, 5000.0, 3000.0],
+            "undrawn_amount": [0.0, 0.0, 0.0, 500.0],
+            "ead_final": [1000.0, 2000.0, 5000.0, 3200.0],
+            "rwa_final": [700.0, 1400.0, 3750.0, 3200.0],
+            "risk_weight": [1.00, 1.00, 1.00, 1.00],
+            "rwa_pre_factor": [1000.0, 2000.0, 5000.0, 3200.0],
+            "supporting_factor_applied": [True, True, True, False],
+            "is_sme": [True, True, False, False],
+            "is_infrastructure": [False, False, True, False],
+            "scra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+            "gcra_provision_amount": [0.0, 0.0, 0.0, 0.0],
+            "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
+            "sa_cqs": [3, 3, 3, 3],
+        }
+    )
 
 
 class TestC0700MemorandumRows:
@@ -7748,9 +7884,7 @@ class TestC0700MemorandumRows:
     def test_row_0300_defaulted_rw_100(self) -> None:
         """Row 0300 filters defaulted exposures with RW = 100%."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0300")
         assert len(row) == 1
@@ -7761,9 +7895,7 @@ class TestC0700MemorandumRows:
     def test_row_0320_defaulted_rw_150(self) -> None:
         """Row 0320 filters defaulted exposures with RW = 150%."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0320")
         assert len(row) == 1
@@ -7774,9 +7906,7 @@ class TestC0700MemorandumRows:
     def test_row_0300_excludes_non_defaulted(self) -> None:
         """Row 0300 must not include non-defaulted exposures even at RW 100%."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row_0300 = corp.filter(pl.col("row_ref") == "0300")
         # SA_CORP_LIVE is RW 100% but NOT defaulted; should be excluded
@@ -7786,9 +7916,7 @@ class TestC0700MemorandumRows:
     def test_row_0320_retail_class(self) -> None:
         """Row 0320 applies within each exposure class independently."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         retail = bundle.c07_00["retail_other"]
         row = retail.filter(pl.col("row_ref") == "0320")
         # SA_RET_DEF has EAD 500, RW 150%, defaulted
@@ -7798,9 +7926,7 @@ class TestC0700MemorandumRows:
     def test_row_0300_null_when_no_defaults_at_100(self) -> None:
         """Row 0300 is null when no defaulted exposures have RW = 100%."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         retail = bundle.c07_00["retail_other"]
         row = retail.filter(pl.col("row_ref") == "0300")
         # No defaulted retail exposures at RW 100%
@@ -7809,9 +7935,7 @@ class TestC0700MemorandumRows:
     def test_b31_rows_0300_0320_present(self) -> None:
         """Basel 3.1 OF 07.00 also has rows 0300 and 0320."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="BASEL_3_1")
         corp = bundle.c07_00["corporate"]
         row_refs = corp["row_ref"].to_list()
         assert "0300" in row_refs
@@ -7820,9 +7944,7 @@ class TestC0700MemorandumRows:
     def test_b31_row_0300_populated(self) -> None:
         """B31 row 0300 is populated from defaulted exposures at RW 100%."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="BASEL_3_1")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0300")
         assert row["0200"][0] == pytest.approx(1000.0)
@@ -7830,9 +7952,7 @@ class TestC0700MemorandumRows:
     def test_row_0290_crr_commercial_re(self) -> None:
         """CRR row 0290: commercial immovable property secured exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_re_memorandum(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_re_memorandum(), framework="CRR")
         re = bundle.c07_00["secured_by_re_property"]
         row = re.filter(pl.col("row_ref") == "0290")
         assert len(row) == 1
@@ -7844,9 +7964,7 @@ class TestC0700MemorandumRows:
     def test_row_0310_crr_residential_re(self) -> None:
         """CRR row 0310: residential immovable property secured exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_re_memorandum(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_re_memorandum(), framework="CRR")
         re = bundle.c07_00["secured_by_re_property"]
         row = re.filter(pl.col("row_ref") == "0310")
         assert len(row) == 1
@@ -7857,9 +7975,7 @@ class TestC0700MemorandumRows:
     def test_row_0290_null_for_non_re_class(self) -> None:
         """Row 0290 is null for classes without RE-secured exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_re_memorandum(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_re_memorandum(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0290")
         assert row["0200"][0] is None
@@ -7878,21 +7994,23 @@ class TestC0700MemorandumRows:
 
     def test_defaulted_rw_matching_uses_rounding(self) -> None:
         """RW comparison uses 4-decimal rounding to handle float imprecision."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["E1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["corporate"],
-            "drawn_amount": [1000.0],
-            "undrawn_amount": [0.0],
-            "ead_final": [1000.0],
-            "rwa_final": [1000.0],
-            # Slightly imprecise 100% due to float arithmetic
-            "risk_weight": [0.99999999],
-            "default_status": [True],
-            "scra_provision_amount": [0.0],
-            "gcra_provision_amount": [0.0],
-            "counterparty_reference": ["CP_A"],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["E1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["corporate"],
+                "drawn_amount": [1000.0],
+                "undrawn_amount": [0.0],
+                "ead_final": [1000.0],
+                "rwa_final": [1000.0],
+                # Slightly imprecise 100% due to float arithmetic
+                "risk_weight": [0.99999999],
+                "default_status": [True],
+                "scra_provision_amount": [0.0],
+                "gcra_provision_amount": [0.0],
+                "counterparty_reference": ["CP_A"],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="CRR")
         corp = bundle.c07_00["corporate"]
@@ -7903,9 +8021,7 @@ class TestC0700MemorandumRows:
     def test_memorandum_columns_complete(self) -> None:
         """Memorandum rows have the full set of COREP columns."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_defaulted(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_defaulted(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row_0300 = corp.filter(pl.col("row_ref") == "0300")
         # Should have all CRR C07 columns
@@ -7933,9 +8049,7 @@ class TestC0700SupportingFactorRows:
     def test_row_0030_sme_exposures(self) -> None:
         """Row 0030 filters SME exposures with supporting factor applied."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         # corporate_sme merges into corporate for C 07.00
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0030")
@@ -7947,9 +8061,7 @@ class TestC0700SupportingFactorRows:
     def test_row_0035_infrastructure_exposures(self) -> None:
         """Row 0035 filters infrastructure exposures with factor applied."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0035")
         assert len(row) == 1
@@ -7960,9 +8072,7 @@ class TestC0700SupportingFactorRows:
     def test_row_0030_excludes_non_sme(self) -> None:
         """Row 0030 excludes non-SME exposures even with factor applied."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row_0030 = corp.filter(pl.col("row_ref") == "0030")
         # Only SME exposures (3000), not infra (5000) or plain (3200)
@@ -7971,9 +8081,7 @@ class TestC0700SupportingFactorRows:
     def test_row_0035_excludes_non_infrastructure(self) -> None:
         """Row 0035 excludes non-infrastructure exposures."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row_0035 = corp.filter(pl.col("row_ref") == "0035")
         # Only infra (5000), not SME (3000) or plain (3200)
@@ -8013,9 +8121,7 @@ class TestC0700SupportingFactorRows:
     def test_original_exposure_correct_for_sme(self) -> None:
         """Row 0030 original exposure (col 0010) = drawn + undrawn for SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         row = corp.filter(pl.col("row_ref") == "0030")
         # SME_1: 1000+0=1000, SME_2: 2000+0=2000, total 3000
@@ -8041,9 +8147,7 @@ class TestC0700SupportingFactorRWEA:
     def test_col_0215_pre_factor_rwa(self) -> None:
         """Col 0215 uses rwa_pre_factor when rwa_before_sme_factor absent."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Total rwa_pre_factor: 1000+2000+5000+3200 = 11200
@@ -8052,9 +8156,7 @@ class TestC0700SupportingFactorRWEA:
     def test_col_0216_sme_adjustment(self) -> None:
         """Col 0216 computes SME factor adjustment from pipeline columns."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # SME adjustment = pre - post for SME rows
@@ -8064,9 +8166,7 @@ class TestC0700SupportingFactorRWEA:
     def test_col_0217_infra_adjustment(self) -> None:
         """Col 0217 computes infrastructure factor adjustment."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Infrastructure adjustment = pre - post for infra rows
@@ -8076,9 +8176,7 @@ class TestC0700SupportingFactorRWEA:
     def test_col_0220_post_factor_rwa(self) -> None:
         """Col 0220 (post-factor RWEA) is the sum of rwa_final."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # Total rwa_final: 700+1400+3750+3200 = 9050
@@ -8087,9 +8185,7 @@ class TestC0700SupportingFactorRWEA:
     def test_pre_minus_adjustments_equals_post(self) -> None:
         """RWEA integrity: 0215 - 0216 - 0217 ≈ 0220."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _sa_results_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         pre = total["0215"][0]
@@ -8131,84 +8227,164 @@ def _irb_results_with_sme_fse() -> pl.LazyFrame:
     the per-sub-class breakdown (rows 0295-0297, 0355-0356, 0382-0385,
     0400/0410).
     """
-    return pl.LazyFrame({
-        "exposure_reference": [
-            "FIRB_CORP_FSE_1", "FIRB_CORP_SME_1", "FIRB_CORP_OTHER_1",
-            "AIRB_CORP_SME_1", "AIRB_CORP_OTHER_1",
-            "AIRB_MORT_RES_SME_1", "AIRB_MORT_RES_1", "AIRB_MORT_COM_SME_1",
-            "AIRB_MORT_COM_1",
-            "AIRB_QRRE_1",
-            "AIRB_OTHER_SME_1", "AIRB_OTHER_1",
-        ],
-        "approach_applied": [
-            "foundation_irb", "foundation_irb", "foundation_irb",
-            "advanced_irb", "advanced_irb",
-            "advanced_irb", "advanced_irb", "advanced_irb", "advanced_irb",
-            "advanced_irb",
-            "advanced_irb", "advanced_irb",
-        ],
-        "exposure_class": [
-            "corporate", "corporate", "corporate",
-            "corporate", "corporate",
-            "retail_mortgage", "retail_mortgage", "retail_mortgage",
-            "retail_mortgage",
-            "retail_qrre",
-            "retail_other", "retail_other",
-        ],
-        "ead_final": [
-            1000.0, 500.0, 2000.0,
-            800.0, 1200.0,
-            400.0, 600.0, 300.0, 700.0,
-            900.0,
-            350.0, 450.0,
-        ],
-        "rwa_final": [
-            800.0, 300.0, 1600.0,
-            640.0, 960.0,
-            120.0, 180.0, 150.0, 350.0,
-            540.0,
-            280.0, 360.0,
-        ],
-        "is_sme": [
-            False, True, False,
-            True, False,
-            True, False, True, False,
-            False,
-            True, False,
-        ],
-        "apply_fi_scalar": [
-            True, False, False,
-            False, False,
-            False, False, False, False,
-            False,
-            False, False,
-        ],
-        "property_type": [
-            None, None, None,
-            None, None,
-            "residential", "residential", "commercial", "commercial",
-            None,
-            None, None,
-        ],
-        "sa_rwa": [
-            700.0, 350.0, 1400.0,
-            560.0, 840.0,
-            100.0, 150.0, 120.0, 280.0,
-            450.0,
-            245.0, 315.0,
-        ],
-        "rwa_pre_floor": [
-            800.0, 300.0, 1600.0,
-            640.0, 960.0,
-            120.0, 180.0, 150.0, 350.0,
-            540.0,
-            280.0, 360.0,
-        ],
-        "counterparty_reference": [
-            "CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CP7", "CP8", "CP9",
-            "CP10", "CP11", "CP12",
-        ],
-    })
+    return pl.LazyFrame(
+        {
+            "exposure_reference": [
+                "FIRB_CORP_FSE_1",
+                "FIRB_CORP_SME_1",
+                "FIRB_CORP_OTHER_1",
+                "AIRB_CORP_SME_1",
+                "AIRB_CORP_OTHER_1",
+                "AIRB_MORT_RES_SME_1",
+                "AIRB_MORT_RES_1",
+                "AIRB_MORT_COM_SME_1",
+                "AIRB_MORT_COM_1",
+                "AIRB_QRRE_1",
+                "AIRB_OTHER_SME_1",
+                "AIRB_OTHER_1",
+            ],
+            "approach_applied": [
+                "foundation_irb",
+                "foundation_irb",
+                "foundation_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+                "advanced_irb",
+            ],
+            "exposure_class": [
+                "corporate",
+                "corporate",
+                "corporate",
+                "corporate",
+                "corporate",
+                "retail_mortgage",
+                "retail_mortgage",
+                "retail_mortgage",
+                "retail_mortgage",
+                "retail_qrre",
+                "retail_other",
+                "retail_other",
+            ],
+            "ead_final": [
+                1000.0,
+                500.0,
+                2000.0,
+                800.0,
+                1200.0,
+                400.0,
+                600.0,
+                300.0,
+                700.0,
+                900.0,
+                350.0,
+                450.0,
+            ],
+            "rwa_final": [
+                800.0,
+                300.0,
+                1600.0,
+                640.0,
+                960.0,
+                120.0,
+                180.0,
+                150.0,
+                350.0,
+                540.0,
+                280.0,
+                360.0,
+            ],
+            "is_sme": [
+                False,
+                True,
+                False,
+                True,
+                False,
+                True,
+                False,
+                True,
+                False,
+                False,
+                True,
+                False,
+            ],
+            "apply_fi_scalar": [
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+            ],
+            "property_type": [
+                None,
+                None,
+                None,
+                None,
+                None,
+                "residential",
+                "residential",
+                "commercial",
+                "commercial",
+                None,
+                None,
+                None,
+            ],
+            "sa_rwa": [
+                700.0,
+                350.0,
+                1400.0,
+                560.0,
+                840.0,
+                100.0,
+                150.0,
+                120.0,
+                280.0,
+                450.0,
+                245.0,
+                315.0,
+            ],
+            "rwa_pre_floor": [
+                800.0,
+                300.0,
+                1600.0,
+                640.0,
+                960.0,
+                120.0,
+                180.0,
+                150.0,
+                350.0,
+                540.0,
+                280.0,
+                360.0,
+            ],
+            "counterparty_reference": [
+                "CP1",
+                "CP2",
+                "CP3",
+                "CP4",
+                "CP5",
+                "CP6",
+                "CP7",
+                "CP8",
+                "CP9",
+                "CP10",
+                "CP11",
+                "CP12",
+            ],
+        }
+    )
 
 
 class TestOF0200IRBSubRowSplits:
@@ -8224,9 +8400,7 @@ class TestOF0200IRBSubRowSplits:
     def test_firb_fse_row_0295(self) -> None:
         """Row 0295: F-IRB financial/large corporates."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         assert bundle.c_02_00 is not None
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0295")
         assert len(row) == 1
@@ -8236,9 +8410,7 @@ class TestOF0200IRBSubRowSplits:
     def test_firb_sme_row_0296(self) -> None:
         """Row 0296: F-IRB other general corporates SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0296")
         assert len(row) == 1
         # FIRB_CORP_SME_1: rwa = 300
@@ -8247,9 +8419,7 @@ class TestOF0200IRBSubRowSplits:
     def test_firb_nonsme_row_0297(self) -> None:
         """Row 0297: F-IRB other general corporates non-SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0297")
         assert len(row) == 1
         # FIRB_CORP_OTHER_1: rwa = 1600
@@ -8258,9 +8428,7 @@ class TestOF0200IRBSubRowSplits:
     def test_firb_corp_sub_rows_sum_to_total(self) -> None:
         """Rows 0295+0296+0297 should sum to total F-IRB corporates (row 0260)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         df = bundle.c_02_00
         r0260 = float(df.filter(pl.col("row_ref") == "0260")["0010"][0])
         r0290 = float(df.filter(pl.col("row_ref") == "0290")["0010"][0])
@@ -8273,9 +8441,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_sme_row_0355(self) -> None:
         """Row 0355: A-IRB other general corporates SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0355")
         assert len(row) == 1
         # AIRB_CORP_SME_1: rwa = 640
@@ -8284,9 +8450,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_nonsme_row_0356(self) -> None:
         """Row 0356: A-IRB other general corporates non-SME (incl. FSE)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0356")
         assert len(row) == 1
         # AIRB_CORP_OTHER_1: rwa = 960
@@ -8295,9 +8459,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_resi_sme_row_0382(self) -> None:
         """Row 0382: A-IRB retail residential RE SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0382")
         assert len(row) == 1
         # AIRB_MORT_RES_SME_1: rwa = 120
@@ -8306,9 +8468,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_resi_nonsme_row_0383(self) -> None:
         """Row 0383: A-IRB retail residential RE non-SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0383")
         assert len(row) == 1
         # AIRB_MORT_RES_1: rwa = 180
@@ -8317,9 +8477,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_comm_sme_row_0384(self) -> None:
         """Row 0384: A-IRB retail commercial RE SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0384")
         assert len(row) == 1
         # AIRB_MORT_COM_SME_1: rwa = 150
@@ -8328,9 +8486,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_comm_nonsme_row_0385(self) -> None:
         """Row 0385: A-IRB retail commercial RE non-SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0385")
         assert len(row) == 1
         # AIRB_MORT_COM_1: rwa = 350
@@ -8339,9 +8495,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_retail_re_sub_rows_sum_to_total(self) -> None:
         """Rows 0382+0383+0384+0385 sum to total A-IRB retail RE (row 0380)."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         df = bundle.c_02_00
         r0380 = float(df.filter(pl.col("row_ref") == "0380")["0010"][0])
         r0382 = float(df.filter(pl.col("row_ref") == "0382")["0010"][0])
@@ -8353,9 +8507,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_other_sme_row_0400(self) -> None:
         """Row 0400: A-IRB retail other SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0400")
         assert len(row) == 1
         # AIRB_OTHER_SME_1: rwa = 280
@@ -8364,9 +8516,7 @@ class TestOF0200IRBSubRowSplits:
     def test_airb_other_nonsme_row_0410(self) -> None:
         """Row 0410: A-IRB retail other non-SME."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0410")
         assert len(row) == 1
         # AIRB_OTHER_1: rwa = 360
@@ -8375,13 +8525,10 @@ class TestOF0200IRBSubRowSplits:
     def test_no_sub_rows_in_crr(self) -> None:
         """CRR does not have sub-rows 0295-0297, 0355-0356, 0382-0385."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="CRR")
         assert bundle.c_02_00 is not None
         df = bundle.c_02_00
-        b31_only_rows = ["0295", "0296", "0297", "0355", "0356", "0382",
-                         "0383", "0384", "0385"]
+        b31_only_rows = ["0295", "0296", "0297", "0355", "0356", "0382", "0383", "0384", "0385"]
         for ref in b31_only_rows:
             assert len(df.filter(pl.col("row_ref") == ref)) == 0
 
@@ -8411,14 +8558,19 @@ class TestOF0200FloorIndicatorRows:
     def test_floor_multiplier_from_summary(self) -> None:
         """Row 0035 shows floor_pct * 100 from OutputFloorSummary."""
         summary = OutputFloorSummary(
-            u_trea=1000.0, s_trea=800.0, floor_pct=0.725,
-            floor_threshold=580.0, shortfall=0.0,
-            portfolio_floor_binding=False, total_rwa_post_floor=1000.0,
+            u_trea=1000.0,
+            s_trea=800.0,
+            floor_pct=0.725,
+            floor_threshold=580.0,
+            shortfall=0.0,
+            portfolio_floor_binding=False,
+            total_rwa_post_floor=1000.0,
             of_adj=50.0,
         )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1",
+            _irb_results_with_sme_fse(),
+            framework="BASEL_3_1",
             output_floor_summary=summary,
         )
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
@@ -8429,14 +8581,19 @@ class TestOF0200FloorIndicatorRows:
     def test_of_adj_from_summary(self) -> None:
         """Row 0036 shows of_adj monetary value from OutputFloorSummary."""
         summary = OutputFloorSummary(
-            u_trea=1000.0, s_trea=800.0, floor_pct=0.725,
-            floor_threshold=580.0, shortfall=0.0,
-            portfolio_floor_binding=False, total_rwa_post_floor=1000.0,
+            u_trea=1000.0,
+            s_trea=800.0,
+            floor_pct=0.725,
+            floor_threshold=580.0,
+            shortfall=0.0,
+            portfolio_floor_binding=False,
+            total_rwa_post_floor=1000.0,
             of_adj=123.45,
         )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1",
+            _irb_results_with_sme_fse(),
+            framework="BASEL_3_1",
             output_floor_summary=summary,
         )
         row = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
@@ -8446,9 +8603,7 @@ class TestOF0200FloorIndicatorRows:
     def test_floor_rows_zero_without_summary(self) -> None:
         """Rows 0035/0036 are zero when no OutputFloorSummary is provided."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="BASEL_3_1")
         r0035 = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
         r0036 = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
         assert r0035["0010"][0] == pytest.approx(0.0)
@@ -8457,9 +8612,7 @@ class TestOF0200FloorIndicatorRows:
     def test_floor_rows_absent_crr(self) -> None:
         """CRR does not have floor indicator rows 0034-0036."""
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _irb_results_with_sme_fse(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_irb_results_with_sme_fse(), framework="CRR")
         df = bundle.c_02_00
         for ref in ("0034", "0035", "0036"):
             assert len(df.filter(pl.col("row_ref") == ref)) == 0
@@ -8476,22 +8629,24 @@ class TestOF0700RESubRowFallback:
 
     def test_re_rows_with_has_income_cover(self) -> None:
         """RE sub-rows populate using has_income_cover as fallback."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["RE_1", "RE_2", "RE_3"],
-            "approach_applied": ["standardised"] * 3,
-            "exposure_class": ["secured_by_re_residential"] * 3,
-            "drawn_amount": [100.0, 200.0, 300.0],
-            "undrawn_amount": [0.0, 0.0, 0.0],
-            "ead_final": [100.0, 200.0, 300.0],
-            "rwa_final": [20.0, 70.0, 105.0],
-            "risk_weight": [0.20, 0.35, 0.35],
-            "property_type": ["residential", "residential", "residential"],
-            "has_income_cover": [False, True, False],
-            "scra_provision_amount": [0.0] * 3,
-            "gcra_provision_amount": [0.0] * 3,
-            "counterparty_reference": ["CP1", "CP2", "CP3"],
-            "sa_cqs": [None] * 3,
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["RE_1", "RE_2", "RE_3"],
+                "approach_applied": ["standardised"] * 3,
+                "exposure_class": ["secured_by_re_residential"] * 3,
+                "drawn_amount": [100.0, 200.0, 300.0],
+                "undrawn_amount": [0.0, 0.0, 0.0],
+                "ead_final": [100.0, 200.0, 300.0],
+                "rwa_final": [20.0, 70.0, 105.0],
+                "risk_weight": [0.20, 0.35, 0.35],
+                "property_type": ["residential", "residential", "residential"],
+                "has_income_cover": [False, True, False],
+                "scra_provision_amount": [0.0] * 3,
+                "gcra_provision_amount": [0.0] * 3,
+                "counterparty_reference": ["CP1", "CP2", "CP3"],
+                "sa_cqs": [None] * 3,
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
         re_res = bundle.c07_00["secured_by_re_residential"]
@@ -8508,22 +8663,24 @@ class TestOF0700RESubRowFallback:
 
     def test_re_rows_with_is_income_producing(self) -> None:
         """RE sub-rows populate using is_income_producing as second fallback."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["RE_1", "RE_2"],
-            "approach_applied": ["standardised"] * 2,
-            "exposure_class": ["secured_by_re_residential"] * 2,
-            "drawn_amount": [100.0, 200.0],
-            "undrawn_amount": [0.0, 0.0],
-            "ead_final": [100.0, 200.0],
-            "rwa_final": [20.0, 70.0],
-            "risk_weight": [0.20, 0.35],
-            "property_type": ["residential", "residential"],
-            "is_income_producing": [False, True],
-            "scra_provision_amount": [0.0] * 2,
-            "gcra_provision_amount": [0.0] * 2,
-            "counterparty_reference": ["CP1", "CP2"],
-            "sa_cqs": [None] * 2,
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["RE_1", "RE_2"],
+                "approach_applied": ["standardised"] * 2,
+                "exposure_class": ["secured_by_re_residential"] * 2,
+                "drawn_amount": [100.0, 200.0],
+                "undrawn_amount": [0.0, 0.0],
+                "ead_final": [100.0, 200.0],
+                "rwa_final": [20.0, 70.0],
+                "risk_weight": [0.20, 0.35],
+                "property_type": ["residential", "residential"],
+                "is_income_producing": [False, True],
+                "scra_provision_amount": [0.0] * 2,
+                "gcra_provision_amount": [0.0] * 2,
+                "counterparty_reference": ["CP1", "CP2"],
+                "sa_cqs": [None] * 2,
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
         re_res = bundle.c07_00["secured_by_re_residential"]
@@ -8533,21 +8690,23 @@ class TestOF0700RESubRowFallback:
 
     def test_re_rows_empty_without_any_dependency_column(self) -> None:
         """Without any dependency column, sub-rows remain null."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["RE_1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["secured_by_re_residential"],
-            "drawn_amount": [100.0],
-            "undrawn_amount": [0.0],
-            "ead_final": [100.0],
-            "rwa_final": [20.0],
-            "risk_weight": [0.20],
-            "property_type": ["residential"],
-            "scra_provision_amount": [0.0],
-            "gcra_provision_amount": [0.0],
-            "counterparty_reference": ["CP1"],
-            "sa_cqs": [None],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["RE_1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["secured_by_re_residential"],
+                "drawn_amount": [100.0],
+                "undrawn_amount": [0.0],
+                "ead_final": [100.0],
+                "rwa_final": [20.0],
+                "risk_weight": [0.20],
+                "property_type": ["residential"],
+                "scra_provision_amount": [0.0],
+                "gcra_provision_amount": [0.0],
+                "counterparty_reference": ["CP1"],
+                "sa_cqs": [None],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
         re_res = bundle.c07_00["secured_by_re_residential"]
@@ -8558,23 +8717,25 @@ class TestOF0700RESubRowFallback:
 
     def test_materially_dependent_preferred_over_has_income_cover(self) -> None:
         """When both columns exist, materially_dependent_on_property wins."""
-        data = pl.LazyFrame({
-            "exposure_reference": ["RE_1"],
-            "approach_applied": ["standardised"],
-            "exposure_class": ["secured_by_re_residential"],
-            "drawn_amount": [100.0],
-            "undrawn_amount": [0.0],
-            "ead_final": [100.0],
-            "rwa_final": [20.0],
-            "risk_weight": [0.20],
-            "property_type": ["residential"],
-            "materially_dependent_on_property": [True],
-            "has_income_cover": [False],  # Different value — should be ignored
-            "scra_provision_amount": [0.0],
-            "gcra_provision_amount": [0.0],
-            "counterparty_reference": ["CP1"],
-            "sa_cqs": [None],
-        })
+        data = pl.LazyFrame(
+            {
+                "exposure_reference": ["RE_1"],
+                "approach_applied": ["standardised"],
+                "exposure_class": ["secured_by_re_residential"],
+                "drawn_amount": [100.0],
+                "undrawn_amount": [0.0],
+                "ead_final": [100.0],
+                "rwa_final": [20.0],
+                "risk_weight": [0.20],
+                "property_type": ["residential"],
+                "materially_dependent_on_property": [True],
+                "has_income_cover": [False],  # Different value — should be ignored
+                "scra_provision_amount": [0.0],
+                "gcra_provision_amount": [0.0],
+                "counterparty_reference": ["CP1"],
+                "sa_cqs": [None],
+            }
+        )
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
         re_res = bundle.c07_00["secured_by_re_residential"]
@@ -8616,26 +8777,26 @@ class TestEquityTransitionalColumns:
         # Replace equity_transitional with our test config
         import dataclasses
 
-        config_with_trans = dataclasses.replace(
-            config_b31, equity_transitional=eq_config
-        )
+        config_with_trans = dataclasses.replace(config_b31, equity_transitional=eq_config)
 
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EQ_1", "EQ_2"],
-            "equity_type": ["listed", "listed"],
-            "ead_final": [1000.0, 500.0],
-            "risk_weight": [2.50, 2.50],
-            "is_speculative": [False, True],
-            "is_diversified_portfolio": [False, False],
-            "is_exchange_traded": [False, False],
-            "is_government_supported": [False, False],
-            "ciu_approach": [None, None],
-            "ciu_mandate_rw": [None, None],
-            "ciu_third_party_calc": [None, None],
-            "fund_reference": [None, None],
-            "ciu_look_through_rw": [None, None],
-            "fund_nav": [None, None],
-        })
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EQ_1", "EQ_2"],
+                "equity_type": ["listed", "listed"],
+                "ead_final": [1000.0, 500.0],
+                "risk_weight": [2.50, 2.50],
+                "is_speculative": [False, True],
+                "is_diversified_portfolio": [False, False],
+                "is_exchange_traded": [False, False],
+                "is_government_supported": [False, False],
+                "ciu_approach": [None, None],
+                "ciu_mandate_rw": [None, None],
+                "ciu_third_party_calc": [None, None],
+                "fund_reference": [None, None],
+                "ciu_look_through_rw": [None, None],
+                "fund_nav": [None, None],
+            }
+        )
         calc = EquityCalculator()
         result = calc._apply_transitional_floor(exposures, config_with_trans)
         collected = result.collect()

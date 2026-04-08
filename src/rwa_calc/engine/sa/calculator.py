@@ -255,9 +255,7 @@ class SACalculator:
 
         # Step 2c: Apply due diligence override (Basel 3.1 Art. 110A)
         dd_errors: list[CalculationError] = []
-        exposures = self._apply_due_diligence_override(
-            exposures, config, errors=dd_errors
-        )
+        exposures = self._apply_due_diligence_override(exposures, config, errors=dd_errors)
         errors.extend(dd_errors)
 
         # Step 3: Calculate pre-factor RWA

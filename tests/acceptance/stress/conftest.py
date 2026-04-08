@@ -148,7 +148,9 @@ def generate_stress_loans(
     """Generate loans linked to counterparties with entity-appropriate products."""
     rng = np.random.default_rng(seed + 10)
 
-    cp_data = counterparties.select("counterparty_reference", "entity_type", "annual_revenue").collect()
+    cp_data = counterparties.select(
+        "counterparty_reference", "entity_type", "annual_revenue"
+    ).collect()
     cp_refs = cp_data["counterparty_reference"].to_numpy()
     entity_types = cp_data["entity_type"].to_numpy()
     revenues = cp_data["annual_revenue"].to_numpy()
@@ -250,7 +252,9 @@ def generate_stress_facilities(
                 "book_code": rng.choice(["CORP_LENDING", "RETAIL_LENDING"], size=n, p=[0.60, 0.40]),
                 "counterparty_reference": cp_refs,
                 "value_date": [base_date] * n,
-                "maturity_date": [base_date + timedelta(days=int(d)) for d in rng.integers(365, 3650, size=n)],
+                "maturity_date": [
+                    base_date + timedelta(days=int(d)) for d in rng.integers(365, 3650, size=n)
+                ],
                 "currency": rng.choice(["GBP", "USD", "EUR"], size=n, p=[0.70, 0.20, 0.10]),
                 "limit": limits,
                 "committed": rng.random(n) > 0.1,
@@ -327,7 +331,11 @@ def generate_stress_org_mappings(
     """Generate org hierarchy mappings."""
     rng = np.random.default_rng(seed + 40)
 
-    cp_refs = counterparties.select("counterparty_reference").collect()["counterparty_reference"].to_numpy()
+    cp_refs = (
+        counterparties.select("counterparty_reference")
+        .collect()["counterparty_reference"]
+        .to_numpy()
+    )
     n = len(cp_refs)
     n_children = int(n * hierarchy_pct)
 
@@ -405,13 +413,19 @@ def generate_stress_contingents(
         pl.DataFrame(
             {
                 "contingent_reference": [f"CONT_{i:08d}" for i in range(n_cont)],
-                "product_type": rng.choice(["GUARANTEE_ISSUED", "LC", "COMMITMENT"], size=n_cont, p=[0.3, 0.3, 0.4]),
+                "product_type": rng.choice(
+                    ["GUARANTEE_ISSUED", "LC", "COMMITMENT"], size=n_cont, p=[0.3, 0.3, 0.4]
+                ),
                 "book_code": ["CORP_LENDING"] * n_cont,
                 "counterparty_reference": cp_refs[cp_assignments],
                 "value_date": [base_date] * n_cont,
-                "maturity_date": [base_date + timedelta(days=int(d)) for d in rng.integers(180, 1825, size=n_cont)],
+                "maturity_date": [
+                    base_date + timedelta(days=int(d)) for d in rng.integers(180, 1825, size=n_cont)
+                ],
                 "currency": rng.choice(["GBP", "USD", "EUR"], size=n_cont, p=[0.70, 0.20, 0.10]),
-                "nominal_amount": np.maximum(revenues[cp_assignments] * rng.uniform(0.005, 0.03, size=n_cont), 5_000),
+                "nominal_amount": np.maximum(
+                    revenues[cp_assignments] * rng.uniform(0.005, 0.03, size=n_cont), 5_000
+                ),
                 "lgd": np.full(n_cont, 0.45),
                 "lgd_unsecured": np.full(n_cont, None),
                 "has_sufficient_collateral_data": np.full(n_cont, None),
@@ -448,7 +462,9 @@ def build_stress_dataset(n_counterparties: int, seed: int = 42) -> dict[str, pl.
     contingents = generate_stress_contingents(counterparties, n_per_cp=0.5, seed=seed)
     ratings = generate_stress_ratings(counterparties, rated_pct=0.7, seed=seed)
     org_mappings = generate_stress_org_mappings(counterparties, hierarchy_pct=0.4, seed=seed)
-    facility_mappings = generate_stress_facility_mappings(facilities, loans, mapping_pct=0.3, seed=seed)
+    facility_mappings = generate_stress_facility_mappings(
+        facilities, loans, mapping_pct=0.3, seed=seed
+    )
 
     return {
         "counterparties": counterparties,

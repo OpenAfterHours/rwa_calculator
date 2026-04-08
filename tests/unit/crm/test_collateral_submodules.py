@@ -43,23 +43,27 @@ class TestGenerateNettingCollateral:
 
     def test_no_netting_agreement_column_returns_none(self) -> None:
         """Missing has_netting_agreement column: returns None."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "drawn_amount": [-50_000.0],
-            "parent_facility_reference": ["FAC001"],
-            "ead_gross": [0.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "drawn_amount": [-50_000.0],
+                "parent_facility_reference": ["FAC001"],
+                "ead_gross": [0.0],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is None
 
     def test_no_parent_facility_column_returns_none(self) -> None:
         """Missing parent_facility_reference column: returns None."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "drawn_amount": [-50_000.0],
-            "has_netting_agreement": [True],
-            "ead_gross": [0.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "drawn_amount": [-50_000.0],
+                "has_netting_agreement": [True],
+                "ead_gross": [0.0],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is None
 
@@ -76,14 +80,16 @@ class TestGenerateNettingCollateral:
 
     def test_no_negative_drawn_loans_empty_result(self) -> None:
         """No negative-drawn loans: returns empty or None."""
-        lf = self._netting_frame({
-            "exposure_reference": ["EXP001"],
-            "drawn_amount": [100_000.0],
-            "has_netting_agreement": [True],
-            "parent_facility_reference": ["FAC001"],
-            "ead_gross": [100_000.0],
-            "currency": ["GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["EXP001"],
+                "drawn_amount": [100_000.0],
+                "has_netting_agreement": [True],
+                "parent_facility_reference": ["FAC001"],
+                "ead_gross": [100_000.0],
+                "currency": ["GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         if result is not None:
             df = result.collect()
@@ -91,14 +97,16 @@ class TestGenerateNettingCollateral:
 
     def test_basic_netting_generates_cash_collateral(self) -> None:
         """Negative-drawn loan creates cash collateral for positive sibling."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEPOSIT", "LOAN_A"],
-            "drawn_amount": [-200_000.0, 500_000.0],
-            "has_netting_agreement": [True, False],
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "ead_gross": [0.0, 500_000.0],
-            "currency": ["GBP", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEPOSIT", "LOAN_A"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "has_netting_agreement": [True, False],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is not None
 
@@ -109,14 +117,16 @@ class TestGenerateNettingCollateral:
 
     def test_netting_pool_grouped_by_currency(self) -> None:
         """Netting pools group by (netting_group, currency)."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEP_GBP", "DEP_EUR", "LOAN_A"],
-            "drawn_amount": [-100_000.0, -200_000.0, 500_000.0],
-            "has_netting_agreement": [True, True, False],
-            "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
-            "ead_gross": [0.0, 0.0, 500_000.0],
-            "currency": ["GBP", "EUR", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEP_GBP", "DEP_EUR", "LOAN_A"],
+                "drawn_amount": [-100_000.0, -200_000.0, 500_000.0],
+                "has_netting_agreement": [True, True, False],
+                "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
+                "ead_gross": [0.0, 0.0, 500_000.0],
+                "currency": ["GBP", "EUR", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is not None
 
@@ -127,14 +137,16 @@ class TestGenerateNettingCollateral:
 
     def test_netting_eligible_requires_true_flag(self) -> None:
         """Only loans with has_netting_agreement=True provide netting pool."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEPOSIT", "LOAN_A"],
-            "drawn_amount": [-200_000.0, 500_000.0],
-            "has_netting_agreement": [False, False],
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "ead_gross": [0.0, 500_000.0],
-            "currency": ["GBP", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEPOSIT", "LOAN_A"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "has_netting_agreement": [False, False],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         if result is not None:
             df = result.collect()
@@ -142,14 +154,16 @@ class TestGenerateNettingCollateral:
 
     def test_collateral_reference_prefixed_netting(self) -> None:
         """Synthetic collateral reference is prefixed with NETTING_."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEPOSIT", "LOAN_A"],
-            "drawn_amount": [-200_000.0, 500_000.0],
-            "has_netting_agreement": [True, False],
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "ead_gross": [0.0, 500_000.0],
-            "currency": ["GBP", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEPOSIT", "LOAN_A"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "has_netting_agreement": [True, False],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is not None
 
@@ -159,14 +173,16 @@ class TestGenerateNettingCollateral:
 
     def test_is_eligible_financial_collateral_set(self) -> None:
         """Synthetic netting collateral marked as eligible financial collateral."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEPOSIT", "LOAN_A"],
-            "drawn_amount": [-200_000.0, 500_000.0],
-            "has_netting_agreement": [True, False],
-            "parent_facility_reference": ["FAC001", "FAC001"],
-            "ead_gross": [0.0, 500_000.0],
-            "currency": ["GBP", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEPOSIT", "LOAN_A"],
+                "drawn_amount": [-200_000.0, 500_000.0],
+                "has_netting_agreement": [True, False],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+                "ead_gross": [0.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is not None
 
@@ -177,14 +193,16 @@ class TestGenerateNettingCollateral:
 
     def test_pro_rata_allocation_across_siblings(self) -> None:
         """Netting pool allocated pro-rata by ead_gross to positive siblings."""
-        lf = self._netting_frame({
-            "exposure_reference": ["DEPOSIT", "LOAN_A", "LOAN_B"],
-            "drawn_amount": [-100_000.0, 600_000.0, 400_000.0],
-            "has_netting_agreement": [True, False, False],
-            "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
-            "ead_gross": [0.0, 600_000.0, 400_000.0],
-            "currency": ["GBP", "GBP", "GBP"],
-        })
+        lf = self._netting_frame(
+            {
+                "exposure_reference": ["DEPOSIT", "LOAN_A", "LOAN_B"],
+                "drawn_amount": [-100_000.0, 600_000.0, 400_000.0],
+                "has_netting_agreement": [True, False, False],
+                "parent_facility_reference": ["FAC001", "FAC001", "FAC001"],
+                "ead_gross": [0.0, 600_000.0, 400_000.0],
+                "currency": ["GBP", "GBP", "GBP"],
+            }
+        )
         result = generate_netting_collateral(lf)
         assert result is not None
 
@@ -257,11 +275,13 @@ class TestFIRBSupervisoryLGDNoCollateral:
 
     def test_seniority_absent_defaults_to_senior(self) -> None:
         """Missing seniority column: treated as not subordinated → senior LGD."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "approach": [ApproachType.FIRB.value],
-            "lgd_pre_crm": [0.45],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "approach": [ApproachType.FIRB.value],
+                "lgd_pre_crm": [0.45],
+            }
+        )
         result = apply_firb_supervisory_lgd_no_collateral(lf, is_basel_3_1=False).collect()
 
         assert result["lgd_post_crm"][0] == pytest.approx(0.45)
@@ -304,14 +324,16 @@ class TestFIRBSupervisoryLGDNoCollateral:
             reporting_date=date(2027, 1, 1),
             airb_collateral_method=AIRBCollateralMethod.LGD_MODELLING,
         )
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "approach": [ApproachType.AIRB.value],
-            "lgd_pre_crm": [0.35],
-            "lgd_unsecured": [0.30],
-            "has_sufficient_collateral_data": [False],
-            "seniority": ["senior"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "approach": [ApproachType.AIRB.value],
+                "lgd_pre_crm": [0.35],
+                "lgd_unsecured": [0.30],
+                "has_sufficient_collateral_data": [False],
+                "seniority": ["senior"],
+            }
+        )
         result = apply_firb_supervisory_lgd_no_collateral(
             lf, is_basel_3_1=True, config=config
         ).collect()
@@ -325,14 +347,16 @@ class TestFIRBSupervisoryLGDNoCollateral:
             reporting_date=date(2027, 1, 1),
             airb_collateral_method=AIRBCollateralMethod.LGD_MODELLING,
         )
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "approach": [ApproachType.AIRB.value],
-            "lgd_pre_crm": [0.35],
-            "lgd_unsecured": [0.30],
-            "has_sufficient_collateral_data": [True],
-            "seniority": ["senior"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "approach": [ApproachType.AIRB.value],
+                "lgd_pre_crm": [0.35],
+                "lgd_unsecured": [0.30],
+                "has_sufficient_collateral_data": [True],
+                "seniority": ["senior"],
+            }
+        )
         result = apply_firb_supervisory_lgd_no_collateral(
             lf, is_basel_3_1=True, config=config
         ).collect()

@@ -145,9 +145,7 @@ def _rating_inheritance(
 class TestGuarantorRatingTypeDerivation:
     """Tests that guarantor_rating_type is correctly derived from rating data."""
 
-    def test_internal_rating_produces_internal_type(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_internal_rating_produces_internal_type(self, crr_config: CalculationConfig) -> None:
         """Guarantor with internal PD -> rating_type = "internal"."""
         result = apply_guarantees(
             _base_exposure(),
@@ -160,9 +158,7 @@ class TestGuarantorRatingTypeDerivation:
         assert "guarantor_rating_type" in result.columns
         assert result["guarantor_rating_type"][0] == "internal"
 
-    def test_external_rating_produces_external_type(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_external_rating_produces_external_type(self, crr_config: CalculationConfig) -> None:
         """Guarantor with CQS but no internal PD -> rating_type = "external"."""
         result = apply_guarantees(
             _base_exposure(),
@@ -174,9 +170,7 @@ class TestGuarantorRatingTypeDerivation:
 
         assert result["guarantor_rating_type"][0] == "external"
 
-    def test_no_rating_produces_null(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_no_rating_produces_null(self, crr_config: CalculationConfig) -> None:
         """Guarantor with neither internal PD nor CQS -> rating_type = null."""
         result = apply_guarantees(
             _base_exposure(),
@@ -188,9 +182,7 @@ class TestGuarantorRatingTypeDerivation:
 
         assert result["guarantor_rating_type"][0] is None
 
-    def test_internal_takes_precedence_over_external(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_internal_takes_precedence_over_external(self, crr_config: CalculationConfig) -> None:
         """When both internal PD and external CQS present, internal wins."""
         result = apply_guarantees(
             _base_exposure(),
@@ -202,9 +194,7 @@ class TestGuarantorRatingTypeDerivation:
 
         assert result["guarantor_rating_type"][0] == "internal"
 
-    def test_rating_type_aligns_with_approach(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_rating_type_aligns_with_approach(self, crr_config: CalculationConfig) -> None:
         """When rating_type is "external", approach should be "sa"."""
         result = apply_guarantees(
             _base_exposure(),
@@ -217,9 +207,7 @@ class TestGuarantorRatingTypeDerivation:
         assert result["guarantor_rating_type"][0] == "external"
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_no_rating_inheritance_produces_null(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_no_rating_inheritance_produces_null(self, crr_config: CalculationConfig) -> None:
         """When no rating_inheritance provided, rating_type should be null."""
         result = apply_guarantees(
             _base_exposure(),
@@ -235,9 +223,7 @@ class TestGuarantorRatingTypeDerivation:
 class TestGuarantorRatingTypeB31:
     """Basel 3.1 framework tests for guarantor_rating_type."""
 
-    def test_b31_internal_rating_type(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_internal_rating_type(self, b31_config: CalculationConfig) -> None:
         """B31: internal PD -> rating_type = "internal"."""
         result = apply_guarantees(
             _base_exposure(),
@@ -249,9 +235,7 @@ class TestGuarantorRatingTypeB31:
 
         assert result["guarantor_rating_type"][0] == "internal"
 
-    def test_b31_external_rating_type(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_b31_external_rating_type(self, b31_config: CalculationConfig) -> None:
         """B31: external CQS only -> rating_type = "external"."""
         result = apply_guarantees(
             _base_exposure(),
@@ -347,9 +331,7 @@ class TestGuarantorRatingTypeInAudit:
 class TestGuarantorRatingTypeEdgeCases:
     """Edge case tests for guarantor_rating_type derivation."""
 
-    def test_column_dtype_is_string(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_column_dtype_is_string(self, crr_config: CalculationConfig) -> None:
         """guarantor_rating_type should be String type."""
         result = apply_guarantees(
             _base_exposure(),
@@ -383,9 +365,7 @@ class TestGuarantorRatingTypeEdgeCases:
         assert "guarantor_rating_type" in exposures.columns
         assert exposures["guarantor_rating_type"][0] is None
 
-    def test_rating_type_values_are_constrained(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_rating_type_values_are_constrained(self, crr_config: CalculationConfig) -> None:
         """Only "internal", "external", or null are valid values."""
         result = apply_guarantees(
             _base_exposure(),
@@ -399,9 +379,7 @@ class TestGuarantorRatingTypeEdgeCases:
         actual = result["guarantor_rating_type"][0]
         assert actual in valid_values
 
-    def test_multiple_exposures_mixed_rating_types(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_multiple_exposures_mixed_rating_types(self, crr_config: CalculationConfig) -> None:
         """Multiple exposures with different guarantors get correct rating types."""
         exposures = pl.LazyFrame(
             {
@@ -458,9 +436,7 @@ class TestGuarantorRatingTypeEdgeCases:
             }
         )
 
-        result = apply_guarantees(
-            exposures, guarantees, cp_lookup, crr_config, ri
-        ).collect()
+        result = apply_guarantees(exposures, guarantees, cp_lookup, crr_config, ri).collect()
 
         # First exposure guaranteed by internal-rated guarantor
         row0 = result.filter(pl.col("exposure_reference") == "EXP001")

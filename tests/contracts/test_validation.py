@@ -635,9 +635,7 @@ class TestValidateBundleValues:
     def test_invalid_ciu_approach_detected(self):
         """Invalid ciu_approach should produce error."""
         bundle = self._make_bundle(
-            equity_exposures=pl.LazyFrame(
-                {"ciu_approach": ["look_through", "INVALID_APPROACH"]}
-            ),
+            equity_exposures=pl.LazyFrame({"ciu_approach": ["look_through", "INVALID_APPROACH"]}),
         )
 
         errors = validate_bundle_values(bundle)
@@ -650,9 +648,7 @@ class TestValidateBundleValues:
     def test_valid_adc_property_type_accepted(self):
         """ADC property type should be accepted as a valid value."""
         bundle = self._make_bundle(
-            collateral=pl.LazyFrame(
-                {"property_type": ["residential", "commercial", "adc"]}
-            ),
+            collateral=pl.LazyFrame({"property_type": ["residential", "commercial", "adc"]}),
         )
 
         errors = validate_bundle_values(bundle)

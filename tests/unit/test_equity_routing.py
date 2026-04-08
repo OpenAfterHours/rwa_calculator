@@ -181,9 +181,7 @@ class TestSAEquityRiskWeightB31:
         # Equity = 250%
         assert eq_row["risk_weight"][0] == pytest.approx(2.50)
 
-    def test_equity_zero_ead(
-        self, calculator: SACalculator, b31_config: CalculationConfig
-    ) -> None:
+    def test_equity_zero_ead(self, calculator: SACalculator, b31_config: CalculationConfig) -> None:
         exposures = _equity_exposure(ead=0.0)
         result = calculator.calculate_branch(exposures, b31_config)
         df = result.collect()
@@ -235,53 +233,39 @@ class TestSAEquityRiskWeightCRR:
 class TestSA005EquityWarning:
     """SA005 warning when equity rows detected in main table."""
 
-    def test_warning_emitted_when_equity_present(
-        self, calculator: SACalculator
-    ) -> None:
+    def test_warning_emitted_when_equity_present(self, calculator: SACalculator) -> None:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert len(errors) == 1
         assert errors[0].code == ERROR_EQUITY_IN_MAIN_TABLE
 
-    def test_warning_severity_is_warning(
-        self, calculator: SACalculator
-    ) -> None:
+    def test_warning_severity_is_warning(self, calculator: SACalculator) -> None:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert errors[0].severity == ErrorSeverity.WARNING
 
-    def test_warning_category_is_data_quality(
-        self, calculator: SACalculator
-    ) -> None:
+    def test_warning_category_is_data_quality(self, calculator: SACalculator) -> None:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert errors[0].category == ErrorCategory.DATA_QUALITY
 
-    def test_warning_has_regulatory_reference(
-        self, calculator: SACalculator
-    ) -> None:
+    def test_warning_has_regulatory_reference(self, calculator: SACalculator) -> None:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert "Art. 133" in errors[0].regulatory_reference
 
-    def test_no_warning_when_no_equity(
-        self, calculator: SACalculator
-    ) -> None:
+    def test_no_warning_when_no_equity(self, calculator: SACalculator) -> None:
         exposures = _mixed_exposures(include_equity=False)
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert len(errors) == 0
 
-    def test_no_warning_when_approach_column_absent(
-        self, calculator: SACalculator
-    ) -> None:
-        exposures = pl.DataFrame(
-            {"exposure_reference": ["X"], "ead": [100.0]}
-        ).lazy()
+    def test_no_warning_when_approach_column_absent(self, calculator: SACalculator) -> None:
+        exposures = pl.DataFrame({"exposure_reference": ["X"], "ead": [100.0]}).lazy()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert len(errors) == 0
@@ -335,12 +319,8 @@ class TestClassifierEquityApproach:
     def test_equity_approach_included_in_sa_exposures_split(self) -> None:
         """Equity-approach rows are included in sa_exposures filter."""
         # The classifier's sa_exposures filter includes both SA and EQUITY approaches
-        approaches = pl.DataFrame(
-            {"approach": ["standardised", "equity", "foundation_irb"]}
-        ).lazy()
-        sa_filter = pl.col("approach").is_in(
-            [ApproachType.SA.value, ApproachType.EQUITY.value]
-        )
+        approaches = pl.DataFrame({"approach": ["standardised", "equity", "foundation_irb"]}).lazy()
+        sa_filter = pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
         result = approaches.filter(sa_filter).collect()
         assert result.height == 2
         assert set(result["approach"].to_list()) == {"standardised", "equity"}
@@ -371,9 +351,7 @@ class TestPipelineEquityRouting:
         approaches = ["standardised", "equity", "foundation_irb", "slotting"]
         df = pl.DataFrame({"approach": approaches})
 
-        is_irb = pl.col("approach").is_in(
-            [ApproachType.FIRB.value, ApproachType.AIRB.value]
-        )
+        is_irb = pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
         is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
         sa_branch = df.filter(~is_irb & ~is_slotting)
 

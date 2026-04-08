@@ -25,6 +25,7 @@ References:
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
     PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -162,8 +163,7 @@ B31_CR4_COLUMNS: list[P3Column] = [
 ]
 
 CRR_CR4_ROWS: list[P3Row] = [
-    P3Row(ref, name, classes)
-    for ref, name, classes in SA_DISCLOSURE_CLASSES
+    P3Row(ref, name, classes) for ref, name, classes in SA_DISCLOSURE_CLASSES
 ] + [P3Row("17", "Total", is_total=True)]
 
 B31_CR4_ROWS: list[P3Row] = []
@@ -175,13 +175,15 @@ for _ref, _name, _classes in SA_DISCLOSURE_CLASSES:
             P3Row("7a", "  Of which: specialised lending", ("specialised_lending",))
         )
     elif _ref == "9":
-        B31_CR4_ROWS.extend([
-            P3Row("9a", "  Residential RE — not income dependent"),
-            P3Row("9b", "  Residential RE — income dependent"),
-            P3Row("9c", "  Commercial RE — not income dependent"),
-            P3Row("9d", "  Commercial RE — income dependent"),
-            P3Row("9e", "  Land acquisition, development and construction"),
-        ])
+        B31_CR4_ROWS.extend(
+            [
+                P3Row("9a", "  Residential RE — not income dependent"),
+                P3Row("9b", "  Residential RE — income dependent"),
+                P3Row("9c", "  Commercial RE — not income dependent"),
+                P3Row("9d", "  Commercial RE — income dependent"),
+                P3Row("9e", "  Land acquisition, development and construction"),
+            ]
+        )
 B31_CR4_ROWS.append(P3Row("17", "Total", is_total=True))
 
 
@@ -190,25 +192,58 @@ B31_CR4_ROWS.append(P3Row("17", "Total", is_total=True))
 # ---------------------------------------------------------------------------
 
 CRR_CR5_RISK_WEIGHTS: list[tuple[float, str]] = [
-    (0.00, "0%"), (0.02, "2%"), (0.04, "4%"), (0.10, "10%"),
-    (0.20, "20%"), (0.35, "35%"), (0.50, "50%"), (0.70, "70%"),
-    (0.75, "75%"), (1.00, "100%"), (1.50, "150%"), (2.50, "250%"),
-    (3.70, "370%"), (12.50, "1250%"),
+    (0.00, "0%"),
+    (0.02, "2%"),
+    (0.04, "4%"),
+    (0.10, "10%"),
+    (0.20, "20%"),
+    (0.35, "35%"),
+    (0.50, "50%"),
+    (0.70, "70%"),
+    (0.75, "75%"),
+    (1.00, "100%"),
+    (1.50, "150%"),
+    (2.50, "250%"),
+    (3.70, "370%"),
+    (12.50, "1250%"),
 ]
 
 B31_CR5_RISK_WEIGHTS: list[tuple[float, str]] = [
-    (0.00, "0%"), (0.02, "2%"), (0.04, "4%"), (0.10, "10%"),
-    (0.15, "15%"), (0.20, "20%"), (0.25, "25%"), (0.30, "30%"),
-    (0.35, "35%"), (0.40, "40%"), (0.45, "45%"), (0.50, "50%"),
-    (0.60, "60%"), (0.65, "65%"), (0.70, "70%"), (0.75, "75%"),
-    (0.80, "80%"), (0.85, "85%"), (1.00, "100%"), (1.05, "105%"),
-    (1.10, "110%"), (1.30, "130%"), (1.35, "135%"), (1.50, "150%"),
-    (2.50, "250%"), (3.00, "300%"), (4.00, "400%"), (12.50, "1250%"),
+    (0.00, "0%"),
+    (0.02, "2%"),
+    (0.04, "4%"),
+    (0.10, "10%"),
+    (0.15, "15%"),
+    (0.20, "20%"),
+    (0.25, "25%"),
+    (0.30, "30%"),
+    (0.35, "35%"),
+    (0.40, "40%"),
+    (0.45, "45%"),
+    (0.50, "50%"),
+    (0.60, "60%"),
+    (0.65, "65%"),
+    (0.70, "70%"),
+    (0.75, "75%"),
+    (0.80, "80%"),
+    (0.85, "85%"),
+    (1.00, "100%"),
+    (1.05, "105%"),
+    (1.10, "110%"),
+    (1.30, "130%"),
+    (1.35, "135%"),
+    (1.50, "150%"),
+    (2.50, "250%"),
+    (3.00, "300%"),
+    (4.00, "400%"),
+    (12.50, "1250%"),
 ]
 
 
 def _build_cr5_columns(
-    rw_list: list[tuple[float, str]], *, is_b31: bool,
+    rw_list: list[tuple[float, str]],
+    *,
+    is_b31: bool,
 ) -> list[P3Column]:
     """Build CR5 columns from a risk-weight band list."""
     cols: list[P3Column] = []
@@ -219,12 +254,14 @@ def _build_cr5_columns(
     cols.append(P3Column(_letter_ref(n + 1), "Total"))
     cols.append(P3Column(_letter_ref(n + 2), "Of which: unrated"))
     if is_b31:
-        cols.extend([
-            P3Column("ba", "On-BS exposure amount", "Exposure breakdown"),
-            P3Column("bb", "Off-BS exposure amount", "Exposure breakdown"),
-            P3Column("bc", "Weighted average CF", "Exposure breakdown"),
-            P3Column("bd", "Total post CF and CRM", "Exposure breakdown"),
-        ])
+        cols.extend(
+            [
+                P3Column("ba", "On-BS exposure amount", "Exposure breakdown"),
+                P3Column("bb", "Off-BS exposure amount", "Exposure breakdown"),
+                P3Column("bc", "Weighted average CF", "Exposure breakdown"),
+                P3Column("bd", "Total post CF and CRM", "Exposure breakdown"),
+            ]
+        )
     return cols
 
 

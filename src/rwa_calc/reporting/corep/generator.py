@@ -240,19 +240,28 @@ class COREPGenerator:
 
         # C 08.07 / OF 08.07 — IRB scope of use
         c08_07 = self._generate_c08_07(
-            results, cols, framework, errors,
+            results,
+            cols,
+            framework,
+            errors,
             output_floor_config=output_floor_config,
         )
 
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
         of_02_01 = self._generate_of_02_01(
-            results, cols, framework, errors,
+            results,
+            cols,
+            framework,
+            errors,
             output_floor_config=output_floor_config,
         )
 
         # C 02.00 / OF 02.00 — Own Funds Requirements
         c_02_00 = self._generate_c_02_00(
-            results, cols, framework, errors,
+            results,
+            cols,
+            framework,
+            errors,
             output_floor_summary=output_floor_summary,
             output_floor_config=output_floor_config,
         )
@@ -365,9 +374,7 @@ class COREPGenerator:
                 )
             # C 09.01 / OF 09.01 — Geographical Breakdown SA
             if bundle.c09_01:
-                c09_01_prefix = (
-                    "OF 09.01" if bundle.framework == "BASEL_3_1" else "C 09.01"
-                )
+                c09_01_prefix = "OF 09.01" if bundle.framework == "BASEL_3_1" else "C 09.01"
                 for country, df in sorted(bundle.c09_01.items()):
                     if len(df) > 0:
                         sheet = f"{c09_01_prefix} - {country}"
@@ -376,9 +383,7 @@ class COREPGenerator:
                         total_rows += len(df)
             # C 09.02 / OF 09.02 — Geographical Breakdown IRB
             if bundle.c09_02:
-                c09_02_prefix = (
-                    "OF 09.02" if bundle.framework == "BASEL_3_1" else "C 09.02"
-                )
+                c09_02_prefix = "OF 09.02" if bundle.framework == "BASEL_3_1" else "C 09.02"
                 for country, df in sorted(bundle.c09_02.items()):
                     if len(df) > 0:
                         sheet = f"{c09_02_prefix} - {country}"
@@ -477,11 +482,7 @@ class COREPGenerator:
         if rwa_col:
             agg_exprs.append(pl.col(rwa_col).sum().alias("_sum_rwa"))
 
-        grouped = (
-            results.group_by([ec_col, approach_col])
-            .agg(agg_exprs)
-            .collect()
-        )
+        grouped = results.group_by([ec_col, approach_col]).agg(agg_exprs).collect()
 
         if len(grouped) == 0:
             return None
@@ -530,7 +531,12 @@ class COREPGenerator:
                     irb_rwa = sum(class_irb_rwa.values())
                     sa_rwa = sum(class_sa_rwa.values())
                     values = self._compute_c08_07_values(
-                        irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                        irb_ead,
+                        sa_ead,
+                        irb_rwa,
+                        sa_rwa,
+                        column_refs,
+                        is_b31,
                         is_consolidated=_is_consolidated,
                     )
                 else:
@@ -543,25 +549,27 @@ class COREPGenerator:
                 irb_rwa = class_irb_rwa.get(ec_value, 0.0)
                 sa_rwa = class_sa_rwa.get(ec_value, 0.0)
                 values = self._compute_c08_07_values(
-                    irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                    irb_ead,
+                    sa_ead,
+                    irb_rwa,
+                    sa_rwa,
+                    column_refs,
+                    is_b31,
                     is_consolidated=_is_consolidated,
                 )
             elif row_ref == "0090":
                 # CRR "Retail" aggregate row
-                irb_ead = sum(
-                    class_irb_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
-                )
-                sa_ead = sum(
-                    class_sa_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
-                )
-                irb_rwa = sum(
-                    class_irb_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
-                )
-                sa_rwa = sum(
-                    class_sa_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES
-                )
+                irb_ead = sum(class_irb_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES)
+                sa_ead = sum(class_sa_ead.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES)
+                irb_rwa = sum(class_irb_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES)
+                sa_rwa = sum(class_sa_rwa.get(c, 0.0) for c in C08_07_CRR_RETAIL_CLASSES)
                 values = self._compute_c08_07_values(
-                    irb_ead, sa_ead, irb_rwa, sa_rwa, column_refs, is_b31,
+                    irb_ead,
+                    sa_ead,
+                    irb_rwa,
+                    sa_rwa,
+                    column_refs,
+                    is_b31,
                     is_consolidated=_is_consolidated,
                 )
             elif row_ref == "0060":
@@ -773,9 +781,7 @@ class COREPGenerator:
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
 
         if ead_col is None or rwa_col is None:
-            errors.append(
-                "C 02.00 skipped: missing EAD or RWA columns in results"
-            )
+            errors.append("C 02.00 skipped: missing EAD or RWA columns in results")
             return None
 
         is_b31 = framework == "BASEL_3_1"
@@ -808,9 +814,7 @@ class COREPGenerator:
             total_rwa = float(collected["_rwa"].sum())
 
             # RWA by approach
-            by_approach = collected.group_by("_approach").agg(
-                pl.col("_rwa").sum().alias("rwa")
-            )
+            by_approach = collected.group_by("_approach").agg(pl.col("_rwa").sum().alias("rwa"))
             for row in by_approach.iter_rows(named=True):
                 approach_rwa[row["_approach"]] = float(row["rwa"])
 
@@ -818,9 +822,7 @@ class COREPGenerator:
             sa_mask = collected["_approach"] == "standardised"
             equity_mask = collected["_approach"] == "equity"
             sa_rows = collected.filter(sa_mask | equity_mask)
-            by_class = sa_rows.group_by("_ec").agg(
-                pl.col("_rwa").sum().alias("rwa")
-            )
+            by_class = sa_rows.group_by("_ec").agg(pl.col("_rwa").sum().alias("rwa"))
             for row in by_class.iter_rows(named=True):
                 sa_class_rwa[row["_ec"]] = float(row["rwa"])
 
@@ -828,9 +830,7 @@ class COREPGenerator:
             total_sa_rwa = float(sa_rows["_rwa"].sum())
 
             # IRB sub-approach breakdowns
-            irb_rows = collected.filter(
-                ~sa_mask & ~equity_mask
-            )
+            irb_rows = collected.filter(~sa_mask & ~equity_mask)
 
             # Per-approach + class breakdown for IRB sub-rows
             irb_class_approach = irb_rows.group_by(["_approach", "_ec"]).agg(
@@ -844,15 +844,15 @@ class COREPGenerator:
             # Slotting by SL type
             self._slotting_type_rwa: dict[str, float] = {}
             if "sl_type" in cols:
-                sl_collected = results.filter(
-                    pl.col(approach_col) == "slotting"
-                ).select(
-                    pl.col("sl_type").alias("_sl"),
-                    pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
-                ).collect()
-                by_sl = sl_collected.group_by("_sl").agg(
-                    pl.col("_rwa").sum().alias("rwa")
+                sl_collected = (
+                    results.filter(pl.col(approach_col) == "slotting")
+                    .select(
+                        pl.col("sl_type").alias("_sl"),
+                        pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+                    )
+                    .collect()
                 )
+                by_sl = sl_collected.group_by("_sl").agg(pl.col("_rwa").sum().alias("rwa"))
                 for row in by_sl.iter_rows(named=True):
                     if row["_sl"] is not None:
                         self._slotting_type_rwa[row["_sl"]] = float(row["rwa"])
@@ -861,7 +861,9 @@ class COREPGenerator:
             # Computes SME/FSE splits for F-IRB/A-IRB corporate and retail
             # RE sub-rows using pipeline columns is_sme, apply_fi_scalar,
             # and property_type.
-            self._irb_sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float] = {}
+            self._irb_sub_rwa: dict[
+                tuple[str, str, bool | None, bool | None, str | None], float
+            ] = {}
             if is_b31:
                 sub_select: list[pl.Expr] = [
                     pl.col(approach_col).alias("_approach"),
@@ -874,14 +876,20 @@ class COREPGenerator:
                 if has_sme:
                     sub_select.append(pl.col("is_sme").fill_null(False).alias("_sme"))
                 if has_fse:
-                    fse_col = "apply_fi_scalar" if "apply_fi_scalar" in cols else "cp_is_financial_sector_entity"
+                    fse_col = (
+                        "apply_fi_scalar"
+                        if "apply_fi_scalar" in cols
+                        else "cp_is_financial_sector_entity"
+                    )
                     sub_select.append(pl.col(fse_col).fill_null(False).alias("_fse"))
                 if has_pt:
                     sub_select.append(pl.col("property_type").alias("_pt"))
                 irb_approaches = {"foundation_irb", "advanced_irb"}
-                sub_collected = results.filter(
-                    pl.col(approach_col).is_in(irb_approaches)
-                ).select(sub_select).collect()
+                sub_collected = (
+                    results.filter(pl.col(approach_col).is_in(irb_approaches))
+                    .select(sub_select)
+                    .collect()
+                )
                 gb_cols = ["_approach", "_ec"]
                 if has_sme:
                     gb_cols.append("_sme")
@@ -889,9 +897,7 @@ class COREPGenerator:
                     gb_cols.append("_fse")
                 if has_pt:
                     gb_cols.append("_pt")
-                sub_agg = sub_collected.group_by(gb_cols).agg(
-                    pl.col("_rwa").sum().alias("rwa")
-                )
+                sub_agg = sub_collected.group_by(gb_cols).agg(pl.col("_rwa").sum().alias("rwa"))
                 for row in sub_agg.iter_rows(named=True):
                     key = (
                         row["_approach"],
@@ -981,10 +987,13 @@ class COREPGenerator:
             row_values["0290"] = {"0010": firb_sl}
             # F-IRB corporate sub-splits using finer-grained IRB aggregation
             firb_fse, firb_sme, firb_nonsme = _irb_sub_split(
-                self._irb_sub_rwa, "foundation_irb", "corporate", firb_corp,
+                self._irb_sub_rwa,
+                "foundation_irb",
+                "corporate",
+                firb_corp,
             )
-            row_values["0295"] = {"0010": firb_fse}   # Financial/large corporates
-            row_values["0296"] = {"0010": firb_sme}    # Other general corporates SME
+            row_values["0295"] = {"0010": firb_fse}  # Financial/large corporates
+            row_values["0296"] = {"0010": firb_sme}  # Other general corporates SME
             row_values["0297"] = {"0010": firb_nonsme}  # Other general corporates non-SME
 
         # A-IRB total and sub-rows
@@ -1001,9 +1010,12 @@ class COREPGenerator:
             row_values["0350"] = {"0010": airb_sl_excl}
             # A-IRB corporate sub-splits
             airb_fse, airb_sme, airb_nonsme = _irb_sub_split(
-                self._irb_sub_rwa, "advanced_irb", "corporate", airb_corp,
+                self._irb_sub_rwa,
+                "advanced_irb",
+                "corporate",
+                airb_corp,
             )
-            row_values["0355"] = {"0010": airb_sme}    # Other general corporates SME
+            row_values["0355"] = {"0010": airb_sme}  # Other general corporates SME
             row_values["0356"] = {"0010": airb_nonsme + airb_fse}  # Non-SME (incl. FSE)
 
         # A-IRB retail
@@ -1016,7 +1028,9 @@ class COREPGenerator:
         if is_b31:
             # A-IRB retail RE sub-splits by property type and SME
             resi_sme, resi_nonsme, comm_sme, comm_nonsme = _irb_re_sub_split(
-                self._irb_sub_rwa, "advanced_irb", "retail_mortgage",
+                self._irb_sub_rwa,
+                "advanced_irb",
+                "retail_mortgage",
                 airb_retail_mort,
             )
             row_values["0382"] = {"0010": resi_sme}
@@ -1027,7 +1041,9 @@ class COREPGenerator:
         # A-IRB retail other sub-splits by SME
         if is_b31:
             other_sme, other_nonsme = _irb_other_sme_split(
-                self._irb_sub_rwa, "advanced_irb", "retail_other",
+                self._irb_sub_rwa,
+                "advanced_irb",
+                "retail_other",
                 airb_retail_other,
             )
             row_values["0400"] = {"0010": other_sme}
@@ -1053,9 +1069,7 @@ class COREPGenerator:
         # B31 output floor indicator rows.
         # Art. 92 para 2A: floor only applies to 3 entity-type/basis combos.
         # When output_floor_config is provided, gate on is_floor_applicable().
-        _floor_applicable = (
-            output_floor_config is None or output_floor_config.is_floor_applicable()
-        )
+        _floor_applicable = output_floor_config is None or output_floor_config.is_floor_applicable()
         if is_b31:
             if _floor_applicable:
                 row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
@@ -1180,8 +1194,7 @@ class COREPGenerator:
 
         if country_col is None:
             errors.append(
-                "C09.01: Missing cp_country_code column — cannot produce "
-                "geographical breakdown"
+                "C09.01: Missing cp_country_code column — cannot produce geographical breakdown"
             )
             return {}
 
@@ -1249,9 +1262,7 @@ class COREPGenerator:
                 )
                 if len(row_data) > 0:
                     values = _compute_c09_01_values(row_data, cols, column_refs, framework)
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -1295,8 +1306,7 @@ class COREPGenerator:
 
         if country_col is None:
             errors.append(
-                "C09.02: Missing cp_country_code column — cannot produce "
-                "geographical breakdown"
+                "C09.02: Missing cp_country_code column — cannot produce geographical breakdown"
             )
             return {}
 
@@ -1333,8 +1343,7 @@ class COREPGenerator:
             country_data = irb_df.filter(pl.col(country_col) == country)
             if len(country_data) > 0:
                 country_df = self._generate_c09_02_for_country(
-                    country_data, df_cols, row_defs, column_refs, framework,
-                    approach_col
+                    country_data, df_cols, row_defs, column_refs, framework, approach_col
                 )
                 result[country] = country_df
 
@@ -1360,22 +1369,15 @@ class COREPGenerator:
         for row_def in row_defs:
             if row_def.ref == "0150":
                 # Total row: sum across all IRB exposure classes
-                values = _compute_c09_02_values(
-                    country_data, cols, column_refs, framework
-                )
+                values = _compute_c09_02_values(country_data, cols, column_refs, framework)
                 rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
             elif row_def.exposure_class_value is not None:
                 row_data = _filter_c09_02_row(
-                    country_data, cols, row_def.exposure_class_value, framework,
-                    approach_col
+                    country_data, cols, row_def.exposure_class_value, framework, approach_col
                 )
                 if len(row_data) > 0:
-                    values = _compute_c09_02_values(
-                        row_data, cols, column_refs, framework
-                    )
-                    rows.append(
-                        {"row_ref": row_def.ref, "row_name": row_def.name, **values}
-                    )
+                    values = _compute_c09_02_values(row_data, cols, column_refs, framework)
+                    rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
                 else:
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
             else:
@@ -1757,7 +1759,11 @@ class COREPGenerator:
         approach_col = "approach_applied" if "approach_applied" in cols else None
         for row_def in row_sections[2].rows:
             subset = _filter_section3_row(
-                class_data, cols, row_def.ref, approach_col, framework,
+                class_data,
+                cols,
+                row_def.ref,
+                approach_col,
+                framework,
             )
             if subset is not None and len(subset) > 0:
                 values = _compute_c08_values(subset, cols, ead_col, rwa_col, column_refs)
@@ -2333,8 +2339,7 @@ class COREPGenerator:
                     # B31 separates HVCRE
                     if hvcre_col is not None:
                         type_df = slotting_df.filter(
-                            (pl.col(sl_type_col) == "hvcre")
-                            | (pl.col(hvcre_col) == True)  # noqa: E712
+                            (pl.col(sl_type_col) == "hvcre") | (pl.col(hvcre_col) == True)  # noqa: E712
                         )
                     else:
                         type_df = slotting_df.filter(pl.col(sl_type_col) == "hvcre")
@@ -2345,15 +2350,25 @@ class COREPGenerator:
                     continue
 
                 template_df = self._generate_c08_06_for_type(
-                    type_df, data_cols, ead_col, rwa_col, cat_col,
-                    maturity_col, framework,
+                    type_df,
+                    data_cols,
+                    ead_col,
+                    rwa_col,
+                    cat_col,
+                    maturity_col,
+                    framework,
                 )
                 result[sl_key] = template_df
         else:
             # No sl_type column — generate a single "all" template
             template_df = self._generate_c08_06_for_type(
-                slotting_df, data_cols, ead_col, rwa_col, cat_col,
-                maturity_col, framework,
+                slotting_df,
+                data_cols,
+                ead_col,
+                rwa_col,
+                cat_col,
+                maturity_col,
+                framework,
             )
             result["specialised_lending"] = template_df
 
@@ -2434,7 +2449,12 @@ class COREPGenerator:
                 continue
 
             values = _compute_c08_06_values(
-                cat_data, cols, ead_col, rwa_col, column_refs, framework,
+                cat_data,
+                cols,
+                ead_col,
+                rwa_col,
+                column_refs,
+                framework,
             )
             rows.append({"row_ref": row_ref, "row_name": category_label, **values})
 
@@ -2766,14 +2786,10 @@ def _filter_re(
         if md_col is not None:
             if md_col == "materially_dependent_on_property":
                 # Exact field: null means unclassified — exclude from split
-                result = result.filter(
-                    pl.col(md_col) == materially_dependent
-                )
+                result = result.filter(pl.col(md_col) == materially_dependent)
             else:
                 # Fallback proxy: null defaults to False (not dependent)
-                result = result.filter(
-                    pl.col(md_col).fill_null(False) == materially_dependent
-                )
+                result = result.filter(pl.col(md_col).fill_null(False) == materially_dependent)
         else:
             return data.clear()
 
@@ -2806,9 +2822,7 @@ def _filter_currency_mismatch(data: pl.DataFrame, cols: set[str]) -> pl.DataFram
     return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
 
 
-def _filter_defaulted_at_rw(
-    data: pl.DataFrame, cols: set[str], target_rw: float
-) -> pl.DataFrame:
+def _filter_defaulted_at_rw(data: pl.DataFrame, cols: set[str], target_rw: float) -> pl.DataFrame:
     """Filter to defaulted exposures with a specific risk weight.
 
     Used for C 07.00 / OF 07.00 memorandum items:
@@ -2828,9 +2842,7 @@ def _filter_defaulted_at_rw(
     return defaulted.filter(pl.col(rw_col).round(4) == round(target_rw, 4))
 
 
-def _filter_re_secured(
-    data: pl.DataFrame, cols: set[str], property_type: str
-) -> pl.DataFrame:
+def _filter_re_secured(data: pl.DataFrame, cols: set[str], property_type: str) -> pl.DataFrame:
     """Filter to exposures secured by mortgages on immovable property.
 
     Used for CRR C 07.00 memorandum items:
@@ -2845,9 +2857,7 @@ def _filter_re_secured(
     return data.filter(pl.col("property_type") == property_type)
 
 
-def _filter_supporting_factor(
-    data: pl.DataFrame, cols: set[str], factor_type: str
-) -> pl.DataFrame:
+def _filter_supporting_factor(data: pl.DataFrame, cols: set[str], factor_type: str) -> pl.DataFrame:
     """Filter to exposures where a specific supporting factor was applied.
 
     Args:
@@ -2911,9 +2921,7 @@ def _filter_section3_row(
 
     if row_ref == "0070":
         # Exposures assigned to obligor grades or pools — non-slotting IRB
-        return data.filter(
-            pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"])
-        )
+        return data.filter(pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"]))
 
     if row_ref == "0080":
         # Specialised lending slotting approach
@@ -2969,9 +2977,7 @@ def _filter_section3_row(
                 & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
             )
         if "irb_pd_floored" in cols:
-            return data.filter(
-                ec_filter & unrated_filter & (pl.col("irb_pd_floored") <= 0.005)
-            )
+            return data.filter(ec_filter & unrated_filter & (pl.col("irb_pd_floored") <= 0.005))
         return None
 
     return None
@@ -3596,11 +3602,7 @@ def _compute_c08_values(
             values["0257"] = pre - post
         else:
             values["0257"] = 0.0
-    elif (
-        "is_infrastructure" in cols
-        and "supporting_factor_applied" in cols
-        and c08_pre_factor_col
-    ):
+    elif "is_infrastructure" in cols and "supporting_factor_applied" in cols and c08_pre_factor_col:
         infra_data = data.filter(
             (pl.col("is_infrastructure") == True)  # noqa: E712
             & (pl.col("supporting_factor_applied") == True)  # noqa: E712
@@ -3784,9 +3786,7 @@ def _compute_c08_03_values(
 
     # 0050: Exposure-weighted average PD (%)
     if pd_col in cols and ead_sum > 0:
-        pd_x_ead = float(
-            (data[pd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        pd_x_ead = float((data[pd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0050"] = pd_x_ead / ead_sum
     else:
         values["0050"] = None
@@ -3800,9 +3800,7 @@ def _compute_c08_03_values(
     # 0070: Exposure-weighted average LGD (%)
     lgd_col = _pick(cols, "irb_lgd_floored", "irb_lgd_original")
     if lgd_col is not None and ead_sum > 0:
-        lgd_x_ead = float(
-            (data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        lgd_x_ead = float((data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0070"] = lgd_x_ead / ead_sum
     else:
         values["0070"] = None
@@ -4003,9 +4001,7 @@ def _compute_c08_06_values(
     # 0070: Risk weight (exposure-weighted average for this bucket)
     rw_col = _pick(cols, "risk_weight")
     if rw_col is not None and ead_sum > 0:
-        rw_x_ead = float(
-            (data[rw_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        rw_x_ead = float((data[rw_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0070"] = rw_x_ead / ead_sum
     elif rw_col is not None:
         rw_vals = data[rw_col].drop_nulls()
@@ -4057,9 +4053,7 @@ def _filter_c09_01_row(
 
     # Main exposure class rows — filter by the pipeline class values that map
     # to this row key via C09_01_SA_CLASS_MAP
-    matching_classes = [
-        ec for ec, mapped in C09_01_SA_CLASS_MAP.items() if mapped == row_key
-    ]
+    matching_classes = [ec for ec, mapped in C09_01_SA_CLASS_MAP.items() if mapped == row_key]
 
     if not matching_classes:
         return data.clear()
@@ -4104,8 +4098,7 @@ def _filter_c09_01_row(
     if row_key == "re_adc":
         if "property_type" in cols:
             return data.filter(
-                (pl.col(ec_col) == "retail_mortgage")
-                & (pl.col("property_type") == "adc")
+                (pl.col(ec_col) == "retail_mortgage") & (pl.col("property_type") == "adc")
             )
         return data.clear()
 
@@ -4138,16 +4131,12 @@ def _filter_c09_01_row(
         return data.clear()
     if row_key == "ciu_fallback":
         if "ciu_approach" in cols:
-            return data.filter(
-                (pl.col(ec_col) == "ciu") & (pl.col("ciu_approach") == "fallback")
-            )
+            return data.filter((pl.col(ec_col) == "ciu") & (pl.col("ciu_approach") == "fallback"))
         return data.clear()
 
     # "retail" row = all retail classes combined
     if row_key == "retail":
-        return data.filter(
-            pl.col(ec_col).is_in(["retail_other", "retail_qrre"])
-        )
+        return data.filter(pl.col(ec_col).is_in(["retail_other", "retail_qrre"]))
 
     return base
 
@@ -4252,9 +4241,7 @@ def _filter_c09_02_row(
         return data.clear()
 
     # Main IRB exposure class rows
-    matching_classes = [
-        ec for ec, mapped in C09_02_IRB_CLASS_MAP.items() if mapped == row_key
-    ]
+    matching_classes = [ec for ec, mapped in C09_02_IRB_CLASS_MAP.items() if mapped == row_key]
 
     if row_key == "central_govt_central_bank":
         return data.filter(pl.col(ec_col) == "central_govt_central_bank")
@@ -4278,24 +4265,19 @@ def _filter_c09_02_row(
     if row_key == "sl_slotting":
         if approach_col and approach_col in cols:
             return data.filter(
-                (pl.col(ec_col) == "specialised_lending")
-                & (pl.col(approach_col) == "slotting")
+                (pl.col(ec_col) == "specialised_lending") & (pl.col(approach_col) == "slotting")
             )
         return data.clear()
 
     if row_key == "corporate_sme":
         return _filter_sme(
-            data.filter(
-                pl.col(ec_col).is_in(["corporate", "corporate_sme"])
-            ),
+            data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"])),
             cols,
         )
 
     if row_key == "corporate_fse_large":
         # B31 Art. 147(4C) — financial corporates and large corporates
-        base = data.filter(
-            pl.col(ec_col).is_in(["corporate", "corporate_sme"])
-        )
+        base = data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"]))
         if "apply_fi_scalar" in cols:
             return base.filter(pl.col("apply_fi_scalar") == True)  # noqa: E712
         return data.clear()
@@ -4305,9 +4287,7 @@ def _filter_c09_02_row(
 
     if row_key == "corporate_non_sme":
         # Non-SME general corporates (excludes SL and FSE/large)
-        base = data.filter(
-            pl.col(ec_col).is_in(["corporate", "corporate_sme"])
-        )
+        base = data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"]))
         non_sme = base
         if "sme_supporting_factor_eligible" in cols:
             non_sme = base.filter(
@@ -4323,26 +4303,22 @@ def _filter_c09_02_row(
 
     # Retail main row
     if row_key == "retail":
-        return data.filter(
-            pl.col(ec_col).is_in(
-                ["retail_mortgage", "retail_qrre", "retail_other"]
-            )
-        )
+        return data.filter(pl.col(ec_col).is_in(["retail_mortgage", "retail_qrre", "retail_other"]))
 
     # CRR retail sub-rows
     if row_key == "retail_mortgage":
         return data.filter(pl.col(ec_col) == "retail_mortgage")
 
     if row_key == "retail_mortgage_sme":
-        return _filter_sme(
-            data.filter(pl.col(ec_col) == "retail_mortgage"), cols
-        )
+        return _filter_sme(data.filter(pl.col(ec_col) == "retail_mortgage"), cols)
 
     if row_key == "retail_mortgage_non_sme":
         base = data.filter(pl.col(ec_col) == "retail_mortgage")
         sme = _filter_sme(base, cols)
         if len(sme) > 0:
-            sme_refs = set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            sme_refs = (
+                set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            )
             if sme_refs:
                 return base.filter(~pl.col("exposure_reference").is_in(list(sme_refs)))
         return base
@@ -4354,15 +4330,15 @@ def _filter_c09_02_row(
         return data.filter(pl.col(ec_col) == "retail_other")
 
     if row_key == "retail_other_sme":
-        return _filter_sme(
-            data.filter(pl.col(ec_col) == "retail_other"), cols
-        )
+        return _filter_sme(data.filter(pl.col(ec_col) == "retail_other"), cols)
 
     if row_key == "retail_other_non_sme":
         base = data.filter(pl.col(ec_col) == "retail_other")
         sme = _filter_sme(base, cols)
         if len(sme) > 0:
-            sme_refs = set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            sme_refs = (
+                set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            )
             if sme_refs:
                 return base.filter(~pl.col("exposure_reference").is_in(list(sme_refs)))
         return base
@@ -4371,20 +4347,18 @@ def _filter_c09_02_row(
     if row_key == "retail_resi_re_sme":
         base = data.filter(pl.col(ec_col) == "retail_mortgage")
         if "property_type" in cols:
-            base = base.filter(
-                pl.col("property_type").is_in(["residential", "rre"])
-            )
+            base = base.filter(pl.col("property_type").is_in(["residential", "rre"]))
         return _filter_sme(base, cols)
 
     if row_key == "retail_resi_re_non_sme":
         base = data.filter(pl.col(ec_col) == "retail_mortgage")
         if "property_type" in cols:
-            base = base.filter(
-                pl.col("property_type").is_in(["residential", "rre"])
-            )
+            base = base.filter(pl.col("property_type").is_in(["residential", "rre"]))
         sme = _filter_sme(base, cols)
         if len(sme) > 0:
-            sme_refs = set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            sme_refs = (
+                set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            )
             if sme_refs:
                 return base.filter(~pl.col("exposure_reference").is_in(list(sme_refs)))
         return base
@@ -4392,20 +4366,18 @@ def _filter_c09_02_row(
     if row_key == "retail_comm_re_sme":
         base = data.filter(pl.col(ec_col) == "retail_mortgage")
         if "property_type" in cols:
-            base = base.filter(
-                pl.col("property_type").is_in(["commercial", "cre"])
-            )
+            base = base.filter(pl.col("property_type").is_in(["commercial", "cre"]))
         return _filter_sme(base, cols)
 
     if row_key == "retail_comm_re_non_sme":
         base = data.filter(pl.col(ec_col) == "retail_mortgage")
         if "property_type" in cols:
-            base = base.filter(
-                pl.col("property_type").is_in(["commercial", "cre"])
-            )
+            base = base.filter(pl.col("property_type").is_in(["commercial", "cre"]))
         sme = _filter_sme(base, cols)
         if len(sme) > 0:
-            sme_refs = set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            sme_refs = (
+                set(sme["exposure_reference"].to_list()) if "exposure_reference" in cols else set()
+            )
             if sme_refs:
                 return base.filter(~pl.col("exposure_reference").is_in(list(sme_refs)))
         return base
@@ -4484,9 +4456,7 @@ def _compute_c09_02_values(
     # 0080: PD assigned to obligor grade — EAD-weighted average
     ead_sum = float(data[ead_col].fill_null(0.0).sum()) if ead_col else 0.0
     if pd_col and ead_col and ead_sum > 0:
-        pd_x_ead = float(
-            (data[pd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        pd_x_ead = float((data[pd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0080"] = pd_x_ead / ead_sum
     elif pd_col:
         pd_vals = data[pd_col].drop_nulls()
@@ -4496,9 +4466,7 @@ def _compute_c09_02_values(
 
     # 0090: Exposure weighted average LGD (%)
     if lgd_col and ead_col and ead_sum > 0:
-        lgd_x_ead = float(
-            (data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
-        )
+        lgd_x_ead = float((data[lgd_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum())
         values["0090"] = lgd_x_ead / ead_sum
     elif lgd_col:
         lgd_vals = data[lgd_col].drop_nulls()

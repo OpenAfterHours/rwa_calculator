@@ -133,13 +133,15 @@ class TestGuaranteeFxHaircut:
 
     def test_guarantee_currency_column_absent_early_return(self) -> None:
         """Missing guarantee_currency column: early return with haircut = 0."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "guaranteed_portion": [500_000.0],
-            "ead_after_collateral": [1_000_000.0],
-            "unguaranteed_portion": [500_000.0],
-            "currency": ["GBP"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "guaranteed_portion": [500_000.0],
+                "ead_after_collateral": [1_000_000.0],
+                "unguaranteed_portion": [500_000.0],
+                "currency": ["GBP"],
+            }
+        )
         result = _apply_guarantee_fx_haircut(lf).collect()
 
         assert result["guarantee_fx_haircut"][0] == pytest.approx(0.0)
@@ -148,28 +150,32 @@ class TestGuaranteeFxHaircut:
 
     def test_exposure_currency_column_absent_early_return(self) -> None:
         """Neither currency nor original_currency: early return with haircut = 0."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "guaranteed_portion": [500_000.0],
-            "ead_after_collateral": [1_000_000.0],
-            "unguaranteed_portion": [500_000.0],
-            "guarantee_currency": ["EUR"],
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "guaranteed_portion": [500_000.0],
+                "ead_after_collateral": [1_000_000.0],
+                "unguaranteed_portion": [500_000.0],
+                "guarantee_currency": ["EUR"],
+            }
+        )
         result = _apply_guarantee_fx_haircut(lf).collect()
 
         assert result["guarantee_fx_haircut"][0] == pytest.approx(0.0)
 
     def test_original_currency_preferred_over_currency(self) -> None:
         """original_currency takes priority over currency for mismatch detection."""
-        lf = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "guaranteed_portion": [500_000.0],
-            "ead_after_collateral": [1_000_000.0],
-            "unguaranteed_portion": [500_000.0],
-            "guarantee_currency": ["EUR"],
-            "original_currency": ["EUR"],  # same as guarantee → no mismatch
-            "currency": ["GBP"],  # different but ignored
-        })
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "guaranteed_portion": [500_000.0],
+                "ead_after_collateral": [1_000_000.0],
+                "unguaranteed_portion": [500_000.0],
+                "guarantee_currency": ["EUR"],
+                "original_currency": ["EUR"],  # same as guarantee → no mismatch
+                "currency": ["GBP"],  # different but ignored
+            }
+        )
         result = _apply_guarantee_fx_haircut(lf).collect()
 
         # original_currency == guarantee_currency → no mismatch
@@ -341,16 +347,20 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_beneficiary_type_absent_returns_unchanged(self) -> None:
         """No beneficiary_type column: guarantees returned unchanged."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_after_collateral": [1_000_000.0],
-            "counterparty_reference": ["CP001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_after_collateral": [1_000_000.0],
+                "counterparty_reference": ["CP001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         assert len(result) == 1
@@ -359,17 +369,21 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_direct_guarantees_pass_through(self) -> None:
         """Direct-level guarantees (loan/exposure/contingent) pass unchanged."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001", "EXP002"],
-            "beneficiary_type": ["loan", "exposure"],
-            "amount_covered": [100_000.0, 200_000.0],
-            "guarantor": ["GUAR001", "GUAR002"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "ead_after_collateral": [500_000.0, 500_000.0],
-            "counterparty_reference": ["CP001", "CP001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001", "EXP002"],
+                "beneficiary_type": ["loan", "exposure"],
+                "amount_covered": [100_000.0, 200_000.0],
+                "guarantor": ["GUAR001", "GUAR002"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "ead_after_collateral": [500_000.0, 500_000.0],
+                "counterparty_reference": ["CP001", "CP001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         assert len(result) == 2
@@ -379,17 +393,21 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_counterparty_level_allocated_pro_rata(self) -> None:
         """Counterparty-level guarantee split by EAD weight."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP001"],
-            "beneficiary_type": ["counterparty"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "ead_after_collateral": [600_000.0, 400_000.0],
-            "counterparty_reference": ["CP001", "CP001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP001"],
+                "beneficiary_type": ["counterparty"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "ead_after_collateral": [600_000.0, 400_000.0],
+                "counterparty_reference": ["CP001", "CP001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         # Pro-rata: 60% and 40% of 100k
@@ -399,18 +417,22 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_facility_level_allocated_pro_rata(self) -> None:
         """Facility-level guarantee split by EAD weight across child exposures."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["FAC001"],
-            "beneficiary_type": ["facility"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "ead_after_collateral": [750_000.0, 250_000.0],
-            "counterparty_reference": ["CP001", "CP001"],
-            "parent_facility_reference": ["FAC001", "FAC001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["FAC001"],
+                "beneficiary_type": ["facility"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "ead_after_collateral": [750_000.0, 250_000.0],
+                "counterparty_reference": ["CP001", "CP001"],
+                "parent_facility_reference": ["FAC001", "FAC001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         result_sorted = result.sort("beneficiary_reference")
@@ -419,40 +441,46 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_facility_level_skipped_without_parent_facility_col(self) -> None:
         """Facility-level guarantees skipped when parent_facility_reference absent."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["FAC001"],
-            "beneficiary_type": ["facility"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_after_collateral": [1_000_000.0],
-            "counterparty_reference": ["CP001"],
-            # No parent_facility_reference column
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["FAC001"],
+                "beneficiary_type": ["facility"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_after_collateral": [1_000_000.0],
+                "counterparty_reference": ["CP001"],
+                # No parent_facility_reference column
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         # Facility guarantee silently dropped (inner join in pro-rata fails)
         # Only counterparty-level runs (but no counterparty guarantees exist)
-        facility_rows = result.filter(
-            pl.col("beneficiary_reference") == "FAC001"
-        )
+        facility_rows = result.filter(pl.col("beneficiary_reference") == "FAC001")
         assert len(facility_rows) == 0
 
     def test_case_insensitive_beneficiary_type(self) -> None:
         """beneficiary_type matching is case-insensitive."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "beneficiary_type": ["LOAN"],  # uppercase
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "ead_after_collateral": [1_000_000.0],
-            "counterparty_reference": ["CP001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["LOAN"],  # uppercase
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_after_collateral": [1_000_000.0],
+                "counterparty_reference": ["CP001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         assert len(result) == 1
@@ -460,17 +488,21 @@ class TestResolveGuaranteesMultiLevel:
 
     def test_mixed_levels_combined(self) -> None:
         """Direct + counterparty guarantees correctly combined."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001", "CP001"],
-            "beneficiary_type": ["loan", "counterparty"],
-            "amount_covered": [50_000.0, 100_000.0],
-            "guarantor": ["GUAR001", "GUAR002"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "ead_after_collateral": [500_000.0, 500_000.0],
-            "counterparty_reference": ["CP001", "CP001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001", "CP001"],
+                "beneficiary_type": ["loan", "counterparty"],
+                "amount_covered": [50_000.0, 100_000.0],
+                "guarantor": ["GUAR001", "GUAR002"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "ead_after_collateral": [500_000.0, 500_000.0],
+                "counterparty_reference": ["CP001", "CP001"],
+            }
+        )
         result = _resolve_guarantees_multi_level(guarantees, exposures).collect()
 
         # 1 direct + 2 cp-level (split 50:50) = 3 rows
@@ -489,17 +521,21 @@ class TestAllocateGuaranteesProRata:
 
     def test_single_exposure_full_allocation(self) -> None:
         """Single exposure gets full guarantee amount."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP001"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-            "beneficiary_type": ["counterparty"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP001"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+                "beneficiary_type": ["counterparty"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = _allocate_guarantees_pro_rata(
             guarantees, exposures, "counterparty_reference"
         ).collect()
@@ -511,17 +547,21 @@ class TestAllocateGuaranteesProRata:
 
     def test_two_exposures_weighted_by_ead(self) -> None:
         """Two exposures get amount proportional to EAD."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP001"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-            "beneficiary_type": ["counterparty"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP001"],
-            "ead_after_collateral": [300_000.0, 700_000.0],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP001"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+                "beneficiary_type": ["counterparty"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "ead_after_collateral": [300_000.0, 700_000.0],
+            }
+        )
         result = _allocate_guarantees_pro_rata(
             guarantees, exposures, "counterparty_reference"
         ).collect()
@@ -532,17 +572,21 @@ class TestAllocateGuaranteesProRata:
 
     def test_zero_total_ead_gets_zero_allocation(self) -> None:
         """All exposures with zero EAD: weight = 0, allocation = 0."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP001"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-            "beneficiary_type": ["counterparty"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_after_collateral": [0.0],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP001"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+                "beneficiary_type": ["counterparty"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_after_collateral": [0.0],
+            }
+        )
         result = _allocate_guarantees_pro_rata(
             guarantees, exposures, "counterparty_reference"
         ).collect()
@@ -551,17 +595,21 @@ class TestAllocateGuaranteesProRata:
 
     def test_no_matching_references_empty_result(self) -> None:
         """No matching references: inner join produces empty output."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP999"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-            "beneficiary_type": ["counterparty"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP999"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+                "beneficiary_type": ["counterparty"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = _allocate_guarantees_pro_rata(
             guarantees, exposures, "counterparty_reference"
         ).collect()
@@ -570,17 +618,21 @@ class TestAllocateGuaranteesProRata:
 
     def test_beneficiary_type_overwritten_to_loan(self) -> None:
         """Output beneficiary_type is always 'loan' regardless of input."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["CP001"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-            "beneficiary_type": ["counterparty"],
-        })
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["CP001"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+                "beneficiary_type": ["counterparty"],
+            }
+        )
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = _allocate_guarantees_pro_rata(
             guarantees, exposures, "counterparty_reference"
         ).collect()
@@ -599,10 +651,12 @@ class TestResolveGuaranteeAmountExpr:
     def test_no_percentage_uses_amount_covered(self) -> None:
         """has_percentage=False: uses amount_covered directly."""
         expr = _resolve_guarantee_amount_expr(has_percentage=False, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": [100_000.0],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": [100_000.0],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(100_000.0)
@@ -610,10 +664,12 @@ class TestResolveGuaranteeAmountExpr:
     def test_no_percentage_null_amount_defaults_zero(self) -> None:
         """has_percentage=False: null amount_covered → 0.0."""
         expr = _resolve_guarantee_amount_expr(has_percentage=False, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(0.0)
@@ -621,11 +677,13 @@ class TestResolveGuaranteeAmountExpr:
     def test_percentage_used_when_amount_null(self) -> None:
         """has_percentage=True + null amount: percentage x EAD."""
         expr = _resolve_guarantee_amount_expr(has_percentage=True, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
-            "percentage_covered": [0.50],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
+                "percentage_covered": [0.50],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(500_000.0)
@@ -633,11 +691,13 @@ class TestResolveGuaranteeAmountExpr:
     def test_percentage_used_when_amount_near_zero(self) -> None:
         """has_percentage=True + amount ~0 (< 1e-10): uses percentage."""
         expr = _resolve_guarantee_amount_expr(has_percentage=True, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": [1e-11],
-            "percentage_covered": [0.30],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": [1e-11],
+                "percentage_covered": [0.30],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(300_000.0)
@@ -645,11 +705,13 @@ class TestResolveGuaranteeAmountExpr:
     def test_amount_used_when_both_present(self) -> None:
         """has_percentage=True + nonzero amount: amount_covered takes priority."""
         expr = _resolve_guarantee_amount_expr(has_percentage=True, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": [200_000.0],
-            "percentage_covered": [0.50],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": [200_000.0],
+                "percentage_covered": [0.50],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(200_000.0)
@@ -657,11 +719,13 @@ class TestResolveGuaranteeAmountExpr:
     def test_both_null_returns_zero(self) -> None:
         """has_percentage=True + both null: 0.0."""
         expr = _resolve_guarantee_amount_expr(has_percentage=True, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
-            "percentage_covered": pl.Series("percentage_covered", [None], dtype=pl.Float64),
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
+                "percentage_covered": pl.Series("percentage_covered", [None], dtype=pl.Float64),
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         assert result["guar_amount"][0] == pytest.approx(0.0)
@@ -669,11 +733,13 @@ class TestResolveGuaranteeAmountExpr:
     def test_zero_percentage_falls_through_to_amount(self) -> None:
         """has_percentage=True + percentage <= 0: uses amount_covered."""
         expr = _resolve_guarantee_amount_expr(has_percentage=True, alias="guar_amount")
-        lf = pl.LazyFrame({
-            "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
-            "percentage_covered": [0.0],
-            "ead_after_collateral": [1_000_000.0],
-        })
+        lf = pl.LazyFrame(
+            {
+                "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
+                "percentage_covered": [0.0],
+                "ead_after_collateral": [1_000_000.0],
+            }
+        )
         result = lf.with_columns(expr).collect()
 
         # percentage <= 0 doesn't trigger, falls to amount.fill_null(0.0)
@@ -689,22 +755,26 @@ class TestApplyGuaranteeSplits:
     """Split exposures by guarantor into sub-rows."""
 
     def _base_exposure(self, ead: float = 1_000_000.0) -> pl.LazyFrame:
-        return pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "parent_exposure_reference": ["EXP001"],
-            "ead_after_collateral": [ead],
-            "drawn_amount": [ead],
-            "nominal_amount": [0.0],
-            "counterparty_reference": ["CP001"],
-        })
+        return pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "parent_exposure_reference": ["EXP001"],
+                "ead_after_collateral": [ead],
+                "drawn_amount": [ead],
+                "nominal_amount": [0.0],
+                "counterparty_reference": ["CP001"],
+            }
+        )
 
     def test_no_guarantees_exposure_unchanged(self) -> None:
         """Exposure with no matching guarantee: zero guaranteed_portion."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["OTHER"],
-            "amount_covered": [100_000.0],
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["OTHER"],
+                "amount_covered": [100_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
         exposures = self._base_exposure()
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
@@ -714,11 +784,13 @@ class TestApplyGuaranteeSplits:
 
     def test_single_guarantor_partial(self) -> None:
         """Single guarantor covering less than EAD: guaranteed + unguaranteed sum to EAD."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": [400_000.0],
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": [400_000.0],
+                "guarantor": ["GUAR001"],
+            }
+        )
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
@@ -728,11 +800,13 @@ class TestApplyGuaranteeSplits:
 
     def test_single_guarantor_full_coverage(self) -> None:
         """Single guarantor covering full EAD: capped at EAD."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": [1_500_000.0],  # exceeds EAD
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": [1_500_000.0],  # exceeds EAD
+                "guarantor": ["GUAR001"],
+            }
+        )
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
@@ -742,11 +816,13 @@ class TestApplyGuaranteeSplits:
 
     def test_multiple_guarantors_creates_subrows(self) -> None:
         """Two guarantors: creates 3 rows (2 guarantor + 1 remainder)."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001", "EXP001"],
-            "amount_covered": [300_000.0, 400_000.0],
-            "guarantor": ["GUAR_A", "GUAR_B"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001", "EXP001"],
+                "amount_covered": [300_000.0, 400_000.0],
+                "guarantor": ["GUAR_A", "GUAR_B"],
+            }
+        )
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
@@ -767,11 +843,13 @@ class TestApplyGuaranteeSplits:
 
     def test_multiple_guarantors_exceeding_ead_pro_rata_scaled(self) -> None:
         """Two guarantors totalling > EAD: amounts scaled pro-rata."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001", "EXP001"],
-            "amount_covered": [800_000.0, 600_000.0],
-            "guarantor": ["GUAR_A", "GUAR_B"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001", "EXP001"],
+                "amount_covered": [800_000.0, 600_000.0],
+                "guarantor": ["GUAR_A", "GUAR_B"],
+            }
+        )
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
@@ -780,21 +858,19 @@ class TestApplyGuaranteeSplits:
 
         # Total = 1.4M, EAD = 1M → scale = 1M / 1.4M ≈ 0.7143
         scale = 1_000_000.0 / 1_400_000.0
-        assert guar_a["guaranteed_portion"][0] == pytest.approx(
-            800_000.0 * scale, rel=1e-4
-        )
-        assert guar_b["guaranteed_portion"][0] == pytest.approx(
-            600_000.0 * scale, rel=1e-4
-        )
+        assert guar_a["guaranteed_portion"][0] == pytest.approx(800_000.0 * scale, rel=1e-4)
+        assert guar_b["guaranteed_portion"][0] == pytest.approx(600_000.0 * scale, rel=1e-4)
 
     def test_percentage_covered_used_when_amount_absent(self) -> None:
         """percentage_covered used when amount_covered is null."""
-        guarantees = pl.LazyFrame({
-            "beneficiary_reference": ["EXP001"],
-            "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
-            "percentage_covered": [0.50],
-            "guarantor": ["GUAR001"],
-        })
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["EXP001"],
+                "amount_covered": pl.Series("amount_covered", [None], dtype=pl.Float64),
+                "percentage_covered": [0.50],
+                "guarantor": ["GUAR001"],
+            }
+        )
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 

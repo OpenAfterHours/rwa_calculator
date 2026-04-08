@@ -1075,9 +1075,7 @@ B31_C08_07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0130", "RWEA for SA: due to roll-out plan", "RWEA: SA Breakdown"),
     COREPColumn("0140", "RWEA for SA: other", "RWEA: SA Breakdown"),
     COREPColumn("0150", "RWEA for exposures subject to IRB", "RWEA"),
-    COREPColumn(
-        "0160", "Materiality of roll-out class (Art 150(1A)(c))", "Materiality"
-    ),
+    COREPColumn("0160", "Materiality of roll-out class (Art 150(1A)(c))", "Materiality"),
     COREPColumn("0170", "% subject to permanent partial use (type)", "Materiality"),
     COREPColumn(
         "0180", "% subject to permanent partial use (immaterial in aggregate)", "Materiality"
@@ -1125,14 +1123,22 @@ B31_C08_07_ROWS: list[tuple[str, str, str | None]] = [
 ]
 
 # Exposure classes that count as "retail" for row aggregation in CRR rows 0090-0140
-C08_07_CRR_RETAIL_CLASSES: frozenset[str] = frozenset({
-    "retail_mortgage", "retail_qrre", "retail_other",
-})
+C08_07_CRR_RETAIL_CLASSES: frozenset[str] = frozenset(
+    {
+        "retail_mortgage",
+        "retail_qrre",
+        "retail_other",
+    }
+)
 
 # Exposure classes that count as IRB approaches (not SA)
-C08_07_IRB_APPROACHES: frozenset[str] = frozenset({
-    "foundation_irb", "advanced_irb", "slotting",
-})
+C08_07_IRB_APPROACHES: frozenset[str] = frozenset(
+    {
+        "foundation_irb",
+        "advanced_irb",
+        "slotting",
+    }
+)
 
 
 def get_c08_07_columns(framework: str = "CRR") -> list[COREPColumn]:
@@ -1411,17 +1417,66 @@ C02_00_SA_CLASS_MAP: dict[str, str] = {
 
 # Rows that are populated from pipeline data (credit risk scope).
 # All other rows are null (CCR, market, op risk out of scope).
-C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset({
-    "0010", "0040", "0050", "0060",
-    "0070", "0080", "0090", "0100", "0110", "0120", "0130", "0131",
-    "0140", "0150", "0160", "0170", "0180", "0190", "0200", "0210", "0211",
-    "0220", "0240", "0250", "0260", "0271", "0290", "0295", "0296", "0297",
-    "0300", "0310", "0330", "0340", "0350", "0355", "0356",
-    "0370", "0380", "0382", "0383", "0384", "0385", "0390", "0400", "0410",
-    "0411", "0412", "0413", "0414", "0415", "0416",
-    "0420",
-    "0034", "0035", "0036",
-})
+C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset(
+    {
+        "0010",
+        "0040",
+        "0050",
+        "0060",
+        "0070",
+        "0080",
+        "0090",
+        "0100",
+        "0110",
+        "0120",
+        "0130",
+        "0131",
+        "0140",
+        "0150",
+        "0160",
+        "0170",
+        "0180",
+        "0190",
+        "0200",
+        "0210",
+        "0211",
+        "0220",
+        "0240",
+        "0250",
+        "0260",
+        "0271",
+        "0290",
+        "0295",
+        "0296",
+        "0297",
+        "0300",
+        "0310",
+        "0330",
+        "0340",
+        "0350",
+        "0355",
+        "0356",
+        "0370",
+        "0380",
+        "0382",
+        "0383",
+        "0384",
+        "0385",
+        "0390",
+        "0400",
+        "0410",
+        "0411",
+        "0412",
+        "0413",
+        "0414",
+        "0415",
+        "0416",
+        "0420",
+        "0034",
+        "0035",
+        "0036",
+    }
+)
 
 
 # =============================================================================
@@ -1442,8 +1497,12 @@ CRR_C09_01_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", "General credit risk adjustments", "Provisions"),
     COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn("0061", "Additional value adjustments and other own funds reductions", "Provisions"),
-    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn(
+        "0061", "Additional value adjustments and other own funds reductions", "Provisions"
+    ),
+    COREPColumn(
+        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+    ),
     COREPColumn("0075", "Exposure value", "Exposure Value"),
     COREPColumn("0080", "RWEA pre supporting factors", "RWEA"),
     COREPColumn("0081", "(-) SME supporting factor adjustment", "RWEA"),
@@ -1459,8 +1518,12 @@ B31_C09_01_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", "General credit risk adjustments", "Provisions"),
     COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn("0061", "Additional value adjustments and other own funds reductions", "Provisions"),
-    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn(
+        "0061", "Additional value adjustments and other own funds reductions", "Provisions"
+    ),
+    COREPColumn(
+        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+    ),
     COREPColumn("0075", "Exposure value", "Exposure Value"),
     COREPColumn("0090", "Risk-weighted exposure amount", "RWEA"),
 ]
@@ -1485,8 +1548,11 @@ CRR_C09_01_ROWS: list[COREPRow] = [
     COREPRow("0100", "Exposures in default", "defaulted"),
     COREPRow("0110", "Items associated with particularly high risk", "high_risk"),
     COREPRow("0120", "Covered bonds", "covered_bond"),
-    COREPRow("0130", "Claims on institutions and corporates with a short-term credit assessment",
-             "short_term"),
+    COREPRow(
+        "0130",
+        "Claims on institutions and corporates with a short-term credit assessment",
+        "short_term",
+    ),
     COREPRow("0140", "Collective investment undertakings (CIU)", "ciu"),
     COREPRow("0141", "  Look-through approach", "ciu_look_through"),
     COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
@@ -1507,8 +1573,9 @@ B31_C09_01_ROWS: list[COREPRow] = [
     COREPRow("0070", "Corporates", "corporate"),
     COREPRow("0075", "  of which: SME", "corporate_sme"),
     COREPRow("0071", "  of which: specialised lending - object finance", "sl_object_finance"),
-    COREPRow("0072", "  of which: specialised lending - commodities finance",
-             "sl_commodities_finance"),
+    COREPRow(
+        "0072", "  of which: specialised lending - commodities finance", "sl_commodities_finance"
+    ),
     COREPRow("0073", "  of which: specialised lending - project finance", "sl_project_finance"),
     COREPRow("0080", "Retail", "retail"),
     COREPRow("0085", "  of which: SME", "retail_sme"),
@@ -1549,7 +1616,9 @@ CRR_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", "General credit risk adjustments", "Provisions"),
     COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn(
+        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+    ),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
@@ -1570,7 +1639,9 @@ B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", "General credit risk adjustments", "Provisions"),
     COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn(
+        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+    ),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
@@ -1589,10 +1660,10 @@ CRR_C09_02_ROWS: list[COREPRow] = [
     COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
     COREPRow("0020", "Institutions", "institution"),
     COREPRow("0030", "Corporates", "corporate"),
-    COREPRow("0042", "  Of which: specialised lending (excl. slotting approach)",
-             "sl_excl_slotting"),
-    COREPRow("0045", "  Of which: specialised lending under the slotting approach",
-             "sl_slotting"),
+    COREPRow(
+        "0042", "  Of which: specialised lending (excl. slotting approach)", "sl_excl_slotting"
+    ),
+    COREPRow("0045", "  Of which: specialised lending under the slotting approach", "sl_slotting"),
     COREPRow("0050", "  Of which: SME", "corporate_sme"),
     COREPRow("0060", "Retail", "retail"),
     COREPRow("0070", "  Secured by immovable property", "retail_mortgage"),
@@ -1612,27 +1683,33 @@ B31_C09_02_ROWS: list[COREPRow] = [
     COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
     COREPRow("0020", "Institutions", "institution"),
     COREPRow("0030", "Corporates", "corporate"),
-    COREPRow("0042", "  Of which: specialised lending (excl. slotting approach)",
-             "sl_excl_slotting"),
-    COREPRow("0045", "  Of which: specialised lending under the slotting approach",
-             "sl_slotting"),
-    COREPRow("0048", "  Of which: financial corporates and large corporates (Art 147(4C))",
-             "corporate_fse_large"),
-    COREPRow("0049", "  Of which: purchased receivables (Art 157)",
-             "corporate_purchased_receivables"),
-    COREPRow("0050", "  Of which: other general corporates - SME (Art 147(4E)(c))",
-             "corporate_sme"),
-    COREPRow("0055", "  Of which: other general corporates - non-SME (Art 147(4E))",
-             "corporate_non_sme"),
+    COREPRow(
+        "0042", "  Of which: specialised lending (excl. slotting approach)", "sl_excl_slotting"
+    ),
+    COREPRow("0045", "  Of which: specialised lending under the slotting approach", "sl_slotting"),
+    COREPRow(
+        "0048",
+        "  Of which: financial corporates and large corporates (Art 147(4C))",
+        "corporate_fse_large",
+    ),
+    COREPRow(
+        "0049", "  Of which: purchased receivables (Art 157)", "corporate_purchased_receivables"
+    ),
+    COREPRow(
+        "0050", "  Of which: other general corporates - SME (Art 147(4E)(c))", "corporate_sme"
+    ),
+    COREPRow(
+        "0055", "  Of which: other general corporates - non-SME (Art 147(4E))", "corporate_non_sme"
+    ),
     COREPRow("0060", "Retail", "retail"),
-    COREPRow("0071", "  Secured by residential immovable property - SME",
-             "retail_resi_re_sme"),
-    COREPRow("0072", "  Secured by residential immovable property - non-SME",
-             "retail_resi_re_non_sme"),
-    COREPRow("0073", "  Secured by commercial immovable property - SME",
-             "retail_comm_re_sme"),
-    COREPRow("0074", "  Secured by commercial immovable property - non-SME",
-             "retail_comm_re_non_sme"),
+    COREPRow("0071", "  Secured by residential immovable property - SME", "retail_resi_re_sme"),
+    COREPRow(
+        "0072", "  Secured by residential immovable property - non-SME", "retail_resi_re_non_sme"
+    ),
+    COREPRow("0073", "  Secured by commercial immovable property - SME", "retail_comm_re_sme"),
+    COREPRow(
+        "0074", "  Secured by commercial immovable property - non-SME", "retail_comm_re_non_sme"
+    ),
     COREPRow("0100", "  Qualifying revolving", "retail_qrre"),
     COREPRow("0105", "  Purchased receivables (Art 157)", "retail_purchased_receivables"),
     COREPRow("0120", "  Other retail - SME", "retail_other_sme"),

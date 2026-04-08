@@ -88,7 +88,10 @@ class TestOutputFloorConfigSkipTransitional:
         """Default call (no skip_transitional) preserves existing behaviour."""
         config_default = OutputFloorConfig.basel_3_1()
         config_explicit = OutputFloorConfig.basel_3_1(skip_transitional=False)
-        assert config_default.transitional_floor_schedule == config_explicit.transitional_floor_schedule
+        assert (
+            config_default.transitional_floor_schedule
+            == config_explicit.transitional_floor_schedule
+        )
 
     def test_skip_transitional_with_entity_type(self) -> None:
         """skip_transitional combines with entity-type params."""

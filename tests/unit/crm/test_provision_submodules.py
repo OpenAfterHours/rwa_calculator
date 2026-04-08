@@ -72,58 +72,66 @@ def _make_provisions(rows: list[dict]) -> pl.LazyFrame:
 class TestDirectProvisionAllocation:
     """Direct-level provisions (beneficiary_type in loan/exposure/contingent)."""
 
-    def test_direct_provision_allocated_by_reference(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_direct_provision_allocated_by_reference(self, crr_config: CalculationConfig) -> None:
         """Direct provision matched to exposure_reference."""
         exposures = _make_exposures()
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(50_000.0)
 
-    def test_exposure_type_beneficiary_matches(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_exposure_type_beneficiary_matches(self, crr_config: CalculationConfig) -> None:
         """beneficiary_type='exposure' also matches as direct."""
         exposures = _make_exposures()
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "exposure",
-            "amount": 30_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "exposure",
+                    "amount": 30_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(30_000.0)
 
-    def test_contingent_type_beneficiary_matches(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_contingent_type_beneficiary_matches(self, crr_config: CalculationConfig) -> None:
         """beneficiary_type='contingent' also matches as direct."""
         exposures = _make_exposures()
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "contingent",
-            "amount": 20_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "contingent",
+                    "amount": 20_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(20_000.0)
 
-    def test_case_insensitive_beneficiary_type(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_case_insensitive_beneficiary_type(self, crr_config: CalculationConfig) -> None:
         """beneficiary_type matching is case-insensitive."""
         exposures = _make_exposures()
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "LOAN",
-            "amount": 25_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "LOAN",
+                    "amount": 25_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(25_000.0)
@@ -144,11 +152,21 @@ class TestMultiLevelProvisionAllocation:
             interest=0.0,
             nominal_amount=0.0,
         )
-        provisions = _make_provisions([
-            {"beneficiary_reference": "EXP001", "beneficiary_type": "loan", "amount": 10_000.0},
-            {"beneficiary_reference": "FAC001", "beneficiary_type": "facility", "amount": 20_000.0},
-            {"beneficiary_reference": "CP001", "beneficiary_type": "counterparty", "amount": 30_000.0},
-        ])
+        provisions = _make_provisions(
+            [
+                {"beneficiary_reference": "EXP001", "beneficiary_type": "loan", "amount": 10_000.0},
+                {
+                    "beneficiary_reference": "FAC001",
+                    "beneficiary_type": "facility",
+                    "amount": 20_000.0,
+                },
+                {
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 30_000.0,
+                },
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         # Single exposure gets all levels: 10k + 20k + 30k = 60k
@@ -165,11 +183,15 @@ class TestMultiLevelProvisionAllocation:
             nominal_amount=[0.0, 0.0],
             approach=[ApproachType.SA.value, ApproachType.SA.value],
         )
-        provisions = _make_provisions([{
-            "beneficiary_reference": "FAC001",
-            "beneficiary_type": "facility",
-            "amount": 100_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "FAC001",
+                    "beneficiary_type": "facility",
+                    "amount": 100_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         exp_a = result.filter(pl.col("exposure_reference") == "EXP_A")
@@ -178,9 +200,7 @@ class TestMultiLevelProvisionAllocation:
         assert exp_a["provision_allocated"][0] == pytest.approx(60_000.0)
         assert exp_b["provision_allocated"][0] == pytest.approx(40_000.0)
 
-    def test_counterparty_pro_rata_across_exposures(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_counterparty_pro_rata_across_exposures(self, crr_config: CalculationConfig) -> None:
         """Counterparty-level provision split pro-rata."""
         exposures = _make_exposures(
             exposure_reference=["EXP_A", "EXP_B"],
@@ -191,11 +211,15 @@ class TestMultiLevelProvisionAllocation:
             nominal_amount=[0.0, 0.0],
             approach=[ApproachType.SA.value, ApproachType.SA.value],
         )
-        provisions = _make_provisions([{
-            "beneficiary_reference": "CP001",
-            "beneficiary_type": "counterparty",
-            "amount": 80_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 80_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         exp_a = result.filter(pl.col("exposure_reference") == "EXP_A")
@@ -204,9 +228,7 @@ class TestMultiLevelProvisionAllocation:
         assert exp_a["provision_allocated"][0] == pytest.approx(60_000.0)
         assert exp_b["provision_allocated"][0] == pytest.approx(20_000.0)
 
-    def test_zero_weight_exposures_get_zero_allocation(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_zero_weight_exposures_get_zero_allocation(self, crr_config: CalculationConfig) -> None:
         """Exposures with zero weight (drawn=0, interest=0, nominal=0) get zero."""
         exposures = _make_exposures(
             exposure_reference=["EXP_A", "EXP_B"],
@@ -217,11 +239,15 @@ class TestMultiLevelProvisionAllocation:
             nominal_amount=[0.0, 0.0],
             approach=[ApproachType.SA.value, ApproachType.SA.value],
         )
-        provisions = _make_provisions([{
-            "beneficiary_reference": "CP001",
-            "beneficiary_type": "counterparty",
-            "amount": 100_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 100_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         # Total weight is 0 → all get 0 allocation
@@ -240,11 +266,15 @@ class TestSADrawnFirstDeduction:
     def test_provision_fully_absorbed_by_drawn(self, crr_config: CalculationConfig) -> None:
         """Provision < drawn: fully absorbed, nominal untouched."""
         exposures = _make_exposures(drawn_amount=500_000.0, nominal_amount=200_000.0)
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 100_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 100_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_on_drawn"][0] == pytest.approx(100_000.0)
@@ -254,11 +284,15 @@ class TestSADrawnFirstDeduction:
     def test_provision_spills_to_nominal(self, crr_config: CalculationConfig) -> None:
         """Provision > drawn: excess goes to nominal."""
         exposures = _make_exposures(drawn_amount=30_000.0, nominal_amount=200_000.0)
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 80_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 80_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_on_drawn"][0] == pytest.approx(30_000.0)
@@ -268,11 +302,15 @@ class TestSADrawnFirstDeduction:
     def test_provision_capped_at_drawn_plus_nominal(self, crr_config: CalculationConfig) -> None:
         """Provision > drawn + nominal: capped at total."""
         exposures = _make_exposures(drawn_amount=50_000.0, nominal_amount=50_000.0)
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 200_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 200_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_on_drawn"][0] == pytest.approx(50_000.0)
@@ -296,11 +334,15 @@ class TestIRBProvisionTracking:
             drawn_amount=1_000_000.0,
             nominal_amount=0.0,
         )
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 50_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 50_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(50_000.0)
@@ -315,11 +357,15 @@ class TestIRBProvisionTracking:
             drawn_amount=1_000_000.0,
             nominal_amount=500_000.0,
         )
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "beneficiary_type": "loan",
-            "amount": 100_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "beneficiary_type": "loan",
+                    "amount": 100_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(100_000.0)
@@ -334,15 +380,17 @@ class TestIRBProvisionTracking:
 class TestNoBeneficiaryTypeFallback:
     """Provisions without beneficiary_type column use direct-only join."""
 
-    def test_direct_join_without_beneficiary_type(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_direct_join_without_beneficiary_type(self, crr_config: CalculationConfig) -> None:
         """No beneficiary_type column: falls back to direct join."""
         exposures = _make_exposures(drawn_amount=1_000_000.0, nominal_amount=0.0)
-        provisions = _make_provisions([{
-            "beneficiary_reference": "EXP001",
-            "amount": 50_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "EXP001",
+                    "amount": 50_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         assert result["provision_allocated"][0] == pytest.approx(50_000.0)
@@ -352,10 +400,14 @@ class TestNoBeneficiaryTypeFallback:
     ) -> None:
         """Without beneficiary_type, facility references are treated as direct."""
         exposures = _make_exposures(drawn_amount=1_000_000.0, nominal_amount=0.0)
-        provisions = _make_provisions([{
-            "beneficiary_reference": "FAC001",  # matches parent_facility_reference
-            "amount": 50_000.0,
-        }])
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "FAC001",  # matches parent_facility_reference
+                    "amount": 50_000.0,
+                }
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         # No beneficiary_type → direct join on exposure_reference = FAC001 → no match
@@ -372,18 +424,30 @@ class TestNoParentFacilityReference:
 
     def test_facility_provisions_skipped(self, crr_config: CalculationConfig) -> None:
         """Facility provisions ignored when exposures lack parent_facility_reference."""
-        exposures = pl.LazyFrame({
-            "exposure_reference": ["EXP001"],
-            "counterparty_reference": ["CP001"],
-            "drawn_amount": [500_000.0],
-            "interest": [0.0],
-            "nominal_amount": [200_000.0],
-            "approach": [ApproachType.SA.value],
-        })
-        provisions = _make_provisions([
-            {"beneficiary_reference": "FAC001", "beneficiary_type": "facility", "amount": 50_000.0},
-            {"beneficiary_reference": "CP001", "beneficiary_type": "counterparty", "amount": 30_000.0},
-        ])
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [500_000.0],
+                "interest": [0.0],
+                "nominal_amount": [200_000.0],
+                "approach": [ApproachType.SA.value],
+            }
+        )
+        provisions = _make_provisions(
+            [
+                {
+                    "beneficiary_reference": "FAC001",
+                    "beneficiary_type": "facility",
+                    "amount": 50_000.0,
+                },
+                {
+                    "beneficiary_reference": "CP001",
+                    "beneficiary_type": "counterparty",
+                    "amount": 30_000.0,
+                },
+            ]
+        )
         result = resolve_provisions(exposures, provisions, crr_config).collect()
 
         # Facility provision skipped, counterparty provision applied

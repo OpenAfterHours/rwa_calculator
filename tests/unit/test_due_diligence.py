@@ -142,9 +142,7 @@ class TestDueDiligenceOverrideApplication:
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.50)
 
-    def test_mixed_overrides(
-        self, calculator: SACalculator, b31_config: CalculationConfig
-    ) -> None:
+    def test_mixed_overrides(self, calculator: SACalculator, b31_config: CalculationConfig) -> None:
         """Mixed override values: some applied, some ignored, some null."""
         exposures = _exposures_with_dd(
             risk_weights=[0.50, 1.50, 0.75, 1.00],
@@ -167,9 +165,7 @@ class TestDueDiligenceOverrideApplication:
         assert df["risk_weight"][0] == pytest.approx(0.50)
         assert df["risk_weight"][1] == pytest.approx(1.00)
 
-    def test_no_op_under_crr(
-        self, calculator: SACalculator, crr_config: CalculationConfig
-    ) -> None:
+    def test_no_op_under_crr(self, calculator: SACalculator, crr_config: CalculationConfig) -> None:
         """No-op under CRR — Art. 110A is Basel 3.1 only."""
         exposures = _exposures_with_dd(
             risk_weights=[0.50],
@@ -261,9 +257,7 @@ class TestDueDiligenceWarnings:
         """Warning emitted when due_diligence_performed column is absent under B31."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert len(errors) == 1
         assert errors[0].code == ERROR_DUE_DILIGENCE_NOT_PERFORMED
 
@@ -273,9 +267,7 @@ class TestDueDiligenceWarnings:
         """Warning has WARNING severity (not ERROR)."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert errors[0].severity == ErrorSeverity.WARNING
 
     def test_warning_category_is_data_quality(
@@ -284,9 +276,7 @@ class TestDueDiligenceWarnings:
         """Warning category is DATA_QUALITY."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert errors[0].category == ErrorCategory.DATA_QUALITY
 
     def test_warning_has_regulatory_reference(
@@ -295,9 +285,7 @@ class TestDueDiligenceWarnings:
         """Warning includes Art. 110A regulatory reference."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert "110A" in (errors[0].regulatory_reference or "")
 
     def test_warning_has_field_name(
@@ -306,9 +294,7 @@ class TestDueDiligenceWarnings:
         """Warning includes the expected field name."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert errors[0].field_name == "due_diligence_performed"
 
     def test_no_warning_under_crr(
@@ -317,9 +303,7 @@ class TestDueDiligenceWarnings:
         """No warning under CRR even if DD column is absent."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(
-            exposures, crr_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, crr_config, errors=errors)
         assert len(errors) == 0
 
     def test_no_warning_when_dd_performed_present(
@@ -332,9 +316,7 @@ class TestDueDiligenceWarnings:
             override_rws=[None],
             dd_performed=[True],
         )
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert len(errors) == 0
 
     def test_no_warning_when_errors_none(
@@ -353,9 +335,7 @@ class TestDueDiligenceWarnings:
         """Warning is emitted once per calculation, not per row."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50, 0.75, 1.00])
-        calculator._apply_due_diligence_override(
-            exposures, b31_config, errors=errors
-        )
+        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
         assert len(errors) == 1
 
 

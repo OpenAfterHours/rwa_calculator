@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P5.2 fixture referential integrity fixed — 12 missing test loans added, 20 integrity tests)
-**Current version:** 0.1.172 | **Test suite:** 5,001 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P2.5 partial — OF 02.00 IRB sub-rows/floor indicator rows, OF 07.00 RE sub-rows/equity transitional rows improved; 24 new tests)
+**Current version:** 0.1.173 | **Test suite:** 5,025 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -110,7 +110,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 ### P2.1 COREP template rework -- structure alignment
 - **Status:** [~] Needs rework
 - **Impact:** Current COREP generator (`reporting/corep/generator.py`) uses simplified column sets and one-row-per-class structure. Only C 07.00, C 08.01, C 08.02 (and their OF variants) are implemented. Full-width CRR/B31 column definitions exist in `templates.py` (lines 1-651) but generator uses backward-compatibility aliases. Specific sub-gaps:
-  - C 08.01 col `0120` ("Of which: off balance sheet") permanently null (`generator.py:1289-1290`)
+  - C 08.01 col `0120` ("Of which: off balance sheet") still null (`generator.py:1289-1290`) — needs off-BS EAD pipeline column
   - B31 OF 08.02 missing columns `0001` and `0101-0105` (per-grade CCF breakdown) (`templates.py:646-651`)
   - B31 C 08.01 off-BS CCF sub-rows `0031-0035` always null (`generator.py:521`)
   - C 07.00 B31 CIU sub-rows `0284/0285` defined in `templates.py:348-353` but never populated by generator
@@ -118,8 +118,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
   - ~~C 07.00 memorandum rows 0290/0300/0310/0320 permanently null~~ — **FIXED** in P2.8 (2026-04-08)
   - ~~CRR supporting factor "of which" rows 0030/0035 permanently null~~ — **FIXED** in P2.8 (2026-04-08)
   - ~~CRR RWEA columns 0215-0217 permanently null due to column name mismatch~~ — **FIXED** in P2.8 (2026-04-08)
-  - B31 slotting FCCM cols `0101-0104` in C 08.01 always null (`generator.py:1281-1283`)
-  - Dead backward-compatibility aliases (`C07_COLUMNS`, `C08_01_COLUMNS`, `C08_02_COLUMNS`) at `templates.py:661-689` still exported but unused
+  - B31 slotting FCCM cols `0101-0104` in C 08.01 still null (`generator.py:1281-1283`) — pipeline FCCM for slotting not yet wired
   **Additional from PDF comparison:** OF 07.00 has 22 columns in spec vs ~29 actual (missing cols 0230/0235/0240 ECAI breakdown, col 0235 "ECAI not available" new in B31). OF 09.02 has 15 cols in spec vs 13 actual (missing col 0107 defaulted EV; remove SF cols). OF 08.01 missing cols 0254 (unrecognised exposure adjustments, NOT PD floors), 0265, 0282 (total post-adjustment EL, NOT PD/LGD floors); col 0280 renamed. OF 02.00 needs rows 0034 (Yes/No indicator), 0035 (multiplier %), 0036 (monetary OF-ADJ). OF 08.06 CRR risk weight column 0070 removed in B3.1; col 0031 FCCM is a deduction column. OF 08.07 cols 0160-0180 require consolidated-basis-only reporting. OF 09.01 missing col 0061 (additional value adjustments).
 - **File:Line:** `reporting/corep/generator.py`, `reporting/corep/templates.py`
 - **Fix:** Migrate generator to use full template definitions. Rework row/column logic. Add missing pipeline columns for equity transitional and currency mismatch reporting. Remove dead alias objects. Correct column counts per PDF comparison.
@@ -176,17 +175,21 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 27 new tests in `tests/unit/test_corep.py::TestSection3CalculationApproaches`: 6 row 0070 tests (EAD/RWEA/PD/obligor count/institution class/excludes slotting), 4 row 0080 tests (EAD/RWEA/SL class/null when no slotting), 2 additive integrity tests (EAD/RWEA sum to total), 3 null-row tests (0160/0170/0180 remain null), 3 B31 row 0190 tests (unrated EAD/excludes rated/not in CRR), 3 B31 row 0200 tests (investment grade/subset of 0190/not in CRR), 6 edge cases (basic data/no slotting/provisions/0175 in B31/0160 in CRR/row 0070 matches total). All 4,264 tests pass (was 4,237). COREP tests: 277 (was 250).
 
 ### P2.5 COREP missing row structure across multiple templates
-- **Status:** [ ] Missing RE sub-classification and many other row IDs
-- **Impact:** Multiple templates have missing row IDs beyond just "other real estate":
-  - OF 02.00: Missing rows 0271/0290/0295-0297 (FIRB breakdown), 0355-0356 (AIRB corporate), 0382-0385 (AIRB retail), 0411-0416 (slotting by 5 SL types), 0034-0036 (floor indicator/multiplier/OF-ADJ — different data types: Yes/No, %, monetary)
-  - OF 07.00: Missing IDs for rows 0021-0026 (SL sub-types, hierarchical under PF), 0331-0344 (RE sub-types incl. SME sub-rows 0343/0344), 0351-0354 (other RE sub-breakdown), 0371-0374 (equity transitional, expire 1 Jan 2030), 0380 (currency mismatch)
-  - OF 08.01: Missing rows 0017 (revolving loan commitments), 0031-0035 (off-BS CCF sub-rows), 0175 (purchased receivables), 0180 (dilution risk), 0190 (ECAI not available), 0200 (investment grade)
-  - OF 08.07: Missing row IDs 0180-0250 (roll-out classes per Art. 147B, not exposure classes), 0260 (total), 0270 (aggregate immateriality %)
-  - OF 09.01: Missing row IDs 0071-0073 (SL), 0091-0094 (RE), 0170 (total)
-  - OF 09.02: Missing rows 0042/0045 (SL excl/incl slotting), 0048 (financial/large corp), 0049 (purchased receivables, NOT SME), 0050/0055 (SME/non-SME), 0071-0074 (retail RE SME/non-SME), 0100 (QRRE), 0105 (purchased receivables retail), 0120/0130 (other SME/non-SME), 0150 (total); equity rows removed
-  - COREP rows 0350-0354 ("other real estate") blocked by missing RE sub-classification (P1.14)
-- **File:Line:** `reporting/corep/templates.py`, `reporting/corep/generator.py:663`
-- **Fix:** Add RE sub-classification to classifier. Add all missing row IDs to template definitions. Populate rows from pipeline data.
+- **Status:** [~] Partial (template definitions exist; generator population improved)
+- **Impact:** Template row definitions for all missing rows already existed in `templates.py`. The real gaps were in the generator's population logic:
+  **Fixed in 0.1.173:**
+  - **OF 02.00 IRB sub-rows (8 rows):** Rows 0295-0297 (F-IRB corporate: FSE/large, SME, non-SME), 0355-0356 (A-IRB corporate: SME, non-SME), 0382-0385 (A-IRB retail RE: resi SME/non-SME, comm SME/non-SME), 0400/0410 (retail other SME/non-SME) — now populated using `is_sme` and `apply_fi_scalar` pipeline columns via finer-grained IRB aggregation in `_generate_c_02_00()`.
+  - **OF 02.00 floor indicator rows:** Row 0035 (floor multiplier %) and 0036 (OF-ADJ monetary value) now populated from `OutputFloorSummary` when provided via new `output_floor_summary` parameter on `generate_from_lazyframe()`.
+  - **OF 07.00 RE sub-rows (10 rows):** `_filter_re()` now falls back to `has_income_cover` (SA calculator proxy) or `is_income_producing` (raw input) when `materially_dependent_on_property` column is absent. Rows 0331/0332, 0341-0344, 0351-0354 now populate from existing pipeline data.
+  - **OF 07.00 equity transitional rows (4 rows):** Equity calculator `_apply_transitional_floor()` now writes `equity_transitional_approach` ("sa_transitional"/"irb_transitional") and `equity_higher_risk` (Boolean) annotation columns. Rows 0371-0374 can now populate.
+  **Remaining gaps (require new pipeline columns or data):**
+  - OF 02.00 rows 0295/0296 (F-IRB FSE/SME) still show 0.0 when `apply_fi_scalar`/`is_sme` absent from pipeline output
+  - OF 08.01 rows 0017 (revolving), 0031-0035 (off-BS CCF sub-rows), 0175 (purchased receivables), 0180 (dilution risk) — need pipeline columns
+  - OF 08.01 col 0120 ("Of which: off balance sheet") — need off-BS EAD
+  - OF 08.07 rows 0180-0250 (roll-out classes), 0260 (total), 0270 (immateriality %)
+- **File:Line:** `reporting/corep/generator.py` (_generate_c_02_00, _filter_re, _irb_sub_split, _irb_re_sub_split, _irb_other_sme_split), `engine/equity/calculator.py` (_apply_transitional_floor)
+- **Spec ref:** PRA PS1/26 Art. 92 para 2A (OF 02.00), CRR Art. 124-126 (OF 07.00 RE), PRA Rules 4.1-4.10 (equity transitional)
+- **Tests:** 24 new tests in `tests/unit/test_corep.py`: TestOF0200IRBSubRowSplits (15), TestOF0200FloorIndicatorRows (4), TestOF0700RESubRowFallback (4), TestEquityTransitionalColumns (1). All tests pass.
 
 ### P2.6 COREP CCR rows (0090-0130 in C 07.00, CCR section in C 08.01)
 - **Status:** [ ] Not implemented (CCR engine out of scope)

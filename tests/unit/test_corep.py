@@ -23,6 +23,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
@@ -8116,3 +8117,533 @@ class TestC0700SupportingFactorRWEA:
         assert "0215" not in corp.columns
         assert "0216" not in corp.columns
         assert "0217" not in corp.columns
+
+
+# =============================================================================
+# OF 02.00 IRB SUB-ROW SPLITS AND FLOOR INDICATOR TESTS (P2.5)
+# =============================================================================
+
+
+def _irb_results_with_sme_fse() -> pl.LazyFrame:
+    """IRB results with is_sme and apply_fi_scalar for OF 02.00 sub-row tests.
+
+    Contains F-IRB and A-IRB exposures with SME and FSE flags to test
+    the per-sub-class breakdown (rows 0295-0297, 0355-0356, 0382-0385,
+    0400/0410).
+    """
+    return pl.LazyFrame({
+        "exposure_reference": [
+            "FIRB_CORP_FSE_1", "FIRB_CORP_SME_1", "FIRB_CORP_OTHER_1",
+            "AIRB_CORP_SME_1", "AIRB_CORP_OTHER_1",
+            "AIRB_MORT_RES_SME_1", "AIRB_MORT_RES_1", "AIRB_MORT_COM_SME_1",
+            "AIRB_MORT_COM_1",
+            "AIRB_QRRE_1",
+            "AIRB_OTHER_SME_1", "AIRB_OTHER_1",
+        ],
+        "approach_applied": [
+            "foundation_irb", "foundation_irb", "foundation_irb",
+            "advanced_irb", "advanced_irb",
+            "advanced_irb", "advanced_irb", "advanced_irb", "advanced_irb",
+            "advanced_irb",
+            "advanced_irb", "advanced_irb",
+        ],
+        "exposure_class": [
+            "corporate", "corporate", "corporate",
+            "corporate", "corporate",
+            "retail_mortgage", "retail_mortgage", "retail_mortgage",
+            "retail_mortgage",
+            "retail_qrre",
+            "retail_other", "retail_other",
+        ],
+        "ead_final": [
+            1000.0, 500.0, 2000.0,
+            800.0, 1200.0,
+            400.0, 600.0, 300.0, 700.0,
+            900.0,
+            350.0, 450.0,
+        ],
+        "rwa_final": [
+            800.0, 300.0, 1600.0,
+            640.0, 960.0,
+            120.0, 180.0, 150.0, 350.0,
+            540.0,
+            280.0, 360.0,
+        ],
+        "is_sme": [
+            False, True, False,
+            True, False,
+            True, False, True, False,
+            False,
+            True, False,
+        ],
+        "apply_fi_scalar": [
+            True, False, False,
+            False, False,
+            False, False, False, False,
+            False,
+            False, False,
+        ],
+        "property_type": [
+            None, None, None,
+            None, None,
+            "residential", "residential", "commercial", "commercial",
+            None,
+            None, None,
+        ],
+        "sa_rwa": [
+            700.0, 350.0, 1400.0,
+            560.0, 840.0,
+            100.0, 150.0, 120.0, 280.0,
+            450.0,
+            245.0, 315.0,
+        ],
+        "rwa_pre_floor": [
+            800.0, 300.0, 1600.0,
+            640.0, 960.0,
+            120.0, 180.0, 150.0, 350.0,
+            540.0,
+            280.0, 360.0,
+        ],
+        "counterparty_reference": [
+            "CP1", "CP2", "CP3", "CP4", "CP5", "CP6", "CP7", "CP8", "CP9",
+            "CP10", "CP11", "CP12",
+        ],
+    })
+
+
+class TestOF0200IRBSubRowSplits:
+    """Tests for OF 02.00 IRB sub-row population using is_sme and apply_fi_scalar.
+
+    Why: The master capital template (OF 02.00) must report F-IRB and A-IRB
+    RWEA with proper sub-class breakdown: financial/large corporates vs SME vs
+    other general corporates (rows 0295-0297, 0355-0356), and retail RE by
+    property type and SME status (rows 0382-0385, 0400/0410). Previously these
+    rows showed placeholder zeros.
+    """
+
+    def test_firb_fse_row_0295(self) -> None:
+        """Row 0295: F-IRB financial/large corporates."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        assert bundle.c_02_00 is not None
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0295")
+        assert len(row) == 1
+        # FIRB_CORP_FSE_1: rwa = 800
+        assert row["0010"][0] == pytest.approx(800.0)
+
+    def test_firb_sme_row_0296(self) -> None:
+        """Row 0296: F-IRB other general corporates SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0296")
+        assert len(row) == 1
+        # FIRB_CORP_SME_1: rwa = 300
+        assert row["0010"][0] == pytest.approx(300.0)
+
+    def test_firb_nonsme_row_0297(self) -> None:
+        """Row 0297: F-IRB other general corporates non-SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0297")
+        assert len(row) == 1
+        # FIRB_CORP_OTHER_1: rwa = 1600
+        assert row["0010"][0] == pytest.approx(1600.0)
+
+    def test_firb_corp_sub_rows_sum_to_total(self) -> None:
+        """Rows 0295+0296+0297 should sum to total F-IRB corporates (row 0260)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        r0260 = float(df.filter(pl.col("row_ref") == "0260")["0010"][0])
+        r0290 = float(df.filter(pl.col("row_ref") == "0290")["0010"][0])
+        r0295 = float(df.filter(pl.col("row_ref") == "0295")["0010"][0])
+        r0296 = float(df.filter(pl.col("row_ref") == "0296")["0010"][0])
+        r0297 = float(df.filter(pl.col("row_ref") == "0297")["0010"][0])
+        # 0260 = SL (0290) + FSE (0295) + SME (0296) + non-SME (0297)
+        assert r0260 == pytest.approx(r0290 + r0295 + r0296 + r0297)
+
+    def test_airb_sme_row_0355(self) -> None:
+        """Row 0355: A-IRB other general corporates SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0355")
+        assert len(row) == 1
+        # AIRB_CORP_SME_1: rwa = 640
+        assert row["0010"][0] == pytest.approx(640.0)
+
+    def test_airb_nonsme_row_0356(self) -> None:
+        """Row 0356: A-IRB other general corporates non-SME (incl. FSE)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0356")
+        assert len(row) == 1
+        # AIRB_CORP_OTHER_1: rwa = 960
+        assert row["0010"][0] == pytest.approx(960.0)
+
+    def test_airb_resi_sme_row_0382(self) -> None:
+        """Row 0382: A-IRB retail residential RE SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0382")
+        assert len(row) == 1
+        # AIRB_MORT_RES_SME_1: rwa = 120
+        assert row["0010"][0] == pytest.approx(120.0)
+
+    def test_airb_resi_nonsme_row_0383(self) -> None:
+        """Row 0383: A-IRB retail residential RE non-SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0383")
+        assert len(row) == 1
+        # AIRB_MORT_RES_1: rwa = 180
+        assert row["0010"][0] == pytest.approx(180.0)
+
+    def test_airb_comm_sme_row_0384(self) -> None:
+        """Row 0384: A-IRB retail commercial RE SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0384")
+        assert len(row) == 1
+        # AIRB_MORT_COM_SME_1: rwa = 150
+        assert row["0010"][0] == pytest.approx(150.0)
+
+    def test_airb_comm_nonsme_row_0385(self) -> None:
+        """Row 0385: A-IRB retail commercial RE non-SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0385")
+        assert len(row) == 1
+        # AIRB_MORT_COM_1: rwa = 350
+        assert row["0010"][0] == pytest.approx(350.0)
+
+    def test_airb_retail_re_sub_rows_sum_to_total(self) -> None:
+        """Rows 0382+0383+0384+0385 sum to total A-IRB retail RE (row 0380)."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        df = bundle.c_02_00
+        r0380 = float(df.filter(pl.col("row_ref") == "0380")["0010"][0])
+        r0382 = float(df.filter(pl.col("row_ref") == "0382")["0010"][0])
+        r0383 = float(df.filter(pl.col("row_ref") == "0383")["0010"][0])
+        r0384 = float(df.filter(pl.col("row_ref") == "0384")["0010"][0])
+        r0385 = float(df.filter(pl.col("row_ref") == "0385")["0010"][0])
+        assert r0380 == pytest.approx(r0382 + r0383 + r0384 + r0385)
+
+    def test_airb_other_sme_row_0400(self) -> None:
+        """Row 0400: A-IRB retail other SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0400")
+        assert len(row) == 1
+        # AIRB_OTHER_SME_1: rwa = 280
+        assert row["0010"][0] == pytest.approx(280.0)
+
+    def test_airb_other_nonsme_row_0410(self) -> None:
+        """Row 0410: A-IRB retail other non-SME."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0410")
+        assert len(row) == 1
+        # AIRB_OTHER_1: rwa = 360
+        assert row["0010"][0] == pytest.approx(360.0)
+
+    def test_no_sub_rows_in_crr(self) -> None:
+        """CRR does not have sub-rows 0295-0297, 0355-0356, 0382-0385."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="CRR"
+        )
+        assert bundle.c_02_00 is not None
+        df = bundle.c_02_00
+        b31_only_rows = ["0295", "0296", "0297", "0355", "0356", "0382",
+                         "0383", "0384", "0385"]
+        for ref in b31_only_rows:
+            assert len(df.filter(pl.col("row_ref") == ref)) == 0
+
+    def test_fallback_without_sme_flag(self) -> None:
+        """Without is_sme column, non-FSE corporate RWA goes to non-SME row."""
+        data = _irb_results_with_sme_fse().drop("is_sme")
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        df = bundle.c_02_00
+        # FSE exposure (800) still goes to 0295; rest (300+1600=1900) to 0297
+        r0295 = float(df.filter(pl.col("row_ref") == "0295")["0010"][0])
+        assert r0295 == pytest.approx(800.0)
+        r0297 = float(df.filter(pl.col("row_ref") == "0297")["0010"][0])
+        assert r0297 == pytest.approx(1900.0)
+        r0296 = float(df.filter(pl.col("row_ref") == "0296")["0010"][0])
+        assert r0296 == pytest.approx(0.0)
+
+
+class TestOF0200FloorIndicatorRows:
+    """Tests for OF 02.00 output floor indicator rows 0034-0036.
+
+    Why: These rows tell regulators whether the output floor is active
+    (row 0034), what multiplier % applies (row 0035), and the OF-ADJ
+    monetary value (row 0036). Previously rows 0035/0036 were always zero.
+    """
+
+    def test_floor_multiplier_from_summary(self) -> None:
+        """Row 0035 shows floor_pct * 100 from OutputFloorSummary."""
+        summary = OutputFloorSummary(
+            u_trea=1000.0, s_trea=800.0, floor_pct=0.725,
+            floor_threshold=580.0, shortfall=0.0,
+            portfolio_floor_binding=False, total_rwa_post_floor=1000.0,
+            of_adj=50.0,
+        )
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1",
+            output_floor_summary=summary,
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
+        assert len(row) == 1
+        # 72.5% → 72.5
+        assert row["0010"][0] == pytest.approx(72.5)
+
+    def test_of_adj_from_summary(self) -> None:
+        """Row 0036 shows of_adj monetary value from OutputFloorSummary."""
+        summary = OutputFloorSummary(
+            u_trea=1000.0, s_trea=800.0, floor_pct=0.725,
+            floor_threshold=580.0, shortfall=0.0,
+            portfolio_floor_binding=False, total_rwa_post_floor=1000.0,
+            of_adj=123.45,
+        )
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1",
+            output_floor_summary=summary,
+        )
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
+        assert len(row) == 1
+        assert row["0010"][0] == pytest.approx(123.45)
+
+    def test_floor_rows_zero_without_summary(self) -> None:
+        """Rows 0035/0036 are zero when no OutputFloorSummary is provided."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="BASEL_3_1"
+        )
+        r0035 = bundle.c_02_00.filter(pl.col("row_ref") == "0035")
+        r0036 = bundle.c_02_00.filter(pl.col("row_ref") == "0036")
+        assert r0035["0010"][0] == pytest.approx(0.0)
+        assert r0036["0010"][0] == pytest.approx(0.0)
+
+    def test_floor_rows_absent_crr(self) -> None:
+        """CRR does not have floor indicator rows 0034-0036."""
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(
+            _irb_results_with_sme_fse(), framework="CRR"
+        )
+        df = bundle.c_02_00
+        for ref in ("0034", "0035", "0036"):
+            assert len(df.filter(pl.col("row_ref") == ref)) == 0
+
+
+class TestOF0700RESubRowFallback:
+    """Tests for OF 07.00 RE sub-row filtering with has_income_cover fallback.
+
+    Why: The generator previously required materially_dependent_on_property
+    to populate RE sub-rows (0331-0354). The SA calculator produces
+    has_income_cover instead. The fallback allows these rows to be populated
+    from existing pipeline data.
+    """
+
+    def test_re_rows_with_has_income_cover(self) -> None:
+        """RE sub-rows populate using has_income_cover as fallback."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["RE_1", "RE_2", "RE_3"],
+            "approach_applied": ["standardised"] * 3,
+            "exposure_class": ["secured_by_re_residential"] * 3,
+            "drawn_amount": [100.0, 200.0, 300.0],
+            "undrawn_amount": [0.0, 0.0, 0.0],
+            "ead_final": [100.0, 200.0, 300.0],
+            "rwa_final": [20.0, 70.0, 105.0],
+            "risk_weight": [0.20, 0.35, 0.35],
+            "property_type": ["residential", "residential", "residential"],
+            "has_income_cover": [False, True, False],
+            "scra_provision_amount": [0.0] * 3,
+            "gcra_provision_amount": [0.0] * 3,
+            "counterparty_reference": ["CP1", "CP2", "CP3"],
+            "sa_cqs": [None] * 3,
+        })
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        # 0331: residential, NOT dependent → RE_1 + RE_3 (EAD 100+300=400)
+        r0331 = re_res.filter(pl.col("row_ref") == "0331")
+        assert len(r0331) == 1
+        ead_col = "0200" if "0200" in r0331.columns else "0010"
+        val = float(r0331[ead_col][0] or 0)
+        assert val == pytest.approx(400.0)
+        # 0332: residential, dependent → RE_2 (EAD 200)
+        r0332 = re_res.filter(pl.col("row_ref") == "0332")
+        val2 = float(r0332[ead_col][0] or 0)
+        assert val2 == pytest.approx(200.0)
+
+    def test_re_rows_with_is_income_producing(self) -> None:
+        """RE sub-rows populate using is_income_producing as second fallback."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["RE_1", "RE_2"],
+            "approach_applied": ["standardised"] * 2,
+            "exposure_class": ["secured_by_re_residential"] * 2,
+            "drawn_amount": [100.0, 200.0],
+            "undrawn_amount": [0.0, 0.0],
+            "ead_final": [100.0, 200.0],
+            "rwa_final": [20.0, 70.0],
+            "risk_weight": [0.20, 0.35],
+            "property_type": ["residential", "residential"],
+            "is_income_producing": [False, True],
+            "scra_provision_amount": [0.0] * 2,
+            "gcra_provision_amount": [0.0] * 2,
+            "counterparty_reference": ["CP1", "CP2"],
+            "sa_cqs": [None] * 2,
+        })
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        r0331 = re_res.filter(pl.col("row_ref") == "0331")
+        ead_col = "0200" if "0200" in r0331.columns else "0010"
+        assert float(r0331[ead_col][0] or 0) == pytest.approx(100.0)
+
+    def test_re_rows_empty_without_any_dependency_column(self) -> None:
+        """Without any dependency column, sub-rows remain null."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["RE_1"],
+            "approach_applied": ["standardised"],
+            "exposure_class": ["secured_by_re_residential"],
+            "drawn_amount": [100.0],
+            "undrawn_amount": [0.0],
+            "ead_final": [100.0],
+            "rwa_final": [20.0],
+            "risk_weight": [0.20],
+            "property_type": ["residential"],
+            "scra_provision_amount": [0.0],
+            "gcra_provision_amount": [0.0],
+            "counterparty_reference": ["CP1"],
+            "sa_cqs": [None],
+        })
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        r0331 = re_res.filter(pl.col("row_ref") == "0331")
+        ead_col = "0200" if "0200" in r0331.columns else "0010"
+        # Should be null (no data to split on)
+        assert r0331[ead_col][0] is None
+
+    def test_materially_dependent_preferred_over_has_income_cover(self) -> None:
+        """When both columns exist, materially_dependent_on_property wins."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["RE_1"],
+            "approach_applied": ["standardised"],
+            "exposure_class": ["secured_by_re_residential"],
+            "drawn_amount": [100.0],
+            "undrawn_amount": [0.0],
+            "ead_final": [100.0],
+            "rwa_final": [20.0],
+            "risk_weight": [0.20],
+            "property_type": ["residential"],
+            "materially_dependent_on_property": [True],
+            "has_income_cover": [False],  # Different value — should be ignored
+            "scra_provision_amount": [0.0],
+            "gcra_provision_amount": [0.0],
+            "counterparty_reference": ["CP1"],
+            "sa_cqs": [None],
+        })
+        gen = COREPGenerator()
+        bundle = gen.generate_from_lazyframe(data, framework="BASEL_3_1")
+        re_res = bundle.c07_00["secured_by_re_residential"]
+        ead_col = "0200" if "0200" in re_res.columns else "0010"
+        # RE_1 has materially_dependent=True, so should appear in row 0332
+        r0332 = re_res.filter(pl.col("row_ref") == "0332")
+        assert float(r0332[ead_col][0] or 0) == pytest.approx(100.0)
+        # And NOT in row 0331
+        r0331 = re_res.filter(pl.col("row_ref") == "0331")
+        assert r0331[ead_col][0] is None
+
+
+class TestEquityTransitionalColumns:
+    """Tests for equity_transitional_approach/equity_higher_risk columns.
+
+    Why: The equity calculator's _apply_transitional_floor() now writes
+    annotation columns needed by COREP OF 07.00 rows 0371-0374. Without
+    these columns, the equity transitional rows were always null.
+    """
+
+    def test_equity_transitional_approach_column_added(self) -> None:
+        """Equity calculator adds equity_transitional_approach column."""
+        from datetime import date
+        from decimal import Decimal
+
+        from rwa_calc.contracts.config import (
+            CalculationConfig,
+            EquityTransitionalConfig,
+        )
+        from rwa_calc.engine.equity.calculator import EquityCalculator
+
+        eq_config = EquityTransitionalConfig(
+            enabled=True,
+            schedule={date(2027, 1, 1): (Decimal("1.00"), Decimal("1.50"))},
+        )
+        config_b31 = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 1),
+        )
+        # Replace equity_transitional with our test config
+        import dataclasses
+
+        config_with_trans = dataclasses.replace(
+            config_b31, equity_transitional=eq_config
+        )
+
+        exposures = pl.LazyFrame({
+            "exposure_reference": ["EQ_1", "EQ_2"],
+            "equity_type": ["listed", "listed"],
+            "ead_final": [1000.0, 500.0],
+            "risk_weight": [2.50, 2.50],
+            "is_speculative": [False, True],
+            "is_diversified_portfolio": [False, False],
+            "is_exchange_traded": [False, False],
+            "is_government_supported": [False, False],
+            "ciu_approach": [None, None],
+            "ciu_mandate_rw": [None, None],
+            "ciu_third_party_calc": [None, None],
+            "fund_reference": [None, None],
+            "ciu_look_through_rw": [None, None],
+            "fund_nav": [None, None],
+        })
+        calc = EquityCalculator()
+        result = calc._apply_transitional_floor(exposures, config_with_trans)
+        collected = result.collect()
+        assert "equity_transitional_approach" in collected.columns
+        assert "equity_higher_risk" in collected.columns
+        # SA transitional (B31 has no IRB equity)
+        assert collected["equity_transitional_approach"][0] == "sa_transitional"
+        # Non-speculative
+        assert collected["equity_higher_risk"][0] is False
+        # Speculative
+        assert collected["equity_higher_risk"][1] is True

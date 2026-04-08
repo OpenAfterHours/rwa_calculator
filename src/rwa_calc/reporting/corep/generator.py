@@ -86,6 +86,7 @@ from rwa_calc.reporting.corep.templates import (
 if TYPE_CHECKING:
     from rwa_calc.api.export import ExportResult
     from rwa_calc.api.models import CalculationResponse
+    from rwa_calc.contracts.bundles import OutputFloorSummary
 
 logger = logging.getLogger(__name__)
 
@@ -178,16 +179,26 @@ class COREPGenerator:
         bundle = generator.generate_from_lazyframe(results_lf, framework="CRR")
     """
 
-    def generate(self, response: CalculationResponse) -> COREPTemplateBundle:
+    def generate(
+        self,
+        response: CalculationResponse,
+        *,
+        output_floor_summary: OutputFloorSummary | None = None,
+    ) -> COREPTemplateBundle:
         """Generate all COREP templates from a CalculationResponse."""
         results_lf = response.scan_results()
-        return self.generate_from_lazyframe(results_lf, framework=response.framework)
+        return self.generate_from_lazyframe(
+            results_lf,
+            framework=response.framework,
+            output_floor_summary=output_floor_summary,
+        )
 
     def generate_from_lazyframe(
         self,
         results: pl.LazyFrame,
         *,
         framework: str = "CRR",
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> COREPTemplateBundle:
         """Generate all COREP templates from a results LazyFrame.
 
@@ -198,6 +209,8 @@ class COREPGenerator:
         Args:
             results: Combined results LazyFrame with all approaches
             framework: Regulatory framework ("CRR" or "BASEL_3_1")
+            output_floor_summary: Optional floor summary for OF 02.00
+                rows 0035 (multiplier) and 0036 (OF-ADJ).
         """
         errors: list[str] = []
         cols = _available_columns(results)
@@ -222,7 +235,10 @@ class COREPGenerator:
         of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
 
         # C 02.00 / OF 02.00 — Own Funds Requirements
-        c_02_00 = self._generate_c_02_00(results, cols, framework, errors)
+        c_02_00 = self._generate_c_02_00(
+            results, cols, framework, errors,
+            output_floor_summary=output_floor_summary,
+        )
 
         # C 09.01 / OF 09.01 — Geographical Breakdown SA
         c09_01 = self._generate_all_c09_01(sa_data, cols, framework, errors)
@@ -664,6 +680,8 @@ class COREPGenerator:
         cols: set[str],
         framework: str,
         errors: list[str],
+        *,
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> pl.DataFrame | None:
         """Generate C 02.00 (CRR) / OF 02.00 (Basel 3.1) Own Funds Requirements.
 
@@ -770,6 +788,51 @@ class COREPGenerator:
                 for row in by_sl.iter_rows(named=True):
                     if row["_sl"] is not None:
                         self._slotting_type_rwa[row["_sl"]] = float(row["rwa"])
+
+            # Finer-grained IRB sub-row aggregation for B31 OF 02.00.
+            # Computes SME/FSE splits for F-IRB/A-IRB corporate and retail
+            # RE sub-rows using pipeline columns is_sme, apply_fi_scalar,
+            # and property_type.
+            self._irb_sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float] = {}
+            if is_b31:
+                sub_select: list[pl.Expr] = [
+                    pl.col(approach_col).alias("_approach"),
+                    pl.col(ec_col).alias("_ec"),
+                    pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
+                ]
+                has_sme = "is_sme" in cols
+                has_fse = "apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
+                has_pt = "property_type" in cols
+                if has_sme:
+                    sub_select.append(pl.col("is_sme").fill_null(False).alias("_sme"))
+                if has_fse:
+                    fse_col = "apply_fi_scalar" if "apply_fi_scalar" in cols else "cp_is_financial_sector_entity"
+                    sub_select.append(pl.col(fse_col).fill_null(False).alias("_fse"))
+                if has_pt:
+                    sub_select.append(pl.col("property_type").alias("_pt"))
+                irb_approaches = {"foundation_irb", "advanced_irb"}
+                sub_collected = results.filter(
+                    pl.col(approach_col).is_in(irb_approaches)
+                ).select(sub_select).collect()
+                gb_cols = ["_approach", "_ec"]
+                if has_sme:
+                    gb_cols.append("_sme")
+                if has_fse:
+                    gb_cols.append("_fse")
+                if has_pt:
+                    gb_cols.append("_pt")
+                sub_agg = sub_collected.group_by(gb_cols).agg(
+                    pl.col("_rwa").sum().alias("rwa")
+                )
+                for row in sub_agg.iter_rows(named=True):
+                    key = (
+                        row["_approach"],
+                        row["_ec"],
+                        row.get("_sme"),
+                        row.get("_fse"),
+                        row.get("_pt"),
+                    )
+                    self._irb_sub_rwa[key] = float(row["rwa"])
         else:
             # Fallback: just compute total RWA
             total_stats = results.select(
@@ -848,10 +911,13 @@ class COREPGenerator:
         row_values["0260"] = {"0010": firb_corp + firb_sl}
         if is_b31:
             row_values["0290"] = {"0010": firb_sl}
-            # Approximate: all non-SL F-IRB corporate goes to "other"
-            row_values["0295"] = {"0010": 0.0}  # Financial/large — needs cp_is_fse
-            row_values["0296"] = {"0010": 0.0}  # SME — needs is_sme
-            row_values["0297"] = {"0010": firb_corp}  # Fallback: all non-SL corporate
+            # F-IRB corporate sub-splits using finer-grained IRB aggregation
+            firb_fse, firb_sme, firb_nonsme = _irb_sub_split(
+                self._irb_sub_rwa, "foundation_irb", "corporate", firb_corp,
+            )
+            row_values["0295"] = {"0010": firb_fse}   # Financial/large corporates
+            row_values["0296"] = {"0010": firb_sme}    # Other general corporates SME
+            row_values["0297"] = {"0010": firb_nonsme}  # Other general corporates non-SME
 
         # A-IRB total and sub-rows
         row_values["0300"] = {"0010": airb_rwa}
@@ -865,8 +931,12 @@ class COREPGenerator:
         row_values["0340"] = {"0010": airb_corp + airb_sl_excl}
         if is_b31:
             row_values["0350"] = {"0010": airb_sl_excl}
-            row_values["0355"] = {"0010": 0.0}  # SME — needs is_sme
-            row_values["0356"] = {"0010": airb_corp}  # Fallback: all non-SL
+            # A-IRB corporate sub-splits
+            airb_fse, airb_sme, airb_nonsme = _irb_sub_split(
+                self._irb_sub_rwa, "advanced_irb", "corporate", airb_corp,
+            )
+            row_values["0355"] = {"0010": airb_sme}    # Other general corporates SME
+            row_values["0356"] = {"0010": airb_nonsme + airb_fse}  # Non-SME (incl. FSE)
 
         # A-IRB retail
         airb_retail_mort = irb_class_rwa.get(("advanced_irb", "retail_mortgage"), 0.0)
@@ -876,14 +946,26 @@ class COREPGenerator:
         row_values["0370"] = {"0010": airb_retail_total}
         row_values["0380"] = {"0010": airb_retail_mort}
         if is_b31:
-            row_values["0382"] = {"0010": 0.0}  # Residential SME — needs is_sme
-            row_values["0383"] = {"0010": airb_retail_mort}  # Fallback: all residential
-            row_values["0384"] = {"0010": 0.0}  # CRE SME — needs is_sme
-            row_values["0385"] = {"0010": 0.0}  # CRE non-SME
+            # A-IRB retail RE sub-splits by property type and SME
+            resi_sme, resi_nonsme, comm_sme, comm_nonsme = _irb_re_sub_split(
+                self._irb_sub_rwa, "advanced_irb", "retail_mortgage",
+                airb_retail_mort,
+            )
+            row_values["0382"] = {"0010": resi_sme}
+            row_values["0383"] = {"0010": resi_nonsme}
+            row_values["0384"] = {"0010": comm_sme}
+            row_values["0385"] = {"0010": comm_nonsme}
         row_values["0390"] = {"0010": airb_retail_qrre}
-        row_values["0400"] = {"0010": airb_retail_other}  # CRR: SME only
+        # A-IRB retail other sub-splits by SME
         if is_b31:
-            row_values["0410"] = {"0010": 0.0}  # Retail other non-SME — needs split
+            other_sme, other_nonsme = _irb_other_sme_split(
+                self._irb_sub_rwa, "advanced_irb", "retail_other",
+                airb_retail_other,
+            )
+            row_values["0400"] = {"0010": other_sme}
+            row_values["0410"] = {"0010": other_nonsme}
+        else:
+            row_values["0400"] = {"0010": airb_retail_other}
 
         # Slotting
         slotting_type_rwa = getattr(self, "_slotting_type_rwa", {})
@@ -903,8 +985,14 @@ class COREPGenerator:
         # B31 output floor indicator rows
         if is_b31:
             row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
-            row_values["0035"] = {"0010": 0.0}  # Placeholder — needs OutputFloorConfig
-            row_values["0036"] = {"0010": 0.0}  # Placeholder — needs OF-ADJ
+            # Row 0035: floor multiplier % (e.g. 72.5 for 72.5%)
+            # Row 0036: OF-ADJ monetary value
+            if output_floor_summary is not None:
+                row_values["0035"] = {"0010": output_floor_summary.floor_pct * 100.0}
+                row_values["0036"] = {"0010": output_floor_summary.of_adj}
+            else:
+                row_values["0035"] = {"0010": 0.0}
+                row_values["0036"] = {"0010": 0.0}
 
         # Add B31 col 0020 (SA-equivalent) and col 0030 (output floor) values
         if is_b31:
@@ -974,6 +1062,7 @@ class COREPGenerator:
         # Clean up temporary state
         self._irb_class_rwa = {}
         self._slotting_type_rwa = {}
+        self._irb_sub_rwa = {}
 
         return pl.DataFrame(rows, schema=schema)
 
@@ -2325,6 +2414,103 @@ def _available_columns(lf: pl.LazyFrame) -> set[str]:
     return set(lf.collect_schema().names())
 
 
+def _irb_sub_split(
+    sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float],
+    approach: str,
+    ec: str,
+    total: float,
+) -> tuple[float, float, float]:
+    """Split IRB corporate RWA into (FSE/large, SME, non-SME) using sub_rwa.
+
+    When sub_rwa has no data for the given approach/ec, falls back to
+    (0.0, 0.0, total) — all RWA reported as non-SME.
+    """
+    fse = 0.0
+    sme = 0.0
+    nonsme = 0.0
+    matched = False
+    for key, rwa in sub_rwa.items():
+        a, e, is_sme, is_fse, _pt = key
+        if a != approach or e != ec:
+            continue
+        matched = True
+        if is_fse:
+            fse += rwa
+        elif is_sme:
+            sme += rwa
+        else:
+            nonsme += rwa
+    if not matched:
+        return 0.0, 0.0, total
+    return fse, sme, nonsme
+
+
+def _irb_re_sub_split(
+    sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float],
+    approach: str,
+    ec: str,
+    total: float,
+) -> tuple[float, float, float, float]:
+    """Split IRB retail mortgage into (resi_sme, resi_nonsme, comm_sme, comm_nonsme).
+
+    Uses property_type ('residential'/'rre' vs 'commercial'/'cre') and is_sme
+    from the sub_rwa dict. Falls back to (0, total, 0, 0) when no sub data.
+    """
+    resi_sme = 0.0
+    resi_nonsme = 0.0
+    comm_sme = 0.0
+    comm_nonsme = 0.0
+    matched = False
+    for key, rwa in sub_rwa.items():
+        a, e, is_sme, _fse, pt = key
+        if a != approach or e != ec:
+            continue
+        matched = True
+        is_comm = pt in ("commercial", "cre")
+        if is_comm:
+            if is_sme:
+                comm_sme += rwa
+            else:
+                comm_nonsme += rwa
+        else:
+            # residential, rre, or null → default to residential
+            if is_sme:
+                resi_sme += rwa
+            else:
+                resi_nonsme += rwa
+    if not matched:
+        return 0.0, total, 0.0, 0.0
+    return resi_sme, resi_nonsme, comm_sme, comm_nonsme
+
+
+def _irb_other_sme_split(
+    sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float],
+    approach: str,
+    ec: str,
+    total: float,
+) -> tuple[float, float]:
+    """Split IRB retail_other into (SME, non-SME).
+
+    Falls back to (total, 0.0) when no sub data (all reported as SME for
+    backward compatibility with CRR row 0400).
+    """
+    sme = 0.0
+    nonsme = 0.0
+    matched = False
+    for key, rwa in sub_rwa.items():
+        a, e, is_sme, _fse, _pt = key
+        if a != approach or e != ec:
+            continue
+        matched = True
+        if is_sme:
+            sme += rwa
+        else:
+            nonsme += rwa
+    if not matched:
+        return total, 0.0
+    return sme, nonsme
+
+
 def _pick(cols: set[str], *candidates: str) -> str | None:
     """Return the first column name from candidates that exists in cols."""
     for c in candidates:
@@ -2481,10 +2667,33 @@ def _filter_re(
     if property_type is not None:
         result = result.filter(pl.col("property_type") == property_type)
 
-    if materially_dependent is not None and "materially_dependent_on_property" in cols:
-        result = result.filter(pl.col("materially_dependent_on_property") == materially_dependent)
-    elif materially_dependent is not None:
-        return data.clear()
+    if materially_dependent is not None:
+        # Prefer materially_dependent_on_property (exact regulatory field).
+        # Fall back to has_income_cover (SA calculator proxy — True means
+        # income depends on property, same semantics as materially_dependent).
+        # Then is_income_producing (raw input, same meaning).
+        md_col: str | None = None
+        for candidate in (
+            "materially_dependent_on_property",
+            "has_income_cover",
+            "is_income_producing",
+        ):
+            if candidate in cols:
+                md_col = candidate
+                break
+        if md_col is not None:
+            if md_col == "materially_dependent_on_property":
+                # Exact field: null means unclassified — exclude from split
+                result = result.filter(
+                    pl.col(md_col) == materially_dependent
+                )
+            else:
+                # Fallback proxy: null defaults to False (not dependent)
+                result = result.filter(
+                    pl.col(md_col).fill_null(False) == materially_dependent
+                )
+        else:
+            return data.clear()
 
     if is_sme is not None:
         sme_subset = _filter_sme(result, set(result.columns))

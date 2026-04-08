@@ -686,8 +686,24 @@ class EquityCalculator:
             .otherwise(pl.lit(float(std_rw)))
         )
 
+        # Determine transitional approach type for COREP reporting (OF 07.00
+        # rows 0371-0374).  CRR firms with prior IRB equity permission use
+        # "irb_transitional"; all others use "sa_transitional".
+        approach_label = (
+            "irb_transitional"
+            if not config.is_basel_3_1
+            and any(
+                ApproachType.FIRB in a or ApproachType.AIRB in a
+                for a in config.irb_permissions.permissions.values()
+            )
+            else "sa_transitional"
+        )
+
         return exposures.with_columns(
             pl.max_horizontal(pl.col("risk_weight"), transitional_rw).alias("risk_weight"),
+            # Annotation columns for COREP OF 07.00 equity transitional rows
+            pl.lit(approach_label).alias("equity_transitional_approach"),
+            is_hr.alias("equity_higher_risk"),
         )
 
     def _calculate_rwa(

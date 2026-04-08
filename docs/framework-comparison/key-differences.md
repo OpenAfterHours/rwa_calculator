@@ -175,11 +175,16 @@ regardless of model output (applied as post-model adjustment).
 
 ### Financial Sector Correlation Multiplier
 
-Under both CRR and Basel 3.1, **large financial sector entities** and **unregulated financial
-sector entities** receive a **1.25x** correlation multiplier on their asset correlation
-(Art. 153(2) / CRE31.5). This is unchanged between frameworks. Note: this applies to
-financial sector entities specifically, not to all large corporates (>£440m revenue) — those
-are restricted to F-IRB but use the standard correlation formula.
+Under both CRR and Basel 3.1, **large financial sector entities** (total assets ≥ EUR 70bn per
+Art. 4(1)(146)) and **unregulated financial sector entities** receive a **1.25x** correlation
+multiplier on their asset correlation (Art. 153(2) / CRE31.5). This is unchanged between
+frameworks.
+
+!!! warning "Two distinct thresholds — do not conflate"
+    - **EUR 70bn total assets** → 1.25x correlation uplift (Art. 153(2)). Applies to the asset correlation coefficient R for large/unregulated FSEs.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+
+    These are entirely separate mechanisms applying to different entity populations and parameters.
 
 ### A-IRB CCF Floor
 

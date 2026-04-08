@@ -95,7 +95,10 @@ to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
 
 ## FI Scalar
 
-The **1.25x correlation multiplier** for large/unregulated financial sector entities applies equally to A-IRB and F-IRB (Art. 153(2), CRE31.5). The 1.25 factor is applied to the asset correlation coefficient R, which has a non-linear effect on the capital requirement K.
+The **1.25x correlation multiplier** for large/unregulated financial sector entities applies equally to A-IRB and F-IRB (Art. 153(2), CRE31.5). "Large FSE" is defined as total assets ≥ EUR 70bn (CRR Art. 4(1)(146)). The 1.25 factor is applied to the asset correlation coefficient R, which has a non-linear effect on the capital requirement K.
+
+!!! note "Distinct from Art. 147A approach restrictions"
+    The correlation multiplier (EUR 70bn total assets, Art. 153(2)) is not the same as the Art. 147A(1)(d) large corporate threshold (GBP 440m revenue), which restricts A-IRB eligibility but does not affect the correlation formula. See [F-IRB Specification](firb-calculation.md#fi-scalar-crr-art-1532) for full details.
 
 ## Calculation
 

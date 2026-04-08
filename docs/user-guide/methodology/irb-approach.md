@@ -133,6 +133,15 @@ R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
     See `_polars_correlation_expr()` in `src/rwa_calc/engine/irb/formulas.py`
     for the full Polars expression implementation including SME adjustment.
 
+### Financial Sector Entity Correlation Multiplier
+
+Large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) and unregulated financial sector entities receive a **1.25x multiplier** on their asset correlation R (CRR Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier applies under both CRR and Basel 3.1.
+
+Set `apply_fi_scalar = True` on the counterparty record for entities meeting these criteria. The calculator derives `requires_fi_scalar` directly from this flag.
+
+!!! warning "Not the same as the Art. 147A large corporate threshold"
+    The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets** (EUR 70bn). The Art. 147A(1)(d) large corporate threshold (**GBP 440m revenue**) is an approach restriction (F-IRB only under Basel 3.1) — it does not trigger the correlation uplift. See the [Key Differences](../../framework-comparison/key-differences.md#financial-sector-correlation-multiplier) for comparison.
+
 ## Maturity Adjustment
 
 For non-retail exposures. See [`_polars_maturity_adjustment_expr()`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py) for the pure Polars implementation.

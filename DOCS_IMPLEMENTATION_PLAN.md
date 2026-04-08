@@ -11,7 +11,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 ### Wrong Risk Weight / Parameter Values in Docs
 
 - [x] **D1.1** — ~~Corporate CQS 5 shown as 100% (BCBS) in `key-differences.md`, `basel31.md`, `corporate.md`.~~ **FIXED:** All three files corrected to 150%. Added PRA vs BCBS deviation admonition to `key-differences.md` and `basel31.md`. `corporate.md` prose updated to explain PRA retained 150%.
-- [ ] **D1.2** — Equity transitional 2027 row in `basel31.md` (lines 278-280) shows Standard=130%, Higher-Risk=160%. Correct values (confirmed in `key-differences.md`, `equity-approach.md`, code): Standard=**160%**, Higher-Risk=**220%**.
+- [x] **D1.2** — ~~Equity transitional 2027 row in `basel31.md` (lines 278-280) shows Standard=130%, Higher-Risk=160%.~~ **FIXED:** Table was shifted by one year. Corrected all 4 rows to match `key-differences.md`, `equity-approach.md`, and code (`config.py` lines 488-491): 2027=160%/220%, 2028=190%/280%, 2029=220%/340%, 2030+=250%/400%.
 - [ ] **D1.3** — CRE income-producing table in `key-differences.md` (lines 330-332) and `basel31.md` (lines 163-165) shows "LTV <=60%: 70%, >60%: 110%". Art. 124I actual: <=80%: 100%, >80%: 110%. The 70% value does not exist in Art. 124I.
 - [ ] **D1.4** — Sovereign unrated in `basel31.md` (lines 234-235) shows OECD bifurcation (0% OECD / 100% non-OECD). Basel 3.1 Art. 114 = flat **100%** for all unrated sovereigns; no OECD bifurcation. Art. 114(5) is left blank in PRA rules.
 - [ ] **D1.5** — Corporate A-IRB subordinated LGD floor shown as 50% in `technical-reference.md` (line 43), `basel31.md` (line 87). Art. 161(5) sets **25%** for all corporate unsecured (no senior/subordinated distinction). The `airb-calculation.md` correction note is right; four other files are wrong.
@@ -191,6 +191,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 ## Completed
 
 - [x] **D1.1** — Corporate CQS 5 corrected from 100% (BCBS) to 150% (PRA) in `key-differences.md`, `basel31.md`, `corporate.md`. PRA vs BCBS deviation admonition added to comparison tables. (2026-04-08)
+- [x] **D1.2** — Equity transitional table in `basel31.md` corrected: was shifted by one year (130%/160% shown for 2027). Fixed to 160%/220% (2027), 190%/280% (2028), 220%/340% (2029), 250%/400% (2030+). Matches `key-differences.md`, `equity-approach.md`, and code. (2026-04-08)
 
 ---
 

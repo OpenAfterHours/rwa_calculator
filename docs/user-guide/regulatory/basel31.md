@@ -278,9 +278,9 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
 
 | Year | Standard | Higher-Risk |
 |------|----------|-------------|
-| 2027 | 130% | 160% |
-| 2028 | 160% | 220% |
-| 2029 | 190% | 280% |
+| 2027 | 160% | 220% |
+| 2028 | 190% | 280% |
+| 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
 
 Under CRR, standard equities receive 100%, with some categories at 250% or 400%.

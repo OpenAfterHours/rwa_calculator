@@ -43,6 +43,7 @@ framework shifts emphasis from risk sensitivity to comparability and floors.
 - **PRA PS1/26:** https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement
 - **PRA PS1/26 Appendix 1 (full rules):** https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/policy-statement/2026/january/ps126app1.pdf
 - **BCBS CRE Standards:** https://www.bis.org/basel_framework/standard/CRE.htm
+- **Source PDFs:** `docs/assets/ps126app1.pdf` (full rules), `docs/assets/comparison-of-the-final-rules.pdf` (delta summary) — use to verify specific articles against the authoritative text
 
 ## Project Specification & Comparison Files
 

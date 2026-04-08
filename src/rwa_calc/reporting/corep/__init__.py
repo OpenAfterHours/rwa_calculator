@@ -6,6 +6,7 @@ Generates EBA/PRA COREP templates from RWA calculation results:
 - C 08.01 / OF 08.01: CR IRB — IRB approach totals by exposure class
 - C 08.02 / OF 08.02: CR IRB — IRB approach breakdown by PD grade
 - C 08.03 / OF 08.03: CR IRB — IRB PD ranges (17 fixed regulatory buckets)
+- C 08.04 / OF 08.04: CR IRB — RWEA flow statements (1 column, 9 rows)
 - C 08.05 / OF 08.05: CR IRB — PD backtesting (5 columns, 17 PD buckets)
 - C 08.06 / OF 08.06: CR IRB — Specialised lending slotting by category/maturity
 - C 08.07 / OF 08.07: CR IRB — Scope of use by exposure class (5/18 columns)
@@ -31,6 +32,7 @@ from rwa_calc.reporting.corep.templates import (
     B31_C07_COLUMNS,
     B31_C08_COLUMNS,
     B31_C08_03_COLUMNS,
+    B31_C08_04_COLUMNS,
     B31_C08_05_COLUMNS,
     B31_C08_06_COLUMNS,
     B31_C08_06_ROWS,
@@ -47,6 +49,8 @@ from rwa_calc.reporting.corep.templates import (
     C08_01_COLUMNS,
     C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
+    C08_04_COLUMN_REFS,
+    C08_04_ROWS,
     C08_05_COLUMN_REFS,
     C08_06_CATEGORY_MAP,
     C08_06_COLUMN_REFS,
@@ -59,6 +63,7 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C07_COLUMNS,
     CRR_C08_COLUMNS,
     CRR_C08_03_COLUMNS,
+    CRR_C08_04_COLUMNS,
     CRR_C08_05_COLUMNS,
     CRR_C08_06_COLUMNS,
     CRR_C08_06_ROWS,
@@ -78,6 +83,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c02_00_row_sections,
     get_c07_columns,
     get_c08_03_columns,
+    get_c08_04_columns,
     get_c08_05_columns,
     get_c08_06_columns,
     get_c08_06_rows,
@@ -97,6 +103,7 @@ __all__ = [
     "B31_C07_COLUMNS",
     "B31_C08_COLUMNS",
     "B31_C08_03_COLUMNS",
+    "B31_C08_04_COLUMNS",
     "B31_C08_05_COLUMNS",
     "B31_C08_06_COLUMNS",
     "B31_C08_06_ROWS",
@@ -113,6 +120,8 @@ __all__ = [
     "C08_01_COLUMNS",
     "C08_03_COLUMN_REFS",
     "C08_03_PD_RANGES",
+    "C08_04_COLUMN_REFS",
+    "C08_04_ROWS",
     "C08_05_COLUMN_REFS",
     "C08_06_CATEGORY_MAP",
     "C08_06_COLUMN_REFS",
@@ -127,6 +136,7 @@ __all__ = [
     "CRR_C07_COLUMNS",
     "CRR_C08_COLUMNS",
     "CRR_C08_03_COLUMNS",
+    "CRR_C08_04_COLUMNS",
     "CRR_C08_05_COLUMNS",
     "CRR_C08_06_COLUMNS",
     "CRR_C08_06_ROWS",
@@ -146,6 +156,7 @@ __all__ = [
     "get_c02_00_row_sections",
     "get_c07_columns",
     "get_c08_03_columns",
+    "get_c08_04_columns",
     "get_c08_05_columns",
     "get_c08_06_columns",
     "get_c08_06_rows",

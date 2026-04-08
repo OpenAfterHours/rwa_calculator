@@ -6,6 +6,7 @@ Defines the row/column structure for COREP credit risk templates:
 - C 08.01 / OF 08.01: IRB totals — 35/40+ columns, row sections
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
 - C 08.03 / OF 08.03: IRB PD ranges — 11 columns, 17 fixed regulatory PD buckets
+- C 08.04 / OF 08.04: IRB RWEA flow statements — 1 column, 9 rows
 - C 08.05 / OF 08.05: IRB PD backtesting — 5 columns, 17 fixed regulatory PD buckets
 - C 08.06 / OF 08.06: IRB specialised lending slotting — 10/11 columns, per SL type
 - C 08.07 / OF 08.07: IRB scope of use — 5/18 columns, per exposure class (CRR/B31)
@@ -794,6 +795,60 @@ def get_c08_05_columns(framework: str = "CRR") -> list[COREPColumn]:
     but differ in col 0010 naming: B31 clarifies "post input floor".
     """
     return B31_C08_05_COLUMNS if framework == "BASEL_3_1" else CRR_C08_05_COLUMNS
+
+
+# =============================================================================
+# C 08.04 / OF 08.04 — IRB RWEA FLOW STATEMENTS
+# =============================================================================
+
+# C 08.04 reports quarter-over-quarter movements in IRB RWEA, decomposed into
+# seven standardised driver categories. Submitted once per IRB exposure class.
+# Excludes CCR exposures.
+#
+# CRR: 1 column (RWEA "after supporting factors"), 9 rows (0010-0090).
+# Basel 3.1: 1 column (RWEA — supporting factors removed), identical 9 rows.
+#
+# Why: Flow statements explain RWEA movements to supervisors. The 7 driver
+# categories (asset size, quality, model updates, methodology, acquisitions,
+# FX, other) provide structured attribution of capital requirement changes.
+#
+# References:
+# - Regulation (EU) 2021/451, Annex I (C 08.04 template layout)
+# - Regulation (EU) 2021/451, Annex II (C 08.04 reporting instructions)
+# - PRA PS1/26, Annex I (OF 08.04 template layout)
+
+CRR_C08_04_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Risk-weighted exposure amount (after supporting factors)", "RWEA"),
+]
+
+B31_C08_04_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Risk-weighted exposure amount", "RWEA"),
+]
+
+C08_04_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_04_COLUMNS]
+
+# 9 rows: opening balance, 7 movement drivers, closing balance.
+# Identical between CRR and Basel 3.1.
+C08_04_ROWS: list[COREPRow] = [
+    COREPRow("0010", "RWEA at the end of the previous reporting period"),
+    COREPRow("0020", "Asset size (+/-)"),
+    COREPRow("0030", "Asset quality (+/-)"),
+    COREPRow("0040", "Model updates (+/-)"),
+    COREPRow("0050", "Methodology and policy (+/-)"),
+    COREPRow("0060", "Acquisitions and disposals (+/-)"),
+    COREPRow("0070", "Foreign exchange movements (+/-)"),
+    COREPRow("0080", "Other (+/-)"),
+    COREPRow("0090", "RWEA at the end of the reporting period"),
+]
+
+
+def get_c08_04_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 08.04 / OF 08.04 column definitions for the given framework.
+
+    C 08.04 (CRR) and OF 08.04 (Basel 3.1) differ only in col 0010 naming:
+    CRR includes "after supporting factors", Basel 3.1 does not (Art 501/501a removed).
+    """
+    return B31_C08_04_COLUMNS if framework == "BASEL_3_1" else CRR_C08_04_COLUMNS
 
 
 # =============================================================================

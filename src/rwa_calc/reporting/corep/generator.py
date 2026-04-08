@@ -7,6 +7,7 @@ Pipeline position:
 Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
 - Populate COREP columns from pipeline calculation results using 4-digit refs
+- Generate C 08.04 / OF 08.04 RWEA flow statements per IRB exposure class
 - Generate C 08.05 / OF 08.05 PD backtesting per IRB exposure class
 - Generate C 08.06 / OF 08.06 specialised lending slotting per SL type
 - Generate C 08.07 / OF 08.07 IRB scope of use (portfolio-level)
@@ -43,6 +44,8 @@ from rwa_calc.reporting.corep.templates import (
     C02_00_SA_CLASS_MAP,
     C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
+    C08_04_COLUMN_REFS,
+    C08_04_ROWS,
     C08_06_CATEGORY_MAP,
     C08_06_COLUMN_REFS,
     C08_07_CRR_RETAIL_CLASSES,
@@ -58,6 +61,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_02_columns,
     get_c08_03_columns,
+    get_c08_04_columns,
     get_c08_05_columns,
     get_c08_06_columns,
     get_c08_06_rows,
@@ -94,6 +98,10 @@ class COREPTemplateBundle:
     C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
     C 08.03 (IRB PD ranges): One DataFrame per IRB exposure class, 17 fixed
         regulatory PD range buckets, 11 columns. Slotting excluded.
+    C 08.04 (IRB RWEA flow): One DataFrame per IRB exposure class, 9 rows
+        (opening RWEA, 7 movement drivers, closing RWEA), 1 column (RWEA).
+        Closing RWEA populated from pipeline; opening and drivers require
+        prior-period data. Slotting excluded.
     C 08.05 (IRB PD backtesting): One DataFrame per IRB exposure class, 17
         fixed PD range buckets, 5 columns. Validates PD model calibration by
         comparing assigned PDs against observed default rates. Slotting excluded.
@@ -121,6 +129,7 @@ class COREPTemplateBundle:
     c08_01: dict[str, pl.DataFrame]
     c08_02: dict[str, pl.DataFrame]
     c08_03: dict[str, pl.DataFrame] = field(default_factory=dict)
+    c08_04: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_05: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_06: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_07: pl.DataFrame | None = None
@@ -139,7 +148,8 @@ class COREPGenerator:
     """Generates COREP credit risk templates from RWA calculation results.
 
     Produces per-exposure-class DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
-    C 08.02 (IRB PD grade breakdown), C 08.03 (IRB PD ranges), C 08.06
+    C 08.02 (IRB PD grade breakdown), C 08.03 (IRB PD ranges), C 08.04
+    (IRB RWEA flow statements), C 08.05 (PD backtesting), C 08.06
     (IRB specialised lending slotting), and C 08.07 / OF 08.07 (IRB scope of use)
     with correct 4-digit COREP column references and multi-section row structure.
 
@@ -182,6 +192,7 @@ class COREPGenerator:
         c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
         c08_03 = self._generate_all_c08_03(irb_data, cols, framework, errors)
+        c08_04 = self._generate_all_c08_04(irb_data, cols, framework, errors)
         c08_05 = self._generate_all_c08_05(irb_data, cols, framework, errors)
         c08_06 = self._generate_all_c08_06(irb_data, cols, framework, errors)
 
@@ -199,6 +210,7 @@ class COREPGenerator:
             c08_01=c08_01,
             c08_02=c08_02,
             c08_03=c08_03,
+            c08_04=c08_04,
             c08_05=c08_05,
             c08_06=c08_06,
             c08_07=c08_07,
@@ -246,6 +258,10 @@ class COREPGenerator:
             )
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_03, "C 08.03", IRB_EXPOSURE_CLASS_ROWS
+            )
+            c08_04_prefix = "OF 08.04" if bundle.framework == "BASEL_3_1" else "C 08.04"
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_04, c08_04_prefix, IRB_EXPOSURE_CLASS_ROWS
             )
             c08_05_prefix = "OF 08.05" if bundle.framework == "BASEL_3_1" else "C 08.05"
             total_rows += self._write_template_sheets(
@@ -1510,6 +1526,110 @@ class COREPGenerator:
             return pl.DataFrame(schema=schema)
 
         schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 08.04 / OF 08.04 — IRB RWEA FLOW STATEMENTS
+    # =========================================================================
+
+    def _generate_all_c08_04(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.04 / OF 08.04 DataFrames for all IRB exposure classes.
+
+        C 08.04 reports quarter-over-quarter movements in IRB RWEA, decomposed
+        into seven standardised driver categories. Submitted once per IRB
+        exposure class, excluding CCR and slotting exposures.
+
+        The pipeline provides current-period data only. Row 0090 (closing RWEA)
+        is populated from current results. Rows 0010 (opening RWEA) and
+        0020-0080 (movement drivers) are null because they require prior-period
+        comparison data that a single pipeline run cannot produce.
+
+        Why: Flow statements help supervisors understand *why* capital
+        requirements changed, not just *that* they changed. The structured
+        driver decomposition (asset size, quality, models, methodology,
+        acquisitions, FX, other) is mandatory for IRB firms.
+
+        References:
+        - Regulation (EU) 2021/451, Annex I/II (C 08.04)
+        - PRA PS1/26, Annex I/II (OF 08.04)
+        """
+        ec_col = _pick(cols, "exposure_class")
+
+        if ec_col is None:
+            errors.append("C08.04: Missing required column (exposure_class)")
+            return {}
+
+        # Exclude slotting exposures — C 08.04 covers F-IRB/A-IRB only
+        approach_col = _pick(cols, "approach_applied", "approach")
+        if approach_col is not None:
+            irb_no_slotting = irb_data.filter(pl.col(approach_col) != "slotting")
+        else:
+            irb_no_slotting = irb_data
+
+        irb_df: pl.DataFrame = irb_no_slotting.collect()
+        if len(irb_df) == 0:
+            return {}
+
+        classes = irb_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
+
+        for ec in classes:
+            class_df = irb_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c08_04_for_class(
+                class_df,
+                set(irb_df.columns),
+                framework,
+            )
+            result[ec] = template_df
+
+        return result
+
+    def _generate_c08_04_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        framework: str,
+    ) -> pl.DataFrame:
+        """Generate a C 08.04 DataFrame for a single IRB exposure class.
+
+        Rows = 9: opening balance, 7 movement drivers, closing balance.
+        Columns = 1: RWEA (col ref 0010).
+
+        Only row 0090 (closing RWEA) is populated from the current pipeline.
+        All other rows require prior-period data and are null.
+
+        Args:
+            class_data: DataFrame filtered to a single exposure class.
+            cols: Available column names.
+            framework: "CRR" or "BASEL_3_1".
+        """
+        column_defs = get_c08_04_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+
+        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
+        closing_rwea: float | None = None
+        if rwa_col is not None and len(class_data) > 0:
+            closing_rwea = float(class_data[rwa_col].fill_null(0.0).sum())
+
+        rows: list[dict[str, object]] = []
+        for row_def in C08_04_ROWS:
+            if row_def.ref == "0090":
+                # Closing RWEA — populated from current pipeline results
+                values: dict[str, object] = {"0010": closing_rwea}
+            else:
+                # Opening (0010) and movement drivers (0020-0080)
+                # require prior-period comparison data
+                values = {"0010": None}
+            rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+
+        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 

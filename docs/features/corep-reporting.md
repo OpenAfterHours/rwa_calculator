@@ -867,6 +867,22 @@ once per IRB exposure class.
     | **Rows** | 9 rows (0010–0090) | Identical — no changes |
     | **Overall** | Virtually identical between frameworks |  |
 
+### Implementation Notes
+
+C 08.04 / OF 08.04 is implemented in v0.1.169. The pipeline provides current-period
+data only, so:
+
+- **Row 0090** (closing RWEA) is populated from `rwa_final` per exposure class
+- **Row 0010** (opening RWEA) and **rows 0020–0080** (movement drivers) are null —
+  they require prior-period comparison data that a single pipeline run cannot produce
+- Slotting exposures are excluded (C 08.06 covers specialised lending separately)
+- Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`
+- Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`
+- Bundle field: `COREPTemplateBundle.c08_04: dict[str, pl.DataFrame]`
+
+To populate the full flow statement, callers can supply prior-period RWEA externally
+and merge it with the generated template.
+
 ---
 
 ## C 08.06 / OF 08.06 — CR IRB Specialised Lending Slotting

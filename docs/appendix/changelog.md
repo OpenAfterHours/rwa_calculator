@@ -5,6 +5,12 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.169] — 2026-04-08
+
+### Added
+- **COREP**: C 08.04 / OF 08.04 — CR IRB RWEA flow statements. 1 column (RWEA) × 9 rows (opening, 7 movement drivers, closing) per IRB exposure class. Closing RWEA (row 0090) populated from pipeline; opening and drivers null (require prior-period data). Slotting excluded. CRR column names "after supporting factors"; Basel 3.1 removes supporting factors reference. Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`, `C08_04_COLUMN_REFS`, `get_c08_04_columns()`. Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`. `COREPTemplateBundle.c08_04` field (dict[str, pl.DataFrame]). Excel export with C 08.04 / OF 08.04 prefix.
+- **Tests**: 41 new COREP tests for C 08.04 across 6 test classes (TestC0804TemplateDefinitions: 13, TestC0804Generation: 5, TestC0804ClosingRWEA: 4, TestC0804NullDriverRows: 9, TestC0804B31Features: 3, TestC0804EdgeCases: 7). COREP tests: 555 (was 514). (P2.2)
+
 ## [0.1.168] — 2026-04-08
 
 ### Added

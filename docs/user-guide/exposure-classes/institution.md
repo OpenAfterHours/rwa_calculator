@@ -40,7 +40,8 @@ Exposures with original maturity ≤ 3 months may receive preferential treatment
 | CQS 1 | 20% | 20% |
 | CQS 2 | 30% | 20% |
 | CQS 3 | 50% | 20% |
-| CQS 4-6 | 100-150% | 50% |
+| CQS 4-5 | 100% | 50% |
+| CQS 6 | 150% | 150% |
 
 **Eligibility:**
 - Original maturity ≤ 3 months

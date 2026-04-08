@@ -203,21 +203,13 @@ The following international organisations receive a **0%** risk weight:
 
 UK unrated institutions default to 40% (derived from sovereign CQS 2).
 
-### Short-Term Institution Exposures (CRR Art. 120 Table 4 / Art. 120 Table 4A)
+### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 
-Short-term exposures (≤ 3 months, denominated and funded in domestic currency):
+Rated institutions with residual maturity ≤ 3 months receive preferential risk weights
+under Art. 120(2). Unrated institutions with maturity ≤ 3 months receive 20% under
+Art. 121(3).
 
-**Table 4 — Sovereign-Derived (CRR Art. 120(1))**
-
-| Sovereign CQS | Short-Term RW |
-|---------------|---------------|
-| 1 | 20% |
-| 2 | 20% |
-| 3 | 20% |
-| 4-5 | 50% |
-| 6 | 150% |
-
-**Table 4A — Own-Rating Based (CRR Art. 120(2))**
+**Table 4 — Short-Term Preferential (CRR Art. 120(2))**
 
 | Institution CQS | Short-Term RW |
 |-----------------|---------------|
@@ -226,7 +218,28 @@ Short-term exposures (≤ 3 months, denominated and funded in domestic currency)
 | 3 | 20% |
 | 4-5 | 50% |
 | 6 | 150% |
-| Unrated | 20% |
+| Unrated | 20% (Art. 121(3)) |
+
+!!! warning "Correction: CRR has no Table 4A"
+    CRR Tables 3 and 4 both use the **institution's own ECAI rating** — Table 3 for
+    general maturities (Art. 120(1)), Table 4 for short-term (Art. 120(2)). The
+    sovereign-derived approach for **unrated** institutions is Art. 121 (Table 5).
+    Earlier versions of this spec incorrectly labelled Table 4 as "Sovereign-Derived"
+    and included a non-existent "Table 4A".
+
+!!! info "Basel 3.1 — Table 4A: Short-Term ECAI Assessments (Art. 120(2B))"
+    Basel 3.1 introduces Table 4A for institutions with a specific **short-term ECAI
+    assessment** (as opposed to a long-term rating applied to a short-term exposure).
+    Table 4A uses the short-term CQS scale with only 3 steps:
+
+    | Short-Term CQS | 1 | 2 | 3 | Others |
+    |----------------|---|---|---|--------|
+    | Risk Weight | 20% | 50% | 100% | 150% |
+
+    Art. 120(3) governs the interaction: where no short-term rating exists, Table 4
+    applies; where a short-term rating yields a lower or equal RW, Table 4A applies;
+    where it yields a worse RW, unrated short-term claims against that obligor also
+    receive the higher weight.
 
 ## Corporate Exposures (CRR Art. 122)
 

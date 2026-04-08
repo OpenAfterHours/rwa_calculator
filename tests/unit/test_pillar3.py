@@ -33,62 +33,57 @@ from rwa_calc.reporting.pillar3.generator import (
     Pillar3TemplateBundle,
 )
 from rwa_calc.reporting.pillar3.templates import (
-    B31_CR10_SUBTEMPLATES,
     B31_CR4_COLUMNS,
     B31_CR4_ROWS,
     B31_CR5_COLUMNS,
     B31_CR5_RISK_WEIGHTS,
     B31_CR6_COLUMNS,
-    B31_CR7A_COLUMNS,
     B31_CR7_ROWS,
+    B31_CR7A_COLUMNS,
+    B31_CR10_SUBTEMPLATES,
     B31_OV1_ROWS,
     CMS1_COLUMNS,
     CMS1_ROWS,
     CMS2_COLUMNS,
     CMS2_ROWS,
     CMS2_SA_CLASS_MAP,
-    CR10_CATEGORY_MAP,
-    CR10_SLOTTING_ROWS,
-    CR6A_COLUMNS,
     CR6_PD_RANGES,
+    CR6A_COLUMNS,
     CR7_COLUMNS,
     CR7A_AIRB_ROWS,
     CR7A_FIRB_ROWS,
     CR8_COLUMNS,
     CR8_ROWS,
     CR9_1_COLUMNS,
-    CR9_1_COLUMN_REFS,
     CR9_AIRB_CLASSES,
     CR9_APPROACH_DISPLAY,
     CR9_COLUMN_REFS,
     CR9_COLUMNS,
     CR9_FIRB_CLASSES,
-    CRR_CR10_COLUMNS,
-    CRR_CR10_SUBTEMPLATES,
+    CR10_CATEGORY_MAP,
+    CR10_SLOTTING_ROWS,
     CRR_CR4_COLUMNS,
     CRR_CR4_ROWS,
     CRR_CR5_COLUMNS,
     CRR_CR5_RISK_WEIGHTS,
     CRR_CR6_COLUMNS,
-    CRR_CR7A_COLUMNS,
     CRR_CR7_ROWS,
+    CRR_CR7A_COLUMNS,
+    CRR_CR10_COLUMNS,
+    CRR_CR10_SUBTEMPLATES,
     CRR_OV1_ROWS,
     IRB_EXPOSURE_CLASSES,
     OV1_COLUMNS,
     SA_DISCLOSURE_CLASSES,
-    get_cr10_columns,
-    get_cr10_subtemplates,
     get_cr4_columns,
-    get_cr4_rows,
     get_cr5_columns,
-    get_cr5_risk_weights,
     get_cr6_columns,
-    get_cr6a_rows,
     get_cr7_rows,
     get_cr7a_columns,
+    get_cr10_columns,
+    get_cr10_subtemplates,
     get_ov1_rows,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -540,13 +535,13 @@ class TestCR6Generation:
     def test_cr6_has_17_pd_rows_plus_total(self, generator: Pillar3Generator):
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for ec, df in bundle.cr6.items():
+        for _ec, df in bundle.cr6.items():
             assert df.height == 18  # 17 PD ranges + 1 total
 
     def test_cr6_total_ead_positive(self, generator: Pillar3Generator):
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for ec, df in bundle.cr6.items():
+        for _ec, df in bundle.cr6.items():
             total = df.filter(pl.col("row_ref") == "18")
             assert total["e"][0] > 0
 
@@ -674,7 +669,7 @@ class TestCR7AGeneration:
     def test_cr7a_total_exposure_positive(self, generator: Pillar3Generator):
         data = _make_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for approach, df in bundle.cr7a.items():
+        for _approach, df in bundle.cr7a.items():
             total = df.filter(pl.col("row_name").str.contains("Total"))
             assert total["a"][0] > 0
 
@@ -721,7 +716,7 @@ class TestCR10Generation:
     def test_cr10_rows_per_subtemplate(self, generator: Pillar3Generator):
         data = _make_slotting_data()
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
-        for sl_type, df in bundle.cr10.items():
+        for _sl_type, df in bundle.cr10.items():
             assert df.height == 6  # 5 categories + total
 
     def test_cr10_risk_weight_populated(self, generator: Pillar3Generator):
@@ -1036,7 +1031,7 @@ class TestCMS2Generation:
         """Retail sub-rows should break down the total."""
         data = _make_mixed_data_with_sa_rwa()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        qrre = bundle.cms2.filter(pl.col("row_ref") == "0051")
+        _qrre = bundle.cms2.filter(pl.col("row_ref") == "0051")
         other = bundle.cms2.filter(pl.col("row_ref") == "0052")
         mortgage = bundle.cms2.filter(pl.col("row_ref") == "0053")
         # retail_qrre: not in IRB data → 0 or None
@@ -1464,7 +1459,7 @@ class TestCR9PDAllocation:
     def test_pd_range_labels_are_readable(self, generator: Pillar3Generator):
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        for key, df in bundle.cr9.items():
+        for _key, df in bundle.cr9.items():
             labels = df["b"].to_list()
             assert "Total" in labels
             for label in labels:

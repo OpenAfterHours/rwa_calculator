@@ -31,7 +31,6 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
-
 # ---------------------------------------------------------------------------
 # Data builders (inline, self-contained per-scenario data)
 # ---------------------------------------------------------------------------

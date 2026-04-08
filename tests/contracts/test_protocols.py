@@ -9,6 +9,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.api.export import ExportResult
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
@@ -21,7 +22,6 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import LazyFrameResult
-from rwa_calc.api.export import ExportResult
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     CRMProcessorProtocol,

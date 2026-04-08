@@ -31,7 +31,6 @@ from rwa_calc.contracts.config import OutputFloorConfig
 from rwa_calc.domain.enums import InstitutionType, ReportingBasis
 from rwa_calc.reporting.corep.generator import COREPGenerator, COREPTemplateBundle
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -568,9 +567,9 @@ class TestExporterProtocolCompliance:
 
     def test_protocol_has_output_floor_config(self) -> None:
         """ResultExporterProtocol.export_to_corep has output_floor_config kwarg."""
-        from rwa_calc.contracts.protocols import ResultExporterProtocol
-
         import inspect
+
+        from rwa_calc.contracts.protocols import ResultExporterProtocol
 
         # Get the method from the protocol class itself
         sig = inspect.signature(ResultExporterProtocol.export_to_corep)

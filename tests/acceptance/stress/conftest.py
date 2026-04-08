@@ -13,11 +13,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 import pytest
+from tests.fixtures.irb_test_helpers import (
+    create_full_irb_model_permissions,
+    enrich_ratings_with_model_id,
+)
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import (
-    COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
@@ -29,10 +32,6 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from tests.fixtures.irb_test_helpers import (
-    create_full_irb_model_permissions,
-    enrich_ratings_with_model_id,
-)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle

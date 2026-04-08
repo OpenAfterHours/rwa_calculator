@@ -34,7 +34,6 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
-import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode

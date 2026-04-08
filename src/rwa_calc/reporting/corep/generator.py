@@ -44,24 +44,19 @@ from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMN_REFS,
     C02_00_CREDIT_RISK_ROWS,
     C02_00_SA_CLASS_MAP,
-    C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
-    C08_04_COLUMN_REFS,
     C08_04_ROWS,
     C08_06_CATEGORY_MAP,
-    C08_06_COLUMN_REFS,
     C08_07_CRR_RETAIL_CLASSES,
     C08_07_IRB_APPROACHES,
     C09_01_SA_CLASS_MAP,
-    C09_02_IRB_CLASS_MAP,
-    COREPRow,
     CRR_C02_00_COLUMN_REFS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
     PD_BANDS,
     SA_EXPOSURE_CLASS_ROWS,
-    get_c02_00_columns,
+    COREPRow,
     get_c02_00_row_sections,
     get_c07_columns,
     get_c08_02_columns,
@@ -506,8 +501,6 @@ class COREPGenerator:
                 class_sa_ead[ec] = class_sa_ead.get(ec, 0.0) + ead
                 class_sa_rwa[ec] = class_sa_rwa.get(ec, 0.0) + rwa_val
 
-        all_classes = set(class_irb_ead) | set(class_sa_ead)
-
         column_defs = get_c08_07_columns(framework)
         column_refs = [c.ref for c in column_defs]
         row_defs = get_c08_07_rows(framework)
@@ -541,7 +534,7 @@ class COREPGenerator:
                     )
                 else:
                     # Materiality row: null (requires institutional config)
-                    values = {ref: None for ref in column_refs}
+                    values = dict.fromkeys(column_refs)
             elif ec_value is not None:
                 # Direct exposure class mapping
                 irb_ead = class_irb_ead.get(ec_value, 0.0)
@@ -575,10 +568,10 @@ class COREPGenerator:
             elif row_ref == "0060":
                 # CRR "SL excluding slotting" — SL on IRB (non-slotting approaches)
                 # Cannot distinguish from data; report as null
-                values = {ref: None for ref in column_refs}
+                values = dict.fromkeys(column_refs)
             else:
                 # Sub-rows without direct mapping (SME sub-rows, etc.)
-                values = {ref: None for ref in column_refs}
+                values = dict.fromkeys(column_refs)
 
             rows.append({"row_ref": row_ref, "row_name": row_name, **values})
 
@@ -788,11 +781,6 @@ class COREPGenerator:
         column_refs = B31_C02_00_COLUMN_REFS if is_b31 else CRR_C02_00_COLUMN_REFS
         row_sections = get_c02_00_row_sections(framework)
 
-        # --- Aggregate RWEA by approach and exposure class ---
-        agg_exprs = [
-            pl.col(rwa_col).fill_null(0.0).sum().alias("total_rwa"),
-        ]
-
         # SA RWEA by exposure class
         ec_col = _pick(cols, "exposure_class")
         approach_col = _pick(cols, "approach_applied")
@@ -801,7 +789,6 @@ class COREPGenerator:
         approach_rwa: dict[str, float] = {}
         sa_class_rwa: dict[str, float] = {}
         total_rwa = 0.0
-        total_sa_rwa = 0.0
 
         if approach_col and ec_col:
             collected = results.select(
@@ -825,9 +812,6 @@ class COREPGenerator:
             by_class = sa_rows.group_by("_ec").agg(pl.col("_rwa").sum().alias("rwa"))
             for row in by_class.iter_rows(named=True):
                 sa_class_rwa[row["_ec"]] = float(row["rwa"])
-
-            # Total SA RWA (for floor comparison col 0020)
-            total_sa_rwa = float(sa_rows["_rwa"].sum())
 
             # IRB sub-approach breakdowns
             irb_rows = collected.filter(~sa_mask & ~equity_mask)
@@ -924,8 +908,6 @@ class COREPGenerator:
 
         # Output floor RWEA (B31 col 0030)
         floor_rwa = total_rwa  # Default: no floor binding
-        floor_pct = 0.0
-        of_adj = 0.0
         floor_activated = False
         if is_b31 and "rwa_pre_floor" in cols:
             pre_floor_stats = results.select(
@@ -961,7 +943,7 @@ class COREPGenerator:
             if ec_value in sa_class_rwa:
                 if row_ref not in row_values:
                     row_values[row_ref] = {"0010": 0.0}
-                existing = row_values[row_ref].get("0010", 0.0) or 0.0
+                existing = float(row_values[row_ref].get("0010", 0.0) or 0.0)
                 row_values[row_ref]["0010"] = existing + sa_class_rwa[ec_value]
 
         # Specialised lending sub-row (B31 only, under SA corporates)
@@ -2329,7 +2311,7 @@ class COREPGenerator:
 
         if sl_type_col is not None:
             # Route by sl_type column
-            for sl_key, sl_display in sl_types.items():
+            for sl_key, _sl_display in sl_types.items():
                 if sl_key == "ipre" and framework != "BASEL_3_1" and hvcre_col is not None:
                     # CRR combines IPRE+HVCRE into one type
                     type_df = slotting_df.filter(
@@ -2421,11 +2403,8 @@ class COREPGenerator:
                 cat_data = cat_data.filter(
                     pl.col(maturity_col) == is_short  # noqa: E712
                 )
-            elif is_short is not None and maturity_col is None:
-                # Default: assume all are ≥ 2.5 years (is_short=False) when
-                # maturity info is unavailable
-                if is_short:
-                    cat_data = type_data.clear()
+            elif is_short is not None and maturity_col is None and is_short:
+                cat_data = type_data.clear()
 
             # "Substantially stronger" sub-rows: currently no pipeline column
             # identifies these exposures. They are reported as empty until
@@ -2435,7 +2414,7 @@ class COREPGenerator:
 
             if len(cat_data) == 0 and category_label != "Total":
                 # Still include the row with zero values for regulatory completeness
-                values = {ref: 0.0 for ref in column_refs}
+                values = dict.fromkeys(column_refs, 0.0)
                 # Risk weight from row definition
                 if "0070" in values and _rw_display:
                     rw_pct = _rw_display.replace("%", "").strip()
@@ -3879,10 +3858,7 @@ def _compute_c08_05_values(
     cp_col = "counterparty_reference" if "counterparty_reference" in cols else None
     default_col = _pick(cols, "is_defaulted", "default_status")
 
-    if cp_col is not None:
-        n_obligors = float(data[cp_col].n_unique())
-    else:
-        n_obligors = float(n_rows)
+    n_obligors = float(data[cp_col].n_unique()) if cp_col is not None else float(n_rows)
 
     if default_col is not None:
         defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
@@ -4241,8 +4217,6 @@ def _filter_c09_02_row(
         return data.clear()
 
     # Main IRB exposure class rows
-    matching_classes = [ec for ec, mapped in C09_02_IRB_CLASS_MAP.items() if mapped == row_key]
-
     if row_key == "central_govt_central_bank":
         return data.filter(pl.col(ec_col) == "central_govt_central_bank")
 

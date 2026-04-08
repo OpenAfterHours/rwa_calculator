@@ -28,7 +28,6 @@ from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.constants import CRM_ALLOC_COLUMNS
 from rwa_calc.engine.crm.processor import CRMProcessor
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -146,7 +145,7 @@ def _firb_exposure(ref: str, drawn: float, cp_ref: str = "CP001") -> dict:
     }
 
 
-def _collateral_schema() -> dict[str, pl.DataType]:
+def _collateral_schema() -> dict[str, type[pl.DataType]]:
     """Schema for collateral test data to avoid null-type inference errors."""
     return {
         "collateral_reference": pl.String,

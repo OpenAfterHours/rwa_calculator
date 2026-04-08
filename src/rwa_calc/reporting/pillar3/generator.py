@@ -44,28 +44,23 @@ from rwa_calc.reporting.pillar3.templates import (
     CMS2_COLUMNS,
     CMS2_ROWS,
     CMS2_SA_CLASS_MAP,
-    CR10_CATEGORY_MAP,
-    CR10_SLOTTING_ROWS,
-    CR6A_COLUMNS,
     CR6_PD_RANGES,
+    CR6A_COLUMNS,
     CR7_COLUMNS,
     CR8_COLUMNS,
     CR8_ROWS,
     CR9_AIRB_CLASSES,
     CR9_APPROACH_DISPLAY,
     CR9_COLUMN_REFS,
-    CR9_COLUMNS,
     CR9_FIRB_CLASSES,
+    CR10_CATEGORY_MAP,
+    CR10_SLOTTING_ROWS,
     HVCRE_RISK_WEIGHTS,
     IRB_EXPOSURE_CLASSES,
     OV1_COLUMNS,
-    SA_DISCLOSURE_CLASSES,
     SLOTTING_RISK_WEIGHTS,
-    P3Column,
     P3Row,
     _letter_ref,
-    get_cr10_columns,
-    get_cr10_subtemplates,
     get_cr4_columns,
     get_cr4_rows,
     get_cr5_columns,
@@ -75,6 +70,8 @@ from rwa_calc.reporting.pillar3.templates import (
     get_cr6a_rows,
     get_cr7_rows,
     get_cr7a_columns,
+    get_cr10_columns,
+    get_cr10_subtemplates,
     get_ov1_rows,
 )
 
@@ -247,10 +244,7 @@ class Pillar3Generator:
             values: dict[str, object] = {}
             ref = row_def.ref
 
-            if ref == "29":
-                values["a"] = total_rwa
-                values["c"] = own_funds
-            elif ref == "1":
+            if ref == "29" or ref == "1":
                 values["a"] = total_rwa
                 values["c"] = own_funds
             elif ref == "2" and approach_col:
@@ -284,7 +278,7 @@ class Pillar3Generator:
             # Column b (T-1) always None — requires prior period data
             values.setdefault("b", None)
             if values.get("a") is not None and values.get("c") is None:
-                values["c"] = (values["a"] or 0.0) * 0.08
+                values["c"] = float(values["a"] or 0.0) * 0.08
 
             rows_out.append(_make_row(row_def, values, column_refs))
 
@@ -764,7 +758,7 @@ class Pillar3Generator:
 
         result: dict[str, pl.DataFrame] = {}
 
-        for approach_val, approach_display, class_defs in [
+        for approach_val, _approach_display, class_defs in [
             ("foundation_irb", "F-IRB", CR9_FIRB_CLASSES),
             ("advanced_irb", "A-IRB", CR9_AIRB_CLASSES),
         ]:
@@ -1500,9 +1494,9 @@ def _compute_cr7a_values(
     }
 
     # c = sum of d + e + f
-    d_val = values.get("d") or 0.0
-    e_val = values.get("e") or 0.0
-    f_val = values.get("f") or 0.0
+    d_val = float(values.get("d") or 0.0)
+    e_val = float(values.get("e") or 0.0)
+    f_val = float(values.get("f") or 0.0)
     values["c"] = d_val + e_val + f_val if (d_val or e_val or f_val) else None
 
     # g = sum of h + i + j

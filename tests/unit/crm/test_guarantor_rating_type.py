@@ -26,7 +26,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.guarantees import apply_guarantees
 from rwa_calc.engine.crm.processor import CRMProcessor
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

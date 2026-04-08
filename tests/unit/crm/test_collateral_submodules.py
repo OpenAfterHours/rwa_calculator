@@ -32,7 +32,6 @@ from rwa_calc.engine.crm.collateral import (
     generate_netting_collateral,
 )
 
-
 # =============================================================================
 # generate_netting_collateral
 # =============================================================================

@@ -1,7 +1,7 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P5.8 model permissions B31 acceptance tests + Art. 147A enforcement fix; P4.15 CRM spec rewrite)
-**Current version:** 0.1.153 | **Test suite:** 4,204 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P4.15, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P6.20 collateral_allocation bundle population)
+**Current version:** 0.1.155 | **Test suite:** 4,228 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P4.15, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (208 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
@@ -618,11 +618,12 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Description:** CRMError class removed. CRM processor now uses CalculationError (via crm_warning() factory) directly. apply_crm() propagates errors from CRMAdjustedBundle.crm_errors. Error emissions added for: collateral data with missing required columns (CRM001), guarantee data with missing required columns (CRM005), guarantee data with missing counterparty lookup (CRM005). CRMAdjustedBundle.crm_errors typed as list[CalculationError]. Pipeline getattr defensive access replaced with direct attribute access. 14 new tests in tests/unit/crm/test_crm_error_propagation.py.
 
 ### P6.20 `collateral_allocation` always None in CRM output bundles
-- **Status:** [ ] Not started
-- **Impact:** Both `get_crm_adjusted_bundle` and `get_crm_unified_bundle` (`processor.py:461,566`) set `collateral_allocation=None` with a comment "Would be populated from collateral processing." Downstream reporting cannot access per-exposure collateral allocation details.
-- **File:Line:** `engine/crm/processor.py:461,566`
-- **Fix:** Populate `collateral_allocation` from the collateral processing results.
-- **Tests needed:** Unit test verifying collateral allocation is populated.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** Both `get_crm_adjusted_bundle` and `get_crm_unified_bundle` set `collateral_allocation=None`, meaning downstream reporting and audit could not access per-exposure collateral allocation details without parsing the full exposure frame.
+- **Fix:** Added `_build_collateral_allocation()` method to `CRMProcessor` that extracts a focused 23-column LazyFrame from the processed exposures containing: 4 identifiers (`exposure_reference`, `counterparty_reference`, `approach`, `ead_gross`), 6 Art. 231 waterfall allocation columns (`crm_alloc_*` — EAD absorbed per collateral type), 2 coverage totals (`total_collateral_for_lgd`, `collateral_coverage_pct`), 7 post-haircut value columns (`collateral_adjusted_value`, `collateral_market_value`, `collateral_financial_value`, `collateral_cash_value`, `collateral_re_value`, `collateral_receivables_value`, `collateral_other_physical_value`), and 4 LGD impact columns (`lgd_secured`, `lgd_unsecured`, `lgd_post_crm`, `ead_after_collateral`). Only populated when `apply_collateral` actually ran (valid collateral present); remains `None` when no collateral or invalid collateral. Wired into both `get_crm_adjusted_bundle` and `get_crm_unified_bundle` via `collateral_applied` boolean flag.
+- **File:Line:** `engine/crm/processor.py:919-963` (_build_collateral_allocation method), `processor.py:440,556,614,700` (wiring)
+- **Spec ref:** CRR Art. 230-231, PRA PS1/26 Art. 230-231
+- **Tests:** 24 new tests in `tests/unit/crm/test_collateral_allocation_bundle.py`: 5 population tests (populated/LazyFrame type/None without collateral/None with invalid collateral/row count), 6 column tests (identifiers/waterfall/coverage/values/LGD/no extra columns), 6 value tests (cash financial allocation/coverage pct/SA EAD reduction/FIRB LGD impact/zero allocation/matches exposure frame), 3 unified bundle tests (populated/None/values match), 4 edge cases (overcollateralised/mixed types/empty exposures/preserves references). All 4,228 tests pass (was 4,204). Contract tests: 135.
 
 ---
 

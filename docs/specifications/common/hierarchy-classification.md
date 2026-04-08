@@ -145,8 +145,11 @@ Under Basel 3.1, Art. 123A has a two-path structure:
 2. **Granularity** (Art. 123A(1)(b)(ii)): Total exposure to the obligor (or connected group) does not exceed **GBP 880,000**. No single exposure represents more than 0.2% of the retail portfolio.
 3. **Pool management** (Art. 123A(1)(b)(iii)): The exposure is part of a **significant number of similarly managed exposures** with similar characteristics. This is a qualitative/attestation requirement, not a calculated check.
 
-!!! warning "Current Gap"
-    Only condition 2 (granularity threshold) is partially implemented. Condition 1 (product type screening) and condition 3 (pool management) are not enforced. The SME auto-qualification path under (a) is also not explicitly handled.
+!!! note "Implementation Status"
+    - **Condition 1 (product type)**: Not enforced — the calculator relies on input data for product type classification. A dedicated `product_type` field would be needed to validate this condition programmatically.
+    - **Condition 2 (granularity threshold)**: Implemented — aggregate exposure threshold (GBP 880,000) is enforced via lending group aggregation.
+    - **Condition 3 (pool management)**: Implemented under Basel 3.1 — non-SME entities must have `is_managed_as_retail=True` to qualify. This field defaults to `True` for backward compatibility. SME entities auto-qualify per Art. 123A(1)(a) and are not subject to this condition.
+    - **SME auto-qualification (Art. 123A(1)(a))**: Explicitly implemented — SME counterparties bypass the three conditions under (b) and qualify for retail treatment directly.
 
 !!! note "No Art. 123A(d)"
     There is no Art. 123A(d) — the article has only two paths (a) and (b), with three sub-conditions under (b). Previous documentation incorrectly described four criteria.

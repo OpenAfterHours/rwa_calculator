@@ -109,9 +109,7 @@ def fac_refs(facilities: pl.DataFrame) -> set[str]:
 class TestCounterpartyReferences:
     """All exposure/rating counterparty references must exist in counterparties."""
 
-    def test_loan_counterparty_references(
-        self, loans: pl.DataFrame, cpty_refs: set[str]
-    ) -> None:
+    def test_loan_counterparty_references(self, loans: pl.DataFrame, cpty_refs: set[str]) -> None:
         loan_cptys = set(loans["counterparty_reference"].to_list())
         missing = loan_cptys - cpty_refs
         assert not missing, f"Loans reference missing counterparties: {missing}"
@@ -166,9 +164,7 @@ class TestCRMBeneficiaryReferences:
         missing = coll_fac_refs - fac_refs
         assert not missing, f"Collateral references missing facilities: {missing}"
 
-    def test_guarantee_loan_references(
-        self, guarantees: pl.DataFrame, loan_refs: set[str]
-    ) -> None:
+    def test_guarantee_loan_references(self, guarantees: pl.DataFrame, loan_refs: set[str]) -> None:
         guar_loan_refs = set(
             guarantees.filter(pl.col("beneficiary_type") == "loan")[
                 "beneficiary_reference"
@@ -195,9 +191,7 @@ class TestCRMBeneficiaryReferences:
         missing = guarantor_refs - cpty_refs
         assert not missing, f"Guarantees reference missing guarantors: {missing}"
 
-    def test_provision_loan_references(
-        self, provisions: pl.DataFrame, loan_refs: set[str]
-    ) -> None:
+    def test_provision_loan_references(self, provisions: pl.DataFrame, loan_refs: set[str]) -> None:
         prov_loan_refs = set(
             provisions.filter(pl.col("beneficiary_type") == "loan")[
                 "beneficiary_reference"
@@ -218,9 +212,7 @@ class TestMappingReferences:
     ) -> None:
         parent_refs = set(facility_mappings["parent_facility_reference"].to_list())
         missing = parent_refs - fac_refs
-        assert not missing, (
-            f"Facility mappings reference missing parent facilities: {missing}"
-        )
+        assert not missing, f"Facility mappings reference missing parent facilities: {missing}"
 
     def test_facility_mapping_child_references(
         self,
@@ -231,13 +223,9 @@ class TestMappingReferences:
         child_refs = set(facility_mappings["child_reference"].to_list())
         valid = fac_refs | loan_refs
         missing = child_refs - valid
-        assert not missing, (
-            f"Facility mappings reference unknown children: {missing}"
-        )
+        assert not missing, f"Facility mappings reference unknown children: {missing}"
 
-    def test_org_mapping_references(
-        self, org_mappings: pl.DataFrame, cpty_refs: set[str]
-    ) -> None:
+    def test_org_mapping_references(self, org_mappings: pl.DataFrame, cpty_refs: set[str]) -> None:
         parents = set(org_mappings["parent_counterparty_reference"].to_list())
         children = set(org_mappings["child_counterparty_reference"].to_list())
         missing = (parents | children) - cpty_refs
@@ -249,9 +237,7 @@ class TestMappingReferences:
         parents = set(lending_mappings["parent_counterparty_reference"].to_list())
         children = set(lending_mappings["child_counterparty_reference"].to_list())
         missing = (parents | children) - cpty_refs
-        assert not missing, (
-            f"Lending mappings reference missing counterparties: {missing}"
-        )
+        assert not missing, f"Lending mappings reference missing counterparties: {missing}"
 
 
 # --- Model ID reference checks ---
@@ -293,23 +279,17 @@ class TestFixtureDataQuality:
         dupes = [r for r in refs if refs.count(r) > 1]
         assert not dupes, f"Duplicate facility references: {set(dupes)}"
 
-    def test_no_duplicate_collateral_references(
-        self, collateral: pl.DataFrame
-    ) -> None:
+    def test_no_duplicate_collateral_references(self, collateral: pl.DataFrame) -> None:
         refs = collateral["collateral_reference"].to_list()
         dupes = [r for r in refs if refs.count(r) > 1]
         assert not dupes, f"Duplicate collateral references: {set(dupes)}"
 
-    def test_no_duplicate_guarantee_references(
-        self, guarantees: pl.DataFrame
-    ) -> None:
+    def test_no_duplicate_guarantee_references(self, guarantees: pl.DataFrame) -> None:
         refs = guarantees["guarantee_reference"].to_list()
         dupes = [r for r in refs if refs.count(r) > 1]
         assert not dupes, f"Duplicate guarantee references: {set(dupes)}"
 
-    def test_no_duplicate_provision_references(
-        self, provisions: pl.DataFrame
-    ) -> None:
+    def test_no_duplicate_provision_references(self, provisions: pl.DataFrame) -> None:
         refs = provisions["provision_reference"].to_list()
         dupes = [r for r in refs if refs.count(r) > 1]
         assert not dupes, f"Duplicate provision references: {set(dupes)}"

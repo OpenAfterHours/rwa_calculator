@@ -168,22 +168,16 @@ class TestCRREquityHaircutsWithMainIndex:
     """CRR equity haircuts: main-index 15%, other-listed 25%."""
 
     def test_main_index_true_gets_15pct(self) -> None:
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=True), is_basel_3_1=False
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=True), is_basel_3_1=False)
         assert haircut == pytest.approx(0.15)
 
     def test_main_index_false_gets_25pct(self) -> None:
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=False), is_basel_3_1=False
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=False), is_basel_3_1=False)
         assert haircut == pytest.approx(0.25)
 
     def test_main_index_null_defaults_to_main(self) -> None:
         """Null is_main_index defaults to True (main-index) for backward compat."""
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=None), is_basel_3_1=False
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=None), is_basel_3_1=False)
         assert haircut == pytest.approx(0.15)
 
     def test_other_listed_eligible_and_haircut(self) -> None:
@@ -214,22 +208,16 @@ class TestB31EquityHaircutsWithMainIndex:
     """Basel 3.1 equity haircuts: main-index 20%, other-listed 30%."""
 
     def test_main_index_true_gets_20pct(self) -> None:
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=True), is_basel_3_1=True
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=True), is_basel_3_1=True)
         assert haircut == pytest.approx(0.20)
 
     def test_main_index_false_gets_30pct(self) -> None:
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=False), is_basel_3_1=True
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=False), is_basel_3_1=True)
         assert haircut == pytest.approx(0.30)
 
     def test_main_index_null_defaults_to_main(self) -> None:
         """Null is_main_index defaults to True (main-index) for backward compat."""
-        haircut = _get_haircut(
-            _build_equity_collateral(is_main_index=None), is_basel_3_1=True
-        )
+        haircut = _get_haircut(_build_equity_collateral(is_main_index=None), is_basel_3_1=True)
         assert haircut == pytest.approx(0.20)
 
     def test_other_listed_eligible_and_haircut(self) -> None:
@@ -252,9 +240,7 @@ class TestBackwardCompatNoMainIndexColumn:
     def test_crr_eligible_fallback_main_index(self) -> None:
         """Eligible equity without is_main_index column → 15% (old behavior)."""
         haircut = _get_haircut(
-            _build_equity_collateral(
-                is_eligible=True, include_main_index_col=False
-            ),
+            _build_equity_collateral(is_eligible=True, include_main_index_col=False),
             is_basel_3_1=False,
         )
         assert haircut == pytest.approx(0.15)
@@ -262,9 +248,7 @@ class TestBackwardCompatNoMainIndexColumn:
     def test_crr_ineligible_fallback_other(self) -> None:
         """Ineligible equity without is_main_index column → 25% (old behavior)."""
         haircut = _get_haircut(
-            _build_equity_collateral(
-                is_eligible=False, include_main_index_col=False
-            ),
+            _build_equity_collateral(is_eligible=False, include_main_index_col=False),
             is_basel_3_1=False,
         )
         assert haircut == pytest.approx(0.25)
@@ -272,9 +256,7 @@ class TestBackwardCompatNoMainIndexColumn:
     def test_b31_eligible_fallback_main_index(self) -> None:
         """Eligible equity without is_main_index column → 20% (old behavior)."""
         haircut = _get_haircut(
-            _build_equity_collateral(
-                is_eligible=True, include_main_index_col=False
-            ),
+            _build_equity_collateral(is_eligible=True, include_main_index_col=False),
             is_basel_3_1=True,
         )
         assert haircut == pytest.approx(0.20)
@@ -282,9 +264,7 @@ class TestBackwardCompatNoMainIndexColumn:
     def test_b31_ineligible_fallback_other(self) -> None:
         """Ineligible equity without is_main_index column → 30% (old behavior)."""
         haircut = _get_haircut(
-            _build_equity_collateral(
-                is_eligible=False, include_main_index_col=False
-            ),
+            _build_equity_collateral(is_eligible=False, include_main_index_col=False),
             is_basel_3_1=True,
         )
         assert haircut == pytest.approx(0.30)
@@ -648,9 +628,7 @@ class TestOtherListedEquityPipeline:
                 result_main_index.irb_results,
             ]
             if lf is not None
-            for r in lf.filter(
-                pl.col("exposure_reference").str.contains("LOAN1")
-            )
+            for r in lf.filter(pl.col("exposure_reference").str.contains("LOAN1"))
             .collect()
             .to_dicts()
         )
@@ -661,9 +639,7 @@ class TestOtherListedEquityPipeline:
                 result_other_listed.irb_results,
             ]
             if lf is not None
-            for r in lf.filter(
-                pl.col("exposure_reference").str.contains("LOAN1")
-            )
+            for r in lf.filter(pl.col("exposure_reference").str.contains("LOAN1"))
             .collect()
             .to_dicts()
         )

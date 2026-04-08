@@ -425,15 +425,9 @@ def _run_pipeline(
         facility_mappings=fac_map,
         lending_mappings=lend_map,
         ratings=pl.LazyFrame(ratings, schema=_RATING_SCHEMA) if ratings else None,
-        guarantees=(
-            pl.LazyFrame(guarantees, schema=_GUARANTEE_SCHEMA) if guarantees else None
-        ),
-        collateral=(
-            pl.LazyFrame(collateral, schema=_COLLATERAL_SCHEMA) if collateral else None
-        ),
-        provisions=(
-            pl.LazyFrame(provisions, schema=_PROVISION_SCHEMA) if provisions else None
-        ),
+        guarantees=(pl.LazyFrame(guarantees, schema=_GUARANTEE_SCHEMA) if guarantees else None),
+        collateral=(pl.LazyFrame(collateral, schema=_COLLATERAL_SCHEMA) if collateral else None),
+        provisions=(pl.LazyFrame(provisions, schema=_PROVISION_SCHEMA) if provisions else None),
     )
     config = CalculationConfig.crr(
         reporting_date=_REPORTING_DATE,
@@ -448,9 +442,7 @@ def _find_rows(results, loan_ref: str) -> list[dict]:
     for lf in [results.sa_results, results.irb_results, results.slotting_results]:
         if lf is None:
             continue
-        df = lf.filter(
-            pl.col("exposure_reference").str.contains(loan_ref)
-        ).collect()
+        df = lf.filter(pl.col("exposure_reference").str.contains(loan_ref)).collect()
         rows.extend(df.to_dicts())
     return rows
 
@@ -630,9 +622,7 @@ class TestCRRD9_CDSRestructuringExclusion:
         """
         rows = _find_rows(result, "LOAN_D9")
         rwa = _total_rwa(rows)
-        assert 200_000 < rwa < 1_000_000, (
-            f"Expected RWA between 200k and 1M, got {rwa:,.0f}"
-        )
+        assert 200_000 < rwa < 1_000_000, f"Expected RWA between 200k and 1M, got {rwa:,.0f}"
 
     def test_rwa_less_than_unprotected(self, result):
         """CDS still provides some benefit despite the 40% haircut."""
@@ -667,9 +657,7 @@ class TestCRRD9b_CDSWithRestructuring:
         return _run_pipeline(
             counterparties=[
                 _counterparty("CP_D9B", entity_type="corporate"),
-                _counterparty(
-                    "CP_D9B_G", entity_type="institution", institution_cqs=1
-                ),
+                _counterparty("CP_D9B_G", entity_type="institution", institution_cqs=1),
             ],
             facilities=[_facility("FAC_D9B", "CP_D9B")],
             loans=[_loan("LOAN_D9B", "CP_D9B", drawn_amount=1_000_000.0)],
@@ -880,9 +868,7 @@ class TestCRRD13_FullCRMChain:
         return _run_pipeline(
             counterparties=[
                 _counterparty("CP_D13", entity_type="corporate"),
-                _counterparty(
-                    "CP_D13_G", entity_type="institution", institution_cqs=1
-                ),
+                _counterparty("CP_D13_G", entity_type="institution", institution_cqs=1),
             ],
             facilities=[_facility("FAC_D13", "CP_D13")],
             loans=[_loan("LOAN_D13", "CP_D13", drawn_amount=1_000_000.0)],

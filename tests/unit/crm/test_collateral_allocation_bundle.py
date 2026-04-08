@@ -222,9 +222,7 @@ class TestCollateralAllocationPopulated:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         assert bundle.collateral_allocation is not None
 
@@ -235,9 +233,7 @@ class TestCollateralAllocationPopulated:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         assert isinstance(bundle.collateral_allocation, pl.LazyFrame)
 
@@ -247,9 +243,7 @@ class TestCollateralAllocationPopulated:
         """Without collateral, collateral_allocation should remain None."""
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, None), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, None), crr_config)
 
         assert bundle.collateral_allocation is None
 
@@ -275,9 +269,7 @@ class TestCollateralAllocationPopulated:
         )
         collateral = _make_collateral_frame([_cash_collateral("E1", 200_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         assert alloc.shape[0] == 2
@@ -298,9 +290,7 @@ class TestCollateralAllocationColumns:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "exposure_reference" in cols
@@ -315,9 +305,7 @@ class TestCollateralAllocationColumns:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         cols = bundle.collateral_allocation.collect_schema().names()
         for alloc_col in CRM_ALLOC_COLUMNS.values():
@@ -330,9 +318,7 @@ class TestCollateralAllocationColumns:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "total_collateral_for_lgd" in cols
@@ -345,9 +331,7 @@ class TestCollateralAllocationColumns:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         cols = bundle.collateral_allocation.collect_schema().names()
         for col_name in [
@@ -368,9 +352,7 @@ class TestCollateralAllocationColumns:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         cols = bundle.collateral_allocation.collect_schema().names()
         assert "lgd_secured" in cols
@@ -378,16 +360,12 @@ class TestCollateralAllocationColumns:
         assert "lgd_post_crm" in cols
         assert "ead_after_collateral" in cols
 
-    def test_no_extra_columns(
-        self, processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
+    def test_no_extra_columns(self, processor: CRMProcessor, crr_config: CalculationConfig) -> None:
         """Allocation frame should contain only the expected 23 columns."""
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         # 4 identifiers + 6 waterfall + 2 totals + 5 values + 2 financial + 4 LGD = 23
@@ -409,9 +387,7 @@ class TestCollateralAllocationValues:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 400_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -425,9 +401,7 @@ class TestCollateralAllocationValues:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -441,9 +415,7 @@ class TestCollateralAllocationValues:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 300_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -456,9 +428,7 @@ class TestCollateralAllocationValues:
         exposures = pl.LazyFrame([_firb_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 1_000_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), firb_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), firb_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -476,9 +446,7 @@ class TestCollateralAllocationValues:
         # Collateral only for E1
         collateral = _make_collateral_frame([_cash_collateral("E1", 200_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         e2_row = alloc.filter(pl.col("exposure_reference") == "E2")
@@ -492,17 +460,13 @@ class TestCollateralAllocationValues:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 600_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         main = bundle.exposures.collect().filter(pl.col("exposure_reference") == "E1")
 
         alloc_row = alloc.filter(pl.col("exposure_reference") == "E1")
-        assert alloc_row["crm_alloc_financial"][0] == pytest.approx(
-            main["crm_alloc_financial"][0]
-        )
+        assert alloc_row["crm_alloc_financial"][0] == pytest.approx(main["crm_alloc_financial"][0])
         assert alloc_row["total_collateral_for_lgd"][0] == pytest.approx(
             main["total_collateral_for_lgd"][0]
         )
@@ -524,9 +488,7 @@ class TestCollateralAllocationUnifiedBundle:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_unified_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
         assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
@@ -538,9 +500,7 @@ class TestCollateralAllocationUnifiedBundle:
         """Unified bundle without collateral should have allocation as None."""
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
 
-        bundle = processor.get_crm_unified_bundle(
-            _make_bundle(exposures, None), crr_config
-        )
+        bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, None), crr_config)
 
         assert bundle.collateral_allocation is None
 
@@ -551,9 +511,7 @@ class TestCollateralAllocationUnifiedBundle:
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 400_000)])
 
-        bundle = processor.get_crm_unified_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         main = bundle.exposures.collect().filter(pl.col("exposure_reference") == "E1")
@@ -575,9 +533,7 @@ class TestCollateralAllocationEdgeCases:
         exposures = pl.LazyFrame([_sa_exposure("E1", 100_000)])
         collateral = _make_collateral_frame([_cash_collateral("E1", 500_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -597,9 +553,7 @@ class TestCollateralAllocationEdgeCases:
             ]
         )
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), firb_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), firb_config)
 
         alloc = bundle.collateral_allocation.collect()
         row = alloc.filter(pl.col("exposure_reference") == "E1")
@@ -630,9 +584,7 @@ class TestCollateralAllocationEdgeCases:
         )
         collateral = _make_collateral_frame([_cash_collateral("E1", 100_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         assert bundle.collateral_allocation is not None
         alloc = bundle.collateral_allocation.collect()
@@ -651,9 +603,7 @@ class TestCollateralAllocationEdgeCases:
         )
         collateral = _make_collateral_frame([_cash_collateral("E1", 100_000)])
 
-        bundle = processor.get_crm_adjusted_bundle(
-            _make_bundle(exposures, collateral), crr_config
-        )
+        bundle = processor.get_crm_adjusted_bundle(_make_bundle(exposures, collateral), crr_config)
 
         alloc = bundle.collateral_allocation.collect()
         refs = set(alloc["exposure_reference"].to_list())

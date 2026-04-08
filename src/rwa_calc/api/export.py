@@ -281,7 +281,8 @@ class ResultExporter:
 
         generator = COREPGenerator()
         bundle = generator.generate(
-            response, output_floor_config=output_floor_config,
+            response,
+            output_floor_config=output_floor_config,
         )
         return generator.export_to_excel(bundle, output_path)
 

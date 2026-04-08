@@ -27,6 +27,7 @@ References:
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
     PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
+
 from __future__ import annotations
 
 import logging
@@ -158,8 +159,9 @@ class Pillar3Generator:
             cr9=self._generate_all_cr9(irb_data, cols, framework, errors),
             cr10=self._generate_all_cr10(slotting_data, cols, framework, errors),
             cms1=self._generate_cms1(results, cols, framework, errors),
-            cms2=self._generate_cms2(results, sa_data, irb_data, slotting_data,
-                                     cols, framework, errors),
+            cms2=self._generate_cms2(
+                results, sa_data, irb_data, slotting_data, cols, framework, errors
+            ),
             framework=framework,
             errors=errors,
         )
@@ -185,28 +187,18 @@ class Pillar3Generator:
 
         try:
             if bundle.ov1 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.ov1, f"{prefix} OV1"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.ov1, f"{prefix} OV1")
             if bundle.cr4 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cr4, f"{prefix} CR4"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cr4, f"{prefix} CR4")
             if bundle.cr5 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cr5, f"{prefix} CR5"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cr5, f"{prefix} CR5")
             total_rows += _write_dict_sheets(
                 workbook, bundle.cr6, f"{prefix} CR6", IRB_EXPOSURE_CLASSES
             )
             if bundle.cr6a is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cr6a, f"{prefix} CR6-A"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cr6a, f"{prefix} CR6-A")
             if bundle.cr7 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cr7, f"{prefix} CR7"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cr7, f"{prefix} CR7")
             total_rows += _write_dict_sheets(
                 workbook,
                 bundle.cr7a,
@@ -214,32 +206,20 @@ class Pillar3Generator:
                 {"foundation_irb": "F-IRB", "advanced_irb": "A-IRB"},
             )
             if bundle.cr8 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cr8, f"{prefix} CR8"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cr8, f"{prefix} CR8")
             if bundle.cr9:
                 cr9_display = _cr9_display_names(bundle.cr9)
-                total_rows += _write_dict_sheets(
-                    workbook, bundle.cr9, f"{prefix} CR9", cr9_display
-                )
+                total_rows += _write_dict_sheets(workbook, bundle.cr9, f"{prefix} CR9", cr9_display)
             subtemplates = get_cr10_subtemplates(bundle.framework)
-            total_rows += _write_dict_sheets(
-                workbook, bundle.cr10, f"{prefix} CR10", subtemplates
-            )
+            total_rows += _write_dict_sheets(workbook, bundle.cr10, f"{prefix} CR10", subtemplates)
             if bundle.cms1 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cms1, f"{prefix} CMS1"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cms1, f"{prefix} CMS1")
             if bundle.cms2 is not None:
-                total_rows += _write_single_sheet(
-                    workbook, bundle.cms2, f"{prefix} CMS2"
-                )
+                total_rows += _write_single_sheet(workbook, bundle.cms2, f"{prefix} CMS2")
         finally:
             workbook.close()
 
-        return ExportResult(
-            format="pillar3_excel", files=[output_path], row_count=total_rows
-        )
+        return ExportResult(format="pillar3_excel", files=[output_path], row_count=total_rows)
 
     # ---- OV1 ----
 
@@ -289,9 +269,7 @@ class Pillar3Generator:
                 # Memo: 250% RW exposures — filter to risk_weight == 2.50
                 rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
                 if rw_col:
-                    memo = data.filter(
-                        (pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505)
-                    )
+                    memo = data.filter((pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505))
                     values["a"] = _col_sum(memo, cols, rwa_col)
             elif ref == "26":
                 # Output floor multiplier — from config, not pipeline data
@@ -380,9 +358,7 @@ class Pillar3Generator:
                 rows_out.append(_null_row(row_def, column_refs))
                 continue
 
-            values = _compute_cr5_values(
-                subset, cols, ead_col, rw_col, rw_bands, is_b31
-            )
+            values = _compute_cr5_values(subset, cols, ead_col, rw_col, rw_bands, is_b31)
             rows_out.append(_make_row(row_def, values, column_refs))
 
         return _build_df(rows_out, column_refs)
@@ -422,8 +398,13 @@ class Pillar3Generator:
                 continue
             class_data = data.filter(pl.col(ec_col) == ec_val)
             result[ec_val] = self._generate_cr6_for_class(
-                class_data, cols, ead_col, rwa_col,
-                pd_col, report_pd_col or pd_col, framework,
+                class_data,
+                cols,
+                ead_col,
+                rwa_col,
+                pd_col,
+                report_pd_col or pd_col,
+                framework,
             )
 
         return result
@@ -450,21 +431,15 @@ class Pillar3Generator:
                     (pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper)
                 )
 
-            values = _compute_cr6_values(
-                bucket, cols, ead_col, rwa_col, report_pd_col
-            )
+            values = _compute_cr6_values(bucket, cols, ead_col, rwa_col, report_pd_col)
             values["a"] = label
             row = P3Row(row_ref, label)
             rows_out.append(_make_row(row, values, column_refs))
 
         # Total row
-        total_values = _compute_cr6_values(
-            class_data, cols, ead_col, rwa_col, report_pd_col
-        )
+        total_values = _compute_cr6_values(class_data, cols, ead_col, rwa_col, report_pd_col)
         total_values["a"] = "Total"
-        rows_out.append(
-            _make_row(P3Row("18", "Total", is_total=True), total_values, column_refs)
-        )
+        rows_out.append(_make_row(P3Row("18", "Total", is_total=True), total_values, column_refs))
 
         # Build with mixed types: col "a" is String, rest Float64
         schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
@@ -498,9 +473,7 @@ class Pillar3Generator:
             if row_def.is_total:
                 subset = data
             elif row_def.exposure_classes:
-                subset = data.filter(
-                    pl.col(ec_col).is_in(list(row_def.exposure_classes))
-                )
+                subset = data.filter(pl.col(ec_col).is_in(list(row_def.exposure_classes)))
             else:
                 rows_out.append(_null_row(row_def, column_refs))
                 continue
@@ -554,13 +527,12 @@ class Pillar3Generator:
                 rwa = _col_sum(firb, cols, rwa_col)
             elif ref == "2" and ec_col:
                 if framework == "BASEL_3_1":
-                    rwa = _col_sum(
-                        firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col
-                    )
+                    rwa = _col_sum(firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col)
                 else:
                     rwa = _col_sum(
                         firb.filter(pl.col(ec_col) == "central_govt_central_bank"),
-                        cols, rwa_col,
+                        cols,
+                        rwa_col,
                     )
             elif ref == "3" and ec_col:
                 if framework == "BASEL_3_1":
@@ -570,21 +542,19 @@ class Pillar3Generator:
                                 ["corporate", "corporate_sme", "specialised_lending"]
                             )
                         ),
-                        cols, rwa_col,
+                        cols,
+                        rwa_col,
                     )
                 else:
-                    rwa = _col_sum(
-                        firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col
-                    )
+                    rwa = _col_sum(firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col)
             elif ref == "4":
                 if framework == "BASEL_3_1":
                     rwa = _col_sum(airb, cols, rwa_col)
                 else:
                     rwa = _col_sum(
-                        firb.filter(
-                            pl.col(ec_col) == "corporate_sme"
-                        ) if ec_col else firb,
-                        cols, rwa_col,
+                        firb.filter(pl.col(ec_col) == "corporate_sme") if ec_col else firb,
+                        cols,
+                        rwa_col,
                     )
             elif ref == "5":
                 if framework == "BASEL_3_1":
@@ -593,27 +563,30 @@ class Pillar3Generator:
                             pl.col(ec_col).is_in(
                                 ["corporate", "corporate_sme", "specialised_lending"]
                             )
-                        ) if ec_col else airb,
-                        cols, rwa_col,
+                        )
+                        if ec_col
+                        else airb,
+                        cols,
+                        rwa_col,
                     )
                 else:
                     rwa = _col_sum(
-                        firb.filter(
-                            pl.col(ec_col).is_in(
-                                ["corporate", "specialised_lending"]
-                            )
-                        ) if ec_col else firb,
-                        cols, rwa_col,
+                        firb.filter(pl.col(ec_col).is_in(["corporate", "specialised_lending"]))
+                        if ec_col
+                        else firb,
+                        cols,
+                        rwa_col,
                     )
             elif ref == "6":
                 if framework == "BASEL_3_1":
                     rwa = _col_sum(
                         airb.filter(
-                            pl.col(ec_col).is_in(
-                                ["retail_mortgage", "retail_qrre", "retail_other"]
-                            )
-                        ) if ec_col else airb,
-                        cols, rwa_col,
+                            pl.col(ec_col).is_in(["retail_mortgage", "retail_qrre", "retail_other"])
+                        )
+                        if ec_col
+                        else airb,
+                        cols,
+                        rwa_col,
                     )
                 else:
                     rwa = _col_sum(airb, cols, rwa_col)
@@ -626,38 +599,36 @@ class Pillar3Generator:
                             pl.col(ec_col).is_in(
                                 ["corporate", "corporate_sme", "specialised_lending"]
                             )
-                        ) if ec_col else airb,
-                        cols, rwa_col,
+                        )
+                        if ec_col
+                        else airb,
+                        cols,
+                        rwa_col,
                     )
             elif ref == "8":
                 if framework == "BASEL_3_1":
                     rwa = _col_sum(
-                        airb.filter(
-                            pl.col(ec_col) == "retail_mortgage"
-                        ) if ec_col else airb,
-                        cols, rwa_col,
+                        airb.filter(pl.col(ec_col) == "retail_mortgage") if ec_col else airb,
+                        cols,
+                        rwa_col,
                     )
                 else:
                     rwa = _col_sum(
-                        airb.filter(
-                            pl.col(ec_col).is_in(
-                                ["retail_other", "retail_qrre"]
-                            )
-                        ) if ec_col else airb,
-                        cols, rwa_col,
+                        airb.filter(pl.col(ec_col).is_in(["retail_other", "retail_qrre"]))
+                        if ec_col
+                        else airb,
+                        cols,
+                        rwa_col,
                     )
             elif ref == "9" and ec_col:
                 rwa = _col_sum(
-                    airb.filter(
-                        pl.col(ec_col).is_in(["retail_other", "retail_qrre"])
-                    ),
-                    cols, rwa_col,
+                    airb.filter(pl.col(ec_col).is_in(["retail_other", "retail_qrre"])),
+                    cols,
+                    rwa_col,
                 )
             elif ref == "10" or row_def.is_total:
                 irb_all = data.filter(
-                    pl.col(approach_col).is_in(
-                        ["foundation_irb", "advanced_irb", "slotting"]
-                    )
+                    pl.col(approach_col).is_in(["foundation_irb", "advanced_irb", "slotting"])
                 )
                 rwa = _col_sum(irb_all, cols, rwa_col)
             else:
@@ -808,8 +779,11 @@ class Pillar3Generator:
 
                 key = f"{approach_val} - {class_key}"
                 result[key] = self._generate_cr9_for_class(
-                    class_data, cols, alloc_pd_col,
-                    report_pd_col or alloc_pd_col, class_display,
+                    class_data,
+                    cols,
+                    alloc_pd_col,
+                    report_pd_col or alloc_pd_col,
+                    class_display,
                 )
 
         return result
@@ -838,7 +812,9 @@ class Pillar3Generator:
                 continue
 
             values = _compute_cr9_values(
-                bucket, cols, report_pd_col,
+                bucket,
+                cols,
+                report_pd_col,
             )
             values["a"] = class_display
             values["b"] = label
@@ -848,19 +824,24 @@ class Pillar3Generator:
         # Total row
         if class_data.height > 0:
             total_values = _compute_cr9_values(
-                class_data, cols, report_pd_col,
+                class_data,
+                cols,
+                report_pd_col,
             )
             total_values["a"] = class_display
             total_values["b"] = "Total"
             rows_out.append(
                 _make_row(
-                    P3Row("18", "Total", is_total=True), total_values, column_refs,
+                    P3Row("18", "Total", is_total=True),
+                    total_values,
+                    column_refs,
                 )
             )
 
         if not rows_out:
             schema: dict[str, pl.DataType] = {
-                "row_ref": pl.String, "row_name": pl.String,
+                "row_ref": pl.String,
+                "row_name": pl.String,
             }
             for ref in column_refs:
                 schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
@@ -903,9 +884,7 @@ class Pillar3Generator:
             if sl_type_col:
                 if sl_key == "ipre" and framework != "BASEL_3_1":
                     # CRR: IPRE combined with HVCRE
-                    type_data = data.filter(
-                        pl.col(sl_type_col).is_in(["ipre", "hvcre"])
-                    )
+                    type_data = data.filter(pl.col(sl_type_col).is_in(["ipre", "hvcre"]))
                 else:
                     type_data = data.filter(pl.col(sl_type_col) == sl_key)
             else:
@@ -934,9 +913,7 @@ class Pillar3Generator:
                     rows_out.append(_null_row(row_def, column_refs))
                     continue
 
-                values = _compute_cr10_values(
-                    subset, cols, ead_col, rwa_col, el_col, rw_value
-                )
+                values = _compute_cr10_values(subset, cols, ead_col, rwa_col, el_col, rw_value)
                 rows_out.append(_make_row(row_def, values, column_refs))
 
             result[sl_key] = _build_df(rows_out, column_refs)
@@ -985,9 +962,7 @@ class Pillar3Generator:
         if approach_col:
             modelled_approaches = ["foundation_irb", "advanced_irb", "slotting"]
             modelled = data.filter(pl.col(approach_col).is_in(modelled_approaches))
-            sa_only = data.filter(
-                ~pl.col(approach_col).is_in(modelled_approaches)
-            )
+            sa_only = data.filter(~pl.col(approach_col).is_in(modelled_approaches))
             modelled_rwa = _col_sum(modelled, cols, rwa_col) or 0.0
             sa_portfolio_rwa = _col_sum(sa_only, cols, rwa_col) or 0.0
 
@@ -1051,9 +1026,7 @@ class Pillar3Generator:
         slotting_collected = slotting_data.collect()
 
         # Merge IRB + slotting into "modelled" data
-        modelled_data = pl.concat(
-            [irb_collected, slotting_collected], how="diagonal_relaxed"
-        )
+        modelled_data = pl.concat([irb_collected, slotting_collected], how="diagonal_relaxed")
 
         column_refs = [c.ref for c in CMS2_COLUMNS]
         rows_out: list[dict[str, object]] = []
@@ -1064,9 +1037,7 @@ class Pillar3Generator:
             if row_def.is_total:
                 # Total row: sum all credit risk exposures
                 values["a"] = _col_sum(modelled_data, cols, rwa_col)
-                values["b"] = (
-                    _col_sum(modelled_data, cols, sa_rwa_col) if sa_rwa_col else None
-                )
+                values["b"] = _col_sum(modelled_data, cols, sa_rwa_col) if sa_rwa_col else None
                 modelled_total = values["a"] or 0.0
                 sa_port_rwa = _col_sum(sa_collected, cols, rwa_col) or 0.0
                 values["c"] = modelled_total + sa_port_rwa
@@ -1075,14 +1046,15 @@ class Pillar3Generator:
                 # "Of which are FIRB" — corporate exposures under F-IRB
                 corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
                 firb_corp = modelled_data.filter(
-                    pl.col(ec_col).is_in(corp_classes)
-                    & (pl.col(approach_col) == "foundation_irb")
+                    pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "foundation_irb")
                 )
                 values["a"] = _col_sum(firb_corp, cols, rwa_col)
-                values["b"] = (
-                    _col_sum(firb_corp, cols, sa_rwa_col) if sa_rwa_col else None
+                values["b"] = _col_sum(firb_corp, cols, sa_rwa_col) if sa_rwa_col else None
+                sa_firb = (
+                    sa_collected.filter(pl.col(ec_col).is_in(corp_classes))
+                    if ec_col
+                    else sa_collected.filter(pl.lit(False))
                 )
-                sa_firb = sa_collected.filter(pl.col(ec_col).is_in(corp_classes)) if ec_col else sa_collected.filter(pl.lit(False))
                 values["c"] = (values["a"] or 0.0) + (_col_sum(sa_firb, cols, rwa_col) or 0.0)
                 values["d"] = (
                     _col_sum(
@@ -1097,13 +1069,10 @@ class Pillar3Generator:
                 # "Of which are AIRB" — corporate exposures under A-IRB
                 corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
                 airb_corp = modelled_data.filter(
-                    pl.col(ec_col).is_in(corp_classes)
-                    & (pl.col(approach_col) == "advanced_irb")
+                    pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "advanced_irb")
                 )
                 values["a"] = _col_sum(airb_corp, cols, rwa_col)
-                values["b"] = (
-                    _col_sum(airb_corp, cols, sa_rwa_col) if sa_rwa_col else None
-                )
+                values["b"] = _col_sum(airb_corp, cols, sa_rwa_col) if sa_rwa_col else None
                 # c and d: same as FIRB sub-row pattern but filtered to AIRB
                 values["c"] = values["a"]  # Sub-row: no SA portfolio add
                 values["d"] = None  # Sub-row: comparison at parent level
@@ -1117,17 +1086,11 @@ class Pillar3Generator:
                 ec_list = list(row_def.exposure_classes)
 
                 # Col a: modelled RWA for this class
-                class_modelled = modelled_data.filter(
-                    pl.col(ec_col).is_in(ec_list)
-                )
+                class_modelled = modelled_data.filter(pl.col(ec_col).is_in(ec_list))
                 values["a"] = _col_sum(class_modelled, cols, rwa_col)
 
                 # Col b: SA-equivalent RWA for modelled exposures
-                values["b"] = (
-                    _col_sum(class_modelled, cols, sa_rwa_col)
-                    if sa_rwa_col
-                    else None
-                )
+                values["b"] = _col_sum(class_modelled, cols, sa_rwa_col) if sa_rwa_col else None
 
                 # Col c: Total actual RWA = modelled + SA portfolio for this class
                 class_sa = sa_collected.filter(pl.col(ec_col).is_in(ec_list))
@@ -1139,9 +1102,7 @@ class Pillar3Generator:
                 sa_class_key = row_def.ref
                 sa_classes = CMS2_SA_CLASS_MAP.get(sa_class_key, ec_list)
                 class_all = all_data.filter(pl.col(ec_col).is_in(list(sa_classes)))
-                values["d"] = (
-                    _col_sum(class_all, cols, sa_rwa_col) if sa_rwa_col else None
-                )
+                values["d"] = _col_sum(class_all, cols, sa_rwa_col) if sa_rwa_col else None
 
             rows_out.append(_make_row(row_def, values, column_refs))
 
@@ -1188,7 +1149,10 @@ def _safe_sum(data: pl.DataFrame, cols: set[str], *col_names: str) -> float | No
 
 
 def _approach_rwa(
-    data: pl.DataFrame, approach_col: str, rwa_col: str, approach: str,
+    data: pl.DataFrame,
+    approach_col: str,
+    rwa_col: str,
+    approach: str,
 ) -> float | None:
     """Sum RWA for a specific approach."""
     filtered = data.filter(pl.col(approach_col) == approach)
@@ -1199,7 +1163,10 @@ def _approach_rwa(
 
 
 def _ead_weighted_avg(
-    data: pl.DataFrame, cols: set[str], ead_col: str, metric_col: str | None,
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    metric_col: str | None,
 ) -> float | None:
     """Compute EAD-weighted average of a metric column."""
     if not metric_col or metric_col not in data.columns or data.height == 0:
@@ -1219,7 +1186,9 @@ def _null_row(row_def: P3Row, column_refs: list[str]) -> dict[str, object]:
 
 
 def _make_row(
-    row_def: P3Row, values: dict[str, object], column_refs: list[str],
+    row_def: P3Row,
+    values: dict[str, object],
+    column_refs: list[str],
 ) -> dict[str, object]:
     """Build a row dict from computed values, filling missing refs with None."""
     row: dict[str, object] = {"row_ref": row_def.ref, "row_name": row_def.name}
@@ -1236,7 +1205,9 @@ def _build_df(rows: list[dict[str, object]], column_refs: list[str]) -> pl.DataF
 
 
 def _filter_by_approach(
-    results: pl.LazyFrame, approach_value: str, cols: set[str],
+    results: pl.LazyFrame,
+    approach_value: str,
+    cols: set[str],
 ) -> pl.LazyFrame:
     """Filter results to a specific approach_applied value."""
     approach_col = _pick(cols, "approach_applied", "approach")
@@ -1246,15 +1217,14 @@ def _filter_by_approach(
 
 
 def _filter_irb_non_slotting(
-    results: pl.LazyFrame, cols: set[str],
+    results: pl.LazyFrame,
+    cols: set[str],
 ) -> pl.LazyFrame:
     """Filter to F-IRB and A-IRB exposures (excluding slotting)."""
     approach_col = _pick(cols, "approach_applied", "approach")
     if not approach_col:
         return results.filter(pl.lit(False))
-    return results.filter(
-        pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"])
-    )
+    return results.filter(pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"]))
 
 
 def _filter_on_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
@@ -1281,7 +1251,10 @@ def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
 
 
 def _compute_cr4_values(
-    data: pl.DataFrame, cols: set[str], ead_col: str, rwa_col: str,
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
 ) -> dict[str, object]:
     """Compute CR4 column values for a subset of SA exposures."""
     on_bs = _filter_on_bs(data, cols)
@@ -1321,9 +1294,7 @@ def _compute_cr5_values(
         ref = _letter_ref(i)
         # Filter to ±0.5pp tolerance for risk weight match
         tol = 0.005
-        bucket = data.filter(
-            (pl.col(rw_col) >= rw_value - tol) & (pl.col(rw_col) < rw_value + tol)
-        )
+        bucket = data.filter((pl.col(rw_col) >= rw_value - tol) & (pl.col(rw_col) < rw_value + tol))
         bucket_ead = _col_sum(bucket, cols, ead_col) or 0.0
         values[ref] = bucket_ead
         allocated += bucket_ead
@@ -1428,11 +1399,7 @@ def _compute_cr9_values(
 
     # Col c: obligor count — prefer unique counterparty_reference
     cp_col = "counterparty_reference" if "counterparty_reference" in data.columns else None
-    n_obligors = (
-        float(data.select(pl.col(cp_col).n_unique()).item())
-        if cp_col
-        else float(n_rows)
-    )
+    n_obligors = float(data.select(pl.col(cp_col).n_unique()).item()) if cp_col else float(n_rows)
 
     # Default detection: is_defaulted → PD >= 1.0 fallback
     default_col = _pick(cols, "is_defaulted", "default_status")

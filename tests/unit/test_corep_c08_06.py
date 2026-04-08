@@ -531,9 +531,7 @@ class TestC0806B31Features:
 
     def test_b31_hvcre_separate_sl_type(self):
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_slotting_with_hvcre(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_slotting_with_hvcre(), framework="BASEL_3_1")
         assert "ipre" in bundle.c08_06
         assert "hvcre" in bundle.c08_06
 
@@ -548,9 +546,7 @@ class TestC0806B31Features:
 
     def test_b31_ipre_excludes_hvcre(self):
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_slotting_with_hvcre(), framework="BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_slotting_with_hvcre(), framework="BASEL_3_1")
         ipre = bundle.c08_06["ipre"]
         total_long = ipre.filter(pl.col("row_ref") == "0120")
         # Only IPRE exposure (2M), not HVCRE (1M)
@@ -581,9 +577,7 @@ class TestC0806B31Features:
 
     def test_crr_combines_ipre_hvcre(self):
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_slotting_with_hvcre(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_slotting_with_hvcre(), framework="CRR")
         # Under CRR, IPRE and HVCRE are combined into one SL type
         assert "ipre" in bundle.c08_06
         ipre = bundle.c08_06["ipre"]
@@ -602,9 +596,7 @@ class TestC0806SupportingFactors:
 
     def test_crr_uses_post_factor_rwea(self):
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _slotting_with_supporting_factors(), framework="CRR"
-        )
+        bundle = gen.generate_from_lazyframe(_slotting_with_supporting_factors(), framework="CRR")
         pf = bundle.c08_06["project_finance"]
         strong_long = pf.filter(pl.col("row_ref") == "0020")
         # rwa_post_factor = 525K (with SF)
@@ -750,9 +742,7 @@ class TestC0806EdgeCases:
             .sum()
         )
         ipre_total_ead = (
-            bundle.c08_06["ipre"]
-            .filter(pl.col("row_ref").is_in(["0110", "0120"]))["0040"]
-            .sum()
+            bundle.c08_06["ipre"].filter(pl.col("row_ref").is_in(["0110", "0120"]))["0040"].sum()
         )
         of_total_ead = (
             bundle.c08_06["object_finance"]

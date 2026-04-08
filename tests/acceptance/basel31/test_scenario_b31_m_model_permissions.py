@@ -27,6 +27,7 @@ References:
     - PRA PS1/26 Art. 147A(1)(a)-(h)
     - docs/specifications/common/hierarchy-classification.md
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -370,9 +371,7 @@ def _find_exposure(results, loan_ref: str) -> tuple[str, dict]:
     ]:
         if lf is None:
             continue
-        df = lf.filter(
-            pl.col("exposure_reference").str.contains(loan_ref)
-        ).collect()
+        df = lf.filter(pl.col("exposure_reference").str.contains(loan_ref)).collect()
         if len(df) > 0:
             return name, df.to_dicts()[0]
     msg = f"Exposure {loan_ref!r} not found in any result set"
@@ -391,16 +390,20 @@ class TestB31M1_FSECorporateForcedFIRB:
     def test_approach_is_firb(self) -> None:
         """B31-M1: FSE corporate routes to FIRB, not AIRB."""
         cp = _counterparty(
-            ref="CP_FSE", entity_type="corporate",
-            is_financial_sector_entity=True, annual_revenue=100_000_000.0,
+            ref="CP_FSE",
+            entity_type="corporate",
+            is_financial_sector_entity=True,
+            annual_revenue=100_000_000.0,
         )
         fac = _facility(ref="FAC_FSE", cp_ref="CP_FSE", lgd=0.35)
         loan = _loan(ref="LOAN_FSE", cp_ref="CP_FSE", lgd=0.35)
         rat = _rating(cp_ref="CP_FSE", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_FSE")
@@ -411,16 +414,20 @@ class TestB31M1_FSECorporateForcedFIRB:
     def test_lgd_cleared_to_supervisory(self) -> None:
         """B31-M1: FSE FIRB uses supervisory LGD 45% (Art. 161(1) FSE)."""
         cp = _counterparty(
-            ref="CP_FSE2", entity_type="corporate",
-            is_financial_sector_entity=True, annual_revenue=100_000_000.0,
+            ref="CP_FSE2",
+            entity_type="corporate",
+            is_financial_sector_entity=True,
+            annual_revenue=100_000_000.0,
         )
         fac = _facility(ref="FAC_FSE2", cp_ref="CP_FSE2", lgd=0.35)
         loan = _loan(ref="LOAN_FSE2", cp_ref="CP_FSE2", lgd=0.35)
         rat = _rating(cp_ref="CP_FSE2", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         _, row = _find_exposure(results, "LOAN_FSE2")
@@ -442,16 +449,20 @@ class TestB31M2_LargeCorporateForcedFIRB:
     def test_approach_is_firb(self) -> None:
         """B31-M2: Large corporate routes to FIRB."""
         cp = _counterparty(
-            ref="CP_LARGE", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=500_000_000.0,
+            ref="CP_LARGE",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=500_000_000.0,
         )
         fac = _facility(ref="FAC_LARGE", cp_ref="CP_LARGE", lgd=0.35)
         loan = _loan(ref="LOAN_LARGE", cp_ref="CP_LARGE", lgd=0.35)
         rat = _rating(cp_ref="CP_LARGE", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_LARGE")
@@ -462,16 +473,20 @@ class TestB31M2_LargeCorporateForcedFIRB:
     def test_rwa_positive(self) -> None:
         """B31-M2: Large corporate produces positive RWA under FIRB."""
         cp = _counterparty(
-            ref="CP_LARGE2", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=500_000_000.0,
+            ref="CP_LARGE2",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=500_000_000.0,
         )
         fac = _facility(ref="FAC_LARGE2", cp_ref="CP_LARGE2", lgd=0.35)
         loan = _loan(ref="LOAN_LARGE2", cp_ref="CP_LARGE2", lgd=0.35)
         rat = _rating(cp_ref="CP_LARGE2", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         _, row = _find_exposure(results, "LOAN_LARGE2")
@@ -492,20 +507,26 @@ class TestB31M3_InstitutionForcedFIRB:
     def test_approach_is_firb(self) -> None:
         """B31-M3: Institution routes to FIRB, not AIRB."""
         cp = _counterparty(
-            ref="CP_INST", entity_type="bank",
+            ref="CP_INST",
+            entity_type="bank",
             is_financial_sector_entity=False,  # Not flagged FSE — tests class-level block
             annual_revenue=50_000_000.0,
             scra_grade="a",
         )
         fac = _facility(
-            ref="FAC_INST", cp_ref="CP_INST", risk_type="institution", lgd=0.35,
+            ref="FAC_INST",
+            cp_ref="CP_INST",
+            risk_type="institution",
+            lgd=0.35,
         )
         loan = _loan(ref="LOAN_INST", cp_ref="CP_INST", lgd=0.35)
         rat = _rating(cp_ref="CP_INST", pd=0.005)
-        mp = _model_permissions([
-            ("institution", ApproachType.AIRB.value),
-            ("institution", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("institution", ApproachType.AIRB.value),
+                ("institution", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_INST")
@@ -530,13 +551,20 @@ class TestB31M4_IPREForcedSlotting:
         loan = _loan(ref="LOAN_IPRE", cp_ref="CP_IPRE", lgd=0.35)
         rat = _rating(cp_ref="CP_IPRE", pd=0.01)
         sl = _specialised_lending(cp_ref="CP_IPRE", sl_type="ipre")
-        mp = _model_permissions([
-            ("specialised_lending", ApproachType.AIRB.value),
-            ("specialised_lending", ApproachType.SLOTTING.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("specialised_lending", ApproachType.AIRB.value),
+                ("specialised_lending", ApproachType.SLOTTING.value),
+            ]
+        )
 
         results = _run_pipeline(
-            cp, fac, loan, ratings=rat, model_permissions=mp, specialised_lending=sl,
+            cp,
+            fac,
+            loan,
+            ratings=rat,
+            model_permissions=mp,
+            specialised_lending=sl,
         )
         result_set, row = _find_exposure(results, "LOAN_IPRE")
 
@@ -559,13 +587,20 @@ class TestB31M5_HVCREForcedSlotting:
         loan = _loan(ref="LOAN_HVCRE", cp_ref="CP_HVCRE", lgd=0.35)
         rat = _rating(cp_ref="CP_HVCRE", pd=0.01)
         sl = _specialised_lending(cp_ref="CP_HVCRE", sl_type="hvcre", is_hvcre=True)
-        mp = _model_permissions([
-            ("specialised_lending", ApproachType.AIRB.value),
-            ("specialised_lending", ApproachType.SLOTTING.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("specialised_lending", ApproachType.AIRB.value),
+                ("specialised_lending", ApproachType.SLOTTING.value),
+            ]
+        )
 
         results = _run_pipeline(
-            cp, fac, loan, ratings=rat, model_permissions=mp, specialised_lending=sl,
+            cp,
+            fac,
+            loan,
+            ratings=rat,
+            model_permissions=mp,
+            specialised_lending=sl,
         )
         result_set, row = _find_exposure(results, "LOAN_HVCRE")
 
@@ -584,16 +619,21 @@ class TestB31M6_SovereignForcedSA:
     def test_approach_is_sa(self) -> None:
         """B31-M6: Sovereign routes to SA, not AIRB, even with model permission."""
         cp = _counterparty(
-            ref="CP_SOV", entity_type="sovereign", country_code="US",
-            annual_revenue=None, is_financial_sector_entity=None,
+            ref="CP_SOV",
+            entity_type="sovereign",
+            country_code="US",
+            annual_revenue=None,
+            is_financial_sector_entity=None,
         )
         fac = _facility(ref="FAC_SOV", cp_ref="CP_SOV", risk_type="sovereign", lgd=0.35)
         loan = _loan(ref="LOAN_SOV", cp_ref="CP_SOV", lgd=0.35)
         rat = _rating(cp_ref="CP_SOV", pd=0.001)
-        mp = _model_permissions([
-            ("central_govt_central_bank", ApproachType.AIRB.value),
-            ("central_govt_central_bank", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("central_govt_central_bank", ApproachType.AIRB.value),
+                ("central_govt_central_bank", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_SOV")
@@ -613,15 +653,19 @@ class TestB31M7_NormalCorporateAIRBPermitted:
     def test_approach_is_airb(self) -> None:
         """B31-M7: Normal corporate routes to AIRB."""
         cp = _counterparty(
-            ref="CP_NORM", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=50_000_000.0,
+            ref="CP_NORM",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=50_000_000.0,
         )
         fac = _facility(ref="FAC_NORM", cp_ref="CP_NORM", lgd=0.35)
         loan = _loan(ref="LOAN_NORM", cp_ref="CP_NORM", lgd=0.35)
         rat = _rating(cp_ref="CP_NORM", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_NORM")
@@ -632,8 +676,10 @@ class TestB31M7_NormalCorporateAIRBPermitted:
     def test_rwa_positive(self) -> None:
         """B31-M7: Normal corporate AIRB produces positive RWA."""
         cp = _counterparty(
-            ref="CP_NORM2", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=50_000_000.0,
+            ref="CP_NORM2",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=50_000_000.0,
         )
         fac = _facility(ref="FAC_NORM2", cp_ref="CP_NORM2", lgd=0.35)
         loan = _loan(ref="LOAN_NORM2", cp_ref="CP_NORM2", lgd=0.35)
@@ -663,12 +709,19 @@ class TestB31M8_ProjectFinanceAIRBPermitted:
         loan = _loan(ref="LOAN_PF", cp_ref="CP_PF", lgd=0.35)
         rat = _rating(cp_ref="CP_PF", pd=0.01)
         sl = _specialised_lending(cp_ref="CP_PF", sl_type="project_finance")
-        mp = _model_permissions([
-            ("specialised_lending", ApproachType.AIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("specialised_lending", ApproachType.AIRB.value),
+            ]
+        )
 
         results = _run_pipeline(
-            cp, fac, loan, ratings=rat, model_permissions=mp, specialised_lending=sl,
+            cp,
+            fac,
+            loan,
+            ratings=rat,
+            model_permissions=mp,
+            specialised_lending=sl,
         )
         result_set, row = _find_exposure(results, "LOAN_PF")
 
@@ -688,16 +741,20 @@ class TestB31M9_FSEAndLargeCorpCombined:
     def test_approach_is_firb(self) -> None:
         """B31-M9: FSE + large corp both trigger FIRB."""
         cp = _counterparty(
-            ref="CP_COMBO", entity_type="corporate",
-            is_financial_sector_entity=True, annual_revenue=600_000_000.0,
+            ref="CP_COMBO",
+            entity_type="corporate",
+            is_financial_sector_entity=True,
+            annual_revenue=600_000_000.0,
         )
         fac = _facility(ref="FAC_COMBO", cp_ref="CP_COMBO", lgd=0.35)
         loan = _loan(ref="LOAN_COMBO", cp_ref="CP_COMBO", lgd=0.35)
         rat = _rating(cp_ref="CP_COMBO", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_COMBO")
@@ -718,8 +775,10 @@ class TestB31M10_ThresholdBoundary:
     def test_approach_is_airb_at_threshold(self) -> None:
         """B31-M10: Revenue == 440m → AIRB permitted (threshold is strict >)."""
         cp = _counterparty(
-            ref="CP_BOUND", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=440_000_000.0,
+            ref="CP_BOUND",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=440_000_000.0,
         )
         fac = _facility(ref="FAC_BOUND", cp_ref="CP_BOUND", lgd=0.35)
         loan = _loan(ref="LOAN_BOUND", cp_ref="CP_BOUND", lgd=0.35)
@@ -735,16 +794,20 @@ class TestB31M10_ThresholdBoundary:
     def test_approach_is_firb_just_above(self) -> None:
         """B31-M10: Revenue == 440,000,001 → FIRB (just above threshold)."""
         cp = _counterparty(
-            ref="CP_ABOVE", entity_type="corporate",
-            is_financial_sector_entity=False, annual_revenue=440_000_001.0,
+            ref="CP_ABOVE",
+            entity_type="corporate",
+            is_financial_sector_entity=False,
+            annual_revenue=440_000_001.0,
         )
         fac = _facility(ref="FAC_ABOVE", cp_ref="CP_ABOVE", lgd=0.35)
         loan = _loan(ref="LOAN_ABOVE", cp_ref="CP_ABOVE", lgd=0.35)
         rat = _rating(cp_ref="CP_ABOVE", pd=0.01)
-        mp = _model_permissions([
-            ("corporate", ApproachType.AIRB.value),
-            ("corporate", ApproachType.FIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("corporate", ApproachType.AIRB.value),
+                ("corporate", ApproachType.FIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_ABOVE")
@@ -788,16 +851,21 @@ class TestB31M12_PSEForcedSA:
     def test_approach_is_sa(self) -> None:
         """B31-M12: PSE routes to SA even with FIRB model permission."""
         cp = _counterparty(
-            ref="CP_PSE", entity_type="pse_sovereign", country_code="GB",
-            annual_revenue=None, is_financial_sector_entity=None,
+            ref="CP_PSE",
+            entity_type="pse_sovereign",
+            country_code="GB",
+            annual_revenue=None,
+            is_financial_sector_entity=None,
         )
         fac = _facility(ref="FAC_PSE", cp_ref="CP_PSE", risk_type="corporate", lgd=None)
         loan = _loan(ref="LOAN_PSE", cp_ref="CP_PSE", lgd=None)
         rat = _rating(cp_ref="CP_PSE", pd=0.005)
-        mp = _model_permissions([
-            ("pse", ApproachType.FIRB.value),
-            ("pse", ApproachType.AIRB.value),
-        ])
+        mp = _model_permissions(
+            [
+                ("pse", ApproachType.FIRB.value),
+                ("pse", ApproachType.AIRB.value),
+            ]
+        )
 
         results = _run_pipeline(cp, fac, loan, ratings=rat, model_permissions=mp)
         result_set, row = _find_exposure(results, "LOAN_PSE")

@@ -163,7 +163,8 @@ class TestCOREPTemplateBundleMetadata:
     def test_bundle_none_config_preserves_none_metadata(self) -> None:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _b31_sa_results(), framework="BASEL_3_1",
+            _b31_sa_results(),
+            framework="BASEL_3_1",
         )
         assert bundle.reporting_basis is None
         assert bundle.institution_type is None
@@ -332,7 +333,8 @@ class TestOF0200FloorIndicatorRows:
         """CRR: rows 0034-0036 not present in C 02.00."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _crr_results(), framework="CRR",
+            _crr_results(),
+            framework="CRR",
         )
         for ref in ("0034", "0035", "0036"):
             row = _get_c02_row(bundle, ref)
@@ -438,7 +440,8 @@ class TestBackwardCompatibility:
         """No config: bundle generated without errors."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _b31_irb_results(), framework="BASEL_3_1",
+            _b31_irb_results(),
+            framework="BASEL_3_1",
         )
         assert bundle.framework == "BASEL_3_1"
         assert bundle.reporting_basis is None
@@ -448,7 +451,8 @@ class TestBackwardCompatibility:
         """No config: OF 02.01 still generated (backward compat)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _b31_irb_results(), framework="BASEL_3_1",
+            _b31_irb_results(),
+            framework="BASEL_3_1",
         )
         assert bundle.of_02_01 is not None
 
@@ -456,7 +460,8 @@ class TestBackwardCompatibility:
         """No config: floor indicator rows still present."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
-            _b31_irb_results(), framework="BASEL_3_1",
+            _b31_irb_results(),
+            framework="BASEL_3_1",
         )
         for ref in ("0034", "0035", "0036"):
             row = _get_c02_row(bundle, ref)
@@ -492,7 +497,8 @@ class TestEntityTypeCombinations:
         """OF 02.01 presence matches floor applicability."""
         gen = COREPGenerator()
         config = OutputFloorConfig.basel_3_1(
-            institution_type=inst_type, reporting_basis=basis,
+            institution_type=inst_type,
+            reporting_basis=basis,
         )
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),
@@ -524,7 +530,8 @@ class TestEntityTypeCombinations:
         """Row 0034 reflects floor activation only for applicable entities."""
         gen = COREPGenerator()
         config = OutputFloorConfig.basel_3_1(
-            institution_type=inst_type, reporting_basis=basis,
+            institution_type=inst_type,
+            reporting_basis=basis,
         )
         bundle = gen.generate_from_lazyframe(
             _b31_irb_results(),

@@ -14,7 +14,7 @@ framework shifts emphasis from risk sensitivity to comparability and floors.
 
 ## Top 10 Changes from CRR
 
-1. **Output floor** — IRB RWA floored at 72.5% of SA-equivalent (phased in 2027-2032)
+1. **Output floor** — IRB RWA floored at 72.5% of SA-equivalent (phased in 2027-2030)
 2. **Supporting factors removed** — no SME (0.7619/0.85) or infrastructure (0.75) relief
 3. **1.06 scaling factor removed** — ~5.7% IRB RWA reduction before output floor
 4. **Differentiated PD floors** — class-specific (0.05%-0.10%) vs CRR uniform 0.03%
@@ -104,12 +104,10 @@ Priority ordering — highest-priority class applies when exposure meets multipl
 
 | Year | Floor % |
 |------|---------|
-| 2027 | 50.0% |
-| 2028 | 55.0% |
-| 2029 | 60.0% |
-| 2030 | 65.0% |
-| 2031 | 70.0% |
-| 2032+ | 72.5% |
+| 2027 | 60.0% |
+| 2028 | 65.0% |
+| 2029 | 70.0% |
+| 2030+ | 72.5% |
 
 ### Equity SA Phase-In (Art. 4.2/4.3)
 

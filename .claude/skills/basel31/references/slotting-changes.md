@@ -10,12 +10,14 @@ Slotting risk weight restructuring from CRR to Basel 3.1.
 
 **CRR:** 2-table structure (HVCRE vs non-HVCRE) x 2 maturity bands (< 2.5yr, >= 2.5yr)
 
-**Basel 3.1:** 3-table structure (Operational, PF Pre-Operational, HVCRE), no maturity
-differentiation in base weights.
+**Basel 3.1 (PRA):** 2-table structure (Non-HVCRE, HVCRE), no maturity
+differentiation in base weights. PRA does not adopt the BCBS separate pre-operational
+PF table — all non-HVCRE specialised lending (including PF pre-operational) uses the
+standard non-HVCRE table.
 
 ## Basel 3.1 Slotting Tables
 
-### Non-HVCRE Operational (OF, CF, IPRE, PF Operational)
+### Non-HVCRE (OF, CF, IPRE, PF — including pre-operational)
 
 | Category | Risk Weight |
 |----------|-------------|
@@ -23,16 +25,6 @@ differentiation in base weights.
 | Good | 90% |
 | Satisfactory | 115% |
 | Weak | 250% |
-| Default | 0% (EL) |
-
-### Project Finance Pre-Operational
-
-| Category | Risk Weight |
-|----------|-------------|
-| Strong | 80% |
-| Good | 100% |
-| Satisfactory | 120% |
-| Weak | 350% |
 | Default | 0% (EL) |
 
 ### HVCRE
@@ -54,18 +46,18 @@ Within Strong and Good categories, subgrades allow finer differentiation:
 | Strong A / B | 50% / 70% (PF Op) | 70% / 70% |
 | Good C / D | 70% / 90% (PF Op) | 90% / 90% |
 
-## Project Finance Comparison (CRR vs Basel 3.1)
+## Project Finance Comparison (CRR vs Basel 3.1 PRA)
 
-| Category | CRR (>=2.5yr) | CRR (<2.5yr) | B3.1 Pre-Op | B3.1 Operational |
-|----------|---------------|--------------|-------------|------------------|
-| Strong | 70% | 50% | 80% | 70% |
-| Good | 90% | 70% | 100% | 90% |
-| Satisfactory | 115% | 115% | 120% | 115% |
-| Weak | 250% | 250% | 350% | 250% |
-| Default | 0% | 0% | 0% | 0% |
+| Category | CRR (>=2.5yr) | CRR (<2.5yr) | B3.1 (PRA) |
+|----------|---------------|--------------|------------|
+| Strong | 70% | 50% | 70% |
+| Good | 90% | 70% | 90% |
+| Satisfactory | 115% | 115% | 115% |
+| Weak | 250% | 250% | 250% |
+| Default | 0% | 0% | 0% |
 
-Key change: PF pre-operational gets higher weights than CRR (80%/100%/120%/350%),
-while PF operational is broadly unchanged. Weak PF pre-op jumps from 250% to 350%.
+Key change: PRA removes maturity differentiation — the CRR short-maturity discount
+(50%/70% for Strong/Good at <2.5yr) is eliminated. All PF uses the single non-HVCRE table.
 
 ---
 

@@ -34,14 +34,6 @@ Quick-reference for collateral haircuts, overcollateralisation, and guarantee su
 | Main index | 15% |
 | Other listed | 25% |
 
-### Non-Financial Collateral
-
-| Type | Haircut |
-|------|---------|
-| Receivables | 20% |
-| Real estate | 0% (handled via LTV, not haircut) |
-| Other physical | 40% |
-
 ## FX Mismatch Haircut (Art. 233)
 
 When collateral currency differs from exposure currency: **8%** additional haircut.

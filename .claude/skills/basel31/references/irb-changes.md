@@ -12,9 +12,9 @@ All IRB parameter changes from CRR to Basel 3.1.
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
 | Corporate SME | 0.03% | 0.05% |
-| Retail Mortgage | 0.03% | 0.05% |
+| Retail Mortgage | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
-| QRRE (Transactors) | 0.03% | 0.03% |
+| QRRE (Transactors) | 0.03% | 0.05% |
 | QRRE (Revolvers) | 0.03% | 0.10% |
 
 ## A-IRB LGD Floors (CRE32, Art. 161(5), 164(4))
@@ -24,7 +24,6 @@ All IRB parameter changes from CRR to Basel 3.1.
 | Collateral Type | CRR | Basel 3.1 |
 |----------------|-----|-----------|
 | Unsecured (Senior) | None | 25% |
-| Unsecured (Subordinated) | None | 50% |
 | Financial collateral | None | 0% |
 | Receivables | None | 10%* |
 | Commercial RE | None | 10%* |

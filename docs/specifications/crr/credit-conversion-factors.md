@@ -146,7 +146,7 @@ Where:
 - **Accrued Interest**: Interest due but not yet paid
 - **Undrawn Amount**: Committed but undrawn facility limit minus drawn amount
 
-### Provision-Adjusted EAD (Art. 111(2))
+### Provision-Adjusted EAD (Art. 111(1)(a)-(b))
 
 When provisions are present (SA only), they are resolved **before** CCF application using a drawn-first deduction:
 
@@ -159,7 +159,7 @@ EAD = (max(0, Drawn Amount) - provision_on_drawn) + Accrued Interest
       + (nominal_after_provision × CCF)
 ```
 
-This ensures that provisions reduce the nominal amount before the CCF multiplier is applied, compliant with CRR Art. 111(2). For IRB/Slotting exposures, provisions are tracked but not deducted — the standard EAD formula applies.
+This ensures that provisions reduce the nominal amount before the CCF multiplier is applied, compliant with CRR Art. 111(1)(a)-(b). For IRB/Slotting exposures, provisions are tracked but not deducted — the standard EAD formula applies.
 
 ## Key Scenarios
 

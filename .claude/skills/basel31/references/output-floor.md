@@ -31,12 +31,10 @@ Without OF-ADJ, the floor comparison would not be on a like-for-like basis.
 
 | Year | Floor % |
 |------|---------|
-| 2027 | 50.0% |
-| 2028 | 55.0% |
-| 2029 | 60.0% |
-| 2030 | 65.0% |
-| 2031 | 70.0% |
-| 2032+ | 72.5% |
+| 2027 | 60.0% |
+| 2028 | 65.0% |
+| 2029 | 70.0% |
+| 2030+ | 72.5% |
 
 ## Worked Example
 

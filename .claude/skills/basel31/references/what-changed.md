@@ -68,8 +68,8 @@ Master delta summary. Every major parameter change in one place.
 | Aspect | CRR | Basel 3.1 | Change |
 |--------|-----|-----------|--------|
 | Haircut maturity bands | 3 (0-1y, 1-5y, 5y+) | 5 (0-1y, 1-3y, 3-5y, 5-10y, 10y+) | More granular |
-| Main index equity haircut | 15% | 25% | +10pp |
-| Other equity haircut | 25% | 35% | +10pp |
+| Main index equity haircut | 15% | 20% | +5pp |
+| Other equity haircut | 25% | 30% | +5pp |
 | Unfunded protection | Cancellable test | +changeable test | Stricter |
 | Method names | Various | FCM, PSM, LGD-AM | Clarified |
 

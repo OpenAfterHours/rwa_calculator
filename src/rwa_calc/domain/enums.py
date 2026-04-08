@@ -111,6 +111,9 @@ class ApproachType(StrEnum):
     SLOTTING = "slotting"
     """Slotting approach for specialised lending (CRE33)"""
 
+    EQUITY = "equity"
+    """Equity approach - routes to equity calculator or SA equity risk weights"""
+
 
 class CQS(IntEnum):
     """

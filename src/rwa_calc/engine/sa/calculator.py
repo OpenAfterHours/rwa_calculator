@@ -46,6 +46,7 @@ import polars as pl
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SAResultBundle
 from rwa_calc.contracts.errors import (
     ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+    ERROR_EQUITY_IN_MAIN_TABLE,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
@@ -227,10 +228,15 @@ class SACalculator:
         Returns:
             SAResultBundle with results and audit trail
         """
-        errors: list = []
+        errors: list[CalculationError] = []
 
         # Get SA exposures
         exposures = data.sa_exposures
+
+        # Warn if equity-class rows are present in the main exposure table.
+        # These get correct SA equity RW (250% B31, 100% CRR) but miss
+        # full equity treatment (CIU approaches, transitional floor, IRB Simple).
+        self._warn_equity_in_main_table(exposures, errors)
 
         # Step 1: Look up risk weights
         exposures = self._apply_risk_weights(exposures, config)
@@ -886,6 +892,12 @@ class SACalculator:
                     # 12d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
                     .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
+                    # 13. Equity (Art. 133(3)): 250% standard equity
+                    # Equity-class rows from main exposure tables get SA equity RW.
+                    # For full equity treatment (CIU approaches, transitional floor,
+                    # type-specific weights), use the dedicated equity_exposures table.
+                    .when(_uc == "EQUITY")
+                    .then(pl.lit(2.50))
                     # Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
@@ -1062,7 +1074,12 @@ class SACalculator:
                     # 8d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
                     .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
-                    # 9. Default: CQS-based or 100%
+                    # 9. Equity (Art. 133(2)): flat 100%
+                    # Equity-class rows from main exposure tables get CRR SA equity RW.
+                    # For full equity treatment (CIU, IRB Simple), use equity_exposures.
+                    .when(_uc == "EQUITY")
+                    .then(pl.lit(1.00))
+                    # 10. Default: CQS-based or 100%
                     .otherwise(pl.col("risk_weight").fill_null(1.0))
                     .alias("risk_weight"),
                 ]
@@ -1823,6 +1840,55 @@ class SACalculator:
         )
 
         return exposures
+
+    @staticmethod
+    def _warn_equity_in_main_table(
+        exposures: pl.LazyFrame,
+        errors: list[CalculationError],
+    ) -> None:
+        """Emit SA005 info if equity-class rows may be in main exposure table.
+
+        Equity exposures in the main loan/contingent tables receive correct SA
+        equity risk weights (250% Basel 3.1, 100% CRR) but miss full equity
+        treatment available via the dedicated equity_exposures input table:
+        CIU look-through/mandate-based approaches, transitional floor schedule,
+        type-specific weights (central_bank 0%, subordinated_debt 150%,
+        speculative 400%), and IRB Simple method (CRR).
+
+        The check is based on the approach column containing equity values,
+        which is set by the classifier for equity-class rows.
+        """
+        schema = exposures.collect_schema()
+        if "approach" not in schema.names():
+            return
+        # Approach == "equity" is only set for equity-class rows from the main
+        # tables. We detect this via a lightweight one-row collect to avoid
+        # materialising the full frame.
+        has_equity = (
+            exposures.filter(pl.col("approach") == ApproachType.EQUITY.value)
+            .head(1)
+            .collect()
+            .height
+            > 0
+        )
+        if has_equity:
+            errors.append(
+                CalculationError(
+                    code=ERROR_EQUITY_IN_MAIN_TABLE,
+                    message=(
+                        "Equity-class exposures detected in main exposure table. "
+                        "These receive default SA equity risk weights (250% Basel 3.1 "
+                        "Art. 133(3), 100% CRR Art. 133(2)). For type-specific weights "
+                        "(central_bank 0%, subordinated_debt 150%, speculative 400%), "
+                        "CIU approaches, transitional floor, or IRB Simple, "
+                        "use the dedicated equity_exposures input table."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="CRR Art. 133 / PRA PS1/26 Art. 133",
+                    field_name="exposure_class",
+                )
+            )
 
     def _calculate_rwa(
         self,

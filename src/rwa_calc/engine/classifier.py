@@ -255,7 +255,9 @@ class ExposureClassifier:
         )
 
         # Step 6: Split by approach (filter/select — no depth added)
-        sa_exposures = classified.filter(pl.col("approach") == ApproachType.SA.value)
+        sa_exposures = classified.filter(
+            pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
+        )
         irb_exposures = classified.filter(
             pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
         )
@@ -935,6 +937,10 @@ class ExposureClassifier:
             # F-IRB (model or org-wide)
             .when(firb_permitted_expr)
             .then(pl.lit(ApproachType.FIRB.value))
+            # Equity exposure class → EQUITY approach (routes to SA equity RW logic;
+            # full equity treatment requires the dedicated equity_exposures table)
+            .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
+            .then(pl.lit(ApproachType.EQUITY.value))
             .otherwise(pl.lit(ApproachType.SA.value))
             .alias("approach")
         )

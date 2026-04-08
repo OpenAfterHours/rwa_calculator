@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P6.3/P6.6/P6.13/P2.11 code quality cleanup)
-**Current version:** 0.1.151 | **Test suite:** 4,159 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
+**Last updated:** 2026-04-08 (P6.11 ApproachType.EQUITY routing)
+**Current version:** 0.1.152 | **Test suite:** 4,188 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P4.1, P4.5, P4.13, P4.14, P5.6, P5.7, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (192 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (+P1.88 IRB EL silent defaults; all prior items complete except P1.10, P1.30(e), P1.38(c) — 3 open items remain) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 (P4.1/P4.5/P4.13/P4.14 now complete) | P5 (tests): 10 | P6 (code quality): 20 | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 | P3 (Pillar III): 4 | P4 (docs): 21 | P5 (tests): 10 | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -505,9 +505,9 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `contracts/errors.py:69`
 
 ### P6.7 `is_guarantee_beneficial` absent from CRM bundle
-- **Status:** [~] Tracking field missing
-- **Impact:** The CRM spec lists `is_guarantee_beneficial` as a CRM tracking field. The CRM processor's `apply_guarantees()` unconditionally sets `guaranteed_portion` without a beneficiality check -- it's deferred to SA/IRB calculators (`sa/calculator.py:839`, `irb/guarantee.py:103`). The CRM audit trail always shows the full covered amount even when non-beneficial.
-- **Fix:** Add `is_guarantee_beneficial` to CRM audit output. Optionally move beneficiality check earlier.
+- **Status:** [x] Complete (already implemented)
+- **Impact:** Investigation (2026-04-08) found `is_guarantee_beneficial` is actively used in 11 places: defined in `data/schemas.py:794`, computed in `engine/sa/calculator.py` (lines 1636, 1651, 1672, 1677) and `engine/irb/guarantee.py` (lines 115, 125, 447, 475, 528, 535, 552). The beneficiality check is performed in the SA/IRB calculators (correct — CRM stage applies the guarantee, calculators decide if it reduces capital). The field is present and functional.
+- **Fix:** No changes needed. Plan description was stale.
 
 ### P6.8 `guarantor_rating_type` output field missing from CRM audit
 - **Status:** [~] Spec tracking field not surfaced
@@ -527,9 +527,16 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** 12 new unit tests in `tests/unit/test_el_shortfall_error_reporting.py`: IRB direct (6 tests: emits warning, returns zeros, no warning when present, None param compat, omitted param compat, regulatory reference), slotting namespace (4 tests: emits warning, no warning when present, returns zeros, no errors param compat), IRB namespace wrapper (2 tests: passes errors through, no errors when present). All 3687 tests pass (was 3675).
 
 ### P6.11 No `ApproachType.EQUITY` enum value
-- **Status:** [~] Gap
-- **Impact:** `ApproachType` enum (`enums.py:92-107`) has no EQUITY member. Equity exposures in loan/contingent tables get classified via standard SA/IRB approach assignment rather than being routed to the equity calculator. Only the separate `data.equity_exposures` LazyFrame bypasses this. This means equity positions in main tables go to SA/IRB, not the equity calculator.
-- **Fix:** Add `ApproachType.EQUITY` and route equity-classified exposures in classifier.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** `ApproachType` enum had no EQUITY member. Equity exposures in loan/contingent tables silently got wrong risk weight: 100% under both CRR and Basel 3.1 (via the default fallback), instead of 100% CRR / 250% Basel 3.1. The SA calculator's when-chain had no EQUITY branch, so equity-class rows fell through to `otherwise(risk_weight.fill_null(1.0))`.
+- **Fix:** Four changes:
+  1. **Enum:** Added `ApproachType.EQUITY = "equity"` to `domain/enums.py`.
+  2. **Classifier:** Added equity branch in approach expression — `ExposureClass.EQUITY → ApproachType.EQUITY`. Updated `sa_exposures` filter to include EQUITY approach alongside SA, so equity rows from main tables flow through the SA calculator.
+  3. **SA calculator:** Added explicit equity risk weight branches in both B31 (`_uc == "EQUITY" → 250%`, Art. 133(3)) and CRR (`_uc == "EQUITY" → 100%`, Art. 133(2)) when-chains, placed before the default `.otherwise()`. For type-specific weights (central_bank 0%, subordinated_debt 150%, speculative 400%), CIU approaches, transitional floor, and IRB Simple, users should use the dedicated `equity_exposures` input table.
+  4. **Warning:** `SA005` (`ERROR_EQUITY_IN_MAIN_TABLE`) emitted via `_warn_equity_in_main_table()` when equity-approach rows detected in the SA bundle path. Lightweight `head(1).collect()` check avoids false positives. Severity=WARNING, category=DATA_QUALITY.
+- **File:Line:** `domain/enums.py:112-114` (EQUITY enum), `engine/classifier.py:940-943` (approach branch), `engine/classifier.py:258-260` (sa filter), `engine/sa/calculator.py:889-895` (B31 RW), `engine/sa/calculator.py:1073-1077` (CRR RW), `engine/sa/calculator.py:1844-1887` (warning method), `contracts/errors.py:198` (SA005)
+- **Spec ref:** CRR Art. 133(2), PRA PS1/26 Art. 133(3)
+- **Tests:** 29 new tests in `tests/unit/test_equity_routing.py`: 4 enum tests (exists, value, distinct from SA, in members), 5 B31 RW tests (250%, RWA, multiple rows, no corporate impact, zero EAD), 3 CRR RW tests (100%, RWA, no corporate impact), 7 warning tests (emitted/severity/category/regulatory ref/no equity/no approach col/message), 3 classifier tests (entity mapping, expression logic, sa filter), 3 pipeline tests (not IRB, not slotting, falls to SA), 4 edge cases (CQS override B31/CRR, regression test, column preservation). All 4,188 tests pass (was 4,159).
 
 ### P6.12 QRRE classification silently disabled when columns absent
 - **Status:** [x] Complete (2026-04-07)

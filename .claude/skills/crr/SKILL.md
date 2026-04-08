@@ -31,6 +31,7 @@ Use this guide to find the right reference file for your question:
 
 - **PRA Rulebook (CRR firms):** https://www.prarulebook.co.uk/pra-rules/crr-firms
 - **UK CRR (legislation.gov.uk):** https://www.legislation.gov.uk/eur/2013/575/contents
+- **Source PDF:** `docs/assets/crr.pdf` — use to verify specific articles against the authoritative text
 
 ## Project Specification Files
 

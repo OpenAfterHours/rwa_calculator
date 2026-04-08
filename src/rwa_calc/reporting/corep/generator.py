@@ -7,6 +7,7 @@ Pipeline position:
 Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
 - Populate COREP columns from pipeline calculation results using 4-digit refs
+- Generate C 08.06 / OF 08.06 specialised lending slotting per SL type
 - Generate OF 02.01 output floor comparison (Basel 3.1, portfolio-level)
 - Support both CRR and Basel 3.1 framework variants
 - Export to Excel with per-class sheet structure
@@ -37,6 +38,8 @@ from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
     C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
+    C08_06_CATEGORY_MAP,
+    C08_06_COLUMN_REFS,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_ROW_SECTIONS,
@@ -45,6 +48,9 @@ from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_02_columns,
     get_c08_03_columns,
+    get_c08_06_columns,
+    get_c08_06_rows,
+    get_c08_06_sl_types,
     get_c08_columns,
     get_irb_row_sections,
     get_sa_risk_weight_bands,
@@ -75,6 +81,9 @@ class COREPTemplateBundle:
     C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
     C 08.03 (IRB PD ranges): One DataFrame per IRB exposure class, 17 fixed
         regulatory PD range buckets, 11 columns. Slotting excluded.
+    C 08.06 (IRB slotting): One DataFrame per SL type, rows by slotting
+        category (Strong-Default) × maturity band (< 2.5yr / ≥ 2.5yr).
+        10 columns (CRR) / 11 columns (Basel 3.1 adds FCCM deduction).
     OF 02.01 (Output Floor comparison): Single DataFrame, 8 risk-type rows,
         4 columns (modelled RWA, SA RWA, U-TREA, S-TREA). Basel 3.1 only.
 
@@ -88,6 +97,7 @@ class COREPTemplateBundle:
     c08_01: dict[str, pl.DataFrame]
     c08_02: dict[str, pl.DataFrame]
     c08_03: dict[str, pl.DataFrame] = field(default_factory=dict)
+    c08_06: dict[str, pl.DataFrame] = field(default_factory=dict)
     of_02_01: pl.DataFrame | None = None
     framework: str = "CRR"
     errors: list[str] = field(default_factory=list)
@@ -102,8 +112,9 @@ class COREPGenerator:
     """Generates COREP credit risk templates from RWA calculation results.
 
     Produces per-exposure-class DataFrames for C 07.00 (SA), C 08.01 (IRB totals),
-    C 08.02 (IRB PD grade breakdown), and C 08.03 (IRB PD ranges) with correct
-    4-digit COREP column references and multi-section row structure.
+    C 08.02 (IRB PD grade breakdown), C 08.03 (IRB PD ranges), and C 08.06
+    (IRB specialised lending slotting) with correct 4-digit COREP column
+    references and multi-section row structure.
 
     Usage:
         generator = COREPGenerator()
@@ -139,11 +150,12 @@ class COREPGenerator:
         sa_data = _filter_by_approach(results, "standardised", cols)
         c07_00 = self._generate_all_c07(sa_data, cols, framework, errors)
 
-        # IRB templates (C 08.01, C 08.02, C 08.03)
+        # IRB templates (C 08.01, C 08.02, C 08.03, C 08.06)
         irb_data = _filter_by_irb_approach(results, cols)
         c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
         c08_03 = self._generate_all_c08_03(irb_data, cols, framework, errors)
+        c08_06 = self._generate_all_c08_06(irb_data, cols, framework, errors)
 
         # OF 02.01 — Output floor comparison (Basel 3.1 only)
         of_02_01 = self._generate_of_02_01(results, cols, framework, errors)
@@ -153,6 +165,7 @@ class COREPGenerator:
             c08_01=c08_01,
             c08_02=c08_02,
             c08_03=c08_03,
+            c08_06=c08_06,
             of_02_01=of_02_01,
             framework=framework,
             errors=errors,
@@ -196,6 +209,11 @@ class COREPGenerator:
             )
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_03, "C 08.03", IRB_EXPOSURE_CLASS_ROWS
+            )
+            sl_type_names = get_c08_06_sl_types(bundle.framework)
+            sl_class_map = {k: (k, v) for k, v in sl_type_names.items()}
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_06, "C 08.06", sl_class_map
             )
             if bundle.of_02_01 is not None:
                 total_rows += self._write_single_template_sheet(
@@ -922,6 +940,191 @@ class COREPGenerator:
             return pl.DataFrame(schema=schema)
 
         schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 08.06 / OF 08.06 — IRB SPECIALISED LENDING SLOTTING
+    # =========================================================================
+
+    def _generate_all_c08_06(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.06 / OF 08.06 DataFrames for all SL types.
+
+        C 08.06 reports specialised lending exposures under slotting criteria.
+        One template per SL type. Rows by slotting category × maturity band.
+        Only slotting-approach exposures are included (F-IRB/A-IRB excluded).
+
+        CRR: 4 SL types (IPRE+HVCRE combined), 12 rows, 10 columns.
+        Basel 3.1: 5 SL types (HVCRE separated), 14 rows (adds "substantially
+        stronger" sub-rows), 11 columns (adds FCCM deduction col 0031).
+
+        References:
+        - CRR Art. 153(5), Regulation (EU) 2021/451 Annex I (C 08.06)
+        - PRA PS1/26 Art. 153(5) Table A (OF 08.06)
+        """
+        ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+        rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
+        approach_col = _pick(cols, "approach_applied", "approach")
+
+        if ead_col is None or rwa_col is None:
+            errors.append("C08.06: Missing required columns (ead/rwa)")
+            return {}
+
+        # Filter to slotting-only exposures
+        if approach_col is not None:
+            slotting_data = irb_data.filter(pl.col(approach_col) == "slotting")
+        else:
+            errors.append("C08.06: No approach column — cannot identify slotting exposures")
+            return {}
+
+        slotting_df: pl.DataFrame = slotting_data.collect()
+        if len(slotting_df) == 0:
+            return {}
+
+        data_cols = set(slotting_df.columns)
+
+        # Validate required slotting columns
+        cat_col = _pick(data_cols, "slotting_category")
+        maturity_col = _pick(data_cols, "is_short_maturity")
+        if cat_col is None:
+            errors.append("C08.06: Missing slotting_category column — cannot generate template")
+            return {}
+
+        sl_type_col = _pick(data_cols, "sl_type")
+        hvcre_col = _pick(data_cols, "is_hvcre")
+        sl_types = get_c08_06_sl_types(framework)
+
+        result: dict[str, pl.DataFrame] = {}
+
+        if sl_type_col is not None:
+            # Route by sl_type column
+            for sl_key, sl_display in sl_types.items():
+                if sl_key == "ipre" and framework != "BASEL_3_1" and hvcre_col is not None:
+                    # CRR combines IPRE+HVCRE into one type
+                    type_df = slotting_df.filter(
+                        (pl.col(sl_type_col) == "ipre") | (pl.col(sl_type_col) == "hvcre")
+                    )
+                elif sl_key == "hvcre" and framework == "BASEL_3_1":
+                    # B31 separates HVCRE
+                    if hvcre_col is not None:
+                        type_df = slotting_df.filter(
+                            (pl.col(sl_type_col) == "hvcre")
+                            | (pl.col(hvcre_col) == True)  # noqa: E712
+                        )
+                    else:
+                        type_df = slotting_df.filter(pl.col(sl_type_col) == "hvcre")
+                else:
+                    type_df = slotting_df.filter(pl.col(sl_type_col) == sl_key)
+
+                if len(type_df) == 0:
+                    continue
+
+                template_df = self._generate_c08_06_for_type(
+                    type_df, data_cols, ead_col, rwa_col, cat_col,
+                    maturity_col, framework,
+                )
+                result[sl_key] = template_df
+        else:
+            # No sl_type column — generate a single "all" template
+            template_df = self._generate_c08_06_for_type(
+                slotting_df, data_cols, ead_col, rwa_col, cat_col,
+                maturity_col, framework,
+            )
+            result["specialised_lending"] = template_df
+
+        return result
+
+    def _generate_c08_06_for_type(
+        self,
+        type_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        cat_col: str,
+        maturity_col: str | None,
+        framework: str,
+    ) -> pl.DataFrame:
+        """Generate a C 08.06 DataFrame for a single SL type.
+
+        Rows = slotting categories (Strong-Default) × maturity bands (< 2.5yr / ≥ 2.5yr).
+        Columns = 10 (CRR) or 11 (Basel 3.1, adds FCCM deduction).
+
+        Args:
+            type_data: DataFrame filtered to a single SL type.
+            cols: Available column names.
+            ead_col: EAD column name.
+            rwa_col: RWA column name.
+            cat_col: Slotting category column name.
+            maturity_col: is_short_maturity column name (None if absent).
+            framework: "CRR" or "BASEL_3_1".
+        """
+        column_defs = get_c08_06_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+        row_defs = get_c08_06_rows(framework)
+
+        rows: list[dict[str, object]] = []
+
+        for row_ref, category_label, is_short, _rw_display in row_defs:
+            category_value = C08_06_CATEGORY_MAP.get(category_label)
+            is_sub_stronger = "substantially stronger" in category_label
+
+            # Filter by category
+            if category_label == "Total":
+                cat_data = type_data
+            else:
+                if category_value is None:
+                    continue
+                cat_data = type_data.filter(pl.col(cat_col) == category_value)
+
+            # Filter by maturity band
+            if is_short is not None and maturity_col is not None:
+                cat_data = cat_data.filter(
+                    pl.col(maturity_col) == is_short  # noqa: E712
+                )
+            elif is_short is not None and maturity_col is None:
+                # Default: assume all are ≥ 2.5 years (is_short=False) when
+                # maturity info is unavailable
+                if is_short:
+                    cat_data = type_data.clear()
+
+            # "Substantially stronger" sub-rows: currently no pipeline column
+            # identifies these exposures. They are reported as empty until
+            # a `is_substantially_stronger` flag is added to the pipeline.
+            if is_sub_stronger:
+                cat_data = cat_data.clear()
+
+            if len(cat_data) == 0 and category_label != "Total":
+                # Still include the row with zero values for regulatory completeness
+                values = {ref: 0.0 for ref in column_refs}
+                # Risk weight from row definition
+                if "0070" in values and _rw_display:
+                    rw_pct = _rw_display.replace("%", "").strip()
+                    try:
+                        values["0070"] = float(rw_pct) / 100.0
+                    except ValueError:
+                        values["0070"] = None
+                else:
+                    values["0070"] = None
+                rows.append({"row_ref": row_ref, "row_name": category_label, **values})
+                continue
+
+            values = _compute_c08_06_values(
+                cat_data, cols, ead_col, rwa_col, column_refs, framework,
+            )
+            rows.append({"row_ref": row_ref, "row_name": category_label, **values})
+
+        if not rows:
+            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema.update(dict.fromkeys(column_refs, pl.Float64))
+            return pl.DataFrame(schema=schema)
+
+        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -2048,5 +2251,107 @@ def _compute_c08_03_values(
     else:
         values["0110"] = prov
 
-    # Filter to only refs in this framework's column set
+    # Filter to only refs in this framework's column set (C 08.03)
+    return {ref: values.get(ref) for ref in column_refs if ref in values}
+
+
+def _compute_c08_06_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    ead_col: str,
+    rwa_col: str,
+    column_refs: list[str],
+    framework: str,
+) -> dict[str, float | None]:
+    """Compute C 08.06 column values for a slotting category × maturity row.
+
+    10 columns (CRR) or 11 (Basel 3.1): original exposure, post-CRM exposure,
+    off-BS items, FCCM deduction (B31 only), exposure value (EAD), off-BS
+    exposure value, CCR exposure value, risk weight, RWEA, EL, provisions.
+
+    Args:
+        data: DataFrame filtered to a single category/maturity bucket.
+        cols: Available column names in the data.
+        ead_col: EAD column name.
+        rwa_col: RWA column name.
+        column_refs: List of column refs to include in output.
+        framework: "CRR" or "BASEL_3_1".
+
+    References:
+    - CRR Art. 153(5) / Regulation (EU) 2021/451 Annex I (C 08.06)
+    - PRA PS1/26 Annex I/II (OF 08.06)
+    """
+    values: dict[str, float | None] = {}
+    ead_sum = float(data[ead_col].fill_null(0.0).sum()) if ead_col in cols else 0.0
+
+    # 0010: Original exposure pre conversion factors
+    values["0010"] = _safe_sum_eager(
+        data, cols, "drawn_amount", "interest", "nominal_amount", "undrawn_amount"
+    )
+
+    # 0020: Exposure after CRM substitution effects pre CCFs
+    crm_col = _pick(cols, "ead_pre_ccf", "exposure_post_crm")
+    if crm_col is not None:
+        values["0020"] = _col_sum_eager(data, cols, crm_col)
+    else:
+        values["0020"] = values["0010"]
+
+    # 0030: Of which: off-balance sheet items (original)
+    off_bs = _filter_off_bs(data, cols)
+    if off_bs is not None and len(off_bs) > 0:
+        values["0030"] = _safe_sum_eager(
+            off_bs, set(off_bs.columns), "nominal_amount", "undrawn_amount"
+        )
+    else:
+        values["0030"] = _col_sum_eager(data, cols, "nominal_amount")
+
+    # 0031: (-) Change in exposure due to FCCM (Basel 3.1 only)
+    if "0031" in column_refs:
+        values["0031"] = None
+
+    # 0040: Exposure value (EAD)
+    values["0040"] = ead_sum if ead_sum > 0 else 0.0
+
+    # 0050: Of which: off-balance sheet items (exposure value)
+    if off_bs is not None and len(off_bs) > 0:
+        off_cols = set(off_bs.columns)
+        values["0050"] = _col_sum_eager(off_bs, off_cols, ead_col)
+    else:
+        values["0050"] = None
+
+    # 0060: Of which: arising from counterparty credit risk (out of scope)
+    values["0060"] = None
+
+    # 0070: Risk weight (exposure-weighted average for this bucket)
+    rw_col = _pick(cols, "risk_weight")
+    if rw_col is not None and ead_sum > 0:
+        rw_x_ead = float(
+            (data[rw_col].fill_null(0.0) * data[ead_col].fill_null(0.0)).sum()
+        )
+        values["0070"] = rw_x_ead / ead_sum
+    elif rw_col is not None:
+        rw_vals = data[rw_col].drop_nulls()
+        values["0070"] = float(rw_vals[0]) if len(rw_vals) > 0 else None
+    else:
+        values["0070"] = None
+
+    # 0080: RWEA (after supporting factors for CRR, plain RWEA for B31)
+    if framework != "BASEL_3_1" and "rwa_post_factor" in cols:
+        values["0080"] = _col_sum_eager(data, cols, "rwa_post_factor")
+    else:
+        values["0080"] = _col_sum_eager(data, cols, rwa_col)
+
+    # 0090: Expected loss amount
+    el_col = _pick(cols, "expected_loss", "irb_expected_loss")
+    values["0090"] = _col_sum_eager(data, cols, el_col) if el_col else None
+
+    # 0100: (-) Value adjustments and provisions
+    prov = _safe_sum_eager(data, cols, "scra_provision_amount", "gcra_provision_amount")
+    if abs(prov) < 1e-9:
+        held = _col_sum_eager(data, cols, "provision_held")
+        values["0100"] = held if held is not None else prov
+    else:
+        values["0100"] = prov
+
+    # Filter to only refs in this framework's column set (C 08.06)
     return {ref: values.get(ref) for ref in column_refs if ref in values}

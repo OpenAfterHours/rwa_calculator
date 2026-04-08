@@ -6,6 +6,7 @@ Defines the row/column structure for COREP credit risk templates:
 - C 08.01 / OF 08.01: IRB totals — 35/40+ columns, row sections
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
 - C 08.03 / OF 08.03: IRB PD ranges — 11 columns, 17 fixed regulatory PD buckets
+- C 08.06 / OF 08.06: IRB specialised lending slotting — 10/11 columns, per SL type
 - OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
@@ -763,6 +764,141 @@ OF_02_01_ROW_SECTIONS: list[RowSection] = [
 ]
 
 OF_02_01_COLUMN_REFS: list[str] = [c.ref for c in OF_02_01_COLUMNS]
+
+
+# =============================================================================
+# C 08.06 / OF 08.06 — IRB SPECIALISED LENDING SLOTTING
+# =============================================================================
+
+# C 08.06 reports specialised lending exposures under the supervisory slotting
+# criteria (CRR Art. 153(5)). Submitted once per SL type. Rows break down by
+# slotting category (1–5: Strong/Good/Satisfactory/Weak/Default) × maturity band
+# (< 2.5 years / ≥ 2.5 years).
+#
+# CRR: 4 SL types (PF, IPRE+HVCRE combined, OF, CF), 12 rows, 10 columns.
+# Basel 3.1: 5 SL types (HVCRE separated from IPRE), 14 rows (adds
+# "substantially stronger" sub-rows 0015/0025), 11 columns (adds col 0031
+# FCCM deduction; supporting factors removed from RWEA label).
+#
+# References:
+# - CRR Art. 153(5) (slotting criteria), Regulation (EU) 2021/451 Annex I
+# - PRA PS1/26 Art. 153(5) Table A (slotting risk weights)
+# - PRA PS1/26 Annex I (OF 08.06 template layout)
+# - PRA PS1/26 Annex II (OF 08.06 reporting instructions)
+
+CRR_C08_06_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0020", "Exposure after CRM substitution effects pre CCFs", "Post-CRM"),
+    COREPColumn("0030", "Of which: off-balance sheet items (original)", "Exposure"),
+    COREPColumn("0040", "Exposure value", "Exposure Value"),
+    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", "Exposure Value"),
+    COREPColumn("0060", "Of which: arising from counterparty credit risk", "Exposure Value"),
+    COREPColumn("0070", "Risk weight", "Parameters"),
+    COREPColumn("0080", "Risk-weighted exposure amount after supporting factors", "RWEA"),
+    COREPColumn("0090", "Expected loss amount", "Memorandum"),
+    COREPColumn("0100", "(-) Value adjustments and provisions", "Memorandum"),
+]
+
+B31_C08_06_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0020", "Exposure after CRM substitution effects pre CCFs", "Post-CRM"),
+    COREPColumn("0030", "Of which: off-balance sheet items (original)", "Exposure"),
+    COREPColumn(
+        "0031", "(-) Change in exposure due to FCCM", "Fin. Collateral Comprehensive"
+    ),  # New in B3.1
+    COREPColumn("0040", "Exposure value", "Exposure Value"),
+    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", "Exposure Value"),
+    COREPColumn("0060", "Of which: arising from counterparty credit risk", "Exposure Value"),
+    COREPColumn("0070", "Risk weight", "Parameters"),
+    COREPColumn("0080", "Risk-weighted exposure amount", "RWEA"),  # No "after supporting factors"
+    COREPColumn("0090", "Expected loss amount", "Memorandum"),
+    COREPColumn("0100", "(-) Value adjustments and provisions", "Memorandum"),
+]
+
+C08_06_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_06_COLUMNS]
+
+# Row definitions for C 08.06 / OF 08.06.
+# Each tuple: (row_ref, category_label, is_short_maturity, risk_weight_display)
+# is_short_maturity: True = < 2.5 years, False = >= 2.5 years, None = total
+
+# CRR: 12 rows (5 categories × 2 maturity bands + 2 totals)
+CRR_C08_06_ROWS: list[tuple[str, str, bool | None, str]] = [
+    ("0010", "Category 1 (Strong)", True, "50%"),
+    ("0020", "Category 1 (Strong)", False, "70%"),
+    ("0030", "Category 2 (Good)", True, "70%"),
+    ("0040", "Category 2 (Good)", False, "90%"),
+    ("0050", "Category 3 (Satisfactory)", True, "115%"),
+    ("0060", "Category 3 (Satisfactory)", False, "115%"),
+    ("0070", "Category 4 (Weak)", True, "250%"),
+    ("0080", "Category 4 (Weak)", False, "250%"),
+    ("0090", "Category 5 (Default)", True, "0%"),
+    ("0100", "Category 5 (Default)", False, "0%"),
+    ("0110", "Total", True, ""),
+    ("0120", "Total", False, ""),
+]
+
+# Basel 3.1: 14 rows (adds "substantially stronger" sub-rows 0015 and 0025).
+# Sub-rows 0015/0025 are subsets of parent rows 0020/0040 respectively (not
+# mutually exclusive — sub-row exposures also appear in the parent row).
+B31_C08_06_ROWS: list[tuple[str, str, bool | None, str]] = [
+    ("0010", "Category 1 (Strong)", True, "50%"),
+    ("0015", "Category 1 (Strong) — substantially stronger", False, "50%"),
+    ("0020", "Category 1 (Strong)", False, "70%"),
+    ("0030", "Category 2 (Good)", True, "70%"),
+    ("0025", "Category 2 (Good) — substantially stronger", False, "70%"),
+    ("0040", "Category 2 (Good)", False, "90%"),
+    ("0050", "Category 3 (Satisfactory)", True, "115%"),
+    ("0060", "Category 3 (Satisfactory)", False, "115%"),
+    ("0070", "Category 4 (Weak)", True, "250%"),
+    ("0080", "Category 4 (Weak)", False, "250%"),
+    ("0090", "Category 5 (Default)", True, "0%"),
+    ("0100", "Category 5 (Default)", False, "0%"),
+    ("0110", "Total", True, ""),
+    ("0120", "Total", False, ""),
+]
+
+# Category name → slotting_category pipeline value mapping
+C08_06_CATEGORY_MAP: dict[str, str] = {
+    "Category 1 (Strong)": "strong",
+    "Category 1 (Strong) — substantially stronger": "strong",
+    "Category 2 (Good)": "good",
+    "Category 2 (Good) — substantially stronger": "good",
+    "Category 3 (Satisfactory)": "satisfactory",
+    "Category 4 (Weak)": "weak",
+    "Category 5 (Default)": "default",
+}
+
+# SL type filter values — maps sl_type pipeline values to display names.
+# CRR combines IPRE+HVCRE; Basel 3.1 separates them.
+CRR_SL_TYPES: dict[str, str] = {
+    "project_finance": "Project finance",
+    "ipre": "Income-producing real estate (incl. HVCRE)",
+    "object_finance": "Object finance",
+    "commodities_finance": "Commodities finance",
+}
+
+B31_SL_TYPES: dict[str, str] = {
+    "project_finance": "Project finance",
+    "ipre": "Income-producing real estate",
+    "hvcre": "High-volatility commercial real estate",
+    "object_finance": "Object finance",
+    "commodities_finance": "Commodities finance",
+}
+
+
+def get_c08_06_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 08.06 / OF 08.06 column definitions for the given framework."""
+    return B31_C08_06_COLUMNS if framework == "BASEL_3_1" else CRR_C08_06_COLUMNS
+
+
+def get_c08_06_rows(framework: str = "CRR") -> list[tuple[str, str, bool | None, str]]:
+    """Return the C 08.06 / OF 08.06 row definitions for the given framework."""
+    return B31_C08_06_ROWS if framework == "BASEL_3_1" else CRR_C08_06_ROWS
+
+
+def get_c08_06_sl_types(framework: str = "CRR") -> dict[str, str]:
+    """Return the SL type filter values for the given framework."""
+    return B31_SL_TYPES if framework == "BASEL_3_1" else CRR_SL_TYPES
 
 
 # =============================================================================

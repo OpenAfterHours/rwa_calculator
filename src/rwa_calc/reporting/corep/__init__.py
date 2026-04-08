@@ -6,6 +6,7 @@ Generates EBA/PRA COREP templates from RWA calculation results:
 - C 08.01 / OF 08.01: CR IRB — IRB approach totals by exposure class
 - C 08.02 / OF 08.02: CR IRB — IRB approach breakdown by PD grade
 - C 08.03 / OF 08.03: CR IRB — IRB PD ranges (17 fixed regulatory buckets)
+- C 08.06 / OF 08.06: CR IRB — Specialised lending slotting by category/maturity
 - OF 02.01: Output floor comparison — modelled vs SA by risk type (Basel 3.1 only)
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
@@ -14,7 +15,7 @@ References:
 - Regulation (EU) 2021/451 (ITS on Supervisory Reporting), Annexes I/II
 - PRA PS1/26 (Basel 3.1 OF template layouts)
 - PRA PS1/26 Art. 92 para 2A/3A (output floor)
-- CRR Art. 111-134 (SA), Art. 142-191 (IRB)
+- CRR Art. 111-134 (SA), Art. 142-191 (IRB), Art. 153(5) (slotting)
 """
 
 from __future__ import annotations
@@ -24,18 +25,26 @@ from rwa_calc.reporting.corep.templates import (
     B31_C07_COLUMNS,
     B31_C08_COLUMNS,
     B31_C08_03_COLUMNS,
+    B31_C08_06_COLUMNS,
+    B31_C08_06_ROWS,
     B31_IRB_ROW_SECTIONS,
     B31_SA_RISK_WEIGHT_BANDS,
     B31_SA_ROW_SECTIONS,
+    B31_SL_TYPES,
     C07_COLUMNS,
     C08_01_COLUMNS,
     C08_03_COLUMN_REFS,
     C08_03_PD_RANGES,
+    C08_06_CATEGORY_MAP,
+    C08_06_COLUMN_REFS,
     CRR_C07_COLUMNS,
     CRR_C08_COLUMNS,
     CRR_C08_03_COLUMNS,
+    CRR_C08_06_COLUMNS,
+    CRR_C08_06_ROWS,
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
+    CRR_SL_TYPES,
     IRB_EXPOSURE_CLASS_ROWS,
     OF_02_01_COLUMN_REFS,
     OF_02_01_COLUMNS,
@@ -45,6 +54,9 @@ from rwa_calc.reporting.corep.templates import (
     SA_RISK_WEIGHT_BANDS,
     get_c07_columns,
     get_c08_03_columns,
+    get_c08_06_columns,
+    get_c08_06_rows,
+    get_c08_06_sl_types,
     get_c08_columns,
     get_irb_row_sections,
     get_sa_risk_weight_bands,
@@ -55,20 +67,28 @@ __all__ = [
     "B31_C07_COLUMNS",
     "B31_C08_COLUMNS",
     "B31_C08_03_COLUMNS",
+    "B31_C08_06_COLUMNS",
+    "B31_C08_06_ROWS",
     "B31_IRB_ROW_SECTIONS",
     "B31_SA_RISK_WEIGHT_BANDS",
     "B31_SA_ROW_SECTIONS",
+    "B31_SL_TYPES",
     "C07_COLUMNS",
     "C08_01_COLUMNS",
     "C08_03_COLUMN_REFS",
     "C08_03_PD_RANGES",
+    "C08_06_CATEGORY_MAP",
+    "C08_06_COLUMN_REFS",
     "COREPGenerator",
     "COREPTemplateBundle",
     "CRR_C07_COLUMNS",
     "CRR_C08_COLUMNS",
     "CRR_C08_03_COLUMNS",
+    "CRR_C08_06_COLUMNS",
+    "CRR_C08_06_ROWS",
     "CRR_IRB_ROW_SECTIONS",
     "CRR_SA_ROW_SECTIONS",
+    "CRR_SL_TYPES",
     "IRB_EXPOSURE_CLASS_ROWS",
     "OF_02_01_COLUMN_REFS",
     "OF_02_01_COLUMNS",
@@ -78,6 +98,9 @@ __all__ = [
     "SA_RISK_WEIGHT_BANDS",
     "get_c07_columns",
     "get_c08_03_columns",
+    "get_c08_06_columns",
+    "get_c08_06_rows",
+    "get_c08_06_sl_types",
     "get_c08_columns",
     "get_irb_row_sections",
     "get_sa_risk_weight_bands",

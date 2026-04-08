@@ -38,7 +38,7 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    cache_dir = Path(__file__).parent.parent.parent / ".cache"
+    cache_dir = project_root / "src" / "rwa_calc" / "ui" / "marimo" / ".cache"
 
     _shared = str(project_root / "src" / "rwa_calc" / "ui" / "marimo" / "shared")
     if _shared not in sys.path:

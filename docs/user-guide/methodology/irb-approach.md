@@ -13,7 +13,7 @@ Two IRB variants are available:
 
 !!! warning "Basel 3.1 Restrictions"
     Under Basel 3.1, A-IRB is no longer permitted for:
-    - Large corporates (revenue > £500m)
+    - Large corporates (revenue > £440m)
     - Banks/Financial Institutions
     - Equity exposures
 

@@ -229,9 +229,12 @@ Beyond PD and LGD floors, Basel 3.1 introduces:
 - Effective maturity floor: 1 year
 - Cap remains: 5 years
 
-### 9. Large Corporate Correlation Multiplier (CRE31.5)
+### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 
-Large corporates (consolidated revenue > £500m) receive a **1.25x** multiplier on their asset correlation under F-IRB. This increases capital requirements for exposures to large financial and non-financial corporates.
+**Large financial sector entities** (regulated FSEs with total assets > EUR 70bn per CRR Art. 4(1)(146)) and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier is unchanged between CRR and Basel 3.1.
+
+!!! note "Not the same as the large corporate threshold"
+    The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets**, not to large non-financial corporates. The Art. 147A large corporate threshold (revenue > £440m) is an **approach restriction** (F-IRB only) — it does not trigger the correlation uplift. See the [IRB restrictions table](#irb-restrictions) below.
 
 ### 10. Due Diligence Requirements
 
@@ -461,7 +464,7 @@ gantt
 | Real estate | CRE20.70-90 |
 | PD/LGD floors | CRE32 |
 | Specialised lending | CRE33 |
-| Large corporate correlation | CRE31.5 |
+| Financial sector entity correlation | CRE31.5 |
 | A-IRB CCF floor | CRE32.27 |
 
 ## Next Steps

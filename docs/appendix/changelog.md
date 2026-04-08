@@ -5,6 +5,15 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.168] — 2026-04-08
+
+### Added
+- **Pillar III**: UKB CR9 — IRB PD backtesting per exposure class (Art. 452(h)). 8 columns × 17 PD buckets + total row. Basel 3.1 only. Separate F-IRB and A-IRB template sets. Uses `irb_pd_original` for bucket allocation (beginning-of-period proxy). Includes obligor count, default count, observed default rate, EAD-weighted average PD, arithmetic mean PD, historical annual default rate.
+- **Pillar III**: UKB CR9.1 — ECAI mapping PD backtesting (Art. 180(1)(f)). Template definitions only; generation deferred until pipeline provides firm-specific ECAI mapping data.
+- **Pillar III**: `Pillar3TemplateBundle.cr9` field added (dict of approach–class keyed DataFrames)
+- **Pillar III**: CR9 Excel export via `export_to_excel()` with human-readable sheet names (e.g., "UKB CR9 F-IRB Corp")
+- **Tests**: 44 new tests for CR9/CR9.1 across 7 test classes (definitions, generation, column values, PD allocation, edge cases, bundle integration, Excel export). Total: 4,832 (was 4,788). (P3.2)
+
 ## [Unreleased]
 
 ### Added

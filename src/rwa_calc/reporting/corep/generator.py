@@ -533,9 +533,19 @@ class COREPGenerator:
                 # CCR/other rows — not implemented
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        # Section 3: Calculation Approaches — null for now
+        # Section 3: Calculation Approaches
+        # Splits the total IRB exposure by calculation method: PD/LGD model
+        # (row 0070) vs slotting (row 0080), plus sub-portfolios.
+        approach_col = "approach_applied" if "approach_applied" in cols else None
         for row_def in row_sections[2].rows:
-            rows.append(_null_row(row_def.ref, row_def.name, column_refs))
+            subset = _filter_section3_row(
+                class_data, cols, row_def.ref, approach_col, framework,
+            )
+            if subset is not None and len(subset) > 0:
+                values = _compute_c08_values(subset, cols, ead_col, rwa_col, column_refs)
+                rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
+            else:
+                rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
         schema: dict[str, pl.DataType] = {
             "row_ref": pl.String,
@@ -888,6 +898,102 @@ def _filter_currency_mismatch(data: pl.DataFrame, cols: set[str]) -> pl.DataFram
     if "currency_mismatch_multiplier_applied" not in cols:
         return data.clear()
     return data.filter(pl.col("currency_mismatch_multiplier_applied") == True)  # noqa: E712
+
+
+def _filter_section3_row(
+    data: pl.DataFrame,
+    cols: set[str],
+    row_ref: str,
+    approach_col: str | None,
+    framework: str,
+) -> pl.DataFrame | None:
+    """Filter class_data for a C 08.01 Section 3 row.
+
+    Section 3 splits the total IRB exposure by calculation method:
+    - 0070: PD/LGD model approach (F-IRB + A-IRB, excluding slotting)
+    - 0080: Specialised lending slotting approach
+    - 0160: Alternative treatment for real estate (CRR only)
+    - 0170: Exposures from free deliveries
+    - 0175: Purchased receivables (Basel 3.1 only)
+    - 0180: Dilution risk on purchased receivables
+    - 0190: Corporates without ECAI (Basel 3.1 only, unrated)
+    - 0200: of which: investment grade (subset of 0190)
+
+    Returns None for rows that cannot be populated from available data.
+
+    References:
+    - CRR Art. 142-191 (IRB approach assignment)
+    - PRA PS1/26 Art. 122D (investment grade assessment)
+    """
+    if approach_col is None:
+        return None
+
+    if row_ref == "0070":
+        # Exposures assigned to obligor grades or pools — non-slotting IRB
+        return data.filter(
+            pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"])
+        )
+
+    if row_ref == "0080":
+        # Specialised lending slotting approach
+        return data.filter(pl.col(approach_col) == "slotting")
+
+    if row_ref == "0160":
+        # Alternative treatment: Secured by real estate (CRR only)
+        # Requires a dedicated pipeline flag not yet available
+        return None
+
+    if row_ref == "0170":
+        # Exposures from free deliveries (alternative RW or 100%)
+        # Requires free_delivery identification not yet in pipeline
+        return None
+
+    if row_ref == "0175":
+        # Purchased receivables (Basel 3.1 only)
+        # Requires purchased_receivable identification not yet in pipeline
+        return None
+
+    if row_ref == "0180":
+        # Dilution risk: Total purchased receivables
+        # Requires dilution risk tracking not yet in pipeline
+        return None
+
+    if row_ref == "0190":
+        # Corporates without ECAI — unrated corporates (Basel 3.1 only)
+        if framework != "BASEL_3_1":
+            return None
+        if "exposure_class" not in cols:
+            return None
+        ec_filter = pl.col("exposure_class").str.contains("corporate", literal=True)
+        # Unrated = no external credit assessment (sa_cqs is null or absent)
+        if "sa_cqs" in cols:
+            return data.filter(ec_filter & pl.col("sa_cqs").is_null())
+        # Without sa_cqs, all IRB corporates are treated as unrated for this row
+        return data.filter(ec_filter)
+
+    if row_ref == "0200":
+        # of which: investment grade (subset of unrated corporates)
+        if framework != "BASEL_3_1":
+            return None
+        if "exposure_class" not in cols:
+            return None
+        ec_filter = pl.col("exposure_class").str.contains("corporate", literal=True)
+        unrated_filter = pl.col("sa_cqs").is_null() if "sa_cqs" in cols else pl.lit(True)
+        # Investment grade: use cp_is_investment_grade if available,
+        # otherwise approximate from PD (Art. 122D: PD <= 0.5% as proxy)
+        if "cp_is_investment_grade" in cols:
+            return data.filter(
+                ec_filter
+                & unrated_filter
+                & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
+            )
+        if "irb_pd_floored" in cols:
+            return data.filter(
+                ec_filter & unrated_filter & (pl.col("irb_pd_floored") <= 0.005)
+            )
+        return None
+
+    return None
 
 
 def _null_row(row_ref: str, row_name: str, column_refs: list[str]) -> dict[str, object]:

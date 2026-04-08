@@ -15,7 +15,7 @@ Equity exposures include:
 
 ### SA Risk Weights
 
-CRR uses 100% for listed equities and 150% for private equity. Basel 3.1 significantly increases weights to 250% (listed) and 400% (private equity/venture capital), with a transitional phase-in schedule.
+CRR assigns a flat 100% SA risk weight to all equity under Art. 133(2), with higher weights under IRB Simple (Art. 155: 290% exchange-traded, 370% PE/VC). Basel 3.1 removes IRB equity approaches and significantly increases SA weights to 250% (standard listed, Art. 133(3)) and 400% (higher risk: unlisted held <5 years, PE/VC, Art. 133(5)), with a transitional phase-in from 2027.
 
 !!! warning "Basel 3.1"
     IRB approaches for equity are **removed** under Basel 3.1. Only SA is permitted.
@@ -28,29 +28,33 @@ CRR uses 100% for listed equities and 150% for private equity. Basel 3.1 signifi
 - £10m listed equity portfolio
 - Mix of exchange-traded and private equity
 
-**CRR (Simple Approach):**
+**CRR SA (Art. 133):**
 ```python
-# Exchange-traded: £7m
-RWA_exchange = £7,000,000 × 190% = £13,300,000
-
-# Private equity: £3m
-RWA_private = £3,000,000 × 370% = £11,100,000
-
-# Total
-Total_RWA = £24,400,000
-```
-
-**Basel 3.1:**
-```python
-# Exchange-traded: £7m
+# Exchange-traded: £7m (flat 100%)
 RWA_exchange = £7,000,000 × 100% = £7,000,000
 
-# Private equity: £3m
+# Private equity: £3m (flat 100%)
+RWA_private = £3,000,000 × 100% = £3,000,000
+
+# Total
+Total_RWA = £10,000,000
+```
+
+**Basel 3.1 SA (Art. 133, fully phased from 2030):**
+```python
+# Exchange-traded: £7m (standard listed: 250%)
+RWA_exchange = £7,000,000 × 250% = £17,500,000
+
+# Private equity: £3m (higher risk: 400%)
 RWA_private = £3,000,000 × 400% = £12,000,000
 
 # Total
-Total_RWA = £19,000,000
+Total_RWA = £29,500,000
 ```
+
+!!! info "Transitional weights (2027–2029)"
+    Standard equity weights phase in from 160% (2027) to 250% (2030+), and higher-risk
+    from 220% (2027) to 400% (2030+). See [Key Differences](../../framework-comparison/key-differences.md#equity-exposures) for the full schedule.
 
 ## Defaulted Exposures
 
@@ -278,8 +282,8 @@ Securitisation has dedicated rules (outside scope of this calculator):
 
 | Exposure Class | SA RW Range | IRB Available |
 |----------------|-------------|---------------|
-| Equity (exchange) | 100% | No (Basel 3.1) |
-| Equity (private) | 150-400% | No (Basel 3.1) |
+| Equity (exchange) | 100–250% | No (Basel 3.1) |
+| Equity (private/VC) | 100–400% | No (Basel 3.1) |
 | Defaulted | 50-150% | Yes |
 | PSE | 0-150% | Yes |
 | MDB (eligible) | 0% | N/A |

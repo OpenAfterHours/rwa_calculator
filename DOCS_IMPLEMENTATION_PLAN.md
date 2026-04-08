@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-08 (D1.22: fixed Table 4/4A mislabelling in sa-risk-weights.md; D4.15: fixed CQS 6 short-term in institution.md; new D3.14 code bug)
+Last updated: 2026-04-08 (D1.25: fixed B31 equity RWs in other.md; D1.23: resolved as false positive; D4.22: fixed equity mislabel)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -28,6 +28,8 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Skill Reference Errors (affect agent-generated regulatory guidance)
 
+!!! note "BLOCKED: `.claude/skills/` is sandbox write-protected. These require manual user fix or sandbox policy change."
+
 - [ ] **D1.13** — `skills/basel31/references/irb-changes.md` (line 15): Retail mortgage PD floor = 0.05%. Correct: **0.10%**. Also QRRE transactors = 0.03%, correct: **0.05%**. **Also**: subordinated 50% row still present in corporate LGD floor table (line 27) — should be removed per D1.5 fix.
 - [ ] **D1.14** — `skills/basel31/references/crm-changes.md` and `what-changed.md`: equity haircuts shown as 25%/35% (BCBS CRE22.53). PRA PS1/26 Art. 224 Table 3 confirmed: **20%/30%**. Fix skill references.
 - [ ] **D1.15** — `skills/basel31/references/output-floor.md` and skill index: show BCBS 6-year transitional schedule (50%-72.5%, 2027-2032). PRA PS1/26 uses **4-year** schedule (60%-72.5%, 2027-2030). Fix skill references. **Also wrong in:** `skills/basel31/SKILL.md` index file (same BCBS 6-year schedule).
@@ -41,9 +43,9 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D1.20** — CIU fallback in `key-differences.md` (line 409) shows **1,250%** for both CRR and Basel 3.1, labelled "Unchanged". **Three errors:** (a) CRR Art. 132(1) default assignment was **100%**, not 150% or 1,250% (the 150% was only the ECAI method CQS 5-6 rate, not the general fallback); (b) Art. 132 was **omitted from UK law** by SI 2021/1078 (1 Jan 2022), so no CIU fallback exists in current UK CRR; (c) Basel 3.1 Art. 132B(2) fallback = **1,250%**, which differs from CRR's 100%. The "Unchanged" label is wrong on all counts.
 - [x] **D1.21** — ~~Art. 122(6)(b) non-investment grade unrated corporate = 135% entirely absent from all docs.~~ **FIXED:** Added 135% non-IG row to corporate sub-categories tables in `sa-risk-weights.md`, `key-differences.md`, `basel31.md`. Updated article references from BCBS CRE20.44/47 to PRA Art. 122(6)–(11). Added PRA permission admonitions to all three files explaining: requires prior PRA permission (Art. 122(6)); default without permission = 100% (Art. 122(5)); IG definition is institution's own internal assessment (Art. 122(9)–(10)), not external rating; SME 85% overrides regardless (Art. 122(11)); IRB output floor firms elect via Art. 122(8). Updated implementation checklist. Also partially addresses D2.24. (2026-04-08)
 - [x] **D1.22** — ~~`sa-risk-weights.md` (lines 220-229): Table 4A mislabelled as "Own-Rating Based (CRR Art. 120(2))".~~ **FIXED:** (1) CRR has no Table 4A — removed. (2) Table 4 label corrected from "Sovereign-Derived (CRR Art. 120(1))" to "Short-Term Preferential (CRR Art. 120(2))". (3) Column header corrected from "Sovereign CQS" to "Institution CQS". (4) Added correction admonition explaining CRR Tables 3/4 use institution's own ECAI, not sovereign-derived (sovereign-derived is Art. 121/Table 5). (5) Added B31 Table 4A info admonition (Art. 120(2B), short-term CQS: 20%/50%/100%/150%) with Art. 120(3) interaction rules. (6) Added Unrated 20% row citing Art. 121(3). (2026-04-08)
-- [ ] **D1.23** — Rated covered bond CQS 6 = **50%** in `key-differences.md` (line 457). Art. 129 Table 7 confirms CQS 6 = **100%**.
+- [x] **D1.23** — ~~Rated covered bond CQS 6 = 50% in `key-differences.md`.~~ **FALSE POSITIVE:** Art. 129 Table 7 (CRR) has CQS 6 = 100%, but Basel 3.1 Art. 129A collapses CQS 4-6 to 50%. The `key-differences.md` value (50% in B31 column) is correct. Code confirmed: `b31_risk_weights.py` line 267 `CQS6: Decimal("0.50")`. (2026-04-08)
 - [ ] **D1.24** — `crr.md` (line 107): unrated institution RW says "See due diligence approach". Under CRR, unrated institutions = flat **40%** (sovereign-derived from UK CQS 2). "Due diligence approach" is a Basel 3.1/SCRA framing, not CRR.
-- [ ] **D1.25** — `other.md` (lines 43-49): B31 equity example shows exchange-traded equity at **100%** RW. This is the CRR SA value. Under Basel 3.1, exchange-traded equity = **250%** (or 160% transitionally in 2027).
+- [x] **D1.25** — ~~`other.md` B31 equity example shows exchange-traded equity at 100% RW.~~ **FIXED:** (1) Corrected B31 exchange-traded from 100% to 250% (Art. 133(3)); (2) CRR example relabelled from "CRR (Simple Approach)" using IRB Simple rates (190%/370%) to "CRR SA (Art. 133)" with correct flat 100%; (3) Line 18 prose corrected from "150% for private equity" to flat 100% per Art. 133(2) with IRB Simple note; (4) Added transitional weights admonition (160%–250% standard, 220%–400% higher risk, 2027–2030); (5) Summary table updated: "Equity (exchange)" range from 100% to 100–250%, "Equity (private)" from 150-400% to 100–400%. Also resolves D4.22 (mislabel). (2026-04-08)
 - [x] **D1.26** — ~~`basel31.md`: SCRA Grade A criteria mislabelled.~~ **FIXED:** as part of D1.7 fix. Grade A (40%) criteria corrected from quantitative thresholds to "Meets all minimum requirements + buffers". Quantitative thresholds (CET1 ≥ 14%, leverage ≥ 5%) now correctly assigned to Grade A enhanced (30%). (2026-04-08)
 - [ ] **D1.27** — `equity.md` (line 47): "Government-supported: 190%" under Art. 155 IRB Simple. Art. 155 has only three categories: exchange-traded (290%), PE diversified (190%), all other (370%). No "Government-supported" category exists.
 
@@ -167,7 +169,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D4.19** — `sa-risk-weights.md` Art. 123 salary/pension 35% treatment labelled as B31-only. It exists in CRR Art. 123 already.
 - [ ] **D4.20** — Covered bond unrated row in `sa-risk-weights.md` CRR table: spec says "20% if CQS 1-2 equivalent" but Art. 129 Table 6a has no unrated row. Clarify regulatory basis.
 - [ ] **D4.21** — `exposure-classes/other.md` PSE/RGLA sections have no risk weight tables. The sovereign-derived Tables 1A/1B (RGLA) and 2/2A (PSE) from `sa-risk-weights.md` are absent.
-- [ ] **D4.22** — `other.md` equity example uses 190% (IRB Simple) but labels it "CRR (Simple Approach) SA". Mislabel.
+- [x] **D4.22** — ~~`other.md` equity example uses 190% (IRB Simple) but labels it "CRR (Simple Approach) SA". Mislabel.~~ **FIXED:** as part of D1.25 fix. CRR example now uses correct SA (Art. 133) flat 100% weights. (2026-04-08)
 - [ ] **D4.23** — HVCRE Table 2 in `slotting-approach.md` and `crr.md`: verify against UK CRR Art. 153(5). May only exist in original EU CRR, not UK onshored version.
 - [ ] **D4.24** — `crr.md` CCF table (lines 138-147) conflates MR and MLR categories. Lists "Undrawn credit facilities: 20%" when >1yr = 50% (MR) and <=1yr = 20% (MLR).
 - [ ] **D4.25** — Art. 226 non-daily revaluation adjustment absent from `key-differences.md` and `technical-reference.md`. Only in `credit-risk-mitigation.md`.
@@ -208,6 +210,9 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D2.24** — PRA permission requirement for Art. 122(6) IG assessment added to all three files as part of D1.21 fix. (2026-04-08)
 - [x] **D1.22** — Institution Table 4/4A mislabelling in `sa-risk-weights.md` corrected. CRR has no Table 4A (removed); Table 4 relabelled from "Sovereign-Derived (Art. 120(1))" to "Short-Term Preferential (Art. 120(2))"; column header corrected from "Sovereign CQS" to "Institution CQS". Added correction admonition (CRR Tables 3/4 use institution ECAI, sovereign-derived is Art. 121/Table 5). Added B31 Table 4A info admonition (Art. 120(2B): 20%/50%/100%/150%). Also added Unrated 20% row citing Art. 121(3). (2026-04-08)
 - [x] **D4.15** — Institution short-term CQS 6 in `institution.md` corrected from 50% to 150%. Row split: "CQS 4-6" → separate "CQS 4-5" (50%) and "CQS 6" (150%) per CRR Art. 120(2) Table 4. (2026-04-08)
+- [x] **D1.23** — Covered bond CQS 6 = 50% in `key-differences.md` B31 column. **FALSE POSITIVE:** Art. 129A (B31) collapses CQS 4-6 to 50%, reducing from CRR Art. 129 Table 7 CQS 6 = 100%. Code confirmed correct (`b31_risk_weights.py:267`). (2026-04-08)
+- [x] **D1.25** — `other.md` B31 equity example corrected: exchange-traded 100% → 250% (Art. 133(3)); CRR example relabelled from IRB Simple (190%/370%) to SA (Art. 133, flat 100%); prose corrected from "150% for PE" to flat 100%; transitional admonition added; summary table ranges updated. Also resolved D4.22 (mislabel). (2026-04-08)
+- [x] **D4.22** — `other.md` equity example mislabel fixed as part of D1.25. (2026-04-08)
 
 ---
 
@@ -227,5 +232,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - Art. 155 (IRB Simple equity) has exactly three categories: exchange-traded (290%), PE diversified (190%), all other (370%). No "government-supported" category exists anywhere in the CRR or Basel 3.1 text.
 - D4.8 flagged for review: CQS 4 govt bond haircut row appears present in current version of `credit-risk-mitigation.md`.
 - Phase 3 PDF verification confirmed all 27 existing D1.x items and all 31 existing D2.x items. 4 new P1 items, 2 new P3 items, and 4 new P4 items added based on CRR omission findings and threshold clarifications.
+- D1.16 re-check: `slotting-changes.md` shows 80/100/120/350% for pre-op PF. These values match the PRA B31 standard non-HVCRE table — the error is that PRA has NO separate pre-op table, so showing any pre-op-specific table is misleading (the same weights apply to all PF). Needs further verification whether the skill file should remove the pre-op section entirely or note that pre-op uses standard weights.
+- D1.13-D1.19 skill file fixes are BLOCKED by sandbox write permissions on `.claude/skills/`. User must fix manually or adjust sandbox policy. All errors verified correct as documented.
 - CRR institution tables: CRR has exactly 3 institution tables — Table 3 (Art. 120(1), rated long-term), Table 4 (Art. 120(2), rated short-term), Table 5 (Art. 121(1), unrated sovereign-derived). There is **no Table 4A** in the CRR. Both Tables 3 and 4 use the institution's own ECAI rating. Basel 3.1 introduces Table 4A (Art. 120(2B)) for short-term ECAI assessments.
 - B31 ECRA short-term Table 4 code bug: `B31_ECRA_SHORT_TERM_RISK_WEIGHTS` in `b31_risk_weights.py` has CQS 4-5 at 20% — should be 50% per PRA PS1/26 Art. 120(2). Filed as D3.14.

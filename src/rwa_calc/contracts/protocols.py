@@ -645,7 +645,8 @@ class ResultExporterProtocol(Protocol):
 
     Why: Firms need calculation results in formats consumable by
     downstream systems — Parquet for analytics pipelines, CSV for
-    ad-hoc analysis, Excel for stakeholder reporting.
+    ad-hoc analysis, Excel for stakeholder reporting, and COREP
+    templates for quarterly regulatory submissions to the PRA.
     """
 
     def export_to_parquet(
@@ -689,6 +690,35 @@ class ResultExporterProtocol(Protocol):
     ) -> ExportResult:
         """
         Export results to a multi-sheet Excel workbook.
+
+        Args:
+            response: CalculationResponse with cached results
+            output_path: Path for the .xlsx output file
+
+        Returns:
+            ExportResult with the written file path and row count
+        """
+        ...
+
+    def export_to_corep(
+        self,
+        response: CalculationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """
+        Export results as COREP regulatory reporting templates.
+
+        Generates C 07.00 (SA credit risk), C 08.01 (IRB totals),
+        and C 08.02 (IRB PD grade breakdown) in a multi-sheet Excel
+        workbook following EBA/PRA COREP template structure.
+
+        Why: CRR firms must submit quarterly COREP returns to the PRA.
+        This reshapes the calculator's exposure-level results into the
+        fixed-format regulatory templates (Regulation (EU) 2021/451).
+
+        References:
+            - CRR Art. 99: COREP reporting obligation
+            - PRA PS1/26: Basel 3.1 OF-variant templates
 
         Args:
             response: CalculationResponse with cached results

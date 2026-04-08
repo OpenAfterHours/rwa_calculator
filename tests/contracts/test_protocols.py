@@ -5,6 +5,7 @@ definitions for type checking.
 """
 
 from datetime import date
+from pathlib import Path
 
 import polars as pl
 
@@ -20,12 +21,14 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import LazyFrameResult
+from rwa_calc.api.export import ExportResult
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     CRMProcessorProtocol,
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
     LoaderProtocol,
+    ResultExporterProtocol,
     SACalculatorProtocol,
 )
 
@@ -134,6 +137,38 @@ class StubIRBCalculator:
         return LazyFrameResult(frame=pl.LazyFrame())
 
 
+class StubResultExporter:
+    """Stub implementation of ResultExporterProtocol."""
+
+    def export_to_parquet(
+        self,
+        response: object,
+        output_dir: Path,
+    ) -> ExportResult:
+        return ExportResult(format="parquet")
+
+    def export_to_csv(
+        self,
+        response: object,
+        output_dir: Path,
+    ) -> ExportResult:
+        return ExportResult(format="csv")
+
+    def export_to_excel(
+        self,
+        response: object,
+        output_path: Path,
+    ) -> ExportResult:
+        return ExportResult(format="excel")
+
+    def export_to_corep(
+        self,
+        response: object,
+        output_path: Path,
+    ) -> ExportResult:
+        return ExportResult(format="corep_excel")
+
+
 class TestProtocolCompliance:
     """Tests that stub implementations satisfy protocols."""
 
@@ -211,6 +246,15 @@ class TestProtocolCompliance:
         result = calculator.calculate(data, config)
         assert isinstance(result, LazyFrameResult)
 
+    def test_result_exporter_protocol_satisfied(self):
+        """StubResultExporter should satisfy ResultExporterProtocol."""
+        exporter = StubResultExporter()
+        assert isinstance(exporter, ResultExporterProtocol)
+
+        result = exporter.export_to_corep(None, Path("/tmp/test.xlsx"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "corep_excel"
+
 
 class TestProtocolRuntimeCheckable:
     """Tests that protocols are runtime checkable."""
@@ -252,3 +296,69 @@ class TestProtocolRuntimeCheckable:
         calculator = StubIRBCalculator()
 
         assert isinstance(calculator, IRBCalculatorProtocol)
+
+    def test_result_exporter_isinstance_check(self):
+        """isinstance should work with ResultExporterProtocol."""
+        exporter = StubResultExporter()
+
+        assert isinstance(exporter, ResultExporterProtocol)
+        assert not isinstance(object(), ResultExporterProtocol)
+
+
+class TestResultExporterProtocol:
+    """Tests for ResultExporterProtocol compliance including export_to_corep."""
+
+    def test_result_exporter_protocol_satisfied(self):
+        """StubResultExporter should satisfy ResultExporterProtocol."""
+        exporter = StubResultExporter()
+        assert isinstance(exporter, ResultExporterProtocol)
+
+    def test_export_to_parquet_returns_export_result(self):
+        """export_to_parquet should return ExportResult."""
+        exporter = StubResultExporter()
+        result = exporter.export_to_parquet(None, Path("/tmp"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "parquet"
+
+    def test_export_to_csv_returns_export_result(self):
+        """export_to_csv should return ExportResult."""
+        exporter = StubResultExporter()
+        result = exporter.export_to_csv(None, Path("/tmp"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "csv"
+
+    def test_export_to_excel_returns_export_result(self):
+        """export_to_excel should return ExportResult."""
+        exporter = StubResultExporter()
+        result = exporter.export_to_excel(None, Path("/tmp"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "excel"
+
+    def test_export_to_corep_returns_export_result(self):
+        """export_to_corep should return ExportResult."""
+        exporter = StubResultExporter()
+        result = exporter.export_to_corep(None, Path("/tmp"))
+        assert isinstance(result, ExportResult)
+        assert result.format == "corep_excel"
+
+    def test_missing_export_to_corep_fails_isinstance(self):
+        """Class without export_to_corep should not satisfy protocol."""
+
+        class IncompleteExporter:
+            def export_to_parquet(self, response, output_dir):
+                return ExportResult(format="parquet")
+
+            def export_to_csv(self, response, output_dir):
+                return ExportResult(format="csv")
+
+            def export_to_excel(self, response, output_path):
+                return ExportResult(format="excel")
+
+        assert not isinstance(IncompleteExporter(), ResultExporterProtocol)
+
+    def test_concrete_result_exporter_satisfies_protocol(self):
+        """The real ResultExporter from api.export should satisfy the protocol."""
+        from rwa_calc.api.export import ResultExporter
+
+        exporter = ResultExporter()
+        assert isinstance(exporter, ResultExporterProtocol)

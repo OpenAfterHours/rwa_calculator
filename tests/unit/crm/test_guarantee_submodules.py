@@ -39,7 +39,6 @@ from rwa_calc.engine.crm.guarantees import (
     _resolve_guarantees_multi_level,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -201,7 +200,7 @@ class TestGuaranteeFxHaircut:
         """FX_HAIRCUT constant is 8% (Decimal 0.08)."""
         from decimal import Decimal
 
-        assert FX_HAIRCUT == Decimal("0.08")
+        assert Decimal("0.08") == FX_HAIRCUT
 
     def test_full_guarantee_cross_currency(self) -> None:
         """Full EAD guarantee in different currency: 8% becomes unguaranteed."""
@@ -324,7 +323,7 @@ class TestRestructuringExclusionHaircut:
         """RESTRUCTURING_EXCLUSION_HAIRCUT constant is 40%."""
         from decimal import Decimal
 
-        assert RESTRUCTURING_EXCLUSION_HAIRCUT == Decimal("0.40")
+        assert Decimal("0.40") == RESTRUCTURING_EXCLUSION_HAIRCUT
 
     def test_both_columns_absent_early_return(self) -> None:
         """Both protection_type and includes_restructuring absent: early return."""

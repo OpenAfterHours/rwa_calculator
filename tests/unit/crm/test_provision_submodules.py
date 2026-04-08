@@ -32,7 +32,6 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.provisions import resolve_provisions
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

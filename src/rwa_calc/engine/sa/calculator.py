@@ -1800,24 +1800,23 @@ class SACalculator:
         cols = schema.names()
 
         # Warn if due_diligence_performed column is absent under Basel 3.1
-        if "due_diligence_performed" not in cols:
-            if errors is not None:
-                errors.append(
-                    CalculationError(
-                        code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
-                        message=(
-                            "Due diligence assessment status not provided "
-                            "(due_diligence_performed column absent). "
-                            "Art. 110A requires firms to perform due diligence "
-                            "on all SA exposures to ensure risk weights "
-                            "appropriately reflect exposure risk."
-                        ),
-                        severity=ErrorSeverity.WARNING,
-                        category=ErrorCategory.DATA_QUALITY,
-                        regulatory_reference="PRA PS1/26 Art. 110A",
-                        field_name="due_diligence_performed",
-                    )
+        if "due_diligence_performed" not in cols and errors is not None:
+            errors.append(
+                CalculationError(
+                    code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+                    message=(
+                        "Due diligence assessment status not provided "
+                        "(due_diligence_performed column absent). "
+                        "Art. 110A requires firms to perform due diligence "
+                        "on all SA exposures to ensure risk weights "
+                        "appropriately reflect exposure risk."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="PRA PS1/26 Art. 110A",
+                    field_name="due_diligence_performed",
                 )
+            )
 
         # Apply override RW where provided and higher than calculated RW
         if "due_diligence_override_rw" not in cols:

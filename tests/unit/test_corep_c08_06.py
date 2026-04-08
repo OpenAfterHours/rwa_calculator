@@ -34,7 +34,6 @@ from rwa_calc.reporting.corep.templates import (
     get_c08_06_sl_types,
 )
 
-
 # =============================================================================
 # TEST FIXTURES (module-level functions, not pytest fixtures)
 # =============================================================================
@@ -225,7 +224,7 @@ class TestC0806TemplateDefinitions:
         assert "0025" not in crr_refs
 
     def test_column_refs_match_crr(self):
-        assert C08_06_COLUMN_REFS == [c.ref for c in CRR_C08_06_COLUMNS]
+        assert [c.ref for c in CRR_C08_06_COLUMNS] == C08_06_COLUMN_REFS
 
     def test_get_c08_06_columns_crr(self):
         assert get_c08_06_columns("CRR") is CRR_C08_06_COLUMNS

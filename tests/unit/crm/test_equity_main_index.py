@@ -33,7 +33,6 @@ from rwa_calc.data.tables.crr_haircuts import (
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

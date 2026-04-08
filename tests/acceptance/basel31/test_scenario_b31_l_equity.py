@@ -40,11 +40,11 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.equity.calculator import EquityCalculator
-from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 # =============================================================================
 # Fixtures

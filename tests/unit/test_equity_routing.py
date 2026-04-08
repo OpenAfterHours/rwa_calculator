@@ -256,6 +256,7 @@ class TestSA005EquityWarning:
         exposures = _equity_exposure()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
+        assert errors[0].regulatory_reference is not None
         assert "Art. 133" in errors[0].regulatory_reference
 
     def test_no_warning_when_no_equity(self, calculator: SACalculator) -> None:

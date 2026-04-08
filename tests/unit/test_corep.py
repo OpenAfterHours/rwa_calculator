@@ -30,8 +30,8 @@ from rwa_calc.reporting.corep.templates import (
     B31_C02_00_COLUMNS,
     B31_C02_00_ROW_SECTIONS,
     B31_C07_COLUMNS,
-    B31_C08_COLUMNS,
     B31_C08_07_ROWS,
+    B31_C08_COLUMNS,
     B31_IRB_ROW_SECTIONS,
     B31_SA_RISK_WEIGHT_BANDS,
     B31_SA_ROW_SECTIONS,
@@ -42,8 +42,8 @@ from rwa_calc.reporting.corep.templates import (
     CRR_C02_00_COLUMNS,
     CRR_C02_00_ROW_SECTIONS,
     CRR_C07_COLUMNS,
-    CRR_C08_COLUMNS,
     CRR_C08_07_ROWS,
+    CRR_C08_COLUMNS,
     CRR_IRB_ROW_SECTIONS,
     CRR_SA_ROW_SECTIONS,
     IRB_EXPOSURE_CLASS_ROWS,
@@ -4433,7 +4433,7 @@ class TestC0803TemplateDefinitions:
         """C08_03_COLUMN_REFS is derived from CRR_C08_03_COLUMNS refs."""
         from rwa_calc.reporting.corep.templates import C08_03_COLUMN_REFS, CRR_C08_03_COLUMNS
 
-        assert C08_03_COLUMN_REFS == [c.ref for c in CRR_C08_03_COLUMNS]
+        assert [c.ref for c in CRR_C08_03_COLUMNS] == C08_03_COLUMN_REFS
 
     def test_get_c08_03_columns_crr(self) -> None:
         """get_c08_03_columns returns CRR columns for 'CRR' framework."""
@@ -4939,7 +4939,7 @@ class TestC0804TemplateDefinitions:
             "Foreign exchange movements",
             "Other",
         ]
-        for row, expected in zip(drivers, expected_names):
+        for row, expected in zip(drivers, expected_names, strict=True):
             assert expected.lower() in row.name.lower()
 
     def test_get_columns_crr(self) -> None:
@@ -4983,7 +4983,7 @@ class TestC0804Generation:
     def test_each_class_has_correct_columns(self) -> None:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_flow_results())
-        for ec, df in bundle.c08_04.items():
+        for _ec, df in bundle.c08_04.items():
             assert "row_ref" in df.columns
             assert "row_name" in df.columns
             assert "0010" in df.columns
@@ -5290,7 +5290,7 @@ class TestC0805TemplateDefinitions:
     def test_column_refs(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_05_COLUMN_REFS, CRR_C08_05_COLUMNS
 
-        assert C08_05_COLUMN_REFS == [c.ref for c in CRR_C08_05_COLUMNS]
+        assert [c.ref for c in CRR_C08_05_COLUMNS] == C08_05_COLUMN_REFS
 
     def test_column_refs_values(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_05_COLUMN_REFS
@@ -5798,12 +5798,12 @@ class TestC0807TemplateDefinitions:
     def test_column_refs_match_crr_columns(self) -> None:
         from rwa_calc.reporting.corep.templates import C08_07_COLUMN_REFS, CRR_C08_07_COLUMNS
 
-        assert C08_07_COLUMN_REFS == [c.ref for c in CRR_C08_07_COLUMNS]
+        assert [c.ref for c in CRR_C08_07_COLUMNS] == C08_07_COLUMN_REFS
 
     def test_b31_column_refs_match_b31_columns(self) -> None:
         from rwa_calc.reporting.corep.templates import B31_C08_07_COLUMN_REFS, B31_C08_07_COLUMNS
 
-        assert B31_C08_07_COLUMN_REFS == [c.ref for c in B31_C08_07_COLUMNS]
+        assert [c.ref for c in B31_C08_07_COLUMNS] == B31_C08_07_COLUMN_REFS
 
     def test_get_c08_07_columns_crr(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C08_07_COLUMNS, get_c08_07_columns

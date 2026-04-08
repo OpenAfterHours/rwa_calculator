@@ -42,7 +42,6 @@ from rwa_calc.domain.enums import (
 )
 from rwa_calc.engine.classifier import ExposureClassifier
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

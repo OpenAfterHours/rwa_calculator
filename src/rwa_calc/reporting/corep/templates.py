@@ -11,6 +11,8 @@ Defines the row/column structure for COREP credit risk templates:
 - C 08.06 / OF 08.06: IRB specialised lending slotting — 10/11 columns, per SL type
 - C 08.07 / OF 08.07: IRB scope of use — 5/18 columns, per exposure class (CRR/B31)
 - OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
+- C 09.01 / OF 09.01: CR GB 1 — geographical breakdown SA, 13/10 columns
+- C 09.02 / OF 09.02: CR GB 2 — geographical breakdown IRB, 17/15 columns
 
 Supports both CRR (current) and Basel 3.1 (PRA PS1/26) frameworks.
 
@@ -1423,6 +1425,258 @@ C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset({
 
 
 # =============================================================================
+# C 09.01 / OF 09.01 — GEOGRAPHICAL BREAKDOWN SA
+# =============================================================================
+# C 09.01 provides a geographical breakdown of SA exposures by country of
+# obligor residence. Submitted once at total level and once per material country.
+#
+# References:
+# - Regulation (EU) 2021/451, Annex I/II (C 09.01)
+# - PRA PS1/26, Annex I/II (OF 09.01)
+# - CRR Art. 112 (SA exposure classes)
+
+CRR_C09_01_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0020", "Defaulted exposures", "Exposure"),
+    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
+    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
+    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0060", "Write-offs", "Provisions"),
+    COREPColumn("0061", "Additional value adjustments and other own funds reductions", "Provisions"),
+    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn("0075", "Exposure value", "Exposure Value"),
+    COREPColumn("0080", "RWEA pre supporting factors", "RWEA"),
+    COREPColumn("0081", "(-) SME supporting factor adjustment", "RWEA"),
+    COREPColumn("0082", "(-) Infrastructure supporting factor adjustment", "RWEA"),
+    COREPColumn("0090", "RWEA after supporting factors", "RWEA"),
+]
+
+# OF 09.01 (Basel 3.1): removes supporting factor columns 0080-0082
+B31_C09_01_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0020", "Defaulted exposures", "Exposure"),
+    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
+    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
+    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0060", "Write-offs", "Provisions"),
+    COREPColumn("0061", "Additional value adjustments and other own funds reductions", "Provisions"),
+    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn("0075", "Exposure value", "Exposure Value"),
+    COREPColumn("0090", "Risk-weighted exposure amount", "RWEA"),
+]
+
+C09_01_COLUMN_REFS: list[str] = [c.ref for c in CRR_C09_01_COLUMNS]
+B31_C09_01_COLUMN_REFS: list[str] = [c.ref for c in B31_C09_01_COLUMNS]
+
+# CRR C 09.01 rows — SA exposure classes for geographical breakdown
+CRR_C09_01_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0020", "Regional governments or local authorities", "rgla"),
+    COREPRow("0030", "Public sector entities", "pse"),
+    COREPRow("0040", "Multilateral development banks", "mdb"),
+    COREPRow("0050", "International organisations", "international_org"),
+    COREPRow("0060", "Institutions", "institution"),
+    COREPRow("0070", "Corporates", "corporate"),
+    COREPRow("0075", "  of which: SME", "corporate_sme"),
+    COREPRow("0080", "Retail", "retail"),
+    COREPRow("0085", "  of which: SME", "retail_sme"),
+    COREPRow("0090", "Secured by mortgages on immovable property", "retail_mortgage"),
+    COREPRow("0095", "  of which: SME", "mortgage_sme"),
+    COREPRow("0100", "Exposures in default", "defaulted"),
+    COREPRow("0110", "Items associated with particularly high risk", "high_risk"),
+    COREPRow("0120", "Covered bonds", "covered_bond"),
+    COREPRow("0130", "Claims on institutions and corporates with a short-term credit assessment",
+             "short_term"),
+    COREPRow("0140", "Collective investment undertakings (CIU)", "ciu"),
+    COREPRow("0141", "  Look-through approach", "ciu_look_through"),
+    COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
+    COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
+    COREPRow("0150", "Equity exposures", "equity"),
+    COREPRow("0160", "Other exposures", "other"),
+    COREPRow("0170", "Total exposures", None),
+]
+
+# OF 09.01 (Basel 3.1) rows — adds SL sub-rows, restructures RE rows
+B31_C09_01_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0020", "Regional governments or local authorities", "rgla"),
+    COREPRow("0030", "Public sector entities", "pse"),
+    COREPRow("0040", "Multilateral development banks", "mdb"),
+    COREPRow("0050", "International organisations", "international_org"),
+    COREPRow("0060", "Institutions", "institution"),
+    COREPRow("0070", "Corporates", "corporate"),
+    COREPRow("0075", "  of which: SME", "corporate_sme"),
+    COREPRow("0071", "  of which: specialised lending - object finance", "sl_object_finance"),
+    COREPRow("0072", "  of which: specialised lending - commodities finance",
+             "sl_commodities_finance"),
+    COREPRow("0073", "  of which: specialised lending - project finance", "sl_project_finance"),
+    COREPRow("0080", "Retail", "retail"),
+    COREPRow("0085", "  of which: SME", "retail_sme"),
+    COREPRow("0090", "Real estate exposures", "real_estate"),
+    COREPRow("0095", "  of which: SME", "re_sme"),
+    COREPRow("0091", "  of which: regulatory residential real estate", "re_residential"),
+    COREPRow("0092", "  of which: regulatory commercial real estate", "re_commercial"),
+    COREPRow("0093", "  of which: other real estate", "re_other"),
+    COREPRow("0094", "  of which: land acquisition, development and construction", "re_adc"),
+    COREPRow("0100", "Exposures in default", "defaulted"),
+    COREPRow("0110", "Exposures associated with particularly high risk", "high_risk"),
+    COREPRow("0120", "Eligible covered bonds", "covered_bond"),
+    COREPRow("0140", "Collective investment undertakings (CIU)", "ciu"),
+    COREPRow("0141", "  Look-through approach", "ciu_look_through"),
+    COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
+    COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
+    COREPRow("0150", "Subordinated debt, equity and other own funds instruments", "equity"),
+    COREPRow("0160", "Other items", "other"),
+    COREPRow("0170", "Total exposures", None),
+]
+
+
+# =============================================================================
+# C 09.02 / OF 09.02 — GEOGRAPHICAL BREAKDOWN IRB
+# =============================================================================
+# C 09.02 provides a geographical breakdown of IRB exposures by country of
+# obligor residence, including PD, LGD, and expected loss parameters.
+#
+# References:
+# - Regulation (EU) 2021/451, Annex I/II (C 09.02)
+# - PRA PS1/26, Annex I/II (OF 09.02)
+# - CRR Art. 147 (IRB exposure classes)
+
+CRR_C09_02_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0030", "Of which: defaulted", "Exposure"),
+    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
+    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
+    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0060", "Write-offs", "Provisions"),
+    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
+    COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
+    COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
+    COREPColumn("0105", "Exposure value", "Exposure Value"),
+    COREPColumn("0110", "RWEA pre supporting factors", "RWEA"),
+    COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
+    COREPColumn("0121", "(-) SME supporting factor adjustment", "RWEA"),
+    COREPColumn("0122", "(-) Infrastructure supporting factor adjustment", "RWEA"),
+    COREPColumn("0125", "RWEA after supporting factors", "RWEA"),
+    COREPColumn("0130", "Expected loss amount", "Memorandum"),
+]
+
+# OF 09.02 (Basel 3.1): adds 0107 (defaulted EV), removes 0110/0121/0122
+B31_C09_02_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0030", "Of which: defaulted", "Exposure"),
+    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
+    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
+    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0060", "Write-offs", "Provisions"),
+    COREPColumn("0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"),
+    COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
+    COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
+    COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
+    COREPColumn("0105", "Exposure value", "Exposure Value"),
+    COREPColumn("0107", "Of which: defaulted (exposure value)", "Exposure Value"),
+    COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
+    COREPColumn("0125", "Risk-weighted exposure amount", "RWEA"),
+    COREPColumn("0130", "Expected loss amount", "Memorandum"),
+]
+
+C09_02_COLUMN_REFS: list[str] = [c.ref for c in CRR_C09_02_COLUMNS]
+B31_C09_02_COLUMN_REFS: list[str] = [c.ref for c in B31_C09_02_COLUMNS]
+
+# CRR C 09.02 rows — IRB exposure classes for geographical breakdown
+CRR_C09_02_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0020", "Institutions", "institution"),
+    COREPRow("0030", "Corporates", "corporate"),
+    COREPRow("0042", "  Of which: specialised lending (excl. slotting approach)",
+             "sl_excl_slotting"),
+    COREPRow("0045", "  Of which: specialised lending under the slotting approach",
+             "sl_slotting"),
+    COREPRow("0050", "  Of which: SME", "corporate_sme"),
+    COREPRow("0060", "Retail", "retail"),
+    COREPRow("0070", "  Secured by immovable property", "retail_mortgage"),
+    COREPRow("0080", "    SME", "retail_mortgage_sme"),
+    COREPRow("0090", "    Non-SME", "retail_mortgage_non_sme"),
+    COREPRow("0100", "  Qualifying revolving", "retail_qrre"),
+    COREPRow("0110", "  Other retail", "retail_other"),
+    COREPRow("0120", "    SME", "retail_other_sme"),
+    COREPRow("0130", "    Non-SME", "retail_other_non_sme"),
+    COREPRow("0140", "Equity", "equity"),
+    COREPRow("0150", "Total exposures", None),
+]
+
+# OF 09.02 (Basel 3.1) rows — adds corporate sub-rows, restructures retail RE,
+# removes equity
+B31_C09_02_ROWS: list[COREPRow] = [
+    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0020", "Institutions", "institution"),
+    COREPRow("0030", "Corporates", "corporate"),
+    COREPRow("0042", "  Of which: specialised lending (excl. slotting approach)",
+             "sl_excl_slotting"),
+    COREPRow("0045", "  Of which: specialised lending under the slotting approach",
+             "sl_slotting"),
+    COREPRow("0048", "  Of which: financial corporates and large corporates (Art 147(4C))",
+             "corporate_fse_large"),
+    COREPRow("0049", "  Of which: purchased receivables (Art 157)",
+             "corporate_purchased_receivables"),
+    COREPRow("0050", "  Of which: other general corporates - SME (Art 147(4E)(c))",
+             "corporate_sme"),
+    COREPRow("0055", "  Of which: other general corporates - non-SME (Art 147(4E))",
+             "corporate_non_sme"),
+    COREPRow("0060", "Retail", "retail"),
+    COREPRow("0071", "  Secured by residential immovable property - SME",
+             "retail_resi_re_sme"),
+    COREPRow("0072", "  Secured by residential immovable property - non-SME",
+             "retail_resi_re_non_sme"),
+    COREPRow("0073", "  Secured by commercial immovable property - SME",
+             "retail_comm_re_sme"),
+    COREPRow("0074", "  Secured by commercial immovable property - non-SME",
+             "retail_comm_re_non_sme"),
+    COREPRow("0100", "  Qualifying revolving", "retail_qrre"),
+    COREPRow("0105", "  Purchased receivables (Art 157)", "retail_purchased_receivables"),
+    COREPRow("0120", "  Other retail - SME", "retail_other_sme"),
+    COREPRow("0130", "  Other retail - non-SME", "retail_other_non_sme"),
+    COREPRow("0150", "Total exposures", None),
+]
+
+# Mapping from pipeline exposure_class values to C 09.01 row filter keys.
+# Sub-rows (SME, RE sub-types, SL sub-types) require additional pipeline fields.
+C09_01_SA_CLASS_MAP: dict[str, str] = {
+    "central_govt_central_bank": "central_govt_central_bank",
+    "rgla": "rgla",
+    "pse": "pse",
+    "mdb": "mdb",
+    "international_org": "international_org",
+    "institution": "institution",
+    "corporate": "corporate",
+    "corporate_sme": "corporate",
+    "retail_other": "retail",
+    "retail_qrre": "retail",
+    "retail_mortgage": "retail_mortgage",
+    "defaulted": "defaulted",
+    "high_risk": "high_risk",
+    "covered_bond": "covered_bond",
+    "equity": "equity",
+    "other": "other",
+    "specialised_lending": "corporate",
+}
+
+# Mapping from pipeline exposure_class values to C 09.02 row filter keys.
+C09_02_IRB_CLASS_MAP: dict[str, str] = {
+    "central_govt_central_bank": "central_govt_central_bank",
+    "institution": "institution",
+    "corporate": "corporate",
+    "corporate_sme": "corporate",
+    "specialised_lending": "corporate",
+    "retail_mortgage": "retail",
+    "retail_qrre": "retail",
+    "retail_other": "retail",
+    "equity": "equity",
+}
+
+
+# =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
@@ -1470,3 +1724,42 @@ def get_c02_00_columns(framework: str = "CRR") -> list[COREPColumn]:
 def get_c02_00_row_sections(framework: str = "CRR") -> list[RowSection]:
     """Return the C 02.00 / OF 02.00 row sections for the given framework."""
     return B31_C02_00_ROW_SECTIONS if framework == "BASEL_3_1" else CRR_C02_00_ROW_SECTIONS
+
+
+def get_c09_01_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 09.01 / OF 09.01 column definitions for the given framework.
+
+    CRR has 13 columns (incl. supporting factors 0080-0082).
+    Basel 3.1 has 10 columns (supporting factors removed).
+    """
+    return B31_C09_01_COLUMNS if framework == "BASEL_3_1" else CRR_C09_01_COLUMNS
+
+
+def get_c09_01_rows(framework: str = "CRR") -> list[COREPRow]:
+    """Return the C 09.01 / OF 09.01 row definitions for the given framework.
+
+    CRR: 23 rows (standard SA exposure classes).
+    Basel 3.1: 29 rows (adds SL sub-rows 0071-0073, RE sub-rows 0091-0094,
+    removes short-term row 0130, renames equity/RE rows).
+    """
+    return B31_C09_01_ROWS if framework == "BASEL_3_1" else CRR_C09_01_ROWS
+
+
+def get_c09_02_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 09.02 / OF 09.02 column definitions for the given framework.
+
+    CRR has 17 columns (incl. supporting factors 0110, 0121, 0122).
+    Basel 3.1 has 15 columns (adds 0107 defaulted EV, removes 3 supporting
+    factor columns).
+    """
+    return B31_C09_02_COLUMNS if framework == "BASEL_3_1" else CRR_C09_02_COLUMNS
+
+
+def get_c09_02_rows(framework: str = "CRR") -> list[COREPRow]:
+    """Return the C 09.02 / OF 09.02 row definitions for the given framework.
+
+    CRR: 16 rows (incl. equity row 0140).
+    Basel 3.1: 19 rows (adds corporate sub-rows 0048/0049/0055, restructures
+    retail RE rows, removes equity).
+    """
+    return B31_C09_02_ROWS if framework == "BASEL_3_1" else CRR_C09_02_ROWS

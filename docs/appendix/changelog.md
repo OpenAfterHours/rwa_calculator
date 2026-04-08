@@ -5,6 +5,13 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.170] — 2026-04-08
+
+### Added
+- **COREP**: C 09.01 / OF 09.01 — CR GB 1 geographical breakdown SA. One DataFrame per country code + TOTAL. CRR: 13 columns (0010-0090 incl. supporting factors), 23 rows. Basel 3.1: 10 columns (removes supporting factors), 29 rows (adds SL sub-rows 0071-0073, RE sub-rows 0091-0094, removes short-term row). Uses `cp_country_code` from counterparty schema. Template definitions, generator methods, class maps, framework selectors.
+- **COREP**: C 09.02 / OF 09.02 — CR GB 2 geographical breakdown IRB. One DataFrame per country code + TOTAL. CRR: 17 columns (incl. PD, LGD, EL, supporting factors), 16 rows (incl. equity). Basel 3.1: 15 columns (adds 0107 defaulted EV, removes supporting factors), 19 rows (adds corporate sub-rows, restructures retail RE, removes equity).
+- **Tests**: 80 new COREP tests for C 09.01/09.02 across 10 test classes. COREP tests: 635 (was 555). Total: 4,953 (was 4,873). (P2.3)
+
 ## [0.1.169] — 2026-04-08
 
 ### Added

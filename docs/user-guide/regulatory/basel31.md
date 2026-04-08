@@ -204,17 +204,25 @@ Payroll/pension loans are a new category for loans repaid directly from salary o
 
 #### Currency Mismatch Multiplier
 
-!!! warning "Not Yet Implemented"
-    The currency mismatch risk weight multiplier is not yet implemented in the calculator.
-
 For unhedged retail and residential real estate exposures where the lending currency differs from the
-borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A / CRE20.76).
-The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral haircut
-used in CRM (CRR Art. 224).
+borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A /
+CRE20.76). The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral
+haircut used in CRM (CRR Art. 224).
+
+To trigger the multiplier, set `cp_borrower_income_currency` on each exposure. When it differs from
+`currency`, the 1.5x multiplier is applied automatically and the `currency_mismatch_multiplier_applied`
+output column is set to `True`. COREP memorandum row 0380 is populated from this flag.
 
 #### Defaulted Exposures
 
-Defaulted exposures receive 100% SA risk weight. Provision-coverage-based differentiation (CRE20.87-90) is not currently implemented in the SA calculator — defaulted treatment with provision coverage is handled through IRB.
+Defaulted exposures receive a risk weight based on provision coverage (PRA PS1/26 Art. 127 /
+CRE20.87-90). Where specific provisions are ≥20% of the unsecured exposure value, the risk weight
+is **100%**; otherwise **150%**. When eligible collateral is present, the secured portion retains the
+collateral-based risk weight and only the unsecured portion is subject to the provision test.
+
+!!! note "Basel 3.1 Exception"
+    Non-income-dependent residential real estate defaulted exposures receive a flat 100% risk weight
+    regardless of provision level (CRE20.88 / Art. 127(1A)).
 
 ### 8. Input Floors for IRB
 
@@ -409,12 +417,9 @@ Slotting remains available with updated risk weights:
 
 ### SA Specialised Lending (Art. 122A-122B)
 
-!!! warning "Not Yet Implemented"
-    SA specialised lending risk weights under Art. 122A-122B are described here for regulatory
-    completeness but are not yet implemented in the calculator. The SA calculator currently assigns
-    corporate risk weights to specialised lending exposures.
-
-Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from slotting:
+Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from slotting.
+Unrated exposures use the type-specific weights below; rated exposures fall through to the standard
+corporate CQS table per Art. 122A(3).
 
 | Specialised Lending Type | Risk Weight |
 |--------------------------|-------------|

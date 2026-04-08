@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-08 (Phase 3 — 10 parallel agents: 6 Explore for orientation, 4 PDF verification agents cross-checked PS1/26, CRR, and comparison PDFs against all doc files and source code)
+Last updated: 2026-04-08 (D1.10-D1.12: removed stale "Not Yet Implemented" warnings for currency mismatch, SA specialised lending, and defaulted provision-coverage in `basel31.md`)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -22,9 +22,9 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Stale "Not Yet Implemented" Warnings
 
-- [ ] **D1.10** — `basel31.md` (line 187): currency mismatch multiplier marked "Not Yet Implemented". **IS implemented** (`sa/calculator.py` lines 253, 318, 383, 1701). Remove warning.
-- [ ] **D1.11** — `basel31.md` (lines 374-377): SA specialised lending marked "Not Yet Implemented". **IS implemented** (`b31_risk_weights.py`, `sa/calculator.py` line 807). Remove warning.
-- [ ] **D1.12** — `basel31.md` (lines 195-196): Defaulted provision-coverage split marked "not implemented". **IS implemented** per `sa-risk-weights.md` and code. Remove warning.
+- [x] **D1.10** — ~~`basel31.md`: currency mismatch multiplier marked "Not Yet Implemented".~~ **FIXED:** Removed stale warning. Replaced with usage instructions (set `cp_borrower_income_currency`; output column `currency_mismatch_multiplier_applied`; COREP row 0380). Regulatory description retained (Art. 123A, 1.5x multiplier, 150% cap). (2026-04-08)
+- [x] **D1.11** — ~~`basel31.md`: SA specialised lending marked "Not Yet Implemented".~~ **FIXED:** Removed stale warning. Added note that unrated exposures use type-specific weights; rated fall through to corporate CQS table per Art. 122A(3). Risk weight table retained. (2026-04-08)
+- [x] **D1.12** — ~~`basel31.md`: Defaulted provision-coverage split marked "not implemented".~~ **FIXED:** Replaced incorrect "100% flat" text with full provision-coverage mechanism: ≥20% provisions → 100% RW, <20% → 150% RW, secured portion retains collateral RW. Added B31 exception admonition for non-income-dependent RESI RE (flat 100%, Art. 127(1A) / CRE20.88). (2026-04-08)
 
 ### Skill Reference Errors (affect agent-generated regulatory guidance)
 
@@ -200,6 +200,9 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D1.7** — SCRA Grade A enhanced (30%) added to tables in `basel31.md`, `key-differences.md`, `institution.md`. Short-term (≤3m) column added to `basel31.md`. Criteria corrected: Grade A = qualitative (all requirements + buffers), Grade A enhanced = quantitative (CET1 ≥ 14%, leverage ≥ 5%). Admonition added. Also resolves D1.26 (criteria mislabelling). (2026-04-08)
 - [x] **D1.8** — CRR equity SA table in `equity.md` corrected: replaced mixed CRR/B31 values (250%/400% for unlisted/speculative) with correct flat 100% per Art. 133(2). Section heading clarified to "CRR Article 133". Admonition added distinguishing CRR (flat 100%) from Basel 3.1 (250%/400%). Cross-references equity-approach.md. (2026-04-08)
 - [x] **D1.9** — CRR equity in `sa-risk-weights.md` corrected: replaced fabricated Art. 133(3)=150% and Art. 133(4)=190% with flat 100% per Art. 133(2). Added note that Art. 133 has only 3 paragraphs; 150%/190% values belong to Art. 155 IRB Simple. Added CIU fallback row (150%, Art. 132(2)). Correction admonition cross-references equity-approach.md. (2026-04-08)
+- [x] **D1.10** — Removed stale "Not Yet Implemented" warning for currency mismatch multiplier in `basel31.md`. Replaced with usage instructions (`cp_borrower_income_currency` input, `currency_mismatch_multiplier_applied` output, COREP row 0380). Regulatory description retained (Art. 123A, 1.5x, 150% cap). (2026-04-08)
+- [x] **D1.11** — Removed stale "Not Yet Implemented" warning for SA specialised lending in `basel31.md`. Added note: unrated exposures use type-specific weights; rated fall through to corporate CQS table per Art. 122A(3). (2026-04-08)
+- [x] **D1.12** — Replaced incorrect "100% flat" defaulted text in `basel31.md` with full provision-coverage mechanism: ≥20% provisions → 100% RW, <20% → 150% RW, secured portion retains collateral RW. Added B31 exception admonition for non-income-dependent RESI RE (flat 100%, Art. 127(1A) / CRE20.88). (2026-04-08)
 
 ---
 

@@ -15,17 +15,19 @@ flowchart LR
     D --> E
 ```
 
-## Article 133 - Standardised Approach (SA)
+## CRR Article 133 - Standardised Approach (SA)
 
-The default approach for firms without IRB approval. Risk weights are based on equity type:
+Under CRR, Art. 133(2) assigns a **flat 100% risk weight** to all equity exposures (except central bank sovereign equity at 0%). There is no differentiation by equity type — listed, unlisted, PE, and speculative all receive 100%.
 
-| Equity Type | Risk Weight | Description |
-|-------------|-------------|-------------|
-| Central bank | 0% | Central bank equity holdings |
-| Listed / Exchange-traded | 100% | Publicly traded on recognised exchanges |
-| Government-supported | 100% | Government-backed equity investments |
-| Unlisted / Private equity | 250% | Non-publicly traded equities |
-| Speculative | 400% | Venture capital, high-risk investments |
+| Equity Type | Risk Weight | Reference |
+|-------------|-------------|-----------|
+| Central bank / sovereign equity | 0% | Sovereign treatment |
+| All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
+
+PE/VC and speculative equity that qualifies as high-risk may be reclassified under Art. 128 (150%), but that is a separate exposure class treatment, not an Art. 133 weight.
+
+!!! warning "Common Confusion: CRR vs Basel 3.1 Art. 133"
+    CRR Art. 133 assigns a flat 100% to all equity. **Basel 3.1** rewrites Art. 133 with differentiated weights: 250% (standard), 400% (higher risk), 150% (subordinated debt), 100% (legislative). Do not confuse the two. See the [Equity Approach Specification](../../specifications/crr/equity-approach.md) for full details including CIU treatment and the Basel 3.1 transitional schedule.
 
 **Calculation:**
 ```

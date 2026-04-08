@@ -462,12 +462,16 @@ ECRA (rated) takes precedence over SCRA (unrated). SCRA does not apply under CRR
 
 ### CRR Equity Risk Weights
 
+Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraphs — references to "Art. 133(3)" or "Art. 133(4)" with differentiated weights are erroneous (those values belong to Art. 155 IRB Simple).
+
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
-| Central bank/sovereign | 0% | Art. 133(1) |
-| Listed/exchange-traded | 100% | Art. 133(2) |
-| Unlisted/other | 150% | Art. 133(3) |
-| Private equity / venture capital | 190% | Art. 133(4) |
+| Central bank / sovereign equity | 0% | Sovereign treatment |
+| All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
+| CIU (fallback) | 150% | Art. 132(2) |
+
+!!! warning "Previous Spec Error Corrected"
+    This table previously showed Unlisted=150% (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were fabricated. The 150%/190% values are from **Art. 155** (IRB Simple Method), not Art. 133. PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133. See [Equity Approach Specification](equity-approach.md) for full details.
 
 ### Basel 3.1 Equity Risk Weights (PRA PS1/26 Art. 133)
 

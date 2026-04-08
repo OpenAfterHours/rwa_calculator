@@ -896,12 +896,33 @@ class ExposureClassifier:
                 pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
             ).fill_null(False)
 
-            _b31_airb_blocked = _is_fse | _is_large_corp
+            # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
+            # Supplements full_irb_b31() org-wide restriction; needed when
+            # model_permissions grant AIRB for institutions.
+            _b31_institution_no_airb = (
+                pl.col("exposure_class") == ExposureClass.INSTITUTION.value
+            )
 
-            # Remove AIRB eligibility for B31-restricted exposures
-            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked
+            _b31_airb_blocked = _is_fse | _is_large_corp | _b31_institution_no_airb
+
+            # Art. 147A(1)(a): CGCB, PSE, MDB, RGLA → SA only (no IRB at all)
+            # Supplements full_irb_b31() org-wide restriction; ensures these
+            # classes use SA even when model_permissions attempt to grant IRB.
+            _b31_sa_only = pl.col("exposure_class").is_in(
+                [
+                    ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+                    ExposureClass.PSE.value,
+                    ExposureClass.MDB.value,
+                    ExposureClass.RGLA.value,
+                ]
+            )
+
+            # Remove AIRB eligibility for B31-restricted exposures and SA-only classes
+            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked & ~_b31_sa_only
             # Expand FIRB LGD clearing to include exposures whose AIRB was blocked
             firb_clear_expr = firb_clear_expr | (firb_permitted_expr & _b31_airb_blocked)
+            # Remove FIRB eligibility for SA-only classes
+            firb_permitted_expr = firb_permitted_expr & ~_b31_sa_only
 
         # --- Approach expression ---
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)

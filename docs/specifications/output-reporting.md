@@ -181,6 +181,8 @@ COREP supervisory returns with publicly available credit risk data.
 - **CR7** — Credit derivatives effect on RWEA (Art. 453(j))
 - **CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
 - **CR8** — RWEA flow statements for IRB (Art. 438(h))
+- **CR9** — IRB PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
+- **CR9.1** — IRB PD back-testing for ECAI mapping (Art. 452(h), Art. 180(1)(f)) — Basel 3.1 only (template defined, generation requires ECAI data)
 - **CR10** — Slotting approach exposures (Art. 438(e))
 - **CMS1** — Output floor comparison by risk type (Art. 456(1)(a), Art. 2a) — Basel 3.1 only
 - **CMS2** — Output floor comparison by asset class (Art. 456(1)(b), Art. 2a) — Basel 3.1 only
@@ -191,7 +193,7 @@ COREP supervisory returns with publicly available credit risk data.
 
 ### Status
 - Documentation: Done — see [Pillar III Disclosures](../features/pillar3-disclosures.md)
-- Code implementation: Not started
+- Code implementation: Done — 13 templates (OV1, CR4-CR10, CR9/CR9.1, CMS1/CMS2) in `reporting/pillar3/`
 
 ## Export
 

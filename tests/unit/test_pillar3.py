@@ -10,6 +10,7 @@ Tests cover:
     - CR7: Credit derivatives effect on RWEA
     - CR7-A: Extent of CRM techniques
     - CR8: RWEA flow statements
+    - CR9: IRB PD back-testing per exposure class (Basel 3.1 only)
     - CR10: Slotting approach exposures
     - CMS1: Output floor comparison by risk type (Basel 3.1 only)
     - CMS2: Output floor comparison by asset class (Basel 3.1 only)
@@ -54,6 +55,13 @@ from rwa_calc.reporting.pillar3.templates import (
     CR7A_FIRB_ROWS,
     CR8_COLUMNS,
     CR8_ROWS,
+    CR9_1_COLUMNS,
+    CR9_1_COLUMN_REFS,
+    CR9_AIRB_CLASSES,
+    CR9_APPROACH_DISPLAY,
+    CR9_COLUMN_REFS,
+    CR9_COLUMNS,
+    CR9_FIRB_CLASSES,
     CRR_CR10_COLUMNS,
     CRR_CR10_SUBTEMPLATES,
     CRR_CR4_COLUMNS,
@@ -1166,6 +1174,457 @@ class TestGeneratorEndToEnd:
         bundle = generator.generate_from_lazyframe(data, framework="CRR")
         refs = bundle.cr4["row_ref"].to_list()
         assert len(refs) == len(set(refs))
+
+
+# ---------------------------------------------------------------------------
+# CR9 — PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
+# ---------------------------------------------------------------------------
+
+
+def _make_cr9_irb_data(**overrides: object) -> pl.LazyFrame:
+    """Create IRB data with multiple obligors for CR9 back-testing tests.
+
+    Includes 6 exposures across F-IRB (corporate, institution) and A-IRB
+    (retail_mortgage, retail_other) with varied PDs, default status, and
+    counterparty references for obligor counting.
+    """
+    defaults = {
+        "exposure_reference": ["CR9_1", "CR9_2", "CR9_3", "CR9_4", "CR9_5", "CR9_6"],
+        "approach_applied": [
+            "foundation_irb", "foundation_irb",
+            "advanced_irb", "advanced_irb", "advanced_irb", "advanced_irb",
+        ],
+        "exposure_class": [
+            "corporate", "institution",
+            "retail_mortgage", "retail_mortgage", "retail_other", "retail_other",
+        ],
+        "ead_final": [5000.0, 3000.0, 2000.0, 1500.0, 1000.0, 800.0],
+        "rwa_final": [4000.0, 1800.0, 1200.0, 900.0, 600.0, 480.0],
+        "irb_pd_floored": [0.02, 0.005, 0.01, 0.008, 0.03, 1.0],
+        "irb_pd_original": [0.018, 0.004, 0.009, 0.007, 0.025, 1.0],
+        "irb_lgd_floored": [0.45, 0.45, 0.10, 0.10, 0.30, 0.45],
+        "irb_maturity_m": [2.5, 2.5, 1.0, 1.0, 1.0, 1.0],
+        "irb_expected_loss": [45.0, 6.75, 2.0, 1.2, 9.0, 360.0],
+        "counterparty_reference": ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6"],
+        "is_defaulted": [False, False, False, False, False, True],
+        "drawn_amount": [4500.0, 2700.0, 1800.0, 1350.0, 900.0, 720.0],
+        "nominal_amount": [600.0, 400.0, 300.0, 200.0, 150.0, 100.0],
+        "undrawn_amount": [500.0, 300.0, 200.0, 150.0, 100.0, 80.0],
+        "interest": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "exposure_type": ["loan", "loan", "loan", "loan", "loan", "loan"],
+        "ccf_applied": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    }
+    defaults.update(overrides)
+    return pl.LazyFrame(defaults)
+
+
+class TestCR9TemplateDefinitions:
+    """Tests for CR9 template constant definitions."""
+
+    def test_cr9_has_8_columns(self):
+        assert len(CR9_COLUMNS) == 8
+
+    def test_cr9_column_refs(self):
+        assert CR9_COLUMN_REFS == ["a", "b", "c", "d", "e", "f", "g", "h"]
+
+    def test_cr9_col_a_is_exposure_class(self):
+        assert CR9_COLUMNS[0].name == "Exposure class"
+
+    def test_cr9_col_b_is_pd_range(self):
+        assert CR9_COLUMNS[1].name == "PD range"
+
+    def test_cr9_col_f_mentions_post_input_floor(self):
+        col_f = next(c for c in CR9_COLUMNS if c.ref == "f")
+        assert "post input floor" in col_f.name.lower()
+
+    def test_cr9_col_h_is_historical_rate(self):
+        col_h = next(c for c in CR9_COLUMNS if c.ref == "h")
+        assert "historical" in col_h.name.lower()
+
+    def test_cr9_airb_classes_count(self):
+        assert len(CR9_AIRB_CLASSES) == 6
+
+    def test_cr9_firb_classes_count(self):
+        assert len(CR9_FIRB_CLASSES) == 4
+
+    def test_cr9_approach_display_has_both(self):
+        assert "foundation_irb" in CR9_APPROACH_DISPLAY
+        assert "advanced_irb" in CR9_APPROACH_DISPLAY
+
+    def test_cr9_firb_includes_institution(self):
+        keys = [k for k, _ in CR9_FIRB_CLASSES]
+        assert "institution" in keys
+
+    def test_cr9_airb_includes_retail(self):
+        keys = [k for k, _ in CR9_AIRB_CLASSES]
+        assert "retail_mortgage" in keys
+        assert "retail_qrre" in keys
+        assert "retail_other" in keys
+
+    def test_cr9_1_has_base_columns(self):
+        """CR9.1 has at least the 8 base columns (ECAI columns added dynamically)."""
+        assert len(CR9_1_COLUMNS) == 8
+
+    def test_cr9_1_col_b_is_firm_defined(self):
+        col_b = next(c for c in CR9_1_COLUMNS if c.ref == "b")
+        assert "firm-defined" in col_b.name.lower()
+
+    def test_cr9_uses_same_pd_ranges_as_cr6(self):
+        """CR9 uses the same 17 fixed PD range buckets as CR6."""
+        assert len(CR6_PD_RANGES) == 17
+        assert CR6_PD_RANGES[0][0] == 0.0
+        assert CR6_PD_RANGES[-1][1] == float("inf")
+
+
+class TestCR9Generation:
+    """Tests for CR9 template generation logic."""
+
+    def test_cr9_returns_empty_under_crr(self, generator: Pillar3Generator):
+        """CR9 is Basel 3.1 only — CRR returns empty dict."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="CRR")
+        assert bundle.cr9 == {}
+
+    def test_cr9_returns_dict_under_b31(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert isinstance(bundle.cr9, dict)
+        assert len(bundle.cr9) > 0
+
+    def test_cr9_keys_include_approach_and_class(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        # Should have F-IRB corporate, F-IRB institution, A-IRB retail_mortgage,
+        # A-IRB retail_other from the test data
+        keys = set(bundle.cr9.keys())
+        assert "foundation_irb - corporate" in keys
+        assert "foundation_irb - institution" in keys
+        assert "advanced_irb - retail_mortgage" in keys
+        assert "advanced_irb - retail_other" in keys
+
+    def test_cr9_has_correct_column_count(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        for key, df in bundle.cr9.items():
+            # row_ref + row_name + 8 template columns = 10
+            assert len(df.columns) == 10, f"Wrong column count for {key}: {df.columns}"
+
+    def test_cr9_total_row_present(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        for key, df in bundle.cr9.items():
+            total_rows = df.filter(pl.col("row_ref") == "18")
+            assert total_rows.height == 1, f"Missing total row for {key}"
+
+    def test_cr9_no_empty_buckets_emitted(self, generator: Pillar3Generator):
+        """Empty PD buckets should not produce rows (unlike CR6 which emits all 17)."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        for key, df in bundle.cr9.items():
+            # Should have fewer than 18 rows (17 PD ranges + 1 total)
+            # since not all PD ranges have data
+            assert df.height < 18, f"Too many rows for {key}: {df.height}"
+
+
+class TestCR9ColumnValues:
+    """Tests for CR9 column value computation."""
+
+    def test_col_c_obligor_count(self, generator: Pillar3Generator):
+        """Col c counts unique counterparty references."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        # 1 corporate F-IRB counterparty (CP1)
+        assert total["c"][0] == pytest.approx(1.0)
+
+    def test_col_d_default_count(self, generator: Pillar3Generator):
+        """Col d counts defaulted obligors."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        # retail_other has one defaulted (CP6, PD=1.0, is_defaulted=True)
+        ro = bundle.cr9["advanced_irb - retail_other"]
+        total = ro.filter(pl.col("row_ref") == "18")
+        assert total["d"][0] == pytest.approx(1.0)
+
+    def test_col_d_non_defaulted_class_zero(self, generator: Pillar3Generator):
+        """Classes with no defaults should have d=0."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        assert total["d"][0] == pytest.approx(0.0)
+
+    def test_col_e_observed_default_rate(self, generator: Pillar3Generator):
+        """Col e = d/c * 100 (observed default rate as percentage)."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        # retail_other: 2 obligors (CP5, CP6), 1 defaulted → 50%
+        ro = bundle.cr9["advanced_irb - retail_other"]
+        total = ro.filter(pl.col("row_ref") == "18")
+        assert total["e"][0] == pytest.approx(50.0)
+
+    def test_col_f_ewa_pd_percentage(self, generator: Pillar3Generator):
+        """Col f = EAD-weighted average PD * 100 (post input floor)."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        # F-IRB corporate: PD=0.02, EAD=5000 → EWA PD = 0.02 * 100 = 2.0%
+        assert total["f"][0] == pytest.approx(2.0)
+
+    def test_col_g_arithmetic_avg_pd(self, generator: Pillar3Generator):
+        """Col g = arithmetic average PD * 100 (obligor-weighted)."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        # retail_mortgage: PDs=[0.01, 0.008] → avg 0.009 * 100 = 0.9%
+        rm = bundle.cr9["advanced_irb - retail_mortgage"]
+        total = rm.filter(pl.col("row_ref") == "18")
+        assert total["g"][0] == pytest.approx(0.9)
+
+    def test_col_h_falls_back_to_observed_rate(self, generator: Pillar3Generator):
+        """Col h falls back to col e when historical_annual_default_rate is absent."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        ro = bundle.cr9["advanced_irb - retail_other"]
+        total = ro.filter(pl.col("row_ref") == "18")
+        # Should equal observed rate (50%) as fallback
+        assert total["h"][0] == pytest.approx(total["e"][0])
+
+    def test_col_h_uses_historical_data_when_present(self, generator: Pillar3Generator):
+        """Col h uses historical_annual_default_rate when column is present."""
+        data = _make_cr9_irb_data(
+            historical_annual_default_rate=[0.01, 0.02, 0.015, 0.015, 0.025, 0.05],
+        )
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        # Corporate: historical_annual_default_rate=0.01 → 1.0%
+        assert total["h"][0] == pytest.approx(1.0)
+
+    def test_col_a_shows_class_display_name(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        # All rows in col a should show "Corporates"
+        assert all(v == "Corporates" for v in corp["a"].to_list())
+
+    def test_col_b_shows_pd_range_label(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        # Total row col b should be "Total"
+        total = corp.filter(pl.col("row_ref") == "18")
+        assert total["b"][0] == "Total"
+
+
+class TestCR9PDAllocation:
+    """Tests for PD range bucket assignment in CR9."""
+
+    def test_pd_allocation_uses_original_pd(self, generator: Pillar3Generator):
+        """B31 allocates by irb_pd_original (pre-input-floor), not irb_pd_floored."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        # Corporate: irb_pd_original=0.018 → bucket "10" (1.00-2.50%)
+        non_total = corp.filter(pl.col("row_ref") != "18")
+        refs = non_total["row_ref"].to_list()
+        assert "10" in refs  # 1.00 to < 2.50%
+
+    def test_defaulted_in_100_percent_bucket(self, generator: Pillar3Generator):
+        """Defaulted exposures (PD=1.0) should be in the 100% (Default) bucket."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        ro = bundle.cr9["advanced_irb - retail_other"]
+        bucket_17 = ro.filter(pl.col("row_ref") == "17")
+        assert bucket_17.height == 1
+        assert bucket_17["d"][0] == pytest.approx(1.0)  # 1 defaulted
+
+    def test_pd_range_labels_are_readable(self, generator: Pillar3Generator):
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        for key, df in bundle.cr9.items():
+            labels = df["b"].to_list()
+            assert "Total" in labels
+            for label in labels:
+                assert isinstance(label, str)
+                assert len(label) > 0
+
+
+class TestCR9EdgeCases:
+    """Tests for CR9 edge cases and error handling."""
+
+    def test_no_irb_data_returns_empty(self, generator: Pillar3Generator):
+        """No IRB exposures → empty CR9 dict."""
+        sa_only = pl.LazyFrame({
+            "exposure_reference": ["SA1"],
+            "approach_applied": ["standardised"],
+            "exposure_class": ["corporate"],
+            "ead_final": [1000.0],
+            "rwa_final": [800.0],
+            "irb_pd_floored": [0.01],
+        })
+        bundle = generator.generate_from_lazyframe(sa_only, framework="BASEL_3_1")
+        assert bundle.cr9 == {}
+
+    def test_missing_pd_column_returns_empty_with_error(
+        self, generator: Pillar3Generator,
+    ):
+        """Missing PD columns → empty dict and error message."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["X"],
+            "approach_applied": ["foundation_irb"],
+            "exposure_class": ["corporate"],
+            "ead_final": [1000.0],
+            "rwa_final": [800.0],
+        })
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cr9 == {}
+        assert any("CR9" in e for e in bundle.errors)
+
+    def test_slotting_exposures_excluded(self, generator: Pillar3Generator):
+        """Slotting exposures should not appear in CR9 (they use CR10)."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["SL1"],
+            "approach_applied": ["slotting"],
+            "exposure_class": ["specialised_lending"],
+            "ead_final": [1000.0],
+            "rwa_final": [700.0],
+            "irb_pd_floored": [0.02],
+            "irb_pd_original": [0.018],
+        })
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        # Slotting is filtered out by _filter_irb_non_slotting before CR9 runs
+        assert bundle.cr9 == {}
+
+    def test_default_detection_falls_back_to_pd(self, generator: Pillar3Generator):
+        """Without is_defaulted column, PD >= 1.0 is used as default proxy."""
+        data = _make_cr9_irb_data()
+        # Remove is_defaulted column
+        collected = data.collect().drop("is_defaulted")
+        no_default_col = collected.lazy()
+        bundle = generator.generate_from_lazyframe(no_default_col, framework="BASEL_3_1")
+        ro = bundle.cr9.get("advanced_irb - retail_other")
+        assert ro is not None
+        total = ro.filter(pl.col("row_ref") == "18")
+        # CP6 has PD=1.0, should be detected as defaulted
+        assert total["d"][0] == pytest.approx(1.0)
+
+    def test_single_exposure_class(self, generator: Pillar3Generator):
+        """Single exposure class produces a single CR9 template."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["X1", "X2"],
+            "approach_applied": ["foundation_irb", "foundation_irb"],
+            "exposure_class": ["corporate", "corporate"],
+            "ead_final": [1000.0, 2000.0],
+            "rwa_final": [800.0, 1600.0],
+            "irb_pd_floored": [0.01, 0.02],
+            "irb_pd_original": [0.009, 0.018],
+            "counterparty_reference": ["A", "B"],
+        })
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert len(bundle.cr9) == 1
+        assert "foundation_irb - corporate" in bundle.cr9
+
+    def test_prior_year_obligor_count_used_when_present(
+        self, generator: Pillar3Generator,
+    ):
+        """Col c uses prior_year_obligor_count when available."""
+        data = _make_cr9_irb_data(
+            prior_year_obligor_count=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        )
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["foundation_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        # prior_year_obligor_count for corporate is 1.0 (one row)
+        assert total["c"][0] == pytest.approx(1.0)
+
+    def test_multiple_obligors_same_class(self, generator: Pillar3Generator):
+        """Multiple obligors in same class are counted correctly."""
+        data = pl.LazyFrame({
+            "exposure_reference": ["X1", "X2", "X3"],
+            "approach_applied": ["advanced_irb", "advanced_irb", "advanced_irb"],
+            "exposure_class": ["corporate", "corporate", "corporate"],
+            "ead_final": [1000.0, 2000.0, 3000.0],
+            "rwa_final": [800.0, 1600.0, 2400.0],
+            "irb_pd_floored": [0.01, 0.01, 0.02],
+            "irb_pd_original": [0.009, 0.009, 0.018],
+            "counterparty_reference": ["A", "A", "B"],  # 2 unique CPs
+            "is_defaulted": [False, False, False],
+        })
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        corp = bundle.cr9["advanced_irb - corporate"]
+        total = corp.filter(pl.col("row_ref") == "18")
+        assert total["c"][0] == pytest.approx(2.0)  # 2 unique counterparties
+
+
+class TestCR9BundleIntegration:
+    """Tests for CR9 integration with Pillar3TemplateBundle."""
+
+    def test_bundle_cr9_field_default_empty(self):
+        bundle = Pillar3TemplateBundle()
+        assert bundle.cr9 == {}
+
+    def test_bundle_cr9_alongside_other_templates(self, generator: Pillar3Generator):
+        """CR9 coexists with other templates in the same bundle."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert isinstance(bundle.cr9, dict)
+        assert bundle.cr6 is not None or isinstance(bundle.cr6, dict)
+        assert bundle.framework == "BASEL_3_1"
+
+    def test_end_to_end_with_mixed_data(self, generator: Pillar3Generator):
+        """CR9 generated alongside all other templates from mixed data."""
+        sa = pl.DataFrame({
+            "exposure_reference": ["SA1", "SA2"],
+            "approach_applied": ["standardised", "standardised"],
+            "exposure_class": ["corporate", "retail_other"],
+            "ead_final": [1000.0, 500.0],
+            "rwa_final": [1000.0, 375.0],
+            "risk_weight": [1.0, 0.75],
+            "drawn_amount": [900.0, 450.0],
+            "nominal_amount": [150.0, 75.0],
+            "undrawn_amount": [100.0, 50.0],
+            "interest": [0.0, 0.0],
+            "exposure_type": ["loan", "loan"],
+            "sa_rwa": [1000.0, 375.0],
+        })
+        irb = _make_cr9_irb_data().collect()
+        irb = irb.with_columns(pl.lit(None).alias("risk_weight").cast(pl.Float64))
+        irb = irb.with_columns(pl.col("rwa_final").alias("sa_rwa"))
+        # Align schemas
+        all_cols = set(sa.columns) | set(irb.columns)
+        for col in all_cols:
+            if col not in sa.columns:
+                dtype = irb.schema.get(col, pl.Float64)
+                sa = sa.with_columns(pl.lit(None).cast(dtype).alias(col))
+            if col not in irb.columns:
+                dtype = sa.schema.get(col, pl.Float64)
+                irb = irb.with_columns(pl.lit(None).cast(dtype).alias(col))
+        combined = pl.concat([sa.select(sorted(all_cols)), irb.select(sorted(all_cols))])
+        bundle = generator.generate_from_lazyframe(
+            combined.lazy(), framework="BASEL_3_1",
+        )
+        assert len(bundle.cr9) > 0
+        assert bundle.ov1 is not None
+        assert bundle.cr4 is not None
+
+
+class TestCR9ExcelExport:
+    """Tests for CR9 Excel export."""
+
+    def test_export_includes_cr9_sheets(
+        self, generator: Pillar3Generator, tmp_path: Path,
+    ):
+        """CR9 templates should be written to Excel sheets."""
+        data = _make_cr9_irb_data()
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        output = tmp_path / "pillar3_cr9.xlsx"
+        result = generator.export_to_excel(bundle, output)
+        assert output.exists()
+        # CR9 rows should be included in total row count
+        cr9_rows = sum(df.height for df in bundle.cr9.values())
+        assert result.row_count >= cr9_rows
 
 
 class TestExcelExport:

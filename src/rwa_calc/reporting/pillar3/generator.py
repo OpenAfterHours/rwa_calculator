@@ -1,7 +1,7 @@
 """
 Pillar III Disclosure Generator.
 
-Generates 11 quantitative credit risk disclosure templates from pipeline results.
+Generates 13 quantitative credit risk disclosure templates from pipeline results.
 CRR templates use UK prefix; Basel 3.1 templates use UKB prefix.
 
 Pipeline position:
@@ -16,6 +16,8 @@ Key responsibilities:
     - CR7: Credit derivatives effect on RWEA
     - CR7-A: Extent of CRM techniques for IRB
     - CR8: RWEA flow statements for IRB
+    - CR9: IRB PD back-testing per exposure class (Basel 3.1 only)
+    - CR9.1: IRB PD back-testing for ECAI mapping (Basel 3.1 only)
     - CR10: Slotting approach exposures
     - CMS1: Output floor comparison by risk type (Basel 3.1 only)
     - CMS2: Output floor comparison by asset class (Basel 3.1 only)
@@ -23,6 +25,7 @@ Key responsibilities:
 References:
     CRR Part 8 (Art. 438, 444, 452, 453)
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
+    PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
 from __future__ import annotations
 
@@ -47,6 +50,11 @@ from rwa_calc.reporting.pillar3.templates import (
     CR7_COLUMNS,
     CR8_COLUMNS,
     CR8_ROWS,
+    CR9_AIRB_CLASSES,
+    CR9_APPROACH_DISPLAY,
+    CR9_COLUMN_REFS,
+    CR9_COLUMNS,
+    CR9_FIRB_CLASSES,
     HVCRE_RISK_WEIGHTS,
     IRB_EXPOSURE_CLASSES,
     OV1_COLUMNS,
@@ -87,7 +95,7 @@ class Pillar3TemplateBundle:
 
     Single-table templates are ``pl.DataFrame | None``.
     Per-class/type templates are ``dict[str, pl.DataFrame]``.
-    CMS1/CMS2 are Basel 3.1 only (Art. 456, Art. 2a) — None under CRR.
+    CMS1/CMS2/CR9 are Basel 3.1 only — None/empty under CRR.
     """
 
     ov1: pl.DataFrame | None = None
@@ -98,6 +106,7 @@ class Pillar3TemplateBundle:
     cr7: pl.DataFrame | None = None
     cr7a: dict[str, pl.DataFrame] = field(default_factory=dict)
     cr8: pl.DataFrame | None = None
+    cr9: dict[str, pl.DataFrame] = field(default_factory=dict)
     cr10: dict[str, pl.DataFrame] = field(default_factory=dict)
     cms1: pl.DataFrame | None = None
     cms2: pl.DataFrame | None = None
@@ -146,6 +155,7 @@ class Pillar3Generator:
             cr7=self._generate_cr7(results, cols, framework, errors),
             cr7a=self._generate_all_cr7a(results, cols, framework, errors),
             cr8=self._generate_cr8(irb_data, cols, framework, errors),
+            cr9=self._generate_all_cr9(irb_data, cols, framework, errors),
             cr10=self._generate_all_cr10(slotting_data, cols, framework, errors),
             cms1=self._generate_cms1(results, cols, framework, errors),
             cms2=self._generate_cms2(results, sa_data, irb_data, slotting_data,
@@ -206,6 +216,11 @@ class Pillar3Generator:
             if bundle.cr8 is not None:
                 total_rows += _write_single_sheet(
                     workbook, bundle.cr8, f"{prefix} CR8"
+                )
+            if bundle.cr9:
+                cr9_display = _cr9_display_names(bundle.cr9)
+                total_rows += _write_dict_sheets(
+                    workbook, bundle.cr9, f"{prefix} CR9", cr9_display
                 )
             subtemplates = get_cr10_subtemplates(bundle.framework)
             total_rows += _write_dict_sheets(
@@ -736,6 +751,127 @@ class Pillar3Generator:
 
         return _build_df(rows_out, column_refs)
 
+    # ---- CR9 — PD back-testing per exposure class (Art. 452(h)) ----
+
+    def _generate_all_cr9(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate UKB CR9 PD back-testing templates.
+
+        Basel 3.1 only. Returns separate DataFrames per approach-class
+        combination, keyed as ``"{approach} - {class_display}"``.
+
+        References:
+            PRA PS1/26 Art. 452(h), Annex XXII paras 12-15
+        """
+        if framework != "BASEL_3_1":
+            return {}
+
+        ec_col = _pick(cols, "exposure_class")
+        approach_col = _pick(cols, "approach_applied", "approach")
+        if not ec_col or not approach_col:
+            errors.append("CR9: missing required columns (exposure_class, approach)")
+            return {}
+
+        # PD column selection — CR9 should use PD at beginning of disclosure
+        # period. Since the pipeline does not provide this temporal variant,
+        # we use irb_pd_original (pre-input-floor model PD) as closest proxy
+        # for bucket allocation. The reported PD (cols f, g) uses post-floor PD.
+        alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
+        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        if not alloc_pd_col:
+            errors.append("CR9: no PD column available — skipping PD backtesting")
+            return {}
+
+        data = irb_data.collect()
+        if data.height == 0:
+            return {}
+
+        result: dict[str, pl.DataFrame] = {}
+
+        for approach_val, approach_display, class_defs in [
+            ("foundation_irb", "F-IRB", CR9_FIRB_CLASSES),
+            ("advanced_irb", "A-IRB", CR9_AIRB_CLASSES),
+        ]:
+            approach_data = data.filter(pl.col(approach_col) == approach_val)
+            if approach_data.height == 0:
+                continue
+
+            for class_key, class_display in class_defs:
+                class_data = approach_data.filter(pl.col(ec_col) == class_key)
+                if class_data.height == 0:
+                    continue
+
+                key = f"{approach_val} - {class_key}"
+                result[key] = self._generate_cr9_for_class(
+                    class_data, cols, alloc_pd_col,
+                    report_pd_col or alloc_pd_col, class_display,
+                )
+
+        return result
+
+    def _generate_cr9_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        alloc_pd_col: str,
+        report_pd_col: str,
+        class_display: str,
+    ) -> pl.DataFrame:
+        """Generate a single CR9 template for one exposure class."""
+        column_refs = CR9_COLUMN_REFS
+        rows_out: list[dict[str, object]] = []
+
+        for lower, upper, row_ref, label in CR6_PD_RANGES:
+            if upper == float("inf"):
+                bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
+            else:
+                bucket = class_data.filter(
+                    (pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper)
+                )
+
+            if bucket.height == 0:
+                continue
+
+            values = _compute_cr9_values(
+                bucket, cols, report_pd_col,
+            )
+            values["a"] = class_display
+            values["b"] = label
+            row = P3Row(row_ref, label)
+            rows_out.append(_make_row(row, values, column_refs))
+
+        # Total row
+        if class_data.height > 0:
+            total_values = _compute_cr9_values(
+                class_data, cols, report_pd_col,
+            )
+            total_values["a"] = class_display
+            total_values["b"] = "Total"
+            rows_out.append(
+                _make_row(
+                    P3Row("18", "Total", is_total=True), total_values, column_refs,
+                )
+            )
+
+        if not rows_out:
+            schema: dict[str, pl.DataType] = {
+                "row_ref": pl.String, "row_name": pl.String,
+            }
+            for ref in column_refs:
+                schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
+            return pl.DataFrame([], schema=schema)
+
+        # Build with mixed types: cols a, b are String; rest Float64
+        schema = {"row_ref": pl.String, "row_name": pl.String}
+        for ref in column_refs:
+            schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
+        return pl.DataFrame(rows_out, schema=schema)
+
     # ---- CR10 ----
 
     def _generate_all_cr10(
@@ -1265,6 +1401,108 @@ def _compute_cr6_values(
     return values
 
 
+def _compute_cr9_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    pd_col: str,
+) -> dict[str, object]:
+    """Compute CR9 column values for a PD-range bucket.
+
+    Columns:
+        a — Exposure class (set by caller)
+        b — PD range label (set by caller)
+        c — Number of obligors at end of previous year
+        d — Of which: defaulted during the year
+        e — Observed average default rate (%)
+        f — Exposure-weighted average PD (%) — post input floor
+        g — Average PD at disclosure date (%) — post input floor
+        h — Average historical annual default rate (%)
+
+    References:
+        PRA PS1/26 Art. 452(h), Annex XXII paras 12-15
+    """
+    if data.height == 0:
+        return {}
+
+    n_rows = data.height
+
+    # Col c: obligor count — prefer unique counterparty_reference
+    cp_col = "counterparty_reference" if "counterparty_reference" in data.columns else None
+    n_obligors = (
+        float(data.select(pl.col(cp_col).n_unique()).item())
+        if cp_col
+        else float(n_rows)
+    )
+
+    # Default detection: is_defaulted → PD >= 1.0 fallback
+    default_col = _pick(cols, "is_defaulted", "default_status")
+    if default_col and default_col in data.columns:
+        defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
+        n_defaults = (
+            float(defaulted.select(pl.col(cp_col).n_unique()).item())
+            if cp_col and defaulted.height > 0
+            else float(defaulted.height)
+        )
+    elif pd_col in data.columns:
+        defaulted = data.filter(pl.col(pd_col) >= 1.0)
+        n_defaults = (
+            float(defaulted.select(pl.col(cp_col).n_unique()).item())
+            if cp_col and defaulted.height > 0
+            else float(defaulted.height)
+        )
+    else:
+        n_defaults = 0.0
+
+    # Col c: prior year obligors — use prior_year_obligor_count if available,
+    # else fall back to current-period count
+    prior_col = _pick(cols, "prior_year_obligor_count")
+    if prior_col and prior_col in data.columns:
+        prior_obligors = float(data.select(pl.col(prior_col).fill_null(0.0).sum()).item())
+    else:
+        prior_obligors = n_obligors
+
+    # Col e: observed average default rate
+    observed_rate = (n_defaults / n_obligors * 100.0) if n_obligors > 0 else 0.0
+
+    # Col f: exposure-weighted average PD (post input floor) — same as CR6 col f
+    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+    if ead_col and ead_col in data.columns and pd_col in data.columns:
+        ewa_pd = _ead_weighted_avg(data, cols, ead_col, pd_col)
+        ewa_pd_pct = float(ewa_pd) * 100.0 if ewa_pd is not None else None
+    elif pd_col in data.columns:
+        # Fallback to arithmetic average if no EAD column
+        avg_pd = data.select(pl.col(pd_col).mean()).item()
+        ewa_pd_pct = float(avg_pd) * 100.0 if avg_pd is not None else None
+    else:
+        ewa_pd_pct = None
+
+    # Col g: arithmetic average PD at disclosure date (obligor-weighted, not
+    # exposure-weighted) — includes PD input floors
+    if pd_col in data.columns:
+        avg_pd_g = data.select(pl.col(pd_col).mean()).item()
+        avg_pd_pct = float(avg_pd_g) * 100.0 if avg_pd_g is not None else None
+    else:
+        avg_pd_pct = None
+
+    # Col h: average historical annual default rate (5-year simple average)
+    hist_col = _pick(cols, "historical_annual_default_rate")
+    if hist_col and hist_col in data.columns and n_rows > 0:
+        hist_rate = data.select(pl.col(hist_col).fill_null(0.0).mean()).item()
+        hist_rate_pct = float(hist_rate) * 100.0 if hist_rate is not None else None
+    else:
+        # Fall back to current-period observed rate as single-period approximation
+        hist_rate_pct = observed_rate
+
+    return {
+        "c": prior_obligors,
+        "d": n_defaults,
+        "e": observed_rate,
+        "f": ewa_pd_pct,
+        "g": avg_pd_pct,
+        "h": hist_rate_pct,
+    }
+
+
 def _compute_cr7a_values(
     data: pl.DataFrame,
     cols: set[str],
@@ -1333,6 +1571,21 @@ def _compute_cr10_values(
         "e": _col_sum(data, cols, rwa_col),
         "f": _col_sum(data, cols, el_col) if el_col else None,
     }
+
+
+def _cr9_display_names(cr9_dict: dict[str, pl.DataFrame]) -> dict[str, str]:
+    """Build display names for CR9 Excel sheets from composite keys.
+
+    Keys are ``"{approach} - {class_key}"`` — display name uses approach
+    abbreviation and human-readable class name.
+    """
+    display: dict[str, str] = {}
+    for key in cr9_dict:
+        parts = key.split(" - ", 1)
+        approach = CR9_APPROACH_DISPLAY.get(parts[0], parts[0]) if len(parts) > 1 else key
+        class_name = IRB_EXPOSURE_CLASSES.get(parts[1], parts[1]) if len(parts) > 1 else ""
+        display[key] = f"{approach} {class_name}" if class_name else approach
+    return display
 
 
 def _obligor_count(data: pl.DataFrame, cols: set[str]) -> float | None:

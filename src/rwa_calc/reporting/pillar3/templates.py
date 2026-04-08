@@ -1,7 +1,7 @@
 """
 Pillar III Disclosure Template Definitions.
 
-Template structure constants for 11 credit risk disclosure templates under
+Template structure constants for 13 credit risk disclosure templates under
 CRR Part 8 / Disclosure (CRR) Part. CRR templates use UK prefix;
 Basel 3.1 templates use UKB prefix.
 
@@ -14,6 +14,8 @@ Templates:
     CR7    Credit derivatives effect on RWEA (Art. 453(j))
     CR7-A  Extent of CRM techniques for IRB (Art. 453(g))
     CR8    RWEA flow statements for IRB (Art. 438(h))
+    CR9    IRB PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
+    CR9.1  IRB PD back-testing for ECAI mapping (Art. 180(1)(f)) — Basel 3.1 only
     CR10   Slotting approach exposures (Art. 438(e))
     CMS1   Output floor comparison by risk type (Art. 456(1)(a)) — Basel 3.1 only
     CMS2   Output floor comparison by asset class (Art. 456(1)(b)) — Basel 3.1 only
@@ -21,6 +23,7 @@ Templates:
 References:
     CRR Part 8 (Art. 438, 444, 452, 453)
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
+    PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
 from __future__ import annotations
 
@@ -497,6 +500,78 @@ HVCRE_RISK_WEIGHTS: dict[str, float] = {
     "weak": 2.50,
     "default": 0.00,
 }
+
+
+# ---------------------------------------------------------------------------
+# CR9 — IRB PD Back-Testing per Exposure Class (Art. 452(h))
+# Basel 3.1 only (UKB CR9) — no CRR equivalent
+#
+# Separate templates per FIRB and AIRB approach, with one template per
+# exposure class within each. Uses the same 17 fixed PD range buckets as
+# CR6. Key distinction from CR6: PD allocation uses PD estimated at the
+# beginning of the disclosure period, not the pre-input-floor PD.
+# ---------------------------------------------------------------------------
+
+CR9_COLUMNS: list[P3Column] = [
+    P3Column("a", "Exposure class"),
+    P3Column("b", "PD range"),
+    P3Column("c", "Number of obligors at end of previous year"),
+    P3Column("d", "Of which: defaulted during the year"),
+    P3Column("e", "Observed average default rate (%)"),
+    P3Column("f", "Exposure-weighted average PD (%) — post input floor"),
+    P3Column("g", "Average PD at disclosure date (%) — post input floor"),
+    P3Column("h", "Average historical annual default rate (%)"),
+]
+
+CR9_COLUMN_REFS: list[str] = [c.ref for c in CR9_COLUMNS]
+
+# CR9 AIRB exposure class breakdown (Art. 147(2)(c)-(d))
+CR9_AIRB_CLASSES: list[tuple[str, str]] = [
+    ("corporate", "Corporates"),
+    ("specialised_lending", "Corporates — Specialised lending"),
+    ("corporate_sme", "Corporates — Other general corporates (SME)"),
+    ("retail_mortgage", "Retail — Secured by immovable property"),
+    ("retail_qrre", "Retail — Qualifying revolving"),
+    ("retail_other", "Retail — Other"),
+]
+
+# CR9 FIRB exposure class breakdown (Art. 147(2)(b)-(c))
+CR9_FIRB_CLASSES: list[tuple[str, str]] = [
+    ("institution", "Institutions"),
+    ("corporate", "Corporates"),
+    ("specialised_lending", "Corporates — Specialised lending"),
+    ("corporate_sme", "Corporates — Other general corporates (SME)"),
+]
+
+# Combined display names for Excel sheet naming
+CR9_APPROACH_DISPLAY: dict[str, str] = {
+    "foundation_irb": "F-IRB",
+    "advanced_irb": "A-IRB",
+}
+
+# ---------------------------------------------------------------------------
+# CR9.1 — IRB PD Back-Testing for ECAI Mapping (Art. 180(1)(f))
+# Basel 3.1 only (UKB CR9.1) — no CRR equivalent
+#
+# Supplementary to CR9 for firms using Art. 180(1)(f) ECAI-based PD
+# estimation. Same structure as CR9 but with variable-width PD ranges
+# based on the firm's internal grades, plus one column per ECAI showing
+# the external rating mapping.
+# ---------------------------------------------------------------------------
+
+CR9_1_COLUMNS: list[P3Column] = [
+    P3Column("a", "Exposure class"),
+    P3Column("b", "PD range (firm-defined)"),
+    P3Column("c", "Number of obligors at end of previous year"),
+    P3Column("d", "Of which: defaulted during the year"),
+    P3Column("e", "Observed average default rate (%)"),
+    P3Column("f", "Exposure-weighted average PD (%) — post input floor"),
+    P3Column("g", "Average PD at disclosure date (%) — post input floor"),
+    P3Column("h", "Average historical annual default rate (%)"),
+    # Additional ECAI columns are added dynamically per firm
+]
+
+CR9_1_COLUMN_REFS: list[str] = [c.ref for c in CR9_1_COLUMNS]
 
 
 # ---------------------------------------------------------------------------

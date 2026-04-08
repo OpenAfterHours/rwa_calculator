@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P2.2f C 08.05 / OF 08.05 PD backtesting template implemented)
-**Current version:** 0.1.167 | **Test suite:** 4,788 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.4, P2.10, P3.1, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P3.2 UKB CR9/CR9.1 PD backtesting disclosure implemented)
+**Current version:** 0.1.168 | **Test suite:** 4,832 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.4, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -230,14 +230,20 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** `docs/specifications/output-reporting.md`, `docs/features/pillar3-disclosures.md`, CRR Part 8 Art. 438, 444, 452, 453
 - **Tests:** 106 new tests in `tests/unit/test_pillar3.py` across 14 test classes: TestTemplateDefinitions (38), TestFrameworkSelectors (13), TestPillar3Bundle (2), TestOV1Generation (7), TestCR4Generation (7), TestCR5Generation (6), TestCR6Generation (8), TestCR6AGeneration (4), TestCR7Generation (4), TestCR7AGeneration (4), TestCR8Generation (4), TestCR10Generation (6), TestGeneratorEndToEnd (5), TestExcelExport (2). Contract tests updated (StubResultExporter, protocol compliance). All 4,640 tests pass.
 
-### P3.2 UKB CR9 / CR9.1 (PD back-testing) missing from spec and plan
-- **Status:** [ ] Not in spec -- mandatory Basel 3.1 template
-- **Impact:** PRA PS1/26 Annex XXII defines **UKB CR9** (PD back-testing per exposure class, 8 columns: (a) exposure class/PD range, (b) PD range (fixed), (c) obligors at end of previous year, (d) of which defaulted, (e) observed average default rate, (f) exposure-weighted avg PD (cross-ref CR6 col f), (g) avg PD at disclosure date (includes PD floors), (h) avg historical annual default rate (5-year simple average)). **UKB CR9.1** (supplementary back-testing for Art. 180(1)(f) ECAI mapping) adds one column per ECAI showing external rating to which internal PD ranges are mapped. These are mandatory under Art. 452(h).
-  **Key distinction:** CR9 col (b) allocates exposures by PD estimated at **beginning of the disclosure period** — contrast with CR6 col (a) which uses **pre-PD input floor** PD. This temporal difference is critical for backtesting accuracy.
-  Neither template is in `docs/features/pillar3-disclosures.md` or `docs/specifications/output-reporting.md`. Note: `output-reporting.md` lists `OF 08.05` / `OF 08.05.1` in "Missing Templates" — these are the COREP equivalents, not the Pillar III templates (UKB CR9 / CR9.1). They must be listed separately.
-- **Spec ref:** PRA PS1/26 Annex XXII pages 18-22
-- **Fix:** Add CR9 and CR9.1 template definitions to `docs/features/pillar3-disclosures.md`. Include in P3.1 implementation scope. Note: CR9 requires historical default rate data (5-year lookback) not currently in the pipeline.
-- **Tests needed:** Unit tests for CR9/CR9.1 templates.
+### P3.2 UKB CR9 / CR9.1 (PD back-testing)
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** PRA PS1/26 Annex XXII defines **UKB CR9** (mandatory PD back-testing per exposure class, Art. 452(h)) and **UKB CR9.1** (supplementary ECAI mapping back-testing, Art. 180(1)(f)). Both are Basel 3.1 only (no CRR equivalent). CR9 is the Pillar III counterpart of COREP template OF 08.05.
+- **Implementation:**
+  - **Templates (`reporting/pillar3/templates.py`):** `CR9_COLUMNS` (8 columns: a-h), `CR9_COLUMN_REFS`, `CR9_AIRB_CLASSES` (6 AIRB exposure class definitions), `CR9_FIRB_CLASSES` (4 FIRB exposure class definitions), `CR9_APPROACH_DISPLAY` (approach display names for Excel), `CR9_1_COLUMNS` (8 base columns for future ECAI extension), `CR9_1_COLUMN_REFS`. Reuses `CR6_PD_RANGES` (17 fixed PD range buckets).
+  - **Generator (`reporting/pillar3/generator.py`):** `_generate_all_cr9()` and `_generate_cr9_for_class()` methods. Separate DataFrames per approach-class combination, keyed as `"{approach} - {class_key}"` (e.g., `"foundation_irb - corporate"`). Returns empty dict under CRR. `_compute_cr9_values()` helper computes all 8 columns: obligor counting via `counterparty_reference.n_unique()`, default detection via `is_defaulted` with PD >= 1.0 fallback, observed default rate, EAD-weighted average PD (post-floor), arithmetic average PD (obligor-weighted), historical annual default rate with current-period fallback.
+  - **Bundle:** `Pillar3TemplateBundle.cr9: dict[str, pl.DataFrame]` field added. Excel export via `_write_dict_sheets()` with `_cr9_display_names()` helper for human-readable sheet names.
+  - **PD allocation:** Uses `irb_pd_original` (pre-input-floor model PD) as closest proxy for beginning-of-period PD. Reported PD (cols f, g) uses `irb_pd_floored` (post-floor).
+  - **CR9.1:** Template definitions in place. Generation returns no data until pipeline provides ECAI mapping data (firm-defined PD ranges and ECAI rating scale mappings). Documented as known gap.
+  - **Known approximations:** Beginning-of-period PD approximated by `irb_pd_original`. Historical annual default rate (col h) falls back to current-period observed rate when `historical_annual_default_rate` column is absent. Prior-year obligor count (col c) falls back to current-period count when `prior_year_obligor_count` column is absent.
+- **File:Line:** `reporting/pillar3/templates.py` (CR9_COLUMNS, CR9_AIRB_CLASSES, CR9_FIRB_CLASSES, CR9_1_COLUMNS), `reporting/pillar3/generator.py` (_generate_all_cr9, _generate_cr9_for_class, _compute_cr9_values, _cr9_display_names, Pillar3TemplateBundle.cr9)
+- **Spec ref:** PRA PS1/26 Art. 452(h), Annex XXII paras 12-15
+- **Docs updated:** `docs/features/pillar3-disclosures.md` (CR9/CR9.1 sections, mermaid flowchart, template table), `docs/specifications/output-reporting.md` (CR9/CR9.1 in Pillar III template list)
+- **Tests:** 44 new tests in `tests/unit/test_pillar3.py` across 6 test classes: TestCR9TemplateDefinitions (15), TestCR9Generation (6), TestCR9ColumnValues (10), TestCR9PDAllocation (3), TestCR9EdgeCases (7), TestCR9BundleIntegration (3) + TestCR9ExcelExport (1). All 4,832 tests pass (was 4,788). Pillar III tests: 197 (was 153).
 
 ### P3.3 Pillar III spec gaps -- qualitative tables and detailed field rules
 - **Status:** [~] Spec is accurate but incomplete for some details
@@ -699,6 +705,8 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 These items are verified complete. Items with **[!]** have known gaps documented in P1/P2:
 
 **P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87
+
+**P3 items complete:** P3.1, P3.2, P3.4
 
 **P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
 

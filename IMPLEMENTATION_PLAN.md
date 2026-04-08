@@ -1,15 +1,15 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P6.8 complete — guarantor_rating_type audit field added to CRM output)
-**Current version:** 0.1.178 | **Test suite:** 5,140 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.38c, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.6, P4.13, P4.14, P4.15, P4.22, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.8, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
-**CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
+**Last updated:** 2026-04-08 (P1.89/P1.90 complete — B31 PE/VC 400% and CIU listed/unlisted split)
+**Current version:** 0.1.179 | **Test suite:** 5,145 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.38c, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.89, P1.90, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.5 [!], P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.6, P4.13, P4.14, P4.15, P4.22, P5.1, P5.2, P5.3, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.8, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20, P6.21 fixed.
+**CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (216 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (2 open: P1.10, P1.30(e)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.3/P5.4/P5.5 resolved) | P6 (code quality): 21 (P6.7/P6.11/P6.21 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 90 items total (2 open: P1.10, P1.30(e)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.5 [!partial]/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.3/P5.4/P5.5 resolved) | P6 (code quality): 21 (P6.7/P6.11/P6.21 now complete) | P7 (future): 4
 **Critical items by impact type:**
-- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
+- *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented); P1.89 (B31 PE/VC was 250% instead of 400% — 37.5% capital understatement now fixed); P1.90 (B31 unlisted CIU fallback was 250% instead of 400% now fixed)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
 - *CRM formula/value errors:* [P1.69 receivables haircut fixed — B31 corrected from 20% to 40%; CRR kept at 20% as C*/C** approximation; P1.77 sequential fill now implemented; P1.70 per-type overcollateralisation threshold now fixed; P1.81 two-branch EL shortfall/excess now fixed; P1.41 CDS restructuring exclusion haircut now implemented; P1.40 Art. 237(2) maturity mismatch ineligibility now implemented; P1.73 B31 gold haircut corrected from 15% to 20% now fixed; P1.74 B31 equity main-index/other haircuts corrected to 20%/30% now fixed; P1.39 liquidation period haircut scaling (5/10/20-day) now implemented; P1.78 FX mismatch on guarantees now fixed; P1.75 LGD* formula single-LGD not blended now fixed; P1.76 bond haircut 3 bands vs 5 now fixed; P6.21 equity is_main_index decoupled from is_eligible_financial_collateral now fixed]
 - *Needs regulatory verification:* [P1.71 now fixed — was 1.5x-4x capital overstatement for CRR equity]
@@ -109,6 +109,29 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `engine/irb/calculator.py:149-215`
 - **Spec ref:** CRR Art. 160 (PD), Art. 161 (LGD), Art. 158 (EL)
 - **Tests:** 10 new tests in `tests/unit/test_irb_el_silent_defaults.py`: missing PD emits IRB004, missing LGD emits IRB005, both missing emits both, both present no warnings, PD default 0.01 used, LGD default 0.45 used, ead_final preferred, regulatory references present, actual values documented, Basel 3.1 config compatible. All 4,014 tests pass (was 4,004).
+
+### P1.89 B31 private equity / venture capital risk weight 250% instead of 400%
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** **Capital understatement.** Under Basel 3.1 Art. 133(5), PE/VC is explicitly "higher-risk" equity requiring 400% RW. The calculator assigned 250% (the standard equity rate) because `_apply_b31_equity_weights_sa()` had no branch for `private_equity` or `private_equity_diversified` — both fell through to `.otherwise(pl.lit(2.50))`. This caused a **37.5% capital understatement** (250/400 = 62.5%) on all PE/VC equity exposures under Basel 3.1. The data table `B31_SA_EQUITY_RISK_WEIGHTS` was also wrong (Decimal("2.50") for both PE types). The `EquityType` enum docstrings documented "250% B31 SA" for both types. Pre-existing tests asserted 250% — all were wrong.
+- **Fix:** Four changes:
+  1. **Calculator** (`engine/equity/calculator.py`): Added two `private_equity` → 4.00 and `private_equity_diversified` → 4.00 branches in `_apply_b31_equity_weights_sa()`, placed after `is_speculative`/`speculative` checks (all are Art. 133(4)/(5) higher-risk). Updated `_apply_transitional_floor()` to classify PE/VC as higher-risk for correct transitional schedule selection (220%/280%/340%/400% vs 160%/190%/220%/250%).
+  2. **Data table** (`data/tables/b31_equity_rw.py`): Changed `PRIVATE_EQUITY` and `PRIVATE_EQUITY_DIVERSIFIED` from `Decimal("2.50")` to `Decimal("4.00")`. Module docstring updated.
+  3. **Enum** (`domain/enums.py`): Fixed `PRIVATE_EQUITY` and `PRIVATE_EQUITY_DIVERSIFIED` docstrings from "250% B31 SA" to "400% B31 SA (Art. 133(5))".
+  4. **Tests:** Corrected pre-existing test expectations from 250% to 400%: `test_b31_equity_weights.py` (data table + calculator), `test_scenario_b31_l_equity.py` (B31-L8 acceptance). Added `test_b31_l8_rwa` acceptance test (400% × 150k = 600k).
+- **File:Line:** `engine/equity/calculator.py:557-560` (PE branches), `engine/equity/calculator.py:660-665` (transitional is_hr), `data/tables/b31_equity_rw.py:43-44`, `domain/enums.py:456-460`
+- **Spec ref:** PRA PS1/26 Art. 133(5), `docs/specifications/crr/equity-approach.md`
+- **Tests:** All 5,145 tests pass (was 5,140). B31 acceptance: 216 (was 212).
+
+### P1.90 B31 CIU fallback flat 250% instead of 250% listed / 400% unlisted
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** **Capital understatement for unlisted CIUs.** Under Basel 3.1, the CIU fallback weight aligns with the equity SA table (Art. 133): listed CIUs get 250% (standard equity, Art. 133(3)), unlisted CIUs get 400% (higher-risk, Art. 133(5)). The calculator applied a flat 250% for all CIU fallback regardless of listing status. The equity-approach spec documented "250% (listed) / 400% (unlisted)" but the code did not implement the split.
+- **Fix:** Split the CIU fallback branch in `_apply_b31_equity_weights_sa()`:
+  - Listed CIU (`is_exchange_traded == True`): 250% (Art. 132(2)/133(3))
+  - Unlisted CIU (`is_exchange_traded == False/null`): 400% (Art. 132(2)/133(5))
+  Uses existing `is_exchange_traded` Boolean field from EQUITY_EXPOSURE_SCHEMA (no schema change needed). CRR CIU fallback (150%) is unchanged.
+- **File:Line:** `engine/equity/calculator.py:568-577` (CIU fallback split)
+- **Spec ref:** PRA PS1/26 Art. 132(2), Art. 133(3)/(5), `docs/specifications/crr/equity-approach.md`
+- **Tests:** Corrected pre-existing CIU tests: `test_b31_equity_weights.py` (split into `test_ciu_fallback_unlisted_400_percent` + `test_ciu_fallback_listed_250_percent`), B31-L17 acceptance (split into unlisted/listed tests), B31-L23 regression contrast (split into unlisted/listed CIU vs CRR). All 5,145 tests pass.
 
 ---
 
@@ -787,7 +810,7 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 These items are verified complete. Items with **[!]** have known gaps documented in P1/P2:
 
-**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.38, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88
+**P1 items complete (moved from active section):** P1.1, P1.2, P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.9a, P1.9d, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.21, P1.22, P1.23, P1.24, P1.25, P1.26, P1.27, P1.28, P1.29, P1.31, P1.32, P1.33, P1.34, P1.35, P1.36, P1.37, P1.38, P1.39, P1.40, P1.41, P1.42, P1.43, P1.44, P1.45, P1.46, P1.47, P1.48, P1.49, P1.50, P1.51, P1.52, P1.53, P1.54, P1.55, P1.56, P1.59, P1.60, P1.61, P1.62, P1.63, P1.64, P1.65, P1.66, P1.67, P1.68, P1.69, P1.70, P1.71, P1.72, P1.73, P1.74, P1.75, P1.76, P1.77, P1.78, P1.79, P1.80, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.89, P1.90
 
 **P3 items complete:** P3.1, P3.2, P3.4
 
@@ -806,7 +829,7 @@ These items are verified complete. Items with **[!]** have known gaps documented
 - [x] F-IRB calculation (supervisory LGD, PD floors, correlation, maturity adjustment, FI scalar)
 - [x] A-IRB calculation (own LGD/CCF, LGD floors, post-model adjustments; mortgage RW floor 10% -- see P1.33 [fixed])
 - [x] Slotting (CRR 4 tables + Basel 3.1 3 tables + subgrades)
-- [x] **[!]** Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback 250%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; subordinated debt 150% + transitional floor exclusion -- P1.59 [fixed])
+- [x] Equity (SA Art. 133, IRB Simple Art. 155, CIU fallback listed 250%/unlisted 400%; CIU look-through/mandate partial -- see P1.61; B31 equity SA weights implemented -- see P1.42 [fixed]; transitional floor applied in pipeline -- see P1.43 [fixed]; subordinated debt 150% + transitional floor exclusion -- P1.59 [fixed]; PE/VC 400% -- P1.89 [fixed]; CIU listed/unlisted split -- P1.90 [fixed])
 - [x] **[!]** CRM (collateral haircuts CRR 3-band + Basel 3.1 5-band, FX mismatch, maturity mismatch, multi-level allocation, guarantee substitution, netting, provisions, Art. 232 life insurance method, Art. 218 CLN-as-cash; gold haircut wrong -- P1.73; LGD* formula doesn't blend -- P1.75; P1.77 sequential fill fixed; P1.70 per-type OC threshold fixed; see also P1.7, P1.11, P1.30, P1.39-P1.41, P1.56)
 - [x] Basel 3.1 parameter substitution (CRE22.70-85) -- including EL adjustment for guaranteed portion
 - [x] Double default (CRR Art. 153(3), Art. 202-203)

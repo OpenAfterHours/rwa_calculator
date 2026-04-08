@@ -7,11 +7,11 @@ under PRA PS1/26 Art. 133 (amended), with IRB equity approaches removed
 
 SA equity weights (B31-L1 through B31-L9):
 - Art. 133(1): Subordinated debt / non-equity own funds 150%
-- Art. 133(3): Standard equity (listed, unlisted, exchange-traded, PE) 250%
-- Art. 133(5): Higher-risk equity (speculative, young unlisted <5yr, PE/VC) 400%
+- Art. 133(3): Standard equity (listed, unlisted, exchange-traded) 250%
+- Art. 133(5): Higher-risk equity (speculative, PE/VC, young unlisted <5yr) 400%
 - Art. 133(6): Legislative (government-supported) equity 100%
 - Central bank equity 0% (sovereign treatment)
-- CIU fallback rises from CRR 150% to Basel 3.1 250%
+- CIU fallback: listed 250% / unlisted 400% (aligns with Art. 133)
 
 Art. 147A IRB removal (B31-L10):
 - IRB config still routes equity to SA (Art. 147A removes equity IRB)
@@ -23,7 +23,7 @@ Transitional schedule (B31-L11 through B31-L16):
   subordinated_debt, CIU look-through/mandate-based
 
 CIU treatment under B31 (B31-L17 through B31-L19):
-- Art. 132(2): Fallback 250% (was 150% under CRR)
+- Art. 132(2): Fallback listed=250% / unlisted=400% (was flat 150% under CRR)
 - Art. 132A: Mandate-based (user-supplied RW, 1.2x third-party multiplier)
 - No ciu_approach → falls to 250% (B31 default)
 
@@ -287,7 +287,7 @@ class TestB31L8_PrivateEquitySA:
     """
     B31-L8: Private equity under Basel 3.1 SA.
     Input: equity_type=private_equity, EAD=£150,000
-    Expected: Art. 133(3) 250% (standard rate for non-speculative PE)
+    Expected: Art. 133(5) 400% (PE/VC is always higher-risk equity)
     """
 
     def test_b31_l8_risk_weight(self, equity_calculator, b31_config):
@@ -297,7 +297,17 @@ class TestB31L8_PrivateEquitySA:
             equity_type="private_equity",
             config=b31_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(4.00, abs=1e-4)
+
+    def test_b31_l8_rwa(self, equity_calculator, b31_config):
+        """PE at 400% RW: RWA = 150k × 4.00 = 600k."""
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("150000"),
+            equity_type="private_equity",
+            config=b31_config,
+        )
+        assert result["rwa"] == pytest.approx(600_000.0, rel=1e-4)
 
 
 class TestB31L9_IsSpeculativeFlagOverridesType:
@@ -549,11 +559,14 @@ class TestB31L16_TransitionalScheduleProgression:
 class TestB31L17_CIUFallbackSA:
     """
     B31-L17: CIU with fallback approach under Basel 3.1.
-    Input: equity_type=ciu, ciu_approach=fallback, EAD=£400,000
-    Expected: Art. 132(2) B31 fallback 250% (was 150% under CRR) → RWA = £1,000,000
+
+    CIU fallback aligns with the equity SA table (Art. 133):
+    - Listed CIU fallback: 250% (Art. 132(2) + Art. 133(3))
+    - Unlisted CIU fallback: 400% (Art. 132(2) + Art. 133(5))
     """
 
-    def test_b31_l17_risk_weight(self, equity_calculator, b31_config):
+    def test_b31_l17_unlisted_risk_weight(self, equity_calculator, b31_config):
+        """Unlisted CIU fallback = 400% (Art. 132(2)/133(5))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("400000"),
@@ -561,20 +574,45 @@ class TestB31L17_CIUFallbackSA:
             ciu_approach="fallback",
             config=b31_config,
         )
-        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(4.00, abs=1e-4)
 
-    def test_b31_l17_rwa(self, equity_calculator, b31_config):
+    def test_b31_l17_unlisted_rwa(self, equity_calculator, b31_config):
+        """Unlisted CIU fallback: RWA = 400k × 4.00 = 1,600k."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("400000"),
             equity_type="ciu",
             ciu_approach="fallback",
+            config=b31_config,
+        )
+        assert result["rwa"] == pytest.approx(1_600_000.0, rel=1e-4)
+
+    def test_b31_l17_listed_risk_weight(self, equity_calculator, b31_config):
+        """Listed CIU fallback = 250% (Art. 132(2)/133(3))."""
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("400000"),
+            equity_type="ciu",
+            ciu_approach="fallback",
+            is_exchange_traded=True,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+
+    def test_b31_l17_listed_rwa(self, equity_calculator, b31_config):
+        """Listed CIU fallback: RWA = 400k × 2.50 = 1,000k."""
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("400000"),
+            equity_type="ciu",
+            ciu_approach="fallback",
+            is_exchange_traded=True,
             config=b31_config,
         )
         assert result["rwa"] == pytest.approx(1_000_000.0, rel=1e-4)
 
     def test_b31_l17_crr_vs_b31_contrast(self, equity_calculator, b31_config):
-        """CIU fallback rises from CRR 150% to B31 250% — verify it's 250%."""
+        """CIU fallback rises from CRR 150% to B31 250%/400% — verify B31 exceeds CRR."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("400000"),
@@ -732,8 +770,8 @@ class TestB31L23_CRRVsB31RegressionContrast:
         assert crr_result["risk_weight"] == pytest.approx(1.00, abs=1e-4)
         assert b31_result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
 
-    def test_b31_l23_ciu_fallback_crr_vs_b31(self, equity_calculator, b31_config):
-        """CRR CIU fallback=150%, B31 CIU fallback=250%."""
+    def test_b31_l23_ciu_fallback_crr_vs_b31_unlisted(self, equity_calculator, b31_config):
+        """CRR CIU fallback=150%, B31 unlisted CIU fallback=400%."""
         crr_config = CalculationConfig.crr(
             reporting_date=date(2024, 12, 31),
             permission_mode=PermissionMode.STANDARDISED,
@@ -750,6 +788,31 @@ class TestB31L23_CRRVsB31RegressionContrast:
             ead=Decimal("100000"),
             equity_type="ciu",
             ciu_approach="fallback",
+            config=b31_config,
+        )
+        assert crr_result["risk_weight"] == pytest.approx(1.50, abs=1e-4)
+        assert b31_result["risk_weight"] == pytest.approx(4.00, abs=1e-4)
+
+    def test_b31_l23_ciu_fallback_crr_vs_b31_listed(self, equity_calculator, b31_config):
+        """CRR CIU fallback=150%, B31 listed CIU fallback=250%."""
+        crr_config = CalculationConfig.crr(
+            reporting_date=date(2024, 12, 31),
+            permission_mode=PermissionMode.STANDARDISED,
+        )
+        crr_result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("100000"),
+            equity_type="ciu",
+            ciu_approach="fallback",
+            is_exchange_traded=True,
+            config=crr_config,
+        )
+        b31_result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("100000"),
+            equity_type="ciu",
+            ciu_approach="fallback",
+            is_exchange_traded=True,
             config=b31_config,
         )
         assert crr_result["risk_weight"] == pytest.approx(1.50, abs=1e-4)

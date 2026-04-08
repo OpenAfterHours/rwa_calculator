@@ -63,12 +63,12 @@ class TestB31EquityRiskWeightTable:
         """Speculative equity should be 400% under B31 (Art. 133(4))."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.SPECULATIVE] == Decimal("4.00")
 
-    def test_private_equity_250_percent(self) -> None:
-        """Private equity should be 250% under B31 (Art. 133(3))."""
-        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.PRIVATE_EQUITY] == Decimal("2.50")
+    def test_private_equity_400_percent(self) -> None:
+        """Private equity should be 400% under B31 (Art. 133(5) higher risk)."""
+        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.PRIVATE_EQUITY] == Decimal("4.00")
 
-    def test_ciu_250_percent(self) -> None:
-        """CIU fallback should be 250% under B31 (Art. 132(2))."""
+    def test_ciu_table_default_250_percent(self) -> None:
+        """CIU table default = 250% (listed fallback; actual weight depends on listed/unlisted)."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.CIU] == Decimal("2.50")
 
     def test_all_equity_types_covered(self) -> None:
@@ -181,13 +181,19 @@ class TestB31EquityCalculatorSAWeights:
         """B31 Art. 133(6): Central bank equity = 0%."""
         assert self._apply_b31_weight("central_bank") == pytest.approx(0.00)
 
-    def test_private_equity_250_percent(self) -> None:
-        """B31 Art. 133(3): Private equity = 250% (standard)."""
-        assert self._apply_b31_weight("private_equity") == pytest.approx(2.50)
+    def test_private_equity_400_percent(self) -> None:
+        """B31 Art. 133(5): Private equity = 400% (higher risk PE/VC)."""
+        assert self._apply_b31_weight("private_equity") == pytest.approx(4.00)
 
-    def test_ciu_fallback_250_percent(self) -> None:
-        """B31: CIU fallback = 250% (was 150% under CRR)."""
-        assert self._apply_b31_weight("ciu", ciu_approach="fallback") == pytest.approx(2.50)
+    def test_ciu_fallback_unlisted_400_percent(self) -> None:
+        """B31: Unlisted CIU fallback = 400% (Art. 132(2)/133(5))."""
+        assert self._apply_b31_weight("ciu", ciu_approach="fallback") == pytest.approx(4.00)
+
+    def test_ciu_fallback_listed_250_percent(self) -> None:
+        """B31: Listed CIU fallback = 250% (Art. 132(2)/133(3))."""
+        assert self._apply_b31_weight(
+            "ciu", ciu_approach="fallback", is_exchange_traded=True
+        ) == pytest.approx(2.50)
 
     def test_other_equity_250_percent(self) -> None:
         """B31 Art. 133(3): Other equity = 250% (standard)."""

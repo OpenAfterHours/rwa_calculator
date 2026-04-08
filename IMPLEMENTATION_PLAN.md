@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P2.8 C 07.00/OF 07.00 memorandum rows + supporting factor rows/columns implemented)
-**Current version:** 0.1.171 | **Test suite:** 4,981 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**Last updated:** 2026-04-08 (P5.2 fixture referential integrity fixed — 12 missing test loans added, 20 integrity tests)
+**Current version:** 0.1.172 | **Test suite:** 5,001 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.2b, P2.2c, P2.2d, P2.2e, P2.2f, P2.2g, P2.3, P2.4, P2.8, P2.10, P3.1, P3.2, P3.4, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.2, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
 **CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
 **Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 13 (P2.2a/P2.2b/P2.2c/P2.2d/P2.2e/P2.2f/P2.2g/P2.3/P2.4/P2.8/P2.10/P2.11 complete) | P3 (Pillar III): 4 (P3.1/P3.2/P3.4 complete) | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.2/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -469,8 +469,22 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests:** All 4,362 tests pass (was 4,306). Stress tests: 56 normal + 4 slow. Contract tests: 144.
 
 ### P5.2 Fixture referential integrity
-- **Status:** [~] Pre-existing errors
-- **Fix:** Fix or regenerate affected fixtures.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** 12 CRM fixture records (5 collateral, 4 guarantee, 3 provision) referenced "dedicated test loans" that were never added to the loan fixture. All had `beneficiary_type="loan"` pointing to `LOAN_COLL_TEST_*`, `LOAN_GUAR_TEST_*`, and `LOAN_PROV_TEST_*` references that did not exist in `tests/fixtures/exposures/loans.py`. These orphaned references meant CRM processing silently ignored these records during acceptance test pipeline runs.
+- **Fix:** Added `_dedicated_test_loans()` function with 12 new loan records to `loans.py`:
+  - **5 collateral test loans:** `LOAN_COLL_TEST_CORP_001` (gilt bond target), `LOAN_COLL_TEST_CORP_002` (equity target), `LOAN_COLL_TEST_CORP_003` (cash target), `LOAN_COLL_TEST_SME_001` (SME cash target), `LOAN_COLL_TEST_RTL_001` (receivables target). Counterparties: `CORP_UR_001` (corporate), `CORP_SME_001` (SME), `RTL_SME_001` (retail SME).
+  - **4 guarantee test loans:** `LOAN_GUAR_TEST_SOV_001` (sovereign guarantee target, £5m), `LOAN_GUAR_TEST_001` (bank guarantee 60% target, £1m), `LOAN_GUAR_TEST_002` (bank guarantee 50% target, £2m SME), `LOAN_GUAR_TEST_RTL_001` (corporate guarantee target, £500k retail). Loan sizes match guarantee comments.
+  - **3 provision test loans:** `LOAN_PROV_TEST_CORP_001` (stage 2 £50k = 5% of £1m), `LOAN_PROV_TEST_CORP_002` (stage 1 £25k = 0.1% of £25m), `LOAN_PROV_TEST_SME_001` (stage 2 £25k = 5% of £500k). Loan sizes match provision amount comments.
+  - All loans use existing counterparties (`CORP_UR_001`, `CORP_SME_001`, `RTL_SME_001`) to avoid adding new counterparty fixtures. All use standard defaults (senior, LGD 0.45, GBP, maturity 2029-12-31).
+  - Regenerated `loans.parquet` (67 → 79 records). `generate_all.py` integrity check now reports all 13 checks passed.
+- **Regression prevention:** Added `tests/integration/test_fixture_integrity.py` with 20 tests across 5 test classes:
+  - **TestCounterpartyReferences (4 tests):** loan/facility/contingent/rating counterparty refs → counterparties
+  - **TestCRMBeneficiaryReferences (6 tests):** collateral loan/facility refs, guarantee loan/facility/guarantor refs, provision loan refs → loans/facilities/counterparties
+  - **TestMappingReferences (4 tests):** facility mapping parent/child, org mapping, lending mapping → facilities/loans/counterparties
+  - **TestModelIDReferences (1 test):** rating model_ids → model_permissions
+  - **TestFixtureDataQuality (5 tests):** no duplicate references in loans/facilities/collateral/guarantees/provisions
+- **File:Line:** `tests/fixtures/exposures/loans.py` (_dedicated_test_loans function), `tests/integration/test_fixture_integrity.py` (20 tests)
+- **Tests:** All 5,001 tests pass (was 4,981). Integration tests: 121 (was 101). Contract tests: 145.
 
 ### P5.3 CRR CRM guarantee/provision test placeholders
 - **Status:** [~] Documented as placeholders
@@ -738,7 +752,7 @@ These items are verified complete. Items with **[!]** have known gaps documented
 
 **P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
 
-**P5 items complete:** P5.1, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
+**P5 items complete:** P5.1, P5.2, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
 
 - [x] All 8 pipeline stages (loader, hierarchy, classifier, CRM, SA/IRB/slotting/equity, aggregator)
 - [x] **[!]** CRR SA risk weights (core classes: sovereign, institution, corporate, retail, RE, defaulted, equity; PSE/RGLA/MDB/Int.Org/Other Items pending -- see P1.52-P1.55)

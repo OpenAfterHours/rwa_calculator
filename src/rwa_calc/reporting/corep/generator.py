@@ -7,6 +7,7 @@ Pipeline position:
 Key responsibilities:
 - Generate per-exposure-class COREP template DataFrames with row sections
 - Populate COREP columns from pipeline calculation results using 4-digit refs
+- Generate C 08.05 / OF 08.05 PD backtesting per IRB exposure class
 - Generate C 08.06 / OF 08.06 specialised lending slotting per SL type
 - Generate C 08.07 / OF 08.07 IRB scope of use (portfolio-level)
 - Generate OF 02.01 output floor comparison (Basel 3.1, portfolio-level)
@@ -57,6 +58,7 @@ from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_02_columns,
     get_c08_03_columns,
+    get_c08_05_columns,
     get_c08_06_columns,
     get_c08_06_rows,
     get_c08_06_sl_types,
@@ -92,6 +94,9 @@ class COREPTemplateBundle:
     C 08.02 (IRB by PD grade): One DataFrame per IRB exposure class.
     C 08.03 (IRB PD ranges): One DataFrame per IRB exposure class, 17 fixed
         regulatory PD range buckets, 11 columns. Slotting excluded.
+    C 08.05 (IRB PD backtesting): One DataFrame per IRB exposure class, 17
+        fixed PD range buckets, 5 columns. Validates PD model calibration by
+        comparing assigned PDs against observed default rates. Slotting excluded.
     C 08.06 (IRB slotting): One DataFrame per SL type, rows by slotting
         category (Strong-Default) × maturity band (< 2.5yr / ≥ 2.5yr).
         10 columns (CRR) / 11 columns (Basel 3.1 adds FCCM deduction).
@@ -116,6 +121,7 @@ class COREPTemplateBundle:
     c08_01: dict[str, pl.DataFrame]
     c08_02: dict[str, pl.DataFrame]
     c08_03: dict[str, pl.DataFrame] = field(default_factory=dict)
+    c08_05: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_06: dict[str, pl.DataFrame] = field(default_factory=dict)
     c08_07: pl.DataFrame | None = None
     of_02_01: pl.DataFrame | None = None
@@ -176,6 +182,7 @@ class COREPGenerator:
         c08_01 = self._generate_all_c08_01(irb_data, cols, framework, errors)
         c08_02 = self._generate_all_c08_02(irb_data, cols, framework, errors)
         c08_03 = self._generate_all_c08_03(irb_data, cols, framework, errors)
+        c08_05 = self._generate_all_c08_05(irb_data, cols, framework, errors)
         c08_06 = self._generate_all_c08_06(irb_data, cols, framework, errors)
 
         # C 08.07 / OF 08.07 — IRB scope of use
@@ -192,6 +199,7 @@ class COREPGenerator:
             c08_01=c08_01,
             c08_02=c08_02,
             c08_03=c08_03,
+            c08_05=c08_05,
             c08_06=c08_06,
             c08_07=c08_07,
             of_02_01=of_02_01,
@@ -238,6 +246,10 @@ class COREPGenerator:
             )
             total_rows += self._write_template_sheets(
                 workbook, bundle.c08_03, "C 08.03", IRB_EXPOSURE_CLASS_ROWS
+            )
+            c08_05_prefix = "OF 08.05" if bundle.framework == "BASEL_3_1" else "C 08.05"
+            total_rows += self._write_template_sheets(
+                workbook, bundle.c08_05, c08_05_prefix, IRB_EXPOSURE_CLASS_ROWS
             )
             sl_type_names = get_c08_06_sl_types(bundle.framework)
             sl_class_map = {k: (k, v) for k, v in sl_type_names.items()}
@@ -1490,6 +1502,140 @@ class COREPGenerator:
             values = _compute_c08_03_values(
                 unassigned, cols, ead_col, rwa_col, report_pd_col, column_refs
             )
+            rows.append({"row_ref": "9999", "row_name": "Unassigned", **values})
+
+        if not rows:
+            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema.update(dict.fromkeys(column_refs, pl.Float64))
+            return pl.DataFrame(schema=schema)
+
+        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema.update(dict.fromkeys(column_refs, pl.Float64))
+        return pl.DataFrame(rows, schema=schema)
+
+    # =========================================================================
+    # C 08.05 / OF 08.05 — IRB PD BACKTESTING
+    # =========================================================================
+
+    def _generate_all_c08_05(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate C 08.05 / OF 08.05 DataFrames for all IRB exposure classes.
+
+        C 08.05 provides PD backtesting analysis using 17 fixed regulatory PD
+        range buckets (same as C 08.03). Each row contains PD model validation
+        metrics: arithmetic average PD, obligor count, defaults, and default
+        rates. Slotting exposures are excluded.
+
+        Basel 3.1 distinction: Row allocation uses pre-input-floor PD,
+        but col 0010 reports the arithmetic average post-input-floor PD.
+
+        Why: PD backtesting is critical for IRB model validation. Comparing
+        assigned PDs against realised default rates reveals model calibration
+        drift and supports supervisory review of internal models.
+
+        References:
+        - CRR Art. 180 (PD validation requirements)
+        - Regulation (EU) 2021/451, Annex I/II (C 08.05)
+        - PRA PS1/26, Annex I/II (OF 08.05)
+        """
+        ec_col = _pick(cols, "exposure_class")
+
+        if ec_col is None:
+            errors.append("C08.05: Missing required column (exposure_class)")
+            return {}
+
+        # For row allocation: B31 uses pre-input-floor PD, CRR uses floored PD
+        if framework == "BASEL_3_1":
+            alloc_pd_col = _pick(cols, "irb_pd_original", "irb_pd_floored")
+        else:
+            alloc_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        # For col 0010 (reported PD): always post-input-floor
+        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+
+        if alloc_pd_col is None:
+            errors.append("C08.05: No PD column available — skipping PD backtesting")
+            return {}
+
+        # Exclude slotting exposures — C 08.05 covers F-IRB/A-IRB only
+        approach_col = _pick(cols, "approach_applied", "approach")
+        if approach_col is not None:
+            irb_no_slotting = irb_data.filter(pl.col(approach_col) != "slotting")
+        else:
+            irb_no_slotting = irb_data
+
+        irb_df: pl.DataFrame = irb_no_slotting.collect()
+        if len(irb_df) == 0:
+            return {}
+
+        classes = irb_df[ec_col].unique().sort().to_list()
+        result: dict[str, pl.DataFrame] = {}
+
+        for ec in classes:
+            class_df = irb_df.filter(pl.col(ec_col) == ec)
+            template_df = self._generate_c08_05_for_class(
+                class_df,
+                set(irb_df.columns),
+                alloc_pd_col,
+                report_pd_col or alloc_pd_col,
+                framework,
+            )
+            result[ec] = template_df
+
+        return result
+
+    def _generate_c08_05_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        alloc_pd_col: str,
+        report_pd_col: str,
+        framework: str,
+    ) -> pl.DataFrame:
+        """Generate a C 08.05 DataFrame for a single IRB exposure class.
+
+        Rows = 17 fixed regulatory PD range buckets (plus optional unassigned).
+        Columns = 5: arithmetic avg PD, obligors (prior year), defaults,
+        observed default rate, historical annual default rate.
+
+        Args:
+            class_data: DataFrame filtered to a single exposure class.
+            cols: Available column names.
+            alloc_pd_col: PD column for row allocation (pre-floor for B31).
+            report_pd_col: PD column for col 0010 reporting (post-floor).
+            framework: "CRR" or "BASEL_3_1".
+        """
+        column_defs = get_c08_05_columns(framework)
+        column_refs = [c.ref for c in column_defs]
+
+        # Assign PD range buckets using the allocation PD column
+        band_expr = pl.lit("Unassigned")
+        for lower, upper, _row_ref, label in reversed(C08_03_PD_RANGES):
+            band_expr = (
+                pl.when((pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper))
+                .then(pl.lit(label))
+                .otherwise(band_expr)
+            )
+        banded = class_data.with_columns(band_expr.alias("_pd_range"))
+
+        rows: list[dict[str, object]] = []
+
+        for _lower, _upper, row_ref, label in C08_03_PD_RANGES:
+            band_data = banded.filter(pl.col("_pd_range") == label).drop("_pd_range")
+            if len(band_data) == 0:
+                continue
+
+            values = _compute_c08_05_values(band_data, cols, report_pd_col, column_refs)
+            rows.append({"row_ref": row_ref, "row_name": label, **values})
+
+        # Handle unassigned (e.g. null PD)
+        unassigned = banded.filter(pl.col("_pd_range") == "Unassigned").drop("_pd_range")
+        if len(unassigned) > 0:
+            values = _compute_c08_05_values(unassigned, cols, report_pd_col, column_refs)
             rows.append({"row_ref": "9999", "row_name": "Unassigned", **values})
 
         if not rows:
@@ -2810,6 +2956,104 @@ def _compute_c08_03_values(
         values["0110"] = prov
 
     # Filter to only refs in this framework's column set (C 08.03)
+    return {ref: values.get(ref) for ref in column_refs if ref in values}
+
+
+def _compute_c08_05_values(
+    data: pl.DataFrame,
+    cols: set[str],
+    pd_col: str,
+    column_refs: list[str],
+) -> dict[str, float | None]:
+    """Compute C 08.05 column values for a PD range bucket.
+
+    5 columns: arithmetic average PD, obligor count (prior year),
+    defaults during year, observed default rate, historical annual default rate.
+
+    Why: PD backtesting compares model-assigned PDs against realised default
+    rates per PD bucket. This is a key supervisory metric for IRB model
+    validation under CRR Art. 180 and PRA PS1/26.
+
+    Note on historical data: Cols 0020 (prior-year obligors) and 0050
+    (historical annual default rate) ideally require multi-year lookback data.
+    When only current-period data is available from the pipeline, col 0020
+    uses current obligor count and col 0050 uses the current-period observed
+    default rate as best-effort approximations.
+
+    Args:
+        data: DataFrame filtered to a single PD range bucket.
+        cols: Available column names in the data.
+        pd_col: PD column for reporting (post-input-floor for B31).
+        column_refs: List of column refs to include in output.
+
+    References:
+    - CRR Art. 180, Regulation (EU) 2021/451 Annex I (C 08.05)
+    - PRA PS1/26 Annex I/II (OF 08.05)
+    """
+    values: dict[str, float | None] = {}
+    n_rows = len(data)
+
+    # 0010: Arithmetic average PD (%)
+    # Unlike C 08.03 col 0050 (EAD-weighted), this is a simple arithmetic average
+    if pd_col in cols and n_rows > 0:
+        pd_sum = float(data[pd_col].fill_null(0.0).sum())
+        values["0010"] = pd_sum / n_rows
+    else:
+        values["0010"] = None
+
+    # Determine obligor count and default count
+    cp_col = "counterparty_reference" if "counterparty_reference" in cols else None
+    default_col = _pick(cols, "is_defaulted", "default_status")
+
+    if cp_col is not None:
+        n_obligors = float(data[cp_col].n_unique())
+    else:
+        n_obligors = float(n_rows)
+
+    if default_col is not None:
+        defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
+        if cp_col is not None:
+            n_defaults = float(defaulted[cp_col].n_unique())
+        else:
+            n_defaults = float(len(defaulted))
+    else:
+        # Fall back to PD >= 1.0 as default indicator
+        if pd_col in cols:
+            defaulted = data.filter(pl.col(pd_col) >= 1.0)
+            if cp_col is not None:
+                n_defaults = float(defaulted[cp_col].n_unique())
+            else:
+                n_defaults = float(len(defaulted))
+        else:
+            n_defaults = 0.0
+
+    # 0020: Number of obligors at end of previous year
+    # Best-effort: use current-period obligor count when historical data absent
+    prior_year_col = _pick(cols, "prior_year_obligor_count")
+    if prior_year_col is not None:
+        values["0020"] = float(data[prior_year_col].fill_null(0.0).sum())
+    else:
+        values["0020"] = n_obligors
+
+    # 0030: Of which: defaulted during the year
+    values["0030"] = n_defaults
+
+    # 0040: Observed average default rate (%)
+    if n_obligors > 0:
+        values["0040"] = n_defaults / n_obligors
+    else:
+        values["0040"] = 0.0
+
+    # 0050: Average historical annual default rate (%)
+    # Best-effort: use current observed default rate when multi-year data absent
+    hist_rate_col = _pick(cols, "historical_annual_default_rate")
+    if hist_rate_col is not None and n_rows > 0:
+        values["0050"] = float(data[hist_rate_col].fill_null(0.0).mean())
+    else:
+        # Fall back to current observed rate as single-period approximation
+        values["0050"] = values["0040"]
+
+    # Filter to only refs in this framework's column set (C 08.05)
     return {ref: values.get(ref) for ref in column_refs if ref in values}
 
 

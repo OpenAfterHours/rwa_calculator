@@ -6,6 +6,7 @@ Defines the row/column structure for COREP credit risk templates:
 - C 08.01 / OF 08.01: IRB totals — 35/40+ columns, row sections
 - C 08.02 / OF 08.02: IRB PD grade bands for granular reporting
 - C 08.03 / OF 08.03: IRB PD ranges — 11 columns, 17 fixed regulatory PD buckets
+- C 08.05 / OF 08.05: IRB PD backtesting — 5 columns, 17 fixed regulatory PD buckets
 - C 08.06 / OF 08.06: IRB specialised lending slotting — 10/11 columns, per SL type
 - C 08.07 / OF 08.07: IRB scope of use — 5/18 columns, per exposure class (CRR/B31)
 - OF 02.01: Output floor comparison — 4 columns, 8 risk-type rows (Basel 3.1 only)
@@ -731,6 +732,68 @@ B31_C08_03_COLUMNS: list[COREPColumn] = [
 ]
 
 C08_03_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_03_COLUMNS]
+
+
+# =============================================================================
+# C 08.05 / OF 08.05 — IRB PD BACKTESTING
+# =============================================================================
+
+# C 08.05 / OF 08.05 provides PD backtesting analysis per IRB exposure class.
+# Uses the same 17 fixed regulatory PD range buckets as C 08.03.
+# One submission per IRB exposure class. Slotting exposures are excluded.
+#
+# 5 columns:
+#   0010: Arithmetic average PD (%) — CRR: as-is; B31: post-input floor
+#   0020: Number of obligors at end of previous year
+#   0030: Of which: defaulted during the year
+#   0040: Observed average default rate (%)
+#   0050: Average historical annual default rate (%)
+#
+# Cols 0020 and 0050 require historical data. When historical data is not
+# available from the pipeline, these columns are populated from current-period
+# data as best-effort approximations:
+#   - Col 0020 uses current-period obligor count (no prior-year data)
+#   - Col 0050 uses current observed default rate (no multi-year lookback)
+#
+# Basel 3.1 distinction: Row allocation uses pre-input-floor PD
+# (same as OF 08.03). Col 0010 reports the arithmetic average of the
+# post-input-floor PD values (not exposure-weighted, unlike C 08.03 col 0050).
+#
+# References:
+# - CRR Art. 180 (PD validation requirements)
+# - Regulation (EU) 2021/451, Annex I (C 08.05 template layout)
+# - Regulation (EU) 2021/451, Annex II (C 08.05 reporting instructions)
+# - PRA PS1/26, Annex I (OF 08.05 template layout)
+# - PRA PS1/26, Annex II (OF 08.05 reporting instructions)
+
+CRR_C08_05_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Arithmetic average PD (%)", "PD"),
+    COREPColumn("0020", "Number of obligors at end of previous year", "Obligors"),
+    COREPColumn("0030", "Of which: defaulted during the year", "Defaults"),
+    COREPColumn("0040", "Observed average default rate (%)", "Default Rate"),
+    COREPColumn("0050", "Average historical annual default rate (%)", "Historical Rate"),
+]
+
+# OF 08.05 (Basel 3.1) has the same 5 columns but col 0010 clarifies
+# that the average PD is post-input-floor.
+B31_C08_05_COLUMNS: list[COREPColumn] = [
+    COREPColumn("0010", "Arithmetic average PD (%) (post input floor)", "PD"),
+    COREPColumn("0020", "Number of obligors at end of previous year", "Obligors"),
+    COREPColumn("0030", "Of which: defaulted during the year", "Defaults"),
+    COREPColumn("0040", "Observed average default rate (%)", "Default Rate"),
+    COREPColumn("0050", "Average historical annual default rate (%)", "Historical Rate"),
+]
+
+C08_05_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_05_COLUMNS]
+
+
+def get_c08_05_columns(framework: str = "CRR") -> list[COREPColumn]:
+    """Return the C 08.05 / OF 08.05 column definitions for the given framework.
+
+    C 08.05 (CRR) and OF 08.05 (Basel 3.1) have identical column structure
+    but differ in col 0010 naming: B31 clarifies "post input floor".
+    """
+    return B31_C08_05_COLUMNS if framework == "BASEL_3_1" else CRR_C08_05_COLUMNS
 
 
 # =============================================================================

@@ -5,6 +5,15 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.173] — 2026-04-08
+
+### Fixed
+- **COREP**: OF 02.00 IRB sub-row splits — rows 0295-0297 (FSE/large, SME, non-SME corporates), 0355-0356 (retail RE SME/non-SME), 0382-0385 (corporate RE sub-splits), 0400/0410 (other retail SME/non-SME) now populated from pipeline data instead of hardcoded 0.0. Uses finer-grained aggregation keyed by (approach, exposure_class, is_sme, apply_fi_scalar, property_type).
+- **COREP**: OF 02.00 floor indicator rows 0035/0036 — floor_pct and of_adj now populated from `OutputFloorSummary` when provided, instead of hardcoded 0.0.
+- **COREP**: `_filter_re()` fallback chain — gracefully degrades from `materially_dependent_on_property` → `has_income_cover` → `is_income_producing` when pipeline columns vary. Null handling corrected: only fallback columns use `fill_null(False)`, preserving null-as-unclassified semantics for the primary column.
+- **Equity**: `_apply_transitional_floor()` now emits `equity_transitional_approach` and `equity_higher_risk` annotation columns for COREP OF 07.00 rows 0371-0374.
+- **Tests**: 24 new COREP tests across 4 classes (IRB sub-row splits, floor indicators, RE fallback, equity transitional columns). COREP tests: 687 (was 663). Total: 5,025 (was 5,001). (P2.5)
+
 ## [0.1.170] — 2026-04-08
 
 ### Added

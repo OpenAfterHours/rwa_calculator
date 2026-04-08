@@ -215,6 +215,8 @@ COLLATERAL_SCHEMA = {
     # Eligibility flags
     "is_eligible_financial_collateral": pl.Boolean,  # Meets SA eligibility (CRR Art 197, CRE22.40)
     "is_eligible_irb_collateral": pl.Boolean,  # Meets IRB eligibility - wider pool (CRR Art 199)
+    # Equity index membership (Art. 224 Table 3/4)
+    "is_main_index": pl.Boolean,  # True = main-index equity (CRR 15%, B31 20%); False = other listed (CRR 25%, B31 30%)
     # Valuation requirements (CRE22.75-78)
     "valuation_date": pl.Date,  # Date of last valuation
     "valuation_type": pl.String,  # market, indexed, independent - RE must be independent

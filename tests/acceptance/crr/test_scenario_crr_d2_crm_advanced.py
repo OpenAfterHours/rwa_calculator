@@ -766,11 +766,9 @@ class TestCRRD11_EquityCollateral:
 
     Expected: EAD ≈ 575k, RWA ≈ 575k.
 
-    Note: The pipeline uses ``is_eligible_financial_collateral`` as the
-    ``is_main_index`` proxy. All eligible equity collateral is treated as
-    main-index (15% CRR / 20% B31). To support 25% (CRR) / 30% (B31) for
-    other-listed equity, a dedicated ``is_main_index`` field is needed
-    on the collateral schema.
+    Note: The ``is_main_index`` field on COLLATERAL_SCHEMA now drives the
+    haircut lookup (P6.21). When absent, falls back to
+    ``is_eligible_financial_collateral`` for backward compatibility.
 
     Reference: CRR Art. 224 Table 4 — main-index equity haircut 15%.
     """

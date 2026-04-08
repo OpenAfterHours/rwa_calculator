@@ -12,6 +12,16 @@ if [[ "$1" = "plan" ]]; then
     MODE="plan"
     PROMPT_FILE="PROMPT_plan.md"
     MAX_ITERATIONS=${2:-2}
+elif [[ "$1" = "docs_plan" ]]; then
+    # Doc Plan mode
+    MODE="plan"
+    PROMPT_FILE="PROMPT_docs_plan.md"
+    MAX_ITERATIONS=${2:-2}
+elif [[ "$1" = "docs_build" ]]; then
+    # Doc build mode
+    MODE="build"
+    PROMPT_FILE="PROMPT_docs_build.md"
+    MAX_ITERATIONS=${2:-2}
 elif [[ "$1" =~ ^[0-9]+$ ]]; then
     # Build mode with max iterations
     MODE="build"

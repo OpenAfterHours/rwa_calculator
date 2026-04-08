@@ -15,6 +15,8 @@ from pathlib import Path
 
 _MARIMO_DIR = Path(__file__).parent.parent
 _WORKSPACES_DIR = _MARIMO_DIR / "workspaces" / "local"
+_TEAM_DIR = _MARIMO_DIR / "workspaces" / "team"
+_SKIP_DIRS = frozenset({"shared", "__marimo__", "__pycache__"})
 
 
 # Read logo at import time from project docs/assets
@@ -42,6 +44,37 @@ def _get_version() -> str:
         return "dev"
 
 
+def _discover_workbooks(base_dir: Path, url_prefix: str) -> list[str]:
+    """Build markdown list entries for workbooks in *base_dir*.
+
+    Returns a list of markdown lines. Root-level workbooks are top-level
+    items; subfolders appear as bold headers with their contents indented.
+    """
+    if not base_dir.exists():
+        return []
+
+    lines: list[str] = []
+
+    # Root-level workbooks
+    root_books = sorted(f.stem for f in base_dir.glob("*.py") if f.stem != "__init__")
+    for name in root_books:
+        lines.append(f"- [{name}](http://localhost:8002/?file={url_prefix}/{name}.py)")
+
+    # Folder workbooks
+    for d in sorted(base_dir.iterdir()):
+        if not d.is_dir() or d.name in _SKIP_DIRS or d.name.startswith("."):
+            continue
+        folder_books = sorted(f.stem for f in d.glob("*.py") if f.stem != "__init__")
+        if folder_books:
+            lines.append(f"- **{d.name}/**")
+            for name in folder_books:
+                lines.append(
+                    f"  - [{name}](http://localhost:8002/?file={url_prefix}/{d.name}/{name}.py)"
+                )
+
+    return lines
+
+
 def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> object:
     """Build the standard RWA Calculator sidebar.
 
@@ -64,12 +97,6 @@ def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> obje
     """
     if not version:
         version = f"v{_get_version()}"
-    workbooks = (
-        sorted(f.stem for f in _WORKSPACES_DIR.glob("*.py") if f.stem != "__init__")
-        if _WORKSPACES_DIR.exists()
-        else []
-    )
-    wb_links = "\n".join(f"- [{n}](http://localhost:8002/?file={n}.py)" for n in workbooks)
 
     _header = (
         mo.Html(
@@ -109,7 +136,15 @@ def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> obje
             "basel_framework/)"
         ),
     ]
-    if workbooks:
-        items.append(mo.md(f"**Workbooks**\n{wb_links}"))
+
+    # Local workbooks
+    local_lines = _discover_workbooks(_WORKSPACES_DIR, "local")
+    if local_lines:
+        items.append(mo.md("**Workbooks**\n" + "\n".join(local_lines)))
+
+    # Team workbooks
+    team_lines = _discover_workbooks(_TEAM_DIR, "team")
+    if team_lines:
+        items.append(mo.md("**Team Workbooks**\n" + "\n".join(team_lines)))
 
     return mo.sidebar(items, footer=mo.md(f"*RWA Calculator {version}*"))

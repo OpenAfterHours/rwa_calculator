@@ -82,6 +82,7 @@ def create_ratings() -> pl.DataFrame:
         *_corporate_internal_ratings(),
         *_firb_scenario_internal_ratings(),
         *_airb_scenario_internal_ratings(),
+        *_slotting_scenario_internal_ratings(),
         *_provision_scenario_internal_ratings(),
         *_retail_internal_ratings(),
         *_complex_scenario_external_ratings(),
@@ -665,6 +666,127 @@ def _airb_scenario_internal_ratings() -> list[Rating]:
             3,
             0.0150,
             airb_rating_date,
+            False,
+        ),
+    ]
+
+
+def _slotting_scenario_internal_ratings() -> list[Rating]:
+    """
+    Internal ratings for slotting acceptance test counterparties.
+
+    These ratings exist solely so that enrich_ratings_with_model_id() can stamp
+    model_id onto them, enabling the classifier to grant slotting permission via
+    model_permissions.  Slotting risk weights are category-based (not PD-based),
+    so the PD values here are indicative only.
+
+    Scenarios:
+        CRR-E1 / B31-E1: PF Strong (>=2.5yr)
+        CRR-E2 / B31-E2: PF Good (>=2.5yr)
+        CRR-E3 / B31-E3: IPRE Weak (>=2.5yr)
+        CRR-E4 / B31-E4: HVCRE Strong (>=2.5yr)
+        CRR-E5: PF Strong short maturity (<2.5yr)
+        CRR-E6: PF Good short maturity (<2.5yr)
+        CRR-E7: HVCRE Strong short maturity (<2.5yr)
+        CRR-E8: HVCRE Good short maturity (<2.5yr)
+    """
+    sl_rating_date = date(2026, 1, 2)
+
+    return [
+        # CRR-E1 / B31-E1: PF Strong — indicative PD 0.50%
+        Rating(
+            "RTG_INT_SL_PF_STRONG",
+            "SL_PF_STRONG",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0050,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E2 / B31-E2: PF Good — indicative PD 1.50%
+        Rating(
+            "RTG_INT_SL_PF_GOOD",
+            "SL_PF_GOOD",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0150,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E3 / B31-E3: IPRE Weak — indicative PD 5.00%
+        Rating(
+            "RTG_INT_SL_IPRE_WEAK",
+            "SL_IPRE_WEAK",
+            "internal",
+            "internal",
+            "5A",
+            5,
+            0.0500,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E4 / B31-E4: HVCRE Strong — indicative PD 0.50%
+        Rating(
+            "RTG_INT_SL_HVCRE_STRONG",
+            "SL_HVCRE_STRONG",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0050,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E5: PF Strong short maturity — indicative PD 0.50%
+        Rating(
+            "RTG_INT_SL_PF_STRONG_SHORT",
+            "SL_PF_STRONG_SHORT",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0050,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E6: PF Good short maturity — indicative PD 1.50%
+        Rating(
+            "RTG_INT_SL_PF_GOOD_SHORT",
+            "SL_PF_GOOD_SHORT",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0150,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E7: HVCRE Strong short maturity — indicative PD 0.50%
+        Rating(
+            "RTG_INT_SL_HVCRE_STRONG_SHORT",
+            "SL_HVCRE_STRONG_SHORT",
+            "internal",
+            "internal",
+            "2B",
+            2,
+            0.0050,
+            sl_rating_date,
+            False,
+        ),
+        # CRR-E8: HVCRE Good short maturity — indicative PD 1.50%
+        Rating(
+            "RTG_INT_SL_HVCRE_GOOD_SHORT",
+            "SL_HVCRE_GOOD_SHORT",
+            "internal",
+            "internal",
+            "3B",
+            3,
+            0.0150,
+            sl_rating_date,
             False,
         ),
     ]

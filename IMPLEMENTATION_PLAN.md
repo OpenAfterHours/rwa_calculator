@@ -1,13 +1,13 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (P5.1 stress/performance acceptance tests)
-**Current version:** 0.1.158 | **Test suite:** 4,362 passed, 33 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.4, P2.10, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
-**CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (208 tests) | **Comparison:** 100% (60 tests)
-**Acceptance tests skipped at runtime:** ~90 (conditional `pytest.skip()` when fixture data unavailable)
+**Last updated:** 2026-04-08 (P5.4 slotting acceptance test skips fixed)
+**Current version:** 0.1.160 | **Test suite:** 4,374 passed, 21 skipped | P1.3, P1.4, P1.5, P1.6, P1.7, P1.8, P1.11, P1.12, P1.13, P1.14, P1.15, P1.16, P1.17, P1.18, P1.19, P1.20, P1.23, P1.26, P1.27, P1.28, P1.29, P1.30b, P1.30c, P1.30d, P1.31, P1.32, P1.34, P1.35, P1.37, P1.38a, P1.38b, P1.39, P1.40, P1.41, P1.44, P1.48, P1.49, P1.50, P1.59, P1.60, P1.61, P1.62, P1.64, P1.65, P1.67, P1.70, P1.71, P1.73, P1.74, P1.78, P1.81, P1.82, P1.83, P1.84, P1.85, P1.86, P1.87, P1.88, P1.9a, P2.2a, P2.4, P2.10, P4.1, P4.5, P4.13, P4.14, P4.15, P5.1, P5.4, P5.6, P5.7, P5.8, P5.9, P5.10, P6.1, P6.2, P6.3, P6.4, P6.5, P6.6, P6.10, P6.11, P6.12, P6.13, P6.14, P6.16, P6.18, P6.19, P6.17, P6.20 fixed.
+**CRR acceptance:** 100% (133 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests)
+**Acceptance tests skipped at runtime:** 0 (was ~12; slotting fixture ratings added)
 **Environment note:** Tests running on Python 3.14.3 with polars. Ruff binary unavailable in sandbox (exec format error).
 **Test corrections in 0.1.64 increment (2026-04-06):** Pre-existing test expectations were corrected for P1.1 (retail_mortgage 0.05%→0.10%, retail_qrre_transactor 0.03%→0.05%), P1.33 (mortgage RW floor 15%→10%), P1.46 (CQS 5 corporate RW 100%→150%), and CIU fallback (tests expected 1250% but code correctly implements 150% per CRR Art. 132(2); the 1250% deduction treatment, if needed, must be tracked separately). Test count increased from ~2,283 to ~2,344.
 
-**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
+**Gap summary:** P1 (calculation correctness): 88 items total (3 open: P1.10, P1.30(e), P1.38(c)) | P2 (COREP): 11 (P2.2a/P2.4/P2.10/P2.11 complete) | P3 (Pillar III): 4 | P4 (docs): 20 | P5 (tests): 9 (P5.1/P5.4/P5.5 resolved) | P6 (code quality): 20 (P6.7/P6.11 now complete) | P7 (future): 4
 **Critical items by impact type:**
 - *Capital understatement (exposures get lower RWA than they should):* [P1.56, P1.55, P1.54, P1.53, P1.52, P1.46, P1.42, P1.51, P1.66, P1.79, P1.24, P1.25, P1.45, P1.69, P1.16, P1.2 (QRRE 50% vs 25%, retail_other 30% vs 25%) now fixed/verified; P1.85 (PMA sequencing now fixed); P1.86 (unrated covered bond Art. 129(5) derivation now wired); P1.87 (blended retail LGD floor now implemented)]
 - *Capital overstatement (conservative but wrong):* [P1.36, P1.33, P1.22, P1.72, P1.80, P1.32, P1.71, P1.2 (retail_mortgage 5% vs 25% previously applied) now fixed/verified; P1.48 defaulted secured/unsecured split now fixed; P1.83 Art. 159(1) Pool B AVAs now fixed]
@@ -430,8 +430,11 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Audit and expand test coverage.
 
 ### P5.4 Conditional pytest.skip() in acceptance tests
-- **Status:** [~] ~90 conditional skips
-- **Fix:** Audit which scenarios are always skipped; ensure fixture data exists for all.
+- **Status:** [x] Complete (2026-04-08)
+- **Impact:** 12 slotting acceptance tests (8 CRR, 4 Basel 3.1) were permanently skipping because the 8 slotting scenario counterparties (SL_PF_STRONG, SL_PF_GOOD, SL_IPRE_WEAK, SL_HVCRE_STRONG + 4 SHORT variants) had no internal ratings in the fixture data. Without ratings, `enrich_ratings_with_model_id()` could not stamp `model_id`, so the classifier could not grant slotting permission via `model_permissions` — all exposures fell back to SA. Under Basel 3.1, IPRE/HVCRE were rescued by the Art. 147A(1)(c) forced-slotting override, but PF exposures and all CRR exposures still fell through.
+- **Fix:** Added `_slotting_scenario_internal_ratings()` function to `tests/fixtures/ratings/ratings.py` with 8 new internal ratings (one per scenario counterparty). Each rating has `rating_type="internal"` and `model_id=None` so that `enrich_ratings_with_model_id()` stamps `"TEST_FULL_IRB"`, which the classifier matches against `create_slotting_only_model_permissions()` granting slotting for specialised lending. PD values are indicative only (slotting uses category-based weights). Regenerated `ratings.parquet` (84 → 92 records).
+- **File:Line:** `tests/fixtures/ratings/ratings.py` (_slotting_scenario_internal_ratings function)
+- **Tests:** All 4,374 tests pass (was 4,362). Skipped: 21 (was 33 — 12 fewer). The remaining 21 skips are all benchmark tests intentionally disabled via `--benchmark-disable` in pyproject.toml. CRR acceptance: 133 (0 skips). B31 acceptance: 212 (was 208, 0 skips). All 12 slotting scenarios now validated end-to-end: CRR-E1 PF Strong 70%, CRR-E2 PF Good 90%, CRR-E3 IPRE Weak 250%, CRR-E4 HVCRE Strong 95%, CRR-E5-E8 short-maturity variants (50%/70%/70%/95%). B31-E1/E2 PF 70%/90%, B31-E3 IPRE 250%, B31-E4 HVCRE 95%.
 
 ### P5.5 Polars venv broken (environment issue)
 - **Status:** [x] Resolved (2026-04-08 — stale; venv is working)
@@ -686,7 +689,7 @@ These items are verified complete. Items with **[!]** have known gaps documented
 
 **P4 items complete:** P4.1, P4.5, P4.7, P4.13, P4.14, P4.15, P4.16, P4.17, P4.18, P4.19, P4.21
 
-**P5 items complete:** P5.1, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
+**P5 items complete:** P5.1, P5.4, P5.5, P5.6, P5.7, P5.8, P5.9, P5.10
 
 - [x] All 8 pipeline stages (loader, hierarchy, classifier, CRM, SA/IRB/slotting/equity, aggregator)
 - [x] **[!]** CRR SA risk weights (core classes: sovereign, institution, corporate, retail, RE, defaulted, equity; PSE/RGLA/MDB/Int.Org/Other Items pending -- see P1.52-P1.55)

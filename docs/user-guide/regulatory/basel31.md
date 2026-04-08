@@ -240,8 +240,15 @@ Enhanced requirements for unrated exposures:
 | CQS 4 | 100% |
 | CQS 5 | 100% |
 | CQS 6 | 150% |
-| Unrated (OECD) | 0% |
-| Unrated (non-OECD) | 100% |
+| Unrated | 100% |
+
+!!! note "No OECD bifurcation"
+    PRA PS1/26 Art. 114(1) assigns a flat 100% risk weight to all unrated sovereign
+    exposures. The Basel I/II approach of 0% for OECD sovereigns and 100% for
+    non-OECD sovereigns was replaced by ECAI-based credit assessments in the EU CRR
+    and is not carried forward. The UK domestic currency exemption (Art. 114(4):
+    UK Government/Bank of England in GBP = 0%) is a separate provision, not an
+    OECD-based rule.
 
 ### Institution Exposures
 

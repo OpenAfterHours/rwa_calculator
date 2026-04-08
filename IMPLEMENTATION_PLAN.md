@@ -268,9 +268,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Update FR status values.
 
 ### P4.5 PD floor documentation discrepancy
-- **Status:** [x] Complete (2026-04-08)
+- **Status:** [~] Mostly complete (2026-04-08 — one remaining file)
 - **Impact:** `technical-reference.md` shows retail mortgage PD floor as 0.05% -- should be **0.10%** per PRA Art. 163(1)(b). The `key-differences.md` table correctly shows 0.10%. Code also wrong (P1.1).
 - **Fix:** Fixed retail mortgage PD floor 0.05%→0.10% (Art. 163(1)(b)) and QRRE transactor 0.03%→0.05% (Art. 163(1)(c)) in technical-reference.md, basel31.md. Fixed PDFloors docstring in config.py. key-differences.md already had correct values.
+- **Remaining:** `docs/api/configuration.md` lines 161 and 185 still show QRRE transactor PD floor as 0.03% (should be 0.05% per Art. 163(1)(c)). Code in `config.py:98` correctly uses 0.05%.
 
 ### P4.6 LGD floor documentation discrepancy
 - **Status:** [~] Docs inconsistent with PRA

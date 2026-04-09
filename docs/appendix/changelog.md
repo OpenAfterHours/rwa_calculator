@@ -5,6 +5,18 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.179] — 2026-04-09
+
+### Fixed
+- **Docs**: SA specialised lending waterfall position documented in `key-differences.md` (D2.20). Waterfall item 15 annotated with Art. 122–122B SA SL sub-classification cross-reference. New admonition added explaining SA SL sits within corporates (row 15, Art. 112(1)(g)), with IPRE excluded per Art. 122A(1) ("not a real estate exposure") — IPRE is caught at row 7 (real estate, Art. 124–124L) instead. SA SL section expanded with:
+  - Art. 122A(1) 4-part definition criteria (SPV structure, asset dependency, lender control, asset income repayment)
+  - Art. 122A(2) sub-type classification (OF, CF, PF)
+  - IPRE exclusion warning admonition with cross-reference to real estate section
+  - Art. 122B(1) rated SL fallthrough to corporate CQS table
+  - Art. 122B(2) unrated risk weight table with article references per row
+  - Art. 122B(3) operational phase definition (positive net cash-flow + declining LT debt)
+  - Art. 122B(4)–(5) high-quality PF criteria (8 structural conditions)
+
 ## [0.1.178] — 2026-04-08
 
 ### Fixed

@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D4.23: HVCRE Table 2 UK CRR omission confirmed — no HVCRE concept in UK CRR, introduced by PRA PS1/26. 9 doc files updated, code bug D3.22 filed.)
+Last updated: 2026-04-09 (D4.36: regulatory-tables.md B31 slotting section corrected — Good 70%→90%, BCBS pre-op table replaced with PRA deviation warning, EL columns and Default rows added.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -201,7 +201,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### New Phase 4 Minor Findings (discovered during D4.23)
 
-- [ ] **D4.36** — `regulatory-tables.md` B31 slotting section (lines 352-373) has two errors: (1) "Basel 3.1 Non-HVCRE Operational" Good = **70%**, should be **90%** per PRA PS1/26 Art. 153(5) Table A. (2) "Basel 3.1 Project Finance Pre-Operational" still shows BCBS CRE33.6 values (80%/100%/120%/350%). PRA has **no separate pre-op table** — all PF uses standard non-HVCRE weights (per D2.17 fix, but `regulatory-tables.md` was missed). Both tables need correction. (2026-04-09)
+- [x] **D4.36** — ~~`regulatory-tables.md` B31 slotting section (lines 352-373) has two errors: (1) "Basel 3.1 Non-HVCRE Operational" Good = **70%**, should be **90%** per PRA PS1/26 Art. 153(5) Table A. (2) "Basel 3.1 Project Finance Pre-Operational" still shows BCBS CRE33.6 values (80%/100%/120%/350%).~~ **FIXED:** (1) Non-HVCRE table: Good corrected from 70% to **90%**; heading changed from "Non-HVCRE Operational" to "Non-HVCRE (PRA PS1/26 Art. 153(5) Table A)"; EL Component column added; Default row added (0% RW, 50% EL); subgrade columns info admonition added (column A/C concessions for short-maturity/enhanced criteria, cross-link to key-differences). (2) Pre-Operational table: replaced entirely with PRA deviation warning admonition — BCBS CRE33.6 Table 6 elevated weights (80/100/120/350%) not adopted by PRA; all PF uses standard non-HVCRE weights; SA pre-op distinction (Art. 122B(2)(c)) noted; cross-link to B31 slotting spec FR-5.2. (3) HVCRE table: heading updated with Art. reference; EL Component column added; Default row added; PRA PS1/26 introduction info admonition added with cross-link to CRR HVCRE note. (4) Source reference split into CRR (`crr_slotting.py`) and B31 (`b31_slotting.py`) constants. All values verified against PRA PS1/26 Art. 153(5) Table A (page 103) and code (`b31_slotting.py`). Docs build validated — no errors. (2026-04-09)
 
 ---
 

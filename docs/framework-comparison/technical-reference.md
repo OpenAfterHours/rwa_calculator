@@ -279,7 +279,11 @@ This multiplier is already implemented via the `requires_fi_scalar` flag in the 
 
 Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26.
 
-## A-IRB CCF Floor (CRE32.27)
+## Credit Conversion Factors (Art. 111 Table A1)
+
+PRA PS1/26 replaces CRR Annex I with a 7-row Table A1. Key changes: CRR maturity-based commitment split (50%/>1yr, 20%/≤1yr) replaced by flat 40% "other commitments" bucket; UCC from 0% to 10%; F-IRB CCFs aligned to SA (Art. 166C). UK residential mortgage commitments carved out at **50%** (Row 4(b)) — a PRA-specific addition preventing the maturity-removal from reducing capital for irrevocable mortgage offers (BCBS would assign 40%). See [CCF specification](../specifications/crr/credit-conversion-factors.md#basel-31-sa-changes-pra-ps126-art-111-table-a1) for full Table A1.
+
+### A-IRB CCF Floor (CRE32.27)
 
 A-IRB own-estimate CCFs must be at least **50% of the SA CCF** for the same item type.
 

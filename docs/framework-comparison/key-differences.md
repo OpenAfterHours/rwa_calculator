@@ -691,14 +691,22 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 
 ## Credit Conversion Factors
 
-| Item Type | CRR | Basel 3.1 |
-|-----------|-----|-----------|
-| Unconditionally Cancellable | 0% | **10%** |
-| Other Commitments < 1yr | 20% | 40% |
-| Other Commitments ≥ 1yr | 50% | 40% |
-| Trade Letters of Credit | 20% | 20% |
-| NIFs/RUFs | 50% | 50% |
-| Direct Credit Substitutes | 100% | 100% |
+PRA PS1/26 Art. 111 Table A1 replaces CRR Annex I with a 7-row structure. Key changes: maturity distinction removed (CRR 50%/>1yr and 20%/≤1yr merged to single 40% bucket), UCC up from 0% to 10%, and UK residential mortgage commitments carved out at 50%.
+
+| Table A1 Row | Item Type | CRR | Basel 3.1 | Change |
+|-------------|-----------|-----|-----------|--------|
+| Row 1 | Full Risk — issued items (guarantees, credit derivatives) | 100% | 100% | Unchanged |
+| Row 2 | Certain Drawdown (factoring, repos, forward purchases) | 100% | 100% | Renamed from Annex I para 2 |
+| Row 3 | Other issued OBS items (non-credit substitute) | 50% | 50% | Unchanged |
+| Row 4 | NIFs/RUFs and **UK residential mortgage commitments** | 50% | **50%** | Row 4(b) is PRA-specific |
+| Row 5 | Other Commitments | 50%/20%* | **40%** | Maturity split removed |
+| Row 6 | Trade LCs, warranties, performance bonds | 20% | 20% | Unchanged |
+| Row 7 | Unconditionally Cancellable | 0% | **10%** | Up from 0% |
+
+*\* CRR split by maturity: >1yr = 50% (MR), ≤1yr = 20% (MLR). Basel 3.1 replaces with flat 40% regardless of maturity.*
+
+!!! warning "PRA Deviation — UK Residential Mortgage Commitments (Row 4(b))"
+    Table A1 Row 4(b) is a **PRA-specific addition** not in the BCBS framework. Under BCBS, residential mortgage commitments would fall into "any other commitment" at **40%** (Row 5). The PRA carved them out at **50%** to prevent the maturity-distinction removal from reducing capital for irrevocable mortgage offer letters. Only applies to commitments not unconditionally cancellable (Row 7) and not certain-drawdown (Row 2). See [CCF specification](../specifications/crr/credit-conversion-factors.md#basel-31-sa-changes-pra-ps126-art-111-table-a1) for full Table A1.
 
 ## Slotting Risk Weights
 

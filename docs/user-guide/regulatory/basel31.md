@@ -329,6 +329,7 @@ Beyond PD and LGD floors, Basel 3.1 introduces:
 - CCF cannot be lower than SA values for comparable exposures
 - A-IRB CCFs must be at least **50% of the SA CCF** (CRE32.27)
 - Minimum 10% CCF for unconditionally cancellable facilities (vs 0% CRR)
+- UK residential mortgage commitments carved out at **50%** CCF (Art. 111 Table A1 Row 4(b)) — PRA-specific, not in BCBS (which would assign 40%). See [key differences](../../framework-comparison/key-differences.md#credit-conversion-factors)
 
 **Maturity:**
 - Effective maturity floor: 1 year

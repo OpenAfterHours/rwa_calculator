@@ -312,11 +312,18 @@ FX volatility from retail classification boundaries.
 |------|-----|-----------|--------|
 | Regulatory Retail QRRE | 75% | 75% | — |
 | Regulatory Retail Transactor | 75% | **45%** | -30pp |
-| Payroll / Pension Loans | 75% | **35%** | -40pp |
+| Payroll / Pension Loans | 35% | 35% | Unchanged from CRR2 |
 | Retail Other | 75% | 75% | — |
 
 Transactor status requires full repayment of outstanding balance each billing cycle.
-Payroll/pension loans are a new category for loans repaid directly from salary or pension (Art. 123(3)).
+Payroll/pension loans (35%) were introduced by CRR2 (Regulation (EU) 2019/876) — not new in
+Basel 3.1. The four qualifying conditions (unconditional salary/pension deduction, insurance,
+payments ≤ 20% of net income, maturity ≤ 10 years) are carried forward unchanged from CRR
+Art. 123 second subparagraph to PRA PS1/26 Art. 123(4).
+
+!!! warning "Code Divergence — CRR Path"
+    The CRR code path applies flat 75% to all retail exposures. The `is_payroll_loan` flag is
+    only checked in the Basel 3.1 branch. See [CRR SA Risk Weights spec](../../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
 
 #### Currency Mismatch Multiplier
 

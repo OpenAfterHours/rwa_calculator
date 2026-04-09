@@ -131,13 +131,21 @@ schema field exists. See [B31 SA Risk Weights spec](../specifications/basel31/sa
 
 ### Retail Risk Weights
 
-| Exposure Type | CRR | Basel 3.1 |
-|---------------|-----|-----------|
-| Retail Mortgage (LTV ≤ 80%) | 35% | LTV-based (see below) |
-| Retail QRRE | 75% | 75% |
-| Retail Other | 75% | 75% |
+| Exposure Type | CRR | Basel 3.1 | Reference |
+|---------------|-----|-----------|-----------|
+| Retail Mortgage (LTV ≤ 80%) | 35% | LTV-based (see below) | Art. 125 / Art. 124F |
+| QRRE Transactors | 75% | 45% | — / Art. 123(3)(a) |
+| Payroll / Pension Loans | 35% | 35% | Art. 123 (CRR2) / Art. 123(4) |
+| Retail QRRE (non-transactor) | 75% | 75% | Art. 123 / Art. 123(3)(b) |
+| Retail Other | 75% | 75% | Art. 123 / Art. 123(3)(b) |
+| Non-Regulatory Retail | — | 100% | — / Art. 123(3)(c) |
 
-**Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`
+!!! info "CRR2 Payroll/Pension Treatment"
+    The 35% payroll/pension risk weight was introduced by CRR2 (Regulation (EU) 2019/876) and
+    carried forward unchanged to PRA PS1/26 Art. 123(4). The CRR code path does not implement
+    this treatment — see [CRR SA spec](../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
+
+**Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`, `B31_RETAIL_PAYROLL_LOAN_RW` / `B31_RETAIL_TRANSACTOR_RW` in `data/tables/b31_risk_weights.py`
 
 ### CRR Residential Mortgage (CRR Art. 125)
 

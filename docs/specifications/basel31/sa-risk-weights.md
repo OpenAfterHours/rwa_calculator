@@ -18,7 +18,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.3 | Institution SCRA risk weights (Art. 120(2A), grades A–C) | P0 | Done |
 | FR-1.4 | Corporate CQS-based risk weights with PRA CQS 5 = 150% | P0 | Done |
 | FR-1.5 | Corporate sub-categories: IG 65%, non-IG unrated 135%, SME 85% | P0 | Done |
-| FR-1.6 | Retail 75%, salary/pension 35% (Art. 123) | P0 | Done |
+| FR-1.6 | Retail 75%, salary/pension 35% (Art. 123(4), carried from CRR2) | P0 | Done |
 | FR-1.7 | Residential RE loan-splitting (Art. 124F–124G) | P0 | Done |
 | FR-1.8 | Commercial RE loan-splitting and income-producing (Art. 124H–124I) | P0 | Done |
 | FR-1.9 | SA Specialised Lending (Art. 122A–122B) | P0 | Done |
@@ -190,8 +190,16 @@ progression.
 
 | Category | Risk Weight | Reference |
 |----------|-------------|-----------|
-| General retail | **75%** | Art. 123(1) |
-| Salary/pension secured | **35%** | Art. 123(1)(c) |
+| Regulatory retail (non-transactor) | **75%** | Art. 123(3)(b) |
+| QRRE transactors | **45%** | Art. 123(3)(a) |
+| Payroll / pension loans | **35%** | Art. 123(4) |
+| Non-regulatory retail | **100%** | Art. 123(3)(c) |
+
+!!! info "CRR2 Continuity"
+    The 35% payroll/pension treatment is **not new** in Basel 3.1. It was introduced by CRR2
+    (Regulation (EU) 2019/876) in CRR Art. 123 second subparagraph and carried forward unchanged
+    to PRA PS1/26 Art. 123(4). The four qualifying conditions (unconditional salary/pension
+    deduction, insurance, payments ≤ 20% of net income, maturity ≤ 10 years) are identical.
 
 The retail threshold is changed from EUR 1m to **GBP 880,000** under PRA PS1/26 Art. 123(1)(b)(ii).
 

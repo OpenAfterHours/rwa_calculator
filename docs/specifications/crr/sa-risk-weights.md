@@ -260,14 +260,34 @@ Art. 121(3).
 
 All qualifying retail exposures receive a flat **75%** risk weight.
 
+### Payroll / Pension Loans (CRR Art. 123, CRR2)
+
+Introduced by CRR2 (Regulation (EU) 2019/876, amendment F68), CRR Art. 123 second subparagraph
+assigns a **35%** risk weight to loans granted to pensioners or employees with permanent contracts
+against unconditional transfer of salary or pension, subject to four conditions:
+
+- **(a)** unconditional payroll/pension deduction authorisation to the credit institution;
+- **(b)** insurance covering death, inability to work, unemployment, or salary/pension reduction;
+- **(c)** aggregate loan payments ≤ 20% of net monthly salary/pension;
+- **(d)** original maturity ≤ 10 years.
+
+!!! warning "Code Divergence — CRR Path"
+    The CRR code path (`sa/calculator.py`) does not implement the 35% payroll/pension treatment.
+    All CRR retail exposures receive the flat 75% weight regardless of the `is_payroll_loan` flag.
+    The `B31_RETAIL_PAYROLL_LOAN_RW` constant and `is_payroll_loan` check exist only in the Basel 3.1
+    branch. This is a known code gap — the 35% treatment should also apply under CRR (since CRR2).
+
 ### Basel 3.1 Retail Sub-Treatments (Art. 123)
+
+Basel 3.1 restructures Art. 123 into numbered paragraphs and introduces new sub-categories.
+The payroll/pension 35% treatment is **carried forward unchanged** from CRR2 into Art. 123(4).
 
 | Sub-Treatment | Risk Weight | Condition | Reference |
 |---------------|-------------|-----------|-----------|
-| Regulatory retail | 75% | Meets all 4 qualifying criteria (Art. 123A) | Art. 123(1) |
-| QRRE transactors | 45% | Qualifying revolving, balance repaid monthly | Art. 123(2) (Basel 3.1) |
-| QRRE non-transactors | 75% | Qualifying revolving, non-transactor | Art. 123(2) |
-| Payroll / pension loans | 35% | Loans secured by assignment of borrower's payroll or pension income | Art. 123(3)(a-b) |
+| Regulatory retail (non-transactor) | 75% | Meets Art. 123A qualifying criteria, non-transactor | Art. 123(3)(b) |
+| QRRE transactors | 45% | Qualifying revolving (Art. 123(2)), balance repaid monthly | Art. 123(3)(a) |
+| QRRE non-transactors | 75% | Qualifying revolving (Art. 123(2)), non-transactor | Art. 123(3)(b) |
+| Payroll / pension loans | 35% | Carried forward from CRR2 — same 4 conditions (a)–(d) | Art. 123(4) |
 | Non-regulatory retail | 100% | Retail exposure that fails Art. 123A qualifying criteria | Art. 123(3)(c) |
 
 ## Covered Bond Exposures (CRR Art. 129)
@@ -621,7 +641,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done
-- **Payroll/pension loans** (Art. 123): 35% — Done
+- **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (Basel 3.1 only; CRR code gap)
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done

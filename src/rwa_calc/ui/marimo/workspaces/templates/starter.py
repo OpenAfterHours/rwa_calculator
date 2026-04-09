@@ -14,10 +14,25 @@ Usage:
     Opened for editing at http://localhost:8002.
 """
 
+from pathlib import Path as _Path
+
 import marimo
 
+# Resolve shared assets via absolute paths so this works at any nesting depth
+# under workspaces/. Walks up to find pyproject.toml as the project-root marker.
+_here = _Path(__file__).resolve()
+_project_root = next(
+    (p for p in _here.parents if (p / "pyproject.toml").exists()),
+    _here.parents[-1],
+)
+_shared_dir = _project_root / "src" / "rwa_calc" / "ui" / "marimo" / "shared"
+
 __generated_with = "0.19.4"
-app = marimo.App(width="medium", css_file="shared/theme.css", html_head_file="shared/head.html")
+app = marimo.App(
+    width="medium",
+    css_file=str(_shared_dir / "theme.css"),
+    html_head_file=str(_shared_dir / "head.html"),
+)
 
 
 @app.cell(hide_code=True)
@@ -30,11 +45,13 @@ def _():
     import marimo as mo
     import polars as pl
 
-    project_root = Path(__file__).parent
-    for _ in range(6):
-        if (project_root / "src").exists():
-            break
-        project_root = project_root.parent
+    # Locate project root by walking up parents to find pyproject.toml.
+    # Robust to any workbook nesting depth under workspaces/.
+    _here = Path(__file__).resolve()
+    project_root = next(
+        (p for p in _here.parents if (p / "pyproject.toml").exists()),
+        _here.parents[-1],
+    )
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 

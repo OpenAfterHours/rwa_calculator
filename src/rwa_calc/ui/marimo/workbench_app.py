@@ -634,7 +634,7 @@ def _(Path, create_btn, current_folder, mo, new_name, set_refresh, shutil):
 
 
 @app.cell
-def _(Path, create_folder_btn, folder_name, mo, set_refresh, shutil):
+def _(Path, create_folder_btn, folder_name, mo, set_refresh):
     mo.stop(not create_folder_btn.value)
 
     _name = folder_name.value.strip() or "new_folder"
@@ -645,10 +645,6 @@ def _(Path, create_folder_btn, folder_name, mo, set_refresh, shutil):
         mo.callout(mo.md(f"Folder **{_name}** already exists."), kind="warn")
     else:
         _target.mkdir(parents=True, exist_ok=True)
-        # Copy shared assets into the new folder
-        _shared_src = Path(__file__).parent / "shared"
-        if _shared_src.exists():
-            shutil.copytree(_shared_src, _target / "shared", dirs_exist_ok=True)
         set_refresh(lambda n: n + 1)
         mo.callout(mo.md(f"Created folder **{_name}**."), kind="success")
     return

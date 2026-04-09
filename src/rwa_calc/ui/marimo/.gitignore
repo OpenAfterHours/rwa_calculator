@@ -4,6 +4,4 @@
 # User workspaces (local workbooks, not templates)
 workspaces/local/
 
-# Auto-copied shared assets in team workspace (regenerated on server start)
-workspaces/team/shared/
 workspaces/team/**/__pycache__/

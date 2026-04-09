@@ -15,6 +15,8 @@
 | Art. 153(1)(ii) | Defaulted exposure F-IRB (K=0) | Done |
 | Art. 154(1)(i) | Defaulted exposure A-IRB (K=max(0, LGD−BEEL)) | Done |
 | Art. 155 | Equity IRB Simple (290%/190%/370%) | Done |
+| Art. 158 | Expected loss by exposure type (omitted from UK CRR by SI 2021/1078; PRA Rulebook) | Done |
+| Art. 159 | EL vs provisions comparison (retained in UK CRR) | Done |
 | Art. 161–163 | F-IRB supervisory LGD | Done |
 | Art. 166 | Off-balance sheet EAD and CCF application | Done |
 | Art. 192–241 | Credit risk mitigation framework | Done |

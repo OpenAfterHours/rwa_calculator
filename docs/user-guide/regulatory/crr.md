@@ -290,6 +290,8 @@ entirely. They are **not active** under current UK CRR:
 |---------|---------|--------|
 | Art. 128 | Items associated with particularly high risk (150%) | Omitted; re-introduced under Basel 3.1 (PRA PS1/26) |
 | Art. 132 | CIU treatment | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 152 | IRB treatment of CIU exposures | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 158 | Expected loss — treatment by exposure type | Omitted; EL rules moved to PRA Rulebook (CRR Part); reinstated with modifications in PS1/26 |
 
 !!! note
     Art. 128 exposures (e.g., speculative RE financing) should fall through to their

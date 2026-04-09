@@ -2,9 +2,19 @@
 
 Provision treatment, expected loss calculation, and EL vs provisions comparison.
 
-**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 158-159
+**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 159; PRA Rulebook (CRR Firms) Art. 158
 
 **Test Group:** CRR-G
+
+!!! warning "Art. 158 Omitted from UK CRR (SI 2021/1078)"
+    CRR Art. 158 (expected loss — treatment by exposure type) was **omitted** from UK retained
+    law on 1 January 2022 by The Capital Requirements Regulation (Amendment) Regulations 2021
+    (SI 2021/1078), reg. 6(3)(e). The expected loss calculation rules are now contained in the
+    PRA Rulebook (CRR Firms). Art. 159 (EL vs provisions comparison) **remains** in UK CRR as
+    substituted by Regulation (EU) 2019/630. PRA PS1/26 reinstates Art. 158 with modifications
+    — including new para 6A (EL monotonicity) — effective 1 January 2027. References to
+    "Art. 158" in this specification refer to the PRA Rulebook equivalent of the omitted CRR
+    provision. See also: [Basel 3.1 Provisions Spec](../basel31/provisions.md).
 
 ---
 
@@ -73,7 +83,12 @@ The `finalize_ead()` step does **not** subtract provisions again — they are al
 | `provision_deducted` | `Float64` | Total = `provision_on_drawn + provision_on_nominal` |
 | `provision_allocated` | `Float64` | Total provision matched to this exposure |
 
-## IRB Approach (CRR Art. 158-159)
+## IRB Approach (Art. 158-159)
+
+!!! info "Legal Basis"
+    Art. 158 references here cite the PRA Rulebook (CRR Firms) equivalent — the CRR
+    version was omitted by SI 2021/1078 (see header admonition). Art. 159 remains in
+    UK CRR.
 
 Under IRB, provisions are tracked (`provision_allocated`) but **not deducted** from EAD. The provision columns are set to zero:
 

@@ -19,7 +19,7 @@ This section contains the formal specifications for the RWA Calculator. These sp
 | [Credit Conversion Factors](crr/credit-conversion-factors.md) | CCF for off-balance sheet items | CRR Art. 111, 166 |
 | [Credit Risk Mitigation](crr/credit-risk-mitigation.md) | Collateral haircuts, guarantees, and overcollateralisation | CRR Art. 192-241 |
 | [Slotting Approach](crr/slotting-approach.md) | Specialised lending categories | CRR Art. 147(8), 153(5) |
-| [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 158-159 |
+| [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 159; PRA Rulebook Art. 158 |
 | [Equity Approach](crr/equity-approach.md) | SA equity (Art. 133), IRB Simple (Art. 155), CIU treatment | CRR Art. 132-133, 155 |
 
 ### Basel 3.1 Framework (From January 2027)

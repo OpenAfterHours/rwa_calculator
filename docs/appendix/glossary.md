@@ -232,7 +232,7 @@ Losses above expected levels, covered by regulatory capital. UL = RWA × 8%.
 | **Corporate Correlation** | `0.12 x f(PD) + 0.24 x (1 - f(PD))` where `f(PD) = (1-e^(-50xPD))/(1-e^(-50))` | CRR Art. 153 |
 | **SME Adjustment** | `0.04 x (1 - (max(5,min(S,50)) - 5) / 45)` | CRR Art. 153 |
 | **Maturity Adjustment** | `(1 + (M-2.5) x b) / (1 - 1.5 x b)` where `b = (0.11852 - 0.05478 x ln(PD))^2` | CRR Art. 153 |
-| **Expected Loss** | `PD x LGD x EAD` | CRR Art. 158 |
+| **Expected Loss** | `PD x LGD x EAD` | PRA Rulebook Art. 158 (CRR Art. 158 omitted by SI 2021/1078) |
 | **EAD (off-BS)** | `Drawn + Undrawn x CCF` | CRR Art. 111, 166 |
 | **Effectively Secured** | `Adjusted Collateral Value / Overcollateralisation Ratio` | CRR Art. 230 |
 | **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 238 |

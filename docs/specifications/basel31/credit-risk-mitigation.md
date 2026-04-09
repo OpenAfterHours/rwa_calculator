@@ -18,7 +18,7 @@ and IRB parameter substitution replacing double default.
 | FR-8.4 | IRB parameter substitution for guarantors (B31-D7) | P0 | Done |
 | FR-8.5 | Double default removal (replaced by parameter substitution) | P0 | Done |
 | FR-8.6 | Art. 191A method taxonomy (FCM, PSM, LGD-AM) | P1 | Done |
-| FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Done |
+| FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Not Implemented |
 
 ---
 
@@ -247,9 +247,13 @@ Pre-1 January 2027 unfunded credit protection contracts may continue to use CRR 
 criteria until **30 June 2028**, even if they do not meet the stricter Basel 3.1 requirements
 (e.g., the new "or changeable" criterion in Art. 213).
 
-!!! note "Implementation Status"
-    The transitional rule is noted in the spec for completeness. The calculator applies the
-    framework-appropriate CRM rules based on `CalculationConfig.regulatory_framework`.
+!!! warning "Not Yet Implemented"
+    Rule 4.11 transitional logic is not implemented. The calculator does not perform
+    Art. 213 eligibility validation, so the "or change" criterion is not enforced under
+    either framework. Implementing this requires a `protection_inception_date` input field
+    and date-gated eligibility logic in the CRM processor.
+    See [CRR CRM spec](../crr/credit-risk-mitigation.md#unfunded-credit-protection-transitional-rule-411)
+    for the full regulatory description and IMPLEMENTATION_PLAN.md item P1.10.
 
 ---
 

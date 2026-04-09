@@ -474,6 +474,18 @@ Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded 
 
 Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
+!!! warning "Not Yet Implemented"
+    Rule 4.11 transitional logic is not implemented. The calculator does not perform
+    Art. 213 eligibility validation, so the "or change" criterion is not enforced under
+    either framework. Implementing this requires:
+
+    - A `protection_inception_date` field on guarantee/credit derivative inputs
+    - Art. 213(1)(c)(i) eligibility validation in the CRM processor
+    - Date-gated logic to disapply the "or change" words for pre-2027 contracts
+      during 1 Jan 2027 – 30 Jun 2028
+
+    See IMPLEMENTATION_PLAN.md item P1.10.
+
 ## Key Scenarios
 
 ### Basic CRM — CRR-D1 to CRR-D6

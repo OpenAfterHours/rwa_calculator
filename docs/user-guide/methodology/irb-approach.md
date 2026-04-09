@@ -88,15 +88,35 @@ F-IRB uses regulatory CCFs based on `risk_type` (FR=100%, MR/MLR=75%, LR=0%). A-
 
 ### Maturity (M)
 
-Effective maturity affects capital through the maturity adjustment.
+Effective maturity affects capital through the maturity adjustment (Art. 162).
 
 - **Range:** 1 year (floor) to 5 years (cap)
-- **Retail exemption:** No maturity adjustment for retail
+- **Retail exemption:** No maturity adjustment for retail (MA = 1.0)
 
 ```python
-# Effective maturity calculation
+# A-IRB: effective maturity from cash flows
 M = max(1, min(5, weighted_average_life))
 ```
+
+**CRR F-IRB fixed maturities** (Art. 162(1)):
+
+| Exposure Type | M |
+|---------------|---|
+| Repo-style transactions (repos, securities/commodities lending) | 0.5 years |
+| All other exposures | 2.5 years |
+
+**Basel 3.1** deletes Art. 162(1) — all IRB firms must calculate M from cash flows or
+contractual terms. Revolving exposures must use the **maximum contractual termination date**
+(Art. 162(2A)(k)), not the current drawing repayment date.
+
+!!! info "Exceptions to the 1-Year Floor"
+    Art. 162(3) allows a **one-day** maturity floor for daily-margined repos, derivatives,
+    and margin lending, and for qualifying short-term exposures (FX settlement, trade finance
+    ≤ 1yr, securities settlement). The `has_one_day_maturity_floor` input flag controls this.
+    See the [F-IRB specification](../../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162)
+    for full details.
+
+> **Details:** See [Technical Reference](../../framework-comparison/technical-reference.md#irb-effective-maturity-art-162) for the full CRR vs Basel 3.1 comparison table.
 
 ## Asset Correlation
 

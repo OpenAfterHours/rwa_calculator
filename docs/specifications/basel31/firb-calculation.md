@@ -222,7 +222,63 @@ Triggered by `apply_fi_scalar = True` in the input data. See
 [Model Permissions](model-permissions.md) for the distinction between the FI scalar
 (EUR 70bn total assets, Art. 4(1)(146)) and Art. 147A approach restrictions (£440m revenue).
 
-### Maturity Adjustment (Art. 162)
+### Effective Maturity (Art. 162)
+
+PRA PS1/26 substantially rewrites Art. 162, requiring **all** IRB firms (F-IRB and A-IRB)
+to calculate effective maturity — the CRR F-IRB fixed-maturity option is deleted.
+
+#### Key Changes from CRR Art. 162
+
+| Aspect | CRR | Basel 3.1 | Reference |
+|--------|-----|-----------|-----------|
+| F-IRB fixed maturities (§1) | 0.5yr repo / 2.5yr other | **Deleted** — all IRB firms must calculate M | Art. 162(1) blanked |
+| Scope | A-IRB only (Art. 143) | **F-IRB and A-IRB** (Art. 147A) | Art. 162(2) |
+| Revolving exposures | Repayment date of current drawing | **Max contractual termination date** | Art. 162(2A)(k) |
+| Mixed MNA (derivatives + repos) | Not addressed | **10-day floor** | Art. 162(2A)(da) |
+| Purchased receivables minimum M | 90 days | **1 year** | Art. 162(2A)(e) |
+| Collateral daily condition (§2A(c)/(d)) | Re-margining **and** revaluation | Re-margining **or** revaluation | Art. 162(2A)(c)/(d) |
+| SME maturity simplification (§4) | Available (EUR 500m) | **Deleted** | Art. 162(4) blanked |
+
+!!! warning "F-IRB Fixed Maturities Deleted"
+    Under CRR Art. 162(1), F-IRB firms assigned M = 0.5 years for repo-style transactions
+    and M = 2.5 years for all other exposures. PRA PS1/26 blanks Art. 162(1) entirely —
+    all IRB firms must now calculate M using Art. 162(2A). The 2.5-year fallback in the code
+    (`namespace.py:259`) should only apply when `maturity_date` is null, not as a general
+    F-IRB default.
+
+#### Art. 162(2A) Calculation Methods
+
+| Method | Applies To | Minimum M |
+|--------|-----------|-----------|
+| (a) Cash-flow schedule | Known cash flow instruments | 1 year |
+| (b) Derivatives under MNA | Weighted average remaining maturity | 1 year |
+| (c) Fully collateralised derivatives/margin lending (MNA) | Daily re-margining **or** revaluation, prompt liquidation | **10 days** |
+| (d) Repos/SFTs under MNA | Daily re-margining **or** revaluation, prompt liquidation | **5 days** |
+| (da) Mixed MNA (derivatives + repos) | Netting agreement covering both (c) and (d) types | **10 days** |
+| (e) Purchased corporate receivables | Drawn amounts; with/without effective protections | **1 year** |
+| (f) Other instruments | Max remaining time to discharge | 1 year |
+| (g) IMM netting sets | Longest-dated > 1 year | Per formula |
+| (h) Internal CVA model | Effective credit duration (PRA permission required) | — |
+| (ha) Short-maturity netting sets | All contracts original maturity < 1 year | Per (a) |
+| (i) BA-CVA / SA-CVA | Netting sets contributing to CVA capital | M may be capped at 1 |
+| (k) Revolving exposures | **Max contractual termination date** — not current drawing repayment | 1 year |
+
+**Precedence rules** (Art. 162(2)):
+
+- (g)/(h) take precedence over (b), (c), (d), (da)
+- (c) takes precedence over (b)
+- (k) takes precedence over (a) — revolving exposures always use facility termination date
+
+#### Art. 162(3) — One-Day Maturity Floor
+
+Retained from CRR with a wider trigger condition (re-margining **or** revaluation, vs CRR's
+**and**). Applies to daily-margined repos/derivatives/margin lending and qualifying short-term
+exposures (FX settlement, trade finance ≤ 1yr, securities settlement, electronic payments).
+
+See [CRR F-IRB specification](../crr/firb-calculation.md#art-1623--one-day-maturity-floor-exceptions)
+for the full qualifying short-term exposure list.
+
+#### Maturity Adjustment Formula
 
 ```
 b = (0.11852 - 0.05478 x ln(PD))^2
@@ -232,8 +288,14 @@ MA = (1 + (M - 2.5) x b) / (1 - 1.5 x b)
 Where:
 
 - `M` = effective maturity, floored at 1.0 year and capped at **5.0 years**
-- Default maturity (when not specified): 2.5 years
+- Default maturity in code (when `maturity_date` null): 2.5 years
 - Retail exposures: MA = 1.0 (no maturity adjustment)
+
+!!! info "Implementation Note — Revolving Maturity"
+    The code implements the Art. 162(2A)(k) revolving maturity change via the
+    `facility_termination_date` input field (`schemas.py:83`). For Basel 3.1 revolving
+    exposures with a non-null termination date, M is calculated from `facility_termination_date`
+    instead of `maturity_date` (`namespace.py:248-279`).
 
 ---
 

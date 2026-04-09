@@ -293,6 +293,32 @@ loss, preventing conservative RWA overlays from inadvertently reducing EL shortf
 PMAs are included in the output floor calculation base, so they cannot be avoided by
 flooring to SA. They persist until the model non-compliance is remediated.
 
+### Effective Maturity (Art. 162)
+
+PRA PS1/26 substantially rewrites Art. 162. The most significant change is the **deletion
+of F-IRB fixed supervisory maturities** — all IRB firms must now calculate M.
+
+| Aspect | CRR | Basel 3.1 | Change |
+|--------|-----|-----------|--------|
+| F-IRB fixed maturities (§1) | 0.5yr repo / 2.5yr other | **Deleted** | All IRB firms calculate M |
+| Scope | A-IRB only (Art. 143) | F-IRB and A-IRB (Art. 147A) | Expanded |
+| Revolving exposures (§2A(k)) | Repayment date of current drawing | **Max contractual termination date** | Increases M |
+| Mixed MNA (§2A(da)) | Not addressed | **10-day floor** | New |
+| Purchased receivables min M (§2A(e)) | 90 days | **1 year** | Raised |
+| Collateral daily condition (§2A(c)/(d)) | Re-margining **and** revaluation | Re-margining **or** revaluation | Wider scope |
+| SME simplification (§4) | Available (EUR 500m threshold) | **Deleted** | Removed |
+| One-day floor (§3) | Daily remargined repos/derivatives | Retained (wider trigger) | Unchanged |
+| General floor / cap | 1yr / 5yr | 1yr / 5yr | Unchanged |
+
+!!! info "Impact of Deleting F-IRB Fixed Maturities"
+    Under CRR, F-IRB repo-style transactions received a fixed M = 0.5 years (below the
+    general 1-year floor), significantly reducing their maturity adjustment. Under Basel 3.1,
+    these exposures must be calculated from cash flows or contractual terms, subject to the
+    1-year general floor — roughly doubling the effective M for short-dated repos.
+
+See the [Technical Reference](technical-reference.md#irb-effective-maturity-art-162) for
+additional detail and the [F-IRB specifications](../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162) for the full regulatory text.
+
 ## Supporting Factors
 
 ### SME Supporting Factor

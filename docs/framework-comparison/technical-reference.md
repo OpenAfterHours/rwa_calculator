@@ -383,19 +383,41 @@ They cannot be avoided by flooring to SA — the floor applies to the post-PMA t
 
 See the [A-IRB specification](../specifications/basel31/airb-calculation.md#post-model-adjustments-art-1463-1544a-1586a) for the complete implementation detail and COREP column mapping.
 
-## IRB Maturity Calculation Changes
+## IRB Effective Maturity (Art. 162)
 
-Basel 3.1 refines the IRB effective maturity (M) calculation (PRA PS1/26 Art. 162):
+PRA PS1/26 substantially rewrites Art. 162. The most significant structural change is the
+**deletion of F-IRB fixed supervisory maturities** — all IRB firms must now calculate M.
 
-| Aspect | CRR | Basel 3.1 |
-|--------|-----|-----------|
-| Cash-flow schedule | Weighted average of cash flows | Same: `M = max(1, min(Σ(t×CF_t)/Σ(CF_t), 5))` |
-| Revolving exposures | Repayment date of current drawing | **Maximum contractual termination date** |
-| Floor | 1 year | 1 year |
-| Cap | 5 years | 5 years |
+| Aspect | CRR | Basel 3.1 | Change |
+|--------|-----|-----------|--------|
+| F-IRB fixed maturities (§1) | 0.5yr repo / 2.5yr other | **Deleted** | All IRB firms calculate M |
+| Scope | A-IRB only (Art. 143) | F-IRB and A-IRB (Art. 147A) | Expanded |
+| Cash-flow schedule (§2A(a)) | `M = max(1, min(Σ(t×CF_t)/Σ(CF_t), 5))` | Same | Unchanged |
+| Revolving exposures (§2A(k)) | Repayment date of current drawing | **Max contractual termination date** | Increases M |
+| Mixed MNA (§2A(da)) | Not addressed | **10-day floor** | New |
+| Purchased receivables min M (§2A(e)) | 90 days | **1 year** | Raised |
+| Collateral daily condition (§2A(c)/(d)) | Re-margining **and** revaluation | Re-margining **or** revaluation | Wider scope |
+| SME simplification (§4) | Available (EUR 500m threshold) | **Deleted** | Removed |
+| One-day floor (§3) | Daily remargined + revalued repos/derivatives | Same (with OR condition) | Unchanged |
+| Floor | 1 year (general) | 1 year (general) | Unchanged |
+| Cap | 5 years | 5 years | Unchanged |
 
-The revolving maturity change is significant — it typically increases M for revolving
-facilities, leading to higher maturity adjustments and therefore higher capital.
+The revolving maturity change (Art. 162(2A)(k)) typically increases M for revolving
+facilities, leading to higher maturity adjustments and therefore higher capital. The deletion
+of the F-IRB 0.5-year repo maturity means repo exposures will use the full cash-flow or
+contractual calculation, generally increasing M from 0.5 to ≥ 1 year.
+
+!!! info "One-Day Floor Exceptions (Art. 162(3))"
+    Both CRR and Basel 3.1 allow a **one-day** maturity floor (overriding the general 1-year
+    floor) for daily-margined repos, derivatives, and margin lending, plus qualifying
+    short-term exposures (FX settlement, trade finance ≤ 1yr, securities settlement). Basel 3.1
+    widens the trigger condition from re-margining **and** revaluation to re-margining **or**
+    revaluation. See the [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1623--one-day-maturity-floor-exceptions)
+    for the full qualifying exposure list.
+
+See the [CRR F-IRB specification](../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162)
+and [Basel 3.1 F-IRB specification](../specifications/basel31/firb-calculation.md#effective-maturity-art-162)
+for full regulatory text and implementation details.
 
 ## Configuration
 

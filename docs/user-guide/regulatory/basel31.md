@@ -350,9 +350,15 @@ Beyond PD and LGD floors, Basel 3.1 introduces:
 - Minimum 10% CCF for unconditionally cancellable facilities (vs 0% CRR)
 - UK residential mortgage commitments carved out at **50%** CCF (Art. 111 Table A1 Row 4(b)) — PRA-specific, not in BCBS (which would assign 40%). See [key differences](../../framework-comparison/key-differences.md#credit-conversion-factors)
 
-**Maturity:**
-- Effective maturity floor: 1 year
-- Cap remains: 5 years
+**Maturity (Art. 162):**
+
+- F-IRB fixed maturities (0.5yr repo / 2.5yr other) — **deleted**; all IRB firms must calculate M
+- Revolving exposures must use **max contractual termination date** (Art. 162(2A)(k))
+- Purchased receivables minimum M raised from 90 days to **1 year**
+- SME maturity simplification (Art. 162(4)) — **deleted**
+- Floor remains 1 year (general); cap remains 5 years
+
+See [Technical Reference](../../framework-comparison/technical-reference.md#irb-effective-maturity-art-162) for the full comparison table.
 
 ### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 

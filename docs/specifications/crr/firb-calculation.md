@@ -223,20 +223,106 @@ Where:
 - `G(0.999)` = 3.0902323061678132
 - `K` is floored at 0
 
-## Maturity Adjustment (CRR Art. 162)
+## Effective Maturity (CRR Art. 162)
 
-Applied to non-retail exposures only (retail exposures use MA = 1.0):
+Applied to non-retail exposures only (retail exposures use MA = 1.0).
+
+### Art. 162(1) — F-IRB Fixed Supervisory Maturities
+
+Institutions that have **not** received permission to use own LGDs and own conversion factors
+(i.e. F-IRB firms) shall assign:
+
+| Exposure Type | Supervisory Maturity | Reference |
+|---------------|---------------------|-----------|
+| Repo-style transactions (repos, securities/commodities lending or borrowing) | **0.5 years** | Art. 162(1) |
+| All other exposures | **2.5 years** | Art. 162(1) |
+
+!!! warning "0.5-Year Repo Maturity — Not Yet Implemented"
+    The code uses a blanket 2.5-year default for all F-IRB exposures when no `maturity_date`
+    is provided (`namespace.py:259`, `formulas.py:366`). The 0.5-year supervisory maturity for
+    repo-style transactions is not applied. This overstates maturity (and therefore RWA) for
+    F-IRB repo/SFT exposures that lack an explicit maturity date.
+
+Alternatively, the competent authority may require the institution to calculate M for each
+exposure using the A-IRB methods in Art. 162(2).
+
+### Art. 162(2) — A-IRB Effective Maturity Calculation
+
+Institutions permitted to use own LGDs and CCFs (A-IRB) must calculate M per exposure.
+M shall not exceed 5 years (except under Art. 384(1) for CVA). Key methods:
+
+| Method | Applies To | Formula / Rule | Minimum M |
+|--------|-----------|----------------|-----------|
+| (a) Cash-flow schedule | Instruments with known cash flows | `M = max(1, min(Σ(t × CF_t) / Σ(CF_t), 5))` | 1 year |
+| (b) Derivatives (MNA) | Derivatives under master netting agreement | Notional-weighted average remaining maturity | 1 year |
+| (c) Fully collateralised derivatives + margin lending (MNA) | Daily remargined **and** revalued (Annex II) | Weighted average remaining maturity | **10 days** |
+| (d) Repo-style transactions (MNA) | Daily remargined **and** revalued repos/SFTs | Notional-weighted average remaining maturity | **5 days** |
+| (e) Purchased corporate receivables | Drawn amounts (own PD permitted) | Exposure-weighted average maturity | **90 days** |
+| (f) Other instruments | When (a) cannot be calculated | Max remaining time to discharge obligations | 1 year |
+| (g) IMM netting sets | Longest-dated contract > 1 year | IMM formula with effective EE | 1 year |
+| (j) Double-default protection | Art. 153(3) credit protection | Effective maturity of protection | 1 year |
+
+### Art. 162(3) — One-Day Maturity Floor Exceptions
+
+Where documentation requires **daily re-margining and daily revaluation** with provisions for
+prompt liquidation or set-off of collateral, M shall be at least **one day** (overriding the
+longer minimums in paragraph 2) for:
+
+- (a) Fully/nearly-fully collateralised derivatives (Annex II)
+- (b) Fully/nearly-fully collateralised margin lending
+- (c) Repurchase transactions, securities or commodities lending or borrowing
+
+The same one-day floor applies to **qualifying short-term exposures** not part of ongoing
+financing, including:
+
+- (a) FX settlement exposures to institutions
+- (b) Self-liquidating short-term trade finance (residual maturity ≤ 1 year, Art. 4(1)(80))
+- (c) Securities settlement within usual delivery period or 2 business days
+- (d) Cash settlement/electronic payment exposures, including failed-transaction overdrafts
+
+!!! info "Implementation Note — `has_one_day_maturity_floor` Flag"
+    The code implements Art. 162(3) via a boolean flag `has_one_day_maturity_floor` on the
+    input schema (`schemas.py:82,103,132`). However, this flag is currently used **only** for
+    CRM maturity mismatch ineligibility (Art. 237(2) — any mismatch zeroes protection value
+    for one-day-floor exposures). It does **not** currently override the IRB maturity column
+    to 1/365. See `haircuts.py:482-485`.
+
+### Art. 162(4) — SME Maturity Simplification
+
+For exposures to **corporates situated in the UK** with consolidated sales and consolidated
+assets < EUR 500 million, institutions may consistently apply the F-IRB fixed maturities
+from Art. 162(1) instead of calculating per Art. 162(2). The EUR 500m threshold rises to
+EUR 1,000m for corporates that primarily own and let non-speculative residential property.
+
+!!! note "Not Yet Implemented"
+    The code does not implement the Art. 162(4) SME maturity simplification. All A-IRB
+    exposures calculate maturity from `maturity_date` or default to 2.5 years.
+
+### Maturity Adjustment Formula
 
 ```
 b = (0.11852 - 0.05478 x ln(PD))^2
 MA = (1 + (M - 2.5) x b) / (1 - 1.5 x b)
 ```
 
-Maturity `M` is clamped to the range [1.0, 5.0] years.
+Where M is clamped to the range [1.0, 5.0] years (per Art. 162(1)/(2) floor and cap).
 
-**Default supervisory maturity**: Where no maturity date is available, F-IRB uses a supervisory default of **2.5 years** (Art. 162(2)).
+### Basel 3.1 Changes to Art. 162
 
-**Basel 3.1 revolving maturity** (Art. 162(2A)(k)): Under Basel 3.1, for revolving exposures, M shall be determined using the **maximum contractual termination date** of the facility. The institution shall not use the repayment date of the current drawing.
+PRA PS1/26 makes significant changes to Art. 162:
+
+| Aspect | CRR | Basel 3.1 | Reference |
+|--------|-----|-----------|-----------|
+| F-IRB fixed maturities (§1) | 0.5yr repo / 2.5yr other | **Deleted** — all IRB firms must calculate M | Art. 162(1) |
+| Scope | A-IRB only (Art. 143 permission) | **F-IRB and A-IRB** (Art. 147A) | Art. 162(2) |
+| Revolving exposures | Repayment date of current drawing | **Max contractual termination date** | Art. 162(2A)(k) |
+| Mixed MNA (derivatives + repos) | Not addressed | **10-day floor** | Art. 162(2A)(da) |
+| Purchased receivables minimum M | 90 days | **1 year** | Art. 162(2A)(e) |
+| Collateral daily condition | Re-margining **and** revaluation | Re-margining **or** revaluation | Art. 162(2A)(c)/(d) |
+| SME simplification (§4) | Available (EUR 500m threshold) | **Deleted** | Art. 162(4) |
+
+See the [Basel 3.1 F-IRB specification](../../specifications/basel31/firb-calculation.md#effective-maturity-art-162)
+for full details.
 
 !!! warning "Previous Description Was Wrong"
     This section previously stated "unconditionally cancellable revolving facilities are assigned a maturity of 1 year". Art. 162(2A)(k) actually requires the **maximum contractual termination date** — not a 1-year default. Using 1 year instead of the facility termination date would systematically understate maturity and therefore RWA for revolving corporate exposures.
@@ -265,7 +351,7 @@ Used for comparison against provisions (see [Provisions](provisions.md)).
 | CRR-B4 | Financial collateral — blended LGD | Collateral reduces effective LGD (Art. 161(1)(d)) |
 | CRR-B5 | SME corporate with firm-size adjustment + supporting factor | Turnover < EUR 50m, correlation reduced (Art. 153(4)) |
 | CRR-B6 | PD floor binding — input PD below 0.03% floor | Input PD=0.01% → floored to 0.03% (Art. 160(1)) |
-| CRR-B7 | Long maturity — contractual 7Y capped to 5Y | M clamped to [1, 5] range (Art. 162(1)) |
+| CRR-B7 | Long maturity — contractual 7Y capped to 5Y | M clamped to [1, 5] range (Art. 162(2)) |
 
 !!! note "FI Scalar Coverage"
     The 1.25x correlation multiplier for large/unregulated FSEs (Art. 153(2)) is validated within CRR-B5 and through the B31-B group (B31-B7 specifically tests FSE LGD differentiation). See [FI Scalar](#fi-scalar-crr-art-1532) for details.

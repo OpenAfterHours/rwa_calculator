@@ -97,7 +97,7 @@ Credit protection provided by a third party. Allows substitution of the guaranto
 A percentage reduction applied to collateral value to account for potential price volatility and liquidation costs.
 
 ### HVCRE (High Volatility Commercial Real Estate)
-Speculative commercial real estate development with higher risk weights.
+Speculative commercial real estate development with elevated slotting risk weights. **Introduced by PRA PS1/26** Art. 153(5) Table A — the UK onshored CRR has no HVCRE concept (only a single slotting table for all SL types). The original EU CRR had a separate Table 2 for HVCRE but this was not retained in UK onshoring.
 
 ## I
 

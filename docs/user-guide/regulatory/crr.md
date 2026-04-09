@@ -200,9 +200,10 @@ Where:
 
 ## Slotting Risk Weights (Art. 153(5))
 
-CRR Art. 153(5) defines two risk weight tables with maturity-based splits.
+UK CRR Art. 153(5) defines a single risk weight table (Table 1) with maturity-based splits,
+covering all specialised lending types (PF, OF, CF, IPRE).
 
-### Non-HVCRE (Table 1 — PF, OF, CF, IPRE)
+### Table 1 (PF, OF, CF, IPRE)
 
 | Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
 |----------|---------------------------|---------------------------|
@@ -212,15 +213,14 @@ CRR Art. 153(5) defines two risk weight tables with maturity-based splits.
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### HVCRE (Table 2)
-
-| Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
-|----------|---------------------------|---------------------------|
-| Strong | 95% | 70% |
-| Good | 120% | 95% |
-| Satisfactory | 140% | 140% |
-| Weak | 250% | 250% |
-| Default | 0% | 0% |
+!!! warning "No HVCRE Distinction in UK CRR"
+    The UK onshored CRR does **not** contain a separate HVCRE table. The term "high volatility
+    commercial real estate" does not appear in the UK CRR text. The original EU CRR had a
+    separate Table 2 with elevated HVCRE weights, but this was not retained in UK onshoring.
+    All specialised lending under UK CRR uses Table 1 above. HVCRE is introduced as a distinct
+    sub-type by PRA PS1/26 (Basel 3.1) — see [Basel 3.1 guide](basel31.md#specialised-lending).
+    The calculator applies EU CRR Table 2 weights for `is_hvcre=True` CRR exposures (code
+    divergence D3.22).
 
 ## IRB Formulas
 
@@ -291,6 +291,7 @@ entirely. They are **not active** under current UK CRR:
 | Art. 128 | Items associated with particularly high risk (150%) | Omitted; re-introduced under Basel 3.1 (PRA PS1/26) |
 | Art. 132 | CIU treatment | Omitted; moved to PRA Rulebook (CRR Part) |
 | Art. 152 | IRB treatment of CIU exposures | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 153(5) Table 2 | HVCRE slotting risk weights | Not retained in UK onshoring; HVCRE introduced by PRA PS1/26 Table A |
 | Art. 158 | Expected loss — treatment by exposure type | Omitted; EL rules moved to PRA Rulebook (CRR Part); reinstated with modifications in PS1/26 |
 
 !!! note

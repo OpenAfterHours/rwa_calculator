@@ -892,15 +892,26 @@ for implementation details.
 
 ### HVCRE
 
-| Category | CRR (≥2.5yr) | CRR (<2.5yr) | Basel 3.1 |
-|----------|--------------|--------------|-----------|
-| Strong | 95% | 70% | 95% |
-| Good | 120% | 95% | 120% |
-| Satisfactory | 140% | 140% | 140% |
-| Weak | 250% | 250% | 250% |
-| Default | 0% | 0% | 0% (EL) |
+| Category | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Strong | N/A | 95% |
+| Good | N/A | 120% |
+| Satisfactory | N/A | 140% |
+| Weak | N/A | 250% |
+| Default | N/A | 0% (EL) |
 
-**Note:** Under CRR, HVCRE has a separate risk weight table (Art. 153(5) Table 2) with higher weights than non-HVCRE.
+!!! warning "HVCRE — PRA PS1/26 Introduction, Not CRR Continuation"
+    The UK onshored CRR has **no HVCRE concept**. The term "high volatility commercial real
+    estate" does not appear in the UK CRR text — Art. 153(5) contains only Table 1
+    (a single table for all SL types). The original EU CRR had a separate Table 2 with
+    elevated HVCRE weights (Strong: 95%/70%, Good: 120%/95%, Satisfactory: 140%, Weak: 250%),
+    but this was **not retained** in UK onshoring. Under UK CRR, all SL uses Table 1.
+
+    PRA PS1/26 **introduces** HVCRE as a new sub-type in Table A (Art. 153(5)(a)(i)) with the
+    higher weights shown above. This is a Basel 3.1 change with no UK CRR predecessor.
+
+    **Code divergence (D3.22):** The calculator applies EU CRR Table 2 weights for CRR
+    exposures with `is_hvcre=True`, which is more conservative than UK CRR requires.
 
 ### Slotting Subgrades — Table A Column Structure (Art. 153(5))
 
@@ -923,8 +934,8 @@ includes optional lower-weight columns (A/C):
 - **(e) IPRE enhanced:** IPRE exposures in Strong **may** use column **A** if all criteria met: substantially stronger underwriting, very low LTV, investment-grade tenant income (≥ 100% debt service), and no ADC characteristics
 - **(f) PF enhanced:** PF exposures in Strong **may** use column **A** if underwriting and characteristics are substantially stronger than required for Strong
 
-!!! info "CRR vs PRA PS1/26 — Format Change, Values Preserved"
-    Under CRR, the short-maturity concession was expressed as separate tables (Table 1 ≥ 2.5yr, Table 1 < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. The **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks.
+!!! info "CRR vs PRA PS1/26 — Format Change, Non-HVCRE Values Preserved"
+    Under CRR, the short-maturity concession was expressed as separate maturity bands in Table 1 (≥ 2.5yr vs < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. For non-HVCRE types, the **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks. The HVCRE row in Table A is a **PRA PS1/26 introduction** — UK CRR has no HVCRE table.
 
 !!! warning "Not Yet Implemented — Column A/C Concession"
     The calculator currently assigns all Basel 3.1 slotting exposures to columns B/D (the default per Art. 153(5)(c)). The optional column A/C short-maturity concession (Art. 153(5)(d)) and enhanced-underwriting concessions (Art. 153(5)(e)/(f)) are not yet implemented. CRR maturity-based differentiation IS implemented via separate short/long maturity tables.

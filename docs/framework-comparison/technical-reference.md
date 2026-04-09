@@ -360,6 +360,11 @@ PRA PS1/26 Art. 153(5) Table A defines two slotting weight tables — non-HVCRE 
 
 ### HVCRE
 
+!!! info "HVCRE — Introduced by PRA PS1/26"
+    UK CRR has no HVCRE concept — Art. 153(5) contains only Table 1 for all SL types.
+    HVCRE is **newly introduced** by PRA PS1/26 Table A. See
+    [Key Differences](key-differences.md#hvcre) for details and code divergence note.
+
 | Category | Risk Weight |
 |----------|-------------|
 | Strong | 95% |
@@ -384,8 +389,9 @@ columns C and D:
 - **IPRE** Strong meets enhanced criteria: very low LTV, investment-grade tenant income, no ADC (Art. 153(5)(e))
 - **PF** Strong meets enhanced underwriting criteria (Art. 153(5)(f))
 
-The values are identical to CRR — PRA restructured the format from maturity-split tables
-to A/B/C/D columns but preserved all risk weight values. See [Key Differences](key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full comparison and [Slotting Approach spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for implementation details.
+For non-HVCRE types, the values are identical to CRR — PRA restructured the format from
+maturity-split tables to A/B/C/D columns but preserved all risk weight values. The HVCRE row
+is a PRA PS1/26 introduction (UK CRR has no HVCRE table). See [Key Differences](key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full comparison and [Slotting Approach spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for implementation details.
 
 ## Financial Institution Correlation Multiplier (CRE31.5)
 

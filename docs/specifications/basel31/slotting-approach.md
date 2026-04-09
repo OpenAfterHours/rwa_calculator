@@ -67,6 +67,12 @@ Applies to: Project Finance, Income-Producing Real Estate, Object Finance, Commo
 
 **Art. 153(5), HVCRE Table**
 
+!!! info "HVCRE Introduced by PRA PS1/26"
+    HVCRE is **newly introduced** by PRA PS1/26 Art. 153(5) Table A. The UK onshored CRR
+    has no HVCRE concept — Art. 153(5) contains only Table 1 (a single table for all SL types).
+    The original EU CRR had a separate Table 2, but it was not retained in UK onshoring.
+    See [CRR Slotting spec](../crr/slotting-approach.md#table-1-art-1535) for details.
+
 High-Volatility Commercial Real Estate receives elevated weights to reflect the higher risk profile:
 
 | Slotting Category | Risk Weight | EL Component |

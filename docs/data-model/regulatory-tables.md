@@ -320,9 +320,9 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 
 ## Slotting Risk Weights
 
-### CRR Non-HVCRE Specialised Lending (CRR Art. 153(5))
+### CRR Specialised Lending (CRR Art. 153(5) Table 1)
 
-CRR differentiates by remaining maturity (≥ 2.5 years vs < 2.5 years).
+UK CRR Art. 153(5) has a single table covering all SL types, differentiated by remaining maturity (≥ 2.5 years vs < 2.5 years).
 
 | Category | ≥ 2.5yr | < 2.5yr |
 |----------|---------|---------|
@@ -332,9 +332,14 @@ CRR differentiates by remaining maturity (≥ 2.5 years vs < 2.5 years).
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### CRR HVCRE (CRR Art. 153(5) Table 2)
+### CRR HVCRE — EU CRR Table 2 (No UK Legal Basis)
 
-HVCRE has **higher** risk weights than standard specialised lending.
+!!! warning "UK CRR Has No HVCRE Table"
+    The values below are from the **original EU CRR** Table 2. The UK onshored CRR does
+    **not** contain this table — "high volatility commercial real estate" does not appear
+    in the UK CRR text. All SL types under UK CRR use Table 1 above. HVCRE is introduced
+    by PRA PS1/26 Table A (see [Basel 3.1 HVCRE below](#basel-31-hvcre)). The code applies
+    these weights for CRR `is_hvcre=True` exposures (code divergence D3.22).
 
 | Category | ≥ 2.5yr | < 2.5yr |
 |----------|---------|---------|

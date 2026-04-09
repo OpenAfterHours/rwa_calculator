@@ -65,6 +65,19 @@ PD_effective = max(PD_estimated, PD_floor)
 
 LGD is the percentage of exposure lost after recoveries. F-IRB uses supervisory values (0%–75% depending on collateral); A-IRB uses bank estimates subject to floors under Basel 3.1.
 
+Under Basel 3.1, A-IRB firms have two methods for incorporating collateral into LGD (Art. 191A):
+
+- **LGD Modelling Collateral Method** (Art. 169A/169B) — the firm's own LGD model captures
+  collateral-specific recovery characteristics, subject to PRA approval and annual revaluation.
+  Must produce estimates at least as conservative as the Foundation Collateral Method.
+- **Foundation Collateral Method** (FCM, Art. 230) — uses supervisory LGDS values by collateral
+  type, blended with LGDU for partially secured exposures.
+
+For unfunded credit protection (guarantees), A-IRB firms use the **LGD Adjustment Method**
+(LGD-AM) or Parameter Substitution Method (PSM). See [Credit Risk Mitigation](crm.md) and the
+[CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
+for details.
+
 ### Exposure at Default (EAD)
 
 F-IRB uses regulatory CCFs based on `risk_type` (FR=100%, MR/MLR=75%, LR=0%). A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to CCF floors under Basel 3.1.
@@ -415,6 +428,7 @@ el = calculate_expected_loss(
 |-----------|-------|-------|
 | PD | Bank estimate | Bank estimate |
 | LGD | Supervisory (45%/75%) | Bank estimate (floored) |
+| CRM for collateral | Foundation Collateral Method (Art. 230) | LGD modelling (Art. 169A/169B) or FCM |
 | EAD | Regulatory | Bank estimate |
 | CCF | Regulatory | Bank estimate |
 | Typical RW | Higher | Lower |
@@ -432,9 +446,11 @@ el = calculate_expected_loss(
 | Correlation | Art. 153 | CRE31 |
 | Maturity adjustment | Art. 162 | CRE31 |
 | Supervisory LGD | Art. 161 | CRE32 |
+| A-IRB LGD modelling for collateral | Art. 169A/169B | CRE32 |
+| CRM method taxonomy | Art. 191A | — |
 
 ## Next Steps
 
 - [Standardised Approach](standardised-approach.md) - Compare with SA
-- [Credit Risk Mitigation](crm.md) - CRM under IRB
+- [Credit Risk Mitigation](crm.md) - CRM under IRB, including Foundation Collateral Method (F-IRB) and LGD Modelling Collateral Method (A-IRB, Art. 169A/169B)
 - [Supporting Factors](supporting-factors.md) - SME correlation adjustment

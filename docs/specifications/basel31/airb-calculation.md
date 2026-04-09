@@ -30,6 +30,9 @@ Basel 3.1 constrains A-IRB flexibility by introducing **LGD floors** that preven
 estimates from falling below supervisory minimums, and **post-model adjustments** (PMA) that
 allow PRA to impose conservative overlays. The double default treatment is removed, replaced
 by parameter substitution for IRB guarantors (see [CRM Specification](credit-risk-mitigation.md)).
+For funded credit protection (collateral), A-IRB firms may use **LGD modelling** under
+Art. 169A/169B or fall back to the **Foundation Collateral Method** (FCM, Art. 230) — see
+[CRM Specification § LGD Modelling Collateral Method](../crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b).
 
 ### Key Differences from F-IRB
 
@@ -70,6 +73,15 @@ For partially secured exposures, the blended LGD floor is:
 ```
 LGD_floor = (E_unsecured / EAD) x LGDU_floor + sum_i((E_i / EAD) x LGDS_floor_i)
 ```
+
+!!! info "Interaction with CRM Methods"
+    These LGD floors apply **after** any CRM adjustment. Under A-IRB, the LGD input may be
+    determined by the firm's own LGD model incorporating collateral effects (Art. 169A/169B) or
+    by the Foundation Collateral Method (Art. 230). Either way, the resulting LGD is then floored
+    per the tables above. Art. 169B requires that the LGD Modelling Collateral Method produce
+    estimates at least as conservative as the FCM. See
+    [CRM Specification](../crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
+    for the full method taxonomy and requirements.
 
 ### Retail A-IRB LGD Floors (Art. 164(4))
 
@@ -203,7 +215,7 @@ RW = K x 12.5 x MA
 
 The differences are:
 
-- `LGD` = firm's own estimate, subject to LGD floors (above)
+- `LGD` = firm's own estimate, subject to LGD floors (above) and CRM adjustments ([Art. 169A/169B](../crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b) or FCM)
 - `PD` = firm's own estimate, subject to the same PD floors as F-IRB
 - `MA` = 1.0 for retail (no maturity adjustment); internal estimate for non-retail
 - Scaling factor = 1.0 (removed under Basel 3.1)

@@ -99,46 +99,109 @@ RWA = £3,500,000 × 100% = £3,500,000
 
 ### Definition
 
-PSEs are non-commercial administrative bodies:
-- Regional governments
-- Local authorities
-- Administrative bodies
-- Enterprises owned by governments
+PSEs are non-commercial administrative bodies responsible to, or owned by, central
+governments, regional governments, or local authorities (CRR Art. 4(1)(8)):
 
-### Treatment Options
+- Transport authorities (e.g., Transport for London)
+- Water and utility boards
+- Public health bodies (e.g., NHS trusts)
+- Government-owned enterprises
+- Administrative bodies exercising public functions
 
-| PSE Type | Treatment |
-|----------|-----------|
-| Central government-like | Sovereign treatment |
-| Regional/Local government | Institution or sovereign treatment |
-| Other PSE | Institution treatment |
+!!! note "PSE vs RGLA"
+    Regional governments and local authorities themselves are classified as **RGLA**
+    (Art. 115), not PSE. PSEs are entities *subordinate to* or *owned by* governments,
+    not the governments themselves.
 
-### Risk Weights
+### Treatment Methods (CRR Art. 116)
 
-Depends on treatment option elected:
+| Method | Condition | Table | Basis |
+|--------|-----------|-------|-------|
+| Sovereign-derived | No own ECAI rating | Table 2 (Art. 116(1)) | Sovereign CQS |
+| Own-rating | Has own ECAI rating | Table 2A (Art. 116(2)) | PSE's own CQS |
 
-| Option | Basis | Risk Weights |
-|--------|-------|--------------|
-| Sovereign | Parent sovereign rating | 0-150% |
-| Institution | PSE's own rating | 20-150% |
+!!! note "Art. 116(4) left blank"
+    PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE
+    sub-treatment under UK rules. All UK PSEs use Tables 2/2A.
 
-**UK Regional Governments:**
-- Scottish Government
-- Welsh Government
-- Northern Ireland Executive
-- Typically treated as sovereign (0% RW)
+### Risk Weight Tables
 
-### Calculation Example
+**Table 2 — Sovereign-Derived (Art. 116(1))**
 
-**Exposure:**
-- £50m loan to Transport for London
-- Treated as PSE with institution option
-- Rating: AA (CQS 1)
+Used when the PSE has no own ECAI rating — look up the sovereign's CQS:
 
+| Sovereign CQS | PSE Risk Weight |
+|---------------|----------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 100% |
+
+**Table 2A — Own-Rating (Art. 116(2))**
+
+Used when the PSE has its own ECAI rating:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+
+!!! info "Key difference: CQS 3"
+    Under sovereign-derived treatment (Table 2), CQS 3 receives **100%**. Under
+    own-rating treatment (Table 2A), CQS 3 receives **50%**. Having an own ECAI
+    rating can materially reduce RWA at CQS 3.
+
+### Short-Term Preferential Treatment (Art. 116(3))
+
+PSE exposures with original effective maturity **≤ 3 months** receive a flat **20%**
+risk weight regardless of CQS. No domestic currency condition is required for PSEs
+(unlike RGLAs under Art. 115(5)).
+
+### Basel 3.1 Changes
+
+!!! info "CRR vs Basel 3.1"
+    PSE risk weight tables are **unchanged** under Basel 3.1 — Tables 2/2A and the
+    short-term 20% preferential continue to apply. The key structural change is:
+
+    - **Art. 147A(1):** PSEs receiving 0% SA risk weight are mandatorily SA — no IRB
+      permission is available.
+    - All other PSEs remain eligible for IRB (mapped to sovereign or institution class
+      depending on `entity_type`).
+
+> **Details:** See [SA Risk Weights — PSE](../../specifications/crr/sa-risk-weights.md#pse-exposures-crr-art-116) for the full specification including test scenarios.
+
+### Calculation Examples
+
+**Example 1 — Sovereign-derived (UK PSE):**
 ```python
-# Institution treatment, CQS 1
+# £50m loan to Transport for London (no own ECAI rating)
+# UK sovereign CQS = 1 → Table 2 row 1
 Risk_Weight = 20%
 RWA = £50,000,000 × 20% = £10,000,000
+```
+
+**Example 2 — Own-rating:**
+```python
+# £30m bond issued by a rated European PSE (own CQS 3)
+# Table 2A, CQS 3
+Risk_Weight = 50%
+RWA = £30,000,000 × 50% = £15,000,000
+# Note: if sovereign-derived, CQS 3 would give 100% (Table 2)
+```
+
+**Example 3 — Short-term:**
+```python
+# £20m 60-day deposit with a UK PSE (any CQS)
+# Art. 116(3): maturity ≤ 3 months → flat 20%
+Risk_Weight = 20%
+RWA = £20,000,000 × 20% = £4,000,000
 ```
 
 ## Multilateral Development Banks (MDB)
@@ -175,21 +238,110 @@ RWA = £25,000,000 × 0% = £0
 
 ## Regional Governments and Local Authorities (RGLA)
 
-### Treatment
+### Definition
 
-RGLAs can receive:
-- Sovereign treatment (if explicitly guaranteed)
-- PSE treatment (based on characteristics)
-- Institution treatment (default)
+RGLAs are sub-national government entities (CRR Art. 115):
 
-### UK RGLAs
+- Devolved administrations (Scotland, Wales, Northern Ireland)
+- County, district, unitary, and metropolitan councils
+- City of London Corporation
+- Combined authorities and mayors' offices
 
-| Entity | Typical Treatment |
-|--------|-------------------|
-| Scottish Government | Sovereign-like |
-| Welsh Government | Sovereign-like |
-| English local authorities | PSE/Institution |
-| Housing associations | Corporate/PSE |
+### Treatment Methods (CRR Art. 115)
+
+| Method | Condition | Table | Basis |
+|--------|-----------|-------|-------|
+| Sovereign-derived | No own ECAI rating | Table 1A (Art. 115(1)(a)) | Sovereign CQS |
+| Own-rating | Has own ECAI rating | Table 1B (Art. 115(1)(b)) | RGLA's own CQS |
+
+### Risk Weight Tables
+
+**Table 1A — Sovereign-Derived (Art. 115(1)(a))**
+
+Used when the RGLA has no own ECAI rating — look up the sovereign's CQS:
+
+| Sovereign CQS | RGLA Risk Weight |
+|---------------|-----------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 100% |
+
+**Table 1B — Own-Rating (Art. 115(1)(b))**
+
+Used when the RGLA has its own ECAI rating:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 100% |
+
+!!! info "Key difference: CQS 3"
+    As with PSEs, CQS 3 receives **100%** under sovereign-derived (Table 1A)
+    but only **50%** under own-rating (Table 1B).
+
+### UK-Specific PRA Designations
+
+UK RGLAs benefit from PRA-specific treatments that override the CQS tables above:
+
+| Entity Type | Risk Weight | Basis |
+|-------------|-------------|-------|
+| UK devolved administrations (Scotland, Wales, NI) | **0%** | PRA designation (sovereign-equivalent) |
+| UK local authorities (GBP exposures) | **20%** | PRA designation |
+| Domestic-currency RGLA exposures | **20%** | Art. 115(5) |
+
+!!! note "Practical effect for UK banks"
+    Most UK RGLA exposures receive 0% (devolved administrations) or 20% (local
+    authorities). The CQS-based Tables 1A/1B primarily apply to **foreign** RGLA
+    exposures.
+
+### Basel 3.1 Changes
+
+!!! info "CRR vs Basel 3.1"
+    RGLA risk weight tables are **unchanged** under Basel 3.1 — Tables 1A/1B,
+    the domestic-currency 20%, and UK PRA designations all continue to apply.
+    Key structural changes:
+
+    - **Art. 147A(1):** RGLAs receiving 0% SA risk weight (e.g., UK devolved
+      administrations) are mandatorily SA — no IRB permission is available.
+    - All other RGLAs remain eligible for IRB (mapped to sovereign or institution
+      class depending on `entity_type`).
+
+> **Details:** See [SA Risk Weights — RGLA](../../specifications/crr/sa-risk-weights.md#rgla-exposures-crr-art-115) for the full specification. See [Key Differences](../../framework-comparison/key-differences.md#regional-governments-and-local-authorities) for the CRR vs Basel 3.1 comparison.
+
+### Calculation Examples
+
+**Example 1 — UK devolved administration:**
+```python
+# £100m exposure to Scottish Government
+# PRA designation: sovereign-equivalent
+Risk_Weight = 0%
+RWA = £100,000,000 × 0% = £0
+```
+
+**Example 2 — UK local authority:**
+```python
+# £25m loan to Manchester City Council (GBP)
+# PRA designation: UK local authority → 20%
+Risk_Weight = 20%
+RWA = £25,000,000 × 20% = £5,000,000
+```
+
+**Example 3 — Foreign RGLA (sovereign-derived):**
+```python
+# £15m bond issued by a German Länder (no own ECAI)
+# Germany sovereign CQS = 1 → Table 1A row 1
+Risk_Weight = 20%
+RWA = £15,000,000 × 20% = £3,000,000
+```
 
 ## International Organisations
 
@@ -305,9 +457,9 @@ a flat **150%** risk weight.
 | Equity (exchange) | 100–250% | No (Basel 3.1) |
 | Equity (private/VC) | 100–400% | No (Basel 3.1) |
 | Defaulted | 50-150% | Yes |
-| PSE | 0-150% | Yes |
+| PSE | 0–150% | Yes (SA-only if 0% RW under B31) |
 | MDB (eligible) | 0% | N/A |
-| RGLA | 0-150% | Yes |
+| RGLA | 0–150% | Yes (SA-only if 0% RW under B31) |
 | International Org | 0% | N/A |
 | Covered Bonds | 10-50% | Varies |
 | High Risk Items (B31 only) | 150% | No |
@@ -318,7 +470,7 @@ a flat **150%** risk weight.
 |-------|-------------|----------|
 | Equity | Art. 133 | CRE20.60-65 |
 | Defaulted | Art. 127 | CRE20.80-85 |
-| PSE | Art. 115-116 | CRE20.15-20 |
+| PSE | Art. 116 | CRE20.15-20 |
 | MDB | Art. 117 | CRE20.12-14 |
 | RGLA | Art. 115 | CRE20.8-10 |
 | Covered bonds | Art. 129 | CRE20.27-30 |

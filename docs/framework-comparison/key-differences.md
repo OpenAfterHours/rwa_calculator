@@ -81,15 +81,35 @@ Where an exposure meets multiple criteria, the highest-priority class applies.
 
 === "Basel 3.1"
 
-    72.5% floor limits IRB benefit.
+    72.5% floor limits IRB benefit (phased in: 60%/65%/70%/72.5% over 2027–2030).
 
     ```
-    Example:
-    - SA RWA: £100m
-    - IRB RWA: £30m
+    Full formula (Art. 92(2A)):
+    TREA = max{U-TREA; x × S-TREA + OF-ADJ}
+
+    Example (fully phased):
+    - SA RWA (S-TREA): £100m
+    - IRB RWA (U-TREA): £30m
     - Floor: £100m × 72.5% = £72.5m
     - Final RWA: £72.5m (27.5% capital saving only)
     ```
+
+    The **OF-ADJ** term (`12.5 × (IRB_T2 – IRB_CET1 – GCRA + SA_T2)`) reconciles the
+    different treatment of provisions under IRB and SA. See the
+    [Technical Reference](technical-reference.md#output-floor-adjustment-of-adj) for the
+    component breakdown.
+
+!!! warning "Entity-Type Carve-Outs (Art. 92(2A)(b)–(d))"
+    The output floor does **not** apply to all entities. Art. 92(2A)(b)–(d) exempts:
+    non-ring-fenced institutions on sub-consolidated basis, ring-fenced bodies at individual
+    level (when in a sub-consolidation group), and international subsidiaries on consolidated
+    basis. Exempt entities use U-TREA (un-floored amount) directly. See the
+    [output floor spec](../specifications/basel31/output-floor.md#entity-type-carve-outs) for
+    the full applicability table.
+
+!!! note "Transitional Rates Are Permissive"
+    Art. 92 para 5 says institutions "may apply" the transitional rates — firms can
+    voluntarily use 72.5% from day one.
 
 ### PD Floors
 

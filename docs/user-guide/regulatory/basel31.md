@@ -54,6 +54,16 @@ Art. 92 para 5: transitional rates are permissive — firms may use 72.5% from d
 !!! warning "Impact"
     For exposures with significant IRB benefit (RWA_IRB < 72.5% × RWA_SA), this floor will increase capital requirements.
 
+The full regulatory formula (Art. 92(2A)) is `TREA = max{U-TREA; x × S-TREA + OF-ADJ}`, where
+OF-ADJ reconciles the different treatment of provisions under IRB and SA. The output floor also
+does **not** apply to all entities — Art. 92(2A)(b)–(d) exempts certain entity/basis combinations
+(e.g., non-ring-fenced institutions on sub-consolidated basis, international subsidiaries on
+consolidated basis). See the
+[Technical Reference](../../framework-comparison/technical-reference.md#output-floor-adjustment-of-adj)
+for the OF-ADJ component formula and
+[output floor spec](../../specifications/basel31/output-floor.md#entity-type-carve-outs) for the
+full applicability table.
+
 ### 3. Removal of Supporting Factors
 
 All CRR supporting factors are withdrawn:

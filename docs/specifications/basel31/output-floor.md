@@ -30,24 +30,29 @@ unjustifiably low capital requirements.
 
 ## Floor Calculation
 
-The floored RWA for an IRB firm is:
+The full TREA formula from PRA PS1/26 Art. 92(2A) is:
 
 ```
-RWA_floored = max(RWA_IRB, floor_percentage x RWA_SA)
+TREA = max{U-TREA; x × S-TREA + OF-ADJ}
 ```
 
 Where:
 
-- `RWA_IRB` = total RWA calculated under the firm's approved IRB approach
-- `RWA_SA` = total RWA that would apply if the entire portfolio were under the Standardised Approach
-- `floor_percentage` = the applicable transitional or fully-phased floor rate
+- **U-TREA** = un-floored total risk exposure amount (Art. 92(3))
+- **S-TREA** = standardised total risk exposure amount (Art. 92(3A)) — calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA
+- **x** = 72.5% fully phased (or transitional rate per Art. 92(5))
+- **OF-ADJ** = own-funds adjustment reconciling IRB vs SA provisions treatment — see [below](#of-adj-capital-adjustment)
 
-The floor applies at the **consolidated level**, not to individual exposures. The output floor
-impact is the additional RWA needed:
+At the RWA level (ignoring OF-ADJ for simplicity):
 
 ```
-floor_impact = max(0, floor_percentage x RWA_SA - RWA_IRB)
+RWA_floored = max(RWA_IRB, floor_percentage × RWA_SA)
+floor_impact = max(0, floor_percentage × RWA_SA - RWA_IRB)
 ```
+
+The floor applies at the **portfolio level** (per entity/basis combination — see
+[Entity-Type Carve-Outs](#entity-type-carve-outs)), not to individual exposures.
+The floor impact is allocated pro-rata to IRB exposures by their share of S-TREA.
 
 ## PRA Transitional Schedule
 
@@ -67,38 +72,55 @@ floor_impact = max(0, floor_percentage x RWA_SA - RWA_IRB)
 
 ## OF-ADJ Capital Adjustment
 
-**Art. 92(2B)–(2D)**
+**Art. 92(2A)**
 
-When the output floor binds (i.e., floor RWA > IRB RWA), an adjustment to own funds requirements
-is needed to avoid double-counting provisions already deducted under IRB:
+The TREA formula includes an OF-ADJ term that reconciles the different treatment of provisions
+under IRB and SA, ensuring the floor comparison is on a like-for-like own-funds basis:
 
 ```
-OF-ADJ = max(0, SA_T2 - IRB_T2 + GCRA + IRB_CET1)
+OF-ADJ = 12.5 × (IRB_T2 – IRB_CET1 – GCRA + SA_T2)
 ```
 
-Where:
+| Component | Description | Regulatory Ref |
+|-----------|-------------|----------------|
+| IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL), capped at 0.6% of IRB credit RWAs | Art. 62(d) |
+| IRB_CET1 | IRB EL shortfall CET1 deductions (EL > provisions) + Art. 40 additional deductions | Art. 36(1)(d), Art. 40 |
+| GCRA | General credit risk adjustments included in T2, gross of tax effects, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
+| SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
 
-- `SA_T2` = Tier 2 credit for SA provisions (excess of provisions over expected credit losses under SA)
-- `IRB_T2` = Tier 2 credit for IRB EL excess (Art. 62(d), capped at 0.6% of IRB RWA)
-- `GCRA` = General credit risk adjustment (provisions not allocated to specific exposures)
-- `IRB_CET1` = CET1 deduction for IRB EL shortfall (50% of shortfall per Art. 36(1)(d))
+The 12.5 multiplier converts own-funds amounts to risk-weighted equivalents (the inverse of the 8%
+minimum capital ratio). Under IRB, EL shortfall adds to capital requirements (via CET1 deduction)
+while excess provisions provide T2 relief. Under SA, general credit risk adjustments provide T2
+relief directly. Without OF-ADJ, switching from IRB to SA in the floor comparison would change
+the own-funds base, making the TREA comparison inconsistent.
 
-The OF-ADJ is added back to own funds when the floor binds, preventing a firm from being penalised
-twice for the same provisions under both the IRB and SA frameworks.
+!!! info "Full formula context"
+    The complete output floor formula is `TREA = max{U-TREA; x × S-TREA + OF-ADJ}` — see the
+    [Floor Calculation](#floor-calculation) section above and the
+    [output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj) for COREP
+    template mapping.
 
 ## Entity-Type Carve-Outs
 
 **Art. 92(2A)(b)–(d)**
 
-Certain entity types may be excluded from the output floor calculation:
+The output floor formula in para 2A(a) applies only to specific entity/basis combinations. All
+other combinations use U-TREA (the un-floored amount) directly:
 
-- **(b)** Investment firms meeting specific conditions
-- **(c)** Central counterparties (CCPs)
-- **(d)** Firms with no IRB permission (floor is moot — they already use SA)
+| Art. 92 Para | Entity Type | Reporting Basis | TREA Calculation |
+|--------------|-------------|-----------------|------------------|
+| 2A(a)(i) | Standalone UK institution; ring-fenced body not in sub-consolidation group | Individual | `max{U-TREA; x × S-TREA + OF-ADJ}` |
+| 2A(a)(ii) | Ring-fenced body in sub-consolidation group | Sub-consolidated | `max{U-TREA; x × S-TREA + OF-ADJ}` |
+| 2A(a)(iii) | CRR consolidation entity (not international subsidiary) | Consolidated | `max{U-TREA; x × S-TREA + OF-ADJ}` |
+| 2A(b) | Institution other than a ring-fenced body | Sub-consolidated | U-TREA (exempt) |
+| 2A(c) | Ring-fenced body in sub-consolidation group; non-standalone UK institution | Individual | U-TREA (exempt) |
+| 2A(d) | CRR consolidation entity that is an international subsidiary | Consolidated | U-TREA (exempt) |
 
-!!! note "Implementation Status"
-    Entity-type carve-outs are implemented in the output floor calculator.
-    Source: `src/rwa_calc/engine/output_floor/`
+!!! note "Implementation"
+    Entity-type carve-outs are implemented via `OutputFloorConfig.is_floor_applicable()` which
+    checks the `institution_type` / `reporting_basis` combination against the applicable set.
+    When both are `None`, the floor defaults to applicable (backward-compatible mode).
+    Source: `src/rwa_calc/contracts/config.py`
 
 ## Structural Invariants
 

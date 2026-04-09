@@ -112,24 +112,58 @@ permissive. Firms can voluntarily use 72.5% from day one.
 
 ### Output Floor Adjustment (OF-ADJ)
 
-The full output floor formula from PRA PS1/26 Art. 92 is:
+The full output floor formula from PRA PS1/26 Art. 92(2A) is:
 
 ```
-TREA = max(U-TREA, x × S-TREA + OF-ADJ)
+TREA = max{U-TREA; x × S-TREA + OF-ADJ}
 ```
 
 Where:
 
-- **U-TREA** = un-floored total risk exposure (using internal models where permitted)
-- **S-TREA** = standardised total risk exposure (recalculated using SA only)
+- **U-TREA** = un-floored total risk exposure amount (Art. 92(3))
+- **S-TREA** = standardised total risk exposure amount (Art. 92(3A)) — calculated without IRB, SFT VaR, SEC-IRBA, IAA, IMM, or IMA
 - **x** = floor percentage (see transitional schedule above)
-- **OF-ADJ** = adjustment for the difference between IRB expected loss provisions treatment
-  and SA general credit risk adjustments
+- **OF-ADJ** = `12.5 × (IRB_T2 – IRB_CET1 – GCRA + SA_T2)`
 
-OF-ADJ reconciles the different treatment of provisions: under IRB, expected loss shortfall
-adds to capital requirements while under SA, general credit risk adjustments reduce
-risk exposure. Without this adjustment, the floor comparison would not be on a like-for-like
-basis.
+The OF-ADJ reconciles the different treatment of provisions under IRB and SA:
+
+| Component | Description | Regulatory Ref |
+|-----------|-------------|----------------|
+| IRB_T2 | IRB excess provisions T2 credit (provisions > EL), capped at 0.6% of IRB RWAs | Art. 62(d) |
+| IRB_CET1 | IRB EL shortfall CET1 deductions (EL > provisions) + Art. 40 additional deductions | Art. 36(1)(d), Art. 40 |
+| GCRA | General credit risk adjustments in T2, gross of tax effects, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
+| SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
+
+Under IRB, EL shortfall adds to capital requirements (CET1 deduction) while excess provisions
+provide T2 relief. Under SA, general credit risk adjustments provide T2 relief directly. The
+12.5 multiplier converts own-funds amounts to risk-weighted equivalents. Without this adjustment,
+the floor comparison would not be on a like-for-like basis.
+
+For COREP template mapping of OF-ADJ components, see the
+[output reporting spec](../specifications/output-reporting.md#output-floor-adjustment-of-adj).
+
+### Entity-Type Carve-Outs (Art. 92(2A)(b)–(d))
+
+The output floor does **not** apply universally. Art. 92(2A) specifies which entity/basis
+combinations must use the floored TREA formula; all others use U-TREA directly:
+
+**Floor applies (Art. 92(2A)(a)):**
+
+- Standalone UK institution — individual basis
+- Ring-fenced body in sub-consolidation group — sub-consolidated basis
+- CRR consolidation entity (not international subsidiary) — consolidated basis
+
+**Exempt — use U-TREA only (Art. 92(2A)(b)–(d)):**
+
+- **(b)** Non-ring-fenced institution — sub-consolidated basis
+- **(c)** Ring-fenced body in sub-consolidation group; non-standalone UK institution — individual basis
+- **(d)** CRR consolidation entity that is an international subsidiary — consolidated basis
+
+!!! info "Implementation"
+    Set `institution_type` and `reporting_basis` on `OutputFloorConfig` to activate the carve-out
+    logic. When both are `None`, the floor defaults to applicable. See the
+    [output floor spec](../specifications/basel31/output-floor.md#entity-type-carve-outs) for the
+    full applicability table.
 
 ## Supervisory Haircut Comparison
 

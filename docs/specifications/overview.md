@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Product** | rwa-calc |
-| **Version** | 0.1.37 (Pre-Release) |
+| **Version** | 0.1.54 (Pre-Release) |
 | **Author** | OpenAfterHours |
 | **License** | Apache 2.0 |
 
@@ -67,5 +67,5 @@ Market Risk (FRTB), Operational Risk, CVA Risk, Securitisation, Large Exposures,
 | Documentation | Zensical | — |
 | Testing | Pytest + pytest-benchmark | — |
 | Linting | Ruff | — |
-| Type Checking | Mypy | — |
+| Type Checking | ty | — |
 | Package Manager | UV | — |

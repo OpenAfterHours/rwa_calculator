@@ -7,7 +7,7 @@
 | M1.1 | All CRR acceptance tests passing (97/97) | Done |
 | M1.2 | Performance benchmarks documented | Done |
 | M1.3 | Full MkDocs documentation site | Done |
-| M1.4 | PyPI package published | Done (v0.1.28) |
+| M1.4 | PyPI package published | Done (v0.1.54) |
 | M1.5 | Interactive web UI (Marimo) | Done |
 | M1.6 | CI/CD pipeline (lint, typecheck, tests) | Done |
 | M1.7 | Complete remaining 3 acceptance tests (CRR-A7, A8, C3) | Done |

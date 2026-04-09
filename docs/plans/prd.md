@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Product** | rwa-calc |
-| **Version** | 0.1.28 (Pre-Release) |
+| **Version** | 0.1.54 (Pre-Release) |
 | **Author** | OpenAfterHours |
 | **Status** | Draft |
 | **Last Updated** | 2026-02-28 |
@@ -216,7 +216,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-6.1 | MkDocs documentation site with user guide, architecture, API reference | Comprehensive | Met (59 pages) |
+| NFR-6.1 | Zensical documentation site with user guide, architecture, API reference | Comprehensive | Met (100+ pages) |
 | NFR-6.2 | Interactive Marimo workbooks with reference implementations | All CRR scenarios | Met |
 | NFR-6.3 | Regulatory reference links to PRA Rulebook, CRR articles, BCBS standards | All calculations | Met |
 
@@ -380,7 +380,7 @@ Input Data (Parquet/CSV/DataFrames)
 | M1.1 | All CRR acceptance tests passing (74/74) | 71/74 (3 fixture gaps) |
 | M1.2 | Performance benchmarks documented and reproducible | Done                   |
 | M1.3 | Full MkDocs documentation site | Done                   |
-| M1.4 | PyPI package published | Done (v0.1.28)         |
+| M1.4 | PyPI package published | Done (v0.1.54)         |
 | M1.5 | Interactive web UI (Marimo) operational | Done                   |
 | M1.6 | CI/CD pipeline with linting, type checking, and tests | Done                   |
 | M1.7 | Complete remaining 3 acceptance tests (CRR-A7, A8, C3) | Not Started            |
@@ -423,7 +423,7 @@ Input Data (Parquet/CSV/DataFrames)
 |--------|--------|--------------|
 | **Regulatory Accuracy** | 100% acceptance test pass rate | Automated test suite against hand-calculated expected outputs |
 | **Performance** | < 2s for 100K exposures, < 20s for 1M | Benchmark tests (`pytest-benchmark`) |
-| **Test Coverage** | > 1,200 tests across unit, acceptance, benchmark | `pytest --co -q \| wc -l` |
+| **Test Coverage** | > 5,000 tests across unit, acceptance, benchmark | `pytest --co -q \| wc -l` |
 | **Documentation Completeness** | All public APIs documented; all calculations traced to CRR/BCBS articles | MkDocs site review |
 | **Adoption** | PyPI downloads, GitHub stars, community contributions | PyPI stats, GitHub analytics |
 | **Transition Readiness** | Full Basel 3.1 coverage before 1 Jan 2027 go-live | Acceptance test pass rate for B31 scenarios |
@@ -442,7 +442,7 @@ Input Data (Parquet/CSV/DataFrames)
 | Documentation | Zensical | — | Documentation site |
 | Testing | Pytest + pytest-benchmark | — | Unit, acceptance, and performance tests |
 | Linting | Ruff | — | Linting and formatting |
-| Type Checking | Mypy | — | Static type analysis |
+| Type Checking | ty | — | Static type analysis |
 | Package Manager | UV | — | Dependency management |
 
 ---
@@ -455,7 +455,7 @@ Input Data (Parquet/CSV/DataFrames)
 | **Performance degrades at 10M+ scale** | Medium — some firms have very large portfolios | Low | Polars LazyFrame architecture scales linearly; benchmark suite includes 1M+ tests; streaming engine available for memory-constrained runs |
 | **IRB formula precision** | High — small rounding errors compound across millions of exposures | Low | `Decimal` type for regulatory parameters; hand-calculated reference values validated to 0.01%; `polars-normal-stats` for statistical functions (avoids scipy float issues) |
 | **Scope creep into market/op risk** | Medium — dilutes focus, increases maintenance burden | Medium | Explicit out-of-scope declaration; modular architecture allows separate products for other risk types |
-| **Open-source contribution quality** | Low — incorrect PRs could introduce regulatory errors | Medium | Comprehensive acceptance test suite as guardrail; all PRs must pass 1,200+ tests; regulatory traceability in docstrings |
+| **Open-source contribution quality** | Low — incorrect PRs could introduce regulatory errors | Medium | Comprehensive acceptance test suite as guardrail; all PRs must pass 5,000+ tests; regulatory traceability in docstrings |
 
 ---
 

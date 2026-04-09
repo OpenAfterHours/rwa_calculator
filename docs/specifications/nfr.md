@@ -13,7 +13,7 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-2.1 | Acceptance test pass rate (CRR + Basel 3.1 + Comparison) | 100% | 100% (97 CRR + 116 B31 + 62 comparison = 275 tests) |
+| NFR-2.1 | Acceptance test pass rate (CRR + Basel 3.1 + Comparison) | 100% | 100% (169 CRR + 212 B31 + 60 comparison + 60 stress = 501 tests) |
 | NFR-2.2 | Hand-calculated expected outputs | Full coverage | Done (CRR + Basel 3.1 scenarios) |
 | NFR-2.3 | Numerical precision vs hand calcs | < 0.01% error | Met |
 | NFR-2.4 | Regulatory article traceability | Full coverage | Done |
@@ -22,7 +22,7 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-3.1 | Total test coverage | > 1,000 tests | Met (1,844+ total: ~1,414 unit, 275 acceptance, 123 contracts, 5 integration, 27 benchmarks) |
+| NFR-3.1 | Total test coverage | > 5,000 tests | Met (5,034 total: 4,232 unit, 501 acceptance, 145 contracts, 122 integration, 34 benchmarks) |
 | NFR-3.2 | Zero data loss (immutable pipeline) | Guaranteed | Met |
 | NFR-3.3 | Graceful invalid data handling | All data quality issues | Met |
 
@@ -47,7 +47,7 @@
 
 | ID | Requirement | Target | Status |
 |----|-------------|--------|--------|
-| NFR-6.1 | Zensical documentation site | Comprehensive | Met (59 pages) |
+| NFR-6.1 | Zensical documentation site | Comprehensive | Met (100+ pages) |
 | NFR-6.2 | Marimo workbooks | All CRR scenarios | Met |
 | NFR-6.3 | Regulatory reference links | All calculations | Met |
 
@@ -57,6 +57,6 @@
 |--------|--------|--------------|
 | Regulatory Accuracy | 100% acceptance test pass rate | Automated test suite |
 | Performance | < 2s/100K, < 20s/1M | pytest-benchmark |
-| Test Coverage | > 1,800 tests | `pytest --co -q` (1,844+ total) |
+| Test Coverage | > 5,000 tests | `pytest --co -q` (5,034 total) |
 | Documentation | All public APIs documented | Zensical site review |
 | Transition Readiness | Full Basel 3.1 before 1 Jan 2027 | B31 acceptance tests |

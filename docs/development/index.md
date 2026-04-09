@@ -214,8 +214,8 @@ uv run ruff format src tests
 ### Type Checking
 
 ```bash
-# Run mypy
-uv run mypy src
+# Run ty
+uv run ty src
 ```
 
 ### Documentation

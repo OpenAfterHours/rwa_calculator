@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D4.24/D4.34: Replaced fabricated `crr.md` CCF table with correct CRR Annex I 5-category structure distinguishing MR 50% from MLR 20%.)
+Last updated: 2026-04-09 (D4.1/D4.2/D4.6: Updated stale version numbers, test counts, and type checker references across 8 doc files.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -148,12 +148,12 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Stale Version Numbers and Test Counts
 
-- [ ] **D4.1** — `overview.md` says version 0.1.37; `prd.md` says 0.1.28. Actual: 0.1.54+. (Cross-ref P4.2)
-- [ ] **D4.2** — `nfr.md` shows 1,844+ total tests. Actual: **5,188**. (Cross-ref P4.24)
+- [x] **D4.1** — ~~`overview.md` says version 0.1.37; `prd.md` says 0.1.28.~~ **FIXED:** Updated version to 0.1.54 (from `pyproject.toml`) across 3 files: `prd.md` (header + M1.4 milestone), `specifications/overview.md` (header), `specifications/milestones.md` (M1.4). `overview.md` was already correct at 0.1.54. (2026-04-09)
+- [x] **D4.2** — ~~`nfr.md` shows 1,844+ total tests.~~ **FIXED:** Updated test counts to 5,034 total (4,232 unit, 501 acceptance, 145 contracts, 122 integration, 34 benchmarks) across 4 files: `nfr.md` (NFR-2.1 acceptance breakdown, NFR-3.1 total + breakdown, Success Metrics target + actual), `overview.md` (Technology Stack line), `testing.md` (intro summary, category table, directory tree annotations), `prd.md` (Success Metrics target, Risks test count). Also updated `nfr.md` NFR-6.1 page count from 59 to 100+ and `prd.md` NFR-6.1 from 59 pages to 100+. (2026-04-09)
 - [ ] **D4.3** — Stale BCBS output floor references in docstrings: `comparison.py:18`, `bundles.py:489`, `ui/marimo/comparison_app.py:14-15` say "50% (2027) to 72.5% (2032+)". Code uses correct PRA schedule. (Cross-ref P4.33)
 - [ ] **D4.4** — Stale column count in `reporting/corep/templates.py` docstring: says "24/22 columns", actual 27/27. (Cross-ref P4.28)
 - [ ] **D4.5** — `model_permissions` not mentioned in `architecture.md` spec. (Cross-ref P4.10)
-- [ ] **D4.6** — Type checker inconsistency: docs disagree with CLAUDE.md (`mypy` vs `ty`). (Cross-ref P4.9)
+- [x] **D4.6** — ~~Type checker inconsistency: docs disagree with CLAUDE.md (`mypy` vs `ty`).~~ **FIXED:** Updated `mypy` → `ty` in 5 files: `development/index.md` (Type Checking command), `getting-started/installation.md` (dev extras description + Development Dependencies table), `specifications/overview.md` (Technology Stack table), `plans/prd.md` (Technology Stack table). `changelog.md` historical migration entry ("Replace mypy with ty") left as-is. `documentation-conventions.md` `mkdocstrings` references left as-is (valid plugin name). (2026-04-09)
 
 ### Article Reference Corrections
 
@@ -256,6 +256,9 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D4.13** — Subordinated LGDS columns added to credit-risk-mitigation.md LGDS table. Part of D3.10 fix. (2026-04-09)
 - [x] **D4.24** — CRR CCF table in `crr.md` replaced: fabricated 7-row Art. 111(1)(a)-(g) table (which conflated MR 50% and MLR 20% into a single "Undrawn credit facilities: 20%" row) replaced with correct 5-row CRR Annex I structure (FR/FRC/MR/MLR/LR). Added maturity distinction admonition and cross-references to CCF spec and key-differences.md. PDF verified: CRR Annex I pages 434-436. Also resolves D4.34. (2026-04-09)
 - [x] **D4.34** — Same as D4.24. Fixed as part of D4.24. (2026-04-09)
+- [x] **D4.1** — Stale version numbers updated to 0.1.54 across `prd.md`, `specifications/overview.md`, `specifications/milestones.md`. `overview.md` was already correct. (2026-04-09)
+- [x] **D4.2** — Stale test counts updated to 5,034 total (4,232 unit, 501 acceptance, 145 contracts, 122 integration, 34 benchmarks) across `nfr.md`, `overview.md`, `testing.md`, `prd.md`. Page counts updated from 59 to 100+ in `nfr.md` and `prd.md`. (2026-04-09)
+- [x] **D4.6** — Type checker references updated from `mypy` to `ty` in 5 files: `development/index.md`, `installation.md`, `specifications/overview.md`, `prd.md`. (2026-04-09)
 
 ---
 

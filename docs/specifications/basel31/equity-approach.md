@@ -3,7 +3,7 @@
 Basel 3.1 equity treatment: new SA risk weight regime (250%/400%), removal of IRB equity
 approaches, transitional phase-in schedule, and CIU treatment.
 
-**Regulatory Reference:** PRA PS1/26 Art. 132–133, Art. 147A(1)(a), Rules 4.1–4.8
+**Regulatory Reference:** PRA PS1/26 Art. 132–133, Art. 147A(1)(a), Rules 4.1–4.10
 **Test Group:** B31-L
 
 ---
@@ -14,7 +14,7 @@ approaches, transitional phase-in schedule, and CIU treatment.
 |----|-------------|----------|--------|
 | FR-9.1 | SA equity risk weights by sub-category (Art. 133) | P0 | Done |
 | FR-9.2 | IRB equity approaches removed (Art. 147A(1)(a)) | P0 | Done |
-| FR-9.3 | Transitional phase-in schedule (Rules 4.1–4.3, 2027–2030) | P0 | Done |
+| FR-9.3 | Transitional phase-in schedule (Rules 4.1–4.10, 2027–2030) | P0 | Done |
 | FR-9.4 | CIU fallback treatment (Art. 132(2)) | P0 | Done |
 | FR-9.5 | CIU mandate-based treatment (Art. 132(4)) | P0 | Done |
 | FR-9.6 | CIU look-through treatment (Art. 132a) | P0 | Done |
@@ -100,16 +100,20 @@ Under CRR, the calculator returns `IRB_SIMPLE` if any exposure class has F-IRB o
 
 ---
 
-## Transitional Phase-In (Rules 4.1–4.3)
+## Transitional Phase-In (Rules 4.1–4.10)
 
-The full Basel 3.1 equity weights (250%/400%) are phased in over 4 years:
+The full Basel 3.1 equity weights (250%/400%) are phased in over 4 years (2027–2030).
+The transitional has distinct pathways depending on whether the firm had IRB equity
+permission at 31 December 2026.
 
-| Year | Standard RW Floor | Higher-Risk RW Floor | Rule |
-|------|-------------------|---------------------|------|
-| 2027 | **160%** | **220%** | Rule 4.1(a) |
-| 2028 | **190%** | **280%** | Rule 4.1(b) |
-| 2029 | **220%** | **340%** | Rule 4.1(c) |
-| 2030+ | **250%** | **400%** | Fully phased |
+### Phase-In Schedule (Rules 4.2–4.3)
+
+| Year | Standard RW Floor (Rule 4.2) | Higher-Risk RW Floor (Rule 4.3) |
+|------|------------------------------|--------------------------------|
+| 2027 | **160%** | **220%** |
+| 2028 | **190%** | **280%** |
+| 2029 | **220%** | **340%** |
+| 2030+ | **250%** | **400%** |
 
 The transitional works as a **floor**:
 
@@ -126,16 +130,58 @@ The following equity sub-categories are **excluded** from the transitional floor
 (their weights apply directly without a phase-in floor):
 
 - **Central bank** (0%) — already below the floor, exclusion is moot
-- **Government-supported** (100%) — legislative programme holdings
-- **Subordinated debt** (150%) — already has a fixed rate
+- **Government-supported** (100%) — legislative programme holdings (Art. 133(6))
+- **Subordinated debt** (150%) — fixed rate (Art. 133(5))
 - **CIU look-through** — weight derives from underlying assets, not Art. 133
 - **CIU mandate-based** — weight derives from fund mandate, not Art. 133
 
-### Scope Restriction (Rules 4.2–4.3)
+### SA Transitional (Rules 4.1–4.3) — Firms Without IRB Permission
 
-Rules 4.2–4.3 (SA transitional) apply only to firms **without** IRB equity permission at
-31 December 2026. Firms with prior IRB equity permission use Rules 4.4–4.6 (IRB transitional)
-instead, which may produce different phase-in weights.
+Rule 4.1 restricts Rules 4.2–4.3 to firms that **did not** have permission to use the
+IRB Approach (Art. 143 of CRR) on 31 December 2026. These firms apply the phase-in
+schedule above directly to all equity exposures.
+
+### IRB Transitional (Rules 4.4–4.6) — Firms With IRB Permission
+
+Rule 4.4 scopes Rules 4.5–4.6 to firms that **had** IRB permission on 31 December 2026.
+These firms bifurcate their equity portfolio per Rule 4.5:
+
+1. **SA equities** (Rule 4.5(1)): Equity exposures that were on the Standardised Approach
+   (Art. 148 or Art. 150 of CRR) at 31 Dec 2026 use the same phase-in schedule as
+   Rules 4.2/4.3 above.
+2. **IRB equities** (Rules 4.5(2) + 4.6): Equity exposures that were on the IRB Approach
+   (Art. 143 of CRR) at 31 Dec 2026 use the **higher of**:
+     - the risk weight from the firm's legacy IRB methodology (Art. 155 of CRR, as in
+       force on 31 Dec 2026), and
+     - the transitional SA risk weight from Rules 4.2 or 4.3.
+
+This "higher of" test provides a floor-based transition — IRB firms cannot produce risk
+weights below the transitional SA schedule, but retain their legacy IRB weights where
+those are higher.
+
+### CIU Transitional (Rules 4.7–4.8)
+
+During the 3-year transition period (2027–2029), Rules 4.7–4.8 apply to firms with IRB
+permission at 31 December 2026. For CIU equity underlyings that were subject to the
+simple risk weight approach (Art. 155(2) of CRR, as in force before 1 Jan 2027), the
+firm assigns the **higher of**:
+
+- the old simple risk weight (CRR Art. 155(2)), and
+- the transitional SA equity weight from Rules 4.2/4.3.
+
+This applies when using look-through (Art. 132A(1) / Art. 152(4)) or mandate-based
+(Art. 132A(2) / Art. 152(5)) approaches.
+
+### Opt-Out (Rules 4.9–4.10)
+
+Instead of Rules 4.5–4.6 and 4.8, a firm may elect to apply:
+
+- full steady-state Art. 133 weights immediately (250%/400%) for direct equity, and
+- standard CIU treatment (Art. 132A / Art. 152) without the simple risk weight floor.
+
+This election is **irrevocable** and requires prior PRA notification (Rule 4.10).
+The opt-out covers both direct equity and CIU underlyings — a firm cannot opt out of
+one while retaining the other.
 
 ---
 

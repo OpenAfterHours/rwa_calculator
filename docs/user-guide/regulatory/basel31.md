@@ -373,6 +373,15 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
 | 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
 
+!!! warning "Transitional Scope: IRB vs Non-IRB Firms"
+    The phase-in schedule above (Rules 4.2/4.3) applies directly only to firms **without**
+    IRB equity permission at 31 December 2026. Firms with prior IRB permission follow
+    Rules 4.4–4.6, which bifurcate the equity portfolio: SA equities use the schedule above,
+    while legacy IRB equities use the **higher of** the old IRB risk weight and the
+    transitional SA schedule. An irrevocable opt-out to full steady-state weights is
+    available (Rules 4.9–4.10). See [Key Differences — Equity](../../framework-comparison/key-differences.md#equity-exposures)
+    for full details including the CIU transitional (Rules 4.7–4.8).
+
 Under CRR, standard equities receive 100%, with some categories at 250% or 400%.
 The phase-in allows firms to gradually adjust to the higher capital requirements.
 

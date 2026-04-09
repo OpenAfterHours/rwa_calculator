@@ -137,33 +137,70 @@ firms to use look-through or mandate-based approaches.
     code constants are in `crr_equity_rw.py` (`CIU: 1.50`) and `b31_equity_rw.py`
     (`CIU: 2.50`). This should be corrected to 12.50 (1,250%) for both frameworks.
 
-## Equity Transitional Schedule (PRA Rules 4.1-4.3)
+## Equity Transitional Schedule (PRA Rules 4.1–4.10)
 
-PRA PS1/26 provides a transitional phase-in for the increased equity risk weights:
+PRA PS1/26 provides a transitional phase-in for the increased equity risk weights
+from 2027 to 2030. The transitional has two distinct pathways depending on whether
+the firm had IRB permission at 31 December 2026.
 
-### Standard Equity (Listed) — Rule 4.1
+### SA Transitional (Rules 4.1–4.3) — Firms Without IRB Permission
+
+Rule 4.1 restricts Rules 4.2–4.3 to firms that **did not** have IRB permission under
+Art. 143 of CRR on 31 December 2026.
+
+**Standard equity (Rule 4.2 — modifies Art. 133(3)):**
 
 | Period | Risk Weight |
 |--------|-------------|
-| 2027 (Year 1) | 160% |
-| 2028 (Year 2) | 190% |
-| 2029 (Year 3) | 220% |
+| 2027 | 160% |
+| 2028 | 190% |
+| 2029 | 220% |
 | 2030+ (Steady state) | 250% |
 
-### Higher Risk Equity (Unlisted/PE) — Rule 4.2
+**Higher-risk equity (Rule 4.3 — modifies Art. 133(4)):**
 
 | Period | Risk Weight |
 |--------|-------------|
-| 2027 (Year 1) | 220% |
-| 2028 (Year 2) | 280% |
-| 2029 (Year 3) | 340% |
+| 2027 | 220% |
+| 2028 | 280% |
+| 2029 | 340% |
 | 2030+ (Steady state) | 400% |
 
-### Scope and Conditions (Rule 4.3)
+### IRB Transitional (Rules 4.4–4.6) — Firms With IRB Permission
 
-- The transitional is **time-period-based**, not vintage-based — all equity exposures receive the transitional weight applicable to the reporting period, regardless of when they were acquired
-- Year 1 = 2027, Year 2 = 2028, Year 3 = 2029, steady state from 2030
-- The transitional schedule does not apply to legislative equity (always 100%) or subordinated debt (always 150%)
+Rule 4.4 scopes Rules 4.5–4.6 to firms that **had** IRB permission on 31 December 2026.
+These firms bifurcate their equity portfolio per Rule 4.5:
+
+- **SA equities** (Rule 4.5(1)): Equity exposures on the Standardised Approach
+  (Art. 148/150) at 31 Dec 2026 use the same phase-in schedule as Rules 4.2/4.3 above.
+- **IRB equities** (Rules 4.5(2) + 4.6): Equity exposures on IRB at 31 Dec 2026 use the
+  **higher of**:
+    - the risk weight from the firm's legacy IRB methodology (Art. 155, as in force on
+      31 Dec 2026), and
+    - the transitional SA risk weight from Rules 4.2/4.3.
+
+### CIU Transitional (Rules 4.7–4.8)
+
+During the 3-year transition period (2027–2029), Rules 4.7–4.8 apply to firms with IRB
+permission at 31 December 2026. CIU equity underlyings that were subject to the simple
+risk weight approach (Art. 155(2)) use the **higher of** the old simple risk weight and
+the transitional SA equity weight from Rules 4.2/4.3.
+
+### Opt-Out (Rules 4.9–4.10)
+
+Firms may elect to skip the transitional and apply full Basel 3.1 steady-state weights
+(Art. 133: 250%/400%) immediately. This election is **irrevocable** and requires prior PRA
+notification. The opt-out covers both direct equity (Rules 4.5–4.6) and CIU underlyings
+(Rule 4.8).
+
+!!! note "Transitional Scope"
+    The transitional is **time-period-based**, not vintage-based — all equity exposures
+    receive the transitional weight applicable to the reporting period, regardless of
+    when they were acquired. The schedule does not apply to legislative equity (100%,
+    Art. 133(6)) or subordinated debt (150%, Art. 133(5)).
+
+See the [Basel 3.1 Equity Approach Specification](../basel31/equity-approach.md#transitional-phase-in-rules-4110)
+for detailed requirements and acceptance test scenarios.
 
 ## Key Scenarios
 

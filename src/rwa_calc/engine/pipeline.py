@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -230,13 +229,32 @@ class PipelineOrchestrator:
             # Validate input data values
             self._validate_input_data(data)
 
-            # IRB mode requires model_permissions data; without it, fall back to SA
+            # IRB mode without model_permissions → org-wide IRBPermissions drive
+            # routing. The classifier's _build_orgwide_permission_exprs path
+            # handles this correctly using internal_pd eligibility. We surface a
+            # pipeline-level error so the user can see that per-model gating is
+            # off. Crucially, we must NOT call dataclasses.replace on
+            # permission_mode — that rebuilds the config and re-runs
+            # CalculationConfig.__post_init__, which derives irb_permissions to
+            # sa_only() and silently wipes the user's declared IRB routing.
             if config.permission_mode == PermissionMode.IRB and data.model_permissions is None:
                 logger.warning(
                     "IRB permission mode selected but no model_permissions data provided. "
-                    "All exposures will fall back to Standardised Approach."
+                    "Using org-wide IRB permissions from config; per-model gating disabled."
                 )
-                config = dataclasses.replace(config, permission_mode=PermissionMode.STANDARDISED)
+                self._errors.append(
+                    PipelineError(
+                        stage="pipeline",
+                        error_type="missing_model_permissions",
+                        message=(
+                            "IRB permission mode selected but no model_permissions "
+                            "data was provided. Org-wide IRBPermissions from config "
+                            "will be used for approach routing; per-model gating is "
+                            "DISABLED. Supply a model_permissions table to enable "
+                            "per-model control."
+                        ),
+                    )
+                )
 
             # Stage 2: Resolve hierarchies
             resolved = self._run_hierarchy_resolver(data, config)

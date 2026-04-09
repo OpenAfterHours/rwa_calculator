@@ -66,6 +66,25 @@ class TestCalculationConfigPermissionMode:
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         assert config.permission_mode == PermissionMode.STANDARDISED
 
+    def test_irb_mode_preserves_full_irb_after_pipeline_init(self) -> None:
+        """Regression guard for the pipeline.py downgrade bug.
+
+        Prior to the fix, the pipeline called
+        ``dataclasses.replace(config, permission_mode=STANDARDISED)`` when
+        ``model_permissions`` was missing, which re-ran ``__post_init__`` and
+        silently wiped ``irb_permissions`` to ``sa_only()``. This test pins
+        the invariant: constructing a CRR IRB config always yields the full
+        IRB permission map, so the classifier's org-wide permission path
+        correctly routes corporate exposures to FIRB/AIRB.
+        """
+        config = CalculationConfig.crr(
+            reporting_date=date(2024, 12, 31),
+            permission_mode=PermissionMode.IRB,
+        )
+        assert config.permission_mode == PermissionMode.IRB
+        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.FIRB)
+        assert config.irb_permissions.is_permitted(ExposureClass.CORPORATE, ApproachType.AIRB)
+
 
 # =============================================================================
 # CreditRiskCalc._create_config Tests

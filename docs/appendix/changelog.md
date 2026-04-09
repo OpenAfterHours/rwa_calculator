@@ -5,6 +5,14 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.181] — 2026-04-09
+
+### Fixed
+- **Classifier**: Exposures with internal ratings no longer silently route to Standardised Approach when `permission_mode="irb"` is set on `CreditRiskCalc`. Two independent bugs are addressed:
+  - **Pipeline downgrade (Bug #1)**: `PipelineOrchestrator.run_with_data` used `dataclasses.replace(config, permission_mode=STANDARDISED)` when `model_permissions` was absent, which re-ran `CalculationConfig.__post_init__` and wiped `irb_permissions` to `sa_only()`. The pipeline now preserves the user's org-wide IRB permissions and emits a `missing_model_permissions` pipeline error explaining that per-model gating is disabled.
+  - **Silent classifier join failure (Bug #2)**: `ExposureClassifier._resolve_model_permissions` joined `exposure.model_id` LEFT against `model_permissions.model_id`. Null or unmatched `model_id` values produced no match and silently routed to SA with no diagnostic. The classifier now tags each IRB-eligible miss with one of three causes (`null_model_id`, `unmatched_model_id`, `filter_rejected`) and emits a rolled-up `CLS006` (`ERROR_MODEL_PERMISSION_UNMATCHED`) classification warning per cause with targeted remediation guidance.
+- **Tests**: Added `TestModelPermissionsDiagnostics` (4 integration tests) and `TestPipelineIRBWithoutModelPermissions` (1 integration test) in `tests/integration/test_model_permissions_pipeline.py`, plus a regression guard `test_irb_mode_preserves_full_irb_after_pipeline_init` in `tests/unit/test_irb_approach_selection.py`.
+
 ## [0.1.180] — 2026-04-09
 
 ### Fixed

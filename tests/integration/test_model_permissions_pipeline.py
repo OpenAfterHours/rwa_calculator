@@ -25,11 +25,13 @@ import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.errors import ERROR_MODEL_PERMISSION_UNMATCHED
 from rwa_calc.data.schemas import RATINGS_SCHEMA
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -217,6 +219,13 @@ class TestBasicModelResolution:
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row.height >= 1
         assert loan_row["approach"][0] == ApproachType.SA.value
+
+        # SA is the correct result for STANDARDISED config — no spurious CLS006.
+        resolved = hierarchy_resolver.resolve(bundle, crr_config)
+        classified = classifier.classify(resolved, crr_config)
+        assert not any(
+            e.code == ERROR_MODEL_PERMISSION_UNMATCHED for e in classified.classification_errors
+        )
 
     def test_model_permission_overrides_org_wide_irb(
         self, hierarchy_resolver, classifier, crm_processor, crr_firb_config
@@ -796,3 +805,276 @@ class TestModelPermissionsMinimalSchema:
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row.height >= 1
         assert loan_row["approach"][0] == ApproachType.FIRB.value
+
+
+# =============================================================================
+# Diagnostic warnings: silent SA fallback made visible (4 tests)
+# =============================================================================
+
+
+class TestModelPermissionsDiagnostics:
+    """Bug #2 coverage: silent SA fallback now emits CLS006 warnings.
+
+    When ``model_permissions`` is provided but an IRB-eligible exposure
+    (internal_pd non-null) fails to match a permission row, the classifier
+    must surface a targeted ``classification_warning`` explaining the cause
+    so the user can remediate — instead of silently routing to SA.
+    """
+
+    def test_null_model_id_emits_diagnostic(self, hierarchy_resolver, classifier, crr_firb_config):
+        """Internal rating with model_id=None → SA + CLS006 'no model_id' warning."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
+                loans=[make_loan(lgd=0.30)],
+                facilities=[make_facility(lgd=0.30)],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_X",
+                        exposure_class="corporate",
+                        approach="advanced_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id=None,
+                )
+            ],
+        )
+
+        resolved = hierarchy_resolver.resolve(bundle, crr_firb_config)
+        classified = classifier.classify(resolved, crr_firb_config)
+
+        df = classified.all_exposures.collect()
+        loan_row = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_row.height >= 1
+        assert loan_row["approach"][0] == ApproachType.SA.value
+
+        cls006_warnings = [
+            e
+            for e in classified.classification_errors
+            if e.code == ERROR_MODEL_PERMISSION_UNMATCHED
+        ]
+        assert len(cls006_warnings) == 1
+        assert "no model_id" in cls006_warnings[0].message
+
+    def test_unmatched_model_id_emits_diagnostic(
+        self, hierarchy_resolver, classifier, crr_firb_config
+    ):
+        """Rating model_id not in permissions table → SA + CLS006 'does not appear'."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
+                loans=[make_loan()],
+                facilities=[make_facility()],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_A",
+                        exposure_class="corporate",
+                        approach="foundation_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_B",
+                )
+            ],
+        )
+
+        resolved = hierarchy_resolver.resolve(bundle, crr_firb_config)
+        classified = classifier.classify(resolved, crr_firb_config)
+
+        df = classified.all_exposures.collect()
+        loan_row = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_row["approach"][0] == ApproachType.SA.value
+
+        cls006_warnings = [
+            e
+            for e in classified.classification_errors
+            if e.code == ERROR_MODEL_PERMISSION_UNMATCHED
+        ]
+        assert len(cls006_warnings) == 1
+        assert "does not appear" in cls006_warnings[0].message
+
+    def test_filter_rejected_emits_diagnostic(
+        self, hierarchy_resolver, classifier, crr_firb_config
+    ):
+        """model_id matches but country filter rejects → SA + CLS006 'filtered out'."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                        country_code="DE",
+                    )
+                ],
+                loans=[make_loan()],
+                facilities=[make_facility()],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_A",
+                        exposure_class="corporate",
+                        approach="foundation_irb",
+                        country_codes="GB",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_A",
+                )
+            ],
+        )
+
+        resolved = hierarchy_resolver.resolve(bundle, crr_firb_config)
+        classified = classifier.classify(resolved, crr_firb_config)
+
+        df = classified.all_exposures.collect()
+        loan_row = df.filter(pl.col("exposure_type") == "loan")
+        assert loan_row["approach"][0] == ApproachType.SA.value
+
+        cls006_warnings = [
+            e
+            for e in classified.classification_errors
+            if e.code == ERROR_MODEL_PERMISSION_UNMATCHED
+        ]
+        assert len(cls006_warnings) == 1
+        assert "filtered out" in cls006_warnings[0].message
+
+    def test_no_diagnostic_when_successfully_routed(
+        self, hierarchy_resolver, classifier, crr_firb_config
+    ):
+        """Happy path: exposure routes to IRB → no CLS006 warnings emitted."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
+                loans=[make_loan(lgd=0.30)],
+                facilities=[make_facility(lgd=0.30)],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_AIRB",
+                        exposure_class="corporate",
+                        approach="advanced_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_AIRB",
+                )
+            ],
+        )
+
+        resolved = hierarchy_resolver.resolve(bundle, crr_firb_config)
+        classified = classifier.classify(resolved, crr_firb_config)
+
+        cls006_warnings = [
+            e
+            for e in classified.classification_errors
+            if e.code == ERROR_MODEL_PERMISSION_UNMATCHED
+        ]
+        assert len(cls006_warnings) == 0
+
+
+# =============================================================================
+# Pipeline-level: IRB without model_permissions preserves routing (1 test)
+# =============================================================================
+
+
+class TestPipelineIRBWithoutModelPermissions:
+    """Bug #1 coverage: IRB mode without a model_permissions file no longer
+    wipes org-wide IRB permissions.
+
+    Before the fix, ``PipelineOrchestrator.run_with_data`` called
+    ``dataclasses.replace(config, permission_mode=STANDARDISED)`` which
+    re-ran ``__post_init__`` and derived ``irb_permissions = sa_only()``,
+    silently forcing every exposure to SA. After the fix, the org-wide
+    IRBPermissions defined by ``CalculationConfig.crr(... IRB)`` still
+    drive routing via the classifier's ``_build_orgwide_permission_exprs``
+    path, and a pipeline-level error is emitted so the user can see that
+    per-model gating is disabled.
+    """
+
+    def test_irb_mode_without_permissions_file_retains_irb_routing(
+        self,
+        hierarchy_resolver,
+        classifier,
+        crm_processor,
+        sa_calculator,
+        irb_calculator,
+        slotting_calculator,
+        equity_calculator,
+        crr_firb_config,
+    ):
+        """Full pipeline: IRB mode + no model_permissions → exposure still routes to IRB."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                    )
+                ],
+                loans=[make_loan()],
+                facilities=[make_facility()],
+                # No model_permissions — the omission that triggers Bug #1.
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id=None,
+                )
+            ],
+        )
+
+        pipeline = PipelineOrchestrator(
+            hierarchy_resolver=hierarchy_resolver,
+            classifier=classifier,
+            crm_processor=crm_processor,
+            sa_calculator=sa_calculator,
+            irb_calculator=irb_calculator,
+            slotting_calculator=slotting_calculator,
+            equity_calculator=equity_calculator,
+        )
+        result = pipeline.run_with_data(bundle, crr_firb_config)
+
+        # Loan routes to IRB via org-wide IRB permissions (corporate + internal_pd).
+        # CRR full_irb permits both FIRB and AIRB for corporate; AIRB wins by
+        # priority in _determine_approach_and_finalize.
+        all_results = result.results.collect()
+        loan_row = all_results.filter(pl.col("exposure_reference") == "LN001")
+        assert loan_row.height >= 1
+        assert loan_row["approach"][0] in (
+            ApproachType.FIRB.value,
+            ApproachType.AIRB.value,
+        )
+
+        # Pipeline emits an error explaining that per-model gating is disabled.
+        assert any("model_permissions" in str(e) for e in result.errors)

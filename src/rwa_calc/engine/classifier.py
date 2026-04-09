@@ -41,6 +41,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.errors import (
+    ERROR_MODEL_PERMISSION_UNMATCHED,
     ERROR_QRRE_COLUMNS_MISSING,
     ERROR_RETAIL_POOL_MGMT_MISSING,
     CalculationError,
@@ -269,6 +270,23 @@ class ExposureClassifier:
             classified = self._resolve_model_permissions(
                 classified, model_permissions, schema_names
             )
+            # Diagnostic roll-up: count IRB-eligible exposures (internal_pd
+            # non-null) that failed to receive a model permission match,
+            # grouped by cause. One cheap .collect() over a narrow projection
+            # (3-element group_by on a String column). Surfaces CLS006 warnings
+            # so users can see WHY exposures silently routed to SA.
+            diagnostic_counts = (
+                classified.filter(pl.col("internal_pd").is_not_null())
+                .filter(pl.col("_model_permission_diagnostic").is_not_null())
+                .group_by("_model_permission_diagnostic")
+                .agg(pl.len().alias("n"))
+                .collect()
+            )
+            for row in diagnostic_counts.iter_rows(named=True):
+                classification_errors.append(
+                    _build_model_permission_warning(row["_model_permission_diagnostic"], row["n"])
+                )
+            classified = classified.drop("_model_permission_diagnostic")
 
         # Step 5: Approach assignment + finalization (1 .with_columns)
         classified = self._determine_approach_and_finalize(
@@ -764,6 +782,17 @@ class ExposureClassifier:
             how="left",
         )
 
+        # Track whether the join produced any matching permission row for this
+        # exposure (before filters are applied). Used downstream to distinguish
+        # "model_id did not match any permission row" from "model_id matched
+        # but filters rejected every row", so the diagnostic column can point
+        # the user at the right remediation. Note: Polars drops the right
+        # join key (mp_model_id) when left_on != right_on, so we probe via
+        # mp_exposure_class which stays in the joined frame.
+        joined = joined.with_columns(
+            pl.col("mp_exposure_class").is_not_null().alias("_mp_row_joined")
+        )
+
         # Apply filters: exposure_class match, geography, book code exclusion
         # A permission row is valid when:
         # 1. exposure_class matches
@@ -804,6 +833,29 @@ class ExposureClassifier:
             .max()
             .over("exposure_reference")
             .alias("model_slotting_permitted"),
+            pl.col("_mp_row_joined").max().over("exposure_reference").alias("_mp_joined_any"),
+        )
+
+        # Diagnostic column: tag WHY a row did not get an IRB permission match.
+        # Three causes with distinct remediations:
+        #   null_model_id       → rating.model_id is null (fix ratings table)
+        #   unmatched_model_id  → model_id absent from model_permissions (stale ref)
+        #   filter_rejected     → matched but filtered by class/geo/book scope
+        # Null when the exposure DID get a match (happy path).
+        has_any_match = (
+            pl.col("model_airb_permitted")
+            | pl.col("model_firb_permitted")
+            | pl.col("model_slotting_permitted")
+        )
+        result = result.with_columns(
+            pl.when(has_any_match)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(pl.col("model_id").is_null())
+            .then(pl.lit("null_model_id"))
+            .when(~pl.col("_mp_joined_any"))
+            .then(pl.lit("unmatched_model_id"))
+            .otherwise(pl.lit("filter_rejected"))
+            .alias("_model_permission_diagnostic")
         )
 
         # Drop the join columns and keep only one row per exposure
@@ -816,6 +868,8 @@ class ExposureClassifier:
                 "_airb_match",
                 "_firb_match",
                 "_slotting_match",
+                "_mp_row_joined",
+                "_mp_joined_any",
             )
         ).unique(subset=["exposure_reference"], keep="first")
 
@@ -1208,3 +1262,42 @@ class ExposureClassifier:
                 ).alias("classification_reason"),
             ]
         )
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+
+def _build_model_permission_warning(cause: str, n: int) -> CalculationError:
+    """Build a CLS006 classification warning for a model permission miss.
+
+    Three distinct causes, each with a specific remediation:
+    - ``null_model_id``: ratings table lacks model_id → fix the ratings input
+    - ``unmatched_model_id``: stale reference → fix the model_permissions table
+    - ``filter_rejected``: scope mismatch → check exposure_class / country_codes
+      / excluded_book_codes filters on the permission row
+    """
+    messages = {
+        "null_model_id": (
+            f"{n} exposure(s) with internal ratings were routed to Standardised "
+            f"Approach because their rating has no model_id. Check the ratings "
+            f"table (model_id column) and rating inheritance."
+        ),
+        "unmatched_model_id": (
+            f"{n} exposure(s) with internal ratings were routed to Standardised "
+            f"Approach because their model_id does not appear in the "
+            f"model_permissions table. Check for stale model references."
+        ),
+        "filter_rejected": (
+            f"{n} exposure(s) with internal ratings were routed to Standardised "
+            f"Approach because all matching model_permissions rows were filtered "
+            f"out by exposure_class / country_codes / excluded_book_codes. "
+            f"Check permission scope."
+        ),
+    }
+    return classification_warning(
+        code=ERROR_MODEL_PERMISSION_UNMATCHED,
+        message=messages[cause],
+        regulatory_reference="PRA PS1/26 / CRR Art. 143",
+    )

@@ -175,6 +175,12 @@ flowchart LR
     | 0200 | Exposure value | Final |
     | 0210 | Of which: arising from CCR | Final |
     | 0211 | Of which: CCR excl. CCP | Final |
+
+    !!! warning "Null Columns — CCR Out of Scope"
+        Columns **0210** and **0211** are always null. Counterparty credit risk (SFT, derivatives,
+        cross-product netting) is outside the current scope of the calculator. CCR exposures would
+        be separately reported in OF 34.07 (see [Missing Templates](../specifications/output-reporting.md#status)).
+
     | 0215 | RWEA pre supporting factors | RWEA |
     | 0216 | (-) SME supporting factor adjustment | RWEA |
     | 0217 | (-) Infrastructure supporting factor adjustment | RWEA |
@@ -209,6 +215,10 @@ flowchart LR
     | 0200 | Exposure value | Final | |
     | 0210 | Of which: arising from CCR | Final | |
     | 0211 | Of which: CCR excl. CCP | Final | |
+
+    !!! warning "Null Columns — CCR Out of Scope"
+        Columns **0210** and **0211** are always null (same as CRR). See CRR tab for details.
+
     | ~~0215~~ | ~~RWEA pre supporting factors~~ | | **Removed** |
     | ~~0216~~ | ~~(-) SME supporting factor adjustment~~ | | **Removed** |
     | ~~0217~~ | ~~(-) Infrastructure supporting factor adjustment~~ | | **Removed** |
@@ -273,6 +283,12 @@ flowchart TD
     | 0110 | Derivatives & Long Settlement Transactions netting sets |
     | 0120 | &emsp;of which: centrally cleared through a QCCP |
     | 0130 | From Contractual Cross Product netting sets |
+
+    !!! warning "Null Rows — CCR Out of Scope"
+        Rows **0090–0130** (SFT netting sets, derivatives and long settlement transactions,
+        cross-product netting, and their QCCP sub-rows) are always null. Counterparty credit risk
+        exposure data (netting sets, QCCP clearing flags) is not produced by the current pipeline.
+        Only rows 0070 (on-BS) and 0080 (off-BS) are populated.
 
     **Section 3 — Breakdown by Risk Weights**
 
@@ -347,7 +363,7 @@ flowchart TD
 
     **Section 2 — Breakdown by Exposure Types**
 
-    Identical to CRR (rows 0070-0130).
+    Identical to CRR (rows 0070-0130). Rows 0090–0130 are null (CCR out of scope — see CRR tab).
 
     **Section 3 — Breakdown by Risk Weights**
 
@@ -464,6 +480,13 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0120 | &emsp;Of which: off balance sheet | Exposure Value |
     | 0130 | &emsp;Of which: arising from CCR | Exposure Value |
     | 0140 | &emsp;Of which: large financial sector entities | Exposure Value |
+
+    !!! warning "Null Columns — CCR and Off-BS Breakdown"
+        Column **0130** ("Of which: arising from CCR") is always null — counterparty credit risk
+        is outside the calculator's scope. Column **0120** ("Of which: off balance sheet" under
+        Exposure Value) is also null (implementation Phase 2B). Column **0030** ("Of which: large
+        financial sector entities") is null (Phase 2F).
+
     | 0150 | Guarantees (own LGD estimates) | CRM in LGD: Unfunded |
     | 0160 | Credit derivatives (own LGD estimates) | CRM in LGD: Unfunded |
     | 0170 | Other funded credit protection (own LGD estimates) | CRM in LGD: Funded |
@@ -512,6 +535,12 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | ==0125== | ==&emsp;Of which: defaulted== | ==Exposure Value== | ==**New**== |
     | 0130 | &emsp;Of which: arising from CCR | Exposure Value | |
     | 0140 | &emsp;Of which: large financial sector entities | Exposure Value | |
+
+    !!! warning "Null Columns — CCR and Off-BS Breakdown"
+        Columns **0120** (off-BS EAD), **0130** (CCR EAD), and **0030** (LFSE) are always null —
+        same as CRR. See CRR tab for details. Additionally, B31-only columns **0101–0104**
+        (slotting FCCM) and **0275–0276** (output floor SA-equivalent) are null (Phase 3A/2D).
+
     | 0150 | Guarantees | CRM in LGD: Unfunded | |
     | 0160 | Credit derivatives | CRM in LGD: Unfunded | |
     | 0170 | Other funded credit protection | CRM in LGD: Funded | |
@@ -574,6 +603,13 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0040 | SFT netting sets |
     | 0050 | Derivatives & Long Settlement Transactions netting sets |
     | 0060 | From Contractual Cross Product netting sets |
+
+    !!! warning "Null Rows — CCR Out of Scope"
+        Rows **0040–0060** (SFT netting sets, derivatives and long settlement transactions,
+        cross-product netting) are always null. Counterparty credit risk exposure data is not
+        produced by the current pipeline. Only rows 0020 (on-BS) and 0030 (off-BS) are populated.
+        CCR-arising IRB exposures would be separately reported in OF 34.07.
+
     | | **CALCULATION APPROACHES** |
     | 0070 | Exposures assigned to obligor grades or pools: Total |
     | 0080 | Specialised lending slotting approach: Total |
@@ -594,6 +630,12 @@ value, LGD, maturity, RWEA, and memorandum items (expected loss, provisions, obl
     | 0040 | SFT netting sets | |
     | 0050 | Derivatives & Long Settlement Transactions netting sets | |
     | 0060 | From Contractual Cross Product netting sets | |
+
+    !!! warning "Null Rows — CCR and CCF Buckets"
+        Rows **0040–0060** are null (CCR out of scope — see CRR tab). Additionally, rows
+        **0031–0035** (off-BS breakdown by CCF buckets) are null — CCF bucket data exists in the
+        pipeline but is not yet disaggregated for C 08.01 (available in C 07.00 only).
+
     | | **CALCULATION APPROACHES** | |
     | 0070 | Exposures assigned to obligor grades or pools: Total | |
     | 0080 | Specialised lending slotting approach: Total | |

@@ -403,7 +403,7 @@ class CRMProcessor:
         """
         Resolve provisions with multi-level beneficiary and drawn-first deduction.
 
-        Called before CCF (CRR Art. 111(2)).
+        Called before CCF (CRR Art. 111(1)(a)-(b)).
 
         Adds columns:
         - provision_allocated: Total provision matched to this exposure

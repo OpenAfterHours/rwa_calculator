@@ -54,6 +54,16 @@ Art. 92 para 5: transitional rates are permissive — firms may use 72.5% from d
 !!! warning "Impact"
     For exposures with significant IRB benefit (RWA_IRB < 72.5% × RWA_SA), this floor will increase capital requirements.
 
+The full regulatory formula (Art. 92(2A)) is `TREA = max{U-TREA; x × S-TREA + OF-ADJ}`, where
+OF-ADJ reconciles the different treatment of provisions under IRB and SA. The output floor also
+does **not** apply to all entities — Art. 92(2A)(b)–(d) exempts certain entity/basis combinations
+(e.g., non-ring-fenced institutions on sub-consolidated basis, international subsidiaries on
+consolidated basis). See the
+[Technical Reference](../../framework-comparison/technical-reference.md#output-floor-adjustment-of-adj)
+for the OF-ADJ component formula and
+[output floor spec](../../specifications/basel31/output-floor.md#entity-type-carve-outs) for the
+full applicability table.
+
 ### 3. Removal of Supporting Factors
 
 All CRR supporting factors are withdrawn:
@@ -71,11 +81,17 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 |----------------|--------------|-------------------|
 | Corporate | 0.03% | **0.05%** |
 | Large Corporate | 0.03% | **0.05%** |
-| Bank | 0.03% | **0.05%** |
+| Sovereign | 0.03% | **0.05%** |
+| Institution | 0.03% | **0.05%** |
 | Retail Mortgage | 0.03% | **0.10%** |
 | Retail QRRE (transactor) | 0.03% | **0.05%** |
 | Retail QRRE (revolver) | 0.03% | **0.10%** |
 | Retail Other | 0.03% | **0.05%** |
+
+!!! note "Sovereign and Institution PD Floors"
+    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
+    exposures to F-IRB only. PD floors for these classes (Art. 160(1)) remain relevant for any
+    grandfathered or transitional IRB treatment.
 
 ### 5. A-IRB LGD Floors
 
@@ -93,7 +109,7 @@ New minimum LGD values for Advanced IRB. Corporate and retail floors are defined
 | Secured - Other Physical | 15%* |
 
 !!! note "No senior/subordinated distinction"
-    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt.
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt. Unlike F-IRB supervisory LGD, A-IRB LGD floors do not distinguish FSE from non-FSE.
 
 **Retail (Art. 164(4)):**
 
@@ -105,18 +121,41 @@ New minimum LGD values for Advanced IRB. Corporate and retail floors are defined
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
-### 6. F-IRB Supervisory LGD Changes (CRE32)
+### 6. F-IRB Supervisory LGD Changes (Art. 161)
 
-Basel 3.1 recalibrates F-IRB supervisory LGD values:
+Basel 3.1 recalibrates F-IRB supervisory LGD values. Notably, senior unsecured LGD is now
+differentiated by whether the counterparty is a **financial sector entity (FSE)**:
 
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
-| Corporate/Institution (Senior) | 45% | **40%** |
+| Financial Sector Entity (Senior) | 45% | **45%** |
+| Other Corporate/Institution (Senior) | 45% | **40%** |
 | Corporate/Institution (Subordinated) | 75% | **75%** |
+| Covered Bonds | 11.25% | **11.25%** |
+| Senior purchased corporate receivables | 45% | **40%** |
+| Subordinated purchased corporate receivables | 100% | **100%** |
+| Dilution risk | 75% | **100%** |
 | Secured - Financial Collateral | 0% | **0%** |
 | Secured - Receivables | 35% | **20%** |
 | Secured - CRE/RRE | 35% | **20%** |
 | Secured - Other Physical | 40% | **25%** |
+
+!!! note "FSE Distinction — New in Basel 3.1"
+    Art. 161(1)(aa) reduces the senior unsecured LGD from 45% to 40% for non-FSE corporates
+    only. FSEs (banks, investment firms, insurance companies — Art. 4(1)(27)) retain 45% under
+    Art. 161(1)(a), reflecting higher observed loss severity. The `is_financial_sector_entity`
+    input flag drives this distinction. See the
+    [F-IRB specification](../../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
+    for full detail.
+
+!!! info "Covered Bond LGD — Value Unchanged"
+    The 11.25% covered bond LGD already exists in CRR Art. 161(1)(d) for bonds eligible under
+    Art. 129(4)/(5). Basel 3.1 restructures this into Art. 161(1B) with the same value.
+
+!!! info "Purchased Receivables and Dilution (Art. 161(1)(e)–(g))"
+    Art. 161(1)(e)/(f) apply where PD cannot be estimated for the purchased receivables pool.
+    Senior aligns with the non-FSE rate (45% → 40%); subordinated remains at 100%.
+    The dilution risk LGD increases from 75% to **100%** under Basel 3.1.
 
 ### 7. Revised SA Risk Weights
 
@@ -151,9 +190,32 @@ Standardised Approach risk weights are recalibrated:
     by the institution's own internal assessment (Art. 122(9)–(10)), not external ratings.
     For IRB output floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split or flat 100%.
 
+#### Short-Term Corporate ECAI (Art. 122(3), Table 6A)
+
+New in Basel 3.1 — corporate exposures with a specific short-term ECAI assessment use
+Table 6A instead of the long-term Table 6. CRR has no equivalent short-term corporate table.
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+!!! warning "Not Yet Implemented"
+    Short-term corporate ECAI (Table 6A) is not yet implemented. All corporate exposures
+    currently use the long-term CQS table (Table 6).
+
 #### Real Estate Exposures
 
-New risk weight approaches for real estate:
+New risk weight approaches for real estate. All preferential RE risk weights require the
+exposure to be a **regulatory real estate exposure** per Art. 124A — satisfying six
+qualifying criteria covering property condition, legal certainty, charge conditions,
+valuation (Art. 124D), borrower independence, and insurance monitoring. Exposures failing
+any criterion are "other real estate" under Art. 124J (150% if income-dependent, or
+counterparty / floor RW otherwise). See the
+[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+for full details.
 
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 
@@ -180,6 +242,28 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 | 90-100% | 75% |
 | > 100% | 105% |
 
+!!! info "Junior Charge Multiplier (Art. 124G(2))"
+    Where prior-ranking charges exist that the institution does not hold, the Table 6B
+    risk weight is multiplied by **1.25×** for LTV > 50% (capped at 105%).
+    Set `prior_charge_ltv` > 0 on the collateral record to trigger this treatment.
+    See [key-differences](../../framework-comparison/key-differences.md#residential-real-estate)
+    for the full CRR vs Basel 3.1 comparison.
+
+**Commercial Real Estate — General (Art. 124H):**
+
+For natural persons and SMEs, CRE uses **loan-splitting**: 60% RW on the secured portion
+(up to 55% of property value), counterparty RW on the residual (Art. 124H(1)–(2)).
+
+For all other counterparties (large corporates, institutions), no loan-splitting applies.
+Art. 124H(3) assigns a whole-loan risk weight:
+
+`RW = max(60%, min(counterparty_rw, income_producing_rw))`
+
+This ensures the weight is at least 60% but capped at the lower of the counterparty's unsecured
+weight and the income-producing table rate (Art. 124I). Set `cp_is_natural_person` and `is_sme`
+in the input data to route exposures correctly — if both are `False` (or absent), the Art. 124H(3)
+path applies by default.
+
 **Commercial Real Estate — Income-Producing (PRA Art. 124I):**
 
 | LTV | Income-Producing RW |
@@ -193,21 +277,53 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 
 **Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
 
-#### ADC Exposures (CRE20.85)
+**Other Real Estate (Art. 124J):** Exposures failing the Art. 124A qualifying criteria receive
+punitive treatment: 150% if income-dependent (Art. 124J(1)); counterparty RW if residential
+and non-income-dependent (Art. 124J(2)); or max(60%, counterparty RW) if commercial and
+non-income-dependent (Art. 124J(3)). Set `is_qualifying_re = False` to route to this treatment.
+See the [Art. 124J specification](../../specifications/basel31/sa-risk-weights.md#consequence-of-failing--other-real-estate-art-124j).
 
-Acquisition, Development and Construction exposures receive a **150%** risk weight (up from 100% under CRR).
+#### ADC Exposures (Art. 124K)
+
+Acquisition, Development and Construction (ADC) exposures — loans to corporates or SPEs
+financing land acquisition for development/construction, or financing RE
+development/construction — receive a default **150%** risk weight (Art. 124K(1)),
+up from 100% (standard corporate unrated) under CRR where Art. 128 was omitted.
+
+A reduced **100%** risk weight is available for **residential ADC only** where both:
+(a) the exposure has prudent underwriting standards; and (b) either legally binding
+pre-sale/pre-lease contracts with substantial forfeitable deposits cover a significant
+portion of total contracts, or the borrower has substantial equity at risk (Art. 124K(2)).
+Commercial ADC always receives 150%.
+
+Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
+overrides all LTV-based RE treatment. See the
+[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
+for full qualifying conditions.
 
 #### Retail Exposures
+
+**Classification threshold:** The retail aggregate exposure limit changes from **EUR 1m**
+(CRR Art. 123(c), FX-converted) to a fixed **GBP 880,000** (Art. 123(1)(b)(ii)). The QRRE
+individual limit changes from EUR 100k to **GBP 90,000** (Art. 147(5A)(c)). This eliminates
+FX volatility from retail classification boundaries.
 
 | Type | CRR | Basel 3.1 | Change |
 |------|-----|-----------|--------|
 | Regulatory Retail QRRE | 75% | 75% | — |
 | Regulatory Retail Transactor | 75% | **45%** | -30pp |
-| Payroll / Pension Loans | 75% | **35%** | -40pp |
+| Payroll / Pension Loans | 35% | 35% | Unchanged from CRR2 |
 | Retail Other | 75% | 75% | — |
 
 Transactor status requires full repayment of outstanding balance each billing cycle.
-Payroll/pension loans are a new category for loans repaid directly from salary or pension.
+Payroll/pension loans (35%) were introduced by CRR2 (Regulation (EU) 2019/876) — not new in
+Basel 3.1. The four qualifying conditions (unconditional salary/pension deduction, insurance,
+payments ≤ 20% of net income, maturity ≤ 10 years) are carried forward unchanged from CRR
+Art. 123 second subparagraph to PRA PS1/26 Art. 123(4).
+
+!!! warning "Code Divergence — CRR Path"
+    The CRR code path applies flat 75% to all retail exposures. The `is_payroll_loan` flag is
+    only checked in the Basel 3.1 branch. See [CRR SA Risk Weights spec](../../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
 
 #### Currency Mismatch Multiplier
 
@@ -223,9 +339,16 @@ output column is set to `True`. COREP memorandum row 0380 is populated from this
 #### Defaulted Exposures
 
 Defaulted exposures receive a risk weight based on provision coverage (PRA PS1/26 Art. 127 /
-CRE20.87-90). Where specific provisions are ≥20% of the unsecured exposure value, the risk weight
-is **100%**; otherwise **150%**. When eligible collateral is present, the secured portion retains the
-collateral-based risk weight and only the unsecured portion is subject to the provision test.
+CRE20.87-90). Where specific provisions are ≥20% of **the outstanding amount of the item or
+facility** (gross), the unsecured portion receives a risk weight of **100%**; otherwise **150%**.
+When eligible collateral is present, the secured portion retains the collateral-based risk weight
+and only the unsecured portion is subject to the provision test.
+
+!!! info "Denominator Difference from CRR"
+    CRR Art. 127(1) uses the **pre-provision unsecured** exposure value as denominator.
+    PRA PS1/26 Art. 127(1) uses the **gross outstanding amount** (the full facility). See
+    [Defaulted Exposures Specification](../../specifications/basel31/defaulted-exposures.md)
+    for details.
 
 !!! note "Basel 3.1 Exception"
     Non-income-dependent residential real estate defaulted exposures receive a flat 100% risk weight
@@ -239,10 +362,17 @@ Beyond PD and LGD floors, Basel 3.1 introduces:
 - CCF cannot be lower than SA values for comparable exposures
 - A-IRB CCFs must be at least **50% of the SA CCF** (CRE32.27)
 - Minimum 10% CCF for unconditionally cancellable facilities (vs 0% CRR)
+- UK residential mortgage commitments carved out at **50%** CCF (Art. 111 Table A1 Row 4(b)) — PRA-specific, not in BCBS (which would assign 40%). See [key differences](../../framework-comparison/key-differences.md#credit-conversion-factors)
 
-**Maturity:**
-- Effective maturity floor: 1 year
-- Cap remains: 5 years
+**Maturity (Art. 162):**
+
+- F-IRB fixed maturities (0.5yr repo / 2.5yr other) — **deleted**; all IRB firms must calculate M
+- Revolving exposures must use **max contractual termination date** (Art. 162(2A)(k))
+- Purchased receivables minimum M raised from 90 days to **1 year**
+- SME maturity simplification (Art. 162(4)) — **deleted**
+- Floor remains 1 year (general); cap remains 5 years
+
+See [Technical Reference](../../framework-comparison/technical-reference.md#irb-effective-maturity-art-162) for the full comparison table.
 
 ### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 
@@ -282,16 +412,23 @@ Enhanced requirements for unrated exposures:
 
 ### Institution Exposures
 
-External Credit Risk Assessment Approach (ECRA):
+External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
 
-| CQS | Risk Weight |
-|-----|-------------|
-| CQS 1 | 20% |
-| CQS 2 | 30% |
-| CQS 3 | 50% |
-| CQS 4 | 100% |
-| CQS 5 | 100% |
-| CQS 6 | 150% |
+| CQS | Risk Weight | Change from CRR |
+|-----|-------------|-----------------|
+| CQS 1 | 20% | — |
+| CQS 2 | **30%** | Reduced from 50% |
+| CQS 3 | 50% | — |
+| CQS 4 | 100% | — |
+| CQS 5 | 100% | — |
+| CQS 6 | 150% | — |
+
+!!! warning "Table 4A — Short-Term ECAI (Art. 120(2B))"
+    Institutions with a specific **short-term credit assessment** use Table 4A
+    (CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%) instead of the general
+    Table 4 short-term preferential weights (CQS 1-3 = 20%, CQS 4-5 = 50%). The
+    `has_short_term_ecai` schema field is not yet implemented — all short-term exposures
+    currently fall back to Table 4. See [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
 Standardised Credit Risk Assessment Approach (SCRA):
 
@@ -332,6 +469,15 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
 | 2028 | 190% | 280% |
 | 2029 | 220% | 340% |
 | 2030+ | 250% | 400% |
+
+!!! warning "Transitional Scope: IRB vs Non-IRB Firms"
+    The phase-in schedule above (Rules 4.2/4.3) applies directly only to firms **without**
+    IRB equity permission at 31 December 2026. Firms with prior IRB permission follow
+    Rules 4.4–4.6, which bifurcate the equity portfolio: SA equities use the schedule above,
+    while legacy IRB equities use the **higher of** the old IRB risk weight and the
+    transitional SA schedule. An irrevocable opt-out to full steady-state weights is
+    available (Rules 4.9–4.10). See [Key Differences — Equity](../../framework-comparison/key-differences.md#equity-exposures)
+    for full details including the CIU transitional (Rules 4.7–4.8).
 
 Under CRR, standard equities receive 100%, with some categories at 250% or 400%.
 The phase-in allows firms to gradually adjust to the higher capital requirements.
@@ -411,16 +557,26 @@ Basel 3.1 restructures CRM methods with clearer names and applicability:
 
 ## Specialised Lending
 
-Slotting remains available with updated risk weights:
+Slotting remains available with updated risk weights (PRA PS1/26 Art. 153(5) Table A).
+The table below shows the **default column** values (column B for Strong, column D for Good
+per Art. 153(5)(c)). Lower column A/C weights are available for exposures with < 2.5 years
+residual maturity (Art. 153(5)(d)) or enhanced underwriting criteria
+(Art. 153(5)(e)/(f)). See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all subgrade columns.
 
 | Category | Strong | Good | Satisfactory | Weak | Default |
 |----------|--------|------|--------------|------|---------|
-| Project Finance (Pre-Operational) | 80% | 100% | 120% | 350% | 0% (EL) |
-| Project Finance (Operational) | 70% | 90% | 115% | 250% | 0% (EL) |
+| Project Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | Object Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | Commodities Finance | 70% | 90% | 115% | 250% | 0% (EL) |
 | IPRE | 70% | 90% | 115% | 250% | 0% (EL) |
 | HVCRE | 95% | 120% | 140% | 250% | 0% (EL) |
+
+!!! warning "PRA Deviation from BCBS — No Pre-Operational PF Slotting Distinction"
+    BCBS CRE33.6 Table 6 defines separate elevated slotting weights for pre-operational
+    project finance (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). **PRA PS1/26
+    does not adopt this distinction** — all project finance uses the standard non-HVCRE
+    table regardless of operational status. The pre-operational / operational distinction
+    only applies under the SA approach (Art. 122B(2)(c)) shown below.
 
 ### SA Specialised Lending (Art. 122A-122B)
 

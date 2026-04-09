@@ -16,9 +16,14 @@ Institution exposures include:
 
 ## Risk Weights (SA)
 
-Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). UK deviation: CQS 2 receives 30% instead of the standard Basel 50%.
+Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 120 Table 3, CQS 2 receives **50%**. Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3) reduces CQS 2 to **30%**.
 
 Under CRR, unrated institutions receive **40%** via the sovereign-derived approach (Art. 121, Table 5). Under Basel 3.1, this is replaced by the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
+
+!!! warning "Code Divergence"
+    The code currently uses 30% for CRR CQS 2 (labelled "UK deviation"). PDF verification of UK
+    onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**. The 30% value is correct for Basel 3.1
+    ECRA only. See D1.30 in the docs implementation plan.
 
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 
@@ -33,20 +38,48 @@ F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03
 
 ## Short-Term Exposures
 
-Exposures with original maturity ≤ 3 months may receive preferential treatment:
+### Table 4 — General Short-Term Preferential (Art. 120(2))
 
-| CQS | Standard RW | Short-Term RW |
-|-----|-------------|---------------|
+Rated institution exposures with original maturity ≤ 3 months receive preferential
+treatment under Table 4. Trade finance exposures (movement of goods) with original
+maturity ≤ 6 months also qualify (Art. 120(2A)).
+
+| CQS | Standard RW (>3m) | Table 4 RW (≤3m) |
+|-----|-------------------|-------------------|
 | CQS 1 | 20% | 20% |
 | CQS 2 | 30% | 20% |
 | CQS 3 | 50% | 20% |
 | CQS 4-5 | 100% | 50% |
 | CQS 6 | 150% | 150% |
 
-**Eligibility:**
-- Original maturity ≤ 3 months
-- Funded in domestic currency
-- Cleared through domestic payments system
+### Table 4A — Short-Term ECAI Assessment (Art. 120(2B))
+
+Where an institution has a specific **short-term credit assessment** from a nominated
+ECAI (as opposed to a long-term rating applied to a short-term exposure), Table 4A
+applies:
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+!!! warning "Not Yet Implemented — Schema Gap"
+    The `has_short_term_ecai` schema field does not exist. The calculator cannot
+    distinguish Table 4A exposures (specific short-term ECAI) from Table 4 exposures
+    (long-term ECAI applied to short-term tenor). All short-term institution exposures
+    currently receive Table 4 weights, which **understates risk** for CQS 2 (20% applied
+    vs correct 50%) and CQS 3 (20% vs 100%). See D3.8 in the docs implementation plan
+    and [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
+### Art. 120(3) — Interaction Rules
+
+The interaction between Table 4 and Table 4A is governed by Art. 120(3):
+
+- **(a)** No short-term assessment → Table 4 applies
+- **(b)** Short-term assessment yields more favourable or equal RW → Table 4A for that exposure only; other short-term exposures still use Table 4
+- **(c)** Short-term assessment yields less favourable RW → Table 4 preferential treatment withdrawn; all unrated short-term claims against that obligor receive the Table 4A weight
 
 ## Interbank Exposures
 
@@ -119,10 +152,11 @@ Bonds issued by institutions as collateral:
 - Maturity: 6 months
 
 ```python
-# CQS 2 institution under CRR
-Risk_Weight = 30%  # UK deviation
+# CQS 2 institution under CRR (Art. 120 Table 3)
+Risk_Weight = 50%
 EAD = £25,000,000
-RWA = £25,000,000 × 30% = £7,500,000
+RWA = £25,000,000 × 50% = £12,500,000
+# Under Basel 3.1 ECRA: 30% → RWA = £7,500,000
 ```
 
 **Example 2: Unrated Bank (Basel 3.1)**

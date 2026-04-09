@@ -16,6 +16,20 @@
 - `CalculationConfig.crr()` — CRR (Basel 3.0) configuration with 1.06 scaling factor, SME supporting factors
 - `CalculationConfig.basel_3_1()` — Basel 3.1 configuration with 1.0 scaling factor, no SME factors, output floor
 
+## Key Scenarios
+
+!!! note "Test Coverage"
+    Configuration is validated implicitly through all acceptance test groups — every CRR and B31 scenario relies on `CalculationConfig.crr()` or `.basel_3_1()` factory methods. The scenario IDs below document key configuration behaviours.
+
+| Scenario ID | Description |
+|-------------|-------------|
+| CONFIG-1 | CRR factory — `CalculationConfig.crr()` sets scaling factor 1.06, enables SME supporting factors |
+| CONFIG-2 | Basel 3.1 factory — `CalculationConfig.basel_3_1()` sets scaling factor 1.0, enables output floor, disables supporting factors |
+| CONFIG-3 | Reporting date — drives transitional parameter selection (e.g., equity weights, output floor percentage) |
+| CONFIG-4 | PD/LGD floor configuration — floor values propagated to IRB calculators per framework |
+| CONFIG-5 | IRB permissions — per-exposure-class approach assignment (F-IRB, A-IRB, or SA fallback) |
+| CONFIG-6 | Target currency — FX conversion rate applied to all monetary thresholds and outputs |
+
 ## Outstanding Work
 
 None — all configuration requirements are complete.

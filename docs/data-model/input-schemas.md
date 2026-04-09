@@ -138,7 +138,7 @@ The classifier (`engine/classifier.py`) processes counterparties through these s
 
 1. **Entity Type Mapping**: Maps `entity_type` to both SA and IRB exposure classes
 2. **SME Classification**: Checks if `annual_revenue < EUR 50m` for corporates
-3. **Retail Threshold**: Aggregates exposures by lending group against EUR 1m threshold
+3. **Retail Threshold**: Aggregates exposures by lending group against retail threshold (EUR 1m CRR / GBP 880k Basel 3.1)
 4. **Default Identification**: Checks `default_status` for defaulted treatment
 5. **FI Scalar Determination**: Identifies large/unregulated FSEs for 1.25x correlation
 6. **Approach Assignment**: Assigns SA/F-IRB/A-IRB/Slotting based on IRB permissions
@@ -575,7 +575,7 @@ provisions = pl.DataFrame({
 | 5 | B+ to B- | B1 to B3 | 100% | 100% | 150% |
 | 6 | CCC+ and below | Caa1 and below | 150% | 150% | 150% |
 
-*UK deviation: CQS 2 institutions get 30% RW (not 50%)
+*CRR Art. 120 Table 3 assigns CQS 2 institutions 50%. Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3) reduces this to 30%.
 
 **Example:**
 
@@ -777,7 +777,7 @@ org_mapping = pl.DataFrame({
 | `parent_counterparty_reference` | `String` | Yes | Lending group lead reference |
 | `child_counterparty_reference` | `String` | Yes | Member counterparty reference |
 
-Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m / GBP 880k).
+Exposures are aggregated to the group level for retail eligibility (threshold: EUR 1m CRR Art. 123(c) / GBP 880k Basel 3.1 Art. 123(1)(b)(ii)).
 
 ---
 

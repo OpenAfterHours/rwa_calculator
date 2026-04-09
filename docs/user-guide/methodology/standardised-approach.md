@@ -52,7 +52,7 @@ Key points:
 - **Sovereign**: 0% (CQS 1) to 150% (CQS 6); UK Government always 0% in GBP
 - **Institution**: 20%-150% by CQS; Basel 3.1 introduces ECRA/SCRA for unrated
 - **Corporate**: 20%-150% by CQS; Basel 3.1 reduces CQS 3 from 100% to 75%
-- **Retail**: CRR flat 75%; Basel 3.1 differentiates (45% transactor, 35% payroll/pension)
+- **Retail**: CRR 75% (35% for payroll/pension since CRR2); Basel 3.1 adds 45% transactor sub-category
 - **Residential RE**: CRR flat 35%; Basel 3.1 uses LTV-based bands (20%-105%)
 - **Defaulted**: 100%-150% based on provision coverage
 - **Equity**: CRR 100%; Basel 3.1 250%/400%

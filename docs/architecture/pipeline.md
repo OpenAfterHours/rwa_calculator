@@ -110,6 +110,7 @@ File paths to data files.
 - `ratings`: External and internal ratings
 - `org_mapping`: Organization hierarchy
 - `lending_mapping`: Retail lending groups
+- `model_permissions`: Per-model IRB approach permissions (optional)
 
 ### Implementation
 
@@ -147,6 +148,7 @@ Resolve counterparty and facility hierarchies, inherit ratings, unify exposures,
 - `counterparty_lookup`: Enriched counterparties with hierarchy metadata and inherited ratings
 - `collateral`, `guarantees`, `provisions`: FX-converted CRM data
 - `lending_group_totals`: Aggregated group exposure for retail threshold testing
+- `model_permissions`: Per-model IRB approach permissions (passed through from `RawDataBundle`)
 - `hierarchy_errors`: Accumulated non-blocking errors
 
 ### Processing Steps
@@ -258,6 +260,22 @@ The classifier assigns exposure classes and calculation approaches. See [`classi
     7. **Corporate**: Non-financial corporates
     8. **Specialised Lending**: Project finance, object finance, etc.
 
+### Model Permissions Resolution
+
+After exposure class assignment, the classifier resolves per-model IRB approach permissions via `_resolve_model_permissions()`. This optional step uses the `model_permissions` table (loaded from `model_permissions.parquet`) to determine which IRB approaches each internal rating model is approved for, scoped by exposure class, geography, and book code.
+
+**Resolution logic:**
+
+1. Left-join exposures to `model_permissions` on `model_id`
+2. A permission row is valid when: `exposure_class` matches, geography passes (`country_codes` is null or `cp_country_code` is in the list), and the book code is not excluded
+3. Per-exposure boolean flags are computed: `model_airb_permitted`, `model_firb_permitted`, `model_slotting_permitted`
+4. These flags feed `_determine_approach_and_finalize()`, which applies Art. 147A hard constraints before model-level permissions
+
+Exposures without a `model_id` receive all permission flags as `False` and fall back to SA. When the `model_permissions` table is absent, the org-wide `IRBPermissions` configuration applies instead.
+
+!!! info "Art. 147A Hard Constraints Override Model Permissions"
+    Regulatory restrictions always take priority over model permissions. For example, institutions are limited to F-IRB (Art. 147A(1)(c)) even if a model has A-IRB approval, and equity exposures are SA-only (Art. 147A(1)(a)) regardless of any model permission. See the [Model Permissions Specification](../specifications/basel31/model-permissions.md) for the full restriction table and precedence rules.
+
 ??? example "Actual Implementation (classifier.py)"
     ```python
     --8<-- "src/rwa_calc/engine/classifier.py:195:244"
@@ -299,7 +317,7 @@ class CRMProcessor:
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
     ) -> CRMAdjustedBundle:
-        """Apply CRM in correct order (Art. 111(2) compliant).
+        """Apply CRM in correct order (Art. 111(1)(a)-(b) compliant).
 
         Returns CRMAdjustedBundle with exposures split by approach."""
 

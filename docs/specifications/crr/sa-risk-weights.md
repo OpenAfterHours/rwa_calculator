@@ -62,7 +62,7 @@ Two optional input fields support Art. 110A:
 | 6 | CCC+ and below | 150% |
 | Unrated | — | 100% |
 
-**Domestic currency**: Sovereign exposures denominated and funded in the domestic currency of that sovereign may receive **0%** risk weight (Art. 114(4)).
+**Domestic currency**: UK central government and Bank of England exposures denominated and funded in **sterling** receive **0%** risk weight (Art. 114(4)). Third-country sovereign exposures in their domestic currency may also receive 0% where the jurisdiction's supervisory regime is deemed equivalent (Art. 114(7) — applies to EU member states). The ECB receives 0% unconditionally (Art. 114(3)).
 
 ## RGLA Exposures (CRR Art. 115)
 
@@ -174,7 +174,7 @@ Other MDBs not on the 0% list use Table 2B:
 | Unrated | **50%** |
 
 !!! note "MDB Table Differs from Institution Table"
-    MDB Table 2B has CQS 2 = 30% (same as UK institutions) and unrated = **50%** (not 40% like UK institutions). Do not use the institution table for MDB lookups.
+    MDB Table 2B has CQS 2 = 30% and unrated = **50%** (institution Table 3 has CQS 2 = 50% and unrated = 40%). Do not use the institution table for MDB lookups. The MDB CQS 2 = 30% value requires verification against CRR Art. 117 — it may reflect the same misattribution as the institution "UK deviation" (see D1.30).
 
 ## International Organisations (CRR Art. 118)
 
@@ -188,20 +188,23 @@ The following international organisations receive a **0%** risk weight:
 
 ## Institution Exposures (CRR Art. 120-121)
 
-!!! note "UK Deviation"
-    CQS 2 institutions receive a 30% risk weight under the UK CRR, rather than the standard 50% under EU CRR.
+| CQS | Risk Weight |
+|-----|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 40% (Art. 121, sovereign-derived from CQS 2) |
 
-| CQS | Risk Weight (UK) | Risk Weight (EU Standard) |
-|-----|-------------------|--------------------------|
-| 1 | 20% | 20% |
-| 2 | **30%** | 50% |
-| 3 | 50% | 50% |
-| 4 | 100% | 100% |
-| 5 | 100% | 100% |
-| 6 | 150% | 150% |
-| Unrated | 40% | 100% |
-
-UK unrated institutions default to 40% (derived from sovereign CQS 2).
+!!! warning "Code Divergence — CQS 2"
+    The code (`INSTITUTION_RISK_WEIGHTS_UK`) uses **30%** for CRR CQS 2, labelled as a
+    "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 (legislation.gov.uk,
+    current version) confirms CQS 2 = **50%**. The 30% value matches the **Basel 3.1 ECRA**
+    table (PRA PS1/26 Art. 120 Table 3), not CRR. No PRA Rulebook instrument or supervisory
+    statement has been identified that reduces CRR CQS 2 to 30%. See D1.30 in the docs
+    implementation plan.
 
 ### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 
@@ -257,14 +260,34 @@ Art. 121(3).
 
 All qualifying retail exposures receive a flat **75%** risk weight.
 
+### Payroll / Pension Loans (CRR Art. 123, CRR2)
+
+Introduced by CRR2 (Regulation (EU) 2019/876, amendment F68), CRR Art. 123 second subparagraph
+assigns a **35%** risk weight to loans granted to pensioners or employees with permanent contracts
+against unconditional transfer of salary or pension, subject to four conditions:
+
+- **(a)** unconditional payroll/pension deduction authorisation to the credit institution;
+- **(b)** insurance covering death, inability to work, unemployment, or salary/pension reduction;
+- **(c)** aggregate loan payments ≤ 20% of net monthly salary/pension;
+- **(d)** original maturity ≤ 10 years.
+
+!!! warning "Code Divergence — CRR Path"
+    The CRR code path (`sa/calculator.py`) does not implement the 35% payroll/pension treatment.
+    All CRR retail exposures receive the flat 75% weight regardless of the `is_payroll_loan` flag.
+    The `B31_RETAIL_PAYROLL_LOAN_RW` constant and `is_payroll_loan` check exist only in the Basel 3.1
+    branch. This is a known code gap — the 35% treatment should also apply under CRR (since CRR2).
+
 ### Basel 3.1 Retail Sub-Treatments (Art. 123)
+
+Basel 3.1 restructures Art. 123 into numbered paragraphs and introduces new sub-categories.
+The payroll/pension 35% treatment is **carried forward unchanged** from CRR2 into Art. 123(4).
 
 | Sub-Treatment | Risk Weight | Condition | Reference |
 |---------------|-------------|-----------|-----------|
-| Regulatory retail | 75% | Meets all 4 qualifying criteria (Art. 123A) | Art. 123(1) |
-| QRRE transactors | 45% | Qualifying revolving, balance repaid monthly | Art. 123(2) (Basel 3.1) |
-| QRRE non-transactors | 75% | Qualifying revolving, non-transactor | Art. 123(2) |
-| Payroll / pension loans | 35% | Loans secured by assignment of borrower's payroll or pension income | Art. 123(3)(a-b) |
+| Regulatory retail (non-transactor) | 75% | Meets Art. 123A qualifying criteria, non-transactor | Art. 123(3)(b) |
+| QRRE transactors | 45% | Qualifying revolving (Art. 123(2)), balance repaid monthly | Art. 123(3)(a) |
+| QRRE non-transactors | 75% | Qualifying revolving (Art. 123(2)), non-transactor | Art. 123(3)(b) |
+| Payroll / pension loans | 35% | Carried forward from CRR2 — same 4 conditions (a)–(d) | Art. 123(4) |
 | Non-regulatory retail | 100% | Retail exposure that fails Art. 123A qualifying criteria | Art. 123(3)(c) |
 
 ## Covered Bond Exposures (CRR Art. 129)
@@ -443,7 +466,7 @@ Materially dependent on cash flows:
 
 ### Other Real Estate (Art. 124J)
 
-Non-regulatory real estate (doesn't meet Art. 124A requirements):
+Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)):
 
 | Type | Risk Weight |
 |------|-------------|
@@ -493,7 +516,7 @@ Non-regulatory real estate (doesn't meet Art. 124A requirements):
 
 ## Basel 3.1 Institution Exposures (CRE20.16-21)
 
-Rated institutions use ECRA (same CQS table as CRR, including UK CQS 2 = 30% deviation). Unrated institutions use SCRA:
+Rated institutions use ECRA (PRA PS1/26 Art. 120 Table 3). CQS 2 is reduced from CRR 50% to **30%** under Basel 3.1 ECRA. Unrated institutions use SCRA:
 
 | SCRA Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
 |------------|--------------------|--------------------|----------|
@@ -539,19 +562,46 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 
 | Condition | Risk Weight |
 |-----------|-------------|
-| Specific provisions ≥ 20% of (EAD + provision_deducted) | 100% |
-| Specific provisions < 20% | 150% |
+| Specific provisions ≥ 20% of the unsecured exposure value before provisions | 100% |
+| Specific provisions < 20% of the unsecured exposure value before provisions | 150% |
+
+!!! info "CRR Art. 127(1) Denominator"
+    The CRR denominator is: "the unsecured part of the exposure value if those specific
+    credit risk adjustments and deductions were not applied" — i.e., the pre-provision
+    unsecured exposure value. The code reconstructs this as `(ead + provision_deducted) ×
+    unsecured_pct`. The numerator includes both specific credit risk adjustments and
+    amounts deducted per Art. 36(1)(m).
+
+!!! note "CRR Art. 127(3)–(4)"
+    CRR also provides flat 100% for defaulted exposures fully and completely secured by
+    mortgages on residential property (Art. 127(3)) or commercial immovable property
+    (Art. 127(4)), regardless of provision level.
 
 ### Basel 3.1 Default Risk Weights (PRA PS1/26 Art. 127)
 
 | Condition | Risk Weight |
 |-----------|-------------|
-| Specific provisions ≥ **20%** of exposure value | 100% |
-| Specific provisions < **20%** | 150% |
-| RESI RE non-dependent (Art. 124F) in default | **100% (always)** — regardless of provision level |
+| Specific provisions ≥ **20%** of the outstanding amount of the item or facility | 100% |
+| Specific provisions < **20%** of the outstanding amount of the item or facility | 150% |
+| RESI RE non-dependent (Art. 127(1A)) in default | **100% (always)** — regardless of provision level |
 
-!!! warning "Threshold Difference from CRR"
-    The Basel 3.1 provision threshold for defaulted exposures is **20%** (same as CRR). Note that the threshold denominator changes: CRR uses `EAD + provision_deducted`, while Basel 3.1 uses `exposure value`.
+!!! warning "Denominator Difference from CRR"
+    Both CRR and Basel 3.1 use a **20%** provision threshold, but the **denominator differs**:
+
+    - **CRR Art. 127(1):** "the unsecured part of the exposure value if those specific
+      credit risk adjustments and deductions were not applied" — the **pre-provision
+      unsecured** exposure value
+    - **PRA PS1/26 Art. 127(1):** "the outstanding amount of the item or facility" — the
+      **gross outstanding** amount (not limited to the unsecured portion)
+
+    The PRA denominator is typically larger (includes the secured portion), making it
+    easier to reach the 20% threshold for a given level of provisioning.
+
+!!! warning "Code Divergence — B31 Path (D3.19)"
+    The Basel 3.1 code path uses `unsecured_ead` (post-provision unsecured exposure value)
+    as the denominator, not the "outstanding amount of the item or facility" specified by
+    PRA PS1/26 Art. 127(1). This underestimates the denominator for partially collateralised
+    exposures, making it harder to reach the 20% threshold than the regulation intends.
 
 ## Basel 3.1 SA Specialised Lending (Art. 122A-122B)
 
@@ -618,7 +668,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Subordinated debt** (CRE20.49): 150% flat, overrides all other treatments — Done
 - **Equity** (Art. 133): 250% standard, 400% higher risk, 150% subordinated — Done
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done
-- **Payroll/pension loans** (Art. 123): 35% — Done
+- **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (Basel 3.1 only; CRR code gap)
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
@@ -634,13 +684,13 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 | Scenario ID | Description | Expected RW |
 |-------------|-------------|-------------|
 | CRR-A1 | UK Sovereign CQS 1 | 0% |
-| CRR-A4 | UK Institution CQS 2 (UK deviation) | 30% |
+| CRR-A4 | Institution CQS 2 (Art. 120 Table 3) | 50% |
 | CRR-A | Corporate unrated | 100% |
 | CRR-A | Retail exposure | 75% |
 | CRR-A | Residential mortgage LTV 60% | 35% |
 | CRR-A | CRE with income cover, LTV 45% | 50% |
 | B31-A2 | Corporate CQS 2 (Basel 3.1) | 50% |
-| B31-A3 | UK Institution CQS 2 (Basel 3.1 ECRA) | 30% |
+| B31-A3 | Institution CQS 2 (Basel 3.1 ECRA, Art. 120 Table 3) | 30% |
 | B31-A8 | SME corporate (Basel 3.1) | 85% |
 
 ## Acceptance Tests

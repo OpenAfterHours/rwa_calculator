@@ -2,9 +2,19 @@
 
 Provision treatment, expected loss calculation, and EL vs provisions comparison.
 
-**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 158-159
+**Regulatory Reference:** CRR Articles 110, 111(1)(a)-(b), 159; PRA Rulebook (CRR Firms) Art. 158
 
 **Test Group:** CRR-G
+
+!!! warning "Art. 158 Omitted from UK CRR (SI 2021/1078)"
+    CRR Art. 158 (expected loss — treatment by exposure type) was **omitted** from UK retained
+    law on 1 January 2022 by The Capital Requirements Regulation (Amendment) Regulations 2021
+    (SI 2021/1078), reg. 6(3)(e). The expected loss calculation rules are now contained in the
+    PRA Rulebook (CRR Firms). Art. 159 (EL vs provisions comparison) **remains** in UK CRR as
+    substituted by Regulation (EU) 2019/630. PRA PS1/26 reinstates Art. 158 with modifications
+    — including new para 6A (EL monotonicity) — effective 1 January 2027. References to
+    "Art. 158" in this specification refer to the PRA Rulebook equivalent of the omitted CRR
+    provision. See also: [Basel 3.1 Provisions Spec](../basel31/provisions.md).
 
 ---
 
@@ -73,7 +83,12 @@ The `finalize_ead()` step does **not** subtract provisions again — they are al
 | `provision_deducted` | `Float64` | Total = `provision_on_drawn + provision_on_nominal` |
 | `provision_allocated` | `Float64` | Total provision matched to this exposure |
 
-## IRB Approach (CRR Art. 158-159)
+## IRB Approach (Art. 158-159)
+
+!!! info "Legal Basis"
+    Art. 158 references here cite the PRA Rulebook (CRR Firms) equivalent — the CRR
+    version was omitted by SI 2021/1078 (see header admonition). Art. 159 remains in
+    UK CRR.
 
 Under IRB, provisions are tracked (`provision_allocated`) but **not deducted** from EAD. The provision columns are set to zero:
 
@@ -147,14 +162,17 @@ Same as IRB: provisions are tracked but not deducted from EAD.
 
 ## Key Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-G | SA exposure with drawn-first provision deduction |
-| CRR-G | SA off-balance sheet: provision reduces nominal before CCF |
-| CRR-G | Multi-level beneficiary resolution (direct, facility, counterparty) |
-| CRR-G | IRB expected loss calculation (provisions not deducted) |
-| CRR-G | EL vs provisions: shortfall case |
-| CRR-G | EL vs provisions: excess case |
+| Scenario ID | Description | Key Validation |
+|-------------|-------------|----------------|
+| CRR-G1 | SA with specific provision — drawn-first deduction | Provision reduces drawn amount first, remainder reduces nominal before CCF (Art. 111(1)(a)-(b)). Net EAD reflects deduction. |
+| CRR-G2 | IRB EL shortfall — provisions < expected loss | EL shortfall = EL − provisions; 50/50 CET1/T2 deduction (Art. 36(1)(d), Art. 62(d)) |
+| CRR-G3 | IRB EL excess — provisions > expected loss | EL excess credited to T2, capped at 0.6% of IRB RWA (Art. 62(d)) |
+
+Additional spec scenarios validated through the above:
+
+- **SA OBS provision deduction**: Provision reduces nominal before CCF application (validated within G1 pipeline — drawn-first mechanics apply to OBS)
+- **Multi-level beneficiary resolution**: Direct, facility, and counterparty-level provisions resolved in priority order with pro-rata distribution (validated through G1 pipeline and unit tests)
+- **Art. 159(3) two-branch rule**: Non-defaulted shortfall and defaulted excess computed separately when conditions hold (validated through G2/G3 and dedicated unit tests)
 
 ## Acceptance Tests
 

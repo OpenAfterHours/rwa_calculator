@@ -5,6 +5,23 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.180] — 2026-04-09
+
+### Fixed
+- **Docs**: Replaced fabricated double-default formula in `crm.md` with correct CRR Art. 153(3) formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)` (D3.7). Added eligibility requirements (Art. 202/217), guarantor RW floor, and Basel 3.1 removal warning with cross-link to A-IRB spec.
+
+## [0.1.179] — 2026-04-09
+
+### Fixed
+- **Docs**: SA specialised lending waterfall position documented in `key-differences.md` (D2.20). Waterfall item 15 annotated with Art. 122–122B SA SL sub-classification cross-reference. New admonition added explaining SA SL sits within corporates (row 15, Art. 112(1)(g)), with IPRE excluded per Art. 122A(1) ("not a real estate exposure") — IPRE is caught at row 7 (real estate, Art. 124–124L) instead. SA SL section expanded with:
+  - Art. 122A(1) 4-part definition criteria (SPV structure, asset dependency, lender control, asset income repayment)
+  - Art. 122A(2) sub-type classification (OF, CF, PF)
+  - IPRE exclusion warning admonition with cross-reference to real estate section
+  - Art. 122B(1) rated SL fallthrough to corporate CQS table
+  - Art. 122B(2) unrated risk weight table with article references per row
+  - Art. 122B(3) operational phase definition (positive net cash-flow + declining LT debt)
+  - Art. 122B(4)–(5) high-quality PF criteria (8 structural conditions)
+
 ## [0.1.178] — 2026-04-08
 
 ### Fixed
@@ -307,8 +324,15 @@ CCP guarantors now receive the prescribed QCCP risk weight (2% proprietary / 4% 
 
 ### Added
 
-#### Article 114(4) EU domestic currency 0% risk weight for EU sovereigns
-EU member state central government and central bank exposures denominated in that member state's domestic currency now receive 0% risk weight regardless of CQS, per CRR Art. 114(4). Covers all 27 EU member states: eurozone members (EUR) and non-euro members in their national currencies (PLN, SEK, CZK, DKK, HUF, BGN, RON). EU domestic sovereign exposures are also forced to the Standardised Approach, preventing internal models from overriding the regulatory 0% treatment. Applies to both direct exposures and guarantor risk weight substitution (SA and IRB).
+#### ~~Article 114(4)~~ Article 114(7) EU domestic currency 0% risk weight for EU sovereigns
+
+!!! warning "Correction (D4.35)"
+    The original entry cited Art. 114(4). In the UK-onshored CRR, Art. 114(4)
+    covers only the UK central government and Bank of England in sterling.
+    EU member state domestic-currency treatment is provided by **Art. 114(7)**
+    (third-country reciprocity).
+
+EU member state central government and central bank exposures denominated in that member state's domestic currency now receive 0% risk weight regardless of CQS, per CRR Art. 114(7). Covers all 27 EU member states: eurozone members (EUR) and non-euro members in their national currencies (PLN, SEK, CZK, DKK, HUF, BGN, RON). EU domestic sovereign exposures are also forced to the Standardised Approach, preventing internal models from overriding the regulatory 0% treatment. Applies to both direct exposures and guarantor risk weight substitution (SA and IRB).
 
 - `is_ccp_client_cleared` field added to data generators
 
@@ -339,7 +363,7 @@ The `is_short_maturity` flag for CRR Art. 153(5) specialised lending was never c
 - Added CRR-E5 through CRR-E8 acceptance scenarios for short-maturity slotting
 
 #### UK govt guarantee exposure marked "not beneficial" for non-sovereign entity types
-Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(3) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
+Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g., `contains("SOVEREIGN")`), which only matched `sovereign` but not `central_bank`, `bank`, `company`, or `mdb`. These entity types produced `null` guarantor RW, causing beneficial guarantees to be incorrectly skipped. The lookup now uses `guarantor_exposure_class` (derived from the existing `ENTITY_TYPE_TO_SA_CLASS` mapping), ensuring all valid entity types resolve to the correct SA risk weight. Also adds Art. 114(4) domestic sovereign treatment: UK CGCB guarantors in GBP receive 0% RW regardless of CQS. *(Correction (D4.35): original entry cited Art. 114(3); Art. 114(3) is the ECB provision, Art. 114(4) is UK domestic currency.)* Both SA calculator and IRB namespace are fixed. CRM processor and namespace now propagate `guarantor_country_code` from counterparty data.
 
 ---
 
@@ -347,8 +371,13 @@ Guarantor risk weight lookup used regex matching on `guarantor_entity_type` (e.g
 
 ### Added
 
-#### Article 114(3) domestic currency 0% risk weight for UK sovereign
-UK central government and central bank exposures denominated in GBP now receive 0% risk weight regardless of CQS, per CRR Art. 114(3). Previously, 0% was only assigned via CQS 1 external rating lookup. The override applies in both CRR and Basel 3.1 SA risk weight chains. Foreign-currency UK sovereign exposures continue to use the standard CQS-based risk weight table.
+#### ~~Article 114(3)~~ Article 114(4) domestic currency 0% risk weight for UK sovereign
+
+!!! warning "Correction (D4.35)"
+    The original entry cited Art. 114(3). CRR Art. 114(3) is the **ECB** 0%
+    provision. The UK domestic currency provision is **Art. 114(4)**.
+
+UK central government and central bank exposures denominated in GBP now receive 0% risk weight regardless of CQS, per CRR Art. 114(4). Previously, 0% was only assigned via CQS 1 external rating lookup. The override applies in both CRR and Basel 3.1 SA risk weight chains. Foreign-currency UK sovereign exposures continue to use the standard CQS-based risk weight table.
 
 ---
 
@@ -653,8 +682,8 @@ GitHub Actions workflow with lint, typecheck, and test jobs.
 
 ### Added
 
-#### SA Provision Handling — Art. 111(2) Compliance
-Provisions are now resolved **before** CCF application using a drawn-first deduction approach, compliant with CRR Art. 111(2):
+#### SA Provision Handling — Art. 111(1)(a)-(b) Compliance
+Provisions are now resolved **before** CCF application using a drawn-first deduction approach, compliant with CRR Art. 111(1)(a)-(b):
 
 **Pipeline reorder:**
 ```

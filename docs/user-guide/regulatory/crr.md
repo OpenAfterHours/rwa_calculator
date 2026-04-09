@@ -99,7 +99,7 @@ CRR does not apply an output floor. IRB RWA can be significantly lower than SA e
 | CQS | Risk Weight |
 |-----|-------------|
 | CQS 1 | 20% |
-| CQS 2 | 30% (UK deviation from 50%) |
+| CQS 2 | 50% |
 | CQS 3 | 50% |
 | CQS 4 | 100% |
 | CQS 5 | 100% |
@@ -136,15 +136,28 @@ CRR does not apply an output floor. IRB RWA can be significantly lower than SA e
 
 ## Credit Conversion Factors (CCF)
 
-| Item Type | CCF | Reference |
-|-----------|-----|-----------|
-| Unconditionally cancellable commitments | 0% | Art. 111(1)(a) |
-| Short-term trade letters of credit | 20% | Art. 111(1)(b) |
-| Undrawn credit facilities | 20% | Art. 111(1)(c) |
-| Note issuance facilities | 50% | Art. 111(1)(d) |
-| Underwriting facilities | 50% | Art. 111(1)(e) |
-| Direct credit substitutes | 100% | Art. 111(1)(f) |
-| Acceptances | 100% | Art. 111(1)(g) |
+CRR Art. 111 assigns CCFs to off-balance sheet items based on the four risk categories
+defined in **Annex I**. The maturity of undrawn commitments determines whether they fall
+into medium risk (50%) or medium/low risk (20%).
+
+| Annex I Category | CCF | Key Items |
+|-----------------|-----|-----------|
+| Full Risk (FR) | 100% | Guarantees with credit-substitute character, credit derivatives, acceptances, irrevocable standby LCs (credit substitute) |
+| Full Risk — Commitments (FRC) | 100% | Certain-drawdown commitments: repos, factoring, forward deposits, outright forward purchases, partly-paid shares (Annex I para 2) |
+| Medium Risk (MR) | 50% | Undrawn credit facilities with original maturity **> 1 year**; NIFs; RUFs (Annex I para 3) |
+| Medium/Low Risk (MLR) | 20% | Undrawn credit facilities with original maturity **≤ 1 year** (not unconditionally cancellable); documentary credits; trade-related LCs; warranties; performance bonds (Annex I para 4) |
+| Low Risk (LR) | 0% | Unconditionally cancellable commitments (Annex I para 5) |
+
+!!! info "Maturity Distinction for Undrawn Commitments"
+    The same undrawn credit facility receives different CCFs depending on its original
+    maturity: **> 1 year → 50%** (MR), **≤ 1 year → 20%** (MLR),
+    **unconditionally cancellable → 0%** (LR). Basel 3.1 removes this maturity split,
+    replacing it with a flat 40% for all non-cancellable commitments
+    (see [key differences](../../framework-comparison/key-differences.md#credit-conversion-factors)).
+
+!!! tip "Full detail"
+    See the [CCF specification](../../specifications/crr/credit-conversion-factors.md)
+    for F-IRB CCFs (Art. 166), Basel 3.1 Table A1 comparison, and acceptance test scenarios.
 
 ## F-IRB Supervisory LGD
 
@@ -277,6 +290,8 @@ entirely. They are **not active** under current UK CRR:
 |---------|---------|--------|
 | Art. 128 | Items associated with particularly high risk (150%) | Omitted; re-introduced under Basel 3.1 (PRA PS1/26) |
 | Art. 132 | CIU treatment | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 152 | IRB treatment of CIU exposures | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 158 | Expected loss — treatment by exposure type | Omitted; EL rules moved to PRA Rulebook (CRR Part); reinstated with modifications in PS1/26 |
 
 !!! note
     Art. 128 exposures (e.g., speculative RE financing) should fall through to their
@@ -293,7 +308,7 @@ entirely. They are **not active** under current UK CRR:
 | IRB approach | Art. 142-191 |
 | Credit risk mitigation | Art. 192-241 |
 | SME supporting factor | Art. 501 |
-| CCFs | Art. 111 |
+| CCFs | Art. 111, Annex I |
 
 ## Next Steps
 

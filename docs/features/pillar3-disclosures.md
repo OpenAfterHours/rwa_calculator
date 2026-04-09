@@ -282,7 +282,7 @@ exposure class. Separate templates are disclosed for F-IRB and A-IRB exposures.
     | i | Exposure-weighted average maturity (years) | Per Art. 162, not disclosed for retail |
     | j | RWEAs | After supporting factors (Art. 501, 501a) |
     | k | RWEA density | Ratio: col j / col e |
-    | l | Expected loss amount | Per Art. 158 |
+    | l | Expected loss amount | Per Art. 158 (PRA Rulebook; CRR Art. 158 omitted by SI 2021/1078) |
     | m | Value adjustments and provisions | Specific + general credit risk adjustments |
 
 === "Basel 3.1 (UKB CR6)"
@@ -675,7 +675,7 @@ CRR only, equity exposures under the simple risk-weighted approach).
     | c | Risk weight | Fixed column — per Art. 153(5) for slotting, Art. 155(2) for equity |
     | d | Exposure value | Post CCF — sum of on-BS + off-BS post conversion |
     | e | RWEA | After supporting factors (Art. 501, 501a) for slotting; per Art. 155(2) for equity |
-    | f | Expected loss amount | Per Art. 158(6) for slotting, Art. 158(7) for equity |
+    | f | Expected loss amount | Per Art. 158(6) for slotting, Art. 158(7) for equity (PRA Rulebook; CRR Art. 158 omitted by SI 2021/1078) |
 
 === "Basel 3.1 (UKB CR10)"
 

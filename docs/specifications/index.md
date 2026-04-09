@@ -19,21 +19,32 @@ This section contains the formal specifications for the RWA Calculator. These sp
 | [Credit Conversion Factors](crr/credit-conversion-factors.md) | CCF for off-balance sheet items | CRR Art. 111, 166 |
 | [Credit Risk Mitigation](crr/credit-risk-mitigation.md) | Collateral haircuts, guarantees, and overcollateralisation | CRR Art. 192-241 |
 | [Slotting Approach](crr/slotting-approach.md) | Specialised lending categories | CRR Art. 147(8), 153(5) |
-| [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 158-159 |
+| [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 159; PRA Rulebook Art. 158 |
+| [Equity Approach](crr/equity-approach.md) | SA equity (Art. 133), IRB Simple (Art. 155), CIU treatment | CRR Art. 132-133, 155 |
 
 ### Basel 3.1 Framework (From January 2027)
 
-| Specification | Description | Regulatory Reference |
-|--------------|-------------|---------------------|
-| [Framework Differences](../framework-comparison/technical-reference.md) | Key changes from CRR including output floor, PD/LGD floors | PRA PS1/26 |
+| Specification | Description | Regulatory Reference | Test Group |
+|--------------|-------------|---------------------|------------|
+| [SA Risk Weights](basel31/sa-risk-weights.md) | ECRA/SCRA, corporate sub-categories, RE loan-splitting, SA specialised lending | Art. 112–134 | B31-A |
+| [Foundation IRB](basel31/firb-calculation.md) | Reduced senior LGD (40%), higher PD floor (0.05%), covered bond LGD, 1.06 removal | Art. 153–163 | B31-B |
+| [Advanced IRB](basel31/airb-calculation.md) | LGD floors, post-model adjustments, CCF floor, double default removal | Art. 153–154, 161, 164, 166D | B31-C |
+| [Credit Risk Mitigation](basel31/credit-risk-mitigation.md) | Revised 5-band haircuts, equity haircuts, IRB parameter substitution | Art. 191A–241 | B31-D, B31-D7 |
+| [Slotting Approach](basel31/slotting-approach.md) | Revised weights, maturity split removal, no pre-op PF distinction | Art. 147(8), 153(5) | B31-E |
+| [Output Floor](basel31/output-floor.md) | PRA 4-year transitional floor, OF-ADJ capital adjustment | Art. 92(2A)–(2D) | B31-F |
+| [Provisions](basel31/provisions.md) | EL with revised LGD, Art. 158(6A) monotonicity, shortfall/excess | Art. 158–159 | B31-G |
+| [Defaulted Exposures](basel31/defaulted-exposures.md) | Provision-coverage split (100%/150%), RESI RE exception, IRB defaulted | Art. 127, 153(1), 154(1) | B31-K |
+| [Equity Approach](basel31/equity-approach.md) | New SA equity regime (250%/400%), IRB removal, transitional, CIU | Art. 133, 147A, Rules 4.1–4.8 | B31-L |
+| [Model Permissions](basel31/model-permissions.md) | Art. 147A approach restrictions: FSE, large corporate, institution, equity | Art. 147A, 4(1)(146) | B31-M |
 
-See the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comprehensive comparison documentation.
+See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comparison documentation.
 
 ### Common (Framework-Agnostic)
 
 | Specification | Description |
 |--------------|-------------|
 | [Hierarchy & Classification](common/hierarchy-classification.md) | Counterparty hierarchy resolution and exposure classification |
+| [Stress Testing](common/stress-testing.md) | Pipeline integrity tests at 10K–100K scale across all framework/permission combinations |
 
 ### Project
 
@@ -55,7 +66,7 @@ See the [CRR vs Basel 3.1](../framework-comparison/index.md) section for compreh
 Covers risk weight determination for all SA exposure classes:
 
 - Sovereigns (CQS 1-6 and unrated)
-- Institutions (including UK 30% CQS 2 deviation)
+- Institutions (CQS-based per Art. 120)
 - Corporates (rated and unrated)
 - Retail (fixed 75%)
 - Residential mortgages (LTV-based split at 80%)
@@ -82,12 +93,9 @@ Covers A-IRB with internal estimates:
 ### Group D: Credit Risk Mitigation
 Covers CRM techniques:
 
-- Financial collateral haircuts (CRR Art. 224)
-- FX mismatch haircut (8%)
-- Overcollateralisation requirements (CRR Art. 230)
-- Guarantee substitution (CRR Art. 213-217)
-- Multi-level collateral allocation (exposure, facility, counterparty)
-- Maturity mismatch adjustment (CRR Art. 238)
+- Basic CRM (D1–D6): Financial collateral haircuts (Art. 224), FX mismatch (8%), overcollateralisation (Art. 230), guarantee substitution (Art. 213-217), multi-level collateral, maturity mismatch (Art. 238)
+- Advanced CRM (D7–D14, D9b): non-beneficial guarantees, sovereign guarantees, CDS restructuring exclusion/inclusion, gold/equity collateral, overcollateralisation floor, full CRM chain, mixed collateral types
+- Provision-CRM interaction (G4–G6): SA provision deduction (Art. 110), multiple provisions, provision + collateral combined waterfall
 
 ### Group E: Slotting
 Covers specialised lending:
@@ -122,12 +130,30 @@ Covers defaulted exposure treatment:
 - A-IRB defaulted (K=max(0, LGD−BEEL), CRR Art. 154(1)(i))
 - Defaulted with CRM adjustments
 
+### Group J: Equity
+Covers equity exposure treatment:
+
+- SA equity flat 100% (CRR Art. 133(2)) — listed, unlisted, PE/VC
+- IRB Simple risk weights (CRR Art. 155(2)) — exchange-traded 290%, PE diversified 190%, other 370%
+- CIU treatment — mandate-based, look-through, fallback (CRR Art. 132)
+- RWA arithmetic validation
+
 ### Basel 3.1 Groups
 Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:
 
 - B31-A through B31-H: Same structure as CRR groups with Basel 3.1 rule changes
-- B31-D7: Parameter substitution (guarantee-driven IRB→SA CCF/RW substitution)
+- B31-D7: Parameter substitution (IRB guarantor PD substitution, new in Basel 3.1)
 - B31-F: Output floor phase-in (60%–72.5%, 2027–2030)
+- B31-K: Defaulted exposures (provision-coverage split, RESI RE exception, IRB K=0)
+- B31-L: Equity approach (SA 250%/400%, IRB removal, transitional phase-in, CIU treatment)
+- B31-M: Model permissions (Art. 147A restrictions — FSE, large corporate, institution, equity routing)
+
+### Stress Testing Groups
+Pipeline integrity tests at scale (framework-agnostic):
+
+- STRESS-1 to STRESS-14: Row count preservation, column completeness, numerical stability, risk weight bounds, approach routing, exposure class coverage, output floor at scale, error accumulation, summary consistency, EAD consistency, determinism, framework comparison, large-scale 100K, reference uniqueness
+
+See the [Stress Testing Specification](common/stress-testing.md) for full scenario definitions.
 
 ### Comparison Groups
 Dual-framework comparison scenarios:
@@ -140,30 +166,36 @@ Dual-framework comparison scenarios:
 
 Each scenario is tagged with an identifier for traceability:
 
-| Prefix | Description |
-|--------|-------------|
-| `CRR-A` | CRR Standardised Approach |
-| `CRR-B` | CRR Foundation IRB |
-| `CRR-C` | CRR Advanced IRB |
-| `CRR-D` | CRR Credit Risk Mitigation |
-| `CRR-E` | CRR Slotting Approach |
-| `CRR-F` | CRR Supporting Factors |
-| `CRR-G` | CRR Provisions |
-| `CRR-H` | CRR Complex/Combined |
-| `CRR-I` | CRR Defaulted Exposures |
-| `B31-A` | Basel 3.1 Standardised Approach |
-| `B31-B` | Basel 3.1 Foundation IRB |
-| `B31-C` | Basel 3.1 Advanced IRB |
-| `B31-D` | Basel 3.1 Credit Risk Mitigation |
-| `B31-E` | Basel 3.1 Slotting Approach |
-| `B31-F` | Basel 3.1 Output Floor |
-| `B31-G` | Basel 3.1 Provisions |
-| `B31-H` | Basel 3.1 Complex/Combined |
-| `M3.1` | Dual-framework comparison |
-| `M3.2` | Capital impact analysis |
-| `M3.3` | Transitional floor modelling |
-| `HIER-` | Hierarchy scenarios |
-| `CLASS-` | Classification scenarios |
+| Prefix | Scenarios | Description |
+|--------|-----------|-------------|
+| `CRR-A` | A1–A9, A11 | CRR Standardised Approach |
+| `CRR-B` | B1–B7 | CRR Foundation IRB |
+| `CRR-C` | C1–C3 | CRR Advanced IRB |
+| `CRR-D` | D1–D14, D.CCF1–CCF4 | CRR Credit Risk Mitigation and CCFs |
+| `CRR-E` | E1–E8 | CRR Slotting Approach |
+| `CRR-F` | F1–F7 | CRR Supporting Factors |
+| `CRR-G` | G1–G3, G4–G6 | CRR Provisions (G4–G6 in CRM spec) |
+| `CRR-H` | H1, H3 | CRR Complex/Combined |
+| `CRR-I` | I1–I3 | CRR Defaulted Exposures |
+| `CRR-J` | J1–J20 | CRR Equity |
+| `B31-A` | A1–A11 | Basel 3.1 Standardised Approach |
+| `B31-B` | B1–B7 | Basel 3.1 Foundation IRB |
+| `B31-C` | C1–C3 | Basel 3.1 Advanced IRB |
+| `B31-D` | D1–D6, D7–D7e, D.CCF1–CCF8 | Basel 3.1 Credit Risk Mitigation and CCFs |
+| `B31-E` | E1–E4 | Basel 3.1 Slotting Approach |
+| `B31-F` | F1–F3 | Basel 3.1 Output Floor |
+| `B31-G` | G1–G3 | Basel 3.1 Provisions |
+| `B31-H` | H1, H3 | Basel 3.1 Complex/Combined |
+| `B31-K` | K1–K12 | Basel 3.1 Defaulted Exposures |
+| `B31-L` | L1–L23 | Basel 3.1 Equity Approach |
+| `B31-M` | M1–M12 | Basel 3.1 Model Permissions |
+| `M3.1` | — | Dual-framework comparison |
+| `M3.2` | — | Capital impact analysis |
+| `M3.3` | — | Transitional floor modelling |
+| `STRESS` | 1–14 | Pipeline stress tests (10K–100K scale) |
+| `HIER` | 1–6 | Hierarchy resolution scenarios |
+| `CLASS` | 1–8 | Classification scenarios |
+| `CONFIG` | 1–6 | Configuration scenarios |
 
 ## For Developers
 

@@ -51,7 +51,7 @@ The calculator provides several optional dependency groups:
 | Extra | Description |
 |-------|-------------|
 | `ui` | Interactive web UI via Marimo for exploration and testing |
-| `dev` | Development tools (pytest, mypy, zensical, etc.) |
+| `dev` | Development tools (pytest, ty, zensical, etc.) |
 | `all` | All optional dependencies combined |
 
 !!! tip "Recommended Installation"
@@ -151,7 +151,7 @@ pip install -e ".[dev]"
 | `pytest` | Testing framework |
 | `pytest-cov` | Test coverage reporting |
 | `ruff` | Linting and formatting |
-| `mypy` | Static type checking |
+| `ty` | Static type checking |
 | `zensical` | Documentation generation |
 | `mkdocstrings[python]` | API documentation |
 | `marimo` | Interactive notebooks |

@@ -4,7 +4,7 @@ Equity exposure treatment under SA and IRB, including CIU look-through and Basel
 
 **Regulatory Reference:** CRR Articles 132-133, 155; PRA PS1/26 Articles 132-133, 147A
 
-**Test Group:** CRR-E (partial)
+**Test Group:** CRR-J
 
 ---
 
@@ -137,47 +137,132 @@ firms to use look-through or mandate-based approaches.
     code constants are in `crr_equity_rw.py` (`CIU: 1.50`) and `b31_equity_rw.py`
     (`CIU: 2.50`). This should be corrected to 12.50 (1,250%) for both frameworks.
 
-## Equity Transitional Schedule (PRA Rules 4.1-4.3)
+## Equity Transitional Schedule (PRA Rules 4.1–4.10)
 
-PRA PS1/26 provides a transitional phase-in for the increased equity risk weights:
+PRA PS1/26 provides a transitional phase-in for the increased equity risk weights
+from 2027 to 2030. The transitional has two distinct pathways depending on whether
+the firm had IRB permission at 31 December 2026.
 
-### Standard Equity (Listed) — Rule 4.1
+### SA Transitional (Rules 4.1–4.3) — Firms Without IRB Permission
+
+Rule 4.1 restricts Rules 4.2–4.3 to firms that **did not** have IRB permission under
+Art. 143 of CRR on 31 December 2026.
+
+**Standard equity (Rule 4.2 — modifies Art. 133(3)):**
 
 | Period | Risk Weight |
 |--------|-------------|
-| 2027 (Year 1) | 160% |
-| 2028 (Year 2) | 190% |
-| 2029 (Year 3) | 220% |
+| 2027 | 160% |
+| 2028 | 190% |
+| 2029 | 220% |
 | 2030+ (Steady state) | 250% |
 
-### Higher Risk Equity (Unlisted/PE) — Rule 4.2
+**Higher-risk equity (Rule 4.3 — modifies Art. 133(4)):**
 
 | Period | Risk Weight |
 |--------|-------------|
-| 2027 (Year 1) | 220% |
-| 2028 (Year 2) | 280% |
-| 2029 (Year 3) | 340% |
+| 2027 | 220% |
+| 2028 | 280% |
+| 2029 | 340% |
 | 2030+ (Steady state) | 400% |
 
-### Scope and Conditions (Rule 4.3)
+### IRB Transitional (Rules 4.4–4.6) — Firms With IRB Permission
 
-- The transitional is **time-period-based**, not vintage-based — all equity exposures receive the transitional weight applicable to the reporting period, regardless of when they were acquired
-- Year 1 = 2027, Year 2 = 2028, Year 3 = 2029, steady state from 2030
-- The transitional schedule does not apply to legislative equity (always 100%) or subordinated debt (always 150%)
+Rule 4.4 scopes Rules 4.5–4.6 to firms that **had** IRB permission on 31 December 2026.
+These firms bifurcate their equity portfolio per Rule 4.5:
+
+- **SA equities** (Rule 4.5(1)): Equity exposures on the Standardised Approach
+  (Art. 148/150) at 31 Dec 2026 use the same phase-in schedule as Rules 4.2/4.3 above.
+- **IRB equities** (Rules 4.5(2) + 4.6): Equity exposures on IRB at 31 Dec 2026 use the
+  **higher of**:
+    - the risk weight from the firm's legacy IRB methodology (Art. 155, as in force on
+      31 Dec 2026), and
+    - the transitional SA risk weight from Rules 4.2/4.3.
+
+### CIU Transitional (Rules 4.7–4.8)
+
+During the 3-year transition period (2027–2029), Rules 4.7–4.8 apply to firms with IRB
+permission at 31 December 2026. CIU equity underlyings that were subject to the simple
+risk weight approach (Art. 155(2)) use the **higher of** the old simple risk weight and
+the transitional SA equity weight from Rules 4.2/4.3.
+
+### Opt-Out (Rules 4.9–4.10)
+
+Firms may elect to skip the transitional and apply full Basel 3.1 steady-state weights
+(Art. 133: 250%/400%) immediately. This election is **irrevocable** and requires prior PRA
+notification. The opt-out covers both direct equity (Rules 4.5–4.6) and CIU underlyings
+(Rule 4.8).
+
+!!! note "Transitional Scope"
+    The transitional is **time-period-based**, not vintage-based — all equity exposures
+    receive the transitional weight applicable to the reporting period, regardless of
+    when they were acquired. The schedule does not apply to legislative equity (100%,
+    Art. 133(6)) or subordinated debt (150%, Art. 133(5)).
+
+See the [Basel 3.1 Equity Approach Specification](../basel31/equity-approach.md#transitional-phase-in-rules-4110)
+for detailed requirements and acceptance test scenarios.
 
 ## Key Scenarios
 
-| Scenario ID | Description | Expected RW |
-|-------------|-------------|-------------|
-| CRR-E | Listed equity SA (CRR) | 100% |
-| CRR-E | Unlisted equity SA (CRR) | 100% |
-| CRR-E | PE / VC equity SA (CRR) | 100% |
-| CRR-E | Listed equity IRB Simple (CRR) | 290% |
-| B31-E | Listed equity SA (Basel 3.1) | 250% |
-| B31-E | Unlisted/higher-risk equity SA (Basel 3.1) | 400% |
-| B31-E | Legislative equity (Basel 3.1) | 100% |
-| B31-E | Subordinated debt (Basel 3.1) | 150% |
-| B31-E | Listed equity transitional Year 1 | 160% |
-| B31-E | CIU look-through | Varies |
-| CRR-E | CIU fallback (CRR) | 1,250% |
-| B31-E | CIU fallback (Basel 3.1) | 1,250% |
+### CRR SA Equity (Art. 133) — CRR-J1 to CRR-J9
+
+| Scenario ID | Description | Equity Type | EAD | Expected RW | Expected RWA |
+|-------------|-------------|-------------|-----|-------------|--------------|
+| CRR-J1 | Listed equity SA | `listed` | £500,000 | 100% | £500,000 |
+| CRR-J2 | Unlisted equity SA | `unlisted` | £300,000 | 100% | £300,000 |
+| CRR-J3 | Exchange-traded equity SA | `exchange_traded` | £200,000 | 100% | £200,000 |
+| CRR-J4 | Private equity SA | `private_equity` | £100,000 | 100% | £100,000 |
+| CRR-J5 | Government-supported equity SA | `government_supported` | £400,000 | 100% | £400,000 |
+| CRR-J6 | Speculative equity SA | `speculative` | £150,000 | 100% | £150,000 |
+| CRR-J7 | Central bank equity SA (sovereign treatment) | `central_bank` | £1,000,000 | 0% | £0 |
+| CRR-J8 | Subordinated debt SA | `subordinated_debt` | £250,000 | 100% | £250,000 |
+| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 150% | £900,000 |
+
+!!! warning "CRR-J9 Implementation Divergence"
+    The CIU fallback should be **1,250%** per Art. 132(2), but the calculator applies 150% (the Art. 133
+    equity weight). See D3.15 for the code bug. The test expects the current code behaviour (150%),
+    not the regulatory value (1,250%).
+
+### CRR IRB Simple Equity (Art. 155) — CRR-J10 to CRR-J14
+
+| Scenario ID | Description | Equity Type | Key Flags | EAD | Expected RW | Expected RWA |
+|-------------|-------------|-------------|-----------|-----|-------------|--------------|
+| CRR-J10 | Exchange-traded equity IRB Simple | `exchange_traded` | `is_exchange_traded=True` | £200,000 | 290% | £580,000 |
+| CRR-J11 | Diversified PE equity IRB Simple | `private_equity` | `is_diversified=True` | £100,000 | 190% | £190,000 |
+| CRR-J12 | Other (unlisted) equity IRB Simple | `unlisted` | — | £100,000 | 370% | £370,000 |
+| CRR-J13 | Central bank equity IRB Simple (sovereign treatment) | `central_bank` | — | £500,000 | 0% | £0 |
+| CRR-J14 | Government-supported equity IRB Simple | `government_supported` | `is_government_supported=True` | £300,000 | 190% | £570,000 |
+
+!!! note "CRR-J14 Government-Supported Mapping"
+    The calculator maps `government_supported` to Art. 155(2)(b) (diversified PE) at 190%.
+    Art. 155 has no "government-supported" category — only exchange-traded (a), PE diversified (b),
+    and all other (c). See D3.4 for the code mapping issue.
+
+### CIU Specific Tests — CRR-J15 to CRR-J17
+
+| Scenario ID | Description | CIU Approach | Key Parameters | EAD | Expected RW | Expected RWA |
+|-------------|-------------|--------------|----------------|-----|-------------|--------------|
+| CRR-J15 | CIU mandate-based SA (Art. 132A) | `mandate_based` | `ciu_mandate_rw=0.80` | £200,000 | 80% | £160,000 |
+| CRR-J16 | CIU mandate-based + third-party 1.2× multiplier | `mandate_based` | `ciu_mandate_rw=0.80`, `ciu_third_party_calc=True` | £200,000 | 96% | £192,000 |
+| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 150% | £150,000 |
+
+CRR-J16 calculation: the 1.2× third-party multiplier (Art. 132(4)) scales the mandate risk weight:
+`RW = 0.80 × 1.2 = 0.96 (96%)`.
+
+### RWA Arithmetic Verification — CRR-J18 to CRR-J20
+
+| Scenario ID | Description | Approach | EAD | Expected RW | Expected RWA |
+|-------------|-------------|----------|-----|-------------|--------------|
+| CRR-J18 | SA RWA arithmetic verification | SA | £1,234,567 | 100% | £1,234,567 |
+| CRR-J19 | IRB Simple RWA arithmetic verification | IRB Simple | £750,000 | 370% | £2,775,000 |
+| CRR-J20 | Zero EAD produces zero RWA | IRB Simple | £0 | 370% | £0 |
+
+### Basel 3.1 Equity Scenarios
+
+Basel 3.1 equity scenarios are documented in the dedicated [Basel 3.1 Equity Approach](../basel31/equity-approach.md) specification (test group B31-L).
+
+## Acceptance Tests
+
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| CRR-J: Equity | J1–J20 | 32 | 100% |

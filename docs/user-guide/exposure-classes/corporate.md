@@ -35,7 +35,9 @@ def is_sme(counterparty):
 
 Corporate risk weights range from 20% (CQS 1) to 150% (CQS 6), with 100% for unrated. Basel 3.1 reduces CQS 3 from 100% to 75%. PRA PS1/26 Art. 122(2) Table 6 retains CQS 5 at 150% (BCBS CRE20.42 reduced to 100%, but the PRA did not adopt this reduction). Basel 3.1 also introduces new sub-categories: investment grade (65%) and SME corporate (85%).
 
-> **Details:** See [Key Differences — Corporate](../../framework-comparison/key-differences.md#corporate) for the complete CRR vs Basel 3.1 comparison and new sub-categories.
+Basel 3.1 additionally introduces a **short-term corporate ECAI table** (Art. 122(3), Table 6A) for exposures with a specific short-term credit assessment: CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%. CRR has no equivalent short-term corporate table. This feature is not yet implemented in the calculator.
+
+> **Details:** See [Key Differences — Corporate](../../framework-comparison/key-differences.md#corporate) for the complete CRR vs Basel 3.1 comparison, new sub-categories, and Table 6A.
 
 ## IRB Treatment
 

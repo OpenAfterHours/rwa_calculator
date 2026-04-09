@@ -7,6 +7,9 @@ This glossary provides definitions for key terms used throughout the documentati
 ### A-IRB (Advanced Internal Ratings-Based)
 An IRB approach where the bank estimates PD, LGD, and EAD using internal models, subject to regulatory floors and approval.
 
+### ADC (Acquisition, Development, and Construction)
+An exposure to a corporate or SPE financing land acquisition for development and construction, or financing development and construction of residential or commercial real estate. ADC exposures are excluded from the regulatory real estate framework (Art. 124A) and receive standalone risk weights under Art. 124K: 150% standard, 100% for qualifying residential with pre-sales or substantial borrower equity at risk.
+
 ### Asset Correlation
 A measure of how closely the value of an asset moves with systematic risk factors. Higher correlation means more sensitivity to economic conditions.
 
@@ -163,6 +166,9 @@ Unsecured revolving credit to individuals (credit cards, overdrafts) meeting spe
 ### RGLA (Regional Government and Local Authority)
 Sub-national government entities with varying risk treatments.
 
+### Regulatory Real Estate Exposure
+A real estate exposure that meets all six qualifying criteria in PRA PS1/26 Art. 124A(1): (a) property condition, (b) legal certainty, (c) charge conditions, (d) Art. 124D valuation, (e) borrower independence, (f) insurance monitoring. Only regulatory RE exposures qualify for the preferential risk weights in Art. 124F–124I. Non-qualifying exposures are "other real estate" under Art. 124J. In the calculator, the `is_qualifying_re` Boolean input field controls this routing.
+
 ### Risk Type
 A classification for off-balance sheet exposures that determines the applicable CCF. Valid values: FR (full_risk, 100%), MR (medium_risk, 50%/75%), MLR (medium_low_risk, 20%/75%), LR (low_risk, 0%). See CRR Art. 111.
 
@@ -226,7 +232,7 @@ Losses above expected levels, covered by regulatory capital. UL = RWA × 8%.
 | **Corporate Correlation** | `0.12 x f(PD) + 0.24 x (1 - f(PD))` where `f(PD) = (1-e^(-50xPD))/(1-e^(-50))` | CRR Art. 153 |
 | **SME Adjustment** | `0.04 x (1 - (max(5,min(S,50)) - 5) / 45)` | CRR Art. 153 |
 | **Maturity Adjustment** | `(1 + (M-2.5) x b) / (1 - 1.5 x b)` where `b = (0.11852 - 0.05478 x ln(PD))^2` | CRR Art. 153 |
-| **Expected Loss** | `PD x LGD x EAD` | CRR Art. 158 |
+| **Expected Loss** | `PD x LGD x EAD` | PRA Rulebook Art. 158 (CRR Art. 158 omitted by SI 2021/1078) |
 | **EAD (off-BS)** | `Drawn + Undrawn x CCF` | CRR Art. 111, 166 |
 | **Effectively Secured** | `Adjusted Collateral Value / Overcollateralisation Ratio` | CRR Art. 230 |
 | **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 238 |

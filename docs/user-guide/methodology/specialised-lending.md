@@ -96,20 +96,39 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 
 ### Basel 3.1 Risk Weights
 
-Basel 3.1 replaces the maturity-based split with three distinct tables:
+Basel 3.1 restructures the CRR maturity-split tables into a single Table A with subgrade
+columns (A/B for Strong, C/D for Good). The tables below show the **default column**
+values (B/D per Art. 153(5)(c)). Firms may optionally use the lower A/C column values
+for exposures with < 2.5 years residual maturity (Art. 153(5)(d)) or enhanced underwriting
+(Art. 153(5)(e)/(f)). See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all columns.
 
-| Category | Standard (Operational) | PF Pre-Operational | HVCRE |
-|----------|----------------------|-------------------|-------|
-| Strong | 70% | **80%** | 95% |
-| Good | 90% | **100%** | 120% |
-| Satisfactory | 115% | **120%** | 140% |
-| Weak | 250% | **350%** | 250% |
-| Default | 0% | 0% | 0% |
+**Non-HVCRE (OF, CF, PF, IPRE):**
 
-!!! note "Basel 3.1 Project Finance Changes"
-    Pre-operational project finance receives higher risk weights under Basel 3.1,
-    reflecting the construction risk premium. Other non-HVCRE types use the same
-    standard weights as CRR (at the >= 2.5yr maturity level).
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 70% |
+| Good | 90% |
+| Satisfactory | 115% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+**HVCRE:**
+
+| Category | Risk Weight |
+|----------|-------------|
+| Strong | 95% |
+| Good | 120% |
+| Satisfactory | 140% |
+| Weak | 250% |
+| Default | 0% (EL) |
+
+!!! warning "PRA Deviation from BCBS — No Pre-Operational PF Table"
+    BCBS CRE33.6 Table 6 defines separate elevated slotting weights for pre-operational
+    project finance (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). **PRA PS1/26
+    does not adopt this distinction** — all project finance uses the standard non-HVCRE
+    Table A (Art. 153(5)) regardless of operational status. The pre-operational / operational
+    distinction only applies under the **SA approach** (Art. 122B(2)(c): 130% pre-op,
+    100% operational, 80% high-quality operational).
 
 ## Defaulted Exposures
 
@@ -231,26 +250,31 @@ rw = lookup_slotting_rw(category=SlottingCategory.STRONG, is_short_maturity=True
 Project is in construction or commissioning:
 - Construction risk present
 - Cash flows not yet established
-- Higher risk weights under Basel 3.1
+- Under PRA PS1/26 slotting, pre-operational PF uses the **same** risk weights as operational PF
+- Under SA (Art. 122B), pre-operational PF receives a higher weight (130% vs 100%)
 
 ### Operational Phase
 
 Project is generating cash flows:
 - Construction complete
 - Revenue stream established
-- Standard slotting weights apply
+- Standard slotting weights apply (identical to pre-operational under PRA)
 
-### Phase Transition
+### Phase Transition (SA Only)
+
+The pre-operational / operational distinction only affects risk weights under the **SA approach**
+(Art. 122B(2)(c)), not under IRB slotting:
 
 ```python
-# Basel 3.1 applies different weights for PF pre-operational
-if framework == "BASEL_3_1" and lending_type == "PROJECT_FINANCE":
+# Basel 3.1 SA applies different weights for PF by project phase
+if framework == "BASEL_3_1" and approach == "SA" and lending_type == "PROJECT_FINANCE":
     if phase == "pre_operational":
-        # Use higher pre-op weights
-        weights = {"strong": 0.80, "good": 1.00, "satisfactory": 1.20, "weak": 3.50}
+        rw = 1.30  # 130% (Art. 122B(2)(c))
+    elif phase == "high_quality_operational":
+        rw = 0.80  # 80% (Art. 122B(4))
     else:
-        # Use standard operational weights
-        weights = {"strong": 0.70, "good": 0.90, "satisfactory": 1.15, "weak": 2.50}
+        rw = 1.00  # 100% operational (Art. 122B(2)(c))
+# For IRB slotting, all PF uses standard non-HVCRE weights regardless of phase
 ```
 
 ## HVCRE Treatment

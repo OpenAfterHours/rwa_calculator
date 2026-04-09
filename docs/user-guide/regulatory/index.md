@@ -83,10 +83,10 @@ The UK has implemented certain deviations from Basel standards:
 
 ### Institution Risk Weights
 
-Under CRR, UK institutions apply a 30% risk weight for CQS2 institutions (vs. 50% standard Basel):
+Under CRR, institution CQS 2 receives 50% (Art. 120 Table 3). Basel 3.1 reduces this to **30%** (PRA PS1/26 Art. 120 Table 3):
 
-| CQS | Standard Basel | UK CRR |
-|-----|----------------|--------|
+| CQS | CRR (Art. 120) | Basel 3.1 ECRA |
+|-----|----------------|----------------|
 | CQS1 | 20% | 20% |
 | CQS2 | 50% | **30%** |
 | CQS3 | 50% | 50% |

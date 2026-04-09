@@ -25,17 +25,21 @@ Sovereign weights are identical under CRR and Basel 3.1.
 
 ### Institution Risk Weights (CRR Art. 120–121)
 
-| CQS | UK CRR (ECRA) | Standard CRR |
-|-----|---------------|--------------|
+| CQS | CRR (Art. 120) | Basel 3.1 ECRA |
+|-----|----------------|----------------|
 | 1 | 20% | 20% |
-| 2 | **30%** | 50% |
+| 2 | 50% | **30%** |
 | 3 | 50% | 50% |
 | 4 | 100% | 100% |
 | 5 | 100% | 100% |
 | 6 | 150% | 150% |
-| Unrated | 40% | 40% |
+| Unrated | 40% (sovereign-derived) | SCRA (see below) |
 
-The UK CRR deviates from the standard EU CRR at CQS 2 (30% vs 50%).
+!!! warning "Code Divergence"
+    The code (`INSTITUTION_RISK_WEIGHTS_UK`) currently uses 30% for CRR CQS 2, labelled as
+    a "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**.
+    The 30% value matches Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3), not CRR. This is a known
+    code bug — see D1.30 in the docs implementation plan.
 
 **Basel 3.1 SCRA** (for unrated institutions, CRE20.16-21):
 
@@ -47,37 +51,101 @@ The UK CRR deviates from the standard EU CRR at CQS 2 (30% vs 50%).
 
 **Source**: `INSTITUTION_RISK_WEIGHTS_UK`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
 
+### Short-Term Institution ECAI (Basel 3.1 Art. 120(2)/(2B))
+
+**Table 4** — long-term ECAI applied to short-term exposure (≤3m, or ≤6m trade finance):
+
+| CQS | Risk Weight |
+|-----|-------------|
+| CQS 1-3 | 20% |
+| CQS 4-5 | 50% |
+| CQS 6 | 150% |
+
+**Table 4A** — specific short-term ECAI assessment (Art. 120(2B)):
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+Art. 120(3) governs the interaction: Table 4 applies when no short-term assessment exists;
+Table 4A applies when a short-term assessment yields a more favourable or equal weight.
+
+!!! warning "Not Yet Implemented — Schema Gap"
+    No `has_short_term_ecai` schema field or `B31_ECRA_SHORT_TERM_TABLE_4A` lookup table
+    exists. All short-term institution exposures fall back to Table 4 weights, understating
+    risk for CQS 2 (20% applied vs correct 50%) and CQS 3 (20% vs 100%).
+    See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
+**Source**: `B31_ECRA_SHORT_TERM_RISK_WEIGHTS` in `data/tables/b31_risk_weights.py` (Table 4 only)
+
 ### Corporate Risk Weights (CRR Art. 122)
 
-| CQS | CRR | Basel 3.1 |
-|-----|-----|-----------|
-| 1 | 20% | 20% |
-| 2 | 50% | 50% |
-| 3 | **100%** | **75%** |
-| 4 | 100% | 100% |
-| 5 | **150%** | **100%** |
-| 6 | 150% | 150% |
-| Unrated | 100% | 100% |
+| CQS | CRR | Basel 3.1 | Change |
+|-----|-----|-----------|--------|
+| 1 | 20% | 20% | — |
+| 2 | 50% | 50% | — |
+| 3 | **100%** | **75%** | Reduced |
+| 4 | 100% | 100% | — |
+| 5 | 150% | **150%** | — |
+| 6 | 150% | 150% | — |
+| Unrated | 100% | 100% | — |
 
-**Basel 3.1 corporate additions:**
+!!! warning "PRA Deviation — CQS 5 = 150%"
+    BCBS CRE20.42 reduced corporate CQS 5 from 150% to 100%. The PRA **retained 150%** per
+    PRA PS1/26 Art. 122(2) Table 6. The code constant `B31_CORPORATE_RISK_WEIGHTS` correctly
+    uses `Decimal("1.50")` for CQS 5.
 
-| Category | Risk Weight | Reference |
-|----------|------------|-----------|
-| Investment grade | 65% | CRE20.47 |
-| SME corporate | 85% | CRE20.49 |
-| Subordinated debt | 150% | CRE20.50 |
+**Basel 3.1 corporate sub-categories (Art. 122(4)–(11)):**
 
-**Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW`, `B31_SUBORDINATED_DEBT_RW` in `data/tables/`
+| Category | Risk Weight | Reference | Conditions |
+|----------|------------|-----------|------------|
+| Investment grade | 65% | Art. 122(6)(a) | PRA permission required; internal IG assessment (Art. 122(9)–(10)) |
+| Non-investment grade | **135%** | Art. 122(6)(b) | PRA permission required; internal non-IG assessment |
+| SME corporate | 85% | Art. 122(4) | Turnover ≤ EUR 50m, unrated |
+| General unrated | 100% | Art. 122(5) | Default without PRA IG/non-IG permission |
+
+!!! info "Subordinated debt"
+    Subordinated debt (150%) is classified under the **equity exposure class** (Art. 133(1)),
+    not the corporate class. It sits at priority 3 in the Art. 112 Table A2 waterfall, above
+    corporates at priority 16. See the [equity section below](#sa-equity-code-constants).
+
+**Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`,
+`B31_CORPORATE_NON_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW` in `data/tables/`
+
+### Short-Term Corporate ECAI (Basel 3.1 Art. 122(3), Table 6A)
+
+New in Basel 3.1 — for corporate exposures with a specific short-term ECAI assessment:
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+CRR has no short-term corporate ECAI table. Not yet implemented — no lookup table or
+schema field exists. See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#short-term-corporate-ecai-art-1223-table-6a).
 
 ### Retail Risk Weights
 
-| Exposure Type | CRR | Basel 3.1 |
-|---------------|-----|-----------|
-| Retail Mortgage (LTV ≤ 80%) | 35% | LTV-based (see below) |
-| Retail QRRE | 75% | 75% |
-| Retail Other | 75% | 75% |
+| Exposure Type | CRR | Basel 3.1 | Reference |
+|---------------|-----|-----------|-----------|
+| Retail Mortgage (LTV ≤ 80%) | 35% | LTV-based (see below) | Art. 125 / Art. 124F |
+| QRRE Transactors | 75% | 45% | — / Art. 123(3)(a) |
+| Payroll / Pension Loans | 35% | 35% | Art. 123 (CRR2) / Art. 123(4) |
+| Retail QRRE (non-transactor) | 75% | 75% | Art. 123 / Art. 123(3)(b) |
+| Retail Other | 75% | 75% | Art. 123 / Art. 123(3)(b) |
+| Non-Regulatory Retail | — | 100% | — / Art. 123(3)(c) |
 
-**Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`
+!!! info "CRR2 Payroll/Pension Treatment"
+    The 35% payroll/pension risk weight was introduced by CRR2 (Regulation (EU) 2019/876) and
+    carried forward unchanged to PRA PS1/26 Art. 123(4). The CRR code path does not implement
+    this treatment — see [CRR SA spec](../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
+
+**Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`, `B31_RETAIL_PAYROLL_LOAN_RW` / `B31_RETAIL_TRANSACTOR_RW` in `data/tables/b31_risk_weights.py`
 
 ### CRR Residential Mortgage (CRR Art. 125)
 
@@ -120,16 +188,32 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 | 90–100% | 75% |
 | > 100% | 105% |
 
-**Source**: `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
+**Junior Charge Multiplier (Art. 124G(2)):**
+
+| LTV | Multiplier | Effective RW (example) |
+|-----|-----------|------------------------|
+| ≤ 50% | 1.0× | 30% (no uplift) |
+| > 50% | 1.25× | e.g. 50% × 1.25 = 62.5% (at 70–80% LTV) |
+
+The multiplied weight is capped at 105% (the Table 6B ceiling).
+
+**Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 
 ### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 
-#### General (Art. 124H — Loan-Splitting)
+#### General — Natural Person/SME (Art. 124H(1)–(2) — Loan-Splitting)
 
 | LTV | Risk Weight |
 |-----|------------|
 | ≤ 55% (secured portion) | 60% |
 | > 55% (unsecured portion) | counterparty RW |
+
+!!! info "Other Counterparties — Art. 124H(3)"
+    For non-natural-person, non-SME borrowers (e.g. large corporates, institutions), no
+    loan-splitting applies. The **entire** exposure receives a whole-loan risk weight:
+    `RW = max(60%, min(counterparty_rw, income_producing_rw))` where `income_producing_rw`
+    is the Art. 124I rate (100% if LTV ≤ 80%, 110% if LTV > 80%). The calculator routes
+    automatically when `cp_is_natural_person = False` and `is_sme = False`.
 
 #### Income-Producing (Art. 124I — Whole-Loan)
 
@@ -156,6 +240,16 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 |-----------|------------|
 | ADC (standard) | 150% |
 | ADC (pre-sold) | 100% |
+
+#### Other Real Estate (Art. 124J)
+
+Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a):
+
+| Sub-Type | Risk Weight |
+|----------|------------|
+| Income-dependent (any property type) | 150% |
+| Residential, non-income-dependent | Counterparty RW |
+| Commercial, non-income-dependent | max(60%, counterparty RW) |
 
 **Source**: `B31_COMMERCIAL_INCOME_LTV_BANDS`, `B31_ADC_RISK_WEIGHT`, `B31_ADC_PRESOLD_RISK_WEIGHT` in `data/tables/b31_risk_weights.py`
 
@@ -283,35 +377,55 @@ HVCRE has **higher** risk weights than standard specialised lending.
 
 ## F-IRB Supervisory LGD (CRR Art. 161)
 
-### CRR Values
+### CRR Art. 161 Values
 
-| Exposure Type | LGD |
-|---------------|-----|
-| Senior unsecured | 45% |
-| Subordinated | 75% |
-| Secured — Financial collateral | 0% |
-| Secured — Receivables | 35% |
-| Secured — Residential RE | 35% |
-| Secured — Commercial RE | 35% |
-| Secured — Other physical | 40% |
+| Category | LGD | Reference |
+|----------|-----|-----------|
+| Senior unsecured | 45% | Art. 161(1)(a) |
+| Subordinated unsecured | 75% | Art. 161(1)(b) |
+| Covered bonds (Art. 129(4)/(5)) | 11.25% | Art. 161(1)(d) |
+| Senior purchased corporate receivables | 45% | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | 100% | Art. 161(1)(f) |
+| Dilution risk of purchased corporate receivables | 75% | Art. 161(1)(g) |
+
+### CRR Art. 230 Table 5 LGDS Values (Secured Portions)
+
+| Collateral Type | LGDS (Senior) | LGDS (Subordinated) |
+|----------------|---------------|---------------------|
+| Financial collateral | 0% | 0% |
+| Receivables | 35% | 65% |
+| Residential RE | 35% | 65% |
+| Commercial RE | 35% | 65% |
+| Other physical | 40% | 70% |
 
 ### Basel 3.1 Values (PRA PS1/26)
 
-| Exposure Type | LGD | Change |
-|---------------|-----|--------|
-| Senior unsecured | **40%** | ↓ from 45% |
+| Category | LGD | Change |
+|----------|-----|--------|
+| Senior unsecured (non-FSE) | **40%** | ↓ from 45% |
+| Senior unsecured (FSE) | **45%** | — |
 | Subordinated | 75% | — |
+| Covered bonds | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
+| Senior purchased receivables | **40%** | ↓ from 45% |
+| Subordinated purchased receivables | 100% | — |
+| Dilution risk | **100%** | ↑ from 75% |
 | Secured — Financial collateral | 0% | — |
 | Secured — Receivables | **20%** | ↓ from 35% |
 | Secured — Residential RE | **20%** | ↓ from 35% |
 | Secured — Commercial RE | **20%** | ↓ from 35% |
 | Secured — Other physical | **25%** | ↓ from 40% |
 
+!!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
+    Basel 3.1 Art. 230(2) provides a single LGDS per collateral type with no
+    senior/subordinated distinction. The CRR Table 5 subordinated column (65%/70%) is
+    not carried forward.
+
 ### Overcollateralisation Requirements
 
 | Collateral Type | Min Ratio | Min Threshold |
 |-----------------|-----------|---------------|
 | Financial | 1.0x | 0% of EAD |
+| Covered bonds | 1.0x | 0% of EAD |
 | Receivables | 1.25x | 0% of EAD |
 | Real estate | 1.4x | 30% of EAD |
 | Other physical | 1.4x | 30% of EAD |
@@ -352,6 +466,7 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Exposure Class | CRR | Basel 3.1 |
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
+| Sovereign | 0.03% | 0.05% |
 | Institution | 0.03% | 0.05% |
 | Retail Mortgage | 0.03% | 0.10% |
 | Retail QRRE (transactor) | 0.03% | 0.05% |

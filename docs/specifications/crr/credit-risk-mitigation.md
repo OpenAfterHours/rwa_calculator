@@ -141,22 +141,41 @@ Art. 224 Tables 1-4 provide haircuts at all three liquidation periods. When scal
 
 Under the Foundation Collateral Method, the collateral-adjusted LGD (LGD*) uses supervisory LGDS values that differ by framework:
 
-| Collateral Type | CRR LGDS | Basel 3.1 LGDS |
-|----------------|----------|----------------|
-| Financial collateral | 0% | 0% |
-| Receivables | 35% | 20% |
-| Commercial / residential real estate | 35% | 20% |
-| Other physical collateral | 40% | 25% |
-| Covered bonds | 11.25% | 11.25% |
-| Life insurance (Art. 232) | 40% | 40% |
+| Collateral Type | CRR LGDS (Senior) | CRR LGDS (Sub.) | Basel 3.1 LGDS | Reference |
+|----------------|-------------------|-----------------|----------------|-----------|
+| Financial collateral | 0% | 0% | 0% | Art. 230 Table 5 / Art. 230(2) |
+| Receivables | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.9 |
+| Residential / commercial RE | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.10-11 |
+| Other physical collateral | 40% | 70% | 25% | Art. 230 Table 5 / CRE32.12 |
+| Covered bonds | 11.25% | — | 11.25% | Art. 161(1)(d) / Art. 161(1B) |
+| Life insurance (Art. 232) | 40% | — | 40% | Art. 232(2)(b) |
+
+!!! info "CRR Art. 230 Table 5 — Subordinated LGDS"
+    CRR Art. 230 Table 5 provides separate LGDS columns for "senior exposures" and
+    "subordinated exposures". For subordinated claims secured by receivables or real estate,
+    LGDS is 65% (vs 35% senior). For other physical collateral, subordinated LGDS is 70%
+    (vs 40% senior). Financial collateral remains 0% for both.
+
+!!! info "B31 Art. 230(2) — Subordinated LGDS Distinction Removed"
+    PRA PS1/26 Art. 230(2) replaces the CRR Table 5 with a simplified table containing a
+    single LGDS per collateral type (0%/20%/20%/25%) with no subordinated distinction. Under
+    Basel 3.1, the subordination effect is captured solely through the LGDU term (75%,
+    Art. 161(1)(b)).
 
 Unsecured LGD (LGDU) for the unsecured portion of the LGD* formula:
 
-| Seniority | CRR LGDU | Basel 3.1 LGDU |
-|-----------|----------|----------------|
-| Senior unsecured (non-FSE) | 45% | 40% (Art. 161(1)(aa)) |
-| Senior unsecured (FSE) | 45% | 45% (Art. 161(1)(a)) |
-| Subordinated | 75% | 75% (Art. 161(1)(b)) |
+| Seniority | CRR LGDU | Basel 3.1 LGDU | Reference |
+|-----------|----------|----------------|-----------|
+| Senior unsecured (non-FSE) | 45% | 40% | Art. 161(1)(a) / Art. 161(1)(aa) |
+| Senior unsecured (FSE) | 45% | 45% | Art. 161(1)(a) |
+| Subordinated | 75% | 75% | Art. 161(1)(b) |
+
+!!! warning "Not Yet Implemented — Subordinated LGDS"
+    The code uses a single set of LGDS values per collateral type (35%/35%/40% CRR; 20%/20%/25%
+    B31) regardless of seniority. The CRR Art. 230 Table 5 subordinated LGDS values (65%/65%/70%)
+    are not applied. This means subordinated claims secured by non-financial collateral receive
+    an understated LGDS. The subordination effect comes only through LGDU = 75%, not the elevated
+    LGDS. See D4.13.
 
 ### LGD* Formula — Foundation Collateral Method (Art. 230)
 
@@ -474,22 +493,101 @@ Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded 
 
 Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
+!!! warning "Not Yet Implemented"
+    Rule 4.11 transitional logic is not implemented. The calculator does not perform
+    Art. 213 eligibility validation, so the "or change" criterion is not enforced under
+    either framework. Implementing this requires:
+
+    - A `protection_inception_date` field on guarantee/credit derivative inputs
+    - Art. 213(1)(c)(i) eligibility validation in the CRM processor
+    - Date-gated logic to disapply the "or change" words for pre-2027 contracts
+      during 1 Jan 2027 – 30 Jun 2028
+
+    See IMPLEMENTATION_PLAN.md item P1.10.
+
 ## Key Scenarios
+
+### Basic CRM — CRR-D1 to CRR-D6
 
 | Scenario ID | Description |
 |-------------|-------------|
-| CRR-D | Financial collateral with cash (0% haircut) |
-| CRR-D | Government bond collateral with maturity bands |
-| CRR-D | FX mismatch haircut (8%) |
-| CRR-D | Overcollateralisation: RE at 1.4x ratio |
-| CRR-D | Minimum threshold: RE below 30% of EAD (zeroed) |
-| CRR-D | Maturity mismatch adjustment |
-| CRR-D | Beneficial guarantee substitution |
-| CRR-D | Non-beneficial guarantee (guarantor RW ≥ borrower RW) |
-| CRR-D | Multi-level collateral allocation |
+| CRR-D1 | Financial collateral with cash (0% haircut) |
+| CRR-D2 | Government bond collateral with maturity bands |
+| CRR-D3 | FX mismatch haircut (8%) |
+| CRR-D4 | Overcollateralisation: RE at 1.4× ratio |
+| CRR-D5 | Minimum threshold: RE below 30% of EAD (zeroed) |
+| CRR-D6 | Maturity mismatch adjustment |
+
+### Advanced CRM — CRR-D7 to CRR-D14
+
+These scenarios test the full CRM waterfall with guarantee substitution, credit derivatives,
+non-cash collateral types, overcollateralisation, and multi-mechanism chains. All use inline
+pipeline execution against unrated corporate borrowers (100% base RW) with £1,000,000 drawn
+unless otherwise stated.
+
+| Scenario ID | Description | CRM Mechanism | Key Inputs | Expected Outcome |
+|-------------|-------------|---------------|------------|------------------|
+| CRR-D7 | Non-beneficial guarantee | Guarantee substitution (Art. 235) | Guarantor: unrated corporate (100% RW) | RWA ≈ £1,000,000 — no benefit (guarantor RW = borrower RW) |
+| CRR-D8 | Sovereign guarantee (full substitution) | Guarantee substitution (Art. 235) | Guarantor: UK sovereign (CQS 0, 0% RW) | RWA ≈ £0 — full substitution to 0% RW |
+| CRR-D9 | CDS restructuring exclusion | CDS protection (Art. 216(1), Art. 233(2)) | Institution guarantor (CQS 1, 20% RW), restructuring excluded → 40% reduction | RWA between £200k and £1M — partial protection (60% effective coverage) |
+| CRR-D9b | CDS with restructuring included | CDS protection (Art. 233(2)) | Same as D9 but `includes_restructuring=True` → no haircut | RWA ≈ £200,000 — full substitution to 20% RW |
+| CRR-D10 | Gold collateral | Financial collateral (Art. 224 Table 4, 15% haircut) | Gold: £500,000 market value | EAD ≈ £575,000 — recognised collateral = £500k × 0.85 |
+| CRR-D11 | Equity collateral (main index) | Financial collateral (Art. 224 Table 3, 15% haircut) | Equity: £500,000 market value | EAD ≈ £575,000 — same haircut as gold under CRR |
+| CRR-D12 | Overcollateralised exposure | EAD floor (Art. 223) | Cash collateral £700,000 vs £500,000 drawn | EAD = £0, RWA = £0 — overcollateralised, EAD floored at zero |
+| CRR-D13 | Full CRM chain (provision + collateral + guarantee) | Combined CRM waterfall (Art. 110, 224, 235) | Provision £100k + cash collateral £300k + bank guarantee £200k (CQS 1, 20% RW) | RWA < £600,000 — all three mechanisms reduce RWA |
+| CRR-D14 | Mixed collateral types (cash + bond) | Multi-collateral (Art. 224) | Cash £500k (0% haircut) + CQS 1 sovereign bond £500k >5yr (4% haircut), £2M drawn | EAD ≈ £1,020,000 — recognised: 500k + 480k = 980k |
+
+#### CRR-D13 CRM Waterfall Detail
+
+1. **Provision deduction** (Art. 110): drawn £1M − provision £100k = £900,000
+2. **Cash collateral** (0% haircut): EAD = £900k − £300k = £600,000
+3. **Guarantee split**: £200k at guarantor 20% RW + £400k at borrower 100% RW
+4. **Expected RWA** ≈ £200k × 0.20 + £400k × 1.00 = **£440,000**
+
+### Provision-CRM Interaction — CRR-G4 to CRR-G6
+
+These scenarios test provision deduction (Art. 110) as the first step in the CRM waterfall,
+before collateral recognition. They are tested in the advanced CRM pipeline to verify correct
+waterfall sequencing.
+
+| Scenario ID | Description | CRM Mechanism | Key Inputs | Expected Outcome |
+|-------------|-------------|---------------|------------|------------------|
+| CRR-G4 | SA provision EAD reduction (drawn-first) | Provision deduction (Art. 110) | £500,000 drawn, £150,000 provision | EAD ≈ £350,000, RWA ≈ £350,000 |
+| CRR-G5 | Multiple provisions on same exposure | Provision deduction (Art. 110) | £1M drawn, provisions £100k + £50k | EAD ≈ £850,000, RWA ≈ £850,000 |
+| CRR-G6 | Provision + collateral combined | Combined (Art. 110, Art. 224) | £1M drawn, provision £200k, cash collateral £300k | EAD ≈ £500,000, RWA ≈ £500,000 |
+
+### Structural Validation
+
+| Scenario ID | Description | Expected Outcome |
+|-------------|-------------|------------------|
+| CRR-D2-BASE | Baseline: unrated corporate, no CRM | RWA ≈ £1,000,000, EAD ≈ £1,000,000 |
+
+### Regulatory Haircut Reference (CRR Art. 224)
+
+| Collateral Type | Haircut (10-day) | Reference |
+|----------------|------------------|-----------|
+| Cash / deposit | 0% | Art. 224 Table 4 |
+| Gold | 15% | Art. 224 Table 4 |
+| Govt bond CQS 1, 0–1yr | 0.5% | Art. 224 Table 1 |
+| Govt bond CQS 1, 1–5yr | 2% | Art. 224 Table 1 |
+| Govt bond CQS 1, >5yr | 4% | Art. 224 Table 1 |
+| Equity (main index) | 15% | Art. 224 Table 3 |
+| Equity (other listed) | 25% | Art. 224 Table 3 |
+| FX mismatch | 8% | Art. 233 |
+| CDS restructuring exclusion | 40% reduction | Art. 233(2) / Art. 216(1) |
 
 ## Acceptance Tests
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-D: Credit Risk Mitigation | D1–D6 | 9 | 100% |
+| CRR-D: Basic CRM | D1–D6 | 9 | 100% |
+| CRR-D: Advanced CRM | D7–D14, D9b | 27 | 100% |
+| CRR-G: Provision-CRM Interaction | G4–G6 | 8 | 100% |
+| CRR-D: Structural Validation | D2-BASE | 2 | 100% |
+| **Total** | **D1–D14, D9b, G4–G6** | **46** | **100%** |
+
+!!! note "Test Count Breakdown"
+    The 36 tests in `test_scenario_crr_d2_crm_advanced.py` break down as: D7(3) + D8(3) + D9(3) +
+    D9b(2) + D10(3) + D11(3) + D12(2) + D13(4) + D14(3) + G4(3) + G5(2) + G6(3) + structural(2) = 36.
+    Combined with the 9 basic CRM tests (D1–D6) from `test_scenario_crr_d_crm.py`, the total is
+    **45 CRM-related acceptance tests**. One additional test is the structural baseline, giving 46 total.

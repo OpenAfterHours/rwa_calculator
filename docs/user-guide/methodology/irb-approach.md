@@ -65,25 +65,95 @@ PD_effective = max(PD_estimated, PD_floor)
 
 LGD is the percentage of exposure lost after recoveries. F-IRB uses supervisory values (0%–75% depending on collateral); A-IRB uses bank estimates subject to floors under Basel 3.1.
 
+Under Basel 3.1, A-IRB firms have two methods for incorporating collateral into LGD (Art. 191A):
+
+- **LGD Modelling Collateral Method** (Art. 169A/169B) — the firm's own LGD model captures
+  collateral-specific recovery characteristics, subject to PRA approval and annual revaluation.
+  Must produce estimates at least as conservative as the Foundation Collateral Method.
+- **Foundation Collateral Method** (FCM, Art. 230) — uses supervisory LGDS values by collateral
+  type, blended with LGDU for partially secured exposures.
+
+For unfunded credit protection (guarantees), A-IRB firms use the **LGD Adjustment Method**
+(LGD-AM) or Parameter Substitution Method (PSM). See [Credit Risk Mitigation](crm.md) and the
+[CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
+for details.
+
 ### Exposure at Default (EAD)
 
-F-IRB uses regulatory CCFs based on `risk_type` (FR=100%, MR/MLR=75%, LR=0%). A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to CCF floors under Basel 3.1.
+=== "CRR"
 
-**CRR Art. 166(9) Exception:** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these exposures with `is_short_term_trade_lc = True`.
+    F-IRB uses regulatory CCFs based on `risk_type` (CRR Art. 166(8)–(9)):
 
-> **Details:** See [Key Differences](../../framework-comparison/key-differences.md#pd-floors) for the complete PD floor, LGD floor, supervisory LGD, and CCF comparison tables across CRR and Basel 3.1.
+    | Risk Type | F-IRB CCF | Rule |
+    |-----------|-----------|------|
+    | FR / FRC | 100% | Full risk / certain drawdown |
+    | MR | **75%** | Medium risk (Art. 166(8)) |
+    | MLR | **75%** | Medium-low risk (Art. 166(8)) |
+    | LR | 0% | Unconditionally cancellable |
+
+    **Art. 166(9) Exception:** Short-term letters of credit arising from the movement of
+    goods retain 20% CCF under F-IRB. Flag these exposures with
+    `is_short_term_trade_lc = True`.
+
+=== "Basel 3.1"
+
+    Basel 3.1 Art. 166C **fully aligns F-IRB CCFs to SA Table A1**. The separate
+    CRR Art. 166(8) supervisory schedule (75% for MR/MLR) is eliminated — F-IRB
+    exposures use the same CCFs as SA exposures:
+
+    | Risk Type | CRR F-IRB | B31 F-IRB | Change |
+    |-----------|-----------|-----------|--------|
+    | FR / FRC | 100% | 100% | Unchanged |
+    | MR | 75% | **50%** | Down from 75% |
+    | MLR | 75% | **20%** | Down from 75% |
+    | OC | 0% | **40%** | Up from 0% (new Table A1 Row 5) |
+    | LR (UCC) | 0% | **10%** | Up from 0% |
+
+    !!! warning "Art. 166(9) Trade LC Exception Removed"
+        CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC
+        carve-out no longer applies under Basel 3.1 — these exposures receive the
+        standard SA CCF for their risk type. The `is_short_term_trade_lc` flag has
+        no effect under Basel 3.1.
+
+A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to Basel 3.1
+restrictions: own-estimate CCFs are limited to **revolving facilities only**
+(Art. 166D(1)(a)), with a floor of 50% of the SA CCF (CRE32.27). Non-revolving
+A-IRB exposures use SA CCFs. See [A-IRB CCF Restrictions](../../specifications/basel31/airb-calculation.md#a-irb-ccf-restrictions-art-166d)
+for full details.
+
+> **Details:** See [Key Differences](../../framework-comparison/key-differences.md#credit-conversion-factors) for the complete CCF comparison table across CRR and Basel 3.1, and [CCF Specification](../../specifications/crr/credit-conversion-factors.md) for the full regulatory treatment.
 
 ### Maturity (M)
 
-Effective maturity affects capital through the maturity adjustment.
+Effective maturity affects capital through the maturity adjustment (Art. 162).
 
 - **Range:** 1 year (floor) to 5 years (cap)
-- **Retail exemption:** No maturity adjustment for retail
+- **Retail exemption:** No maturity adjustment for retail (MA = 1.0)
 
 ```python
-# Effective maturity calculation
+# A-IRB: effective maturity from cash flows
 M = max(1, min(5, weighted_average_life))
 ```
+
+**CRR F-IRB fixed maturities** (Art. 162(1)):
+
+| Exposure Type | M |
+|---------------|---|
+| Repo-style transactions (repos, securities/commodities lending) | 0.5 years |
+| All other exposures | 2.5 years |
+
+**Basel 3.1** deletes Art. 162(1) — all IRB firms must calculate M from cash flows or
+contractual terms. Revolving exposures must use the **maximum contractual termination date**
+(Art. 162(2A)(k)), not the current drawing repayment date.
+
+!!! info "Exceptions to the 1-Year Floor"
+    Art. 162(3) allows a **one-day** maturity floor for daily-margined repos, derivatives,
+    and margin lending, and for qualifying short-term exposures (FX settlement, trade finance
+    ≤ 1yr, securities settlement). The `has_one_day_maturity_floor` input flag controls this.
+    See the [F-IRB specification](../../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162)
+    for full details.
+
+> **Details:** See [Technical Reference](../../framework-comparison/technical-reference.md#irb-effective-maturity-art-162) for the full CRR vs Basel 3.1 comparison table.
 
 ## Asset Correlation
 
@@ -415,8 +485,9 @@ el = calculate_expected_loss(
 |-----------|-------|-------|
 | PD | Bank estimate | Bank estimate |
 | LGD | Supervisory (45%/75%) | Bank estimate (floored) |
+| CRM for collateral | Foundation Collateral Method (Art. 230) | LGD modelling (Art. 169A/169B) or FCM |
 | EAD | Regulatory | Bank estimate |
-| CCF | Regulatory | Bank estimate |
+| CCF | Regulatory (CRR: 75% MR/MLR; B31: SA-aligned via Art. 166C) | Bank estimate (B31: revolving only, floored at 50% SA) |
 | Typical RW | Higher | Lower |
 | Complexity | Lower | Higher |
 | Approval | Easier | Harder |
@@ -432,9 +503,13 @@ el = calculate_expected_loss(
 | Correlation | Art. 153 | CRE31 |
 | Maturity adjustment | Art. 162 | CRE31 |
 | Supervisory LGD | Art. 161 | CRE32 |
+| F-IRB CCF | Art. 166(8)–(9) (CRR) / Art. 166C (B31) | CRE32 |
+| A-IRB CCF / EAD | Art. 166 (CRR) / Art. 166D (B31) | CRE32 |
+| A-IRB LGD modelling for collateral | Art. 169A/169B | CRE32 |
+| CRM method taxonomy | Art. 191A | — |
 
 ## Next Steps
 
 - [Standardised Approach](standardised-approach.md) - Compare with SA
-- [Credit Risk Mitigation](crm.md) - CRM under IRB
+- [Credit Risk Mitigation](crm.md) - CRM under IRB, including Foundation Collateral Method (F-IRB) and LGD Modelling Collateral Method (A-IRB, Art. 169A/169B)
 - [Supporting Factors](supporting-factors.md) - SME correlation adjustment

@@ -230,6 +230,21 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 | 90-100% | 75% |
 | > 100% | 105% |
 
+**Commercial Real Estate — General (Art. 124H):**
+
+For natural persons and SMEs, CRE uses **loan-splitting**: 60% RW on the secured portion
+(up to 55% of property value), counterparty RW on the residual (Art. 124H(1)–(2)).
+
+For all other counterparties (large corporates, institutions), no loan-splitting applies.
+Art. 124H(3) assigns a whole-loan risk weight:
+
+`RW = max(60%, min(counterparty_rw, income_producing_rw))`
+
+This ensures the weight is at least 60% but capped at the lower of the counterparty's unsecured
+weight and the income-producing table rate (Art. 124I). Set `cp_is_natural_person` and `is_sme`
+in the input data to route exposures correctly — if both are `False` (or absent), the Art. 124H(3)
+path applies by default.
+
 **Commercial Real Estate — Income-Producing (PRA Art. 124I):**
 
 | LTV | Income-Producing RW |
@@ -242,6 +257,12 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
     The PRA simplified this to a **2-band table** in Art. 124I.
 
 **Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
+
+**Other Real Estate (Art. 124J):** Exposures failing the Art. 124A qualifying criteria receive
+punitive treatment: 150% if income-dependent (Art. 124J(1)); counterparty RW if residential
+and non-income-dependent (Art. 124J(2)); or max(60%, counterparty RW) if commercial and
+non-income-dependent (Art. 124J(3)). Set `is_qualifying_re = False` to route to this treatment.
+See the [Art. 124J specification](../../specifications/basel31/sa-risk-weights.md#consequence-of-failing--other-real-estate-art-124j).
 
 #### ADC Exposures (Art. 124K)
 

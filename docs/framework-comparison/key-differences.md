@@ -437,7 +437,38 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 ### Commercial Real Estate
 
-**Income-Producing (PRA Art. 124I) — Whole-Loan:**
+#### CRE Loan-Splitting — Natural Person/SME (Art. 124H(1)–(2))
+
+| Portion | CRR (Art. 126) | Basel 3.1 (Art. 124H) | Change |
+|---------|----------------|----------------------|--------|
+| Secured portion | 50% (≤50% LTV) | **60%** (≤55% LTV) | Higher RW, higher threshold |
+| Unsecured residual | 100% | Counterparty RW (Art. 124L) | Risk-sensitive |
+
+CRR Art. 126 applies a two-part split to all CRE regardless of counterparty type.
+Basel 3.1 Art. 124H(1)–(2) restricts loan-splitting to natural persons and SMEs,
+with a higher secured RW (60% vs 50%) and a higher threshold (55% vs 50%).
+
+!!! info "Art. 124H(3) — Large Corporate CRE (Non-Natural-Person, Non-SME)"
+    For counterparties that are **not** natural persons and **not** SMEs (e.g. large corporates,
+    institutions), Basel 3.1 does not apply loan-splitting. Instead, Art. 124H(3) assigns a
+    **whole-loan** risk weight to the entirety of the exposure:
+
+    `RW = max(60%, min(counterparty_rw, income_producing_rw))`
+
+    where `income_producing_rw` is the Art. 124I rate for the same LTV band (100% if LTV ≤ 80%,
+    110% if LTV > 80%). This ensures the risk weight is at least 60% but does not exceed the
+    lower of the counterparty's unsecured weight and the income-producing table rate.
+
+    **CRR has no equivalent entity-type distinction** — all CRE uses the same Art. 126 split
+    regardless of counterparty type.
+
+    The calculator routes automatically: when `cp_is_natural_person = False` **and**
+    `is_sme = False` (or both absent), the Art. 124H(3) path applies. No separate input flag
+    is required.
+
+    See: [B31 specification](../specifications/basel31/sa-risk-weights.md#large-corporate-cre-art-124h3)
+
+#### Income-Producing CRE (PRA Art. 124I) — Whole-Loan
 
 | Scenario | CRR | Basel 3.1 |
 |----------|-----|-----------|
@@ -455,6 +486,23 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 | ≤ 60% | 1.0× | 100% |
 | 60–80% | 1.25× | 125% |
 | > 80% | 1.375× | 137.5% |
+
+### Other Real Estate (Art. 124J)
+
+Exposures that fail any [Art. 124A qualifying criterion](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a) are classified as "other real estate" and receive punitive treatment:
+
+| Sub-Type | Risk Weight | Reference |
+|----------|-------------|-----------|
+| Income-dependent (any property type) | **150%** | Art. 124J(1) |
+| Residential, not income-dependent | Counterparty RW (Art. 124L) | Art. 124J(2) |
+| Commercial, not income-dependent | max(60%, counterparty RW) | Art. 124J(3) |
+
+!!! warning "No CRR Equivalent"
+    CRR does not have qualifying criteria for RE treatment — the Art. 124A/124J qualifying gate
+    and punitive fallback is entirely new in Basel 3.1. Set `is_qualifying_re = False` in the
+    input data to route exposures to Art. 124J treatment. When omitted, defaults to `True`.
+
+See: [B31 specification — Other Real Estate](../specifications/basel31/sa-risk-weights.md#consequence-of-failing--other-real-estate-art-124j)
 
 ### ADC Exposures (Art. 124K)
 

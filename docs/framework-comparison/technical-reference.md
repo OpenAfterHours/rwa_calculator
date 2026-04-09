@@ -197,6 +197,28 @@ PRA PS1/26 Art. 224 Table 3 (10-day holding period):
 
 Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22.54).
 
+## SA Commercial Real Estate Risk Weights (Basel 3.1)
+
+Basel 3.1 replaces CRR Art. 126 (flat 50%/100% split for all CRE) with entity-type-differentiated
+treatment under Art. 124H:
+
+| Counterparty Type | Treatment | Risk Weight | Reference |
+|-------------------|-----------|-------------|-----------|
+| Natural person / SME | Loan-splitting | 60% secured (≤55% LTV) + counterparty RW residual | Art. 124H(1)–(2) |
+| Other (large corporate, institution) | Whole-loan | max(60%, min(counterparty RW, income-producing RW)) | Art. 124H(3) |
+| Income-dependent (any counterparty) | Whole-loan LTV table | 100% (≤80%) / 110% (>80%) | Art. 124I |
+
+!!! info "Art. 124H(3) — Large Corporate CRE"
+    The Art. 124H(3) path applies to the **entirety** of the exposure — no portion-based splitting.
+    The `income_producing_rw` in the formula is the Art. 124I rate for the same LTV band.
+    The calculator routes automatically when `cp_is_natural_person = False` and `is_sme = False`.
+    See [key-differences](key-differences.md#commercial-real-estate) for the full CRR vs Basel 3.1
+    comparison.
+
+Exposures failing Art. 124A qualifying criteria fall to Art. 124J: 150% (income-dependent),
+counterparty RW (residential non-income-dependent), or max(60%, counterparty RW) (commercial
+non-income-dependent).
+
 ## Slotting Risk Weights (Basel 3.1)
 
 PRA PS1/26 Art. 153(5) Table A defines two slotting weight tables — non-HVCRE and HVCRE:

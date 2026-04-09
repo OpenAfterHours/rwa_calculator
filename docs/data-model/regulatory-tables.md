@@ -142,12 +142,19 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 
 ### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 
-#### General (Art. 124H — Loan-Splitting)
+#### General — Natural Person/SME (Art. 124H(1)–(2) — Loan-Splitting)
 
 | LTV | Risk Weight |
 |-----|------------|
 | ≤ 55% (secured portion) | 60% |
 | > 55% (unsecured portion) | counterparty RW |
+
+!!! info "Other Counterparties — Art. 124H(3)"
+    For non-natural-person, non-SME borrowers (e.g. large corporates, institutions), no
+    loan-splitting applies. The **entire** exposure receives a whole-loan risk weight:
+    `RW = max(60%, min(counterparty_rw, income_producing_rw))` where `income_producing_rw`
+    is the Art. 124I rate (100% if LTV ≤ 80%, 110% if LTV > 80%). The calculator routes
+    automatically when `cp_is_natural_person = False` and `is_sme = False`.
 
 #### Income-Producing (Art. 124I — Whole-Loan)
 
@@ -174,6 +181,16 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 |-----------|------------|
 | ADC (standard) | 150% |
 | ADC (pre-sold) | 100% |
+
+#### Other Real Estate (Art. 124J)
+
+Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a):
+
+| Sub-Type | Risk Weight |
+|----------|------------|
+| Income-dependent (any property type) | 150% |
+| Residential, non-income-dependent | Counterparty RW |
+| Commercial, non-income-dependent | max(60%, counterparty RW) |
 
 **Source**: `B31_COMMERCIAL_INCOME_LTV_BANDS`, `B31_ADC_RISK_WEIGHT`, `B31_ADC_PRESOLD_RISK_WEIGHT` in `data/tables/b31_risk_weights.py`
 

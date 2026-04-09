@@ -62,7 +62,7 @@ Two optional input fields support Art. 110A:
 | 6 | CCC+ and below | 150% |
 | Unrated | — | 100% |
 
-**Domestic currency**: Sovereign exposures denominated and funded in the domestic currency of that sovereign may receive **0%** risk weight (Art. 114(4)).
+**Domestic currency**: UK central government and Bank of England exposures denominated and funded in **sterling** receive **0%** risk weight (Art. 114(4)). Third-country sovereign exposures in their domestic currency may also receive 0% where the jurisdiction's supervisory regime is deemed equivalent (Art. 114(7) — applies to EU member states). The ECB receives 0% unconditionally (Art. 114(3)).
 
 ## RGLA Exposures (CRR Art. 115)
 

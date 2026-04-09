@@ -28,7 +28,7 @@ Sovereign exposures use the corporate correlation formula. F-IRB uses supervisor
 
 ## Domestic Sovereign
 
-### UK Domestic Currency Treatment (Art. 114(3))
+### UK Domestic Currency Treatment (Art. 114(4))
 
 Exposures to the **UK central government and central bank** denominated and funded
 in **GBP** receive a **0% risk weight**, regardless of external credit rating or CQS.
@@ -46,11 +46,26 @@ The override requires both:
 Exposures to UK sovereign entities in **foreign currencies** (e.g. USD-denominated Gilts)
 fall back to the standard CQS-based risk weight table.
 
-### EU Domestic Currency Treatment (Art. 114(4))
+### ECB Treatment (Art. 114(3))
+
+Exposures to the **European Central Bank** receive a **0% risk weight** unconditionally,
+per Art. 114(3). This provision is identical in both CRR and PRA PS1/26.
+
+### EU Domestic Currency Treatment (Art. 114(7))
 
 Exposures to **EU member state central governments and central banks** denominated in
 that member state's **domestic currency** receive a **0% risk weight**, regardless of
 external credit rating or CQS.
+
+!!! warning "Regulatory Basis — Third-Country Reciprocity"
+    In the UK-onshored CRR, Art. 114(4) was narrowed from the original EU CRR
+    (which covered all member states) to apply only to the **UK central government
+    and Bank of England in sterling**. Post-Brexit, the 0% treatment for EU member
+    state domestic-currency sovereign exposures is provided by **Art. 114(7)** —
+    the third-country reciprocity provision, which allows UK firms to apply 0%
+    where the third country's supervisory regime is deemed equivalent. PRA PS1/26
+    Art. 114(7) is not re-enacted in the PRA Rulebook but is preserved by
+    cross-reference to CRR Art. 114(7) via PS1/26 Art. 114(1)(b).
 
 This applies to all 27 EU member states:
 
@@ -71,9 +86,9 @@ regulatory 0% RW is applied rather than an internal model estimate.
 
 ```python
 if counterparty.country_code == "GB" and exposure.currency == "GBP":
-    risk_weight = 0.00  # Art. 114(3) UK domestic currency 0% RW
+    risk_weight = 0.00  # Art. 114(4) UK domestic currency 0% RW
 elif is_eu_member(counterparty.country_code) and exposure.currency == domestic_currency(counterparty.country_code):
-    risk_weight = 0.00  # Art. 114(4) EU domestic currency 0% RW
+    risk_weight = 0.00  # Art. 114(7) EU domestic currency 0% RW
     approach = "SA"     # Forced to standardised approach
 else:
     risk_weight = cqs_lookup(counterparty.cqs)  # Standard CQS table
@@ -104,11 +119,17 @@ else:
 
 Central bank exposures receive the same treatment as their sovereign:
 
-| Central Bank | Sovereign Link | Risk Weight |
-|--------------|----------------|-------------|
-| Bank of England | UK Government | 0% |
-| European Central Bank | Per member state or EU | 0% |
-| Federal Reserve | US Government | 0-20% |
+| Central Bank | Sovereign Link | Risk Weight | Basis |
+|--------------|----------------|-------------|-------|
+| Bank of England | UK Government | 0% | Art. 114(4) — domestic currency |
+| European Central Bank | N/A | 0% | Art. 114(3) — unconditional |
+| Federal Reserve | US Government | 0-20% | Art. 114(2) — sovereign CQS |
+
+!!! info "Basel 3.1 — Unrated Central Banks (Art. 114(2A))"
+    PRA PS1/26 introduces Art. 114(2A): where a central bank has **no ECAI rating**
+    but its **central government** does, the central bank exposure shall be treated
+    under Art. 114(2) using the central government's credit assessment. This codifies
+    what was previously implicit practice. CRR has no equivalent paragraph.
 
 ### Reserves Held
 
@@ -203,10 +224,12 @@ RWA = £20,000,000 × 100% = £20,000,000
 | Topic | CRR Article | BCBS CRE |
 |-------|-------------|----------|
 | Sovereign definition | Art. 114 | CRE20.7-10 |
-| Risk weights | Art. 114 | CRE20.11 |
-| Domestic currency 0% RW | Art. 114(3) | CRE20.9 |
+| Risk weights (ECAI) | Art. 114(2) | CRE20.11 |
+| ECB 0% RW | Art. 114(3) | — |
+| UK domestic currency 0% RW | Art. 114(4) | CRE20.9 |
+| Third-country domestic currency | Art. 114(7) | CRE20.9 |
+| Central bank = sovereign | Art. 114; PS1/26 Art. 114(2A) | CRE20.8 |
 | MDB treatment | Art. 117 | CRE20.12-14 |
-| Central bank treatment | Art. 114(4) | CRE20.8 |
 
 ## Next Steps
 

@@ -147,14 +147,17 @@ Same as IRB: provisions are tracked but not deducted from EAD.
 
 ## Key Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-G | SA exposure with drawn-first provision deduction |
-| CRR-G | SA off-balance sheet: provision reduces nominal before CCF |
-| CRR-G | Multi-level beneficiary resolution (direct, facility, counterparty) |
-| CRR-G | IRB expected loss calculation (provisions not deducted) |
-| CRR-G | EL vs provisions: shortfall case |
-| CRR-G | EL vs provisions: excess case |
+| Scenario ID | Description | Key Validation |
+|-------------|-------------|----------------|
+| CRR-G1 | SA with specific provision — drawn-first deduction | Provision reduces drawn amount first, remainder reduces nominal before CCF (Art. 111(1)(a)-(b)). Net EAD reflects deduction. |
+| CRR-G2 | IRB EL shortfall — provisions < expected loss | EL shortfall = EL − provisions; 50/50 CET1/T2 deduction (Art. 36(1)(d), Art. 62(d)) |
+| CRR-G3 | IRB EL excess — provisions > expected loss | EL excess credited to T2, capped at 0.6% of IRB RWA (Art. 62(d)) |
+
+Additional spec scenarios validated through the above:
+
+- **SA OBS provision deduction**: Provision reduces nominal before CCF application (validated within G1 pipeline — drawn-first mechanics apply to OBS)
+- **Multi-level beneficiary resolution**: Direct, facility, and counterparty-level provisions resolved in priority order with pro-rata distribution (validated through G1 pipeline and unit tests)
+- **Art. 159(3) two-branch rule**: Non-defaulted shortfall and defaulted excess computed separately when conditions hold (validated through G2/G3 and dedicated unit tests)
 
 ## Acceptance Tests
 

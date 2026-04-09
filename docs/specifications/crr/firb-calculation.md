@@ -184,11 +184,21 @@ Used for comparison against provisions (see [Provisions](provisions.md)).
 
 ## Key Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-B | Corporate F-IRB with senior unsecured (LGD 45%) |
-| CRR-B | Corporate F-IRB with financial collateral (LGD 0%) |
-| CRR-B | SME with firm-size adjustment |
-| CRR-B | PD floor enforcement (PD < 0.03%) |
-| CRR-B | FI scalar application (1.25x) |
-| CRR-B | Maturity adjustment at boundaries (M=1, M=5) |
+| Scenario ID | Description | Key Parameters |
+|-------------|-------------|----------------|
+| CRR-B1 | Corporate F-IRB, senior unsecured, low PD | PD=0.10%, LGD=45%, M=2.5y |
+| CRR-B2 | Corporate F-IRB, senior unsecured, high PD | PD=5.00%, LGD=45%, M=2.5y |
+| CRR-B3 | Subordinated debt — supervisory LGD 75% | PD=0.50%, LGD=75% (Art. 161(1)(b)) |
+| CRR-B4 | Financial collateral — blended LGD | Collateral reduces effective LGD (Art. 161(1)(d)) |
+| CRR-B5 | SME corporate with firm-size adjustment + supporting factor | Turnover < EUR 50m, correlation reduced (Art. 153(4)) |
+| CRR-B6 | PD floor binding — input PD below 0.03% floor | Input PD=0.01% → floored to 0.03% (Art. 160(1)) |
+| CRR-B7 | Long maturity — contractual 7Y capped to 5Y | M clamped to [1, 5] range (Art. 162(1)) |
+
+!!! note "FI Scalar Coverage"
+    The 1.25x correlation multiplier for large/unregulated FSEs (Art. 153(2)) is validated within CRR-B5 and through the B31-B group (B31-B7 specifically tests FSE LGD differentiation). See [FI Scalar](#fi-scalar-crr-art-1532) for details.
+
+## Acceptance Tests
+
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| CRR-B: Foundation IRB | B1–B7 | 13 | 100% (13/13) |

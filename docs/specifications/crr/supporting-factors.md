@@ -55,8 +55,19 @@ When both factors apply to an exposure, the calculator uses the **minimum** (mos
 
 | Scenario ID | Description | Expected Factor |
 |-------------|-------------|-----------------|
-| CRR-F | SME below EUR 2.5m threshold | 0.7619 |
-| CRR-F | SME above EUR 2.5m threshold | 0.85 |
-| CRR-F | SME spanning both tiers | Blended |
-| CRR-F | Infrastructure exposure | 0.75 |
-| CRR-F | Combined SME + infrastructure | min(SME, 0.75) |
+| CRR-F1 | Small SME — Tier 1 only (exposure ≤ EUR 2.5m) | 0.7619 |
+| CRR-F2 | Medium SME — blended tiers (exposure spans threshold) | Blended (weighted average of 0.7619 and 0.85) |
+| CRR-F3 | Large SME — Tier 2 dominant (exposure well above EUR 2.5m) | → 0.85 |
+| CRR-F4 | SME retail — Tier 1 factor applied to retail-classified SME | 0.7619 |
+| CRR-F5 | Infrastructure — flat factor (not tiered) | 0.75 (Art. 501a) |
+| CRR-F6 | Large corporate — no SME factor (turnover > EUR 50m threshold) | 1.0 (no discount) |
+| CRR-F7 | Boundary — exposure exactly at EUR 2.5m (GBP ~£2.18m) threshold | Tier 1 factor (0.7619) applies up to threshold |
+
+!!! note "Combined Factors"
+    When both SME and infrastructure factors apply, the calculator uses the minimum (most beneficial) factor. This is validated within CRR-F5 where infrastructure exposures may also qualify as SME.
+
+## Acceptance Tests
+
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| CRR-F: Supporting Factors | F1–F7 | 15 | 100% (15/15) |

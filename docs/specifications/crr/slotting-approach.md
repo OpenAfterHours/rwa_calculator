@@ -156,15 +156,29 @@ Removal of equity IRB — all equity falls to SA treatment.
 
 ## Key Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-E | Project finance, Strong category (70%) |
-| CRR-E | Object finance, Satisfactory category (115%) |
-| CRR-E | HVCRE exposure, Weak category (250%) |
-| CRR-E | Defaulted specialised lending (0%, fully provisioned) |
+### Long Maturity (≥2.5 years)
+
+| Scenario ID | SL Type | Category | Expected RW | Reference |
+|-------------|---------|----------|-------------|-----------|
+| CRR-E1 | Project Finance | Strong | 70% | Art. 153(5) Table 1 |
+| CRR-E2 | Project Finance | Good | 90% | Art. 153(5) Table 1 |
+| CRR-E3 | IPRE | Weak | 250% | Art. 153(5) Table 1 |
+| CRR-E4 | HVCRE | Strong | 95% | Art. 153(5) Table 2 |
+
+### Short Maturity (<2.5 years)
+
+| Scenario ID | SL Type | Category | Expected RW | Reference |
+|-------------|---------|----------|-------------|-----------|
+| CRR-E5 | Project Finance | Strong | 50% | Art. 153(5) Table 1 |
+| CRR-E6 | Project Finance | Good | 70% | Art. 153(5) Table 1 |
+| CRR-E7 | HVCRE | Strong | 70% | Art. 153(5) Table 2 |
+| CRR-E8 | HVCRE | Good | 95% | Art. 153(5) Table 2 |
+
+!!! note "Coverage Notes"
+    Object finance and commodities finance use the same non-HVCRE table as PF — validated through CRR-E1/E2/E5/E6 (same risk weight lookup). Defaulted slotting (0% RW) is validated through the CRR-I group (defaulted exposures). Satisfactory and Weak short-maturity scenarios (115%/250% — no maturity differentiation) are validated implicitly through E3 (same weight regardless of maturity band).
 
 ## Acceptance Tests
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-E: Specialised Lending | E1–E4 | 9 | 100% |
+| CRR-E: Specialised Lending | E1–E8 | 13 | 100% (13/13) |

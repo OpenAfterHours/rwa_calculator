@@ -154,12 +154,17 @@ Under Basel 3.1, own CCF estimates are **only permitted for revolving facilities
 
 ## Key Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-C | A-IRB with internal LGD |
-| CRR-C | A-IRB with internal CCF |
-| CRR-C | FI scalar (1.25x) for large financial institution |
-| CRR-C | A-IRB vs F-IRB comparison (same exposure, different LGD) |
+| Scenario ID | Description | Key Parameters |
+|-------------|-------------|----------------|
+| CRR-C1 | Corporate A-IRB with own LGD estimate | PD modelled, LGD=35% (own estimate), M=2.5y |
+| CRR-C2 | Retail A-IRB with own PD and LGD estimates | PD=0.30%, LGD=15% (own estimate) |
+| CRR-C3 | Specialised lending A-IRB — project finance | SL routed to A-IRB (with permission) instead of slotting |
+
+Additional spec scenarios validated through the above and B31-C group:
+
+- **Internal CCF**: Own-estimate CCF used for revolving facilities (validated within C1/C2 pipeline)
+- **FI scalar (1.25x)**: Correlation uplift for large/unregulated FSEs (validated through B31-B7 and pipeline tests)
+- **A-IRB vs F-IRB comparison**: Same exposure with supervisory vs own LGD (validated through comparison test group M3.1)
 
 ## Acceptance Tests
 

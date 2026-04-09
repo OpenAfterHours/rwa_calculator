@@ -163,24 +163,27 @@ This ensures that provisions reduce the nominal amount before the CCF multiplier
 
 ## Key Scenarios
 
+!!! note "Test Coverage"
+    CCF scenarios are validated implicitly through the CRM acceptance test group (CRR-D, B31-D) and pipeline integration tests. CCF application is a prerequisite step for EAD calculation in all CRM scenarios. The IDs below use a `.CCF` sub-designation to distinguish them from the CRM collateral/guarantee scenarios (CRR-D1–D14) in [`credit-risk-mitigation.md`](credit-risk-mitigation.md).
+
 ### CRR Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| CRR-D | Full risk CCF (100%) on guarantee |
-| CRR-D | Medium risk undrawn commitment (50% SA, 75% F-IRB) |
-| CRR-D | Trade LC at 20% under F-IRB Art. 166(9) exception |
-| CRR-D | Unconditionally cancellable (0% SA, 0% F-IRB) |
+| Scenario ID | CCF Category | SA CCF | F-IRB CCF | Reference |
+|-------------|-------------|--------|-----------|-----------|
+| CRR-D.CCF1 | Full Risk (FR) — guarantee | 100% | 100% | Art. 111, Art. 166(8) |
+| CRR-D.CCF2 | Medium Risk (MR) — undrawn commitment >1yr | 50% | 75% | Art. 111, Art. 166(8) |
+| CRR-D.CCF3 | Medium-Low Risk (MLR) — trade LC for goods movement | 20% | 20% | Art. 111, Art. 166(9) |
+| CRR-D.CCF4 | Low Risk (LR) — unconditionally cancellable | 0% | 0% | Art. 111, Art. 166(8) |
 
 ### Basel 3.1 Scenarios
 
-| Scenario ID | Description |
-|-------------|-------------|
-| B31-D | Full risk CCF (100%) on guarantee — unchanged from CRR |
-| B31-D | Other OBS (MR) at 50% — NIFs, RUFs (same as CRR SA; F-IRB aligned down from 75%) |
-| B31-D | Trade LC (MLR) at 20% — from Table A1 Row 4 (no separate F-IRB exception) |
-| B31-D | Other commitments (OC) at 40% — replaces CRR maturity-based 50%/20% split |
-| B31-D | Unconditionally cancellable (LR) at 10% — up from CRR 0% |
-| B31-D | F-IRB uses SA CCFs — Art. 166C alignment (no distinct F-IRB schedule) |
-| B31-D | Certain drawdown (FRC) at 100% — factoring, repos, forward purchases |
-| B31-D | Commitment-to-issue: OC to issue FR → min(40%,100%) = 40% (Art. 111(1)(c)) |
+| Scenario ID | Table A1 Row | CCF Category | SA/F-IRB CCF | Key Change from CRR | Reference |
+|-------------|-------------|-------------|-------------|---------------------|-----------|
+| B31-D.CCF1 | Row 1 | Full Risk (FR) — guarantee | 100% | Unchanged | Art. 111 Table A1 |
+| B31-D.CCF2 | Row 2 | Certain Drawdown (FRC) — factoring, repos | 100% | Renamed from Annex I para 2 | Art. 111 Table A1 |
+| B31-D.CCF3 | Row 3 | Other OBS (MR) — NIFs, RUFs | 50% | F-IRB aligned down from 75% | Art. 111 Table A1 |
+| B31-D.CCF4 | Row 4 | Medium-Low Risk (MLR) — trade LCs | 20% | Art. 166(9) exception removed | Art. 111 Table A1 |
+| B31-D.CCF5 | Row 5 | Other Commitments (OC) | 40% | Replaces CRR 50%/>1yr / 20%/≤1yr split | Art. 111 Table A1 |
+| B31-D.CCF6 | Row 6 | Low Risk (LR) — unconditionally cancellable | 10% | Up from CRR 0% | Art. 111 Table A1 |
+| B31-D.CCF7 | — | F-IRB uses SA CCFs (Art. 166C alignment) | Per SA table | No distinct F-IRB schedule | Art. 166C |
+| B31-D.CCF8 | — | Commitment-to-issue lower-of rule | min(CCF_commitment, CCF_underlying) | New Art. 111(1)(c) | Art. 111(1)(c) |

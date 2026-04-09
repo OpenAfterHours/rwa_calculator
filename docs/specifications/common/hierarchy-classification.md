@@ -220,3 +220,32 @@ Based on IRB permissions in the configuration, exposures are routed to:
 ### FX Conversion
 
 All monetary values are converted to the base currency (GBP) using provided FX rates before calculation.
+
+## Key Scenarios
+
+!!! note "Test Coverage"
+    Hierarchy and classification are validated through unit tests (`test_hierarchy.py`, `test_classifier.py`) and integration tests (`test_loader_to_hierarchy.py`, `test_hierarchy_to_classifier.py`), not dedicated acceptance test scenarios. The scenario IDs below document the key behaviours for traceability.
+
+### Hierarchy Resolution (HIER)
+
+| Scenario ID | Description |
+|-------------|-------------|
+| HIER-1 | Rating inheritance — child counterparty inherits CQS from rated parent |
+| HIER-2 | Multi-level hierarchy — rating traversed upward through two or more parent levels |
+| HIER-3 | Lending group aggregation — turnover/exposure summed across group members |
+| HIER-4 | Facility hierarchy — sub-facility undrawn amount aggregated to root facility |
+| HIER-5 | Duplicate membership — counterparty in multiple lending groups keeps first assignment |
+| HIER-6 | Negative drawn amount clamping — negative balances do not increase undrawn headroom |
+
+### Exposure Classification (CLASS)
+
+| Scenario ID | Description |
+|-------------|-------------|
+| CLASS-1 | Entity-type to exposure class mapping (e.g., `sovereign` → CENTRAL_GOVT_CENTRAL_BANK) |
+| CLASS-2 | SME detection — corporate reclassified as CORPORATE_SME when turnover < threshold |
+| CLASS-3 | Retail qualification — individual reclassified as RETAIL when aggregate exposure < threshold |
+| CLASS-4 | Retail breach — exposure exceeding threshold reclassified as CORPORATE |
+| CLASS-5 | Art. 112 priority ordering — higher-priority class takes precedence (e.g., equity > corporate) |
+| CLASS-6 | Art. 147A approach restriction — FSE forced to F-IRB, sovereign forced to SA (Basel 3.1) |
+| CLASS-7 | Large corporate restriction — revenue > GBP 440m forced to F-IRB (Basel 3.1, Art. 147A(1)(d)) |
+| CLASS-8 | Defaulted exposure identification — default status flag propagated through classification |

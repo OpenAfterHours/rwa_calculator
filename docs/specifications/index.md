@@ -166,36 +166,36 @@ Dual-framework comparison scenarios:
 
 Each scenario is tagged with an identifier for traceability:
 
-| Prefix | Description |
-|--------|-------------|
-| `CRR-A` | CRR Standardised Approach |
-| `CRR-B` | CRR Foundation IRB |
-| `CRR-C` | CRR Advanced IRB |
-| `CRR-D` | CRR Credit Risk Mitigation |
-| `CRR-E` | CRR Slotting Approach |
-| `CRR-F` | CRR Supporting Factors |
-| `CRR-G` | CRR Provisions |
-| `CRR-H` | CRR Complex/Combined |
-| `CRR-I` | CRR Defaulted Exposures |
-| `CRR-J` | CRR Equity |
-| `B31-A` | Basel 3.1 Standardised Approach |
-| `B31-B` | Basel 3.1 Foundation IRB |
-| `B31-C` | Basel 3.1 Advanced IRB |
-| `B31-D` | Basel 3.1 Credit Risk Mitigation |
-| `B31-D7` | Basel 3.1 Parameter Substitution |
-| `B31-E` | Basel 3.1 Slotting Approach |
-| `B31-F` | Basel 3.1 Output Floor |
-| `B31-G` | Basel 3.1 Provisions |
-| `B31-H` | Basel 3.1 Complex/Combined |
-| `B31-K` | Basel 3.1 Defaulted Exposures |
-| `B31-L` | Basel 3.1 Equity Approach |
-| `B31-M` | Basel 3.1 Model Permissions |
-| `M3.1` | Dual-framework comparison |
-| `M3.2` | Capital impact analysis |
-| `M3.3` | Transitional floor modelling |
-| `STRESS` | Pipeline stress tests (10K–100K scale) |
-| `HIER-` | Hierarchy scenarios |
-| `CLASS-` | Classification scenarios |
+| Prefix | Scenarios | Description |
+|--------|-----------|-------------|
+| `CRR-A` | A1–A9, A11 | CRR Standardised Approach |
+| `CRR-B` | B1–B7 | CRR Foundation IRB |
+| `CRR-C` | C1–C3 | CRR Advanced IRB |
+| `CRR-D` | D1–D14, D.CCF1–CCF4 | CRR Credit Risk Mitigation and CCFs |
+| `CRR-E` | E1–E8 | CRR Slotting Approach |
+| `CRR-F` | F1–F7 | CRR Supporting Factors |
+| `CRR-G` | G1–G3, G4–G6 | CRR Provisions (G4–G6 in CRM spec) |
+| `CRR-H` | H1, H3 | CRR Complex/Combined |
+| `CRR-I` | I1–I3 | CRR Defaulted Exposures |
+| `CRR-J` | J1–J20 | CRR Equity |
+| `B31-A` | A1–A11 | Basel 3.1 Standardised Approach |
+| `B31-B` | B1–B7 | Basel 3.1 Foundation IRB |
+| `B31-C` | C1–C3 | Basel 3.1 Advanced IRB |
+| `B31-D` | D1–D6, D7–D7e, D.CCF1–CCF8 | Basel 3.1 Credit Risk Mitigation and CCFs |
+| `B31-E` | E1–E4 | Basel 3.1 Slotting Approach |
+| `B31-F` | F1–F3 | Basel 3.1 Output Floor |
+| `B31-G` | G1–G3 | Basel 3.1 Provisions |
+| `B31-H` | H1, H3 | Basel 3.1 Complex/Combined |
+| `B31-K` | K1–K12 | Basel 3.1 Defaulted Exposures |
+| `B31-L` | L1–L23 | Basel 3.1 Equity Approach |
+| `B31-M` | M1–M12 | Basel 3.1 Model Permissions |
+| `M3.1` | — | Dual-framework comparison |
+| `M3.2` | — | Capital impact analysis |
+| `M3.3` | — | Transitional floor modelling |
+| `STRESS` | 1–14 | Pipeline stress tests (10K–100K scale) |
+| `HIER` | 1–6 | Hierarchy resolution scenarios |
+| `CLASS` | 1–8 | Classification scenarios |
+| `CONFIG` | 1–6 | Configuration scenarios |
 
 ## For Developers
 

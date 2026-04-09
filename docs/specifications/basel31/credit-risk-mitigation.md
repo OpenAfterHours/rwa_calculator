@@ -124,23 +124,71 @@ Null maturity defaults to **10y+** (conservative) under Basel 3.1, vs 5y+ under 
 
 ## Volatility Scaling (Art. 226)
 
-### Non-Daily Revaluation
+PRA PS1/26 restructures CRR Art. 226 into two numbered paragraphs: paragraph 1 retains
+the non-daily revaluation formula (from CRR Art. 226); paragraph 2 absorbs the liquidation
+period scaling formula previously in CRR Art. 225(2)(c), since the own-estimates approach
+(Art. 225) is removed under Basel 3.1.
 
-When collateral is not revalued daily, haircuts are scaled up:
+### Art. 226(1) — Non-Daily Revaluation Adjustment
+
+When collateral is revalued less frequently than daily, haircuts must be scaled up using
+the square-root-of-time formula:
 
 ```
-H_m = H x sqrt(T_m / 10)
+H = H_m × sqrt((N_R + T_m − 1) / T_m)
 ```
 
-Where `T_m` is the liquidation period in business days.
+| Variable | Definition |
+|----------|-----------|
+| H | Volatility adjustment to be applied |
+| H_m | Volatility adjustment where there is daily revaluation |
+| N_R | Actual number of business days between revaluations |
+| T_m | Liquidation period for the transaction type (business days) |
 
-### Liquidation Periods
+When revaluation is daily (N_R = 1), the formula reduces to H = H_m (no adjustment).
 
-| Transaction Type | Period |
-|-----------------|--------|
-| Repo / SFT | 5 days |
-| Capital market | 10 days |
-| Secured lending | 20 days |
+!!! warning "Not Yet Implemented"
+    Art. 226(1) non-daily revaluation adjustment is not implemented. No
+    `revaluation_frequency_days` input field exists in the collateral schema. Haircuts are
+    understated when collateral is not marked-to-market daily. See IMPLEMENTATION_PLAN.md
+    P1.101.
+
+### Art. 226(2) — Liquidation Period Scaling
+
+When the applicable liquidation period differs from the haircut table's reference period,
+scale using:
+
+```
+H_m = H_n × sqrt(T_m / T_n)
+```
+
+| Variable | Definition |
+|----------|-----------|
+| T_m | Liquidation period for the transaction type |
+| T_n | Liquidation period under Art. 224(2)(a)–(c) (the table reference period) |
+| H_m | Volatility adjustment based on T_m |
+| H_n | Volatility adjustment based on T_n |
+
+### Liquidation Periods (Art. 224(2))
+
+| Transaction Type | Minimum Holding Period (T_m) |
+|-----------------|------------------------------|
+| Repo-style / SFT | 5 business days |
+| Other capital market transactions | 10 business days |
+| Secured lending | 20 business days |
+
+Art. 224 Table 3 provides haircuts at the 10-day holding period. Apply Art. 226(2) to
+scale to 5-day (repos) or 20-day (secured lending) periods. Apply Art. 226(1) additionally
+when revaluation is not daily.
+
+### Key Change from CRR
+
+| Aspect | CRR | Basel 3.1 |
+|--------|-----|-----------|
+| Non-daily revaluation formula | Art. 226 (single article) | Art. 226(1) — **unchanged** |
+| Liquidation period scaling | Art. 225(2)(c) | Art. 226(2) — **moved** |
+| Own-estimates approach | Art. 225 (permitted) | Art. 225 **removed** |
+| Art. 226 scope | Supervisory + own-estimates | Supervisory only |
 
 ---
 

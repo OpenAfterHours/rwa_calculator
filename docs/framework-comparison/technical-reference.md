@@ -221,6 +221,74 @@ PRA PS1/26 Art. 224 Table 3 (10-day holding period):
 
 Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22.54).
 
+## Volatility Scaling (Art. 226)
+
+Supervisory haircuts from Art. 224 assume daily revaluation and a 10-day holding period.
+Two scaling adjustments may apply:
+
+### Art. 226(2) — Liquidation Period Scaling
+
+Scales haircuts between holding periods (e.g., 10-day table value to 5-day repo period):
+
+```
+H_m = H_n × sqrt(T_m / T_n)
+```
+
+| Variable | Definition |
+|----------|-----------|
+| T_m | Liquidation period for the transaction type |
+| T_n | Reference period from haircut table (10 days for Art. 224 Table 3) |
+| H_n | Table haircut at period T_n |
+| H_m | Scaled haircut at period T_m |
+
+| Transaction Type | T_m | Scaling Factor (vs 10-day) |
+|-----------------|-----|---------------------------|
+| Repo / SFT | 5 days | × 0.707 (`sqrt(0.5)`) |
+| Capital market | 10 days | × 1.000 (no scaling) |
+| Secured lending | 20 days | × 1.414 (`sqrt(2)`) |
+
+**Implementation:** `scale_haircut_for_liquidation_period()` in `data/tables/crr_haircuts.py`;
+applied via `liquidation_period_days` column in `engine/crm/haircuts.py`.
+
+### Art. 226(1) — Non-Daily Revaluation Adjustment
+
+When collateral is revalued less frequently than daily, an additional scaling applies
+**on top of** the liquidation period adjustment:
+
+```
+H = H_m × sqrt((N_R + T_m − 1) / T_m)
+```
+
+| Variable | Definition |
+|----------|-----------|
+| H | Final volatility adjustment to apply |
+| H_m | Haircut after liquidation period scaling (daily revaluation basis) |
+| N_R | Actual number of business days between revaluations |
+| T_m | Liquidation period (business days) |
+
+**Example:** Government bond CQS 1 (0-1y), weekly revaluation (N_R = 5), repo (T_m = 5):
+
+- Table haircut (10-day): 0.5%
+- After Art. 226(2): 0.5% × sqrt(5/10) = 0.354%
+- After Art. 226(1): 0.354% × sqrt((5 + 5 - 1)/5) = 0.354% × 1.342 = **0.475%**
+
+!!! warning "Not Yet Implemented"
+    Art. 226(1) non-daily revaluation scaling is not implemented. No
+    `revaluation_frequency_days` schema field exists. All haircuts assume daily
+    revaluation (N_R = 1). See IMPLEMENTATION_PLAN.md P1.101.
+
+### CRR vs Basel 3.1 Structural Change
+
+CRR Art. 226 was a single (unnumbered) article covering non-daily revaluation only.
+The liquidation period scaling formula was in Art. 225(2)(c) (own-estimates approach).
+PRA PS1/26 removes Art. 225 entirely (own-estimates approach no longer permitted) and
+restructures Art. 226 into two numbered paragraphs: (1) non-daily revaluation, (2)
+liquidation period scaling. The formulas themselves are unchanged.
+
+See [CRR CRM spec](../specifications/crr/credit-risk-mitigation.md#volatility-scaling-crr-art-226)
+and [B31 CRM spec](../specifications/basel31/credit-risk-mitigation.md#volatility-scaling-art-226)
+for full regulatory text.
+
 ## SA Residential Real Estate Risk Weights (Basel 3.1)
 
 Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct residential RE treatments:

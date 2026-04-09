@@ -996,6 +996,40 @@ Basel 3.1 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+.
 See [Supervisory Haircut Comparison](technical-reference.md#supervisory-haircut-comparison)
 for the full haircut tables across all maturity bands.
 
+### Volatility Scaling and Non-Daily Revaluation (Art. 226)
+
+When collateral is revalued less frequently than daily, supervisory haircuts must be
+scaled up using a square-root-of-time formula. The non-daily revaluation formula is
+**unchanged** between CRR and Basel 3.1:
+
+```
+H = H_m × sqrt((N_R + T_m − 1) / T_m)
+```
+
+Where `N_R` is the number of business days between revaluations and `T_m` is the
+liquidation period. For weekly revaluation (N_R = 5) on a 10-day holding period, this
+increases haircuts by ~22% (`sqrt(14/10) ≈ 1.183`).
+
+The structural change under Basel 3.1 is the **removal of Art. 225** (own-estimates
+approach for volatility adjustments). The liquidation period scaling formula previously
+in Art. 225(2)(c) is relocated to Art. 226(2):
+
+| Aspect | CRR | Basel 3.1 | Change |
+|--------|-----|-----------|--------|
+| Non-daily revaluation | Art. 226 | Art. 226(1) | Unchanged (renumbered) |
+| Liquidation period scaling | Art. 225(2)(c) | Art. 226(2) | Moved |
+| Own-estimates volatility | Art. 225 | — | **Removed** |
+
+!!! warning "Not Yet Implemented — Art. 226(1)"
+    Non-daily revaluation adjustment is not implemented in either framework. No
+    `revaluation_frequency_days` input field exists. Haircuts are understated for
+    collateral not marked-to-market daily. See
+    [B31 CRM spec](../specifications/basel31/credit-risk-mitigation.md#art-2261--non-daily-revaluation-adjustment)
+    for full formula and variable definitions.
+
+See [Volatility Scaling](technical-reference.md#volatility-scaling-art-226) for
+developer-facing formula details and code references.
+
 ### Overcollateralisation (Foundation Collateral Method)
 
 | Collateral Type | Overcoll. Ratio | Minimum EAD Coverage |

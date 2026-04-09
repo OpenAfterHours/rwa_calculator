@@ -227,6 +227,50 @@ Note: There is no separate "large corporate" correlation multiplier for non-fina
 
 A-IRB own-estimate CCFs must be at least **50% of the SA CCF** for the same item type.
 
+## Post-Model Adjustments (Art. 146(3), 153(5A), 154(4A), 158(6A))
+
+Basel 3.1 introduces mandatory post-model adjustments (PMAs) — conservative overlays on
+A-IRB model outputs with no CRR equivalent. PMAs address material model non-compliance
+without requiring full model re-estimation.
+
+### Components
+
+| Component | Formula | Article |
+|-----------|---------|---------|
+| Mortgage RW floor | `RW = max(RW_modelled, mortgage_rw_floor)` | Art. 154(4A)(b) |
+| General RWA scalar | `RWEA_adj = RWEA × (1 + pma_rwa_scalar)` | Art. 153(5A) / 154(4A)(a) |
+| EL scalar | `EL_adj = EL × (1 + pma_el_scalar)` | Art. 158(6A) |
+
+The mortgage RW floor default is **10%** for UK residential mortgage exposures (PRA supervisory
+parameter). The general scalars are set per model via `PostModelAdjustmentConfig`.
+
+### Sequencing (Mandatory)
+
+Art. 154(4A) prescribes a strict ordering:
+
+1. **Step 1 — Mortgage floor** (Art. 154(4A)(b)): Floor the modelled risk weight
+2. **Step 2 — PMA scalar** (Art. 154(4A)(a)): Scale the floor-adjusted RWEA
+
+The PMA scalar amplifies the post-floor RWEA, not the raw model output. Reversing the
+order would produce incorrect results because the scalar would inflate a sub-floor RW
+before the floor is applied.
+
+### EL Monotonicity (Art. 158(6A))
+
+```
+EL_adjusted >= EL_unadjusted
+```
+
+PMAs cannot decrease expected loss. The `pma_el_scalar` must be ≥ 0, ensuring conservative
+RWA overlays do not inadvertently reduce EL shortfall calculations (Art. 159).
+
+### Output Floor Interaction
+
+PMAs are included in the un-floored TREA (U-TREA) used for the output floor comparison.
+They cannot be avoided by flooring to SA — the floor applies to the post-PMA total.
+
+See the [A-IRB specification](../specifications/basel31/airb-calculation.md#post-model-adjustments-art-1463-1544a-1586a) for the complete implementation detail and COREP column mapping.
+
 ## IRB Maturity Calculation Changes
 
 Basel 3.1 refines the IRB effective maturity (M) calculation (PRA PS1/26 Art. 162):

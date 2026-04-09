@@ -207,9 +207,26 @@ quantify additive adjustments to offset the impact:
 
 | PMA Component | Covers | Added via |
 |---------------|--------|----------|
+| Mortgage RW floor | Min 10% RW for UK residential mortgage exposures | Art. 154(4A)(b) |
 | (a) Corporate/Institution RWA | Model deficiencies on corporate/institution exposures | Art. 153(5A) |
 | (b) Retail RWA | Model deficiencies on retail exposures | Art. 154(4A)(a) |
 | (c) Expected Loss | Model deficiencies affecting EL amounts | Art. 158(6A) |
+
+#### Sequencing (Art. 154(4A))
+
+The mortgage RW floor and general PMA scalars must be applied in a **mandatory order**:
+
+1. **First:** Mortgage risk weight floor (Art. 154(4A)(b)) — `RW = max(RW_modelled, 0.10)`
+2. **Then:** General PMA RWA/EL scalar (Art. 154(4A)(a) / Art. 153(5A) / Art. 158(6A))
+
+The PMA scalar operates on the floor-adjusted RWEA, not the raw modelled RWEA. Reversing
+the order would allow the scalar to amplify a sub-floor RW, producing an incorrectly low
+result. See the [A-IRB specification](../specifications/basel31/airb-calculation.md#adjustment-sequencing-art-1535a--art-1544a) for the full formula chain.
+
+#### EL Monotonicity (Art. 158(6A))
+
+EL after PMA must satisfy `EL_adjusted >= EL_unadjusted`. PMAs cannot decrease expected
+loss, preventing conservative RWA overlays from inadvertently reducing EL shortfall.
 
 PMAs are included in the output floor calculation base, so they cannot be avoided by
 flooring to SA. They persist until the model non-compliance is remediated.

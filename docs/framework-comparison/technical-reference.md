@@ -197,6 +197,31 @@ PRA PS1/26 Art. 224 Table 3 (10-day holding period):
 
 Currency mismatch haircut remains 8% under both frameworks (CRR Art. 224 / CRE22.54).
 
+## SA Residential Real Estate Risk Weights (Basel 3.1)
+
+Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct residential RE treatments:
+
+**General (not income-dependent) — Art. 124F: Loan-Splitting**
+
+- Secured portion (up to **55% of property value**) → **20%** RW
+- Residual portion → **counterparty RW** (75% for individuals per Art. 124L)
+
+**Income-producing (cash-flow dependent) — Art. 124G, Table 6B: Whole-Loan**
+
+| LTV | ≤50% | 50–60% | 60–70% | 70–80% | 80–90% | 90–100% | >100% |
+|-----|------|--------|--------|--------|--------|---------|-------|
+| RW  | 30%  | 35%    | 40%    | 50%    | 60%    | 75%     | 105%  |
+
+!!! info "Junior Charge Multiplier (Art. 124G(2))"
+    Where prior-ranking charges exist that the institution does not hold, the Table 6B risk
+    weight is multiplied by **1.25×** when LTV > 50%. At LTV ≤ 50% the 30% weight applies
+    without uplift. The multiplied weight is capped at 105%.
+    **Example:** junior charge at 75% LTV → 50% × 1.25 = **62.5%** whole-loan.
+    CRR has no equivalent junior-charge mechanism for residential RE (Art. 125 applies flat
+    35% regardless of lien position).
+    See [key-differences](key-differences.md#residential-real-estate) for the full CRR vs
+    Basel 3.1 comparison.
+
 ## SA Commercial Real Estate Risk Weights (Basel 3.1)
 
 Basel 3.1 replaces CRR Art. 126 (flat 50%/100% split for all CRE) with entity-type-differentiated

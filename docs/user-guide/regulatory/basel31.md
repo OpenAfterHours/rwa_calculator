@@ -230,6 +230,13 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 | 90-100% | 75% |
 | > 100% | 105% |
 
+!!! info "Junior Charge Multiplier (Art. 124G(2))"
+    Where prior-ranking charges exist that the institution does not hold, the Table 6B
+    risk weight is multiplied by **1.25×** for LTV > 50% (capped at 105%).
+    Set `prior_charge_ltv` > 0 on the collateral record to trigger this treatment.
+    See [key-differences](../../framework-comparison/key-differences.md#residential-real-estate)
+    for the full CRR vs Basel 3.1 comparison.
+
 **Commercial Real Estate — General (Art. 124H):**
 
 For natural persons and SMEs, CRE uses **loan-splitting**: 60% RW on the secured portion

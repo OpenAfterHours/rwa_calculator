@@ -138,7 +138,16 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 | 90–100% | 75% |
 | > 100% | 105% |
 
-**Source**: `B31_RESIDENTIAL_INCOME_LTV_BANDS` in `data/tables/b31_risk_weights.py`
+**Junior Charge Multiplier (Art. 124G(2)):**
+
+| LTV | Multiplier | Effective RW (example) |
+|-----|-----------|------------------------|
+| ≤ 50% | 1.0× | 30% (no uplift) |
+| > 50% | 1.25× | e.g. 50% × 1.25 = 62.5% (at 70–80% LTV) |
+
+The multiplied weight is capped at 105% (the Table 6B ceiling).
+
+**Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 
 ### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 

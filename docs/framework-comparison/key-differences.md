@@ -435,6 +435,16 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 | 90-100% | 75% | **75%** |
 | > 100% | Cpty RW | **105%** |
 
+!!! info "Junior Charge Multiplier (Art. 124G(2))"
+    Where prior-ranking charges exist that the institution does not hold (i.e. a junior lien),
+    the Table 6B risk weight is multiplied by **1.25×** when LTV > 50%.
+    At LTV ≤ 50% the 30% weight applies without uplift.
+    The multiplied weight is capped at 105% (the Table 6B ceiling).
+    **Example:** junior charge at 75% LTV → 50% × 1.25 = **62.5%** whole-loan.
+    CRR has no equivalent junior-charge multiplier for residential RE.
+    See [B31 SA spec](../specifications/basel31/sa-risk-weights.md#income-producing-residential--whole-loan-art-124g-table-6b)
+    for full details.
+
 ### Commercial Real Estate
 
 #### CRE Loan-Splitting — Natural Person/SME (Art. 124H(1)–(2))

@@ -299,6 +299,29 @@ flooring to SA. They persist until the model non-compliance is remediated.
     Investment grade is assessed by the institution's own internal credit assessment
     (Art. 122(9)–(10)), not by external ratings. SME corporates receive 85% regardless.
 
+#### Short-Term Corporate ECAI (Art. 122(3), Table 6A) — New in Basel 3.1
+
+CRR has no short-term corporate ECAI table. Basel 3.1 introduces Table 6A for corporate
+exposures with a specific short-term credit assessment:
+
+| Short-Term CQS | Basel 3.1 RW |
+|----------------|--------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+This mirrors the institution short-term ECRA table (Art. 120(2), Table 4) but applies to
+corporate exposures. Under CRR, short-term corporate exposures use the standard Table 6
+long-term CQS mapping — there is no tenor-specific treatment.
+
+!!! warning "Not Yet Implemented"
+    Short-term corporate ECAI (Art. 122(3), Table 6A) is not yet implemented in the
+    calculator. No `has_short_term_ecai` schema field exists for corporate exposures.
+    All corporate exposures currently use the long-term CQS table (Art. 122(2), Table 6).
+    See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#short-term-corporate-ecai-art-1223-table-6a)
+    for details.
+
 ### Institution Exposures
 
 Basel 3.1 replaces the CRR institution risk weight approach with two distinct methods:

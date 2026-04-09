@@ -73,6 +73,20 @@ Sovereign weights are identical under CRR and Basel 3.1.
 
 **Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW`, `B31_SUBORDINATED_DEBT_RW` in `data/tables/`
 
+### Short-Term Corporate ECAI (Basel 3.1 Art. 122(3), Table 6A)
+
+New in Basel 3.1 — for corporate exposures with a specific short-term ECAI assessment:
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+CRR has no short-term corporate ECAI table. Not yet implemented — no lookup table or
+schema field exists. See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#short-term-corporate-ecai-art-1223-table-6a).
+
 ### Retail Risk Weights
 
 | Exposure Type | CRR | Basel 3.1 |

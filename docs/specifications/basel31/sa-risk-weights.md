@@ -171,6 +171,18 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
 | CQS 3 | 100% |
 | Others | 150% |
 
+CRR has no equivalent short-term corporate ECAI table — all corporate exposures use the
+long-term CQS mapping (Art. 122(1), Table 6) regardless of assessment tenor. The Table 6A
+structure mirrors institution short-term ECRA (Art. 120(2), Table 4) with the same weight
+progression.
+
+!!! warning "Not Yet Implemented — Schema Gap"
+    Short-term corporate ECAI (Art. 122(3), Table 6A) is not yet implemented. No
+    `has_short_term_ecai` schema field exists for corporate exposures (same gap as
+    institution Table 4A — see D3.8). The calculator falls back to long-term Table 6 for
+    all corporate exposures. No `B31_CORPORATE_SHORT_TERM_RISK_WEIGHTS` constant exists
+    in the codebase.
+
 ---
 
 ## Retail Risk Weights (Art. 123)

@@ -168,6 +168,22 @@ Standardised Approach risk weights are recalibrated:
     by the institution's own internal assessment (Art. 122(9)–(10)), not external ratings.
     For IRB output floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split or flat 100%.
 
+#### Short-Term Corporate ECAI (Art. 122(3), Table 6A)
+
+New in Basel 3.1 — corporate exposures with a specific short-term ECAI assessment use
+Table 6A instead of the long-term Table 6. CRR has no equivalent short-term corporate table.
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+!!! warning "Not Yet Implemented"
+    Short-term corporate ECAI (Table 6A) is not yet implemented. All corporate exposures
+    currently use the long-term CQS table (Table 6).
+
 #### Real Estate Exposures
 
 New risk weight approaches for real estate. All preferential RE risk weights require the

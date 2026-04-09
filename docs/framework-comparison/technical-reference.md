@@ -24,16 +24,23 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 
 ## Differentiated PD Floors (Basel 3.1)
 
-PRA PS1/26 Art. 163(1):
+PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (retail):
 
 | Exposure Class | PD Floor | Reference |
 |---------------|----------|-----------|
 | Corporate | 0.05% | Art. 160(1) |
 | Corporate SME | 0.05% | Art. 160(1) |
+| Sovereign | 0.05% | Art. 160(1) |
+| Institution | 0.05% | Art. 160(1) |
 | Retail Mortgage | 0.10% | Art. 163(1)(b) |
 | Retail Other | 0.05% | Art. 163(1)(c) |
 | QRRE (Transactors) | 0.05% | Art. 163(1)(c) |
 | QRRE (Revolvers) | 0.10% | Art. 163(1)(a) |
+
+!!! note "Sovereign and Institution PD Floors"
+    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
+    exposures to F-IRB only. PD floors remain relevant for any grandfathered or transitional
+    IRB treatment.
 
 ## A-IRB LGD Floors (Basel 3.1)
 

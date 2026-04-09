@@ -97,11 +97,19 @@ Where an exposure meets multiple criteria, the highest-priority class applies.
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
 | Large Corporate | 0.03% | 0.05% |
-| Institution/Bank | 0.03% | 0.05% |
+| Sovereign | 0.03% | 0.05% |
+| Institution | 0.03% | 0.05% |
 | Retail Mortgage | 0.03% | **0.10%** |
 | Retail QRRE (Transactor) | 0.03% | 0.05% |
 | Retail QRRE (Revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
+
+!!! note "Sovereign and Institution PD Floors"
+    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
+    exposures to F-IRB only. PD floors for these classes (Art. 160(1)) remain relevant for any
+    grandfathered or transitional IRB treatment. See the
+    [F-IRB specification](../specifications/basel31/firb-calculation.md#pd-floors-art-160-163)
+    for the complete table.
 
 ### LGD Floors (A-IRB Only)
 

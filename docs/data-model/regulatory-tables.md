@@ -356,6 +356,7 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Exposure Class | CRR | Basel 3.1 |
 |----------------|-----|-----------|
 | Corporate | 0.03% | 0.05% |
+| Sovereign | 0.03% | 0.05% |
 | Institution | 0.03% | 0.05% |
 | Retail Mortgage | 0.03% | 0.10% |
 | Retail QRRE (transactor) | 0.03% | 0.05% |

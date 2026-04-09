@@ -476,20 +476,87 @@ Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit 
 
 ## Key Scenarios
 
+### Basic CRM — CRR-D1 to CRR-D6
+
 | Scenario ID | Description |
 |-------------|-------------|
-| CRR-D | Financial collateral with cash (0% haircut) |
-| CRR-D | Government bond collateral with maturity bands |
-| CRR-D | FX mismatch haircut (8%) |
-| CRR-D | Overcollateralisation: RE at 1.4x ratio |
-| CRR-D | Minimum threshold: RE below 30% of EAD (zeroed) |
-| CRR-D | Maturity mismatch adjustment |
-| CRR-D | Beneficial guarantee substitution |
-| CRR-D | Non-beneficial guarantee (guarantor RW ≥ borrower RW) |
-| CRR-D | Multi-level collateral allocation |
+| CRR-D1 | Financial collateral with cash (0% haircut) |
+| CRR-D2 | Government bond collateral with maturity bands |
+| CRR-D3 | FX mismatch haircut (8%) |
+| CRR-D4 | Overcollateralisation: RE at 1.4× ratio |
+| CRR-D5 | Minimum threshold: RE below 30% of EAD (zeroed) |
+| CRR-D6 | Maturity mismatch adjustment |
+
+### Advanced CRM — CRR-D7 to CRR-D14
+
+These scenarios test the full CRM waterfall with guarantee substitution, credit derivatives,
+non-cash collateral types, overcollateralisation, and multi-mechanism chains. All use inline
+pipeline execution against unrated corporate borrowers (100% base RW) with £1,000,000 drawn
+unless otherwise stated.
+
+| Scenario ID | Description | CRM Mechanism | Key Inputs | Expected Outcome |
+|-------------|-------------|---------------|------------|------------------|
+| CRR-D7 | Non-beneficial guarantee | Guarantee substitution (Art. 235) | Guarantor: unrated corporate (100% RW) | RWA ≈ £1,000,000 — no benefit (guarantor RW = borrower RW) |
+| CRR-D8 | Sovereign guarantee (full substitution) | Guarantee substitution (Art. 235) | Guarantor: UK sovereign (CQS 0, 0% RW) | RWA ≈ £0 — full substitution to 0% RW |
+| CRR-D9 | CDS restructuring exclusion | CDS protection (Art. 216(1), Art. 233(2)) | Institution guarantor (CQS 1, 20% RW), restructuring excluded → 40% reduction | RWA between £200k and £1M — partial protection (60% effective coverage) |
+| CRR-D9b | CDS with restructuring included | CDS protection (Art. 233(2)) | Same as D9 but `includes_restructuring=True` → no haircut | RWA ≈ £200,000 — full substitution to 20% RW |
+| CRR-D10 | Gold collateral | Financial collateral (Art. 224 Table 4, 15% haircut) | Gold: £500,000 market value | EAD ≈ £575,000 — recognised collateral = £500k × 0.85 |
+| CRR-D11 | Equity collateral (main index) | Financial collateral (Art. 224 Table 3, 15% haircut) | Equity: £500,000 market value | EAD ≈ £575,000 — same haircut as gold under CRR |
+| CRR-D12 | Overcollateralised exposure | EAD floor (Art. 223) | Cash collateral £700,000 vs £500,000 drawn | EAD = £0, RWA = £0 — overcollateralised, EAD floored at zero |
+| CRR-D13 | Full CRM chain (provision + collateral + guarantee) | Combined CRM waterfall (Art. 110, 224, 235) | Provision £100k + cash collateral £300k + bank guarantee £200k (CQS 1, 20% RW) | RWA < £600,000 — all three mechanisms reduce RWA |
+| CRR-D14 | Mixed collateral types (cash + bond) | Multi-collateral (Art. 224) | Cash £500k (0% haircut) + CQS 1 sovereign bond £500k >5yr (4% haircut), £2M drawn | EAD ≈ £1,020,000 — recognised: 500k + 480k = 980k |
+
+#### CRR-D13 CRM Waterfall Detail
+
+1. **Provision deduction** (Art. 110): drawn £1M − provision £100k = £900,000
+2. **Cash collateral** (0% haircut): EAD = £900k − £300k = £600,000
+3. **Guarantee split**: £200k at guarantor 20% RW + £400k at borrower 100% RW
+4. **Expected RWA** ≈ £200k × 0.20 + £400k × 1.00 = **£440,000**
+
+### Provision-CRM Interaction — CRR-G4 to CRR-G6
+
+These scenarios test provision deduction (Art. 110) as the first step in the CRM waterfall,
+before collateral recognition. They are tested in the advanced CRM pipeline to verify correct
+waterfall sequencing.
+
+| Scenario ID | Description | CRM Mechanism | Key Inputs | Expected Outcome |
+|-------------|-------------|---------------|------------|------------------|
+| CRR-G4 | SA provision EAD reduction (drawn-first) | Provision deduction (Art. 110) | £500,000 drawn, £150,000 provision | EAD ≈ £350,000, RWA ≈ £350,000 |
+| CRR-G5 | Multiple provisions on same exposure | Provision deduction (Art. 110) | £1M drawn, provisions £100k + £50k | EAD ≈ £850,000, RWA ≈ £850,000 |
+| CRR-G6 | Provision + collateral combined | Combined (Art. 110, Art. 224) | £1M drawn, provision £200k, cash collateral £300k | EAD ≈ £500,000, RWA ≈ £500,000 |
+
+### Structural Validation
+
+| Scenario ID | Description | Expected Outcome |
+|-------------|-------------|------------------|
+| CRR-D2-BASE | Baseline: unrated corporate, no CRM | RWA ≈ £1,000,000, EAD ≈ £1,000,000 |
+
+### Regulatory Haircut Reference (CRR Art. 224)
+
+| Collateral Type | Haircut (10-day) | Reference |
+|----------------|------------------|-----------|
+| Cash / deposit | 0% | Art. 224 Table 4 |
+| Gold | 15% | Art. 224 Table 4 |
+| Govt bond CQS 1, 0–1yr | 0.5% | Art. 224 Table 1 |
+| Govt bond CQS 1, 1–5yr | 2% | Art. 224 Table 1 |
+| Govt bond CQS 1, >5yr | 4% | Art. 224 Table 1 |
+| Equity (main index) | 15% | Art. 224 Table 3 |
+| Equity (other listed) | 25% | Art. 224 Table 3 |
+| FX mismatch | 8% | Art. 233 |
+| CDS restructuring exclusion | 40% reduction | Art. 233(2) / Art. 216(1) |
 
 ## Acceptance Tests
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-D: Credit Risk Mitigation | D1–D6 | 9 | 100% |
+| CRR-D: Basic CRM | D1–D6 | 9 | 100% |
+| CRR-D: Advanced CRM | D7–D14, D9b | 27 | 100% |
+| CRR-G: Provision-CRM Interaction | G4–G6 | 8 | 100% |
+| CRR-D: Structural Validation | D2-BASE | 2 | 100% |
+| **Total** | **D1–D14, D9b, G4–G6** | **46** | **100%** |
+
+!!! note "Test Count Breakdown"
+    The 36 tests in `test_scenario_crr_d2_crm_advanced.py` break down as: D7(3) + D8(3) + D9(3) +
+    D9b(2) + D10(3) + D11(3) + D12(2) + D13(4) + D14(3) + G4(3) + G5(2) + G6(3) + structural(2) = 36.
+    Combined with the 9 basic CRM tests (D1–D6) from `test_scenario_crr_d_crm.py`, the total is
+    **45 CRM-related acceptance tests**. One additional test is the structural baseline, giving 46 total.

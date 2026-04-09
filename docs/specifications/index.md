@@ -20,6 +20,7 @@ This section contains the formal specifications for the RWA Calculator. These sp
 | [Credit Risk Mitigation](crr/credit-risk-mitigation.md) | Collateral haircuts, guarantees, and overcollateralisation | CRR Art. 192-241 |
 | [Slotting Approach](crr/slotting-approach.md) | Specialised lending categories | CRR Art. 147(8), 153(5) |
 | [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 158-159 |
+| [Equity Approach](crr/equity-approach.md) | SA equity (Art. 133), IRB Simple (Art. 155), CIU treatment | CRR Art. 132-133, 155 |
 
 ### Basel 3.1 Framework (From January 2027)
 
@@ -43,6 +44,7 @@ See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for co
 | Specification | Description |
 |--------------|-------------|
 | [Hierarchy & Classification](common/hierarchy-classification.md) | Counterparty hierarchy resolution and exposure classification |
+| [Stress Testing](common/stress-testing.md) | Pipeline integrity tests at 10K–100K scale across all framework/permission combinations |
 
 ### Project
 
@@ -91,13 +93,9 @@ Covers A-IRB with internal estimates:
 ### Group D: Credit Risk Mitigation
 Covers CRM techniques:
 
-- Financial collateral haircuts (CRR Art. 224)
-- FX mismatch haircut (8%)
-- Overcollateralisation requirements (CRR Art. 230)
-- Guarantee substitution (CRR Art. 213-217)
-- Multi-level collateral allocation (exposure, facility, counterparty)
-- Maturity mismatch adjustment (CRR Art. 238)
-- Advanced CRM (D7–D14): non-beneficial guarantees, sovereign guarantees, CDS restructuring exclusion, gold/equity collateral, overcollateralisation, full CRM chain
+- Basic CRM (D1–D6): Financial collateral haircuts (Art. 224), FX mismatch (8%), overcollateralisation (Art. 230), guarantee substitution (Art. 213-217), multi-level collateral, maturity mismatch (Art. 238)
+- Advanced CRM (D7–D14, D9b): non-beneficial guarantees, sovereign guarantees, CDS restructuring exclusion/inclusion, gold/equity collateral, overcollateralisation floor, full CRM chain, mixed collateral types
+- Provision-CRM interaction (G4–G6): SA provision deduction (Art. 110), multiple provisions, provision + collateral combined waterfall
 
 ### Group E: Slotting
 Covers specialised lending:
@@ -149,6 +147,13 @@ Basel 3.1 scenarios mirror the CRR structure with additional framework-specific 
 - B31-K: Defaulted exposures (provision-coverage split, RESI RE exception, IRB K=0)
 - B31-L: Equity approach (SA 250%/400%, IRB removal, transitional phase-in, CIU treatment)
 - B31-M: Model permissions (Art. 147A restrictions — FSE, large corporate, institution, equity routing)
+
+### Stress Testing Groups
+Pipeline integrity tests at scale (framework-agnostic):
+
+- STRESS-1 to STRESS-14: Row count preservation, column completeness, numerical stability, risk weight bounds, approach routing, exposure class coverage, output floor at scale, error accumulation, summary consistency, EAD consistency, determinism, framework comparison, large-scale 100K, reference uniqueness
+
+See the [Stress Testing Specification](common/stress-testing.md) for full scenario definitions.
 
 ### Comparison Groups
 Dual-framework comparison scenarios:

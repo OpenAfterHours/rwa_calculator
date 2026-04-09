@@ -95,6 +95,7 @@ nav = [
       { "Credit Risk Mitigation" = "specifications/crr/credit-risk-mitigation.md" },
       { "Slotting Approach" = "specifications/crr/slotting-approach.md" },
       { "Provisions" = "specifications/crr/provisions.md" },
+      { "Equity Approach" = "specifications/crr/equity-approach.md" },
     ]},
     { "Basel 3.1 Framework" = [
       "specifications/basel31/index.md",
@@ -111,6 +112,7 @@ nav = [
     ]},
     { "Common" = [
       { "Hierarchy & Classification" = "specifications/common/hierarchy-classification.md" },
+      { "Stress Testing" = "specifications/common/stress-testing.md" },
     ]},
     { "Project" = [
       { "Overview" = "specifications/overview.md" },

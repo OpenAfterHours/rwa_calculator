@@ -4,7 +4,7 @@ Equity exposure treatment under SA and IRB, including CIU look-through and Basel
 
 **Regulatory Reference:** CRR Articles 132-133, 155; PRA PS1/26 Articles 132-133, 147A
 
-**Test Group:** CRR-E (partial)
+**Test Group:** CRR-J
 
 ---
 
@@ -167,17 +167,65 @@ PRA PS1/26 provides a transitional phase-in for the increased equity risk weight
 
 ## Key Scenarios
 
-| Scenario ID | Description | Expected RW |
-|-------------|-------------|-------------|
-| CRR-E | Listed equity SA (CRR) | 100% |
-| CRR-E | Unlisted equity SA (CRR) | 100% |
-| CRR-E | PE / VC equity SA (CRR) | 100% |
-| CRR-E | Listed equity IRB Simple (CRR) | 290% |
-| B31-E | Listed equity SA (Basel 3.1) | 250% |
-| B31-E | Unlisted/higher-risk equity SA (Basel 3.1) | 400% |
-| B31-E | Legislative equity (Basel 3.1) | 100% |
-| B31-E | Subordinated debt (Basel 3.1) | 150% |
-| B31-E | Listed equity transitional Year 1 | 160% |
-| B31-E | CIU look-through | Varies |
-| CRR-E | CIU fallback (CRR) | 1,250% |
-| B31-E | CIU fallback (Basel 3.1) | 1,250% |
+### CRR SA Equity (Art. 133) — CRR-J1 to CRR-J9
+
+| Scenario ID | Description | Equity Type | EAD | Expected RW | Expected RWA |
+|-------------|-------------|-------------|-----|-------------|--------------|
+| CRR-J1 | Listed equity SA | `listed` | £500,000 | 100% | £500,000 |
+| CRR-J2 | Unlisted equity SA | `unlisted` | £300,000 | 100% | £300,000 |
+| CRR-J3 | Exchange-traded equity SA | `exchange_traded` | £200,000 | 100% | £200,000 |
+| CRR-J4 | Private equity SA | `private_equity` | £100,000 | 100% | £100,000 |
+| CRR-J5 | Government-supported equity SA | `government_supported` | £400,000 | 100% | £400,000 |
+| CRR-J6 | Speculative equity SA | `speculative` | £150,000 | 100% | £150,000 |
+| CRR-J7 | Central bank equity SA (sovereign treatment) | `central_bank` | £1,000,000 | 0% | £0 |
+| CRR-J8 | Subordinated debt SA | `subordinated_debt` | £250,000 | 100% | £250,000 |
+| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 150% | £900,000 |
+
+!!! warning "CRR-J9 Implementation Divergence"
+    The CIU fallback should be **1,250%** per Art. 132(2), but the calculator applies 150% (the Art. 133
+    equity weight). See D3.15 for the code bug. The test expects the current code behaviour (150%),
+    not the regulatory value (1,250%).
+
+### CRR IRB Simple Equity (Art. 155) — CRR-J10 to CRR-J14
+
+| Scenario ID | Description | Equity Type | Key Flags | EAD | Expected RW | Expected RWA |
+|-------------|-------------|-------------|-----------|-----|-------------|--------------|
+| CRR-J10 | Exchange-traded equity IRB Simple | `exchange_traded` | `is_exchange_traded=True` | £200,000 | 290% | £580,000 |
+| CRR-J11 | Diversified PE equity IRB Simple | `private_equity` | `is_diversified=True` | £100,000 | 190% | £190,000 |
+| CRR-J12 | Other (unlisted) equity IRB Simple | `unlisted` | — | £100,000 | 370% | £370,000 |
+| CRR-J13 | Central bank equity IRB Simple (sovereign treatment) | `central_bank` | — | £500,000 | 0% | £0 |
+| CRR-J14 | Government-supported equity IRB Simple | `government_supported` | `is_government_supported=True` | £300,000 | 190% | £570,000 |
+
+!!! note "CRR-J14 Government-Supported Mapping"
+    The calculator maps `government_supported` to Art. 155(2)(b) (diversified PE) at 190%.
+    Art. 155 has no "government-supported" category — only exchange-traded (a), PE diversified (b),
+    and all other (c). See D3.4 for the code mapping issue.
+
+### CIU Specific Tests — CRR-J15 to CRR-J17
+
+| Scenario ID | Description | CIU Approach | Key Parameters | EAD | Expected RW | Expected RWA |
+|-------------|-------------|--------------|----------------|-----|-------------|--------------|
+| CRR-J15 | CIU mandate-based SA (Art. 132A) | `mandate_based` | `ciu_mandate_rw=0.80` | £200,000 | 80% | £160,000 |
+| CRR-J16 | CIU mandate-based + third-party 1.2× multiplier | `mandate_based` | `ciu_mandate_rw=0.80`, `ciu_third_party_calc=True` | £200,000 | 96% | £192,000 |
+| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 150% | £150,000 |
+
+CRR-J16 calculation: the 1.2× third-party multiplier (Art. 132(4)) scales the mandate risk weight:
+`RW = 0.80 × 1.2 = 0.96 (96%)`.
+
+### RWA Arithmetic Verification — CRR-J18 to CRR-J20
+
+| Scenario ID | Description | Approach | EAD | Expected RW | Expected RWA |
+|-------------|-------------|----------|-----|-------------|--------------|
+| CRR-J18 | SA RWA arithmetic verification | SA | £1,234,567 | 100% | £1,234,567 |
+| CRR-J19 | IRB Simple RWA arithmetic verification | IRB Simple | £750,000 | 370% | £2,775,000 |
+| CRR-J20 | Zero EAD produces zero RWA | IRB Simple | £0 | 370% | £0 |
+
+### Basel 3.1 Equity Scenarios
+
+Basel 3.1 equity scenarios are documented in the dedicated [Basel 3.1 Equity Approach](../basel31/equity-approach.md) specification (test group B31-L).
+
+## Acceptance Tests
+
+| Group | Scenarios | Tests | Pass Rate |
+|-------|-----------|-------|-----------|
+| CRR-J: Equity | J1–J20 | 32 | 100% |

@@ -106,9 +106,25 @@
 
 ### Stress Tests (60 tests)
 
+See the [Stress Testing Specification](common/stress-testing.md) for full scenario definitions (STRESS-1 to STRESS-14).
+
 | Group | Description | Tests | Pass Rate |
 |-------|-------------|-------|-----------|
-| Pipeline Stress | Scale correctness at 10K–100K rows: row count preservation, numerical stability (no NaN/inf), RW bounds (0–1,250%), approach distribution, output floor at scale, error accumulation, determinism | 60 | 100% |
+| STRESS-1 | Row count preservation | 8 | 100% |
+| STRESS-2 | Column completeness | 4 | 100% |
+| STRESS-3 | Numerical stability (no NaN/Inf/negative) | 10 | 100% |
+| STRESS-4 | Risk weight bounds [0%, 1250%] | 4 | 100% |
+| STRESS-5 | Approach distribution (SA/IRB routing) | 5 | 100% |
+| STRESS-6 | Exposure class coverage | 4 | 100% |
+| STRESS-7 | Output floor at scale | 7 | 100% |
+| STRESS-8 | Error accumulation (bounded) | 4 | 100% |
+| STRESS-9 | Summary consistency | 2 | 100% |
+| STRESS-10 | EAD consistency | 4 | 100% |
+| STRESS-11 | Determinism | 1 | 100% |
+| STRESS-12 | Framework comparison | 1 | 100% |
+| STRESS-13 | Large scale 100K (slow) | 4 | 100% |
+| STRESS-14 | Reference uniqueness | 2 | 100% |
+| **Total** | | **60** | **100%** |
 
 ### Overall Acceptance Test Summary
 
@@ -117,8 +133,8 @@
 | CRR | 11 | 80 | 169 |
 | Basel 3.1 | 12 | 90 | 212 |
 | Comparison | 3 | — | 60 |
-| Stress | 1 | — | 60 |
-| **Total** | **27** | **170+** | **501** |
+| Stress | 14 | — | 60 |
+| **Total** | **40** | **170+** | **501** |
 
 The full test suite includes 5,034 tests across unit (4,232), acceptance (501), contracts (145), integration (122), and benchmarks (34).
 

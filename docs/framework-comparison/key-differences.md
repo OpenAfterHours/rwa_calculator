@@ -1147,7 +1147,7 @@ Basel 3.1:
 | Unhedged FX Retail/RE | **Increase** (1.5x multiplier) |
 | High LTV Mortgages | **Decrease** (better SA RWs) |
 | Low LTV Mortgages | **Decrease** (better SA RWs) |
-| High-risk Corporate | **Decrease** (CQS5 reduction) |
+| High-risk Corporate | Neutral (PRA retains CQS 5 at 150%; BCBS reduced to 100% but PRA did not adopt) |
 | Retail Transactor | **Decrease** (45% from 75%) |
 | Standard Corporate | Neutral |
 

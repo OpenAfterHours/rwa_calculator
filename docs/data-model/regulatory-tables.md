@@ -83,25 +83,37 @@ Table 4A applies when a short-term assessment yields a more favourable or equal 
 
 ### Corporate Risk Weights (CRR Art. 122)
 
-| CQS | CRR | Basel 3.1 |
-|-----|-----|-----------|
-| 1 | 20% | 20% |
-| 2 | 50% | 50% |
-| 3 | **100%** | **75%** |
-| 4 | 100% | 100% |
-| 5 | **150%** | **100%** |
-| 6 | 150% | 150% |
-| Unrated | 100% | 100% |
+| CQS | CRR | Basel 3.1 | Change |
+|-----|-----|-----------|--------|
+| 1 | 20% | 20% | — |
+| 2 | 50% | 50% | — |
+| 3 | **100%** | **75%** | Reduced |
+| 4 | 100% | 100% | — |
+| 5 | 150% | **150%** | — |
+| 6 | 150% | 150% | — |
+| Unrated | 100% | 100% | — |
 
-**Basel 3.1 corporate additions:**
+!!! warning "PRA Deviation — CQS 5 = 150%"
+    BCBS CRE20.42 reduced corporate CQS 5 from 150% to 100%. The PRA **retained 150%** per
+    PRA PS1/26 Art. 122(2) Table 6. The code constant `B31_CORPORATE_RISK_WEIGHTS` correctly
+    uses `Decimal("1.50")` for CQS 5.
 
-| Category | Risk Weight | Reference |
-|----------|------------|-----------|
-| Investment grade | 65% | CRE20.47 |
-| SME corporate | 85% | CRE20.49 |
-| Subordinated debt | 150% | CRE20.50 |
+**Basel 3.1 corporate sub-categories (Art. 122(4)–(11)):**
 
-**Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW`, `B31_SUBORDINATED_DEBT_RW` in `data/tables/`
+| Category | Risk Weight | Reference | Conditions |
+|----------|------------|-----------|------------|
+| Investment grade | 65% | Art. 122(6)(a) | PRA permission required; internal IG assessment (Art. 122(9)–(10)) |
+| Non-investment grade | **135%** | Art. 122(6)(b) | PRA permission required; internal non-IG assessment |
+| SME corporate | 85% | Art. 122(4) | Turnover ≤ EUR 50m, unrated |
+| General unrated | 100% | Art. 122(5) | Default without PRA IG/non-IG permission |
+
+!!! info "Subordinated debt"
+    Subordinated debt (150%) is classified under the **equity exposure class** (Art. 133(1)),
+    not the corporate class. It sits at priority 3 in the Art. 112 Table A2 waterfall, above
+    corporates at priority 16. See the [equity section below](#sa-equity-code-constants).
+
+**Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`,
+`B31_CORPORATE_NON_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW` in `data/tables/`
 
 ### Short-Term Corporate ECAI (Basel 3.1 Art. 122(3), Table 6A)
 

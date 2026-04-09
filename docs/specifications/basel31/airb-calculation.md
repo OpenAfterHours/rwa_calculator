@@ -40,7 +40,7 @@ Art. 169A/169B or fall back to the **Foundation Collateral Method** (FCM, Art. 2
 |-----------|-------|-----------|-----------------|
 | PD | Internal (floored) | Internal (floored) | Internal (floored, higher floors) |
 | LGD | Supervisory | Internal | Internal **(with floors)** |
-| CCF | Supervisory (CRR) / SA-aligned (B31) | Internal | Internal **(floor: 50% of SA)** |
+| CCF | Supervisory (CRR) / SA-aligned (B31) | Internal | **Revolving only** (floor: 50% of SA); others use SA |
 | Maturity | Default 2.5y | Internal (retail: no MA) | Internal (retail: no MA) |
 | Double default | Available | Available | **Removed** |
 | PMA | N/A | N/A | **New: RWA/EL scalars + mortgage floor** |
@@ -156,37 +156,66 @@ EL shortfall/excess comparison (Art. 159).
 
 ---
 
-## A-IRB CCF Restrictions (Art. 166D, CRE32.27)
+## A-IRB CCF Restrictions (Art. 166D)
 
-A-IRB firms may use own-estimate CCFs, subject to:
+Under Basel 3.1, A-IRB own-estimate CCFs are **restricted to revolving facilities only**
+(Art. 166D(1)(a)). All other off-balance sheet items must use SA CCFs from
+[Table A1](../crr/credit-conversion-factors.md) (Art. 166D(1)(b)).
 
-### CCF Floor
+### Revolving Facility Eligibility (Art. 166D(1)(a))
+
+Own-estimate CCFs are permitted only where **both** conditions are met:
+
+1. The facility is a **revolving loan commitment** — set `is_revolving = True` in input data
+2. The facility's SA CCF (per Art. 111 Table A1) is **less than 100%**
+
+!!! warning "Table A1 Row 2 Carve-Out"
+    Revolving facilities classified at **100% SA CCF** under Table A1 Row 2
+    (factoring facilities, repos, forward asset purchases, partly-paid shares)
+    **cannot use own-estimate CCFs** even though they are revolving. These always
+    receive the full 100% SA CCF. The 100% reflects certain-drawdown commitments
+    where the full nominal is economically equivalent to on-balance sheet exposure —
+    there is no estimation benefit.
+
+Non-revolving A-IRB facilities (term loans, non-revolving commitments, guarantees, etc.)
+must use SA CCFs from Table A1 regardless of the firm's A-IRB permission. The
+`is_revolving` flag in the input data controls this routing in the calculator.
+
+!!! info "Definition: Revolving Loan Commitment (PRA PS1/26 Art. 1.3)"
+    A commitment arising from a revolving loan facility — including credit cards, charge
+    cards, and overdrafts — that lets a borrower decide how often to draw and at what
+    intervals. Facilities allowing prepayments and subsequent redraws are considered
+    revolving.
+
+### CCF Floor (Art. 166D(5)(a) / CRE32.27)
+
+For eligible revolving facilities, the own-estimate CCF is subject to a floor:
 
 ```
-CCF_applied = max(CCF_modelled, 0.50 x CCF_SA)
+CCF_applied = max(CCF_modelled, 0.50 × CCF_SA)
 ```
 
-The A-IRB CCF must be at least **50% of the corresponding SA CCF** (Art. 166D(5) / CRE32.27).
+The A-IRB CCF must be at least **50% of the corresponding SA CCF** (Art. 166D(5)(a)).
 
-### EAD Floor
+### EAD Floor (Art. 166D(5))
 
-The exposure at default must not fall below:
+The exposure at default must not fall below the current drawn amount:
 
 ```
 EAD >= current_drawn_amount
 ```
 
-The EAD floor prevents own-estimate CCF models from producing EAD below the current
-outstanding balance.
+Art. 166D(5) specifies three separate floor tests for A-IRB revolving facilities:
 
-### Facility-Type Restrictions
+| Floor | Applies To | Formula | Reference |
+|-------|-----------|---------|-----------|
+| (a) CCF floor | Own-estimate CCFs (para 1(a)) | CCF ≥ 50% × SA CCF | Art. 166D(5)(a) |
+| (b) Facility EAD floor | Full-facility EAD (para 3) | EAD ≥ on-BS + 50% × F-IRB off-BS | Art. 166D(5)(b) |
+| (c) Fully-drawn floor | Fully-drawn revolving (para 4) | EAD ≥ on-BS exposure value | Art. 166D(5)(c) |
 
-Certain facility types classified at 100% SA CCF (e.g., factoring facilities, repos in
-Table A1 Row 2) **cannot use own-estimate CCFs** even under A-IRB. These always receive
-the SA CCF of 100%.
-
-See the [CRR CCF specification](../crr/credit-conversion-factors.md) for full B31 CCF
-change details including the full-facility EAD approach (Art. 166D(3)/(4)).
+See the [CRR CCF specification](../crr/credit-conversion-factors.md) for full
+implementation detail including the full-facility EAD approach (Art. 166D(3)/(4)),
+the `ead_modelled` input field, and all three floor calculations.
 
 ---
 

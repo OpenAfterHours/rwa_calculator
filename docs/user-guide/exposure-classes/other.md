@@ -204,36 +204,79 @@ Risk_Weight = 20%
 RWA = £20,000,000 × 20% = £4,000,000
 ```
 
-## Multilateral Development Banks (MDB)
+## Multilateral Development Banks (Art. 117)
 
-### Eligible MDBs (0% RW)
+### Named MDBs at 0% (Art. 117(2))
 
-| Institution | Countries/Region |
-|-------------|------------------|
-| World Bank (IBRD, IDA) | Global |
-| European Investment Bank (EIB) | EU |
-| Asian Development Bank (ADB) | Asia-Pacific |
-| African Development Bank (AfDB) | Africa |
-| Inter-American Development Bank (IADB) | Americas |
-| European Bank for Reconstruction (EBRD) | Europe/Asia |
-| Asian Infrastructure Investment Bank (AIIB) | Asia |
-| Islamic Development Bank (IsDB) | Islamic countries |
-| Nordic Investment Bank (NIB) | Nordic region |
-| Council of Europe Development Bank (CEB) | Europe |
+The following 16 MDBs receive a **0% risk weight** unconditionally. Set `entity_type = "mdb_named"`
+in the counterparty data for these institutions.
 
-### Non-Eligible MDBs
+| # | Institution | Abbreviation |
+|---|-------------|--------------|
+| a | International Bank for Reconstruction and Development | IBRD |
+| b | International Finance Corporation | IFC |
+| c | Inter-American Development Bank | IDB |
+| d | Asian Development Bank | ADB |
+| e | African Development Bank | AfDB |
+| f | Council of Europe Development Bank | CEB |
+| g | Nordic Investment Bank | NIB |
+| h | Caribbean Development Bank | CDB |
+| i | European Bank for Reconstruction and Development | EBRD |
+| j | European Investment Bank | EIB |
+| k | European Investment Fund | EIF |
+| l | Multilateral Investment Guarantee Agency | MIGA |
+| m | International Finance Facility for Immunisation | IFFIm |
+| n | Islamic Development Bank | IsDB |
+| o | International Development Association | IDA |
+| p | Asian Infrastructure Investment Bank | AIIB |
 
-Treated as institutions with applicable risk weight.
+!!! info "CRR2 additions"
+    Items (o) IDA and (p) AIIB were added by CRR2 (Regulation (EU) 2019/876). The list is
+    unchanged in PRA PS1/26 Art. 117(2).
 
-### Calculation Example
+### Other MDBs — Table 2B (Art. 117(1))
 
-**Exposure:**
-- £25m bond issued by World Bank
+MDBs not on the 0% list use **Table 2B** risk weights based on their external credit assessment.
+Set `entity_type = "mdb"` in the counterparty data for these institutions.
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1   | 20%         |
+| 2   | 30%         |
+| 3   | 50%         |
+| 4   | 100%        |
+| 5   | 100%        |
+| 6   | 150%        |
+| Unrated | 50%     |
+
+!!! warning "Table 2B differs from institution tables"
+    MDB Table 2B has CQS 2 = 30% and unrated = 50%, compared to institution Table 3 (CQS 2 = 50%,
+    unrated = 40% sovereign-derived). Do not use institution risk weights for non-named MDBs.
+
+Art. 117(1) also names four MDBs that are **not** on the 0% list and therefore use Table 2B:
+Inter-American Investment Corporation, Black Sea Trade and Development Bank, Central American
+Bank for Economic Integration, and CAF — Development Bank of Latin America.
+
+### Calculation Examples
+
+**Named MDB (0% RW):**
+
+- £25m bond issued by IBRD (World Bank)
 
 ```python
-# Eligible MDB = 0% RW
-Risk_Weight = 0%
-RWA = £25,000,000 × 0% = £0
+# entity_type = "mdb_named" → 0% RW (Art. 117(2))
+risk_weight = 0.00
+rwa = 25_000_000 * 0.00  # = £0
+```
+
+**Non-named MDB (Table 2B):**
+
+- £10m loan to a CQS 3 rated development bank not on the Art. 117(2) list
+
+```python
+# entity_type = "mdb" → Table 2B lookup
+risk_weight = 0.50  # CQS 3 = 50%
+rwa = 10_000_000 * 0.50  # = £5,000,000
 ```
 
 ## Regional Governments and Local Authorities (RGLA)
@@ -458,7 +501,8 @@ a flat **150%** risk weight.
 | Equity (private/VC) | 100–400% | No (Basel 3.1) |
 | Defaulted | 50-150% | Yes |
 | PSE | 0–150% | Yes (SA-only if 0% RW under B31) |
-| MDB (eligible) | 0% | N/A |
+| MDB (named, Art. 117(2)) | 0% | N/A |
+| MDB (other, Table 2B) | 20–150% | N/A |
 | RGLA | 0–150% | Yes (SA-only if 0% RW under B31) |
 | International Org | 0% | N/A |
 | Covered Bonds | 10-50% | Varies |

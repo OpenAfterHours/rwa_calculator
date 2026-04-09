@@ -161,21 +161,6 @@ def _list_items(base: Path, folder: str = "") -> list[dict[str, str]]:
     return items
 
 
-def _sync_shared_into(target_dir: Path) -> None:
-    """Copy the canonical ``shared/`` assets into *target_dir* / ``shared/``."""
-    shared_src = apps_dir / "shared"
-    if shared_src.exists():
-        shutil.copytree(shared_src, target_dir / "shared", dirs_exist_ok=True)
-
-
-def _sync_shared_recursive(base: Path) -> None:
-    """Copy ``shared/`` into *base* and every subfolder that is not itself ``shared``."""
-    _sync_shared_into(base)
-    for sub in base.iterdir():
-        if sub.is_dir() and sub.name not in _SKIP_DIRS:
-            _sync_shared_into(sub)
-
-
 # ---------------------------------------------------------------------------
 # Template API
 # ---------------------------------------------------------------------------
@@ -264,7 +249,6 @@ async def create_folder(name: str, workspace: str = "local") -> dict[str, str]:
     if target.exists():
         raise HTTPException(status_code=409, detail="Folder already exists")
     target.mkdir()
-    _sync_shared_into(target)
     return {"folder": sanitised, "workspace": workspace}
 
 
@@ -330,7 +314,6 @@ async def publish_to_team(name: str, folder: str = "") -> dict[str, str]:
 
     dest_parent = _validate_workspace_path(team_dir, folder) if folder else team_dir
     dest_parent.mkdir(parents=True, exist_ok=True)
-    _sync_shared_into(dest_parent)
 
     dest = publish(src, dest_parent)
     rel = f"team/{folder}/{dest.name}" if folder else f"team/{dest.name}"
@@ -399,10 +382,6 @@ def main() -> None:
 
     print("Starting RWA Calculator server...")
     print()
-
-    # Sync shared assets into both workspaces and their subfolders
-    _sync_shared_recursive(workspaces_dir)
-    _sync_shared_recursive(team_dir)
 
     # Launch marimo edit server for workbench (separate process/port)
     # Points at workspaces/ parent so both local/ and team/ are accessible

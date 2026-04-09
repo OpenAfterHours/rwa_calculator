@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D4.36: regulatory-tables.md B31 slotting section corrected — Good 70%→90%, BCBS pre-op table replaced with PRA deviation warning, EL columns and Default rows added.)
+Last updated: 2026-04-09 (D4.26: crr.md F-IRB LGD table restructured — split Art. 161/Art. 230, added 6 missing rows, subordinated LGDS. D4.29: verified already fixed.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -185,10 +185,10 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### New Phase 2 Minor Findings
 
-- [ ] **D4.26** — `crr.md` (lines 149-157): F-IRB supervisory LGD table groups CRE/RRE as single row. Inconsistent with `firb-calculation.md` spec which lists them separately. Minor presentation issue.
+- [x] **D4.26** — ~~`crr.md` (lines 149-157): F-IRB supervisory LGD table groups CRE/RRE as single row. Inconsistent with `firb-calculation.md` spec which lists them separately. Minor presentation issue.~~ **FIXED:** Restructured single mixed table into two properly attributed sub-sections: (1) Art. 161(1) unsecured LGD table (6 rows: senior 45%, subordinated 75%, covered bonds 11.25%, senior purchased receivables 45%, subordinated purchased receivables 100%, dilution risk 75%); (2) Art. 230 Table 5 LGDS table (4 rows with subordinated LGDS column: financial 0%/0%, receivables 35%/65%, RE 35%/65%, other physical 40%/70%). Added "Not Yet Implemented" warning for purchased receivables code gap (Art. 161(1)(e)/(f)/(g)). Added CRE/RRE combined info admonition (correct per CRR Art. 230 Table 5). Added cross-reference tip to F-IRB spec with B31 FSE distinction note. CRE/RRE remain combined as this is correct for CRR — the original D4.26 finding that the spec "lists them separately" was inaccurate; the CRR spec also uses a combined row. (2026-04-09)
 - [ ] **D4.27** — `crr.md` (line 33): SME supporting factor eligibility listed as "Corporate, Retail, or Secured by Real Estate". The spec `supporting-factors.md` narrows to "Corporate SME" only. CRR Art. 501 covers corporate AND retail but the spec deliberately narrows scope. Add clarifying note to one or both.
 - [ ] **D4.28** — `crr.md` (lines 63-67): infrastructure factor eligibility criteria include "Revenues predominantly in EUR/GBP or hedged" (Art. 501a condition). This currency criterion is not validated in the spec or code. Document the gap or remove the criterion from user guide.
-- [ ] **D4.29** — `firb-calculation.md` (lines 45-48): Basel 3.1 F-IRB collateral-type LGD values cited as "CRE32.9-12" (BCBS references). PRA regulatory reference should be Art. 161 and Art. 230. Minor citation improvement.
+- [x] **D4.29** — ~~`firb-calculation.md` (lines 45-48): Basel 3.1 F-IRB collateral-type LGD values cited as "CRE32.9-12" (BCBS references). PRA regulatory reference should be Art. 161 and Art. 230. Minor citation improvement.~~ **ALREADY FIXED:** Verified that `firb-calculation.md` already uses PRA article references (Art. 161(1), Art. 230 Table 5) throughout — no BCBS CRE32.9-12 references remain in the CRR spec file. The B31 comparison sub-table in the CRR spec references CRE32.9-12 for the BCBS source column, which is correct context. (2026-04-09)
 - [ ] **D4.30** — `slotting-approach.md` CRR table: Default category shows "0%" without EL annotation. B31 table says "0% (EL)". Inconsistent annotation — add EL context to CRR table too.
 
 ### New Phase 3 Minor Findings

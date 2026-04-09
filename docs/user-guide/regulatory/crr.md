@@ -161,13 +161,43 @@ into medium risk (50%) or medium/low risk (20%).
 
 ## F-IRB Supervisory LGD
 
-| Exposure Type | Senior Unsecured | Subordinated |
-|---------------|------------------|--------------|
-| Corporate/Institution | 45% | 75% |
-| Secured - Financial Collateral | 0% | N/A |
-| Secured - Receivables | 35% | N/A |
-| Secured - CRE/RRE | 35% | N/A |
-| Secured - Other | 40% | N/A |
+### Unsecured Exposures (Art. 161(1))
+
+| Category | LGD | Reference |
+|----------|-----|-----------|
+| Senior unsecured | 45% | Art. 161(1)(a) |
+| Subordinated unsecured | 75% | Art. 161(1)(b) |
+| Covered bonds (Art. 129(4)/(5) eligible) | 11.25% | Art. 161(1)(d) |
+| Senior purchased corporate receivables | 45% | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | 100% | Art. 161(1)(f) |
+| Dilution risk of purchased receivables | 75% | Art. 161(1)(g) |
+
+!!! warning "Not Yet Implemented — Purchased Receivables"
+    Art. 161(1)(e)/(f)/(g) purchased receivables and dilution risk LGD values are not
+    implemented in code. These exposures currently receive the standard unsecured LGD
+    (45% senior / 75% subordinated).
+
+### Secured Exposures — LGDS (Art. 230 Table 5)
+
+For collateralised exposures under the Foundation Collateral Method, the secured
+portion receives a reduced LGDS value:
+
+| Collateral Type | LGDS (Senior) | LGDS (Subordinated) | Reference |
+|-----------------|---------------|---------------------|-----------|
+| Financial collateral | 0% | 0% | Art. 230 Table 5 |
+| Receivables | 35% | 65% | Art. 230 Table 5 |
+| Residential / commercial RE | 35% | 65% | Art. 230 Table 5 |
+| Other physical collateral | 40% | 70% | Art. 230 Table 5 |
+
+!!! info "CRE and RRE Combined"
+    CRR Art. 230 Table 5 does not differentiate between residential and commercial
+    real estate — both receive 35% LGDS (senior). Basel 3.1 reduces both to 20%
+    (see [key differences](../../framework-comparison/key-differences.md#f-irb-lgd)).
+
+!!! tip "Full detail"
+    See the [F-IRB specification](../../specifications/crr/firb-calculation.md) for
+    overcollateralisation thresholds (C\*/C\*\*), Basel 3.1 FSE distinction
+    (Art. 161(1)(a) 45% vs Art. 161(1)(aa) 40%), and acceptance test scenarios.
 
 ## CRM Haircuts
 

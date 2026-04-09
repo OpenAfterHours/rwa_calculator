@@ -323,6 +323,16 @@ risk weight.
 
 ### Residential Real Estate
 
+!!! warning "Art. 124A Qualifying Gate"
+    All preferential RE risk weights below (Art. 124F–124I) require the exposure to be a
+    **regulatory real estate exposure** per Art. 124A — meeting 6 criteria: (a) property
+    condition, (b) legal certainty, (c) charge conditions per Art. 124A(2), (d) valuation
+    per Art. 124D, (e) value independence from borrower, (f) insurance monitoring.
+    Exposures failing any criterion receive Art. 124J treatment: **150%** if income-dependent,
+    counterparty RW if RESI non-dependent, or max(60%, counterparty RW) if CRE non-dependent.
+    See [SA Risk Weights — Art. 124A](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+    for the full criteria.
+
 **General (not cash-flow dependent) — PRA Art. 124F: Loan-Splitting**
 
 The PRA adopted loan-splitting (not the BCBS whole-loan LTV-band table):

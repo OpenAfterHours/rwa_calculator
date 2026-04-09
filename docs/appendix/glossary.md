@@ -163,6 +163,9 @@ Unsecured revolving credit to individuals (credit cards, overdrafts) meeting spe
 ### RGLA (Regional Government and Local Authority)
 Sub-national government entities with varying risk treatments.
 
+### Regulatory Real Estate Exposure
+A real estate exposure that meets all six qualifying criteria in PRA PS1/26 Art. 124A(1): (a) property condition, (b) legal certainty, (c) charge conditions, (d) Art. 124D valuation, (e) borrower independence, (f) insurance monitoring. Only regulatory RE exposures qualify for the preferential risk weights in Art. 124F–124I. Non-qualifying exposures are "other real estate" under Art. 124J. In the calculator, the `is_qualifying_re` Boolean input field controls this routing.
+
 ### Risk Type
 A classification for off-balance sheet exposures that determines the applicable CCF. Valid values: FR (full_risk, 100%), MR (medium_risk, 50%/75%), MLR (medium_low_risk, 20%/75%), LR (low_risk, 0%). See CRR Art. 111.
 

@@ -446,7 +446,7 @@ Materially dependent on cash flows:
 
 ### Other Real Estate (Art. 124J)
 
-Non-regulatory real estate (doesn't meet Art. 124A requirements):
+Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)):
 
 | Type | Risk Weight |
 |------|-------------|

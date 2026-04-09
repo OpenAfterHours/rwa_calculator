@@ -24,6 +24,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.9 | SA Specialised Lending (Art. 122A–122B) | P0 | Done |
 | FR-1.10 | Currency mismatch multiplier 1.5× (Art. 123A) | P0 | Done |
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
+| FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
 
 ---
 
@@ -195,44 +196,124 @@ from the exposure currency. Output column: `currency_mismatch_multiplier_applied
 
 ---
 
+## Real Estate — Qualifying Criteria (Art. 124A)
+
+Basel 3.1 introduces a gating requirement for preferential real estate risk weights. An
+exposure is a **regulatory real estate exposure** only if it is NOT an ADC exposure
+(Art. 124K) and meets **all six** criteria in Art. 124A(1). Exposures failing any criterion
+are "other real estate" under Art. 124J with less favourable treatment.
+
+**Regulatory Reference:** PRA PS1/26 Art. 124A (p.51), Art. 124D (pp.52–53)
+
+### The Six Qualifying Criteria (Art. 124A(1))
+
+| Criterion | Requirement | Detail |
+|-----------|-------------|--------|
+| **(a)** Property condition | Property is not held for development/construction, OR development is complete, OR it is a self-build exposure | Art. 124A(1)(a)(i)–(iii) |
+| **(b)** Legal certainty | Charge is enforceable in all relevant jurisdictions AND institution can likely realise collateral value within a reasonable period following default | Art. 124A(1)(b)(i)–(ii) |
+| **(c)** Charge conditions | One of the conditions in Art. 124A(2) is met (see below) | Art. 124A(1)(c) |
+| **(d)** Valuation | Property valued per Art. 124D requirements (independent, at or below market value) | Art. 124A(1)(d) |
+| **(e)** Borrower independence | Property value does NOT materially depend on borrower performance | Art. 124A(1)(e) |
+| **(f)** Insurance monitoring | Institution has procedures to monitor adequate property insurance against damage | Art. 124A(1)(f) |
+
+### Charge Conditions (Art. 124A(2))
+
+Criterion (c) is satisfied if **any** of the following apply:
+
+| Condition | Requirement |
+|-----------|-------------|
+| **(a)** First charge | Exposure is secured by a first-ranking charge over the property |
+| **(b)** All prior charges held | Institution holds all charges ranking ahead of the exposure's charge |
+| **(c)** Junior charge alternative | (i) Charge provides legally enforceable claim constituting effective CRM; (ii) each charge-holder can independently initiate sale; (iii) sale must seek fair market value or best price |
+
+### Valuation Requirements (Art. 124D)
+
+The valuation standard required by criterion (d):
+
+- Valuation at origination by an independent qualified valuer or robust statistical method
+- Must not exceed market value; for purchase financing, the lower of market value and purchase price
+- Must not reflect expectations of speculative price increases
+- Re-valuation triggers: material value reduction events, market decrease >10%, exposures >GBP 2.6m after 3 years, or all exposures every 5 years
+- Self-build: value = higher of (underlying land value, 0.8 × latest qualifying valuation)
+
+### Consequence of Failing — Other Real Estate (Art. 124J)
+
+Exposures that fail any Art. 124A criterion are "other real estate":
+
+| Sub-Type | Risk Weight | Reference |
+|----------|-------------|-----------|
+| Income-dependent (any property type) | **150%** | Art. 124J(1) |
+| Residential, not income-dependent | Counterparty RW per Art. 124L | Art. 124J(2) |
+| Commercial, not income-dependent | max(60%, counterparty RW) | Art. 124J(3) |
+
+!!! warning "Input Field: `is_qualifying_re`"
+    The calculator uses a single Boolean field `is_qualifying_re` in the input data.
+    When `False`, the exposure is routed to Art. 124J treatment **before** the standard
+    RE branches. The six Art. 124A(1) criteria must be pre-evaluated by the reporting
+    institution — the calculator does not validate individual criteria. If the field is
+    omitted, the exposure defaults to qualifying (`True`) for backward compatibility.
+
+---
+
 ## Real Estate — Residential (Art. 124F–124G)
 
-### Loan-Splitting Mechanism
+All residential RE risk weights below require the exposure to meet the
+[Art. 124A qualifying criteria](#real-estate--qualifying-criteria-art-124a).
 
-Basel 3.1 introduces **loan-splitting** for residential real estate, replacing CRR's flat
-35% treatment. The exposure is split into a secured portion (up to LTV threshold) and an
-unsecured portion (remainder):
+### General Residential — Loan-Splitting (Art. 124F)
+
+Not materially dependent on cash flows. The exposure is split into a secured portion
+(up to 55% of property value) and a residual portion:
 
 | Portion | Risk Weight | Reference |
 |---------|-------------|-----------|
-| Secured (up to 80% LTV) | **20%** | Art. 124F(1) |
-| Unsecured (above 80% LTV) | Counterparty RW | Art. 124F(2) |
+| Secured (up to 55% of property value) | **20%** | Art. 124F(1) |
+| Residual (above 55% of property value) | Counterparty RW | Art. 124L |
 
 ```
-secured_ead = min(ead, 0.80 x property_value)
-unsecured_ead = max(0, ead - secured_ead)
-rwa = secured_ead x 0.20 + unsecured_ead x counterparty_rw
+secured_share = min(1.0, 0.55 / LTV)
+RW = 0.20 × secured_share + counterparty_RW × (1.0 - secured_share)
 ```
 
-!!! note "Art. 124A Qualifying Criteria"
-    Preferential RE risk weights require the property to meet the 6 qualifying criteria in
-    Art. 124A(1): (a) property condition, (b) legal certainty, (c) charge conditions,
-    (d) valuation per Art. 124D, (e) value independence from borrower, (f) insurance monitoring.
-    Non-qualifying residential RE receives the counterparty risk weight (no preferential treatment).
+**Counterparty risk weight** (Art. 124L):
 
-### Junior Charge Uplift (Art. 124G(2))
+| Counterparty Type | RW |
+|-------------------|----|
+| Natural person (non-SME) | 75% |
+| Retail-qualifying SME | 75% |
+| Other SME (unrated) | 85% |
+| Social housing / cooperative | max(75%, unsecured RW) |
+| Other | Unsecured counterparty RW |
 
-Where there are prior-ranking charges not held by the institution, the secured portion RW
-for LTV > 50% is multiplied by **1.25×**:
+**Junior charges** (Art. 124F(2)): If a prior or pari passu charge exists that the
+institution does not hold, the 55% threshold is reduced by the amount of the prior
+charge. This decreases the secured portion, increasing the blended risk weight.
 
-```
-if has_prior_charges and ltv > 50%:
-    secured_rw = 20% x 1.25 = 25%
-```
+### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
+
+Materially dependent on cash flows (e.g., buy-to-let). Whole-loan approach — single
+risk weight on entire exposure:
+
+| LTV Band | Risk Weight |
+|----------|-------------|
+| ≤ 50% | 30% |
+| 50–60% | 35% |
+| 60–70% | 40% |
+| 70–80% | 50% |
+| 80–90% | 60% |
+| 90–100% | 75% |
+| > 100% | 105% |
+
+**Junior charge multiplier** (Art. 124G(2)): Where prior-ranking charges exist that the
+institution does not hold, the whole-loan risk weight is multiplied by **1.25×** for
+LTV > 50%.
 
 ---
 
 ## Real Estate — Commercial (Art. 124H–124I)
+
+All commercial RE risk weights below require the exposure to meet the
+[Art. 124A qualifying criteria](#real-estate--qualifying-criteria-art-124a).
 
 ### CRE Loan-Splitting (Art. 124H(1))
 
@@ -312,6 +393,8 @@ central bank 0%, government-supported 100%. Transitional phase-in 2027–2030.
 - **Institution ECRA** (Art. 120): CQS 2 reduced to 30% — Done
 - **Institution SCRA** (Art. 120(2A)): New grade-based approach with Grade A enhanced 30% — Done
 - **Corporate sub-categories** (Art. 122(4)–(11)): SME 85%, IG 65%, non-IG 135% — Done
+- **RE qualifying criteria** (Art. 124A): 6-criteria gate for preferential RE weights — Done
+- **Other RE fallback** (Art. 124J): 150% / counterparty RW / max(60%, cpty RW) — Done
 - **RRE loan-splitting** (Art. 124F–124G): Secured 20% / unsecured counterparty — Done
 - **CRE loan-splitting** (Art. 124H): Secured 60% / unsecured counterparty — Done
 - **CRE income-producing** (Art. 124I): PRA 2-band (100%/110%) — Done
@@ -337,6 +420,7 @@ central bank 0%, government-supported 100%. Transitional phase-in 2027–2030.
 | B31-A8 | Retail exposure | 75% |
 | B31-A9 | SME corporate (turnover ≤ £440m) | 85% |
 | B31-A10 | SME retail (under GBP 880k threshold) | 85% |
+| B31-A11 | Non-qualifying income-producing RE (`is_qualifying_re=False`) | 150% (Art. 124J(1)) |
 
 ## Acceptance Tests
 

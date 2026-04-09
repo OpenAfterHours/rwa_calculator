@@ -153,7 +153,14 @@ Standardised Approach risk weights are recalibrated:
 
 #### Real Estate Exposures
 
-New risk weight approaches for real estate:
+New risk weight approaches for real estate. All preferential RE risk weights require the
+exposure to be a **regulatory real estate exposure** per Art. 124A — satisfying six
+qualifying criteria covering property condition, legal certainty, charge conditions,
+valuation (Art. 124D), borrower independence, and insurance monitoring. Exposures failing
+any criterion are "other real estate" under Art. 124J (150% if income-dependent, or
+counterparty / floor RW otherwise). See the
+[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+for full details.
 
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 

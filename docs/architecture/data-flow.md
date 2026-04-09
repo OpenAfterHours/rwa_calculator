@@ -266,7 +266,7 @@ classified = (
 
 See [`crm/processor.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/processor.py) for implementation.
 
-Transformations (Art. 111(2) compliant order):
+Transformations (Art. 111(1)(a)-(b) compliant order):
 
 1. **Resolve provisions** — drawn-first deduction (SA), tracking only (IRB/Slotting)
 2. **Apply CCFs** — uses `nominal_after_provision` for off-balance sheet conversion

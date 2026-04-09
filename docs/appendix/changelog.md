@@ -662,8 +662,8 @@ GitHub Actions workflow with lint, typecheck, and test jobs.
 
 ### Added
 
-#### SA Provision Handling — Art. 111(2) Compliance
-Provisions are now resolved **before** CCF application using a drawn-first deduction approach, compliant with CRR Art. 111(2):
+#### SA Provision Handling — Art. 111(1)(a)-(b) Compliance
+Provisions are now resolved **before** CCF application using a drawn-first deduction approach, compliant with CRR Art. 111(1)(a)-(b):
 
 **Pipeline reorder:**
 ```

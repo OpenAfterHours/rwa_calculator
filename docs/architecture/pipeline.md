@@ -299,7 +299,7 @@ class CRMProcessor:
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
     ) -> CRMAdjustedBundle:
-        """Apply CRM in correct order (Art. 111(2) compliant).
+        """Apply CRM in correct order (Art. 111(1)(a)-(b) compliant).
 
         Returns CRMAdjustedBundle with exposures split by approach."""
 

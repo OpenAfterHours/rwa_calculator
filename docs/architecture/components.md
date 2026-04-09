@@ -325,7 +325,7 @@ The `CRMProcessor` provides three public methods:
 
 ```python
 class CRMProcessor:
-    """Process credit risk mitigation (Art. 111(2) compliant)."""
+    """Process credit risk mitigation (Art. 111(1)(a)-(b) compliant)."""
 
     def get_crm_adjusted_bundle(
         self,

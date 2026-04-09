@@ -12,7 +12,7 @@ Specialised lending categories:
 | Object Finance | OF | Financing of physical assets (ships, aircraft) |
 | Commodities Finance | CF | Structured financing of commodities |
 | Income-Producing Real Estate | IPRE | Real estate with rental/sale income |
-| High Volatility Commercial Real Estate | HVCRE | Speculative CRE development |
+| High Volatility Commercial Real Estate | HVCRE | Speculative CRE development (PRA PS1/26 only) |
 
 ## Slotting Approach
 
@@ -72,9 +72,10 @@ Each exposure is assessed against supervisory criteria:
 
 ### CRR Risk Weights
 
-Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remaining maturity:
+UK CRR Art. 153(5) defines a single risk weight table (Table 1) with maturity-based splits,
+covering all specialised lending types (PF, OF, CF, IPRE):
 
-**Non-HVCRE (PF, OF, CF, IPRE):**
+**Table 1 (PF, OF, CF, IPRE):**
 
 | Category | Maturity >= 2.5yr | Maturity < 2.5yr |
 |----------|-------------------|------------------|
@@ -84,23 +85,21 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-**HVCRE:**
-
-| Category | Maturity >= 2.5yr | Maturity < 2.5yr |
-|----------|-------------------|------------------|
-| Strong | 95% | 70% |
-| Good | 120% | 95% |
-| Satisfactory | 140% | 140% |
-| Weak | 250% | 250% |
-| Default | 0% | 0% |
+!!! warning "No HVCRE Distinction in UK CRR"
+    The UK onshored CRR does **not** contain a separate HVCRE table. All specialised
+    lending uses Table 1 above. The original EU CRR had a separate Table 2 with elevated
+    HVCRE weights, but this was not retained in UK onshoring. HVCRE is **introduced** by
+    PRA PS1/26 (see [Basel 3.1 section below](#basel-31-risk-weights)). The calculator
+    applies EU CRR Table 2 weights for `is_hvcre=True` CRR exposures (code divergence D3.22).
 
 ### Basel 3.1 Risk Weights
 
-Basel 3.1 restructures the CRR maturity-split tables into a single Table A with subgrade
-columns (A/B for Strong, C/D for Good). The tables below show the **default column**
-values (B/D per Art. 153(5)(c)). Firms may optionally use the lower A/C column values
-for exposures with < 2.5 years residual maturity (Art. 153(5)(d)) or enhanced underwriting
-(Art. 153(5)(e)/(f)). See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all columns.
+PRA PS1/26 restructures slotting into a single Table A with subgrade columns (A/B for
+Strong, C/D for Good) and **introduces HVCRE** as a distinct sub-type with elevated weights
+(UK CRR has no HVCRE concept). The tables below show the **default column** values (B/D per
+Art. 153(5)(c)). Firms may optionally use the lower A/C column values for exposures with
+< 2.5 years residual maturity (Art. 153(5)(d)) or enhanced underwriting (Art. 153(5)(e)/(f)).
+See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all columns.
 
 **Non-HVCRE (OF, CF, PF, IPRE):**
 
@@ -279,24 +278,33 @@ if framework == "BASEL_3_1" and approach == "SA" and lending_type == "PROJECT_FI
 
 ## HVCRE Treatment
 
-**High Volatility Commercial Real Estate** receives higher risk weights due to:
+**High Volatility Commercial Real Estate** receives higher risk weights under PRA PS1/26
+(Basel 3.1) due to:
+
 - Speculative development
 - No established cash flows
 - Higher correlation to economic cycles
 
 **HVCRE Criteria:**
+
 - CRE development or land acquisition
 - Repayment from future sale or refinancing
 - Uncertain outcome
 
+!!! warning "HVCRE Is a PRA PS1/26 Introduction"
+    UK CRR has **no HVCRE concept**. The term does not appear in UK CRR Art. 153(5) —
+    all SL types use the same Table 1. HVCRE is **introduced** by PRA PS1/26 Table A
+    (Art. 153(5)(a)(i)). The "CRR HVCRE" column below reflects the original EU CRR Table 2
+    values, which have no UK CRR legal basis.
+
 **Risk Weight Comparison:**
 
-| Category | CRR Non-HVCRE (>=2.5yr) | CRR HVCRE (>=2.5yr) | Basel 3.1 HVCRE |
-|----------|------------------------|---------------------|-----------------|
-| Strong | 70% | 95% | 95% |
-| Good | 90% | 120% | 120% |
-| Satisfactory | 115% | 140% | 140% |
-| Weak | 250% | 250% | 250% |
+| Category | CRR Table 1 (>=2.5yr) | B31 HVCRE (Table A) |
+|----------|----------------------|---------------------|
+| Strong | 70% | 95% |
+| Good | 90% | 120% |
+| Satisfactory | 115% | 140% |
+| Weak | 250% | 250% |
 
 ## Supporting Factors
 
@@ -314,7 +322,7 @@ See [Supporting Factors](supporting-factors.md) for eligibility criteria and app
 | Specialised lending definition | Art. 147(8) | CRE33.1 |
 | Slotting categories | Art. 153(5) | CRE33.2 |
 | Risk weights | Art. 153(5) | CRE33.3-4 |
-| HVCRE | Art. 153(5) | CRE33.5 |
+| HVCRE | PRA PS1/26 Art. 153(5) Table A (not in UK CRR) | CRE33.5 |
 | Infrastructure factor | Art. 501a | N/A |
 
 ## Next Steps

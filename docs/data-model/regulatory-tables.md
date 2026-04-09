@@ -320,9 +320,9 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 
 ## Slotting Risk Weights
 
-### CRR Non-HVCRE Specialised Lending (CRR Art. 153(5))
+### CRR Specialised Lending (CRR Art. 153(5) Table 1)
 
-CRR differentiates by remaining maturity (≥ 2.5 years vs < 2.5 years).
+UK CRR Art. 153(5) has a single table covering all SL types, differentiated by remaining maturity (≥ 2.5 years vs < 2.5 years).
 
 | Category | ≥ 2.5yr | < 2.5yr |
 |----------|---------|---------|
@@ -332,9 +332,14 @@ CRR differentiates by remaining maturity (≥ 2.5 years vs < 2.5 years).
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### CRR HVCRE (CRR Art. 153(5) Table 2)
+### CRR HVCRE — EU CRR Table 2 (No UK Legal Basis)
 
-HVCRE has **higher** risk weights than standard specialised lending.
+!!! warning "UK CRR Has No HVCRE Table"
+    The values below are from the **original EU CRR** Table 2. The UK onshored CRR does
+    **not** contain this table — "high volatility commercial real estate" does not appear
+    in the UK CRR text. All SL types under UK CRR use Table 1 above. HVCRE is introduced
+    by PRA PS1/26 Table A (see [Basel 3.1 HVCRE below](#basel-31-hvcre)). The code applies
+    these weights for CRR `is_hvcre=True` exposures (code divergence D3.22).
 
 | Category | ≥ 2.5yr | < 2.5yr |
 |----------|---------|---------|
@@ -344,34 +349,55 @@ HVCRE has **higher** risk weights than standard specialised lending.
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### Basel 3.1 Non-HVCRE Operational
+### Basel 3.1 Non-HVCRE (PRA PS1/26 Art. 153(5) Table A)
 
-| Category | Risk Weight |
-|----------|------------|
-| Strong | 70% |
-| Good | 70% |
-| Satisfactory | 115% |
-| Weak | 250% |
+Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational status.
 
-### Basel 3.1 Project Finance Pre-Operational
+| Category | Risk Weight | EL Component |
+|----------|------------|-------------|
+| Strong | 70% | 0.4% |
+| Good | **90%** | 0.8% |
+| Satisfactory | 115% | 2.8% |
+| Weak | 250% | 8.0% |
+| Default | 0% | 50.0% |
 
-| Category | Risk Weight |
-|----------|------------|
-| Strong | 80% |
-| Good | 100% |
-| Satisfactory | 120% |
-| Weak | 350% |
+!!! warning "No Separate Pre-Operational Table"
+    BCBS CRE33.6 Table 6 defines elevated pre-operational PF weights
+    (Strong 80%, Good 100%, Satisfactory 120%, Weak 350%). PRA PS1/26
+    **does not adopt this distinction** — all project finance uses the
+    standard non-HVCRE weights above regardless of operational status.
+    The SA calculator handles pre-operational PF separately via
+    Art. 122B(2)(c) (130% unrated pre-op, 100% operational, 80% high-quality).
+    See [B31 slotting spec](../specifications/basel31/slotting-approach.md)
+    for details (FR-5.2).
 
-### Basel 3.1 HVCRE
+!!! info "Subgrade Columns (Art. 153(5)(c)–(f))"
+    Table A has a 7-column structure with subgrade columns A/B/C/D.
+    The weights above are the **default** column B (Strong) and D (Good)
+    values per Art. 153(5)(c). Column A (Strong 50%) and C (Good 70%)
+    are available for short-maturity (< 2.5yr) exposures and certain
+    enhanced-criteria IPRE/PF exposures. Column A/C concessions are
+    not yet implemented — see
+    [key-differences](../framework-comparison/key-differences.md#slotting-subgrades--table-a-column-structure-art-1535).
 
-| Category | Risk Weight |
-|----------|------------|
-| Strong | 95% |
-| Good | 120% |
-| Satisfactory | 140% |
-| Weak | 250% |
+### Basel 3.1 HVCRE (PRA PS1/26 Art. 153(5) Table A)
 
-**Source**: `SLOTTING_RISK_WEIGHTS`, `SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` in `data/tables/crr_slotting.py`
+!!! info "Introduced by PRA PS1/26"
+    UK CRR has no HVCRE concept. PRA PS1/26 introduces HVCRE as a new
+    sub-type with elevated risk weights. See
+    [CRR HVCRE note above](#crr-hvcre--eu-crr-table-2-no-uk-legal-basis).
+
+| Category | Risk Weight | EL Component |
+|----------|------------|-------------|
+| Strong | 95% | 0.4% |
+| Good | 120% | 0.8% |
+| Satisfactory | 140% | 2.8% |
+| Weak | 250% | 8.0% |
+| Default | 0% | 50.0% |
+
+**Source (CRR)**: `SLOTTING_RISK_WEIGHTS`, `SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` in `data/tables/crr_slotting.py`
+
+**Source (B31)**: `B31_SLOTTING_RISK_WEIGHTS`, `B31_SLOTTING_RISK_WEIGHTS_PREOP`, `B31_SLOTTING_RISK_WEIGHTS_HVCRE` in `data/tables/b31_slotting.py`
 
 ---
 

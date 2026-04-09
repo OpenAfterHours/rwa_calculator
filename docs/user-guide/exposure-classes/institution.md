@@ -102,9 +102,9 @@ The interaction between Table 4 and Table 4A is governed by Art. 120(3):
 
 ## Covered Bonds
 
-Covered bonds issued by institutions receive preferential treatment, ranging from 10% (CQS 1) to 50% (CQS 4-6 / unrated). Eligibility requires the issuer to be a regulated credit institution, with the bonds subject to special public supervision and backed by qualifying assets.
+Covered bonds issued by institutions receive preferential treatment under Art. 129. Rated bonds range from 10% (CQS 1) to 100% (CQS 6) per Table 6A/Table 7. Unrated bonds derive their RW from the issuing institution's senior unsecured RW via Art. 129(5), producing values from 10% to 100%. PRA PS1/26 retains the same rated table — the BCBS CRE20 reductions (CQS 2→15%, CQS 4–6→50%) were not adopted.
 
-> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds) for the full CQS table and CRR vs Basel 3.1 comparison.
+> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129) for the full CQS table and CRR vs Basel 3.1 comparison.
 
 ## Central Counterparties (CCPs)
 

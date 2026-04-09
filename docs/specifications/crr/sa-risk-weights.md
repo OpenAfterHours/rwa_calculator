@@ -294,7 +294,7 @@ The payroll/pension 35% treatment is **carried forward unchanged** from CRR2 int
 
 Covered bonds backed by eligible collateral pools receive preferential risk weights:
 
-### CRR Covered Bond Risk Weights (Art. 129(4))
+### CRR Covered Bond Risk Weights — Rated (Art. 129(4), Table 6A)
 
 | CQS of Issuing Institution | Risk Weight |
 |-----------------------------|-------------|
@@ -304,34 +304,80 @@ Covered bonds backed by eligible collateral pools receive preferential risk weig
 | 4 | 50% |
 | 5 | 50% |
 | 6 | 100% |
-| Unrated | 20% (if institution CQS 1-2 equivalent) |
 
-### Eligibility Conditions (Art. 129(1)-(3))
+!!! info "No Unrated Row in Table 6A"
+    Table 6A contains CQS 1–6 only. Unrated covered bonds are handled separately by
+    Art. 129(5) — see derivation table below.
+
+### CRR Covered Bond Risk Weights — Unrated (Art. 129(5))
+
+Unrated eligible covered bonds are assigned a risk weight derived from the issuing
+institution's senior unsecured risk weight:
+
+| Institution Senior Unsecured RW | Covered Bond RW | Art. 129(5) Sub-Para |
+|---------------------------------|-----------------|----------------------|
+| 20% | 10% | (a) |
+| 50% | 20% | (b) |
+| 100% | 50% | (c) |
+| 150% | 100% | (d) |
+
+The institution RW is determined per Art. 120 (ECRA rated) or Art. 121 (sovereign-derived).
+If the issuing institution itself is unrated under CRR, the sovereign-derived approach
+(Art. 121, Table 5) provides the institution RW, which then maps through the table above.
+
+### Eligibility Conditions (Art. 129(1)–(3), (7))
 
 Covered bonds must meet the following to qualify for preferential treatment:
 
 - Issued by a credit institution with registered office in the UK or EEA
-- Subject to special public supervision protecting bond holders
-- Backed by one of: (a) residential mortgage loans ≤ 80% LTV, (b) commercial mortgage loans ≤ 60% LTV, (c) exposures to central/regional governments ≤ CQS 1-2, (d) exposures to credit institutions ≤ CQS 1-2
+- Subject to special public supervision protecting bond holders (Art. 129(7))
+- Backed by one of: (a) residential mortgage loans ≤ 80% LTV, (b) commercial mortgage loans ≤ 60% LTV, (c) exposures to central/regional governments ≤ CQS 1–2, (d) exposures to credit institutions ≤ CQS 1–2
 - Bond holders have priority claim in the event of issuer default
+- Collateral meets Art. 208 valuation requirements and Art. 229(1) valuation rules (Art. 129(3))
 
-### Basel 3.1 Covered Bond Changes (Art. 129A)
+### Basel 3.1 Covered Bond Changes (Art. 129)
 
-Under Basel 3.1, covered bond risk weights are reduced and the CQS mapping is simplified:
+PRA PS1/26 modifies Art. 129 in-place — there is no separate "Art. 129A".
 
-| CQS of Issuing Institution | Risk Weight |
-|-----------------------------|-------------|
-| 1 | 10% |
-| 2 | 15% |
-| 3 | 20% |
-| 4-6 | 50% |
-| Unrated | Derived from issuer (A_ENHANCED→15%, A→20%, B→35%, C→100%) |
+!!! warning "PRA Deviation from BCBS — Rated Risk Weights Unchanged"
+    BCBS CRE20.28–29 reduced rated covered bond risk weights (CQS 2: 20%→15%,
+    CQS 4–6: collapsed to 50%). **PRA did not adopt these reductions.** PRA PS1/26
+    Art. 129(4) Table 7 is identical to CRR Table 6A — all six CQS values are unchanged.
+
+**Rated (Art. 129(4), Table 7):** Identical to CRR Table 6A above — no changes.
+
+**New due diligence requirement (Art. 129(4A)):** Institutions must conduct due diligence
+on external credit assessments. If the analysis reflects higher risk than the CQS implies,
+the institution must assign at least one CQS step higher than the external assessment.
+
+**Unrated (Art. 129(5)):** The derivation table is expanded from 4 to 7 entries to
+accommodate the new institution risk weights introduced by ECRA and SCRA:
+
+| Institution Senior Unsecured RW | Covered Bond RW | Art. 129(5) Sub-Para | Change |
+|---------------------------------|-----------------|----------------------|--------|
+| 20% | 10% | (a) | Unchanged |
+| 30% | 15% | (aa) | **New** |
+| 40% | 20% | (ab) | **New** |
+| 50% | 25% | (b) | ↓ from 20% |
+| 75% | 35% | (ba) | **New** |
+| 100% | 50% | (c) | Unchanged |
+| 150% | 100% | (d) | Unchanged |
+
+The new entries (aa), (ab), (ba) correspond to B31 institution risk weights that did not
+exist under CRR: 30% (ECRA CQS 2), 40% (SCRA Grade A), 75% (SCRA Grade B).
+
+!!! warning "Code Divergence — B31 Rated Covered Bond Risk Weights"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` (lines 261–268) uses
+    **BCBS CRE20** values (CQS 2 = 15%, CQS 6 = 50%) instead of PRA Table 7 values
+    (CQS 2 = 20%, CQS 6 = 100%). The rated table should be identical to CRR per PRA
+    PS1/26. The unrated derivation table (`COVERED_BOND_UNRATED_DERIVATION`) and
+    SCRA mapping (`B31_COVERED_BOND_UNRATED_FROM_SCRA`) are correct. See D3.21.
 
 !!! note "Implementation Status"
     Covered bonds are implemented as a separate exposure class under Art. 112(m).
-    Both CRR and Basel 3.1 rated risk weights are wired via CQS join tables.
-    B31 unrated derivation uses SCRA grade → institution RW → CB RW chain
-    per Art. 129(5) with values traced to COVERED_BOND_UNRATED_DERIVATION table.
+    Rated risk weights use CQS join tables; unrated uses the Art. 129(5) derivation chain.
+    CRR: institution CQS → institution RW → CB RW via `COVERED_BOND_UNRATED_DERIVATION`.
+    B31: SCRA grade → CB RW via `B31_COVERED_BOND_UNRATED_FROM_SCRA`.
 
 ## High-Risk Exposures (Art. 128)
 
@@ -673,7 +719,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
 - **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
-- **Covered bonds** (Art. 129/129A): CQS-based risk weights, eligibility criteria — Added
+- **Covered bonds** (Art. 129): CQS-based risk weights, eligibility criteria, unrated derivation, PRA deviation — Added
 - **RGLA/PSE/MDB/Int'l Org tables** (Art. 115-118): Missing from original spec — Added
 - **ECA consensus scores** (Art. 137 Table 9): ECA-to-CQS mapping for unrated sovereigns — Added
 - **Removal of SME supporting factor**: No longer applicable under Basel 3.1

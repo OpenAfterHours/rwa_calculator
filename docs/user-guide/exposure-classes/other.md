@@ -419,9 +419,9 @@ Debt securities secured by a dedicated pool of assets (cover pool):
 
 ### Risk Weights
 
-Covered bond risk weights range from 10% (CQS 1) to 50% (CQS 4-6 / unrated). Eligibility requires the issuer to be a regulated credit institution with special public supervision, qualifying cover pool, and at least 5% overcollateralisation.
+Covered bond risk weights range from 10% (CQS 1) to 100% (CQS 6) for rated bonds (Art. 129(4), Table 6A). Unrated covered bonds are derived from the issuing institution's senior unsecured RW via Art. 129(5), producing values from 10% to 100%. Eligibility requires the issuer to be a regulated credit institution with special public supervision, qualifying cover pool, and investor transparency requirements (Art. 129(7)).
 
-> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds) for the full CQS table.
+> **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129) for the full CQS table.
 
 ## Securitisation Positions
 
@@ -505,7 +505,7 @@ a flat **150%** risk weight.
 | MDB (other, Table 2B) | 20–150% | N/A |
 | RGLA | 0–150% | Yes (SA-only if 0% RW under B31) |
 | International Org | 0% | N/A |
-| Covered Bonds | 10-50% | Varies |
+| Covered Bonds | 10–100% | Varies |
 | High Risk Items (B31 only) | 150% | No |
 
 ## Regulatory References

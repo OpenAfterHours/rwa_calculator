@@ -17,9 +17,17 @@ A tiered discount applied to RWA for qualifying SME exposures.
 
 ### Eligibility
 
-- Counterparty must be classified as Corporate SME
 - Turnover < EUR 50m (converted from GBP at the configured FX rate)
 - Aggregated at counterparty level, not per-exposure
+
+!!! info "Regulatory Scope vs Implementation"
+    CRR Art. 501 applies the factor to **all** exposures to SMEs, including corporate, retail,
+    and real-estate-secured classes. The implementation applies the factor only to exposures
+    classified as `CORPORATE_SME` via the `is_sme` flag. Retail-origin entities that fail the
+    retail qualification test are reclassified to `CORPORATE_SME` by the classifier and receive
+    the factor (see CRR-F4). Retail-qualifying SMEs that remain in `RETAIL_OTHER`,
+    `RETAIL_MORTGAGE`, or `RETAIL_QRRE` do not currently receive the Art. 501 discount — their
+    75% risk weight already provides favourable treatment compared to corporate exposures.
 
 ### Tiered Application
 
@@ -58,7 +66,7 @@ When both factors apply to an exposure, the calculator uses the **minimum** (mos
 | CRR-F1 | Small SME — Tier 1 only (exposure ≤ EUR 2.5m) | 0.7619 |
 | CRR-F2 | Medium SME — blended tiers (exposure spans threshold) | Blended (weighted average of 0.7619 and 0.85) |
 | CRR-F3 | Large SME — Tier 2 dominant (exposure well above EUR 2.5m) | → 0.85 |
-| CRR-F4 | SME retail — Tier 1 factor applied to retail-classified SME | 0.7619 |
+| CRR-F4 | Retail-origin SME — reclassified to `CORPORATE_SME`, Tier 1 factor applied | 0.7619 |
 | CRR-F5 | Infrastructure — flat factor (not tiered) | 0.75 (Art. 501a) |
 | CRR-F6 | Large corporate — no SME factor (turnover > EUR 50m threshold) | 1.0 (no discount) |
 | CRR-F7 | Boundary — exposure exactly at EUR 2.5m (GBP ~£2.18m) threshold | Tier 1 factor (0.7619) applies up to threshold |

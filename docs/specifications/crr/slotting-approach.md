@@ -29,13 +29,14 @@ The slotting approach assigns risk weights based on qualitative category assessm
 | Object Finance | OF | Financing of physical assets (ships, aircraft, etc.) |
 | Commodities Finance | CF | Structured financing of commodity inventories |
 | Income-Producing RE | IPRE | Commercial real estate where repayment depends on rental income |
-| High Volatility CRE | HVCRE | CRE with higher risk characteristics |
+| High Volatility CRE | HVCRE | CRE with higher risk characteristics (PRA PS1/26 only — see below) |
 
 ## CRR Slotting Risk Weights
 
-Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remaining maturity.
+Under UK CRR Art. 153(5), risk weights are assigned from a single table (Table 1) differentiated
+by remaining maturity. All specialised lending types (PF, OF, CF, IPRE) use the same table.
 
-### Non-HVCRE (Table 1)
+### Table 1 (Art. 153(5))
 
 | Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
 |----------|----------------------------|---------------------------|
@@ -45,15 +46,24 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### HVCRE (Table 2)
+!!! warning "UK CRR Has No HVCRE Concept — No Table 2"
+    The term "high volatility commercial real estate" does **not appear anywhere** in the
+    UK onshored CRR (Regulation (EU) No 575/2013 as retained in UK law). Art. 153(5) contains
+    only **Table 1** — a single table covering all specialised lending types with no HVCRE
+    distinction. Art. 147(8) defines specialised lending generically (no HVCRE sub-type).
 
-| Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
-|----------|----------------------------|---------------------------|
-| Strong | 95% | 70% |
-| Good | 120% | 95% |
-| Satisfactory | 140% | 140% |
-| Weak | 250% | 250% |
-| Default | 0% | 0% |
+    The original EU CRR had a separate Table 2 with elevated HVCRE weights
+    (Strong: 95%/70%, Good: 120%/95%, Satisfactory: 140%/140%, Weak: 250%/250%, Default: 0%/0%).
+    This table was **not retained** in the UK onshored version. Under UK CRR, exposures
+    that would be classified as HVCRE in the EU use the same Table 1 as all other SL types.
+
+    PRA PS1/26 (Basel 3.1, effective 1 Jan 2027) **introduces** HVCRE as a distinct sub-type
+    in Table A with separate, higher risk weights. See [Basel 3.1 section below](#hvcre--table-a).
+
+    **Code divergence (D3.22):** The calculator applies EU CRR Table 2 HVCRE weights
+    (`SLOTTING_RISK_WEIGHTS_HVCRE`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT`) for CRR exposures
+    with `is_hvcre=True`. This is more conservative than required by UK law (higher RWs)
+    but has no UK CRR legal basis. See acceptance tests CRR-E4, CRR-E7, CRR-E8.
 
 ## Basel 3.1 Slotting Risk Weights
 
@@ -94,6 +104,11 @@ Satisfactory=115%, Weak=250%, Default=0%.
 
 ### HVCRE — Table A
 
+!!! info "HVCRE Introduced by PRA PS1/26"
+    HVCRE is **not** a continuation from CRR — it is newly introduced by PRA PS1/26 Art. 153(5)
+    Table A. UK CRR has no HVCRE concept (see [CRR section above](#table-1-art-1535)). The
+    elevated weights below have no CRR predecessor in UK law.
+
 | Category | Remaining Maturity >= 2.5yr | Remaining Maturity < 2.5yr |
 |----------|----------------------------|---------------------------|
 | Strong | 95% | 70% |
@@ -129,7 +144,7 @@ EL rates for slotting exposures are maturity-dependent, unlike the flat values i
 !!! warning "Previous Values Were Wrong"
     The EL rates previously documented here (Strong=5%, Good=10%, Satisfactory=35%, Weak=50%, Default=50%) were **BCBS CRE33 values**, not PRA PS1/26 values. The PRA Table B values above are dramatically lower for Strong/Good categories (e.g., Strong 0% vs 5%, Good 0.4% vs 10%). Using the BCBS values would massively overstate the EL shortfall for well-categorised slotting exposures.
 
-These EL rates are used when calculating the IRB EL shortfall/excess for slotting exposures. The 0% risk weight for defaulted slotting categories (in Tables 1/2 above) means K=0, but the EL amount = EL_rate × EAD is still recognised for the EL shortfall calculation.
+These EL rates are used when calculating the IRB EL shortfall/excess for slotting exposures. The 0% risk weight for defaulted slotting categories means K=0, but the EL amount = EL_rate × EAD is still recognised for the EL shortfall calculation.
 
 ### PRA vs BCBS Slotting Differences
 
@@ -167,7 +182,7 @@ Removal of equity IRB — all equity falls to SA treatment.
 | CRR-E1 | Project Finance | Strong | 70% | Art. 153(5) Table 1 |
 | CRR-E2 | Project Finance | Good | 90% | Art. 153(5) Table 1 |
 | CRR-E3 | IPRE | Weak | 250% | Art. 153(5) Table 1 |
-| CRR-E4 | HVCRE | Strong | 95% | Art. 153(5) Table 2 |
+| CRR-E4 | HVCRE | Strong | 95% | EU CRR Table 2 (no UK basis — see D3.22) |
 
 ### Short Maturity (<2.5 years)
 
@@ -175,8 +190,8 @@ Removal of equity IRB — all equity falls to SA treatment.
 |-------------|---------|----------|-------------|-----------|
 | CRR-E5 | Project Finance | Strong | 50% | Art. 153(5) Table 1 |
 | CRR-E6 | Project Finance | Good | 70% | Art. 153(5) Table 1 |
-| CRR-E7 | HVCRE | Strong | 70% | Art. 153(5) Table 2 |
-| CRR-E8 | HVCRE | Good | 95% | Art. 153(5) Table 2 |
+| CRR-E7 | HVCRE | Strong | 70% | EU CRR Table 2 (no UK basis — see D3.22) |
+| CRR-E8 | HVCRE | Good | 95% | EU CRR Table 2 (no UK basis — see D3.22) |
 
 !!! note "Coverage Notes"
     Object finance and commodities finance use the same non-HVCRE table as PF — validated through CRR-E1/E2/E5/E6 (same risk weight lookup). Defaulted slotting (0% RW) is validated through the CRR-I group (defaulted exposures). Satisfactory and Weak short-maturity scenarios (115%/250% — no maturity differentiation) are validated implicitly through E3 (same weight regardless of maturity band).

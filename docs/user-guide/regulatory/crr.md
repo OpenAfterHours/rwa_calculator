@@ -27,9 +27,19 @@ RWA_IRB = K × 12.5 × EAD × MA × 1.06
 
 The SME Supporting Factor reduces RWA for qualifying SME exposures.
 
-**Eligibility Criteria:**
+**Eligibility Criteria (Art. 501):**
 - Counterparty turnover ≤ EUR 50m (GBP 44m)
 - Exposure classified as Corporate, Retail, or Secured by Real Estate
+
+!!! warning "Implementation Scope"
+    CRR Art. 501 applies the supporting factor to all SME exposures regardless of exposure
+    class. However, the calculator applies the factor only to `CORPORATE_SME` exposures (via
+    the `is_sme` flag). Retail-origin entities that fail the retail qualification test are
+    reclassified to `CORPORATE_SME` and receive the factor (tested by CRR-F4). Retail-qualifying
+    SMEs that remain in `RETAIL_OTHER` or `RETAIL_MORTGAGE` do not currently receive the
+    Art. 501 discount — their 75% risk weight already provides favourable treatment. See the
+    [supporting factors specification](../../specifications/crr/supporting-factors.md) for
+    details.
 
 **Tiered Calculation (CRR2 Article 501):**
 
@@ -161,13 +171,43 @@ into medium risk (50%) or medium/low risk (20%).
 
 ## F-IRB Supervisory LGD
 
-| Exposure Type | Senior Unsecured | Subordinated |
-|---------------|------------------|--------------|
-| Corporate/Institution | 45% | 75% |
-| Secured - Financial Collateral | 0% | N/A |
-| Secured - Receivables | 35% | N/A |
-| Secured - CRE/RRE | 35% | N/A |
-| Secured - Other | 40% | N/A |
+### Unsecured Exposures (Art. 161(1))
+
+| Category | LGD | Reference |
+|----------|-----|-----------|
+| Senior unsecured | 45% | Art. 161(1)(a) |
+| Subordinated unsecured | 75% | Art. 161(1)(b) |
+| Covered bonds (Art. 129(4)/(5) eligible) | 11.25% | Art. 161(1)(d) |
+| Senior purchased corporate receivables | 45% | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | 100% | Art. 161(1)(f) |
+| Dilution risk of purchased receivables | 75% | Art. 161(1)(g) |
+
+!!! warning "Not Yet Implemented — Purchased Receivables"
+    Art. 161(1)(e)/(f)/(g) purchased receivables and dilution risk LGD values are not
+    implemented in code. These exposures currently receive the standard unsecured LGD
+    (45% senior / 75% subordinated).
+
+### Secured Exposures — LGDS (Art. 230 Table 5)
+
+For collateralised exposures under the Foundation Collateral Method, the secured
+portion receives a reduced LGDS value:
+
+| Collateral Type | LGDS (Senior) | LGDS (Subordinated) | Reference |
+|-----------------|---------------|---------------------|-----------|
+| Financial collateral | 0% | 0% | Art. 230 Table 5 |
+| Receivables | 35% | 65% | Art. 230 Table 5 |
+| Residential / commercial RE | 35% | 65% | Art. 230 Table 5 |
+| Other physical collateral | 40% | 70% | Art. 230 Table 5 |
+
+!!! info "CRE and RRE Combined"
+    CRR Art. 230 Table 5 does not differentiate between residential and commercial
+    real estate — both receive 35% LGDS (senior). Basel 3.1 reduces both to 20%
+    (see [key differences](../../framework-comparison/key-differences.md#f-irb-lgd)).
+
+!!! tip "Full detail"
+    See the [F-IRB specification](../../specifications/crr/firb-calculation.md) for
+    overcollateralisation thresholds (C\*/C\*\*), Basel 3.1 FSE distinction
+    (Art. 161(1)(a) 45% vs Art. 161(1)(aa) 40%), and acceptance test scenarios.
 
 ## CRM Haircuts
 
@@ -200,9 +240,10 @@ Where:
 
 ## Slotting Risk Weights (Art. 153(5))
 
-CRR Art. 153(5) defines two risk weight tables with maturity-based splits.
+UK CRR Art. 153(5) defines a single risk weight table (Table 1) with maturity-based splits,
+covering all specialised lending types (PF, OF, CF, IPRE).
 
-### Non-HVCRE (Table 1 — PF, OF, CF, IPRE)
+### Table 1 (PF, OF, CF, IPRE)
 
 | Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
 |----------|---------------------------|---------------------------|
@@ -212,15 +253,14 @@ CRR Art. 153(5) defines two risk weight tables with maturity-based splits.
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
-### HVCRE (Table 2)
-
-| Category | Remaining Maturity ≥ 2.5yr | Remaining Maturity < 2.5yr |
-|----------|---------------------------|---------------------------|
-| Strong | 95% | 70% |
-| Good | 120% | 95% |
-| Satisfactory | 140% | 140% |
-| Weak | 250% | 250% |
-| Default | 0% | 0% |
+!!! warning "No HVCRE Distinction in UK CRR"
+    The UK onshored CRR does **not** contain a separate HVCRE table. The term "high volatility
+    commercial real estate" does not appear in the UK CRR text. The original EU CRR had a
+    separate Table 2 with elevated HVCRE weights, but this was not retained in UK onshoring.
+    All specialised lending under UK CRR uses Table 1 above. HVCRE is introduced as a distinct
+    sub-type by PRA PS1/26 (Basel 3.1) — see [Basel 3.1 guide](basel31.md#specialised-lending).
+    The calculator applies EU CRR Table 2 weights for `is_hvcre=True` CRR exposures (code
+    divergence D3.22).
 
 ## IRB Formulas
 
@@ -291,6 +331,7 @@ entirely. They are **not active** under current UK CRR:
 | Art. 128 | Items associated with particularly high risk (150%) | Omitted; re-introduced under Basel 3.1 (PRA PS1/26) |
 | Art. 132 | CIU treatment | Omitted; moved to PRA Rulebook (CRR Part) |
 | Art. 152 | IRB treatment of CIU exposures | Omitted; moved to PRA Rulebook (CRR Part) |
+| Art. 153(5) Table 2 | HVCRE slotting risk weights | Not retained in UK onshoring; HVCRE introduced by PRA PS1/26 Table A |
 | Art. 158 | Expected loss — treatment by exposure type | Omitted; EL rules moved to PRA Rulebook (CRR Part); reinstated with modifications in PS1/26 |
 
 !!! note

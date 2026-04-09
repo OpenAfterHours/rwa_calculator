@@ -40,7 +40,7 @@
 | Art. 123–123A | Retail SA, currency mismatch multiplier (1.5x) | Done |
 | Art. 124A–124L | Real estate: loan-splitting, qualifying criteria, LTV bands | Done |
 | Art. 127(1)–(1A) | Defaulted SA: provision-coverage split (100%/150%) | Done |
-| Art. 129–129A | Covered bond risk weights | Done |
+| Art. 129 | Covered bond risk weights (rated Table 6A/Table 7, unrated derivation Art. 129(5)) | Done |
 | Art. 132–132B | CIU treatment (fallback 1,250%, mandate-based, look-through) | Done |
 | Art. 133 | Equity SA (listed 250%, speculative 400%) | Done |
 | Art. 143–154 | IRB approach revisions (PD/LGD floors, 1.06 removal) | Done |

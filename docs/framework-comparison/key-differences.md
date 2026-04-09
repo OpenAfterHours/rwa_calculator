@@ -777,16 +777,45 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 | Rated RGLAs | Sovereign-based | Own ECAI rating (20-150%) |
 | Unrated RGLAs | Sovereign-based | Based on sovereign CQS |
 
-### Covered Bonds
+### Covered Bonds (Art. 129)
 
-| CQS | CRR | Basel 3.1 |
-|-----|-----|-----------|
-| CQS 1 | 10% | 10% |
-| CQS 2 | 20% | **15%** (Art. 129A) |
-| CQS 3 | 20% | 20% |
-| CQS 4-5 | 50% | 50% |
-| CQS 6 | 100% | **50%** (Art. 129A) |
-| Unrated | Derived from issuer (40%→20% UK) | Derived from issuer via SCRA (A_ENHANCED→15%, A→20%, B→35%, C→100%) |
+!!! warning "PRA Deviation from BCBS — Rated Risk Weights Unchanged"
+    BCBS CRE20.28–29 reduced rated covered bond risk weights (CQS 2: 20%→15%, CQS 4–6:
+    collapsed to 50%). **PRA PS1/26 Art. 129(4) Table 7 did not adopt these reductions** — all
+    six rated CQS values are identical to CRR Table 6A.
+
+| CQS | CRR (Table 6A) | Basel 3.1 (Table 7) | Change |
+|-----|----------------|---------------------|--------|
+| CQS 1 | 10% | 10% | Unchanged |
+| CQS 2 | 20% | 20% | Unchanged |
+| CQS 3 | 20% | 20% | Unchanged |
+| CQS 4 | 50% | 50% | Unchanged |
+| CQS 5 | 50% | 50% | Unchanged |
+| CQS 6 | 100% | 100% | Unchanged |
+
+**Unrated (Art. 129(5)):** Risk weight is derived from the issuing institution's senior
+unsecured RW. Basel 3.1 expands the derivation table from 4 to 7 entries to accommodate
+new institution RWs (ECRA 30%, SCRA 40%/75%):
+
+| Institution RW | CRR CB RW | B31 CB RW | Change |
+|---------------|-----------|-----------|--------|
+| 20% | 10% | 10% | Unchanged |
+| 30% | — | **15%** | New (Art. 129(5)(aa)) |
+| 40% | — | **20%** | New (Art. 129(5)(ab)) |
+| 50% | 20% | **25%** | ↑ from 20% |
+| 75% | — | **35%** | New (Art. 129(5)(ba)) |
+| 100% | 50% | 50% | Unchanged |
+| 150% | 100% | 100% | Unchanged |
+
+!!! info "Art. 129(4A) — New Due Diligence Requirement"
+    Basel 3.1 adds Art. 129(4A): institutions must assess whether external ratings
+    adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
+    must assign at least one CQS step higher.
+
+!!! warning "Code Divergence — B31 Rated Values"
+    `B31_COVERED_BOND_RISK_WEIGHTS` uses **BCBS CRE20** values (CQS 2 = 15%,
+    CQS 6 = 50%) instead of PRA Table 7 values (identical to CRR). The unrated derivation
+    is correct. See [SA risk weights spec](../specifications/crr/sa-risk-weights.md#covered-bond-exposures-crr-art-129) for details.
 
 ## Credit Conversion Factors
 
@@ -863,15 +892,26 @@ for implementation details.
 
 ### HVCRE
 
-| Category | CRR (≥2.5yr) | CRR (<2.5yr) | Basel 3.1 |
-|----------|--------------|--------------|-----------|
-| Strong | 95% | 70% | 95% |
-| Good | 120% | 95% | 120% |
-| Satisfactory | 140% | 140% | 140% |
-| Weak | 250% | 250% | 250% |
-| Default | 0% | 0% | 0% (EL) |
+| Category | CRR | Basel 3.1 |
+|----------|-----|-----------|
+| Strong | N/A | 95% |
+| Good | N/A | 120% |
+| Satisfactory | N/A | 140% |
+| Weak | N/A | 250% |
+| Default | N/A | 0% (EL) |
 
-**Note:** Under CRR, HVCRE has a separate risk weight table (Art. 153(5) Table 2) with higher weights than non-HVCRE.
+!!! warning "HVCRE — PRA PS1/26 Introduction, Not CRR Continuation"
+    The UK onshored CRR has **no HVCRE concept**. The term "high volatility commercial real
+    estate" does not appear in the UK CRR text — Art. 153(5) contains only Table 1
+    (a single table for all SL types). The original EU CRR had a separate Table 2 with
+    elevated HVCRE weights (Strong: 95%/70%, Good: 120%/95%, Satisfactory: 140%, Weak: 250%),
+    but this was **not retained** in UK onshoring. Under UK CRR, all SL uses Table 1.
+
+    PRA PS1/26 **introduces** HVCRE as a new sub-type in Table A (Art. 153(5)(a)(i)) with the
+    higher weights shown above. This is a Basel 3.1 change with no UK CRR predecessor.
+
+    **Code divergence (D3.22):** The calculator applies EU CRR Table 2 weights for CRR
+    exposures with `is_hvcre=True`, which is more conservative than UK CRR requires.
 
 ### Slotting Subgrades — Table A Column Structure (Art. 153(5))
 
@@ -894,8 +934,8 @@ includes optional lower-weight columns (A/C):
 - **(e) IPRE enhanced:** IPRE exposures in Strong **may** use column **A** if all criteria met: substantially stronger underwriting, very low LTV, investment-grade tenant income (≥ 100% debt service), and no ADC characteristics
 - **(f) PF enhanced:** PF exposures in Strong **may** use column **A** if underwriting and characteristics are substantially stronger than required for Strong
 
-!!! info "CRR vs PRA PS1/26 — Format Change, Values Preserved"
-    Under CRR, the short-maturity concession was expressed as separate tables (Table 1 ≥ 2.5yr, Table 1 < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. The **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks.
+!!! info "CRR vs PRA PS1/26 — Format Change, Non-HVCRE Values Preserved"
+    Under CRR, the short-maturity concession was expressed as separate maturity bands in Table 1 (≥ 2.5yr vs < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. For non-HVCRE types, the **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks. The HVCRE row in Table A is a **PRA PS1/26 introduction** — UK CRR has no HVCRE table.
 
 !!! warning "Not Yet Implemented — Column A/C Concession"
     The calculator currently assigns all Basel 3.1 slotting exposures to columns B/D (the default per Art. 153(5)(c)). The optional column A/C short-maturity concession (Art. 153(5)(d)) and enhanced-underwriting concessions (Art. 153(5)(e)/(f)) are not yet implemented. CRR maturity-based differentiation IS implemented via separate short/long maturity tables.

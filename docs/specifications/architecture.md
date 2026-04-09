@@ -14,6 +14,7 @@ The calculator uses a six-stage immutable pipeline: Load → Hierarchy → Class
 | FR-3.2 | Multi-level counterparty hierarchies with rating inheritance (up to 10 levels) | P0 | Done |
 | FR-3.3 | Multi-level facility hierarchies with drawn aggregation and sub-facility exclusion | P0 | Done |
 | FR-3.4 | Automatic exposure classification by approach based on config and exposure attributes | P0 | Done |
+| FR-3.4a | Per-model IRB permissions with geography/book scoping, overriding org-wide defaults (Art. 147A) | P0 | Done |
 | FR-3.5 | Non-blocking input validation with categorised error accumulation | P0 | Done |
 | FR-3.6 | Multi-currency FX conversion with configurable target currency | P1 | Done |
 | FR-3.7 | Results caching with lazy loading | P2 | Done |
@@ -36,6 +37,7 @@ The calculator uses a six-stage immutable pipeline: Load → Hierarchy → Class
 | `facility_mappings` | `parent_reference`, `child_reference` | Facility-to-exposure relationships |
 | `lending_groups` | `group_reference`, `member_reference` | Retail lending group connections |
 | `fx_rates` | `currency_pair`, `rate` | FX conversion rates |
+| `model_permissions` | `model_id`, `exposure_class`, `approach` | Per-model IRB approach permissions (optional; overrides org-wide `IRBPermissions`) |
 
 ### Output Fields (Exposure-Level)
 

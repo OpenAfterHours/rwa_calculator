@@ -56,6 +56,7 @@ flowchart TD
 | `ratings.parquet` | Credit ratings |
 | `org_mapping.parquet` | Organization hierarchy |
 | `lending_mapping.parquet` | Retail lending groups |
+| `model_permissions.parquet` | Per-model IRB approach permissions (overrides org-wide `IRBPermissions`) |
 
 ## Schema Definitions
 
@@ -237,7 +238,8 @@ See [`classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/mast
 
 Transformations:
 - Assign exposure class
-- Determine calculation approach
+- Resolve per-model IRB permissions (`model_permissions` join on `model_id`, producing `model_airb_permitted`, `model_firb_permitted`, `model_slotting_permitted` flags)
+- Determine calculation approach (Art. 147A hard constraints override model permissions)
 - Calculate CCFs
 - Calculate EAD
 

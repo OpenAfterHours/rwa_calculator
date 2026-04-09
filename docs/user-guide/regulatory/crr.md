@@ -27,9 +27,19 @@ RWA_IRB = K × 12.5 × EAD × MA × 1.06
 
 The SME Supporting Factor reduces RWA for qualifying SME exposures.
 
-**Eligibility Criteria:**
+**Eligibility Criteria (Art. 501):**
 - Counterparty turnover ≤ EUR 50m (GBP 44m)
 - Exposure classified as Corporate, Retail, or Secured by Real Estate
+
+!!! warning "Implementation Scope"
+    CRR Art. 501 applies the supporting factor to all SME exposures regardless of exposure
+    class. However, the calculator applies the factor only to `CORPORATE_SME` exposures (via
+    the `is_sme` flag). Retail-origin entities that fail the retail qualification test are
+    reclassified to `CORPORATE_SME` and receive the factor (tested by CRR-F4). Retail-qualifying
+    SMEs that remain in `RETAIL_OTHER` or `RETAIL_MORTGAGE` do not currently receive the
+    Art. 501 discount — their 75% risk weight already provides favourable treatment. See the
+    [supporting factors specification](../../specifications/crr/supporting-factors.md) for
+    details.
 
 **Tiered Calculation (CRR2 Article 501):**
 

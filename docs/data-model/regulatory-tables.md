@@ -327,31 +327,48 @@ HVCRE has **higher** risk weights than standard specialised lending.
 
 ## F-IRB Supervisory LGD (CRR Art. 161)
 
-### CRR Values
+### CRR Art. 161 Values
 
-| Exposure Type | LGD |
-|---------------|-----|
-| Senior unsecured | 45% |
-| Subordinated | 75% |
-| Covered bonds (Art. 129(4)/(5)) | 11.25% |
-| Secured — Financial collateral | 0% |
-| Secured — Receivables | 35% |
-| Secured — Residential RE | 35% |
-| Secured — Commercial RE | 35% |
-| Secured — Other physical | 40% |
+| Category | LGD | Reference |
+|----------|-----|-----------|
+| Senior unsecured | 45% | Art. 161(1)(a) |
+| Subordinated unsecured | 75% | Art. 161(1)(b) |
+| Covered bonds (Art. 129(4)/(5)) | 11.25% | Art. 161(1)(d) |
+| Senior purchased corporate receivables | 45% | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | 100% | Art. 161(1)(f) |
+| Dilution risk of purchased corporate receivables | 75% | Art. 161(1)(g) |
+
+### CRR Art. 230 Table 5 LGDS Values (Secured Portions)
+
+| Collateral Type | LGDS (Senior) | LGDS (Subordinated) |
+|----------------|---------------|---------------------|
+| Financial collateral | 0% | 0% |
+| Receivables | 35% | 65% |
+| Residential RE | 35% | 65% |
+| Commercial RE | 35% | 65% |
+| Other physical | 40% | 70% |
 
 ### Basel 3.1 Values (PRA PS1/26)
 
-| Exposure Type | LGD | Change |
-|---------------|-----|--------|
-| Senior unsecured | **40%** | ↓ from 45% |
+| Category | LGD | Change |
+|----------|-----|--------|
+| Senior unsecured (non-FSE) | **40%** | ↓ from 45% |
+| Senior unsecured (FSE) | **45%** | — |
 | Subordinated | 75% | — |
 | Covered bonds | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
+| Senior purchased receivables | **40%** | ↓ from 45% |
+| Subordinated purchased receivables | 100% | — |
+| Dilution risk | **100%** | ↑ from 75% |
 | Secured — Financial collateral | 0% | — |
 | Secured — Receivables | **20%** | ↓ from 35% |
 | Secured — Residential RE | **20%** | ↓ from 35% |
 | Secured — Commercial RE | **20%** | ↓ from 35% |
 | Secured — Other physical | **25%** | ↓ from 40% |
+
+!!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
+    Basel 3.1 Art. 230(2) provides a single LGDS per collateral type with no
+    senior/subordinated distinction. The CRR Table 5 subordinated column (65%/70%) is
+    not carried forward.
 
 ### Overcollateralisation Requirements
 

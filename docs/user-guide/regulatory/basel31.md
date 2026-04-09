@@ -132,6 +132,9 @@ differentiated by whether the counterparty is a **financial sector entity (FSE)*
 | Other Corporate/Institution (Senior) | 45% | **40%** |
 | Corporate/Institution (Subordinated) | 75% | **75%** |
 | Covered Bonds | 11.25% | **11.25%** |
+| Senior purchased corporate receivables | 45% | **40%** |
+| Subordinated purchased corporate receivables | 100% | **100%** |
+| Dilution risk | 75% | **100%** |
 | Secured - Financial Collateral | 0% | **0%** |
 | Secured - Receivables | 35% | **20%** |
 | Secured - CRE/RRE | 35% | **20%** |
@@ -148,6 +151,11 @@ differentiated by whether the counterparty is a **financial sector entity (FSE)*
 !!! info "Covered Bond LGD — Value Unchanged"
     The 11.25% covered bond LGD already exists in CRR Art. 161(1)(d) for bonds eligible under
     Art. 129(4)/(5). Basel 3.1 restructures this into Art. 161(1B) with the same value.
+
+!!! info "Purchased Receivables and Dilution (Art. 161(1)(e)–(g))"
+    Art. 161(1)(e)/(f) apply where PD cannot be estimated for the purchased receivables pool.
+    Senior aligns with the non-FSE rate (45% → 40%); subordinated remains at 100%.
+    The dilution risk LGD increases from 75% to **100%** under Basel 3.1.
 
 ### 7. Revised SA Risk Weights
 

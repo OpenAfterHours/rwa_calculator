@@ -36,6 +36,9 @@ internal models by tightening supervisory parameters and removing the scaling fa
 | Senior unsecured LGD (FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated LGD | 75% | 75% | Art. 161(1)(b) |
 | Covered bond LGD | 11.25% | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
+| Senior purchased receivables LGD | 45% | **40%** | Art. 161(1)(e) |
+| Subordinated purchased receivables LGD | 100% | 100% | Art. 161(1)(f) |
+| Dilution risk LGD | 75% | **100%** | Art. 161(1)(g) |
 | Corporate PD floor | 0.03% | **0.05%** | Art. 160(1) |
 | Sovereign/institution PD floor | 0.03% | **0.05%** | Art. 160(1) |
 | Scaling factor | 1.06 | **1.00** (removed) | Art. 153(1) |
@@ -53,6 +56,9 @@ internal models by tightening supervisory parameters and removing the scaling fa
 | Senior unsecured (FSE) | **45%** | Art. 161(1)(a) |
 | Subordinated | **75%** | Art. 161(1)(b) |
 | Covered bonds | **11.25%** | Art. 161(1B) |
+| Senior purchased corporate receivables | **40%** | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | **100%** | Art. 161(1)(f) |
+| Dilution risk of purchased corporate receivables | **100%** | Art. 161(1)(g) |
 
 !!! info "Covered Bond LGD — Restructured from CRR Art. 161(1)(d)"
     The 11.25% covered bond LGD is not new — CRR Art. 161(1)(d) already provides this value
@@ -64,6 +70,14 @@ internal models by tightening supervisory parameters and removing the scaling fa
     unsecured exposures benefit from a reduced 40% LGD, while FSE senior unsecured retains the
     CRR 45% rate. This recognises the higher loss severity observed for financial institution
     defaults. FSE is defined per Art. 4(1)(146).
+
+!!! info "Purchased Receivables Changes (Art. 161(1)(e)–(g))"
+    Art. 161(1)(e) aligns the senior purchased receivables LGD with the new non-FSE rate
+    (CRR 45% → B31 40%). The condition changes from "PD estimates do not meet Section 6
+    requirements" to "PD is determined in accordance with Art. 160(2)(a)". Art. 161(1)(g)
+    increases the dilution risk LGD from CRR 75% to **100%**, aligning with the subordinated
+    rate and reflecting the PRA's position that dilution losses receive no recovery benefit.
+    Art. 161(1)(f) (subordinated purchased receivables at 100%) is unchanged.
 
 ### Collateral-Type LGDS Values (Art. 230, CRE32.9–12)
 

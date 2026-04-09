@@ -70,16 +70,26 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 
 ## F-IRB Supervisory LGD (Art. 161)
 
+### Art. 161 LGD Values
+
 | Exposure Type | CRR | Basel 3.1 | Reference |
 |---------------|-----|-----------|-----------|
 | Financial Sector Entity (Senior) | 45% | 45% | Art. 161(1)(a) |
 | Other Corporate/Institution (Senior) | 45% | 40% | Art. 161(1)(aa) |
 | Corporate/Institution (Subordinated) | 75% | 75% | Art. 161(1)(b) |
 | Covered Bonds | 11.25% | 11.25% | Art. 161(1)(d) → Art. 161(1B) |
-| Secured - Financial Collateral | 0% | 0% | Art. 230 Table 5 |
-| Secured - Receivables | 35% | 20% | Art. 230 |
-| Secured - CRE/RRE | 35% | 20% | Art. 230 |
-| Secured - Other Physical | 40% | 25% | Art. 230 |
+| Senior purchased corporate receivables | 45% | 40% | Art. 161(1)(e) |
+| Subordinated purchased corporate receivables | 100% | 100% | Art. 161(1)(f) |
+| Dilution risk | 75% | 100% | Art. 161(1)(g) |
+
+### Art. 230 LGDS Values (Secured Portions)
+
+| Collateral Type | CRR LGDS (Senior) | CRR LGDS (Sub.) | Basel 3.1 LGDS | Reference |
+|----------------|-------------------|-----------------|----------------|-----------|
+| Financial Collateral | 0% | 0% | 0% | Art. 230 Table 5 / Art. 230(2) |
+| Receivables | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.9 |
+| CRE/RRE | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.10-11 |
+| Other Physical | 40% | 70% | 25% | Art. 230 Table 5 / CRE32.12 |
 
 !!! note "FSE Distinction — New in Basel 3.1"
     Basel 3.1 Art. 161(1)(aa) reduces the senior unsecured LGD from 45% to 40% for non-FSE
@@ -87,6 +97,20 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
     reflecting higher observed loss severity for financial institution defaults. Institutions are
     implicitly FSEs. See [Key Differences](key-differences.md#f-irb-supervisory-lgd) for change
     summary.
+
+!!! info "Purchased Receivables and Dilution Risk (Art. 161(1)(e)–(g))"
+    Art. 161(1)(e)/(f) apply where the institution cannot estimate PD for the purchased
+    receivables pool (per Art. 160(2)). Senior purchased receivables align with the standard
+    senior rate; subordinated purchased receivables are penalised at 100%. Basel 3.1 increases
+    the dilution risk LGD from 75% to 100% (Art. 161(1)(g)). See
+    [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values) for full
+    Art. 161(1)(a)–(g) breakdown.
+
+!!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
+    CRR Art. 230 Table 5 has separate "senior" and "subordinated" LGDS columns (e.g.,
+    receivables 35% senior / 65% subordinated). PRA PS1/26 Art. 230(2) replaces this with a
+    single LGDS per collateral type with no subordinated distinction. Under Basel 3.1, the
+    subordination effect is captured solely through the LGDU term (75%, Art. 161(1)(b)).
 
 ## Output Floor
 

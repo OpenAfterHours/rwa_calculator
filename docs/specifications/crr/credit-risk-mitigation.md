@@ -141,22 +141,41 @@ Art. 224 Tables 1-4 provide haircuts at all three liquidation periods. When scal
 
 Under the Foundation Collateral Method, the collateral-adjusted LGD (LGD*) uses supervisory LGDS values that differ by framework:
 
-| Collateral Type | CRR LGDS | Basel 3.1 LGDS |
-|----------------|----------|----------------|
-| Financial collateral | 0% | 0% |
-| Receivables | 35% | 20% |
-| Commercial / residential real estate | 35% | 20% |
-| Other physical collateral | 40% | 25% |
-| Covered bonds | 11.25% | 11.25% |
-| Life insurance (Art. 232) | 40% | 40% |
+| Collateral Type | CRR LGDS (Senior) | CRR LGDS (Sub.) | Basel 3.1 LGDS | Reference |
+|----------------|-------------------|-----------------|----------------|-----------|
+| Financial collateral | 0% | 0% | 0% | Art. 230 Table 5 / Art. 230(2) |
+| Receivables | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.9 |
+| Residential / commercial RE | 35% | 65% | 20% | Art. 230 Table 5 / CRE32.10-11 |
+| Other physical collateral | 40% | 70% | 25% | Art. 230 Table 5 / CRE32.12 |
+| Covered bonds | 11.25% | — | 11.25% | Art. 161(1)(d) / Art. 161(1B) |
+| Life insurance (Art. 232) | 40% | — | 40% | Art. 232(2)(b) |
+
+!!! info "CRR Art. 230 Table 5 — Subordinated LGDS"
+    CRR Art. 230 Table 5 provides separate LGDS columns for "senior exposures" and
+    "subordinated exposures". For subordinated claims secured by receivables or real estate,
+    LGDS is 65% (vs 35% senior). For other physical collateral, subordinated LGDS is 70%
+    (vs 40% senior). Financial collateral remains 0% for both.
+
+!!! info "B31 Art. 230(2) — Subordinated LGDS Distinction Removed"
+    PRA PS1/26 Art. 230(2) replaces the CRR Table 5 with a simplified table containing a
+    single LGDS per collateral type (0%/20%/20%/25%) with no subordinated distinction. Under
+    Basel 3.1, the subordination effect is captured solely through the LGDU term (75%,
+    Art. 161(1)(b)).
 
 Unsecured LGD (LGDU) for the unsecured portion of the LGD* formula:
 
-| Seniority | CRR LGDU | Basel 3.1 LGDU |
-|-----------|----------|----------------|
-| Senior unsecured (non-FSE) | 45% | 40% (Art. 161(1)(aa)) |
-| Senior unsecured (FSE) | 45% | 45% (Art. 161(1)(a)) |
-| Subordinated | 75% | 75% (Art. 161(1)(b)) |
+| Seniority | CRR LGDU | Basel 3.1 LGDU | Reference |
+|-----------|----------|----------------|-----------|
+| Senior unsecured (non-FSE) | 45% | 40% | Art. 161(1)(a) / Art. 161(1)(aa) |
+| Senior unsecured (FSE) | 45% | 45% | Art. 161(1)(a) |
+| Subordinated | 75% | 75% | Art. 161(1)(b) |
+
+!!! warning "Not Yet Implemented — Subordinated LGDS"
+    The code uses a single set of LGDS values per collateral type (35%/35%/40% CRR; 20%/20%/25%
+    B31) regardless of seniority. The CRR Art. 230 Table 5 subordinated LGDS values (65%/65%/70%)
+    are not applied. This means subordinated claims secured by non-financial collateral receive
+    an understated LGDS. The subordination effect comes only through LGDU = 75%, not the elevated
+    LGDS. See D4.13.
 
 ### LGD* Formula — Foundation Collateral Method (Art. 230)
 

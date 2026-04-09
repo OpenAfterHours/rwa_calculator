@@ -174,13 +174,23 @@ Note: The retail unsecured LGDU used in the LGD* formula for secured exposures i
 
 ### F-IRB Supervisory LGD
 
+#### Art. 161 LGD Values
+
 | Exposure Type | CRR | Basel 3.1 | Change |
 |---------------|-----|-----------|--------|
 | Financial Sector Entity (Senior) | 45% | **45%** | — |
 | Other Corporate (Senior) | 45% | **40%** | -5pp |
-| Corporate/Institution (Subordinated) | 75% | **75%** | - |
+| Corporate/Institution (Subordinated) | 75% | **75%** | — |
 | Covered Bonds | 11.25% | **11.25%** | Art. restructured |
-| Secured - Financial Collateral | 0% | **0%** | - |
+| Senior purchased corporate receivables | 45% | **40%** | -5pp |
+| Subordinated purchased corporate receivables | 100% | **100%** | — |
+| Dilution risk | 75% | **100%** | +25pp |
+
+#### Art. 230 LGDS Values (Secured Portions)
+
+| Collateral Type | CRR | Basel 3.1 | Change |
+|----------------|-----|-----------|--------|
+| Secured - Financial Collateral | 0% | **0%** | — |
 | Secured - Receivables | 35% | **20%** | -15pp |
 | Secured - CRE/RRE | 35% | **20%** | -15pp |
 | Secured - Other Physical | 40% | **25%** | -15pp |
@@ -190,8 +200,20 @@ Note: The retail unsecured LGDU used in the LGD* formula for secured exposures i
     Art. 129(4) or (5) — this is not a Basel 3.1 introduction. Basel 3.1 restructures
     the provision into a new Art. 161(1B) paragraph but retains the identical 11.25% value.
     The CRR text uses permissive language ("may be assigned"); the B31 text may formalise this
-    as mandatory. See [CRR F-IRB spec](../specifications/crr/firb-calculation.md#supervisory-lgd-values-crr-art-161)
+    as mandatory. See [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values)
     for the full Art. 161(1)(a)–(g) breakdown.
+
+!!! info "Purchased Receivables and Dilution Risk Changes"
+    Art. 161(1)(e)/(f) apply where PD cannot be estimated for the purchased receivables pool
+    (Art. 160(2)). Basel 3.1 aligns senior purchased receivables with the new non-FSE rate
+    (45% → 40%). The dilution risk LGD increases significantly from 75% to **100%**
+    (Art. 161(1)(g)). Subordinated purchased receivables remain at 100%.
+
+!!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
+    CRR Art. 230 Table 5 has separate senior/subordinated LGDS columns (receivables 35%/65%,
+    RE 35%/65%, other 40%/70%). PRA PS1/26 Art. 230(2) removes the subordinated distinction —
+    only a single LGDS per collateral type remains. Under Basel 3.1, the subordination effect
+    is captured solely through LGDU (75%, Art. 161(1)(b)).
 
 ### IRB Approach Restrictions
 

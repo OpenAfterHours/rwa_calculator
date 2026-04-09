@@ -33,6 +33,8 @@ dependencies = [
     "fastapi>=0.135.3",
     "itsdangerous>=2.2.0",
     "uvicorn>=0.40.0",
+    "marimo>=0.19.6",
+    "ty>=0.0.26",
 ]
 
 [project.scripts]

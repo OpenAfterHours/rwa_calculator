@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D4.11: Comprehensive Art. 162 effective maturity documentation across 6 files — F-IRB fixed maturities, one-day floor exceptions, SME simplification, Basel 3.1 changes.)
+Last updated: 2026-04-09 (D4.17: F-IRB CCF section rewritten with B31 Art. 166C alignment across irb-approach.md and key-differences.md.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -167,7 +167,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [ ] **D4.14** — MDB list in `other.md` missing 4-6 named institutions compared to `sa-risk-weights.md`.
 - [x] **D4.15** — ~~Institution short-term table in `institution.md`: CQS 6 shown as 50%, should be **150%**.~~ **FIXED:** Split "CQS 4-6" row into "CQS 4-5" (100% standard, 50% short-term) and "CQS 6" (150% standard, 150% short-term). CQS 6 retains 150% even for short-term exposures per CRR Art. 120(2) Table 4. (2026-04-08)
 - [x] **D4.16** — ~~Equity transitional rule numbering inconsistent across files (`Rule 4.1` vs `Art. 4.2/4.3`). CIU transitional (Art. 4.7-4.8) absent from `basel31.md`.~~ **FIXED:** as part of D2.25 fix. Rule numbering corrected throughout both equity spec files and user guide. CIU transitional (Rules 4.7-4.8) and opt-out (Rules 4.9-4.10) added to `basel31/equity-approach.md`. (2026-04-09)
-- [ ] **D4.17** — `irb-approach.md` F-IRB CCF section still uses CRR framing (75% MR/MLR, Art. 166(9)); doesn't note B31 Art. 166C alignment to SA CCFs.
+- [x] **D4.17** — ~~`irb-approach.md` F-IRB CCF section still uses CRR framing (75% MR/MLR, Art. 166(9)); doesn't note B31 Art. 166C alignment to SA CCFs.~~ **FIXED:** Comprehensive rewrite of EAD/CCF section in `irb-approach.md`: (1) Added tabbed CRR/Basel 3.1 content — CRR tab shows Art. 166(8)–(9) supervisory schedule (75% MR/MLR, 20% trade LC), B31 tab shows Art. 166C full alignment to SA Table A1 with 5-row CRR vs B31 comparison table (MR 75%→50%, MLR 75%→20%, OC 0%→40%, LR 0%→10%); (2) Added Art. 166(9) blanking warning admonition (`is_short_term_trade_lc` flag no effect under B31); (3) Added A-IRB CCF summary with revolving-only restriction (Art. 166D(1)(a)), 50% SA floor (CRE32.27), and cross-link to A-IRB spec; (4) F-IRB vs A-IRB comparison table CCF row expanded with framework-specific detail; (5) Regulatory References table gained F-IRB CCF (Art. 166(8)–(9) / Art. 166C) and A-IRB CCF (Art. 166 / Art. 166D) rows; (6) Cross-reference link corrected from `#pd-floors` to `#credit-conversion-factors`. **Also fixed:** `key-differences.md` — new "F-IRB CCF Alignment (Art. 166C)" subsection added under Credit Conversion Factors with full 5-row comparison table, Art. 166(9) blanking info admonition, and cross-links to CCF spec and IRB approach. Docs build validated — no errors. (2026-04-09)
 - [ ] **D4.18** — Gold haircut increase (15%->20% B31) missing from `key-differences.md` CRM table. Present in `technical-reference.md` and `basel31.md`.
 - [ ] **D4.19** — `sa-risk-weights.md` Art. 123 salary/pension 35% treatment labelled as B31-only. It exists in CRR Art. 123 already.
 - [ ] **D4.20** — Covered bond unrated row in `sa-risk-weights.md` CRR table: spec says "20% if CQS 1-2 equivalent" but Art. 129 Table 6a has no unrated row. Clarify regulatory basis.
@@ -260,6 +260,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D4.1** — Stale version numbers updated to 0.1.54 across `prd.md`, `specifications/overview.md`, `specifications/milestones.md`. `overview.md` was already correct. (2026-04-09)
 - [x] **D4.2** — Stale test counts updated to 5,034 total (4,232 unit, 501 acceptance, 145 contracts, 122 integration, 34 benchmarks) across `nfr.md`, `overview.md`, `testing.md`, `prd.md`. Page counts updated from 59 to 100+ in `nfr.md` and `prd.md`. (2026-04-09)
 - [x] **D4.6** — Type checker references updated from `mypy` to `ty` in 5 files: `development/index.md`, `installation.md`, `specifications/overview.md`, `prd.md`. (2026-04-09)
+- [x] **D4.17** — F-IRB CCF section in `irb-approach.md` rewritten with CRR/B31 tabs. CRR tab: Art. 166(8)–(9) supervisory schedule. B31 tab: Art. 166C alignment to SA Table A1 with 5-row comparison (MR 75%→50%, MLR 75%→20%, OC 0%→40%, LR 0%→10%), Art. 166(9) blanking warning. F-IRB vs A-IRB table and Regulatory References updated. `key-differences.md` gained new "F-IRB CCF Alignment (Art. 166C)" subsection with comparison table and cross-links. (2026-04-09)
 
 ---
 

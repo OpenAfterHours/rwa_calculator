@@ -787,6 +787,31 @@ PRA PS1/26 Art. 111 Table A1 replaces CRR Annex I with a 7-row structure. Key ch
 !!! warning "PRA Deviation — UK Residential Mortgage Commitments (Row 4(b))"
     Table A1 Row 4(b) is a **PRA-specific addition** not in the BCBS framework. Under BCBS, residential mortgage commitments would fall into "any other commitment" at **40%** (Row 5). The PRA carved them out at **50%** to prevent the maturity-distinction removal from reducing capital for irrevocable mortgage offer letters. Only applies to commitments not unconditionally cancellable (Row 7) and not certain-drawdown (Row 2). See [CCF specification](../specifications/crr/credit-conversion-factors.md#basel-31-sa-changes-pra-ps126-art-111-table-a1) for full Table A1.
 
+### F-IRB CCF Alignment (Art. 166C)
+
+Under CRR, F-IRB has its own supervisory CCF schedule (Art. 166(8)): **75%** for both MR
+and MLR commitments, with a 20% carve-out for short-term trade LCs (Art. 166(9)). Basel 3.1
+**eliminates** this separate F-IRB schedule — Art. 166C aligns F-IRB CCFs to the SA Table A1
+values above.
+
+| Risk Type | CRR F-IRB (Art. 166(8)) | Basel 3.1 F-IRB (Art. 166C = SA Table A1) | Change |
+|-----------|-------------------------|-------------------------------------------|--------|
+| FR / FRC | 100% | 100% | Unchanged |
+| MR | 75% | **50%** | Down from 75% |
+| MLR | 75% | **20%** | Down from 75% |
+| OC | 0% | **40%** | New Table A1 Row 5 category |
+| LR (UCC) | 0% | **10%** | Up from 0% |
+
+!!! info "Art. 166(9) Trade LC Exception Removed"
+    CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC carve-out
+    no longer applies under Basel 3.1 — these exposures receive the standard SA CCF for
+    their risk type via the Table A1 mapping. The `is_short_term_trade_lc` flag has no
+    effect under Basel 3.1.
+
+See [CCF specification](../specifications/crr/credit-conversion-factors.md#basel-31-f-irb-changes-pra-ps126-art-166c)
+for the full F-IRB CCF comparison and [IRB Approach](../user-guide/methodology/irb-approach.md#exposure-at-default-ead)
+for implementation details.
+
 ## Slotting Risk Weights
 
 ### Project Finance

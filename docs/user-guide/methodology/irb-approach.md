@@ -80,11 +80,48 @@ for details.
 
 ### Exposure at Default (EAD)
 
-F-IRB uses regulatory CCFs based on `risk_type` (FR=100%, MR/MLR=75%, LR=0%). A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to CCF floors under Basel 3.1.
+=== "CRR"
 
-**CRR Art. 166(9) Exception:** Short-term letters of credit arising from the movement of goods retain 20% CCF under F-IRB. Flag these exposures with `is_short_term_trade_lc = True`.
+    F-IRB uses regulatory CCFs based on `risk_type` (CRR Art. 166(8)–(9)):
 
-> **Details:** See [Key Differences](../../framework-comparison/key-differences.md#pd-floors) for the complete PD floor, LGD floor, supervisory LGD, and CCF comparison tables across CRR and Basel 3.1.
+    | Risk Type | F-IRB CCF | Rule |
+    |-----------|-----------|------|
+    | FR / FRC | 100% | Full risk / certain drawdown |
+    | MR | **75%** | Medium risk (Art. 166(8)) |
+    | MLR | **75%** | Medium-low risk (Art. 166(8)) |
+    | LR | 0% | Unconditionally cancellable |
+
+    **Art. 166(9) Exception:** Short-term letters of credit arising from the movement of
+    goods retain 20% CCF under F-IRB. Flag these exposures with
+    `is_short_term_trade_lc = True`.
+
+=== "Basel 3.1"
+
+    Basel 3.1 Art. 166C **fully aligns F-IRB CCFs to SA Table A1**. The separate
+    CRR Art. 166(8) supervisory schedule (75% for MR/MLR) is eliminated — F-IRB
+    exposures use the same CCFs as SA exposures:
+
+    | Risk Type | CRR F-IRB | B31 F-IRB | Change |
+    |-----------|-----------|-----------|--------|
+    | FR / FRC | 100% | 100% | Unchanged |
+    | MR | 75% | **50%** | Down from 75% |
+    | MLR | 75% | **20%** | Down from 75% |
+    | OC | 0% | **40%** | Up from 0% (new Table A1 Row 5) |
+    | LR (UCC) | 0% | **10%** | Up from 0% |
+
+    !!! warning "Art. 166(9) Trade LC Exception Removed"
+        CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC
+        carve-out no longer applies under Basel 3.1 — these exposures receive the
+        standard SA CCF for their risk type. The `is_short_term_trade_lc` flag has
+        no effect under Basel 3.1.
+
+A-IRB uses bank-estimated CCFs via the `ccf_modelled` column, subject to Basel 3.1
+restrictions: own-estimate CCFs are limited to **revolving facilities only**
+(Art. 166D(1)(a)), with a floor of 50% of the SA CCF (CRE32.27). Non-revolving
+A-IRB exposures use SA CCFs. See [A-IRB CCF Restrictions](../../specifications/basel31/airb-calculation.md#a-irb-ccf-restrictions-art-166d)
+for full details.
+
+> **Details:** See [Key Differences](../../framework-comparison/key-differences.md#credit-conversion-factors) for the complete CCF comparison table across CRR and Basel 3.1, and [CCF Specification](../../specifications/crr/credit-conversion-factors.md) for the full regulatory treatment.
 
 ### Maturity (M)
 
@@ -450,7 +487,7 @@ el = calculate_expected_loss(
 | LGD | Supervisory (45%/75%) | Bank estimate (floored) |
 | CRM for collateral | Foundation Collateral Method (Art. 230) | LGD modelling (Art. 169A/169B) or FCM |
 | EAD | Regulatory | Bank estimate |
-| CCF | Regulatory | Bank estimate |
+| CCF | Regulatory (CRR: 75% MR/MLR; B31: SA-aligned via Art. 166C) | Bank estimate (B31: revolving only, floored at 50% SA) |
 | Typical RW | Higher | Lower |
 | Complexity | Lower | Higher |
 | Approval | Easier | Harder |
@@ -466,6 +503,8 @@ el = calculate_expected_loss(
 | Correlation | Art. 153 | CRE31 |
 | Maturity adjustment | Art. 162 | CRE31 |
 | Supervisory LGD | Art. 161 | CRE32 |
+| F-IRB CCF | Art. 166(8)–(9) (CRR) / Art. 166C (B31) | CRE32 |
+| A-IRB CCF / EAD | Art. 166 (CRR) / Art. 166D (B31) | CRE32 |
 | A-IRB LGD modelling for collateral | Art. 169A/169B | CRE32 |
 | CRM method taxonomy | Art. 191A | — |
 

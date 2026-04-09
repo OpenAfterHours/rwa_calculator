@@ -129,10 +129,36 @@ Three separate floor tests apply:
 
 ### Full-Facility EAD Approach (Art. 166D(3)/(4))
 
-As an alternative to the CCF approach, A-IRB firms may compute a **single EAD estimate** for the entire revolving facility:
+As an alternative to the CCF approach (drawn + undrawn × CCF), A-IRB firms **may**
+estimate a single facility-level EAD that combines both on-balance sheet and
+off-balance sheet components into one figure:
 
-- Art. 166D(3): for partially/fully undrawn revolving facilities — a single EAD combining on-BS and off-BS components
-- Art. 166D(4): for fully drawn revolving facilities — the own EAD estimate replaces the on-BS accounting value
+- **Art. 166D(3)** — Partially/fully undrawn revolving facilities: a single EAD
+  estimate replaces the separate on-BS item (Art. 166A(2)) and the revolving loan
+  commitment (Art. 166D(1)). Activated by providing a non-null `ead_modelled` value.
+- **Art. 166D(4)** — Fully drawn revolving facilities: the own EAD estimate replaces
+  the on-BS accounting value, recognising that a revolving facility's exposure can
+  exceed its current drawn balance due to repayment-and-redraw dynamics.
+
+The `ead_modelled` input field (`Float64`, nullable) controls this routing:
+
+- **Non-null:** Calculator uses the modelled EAD, subject to floors (b)/(c) below
+- **Null or absent:** Calculator uses standard CCF-based EAD (drawn + undrawn × CCF)
+
+**Floors for full-facility EAD:**
+
+| Floor | Condition | Formula | Reference |
+|-------|----------|---------|-----------|
+| (b) | Partially/fully undrawn (para 3) | `EAD ≥ EAD_on_BS + 50% × (nominal × CCF_SA)` | Art. 166D(5)(b) |
+| (c) | Fully drawn (para 4) | `EAD ≥ EAD_on_BS` | Art. 166D(5)(c) |
+
+Floor (b) mirrors the 50%-of-SA-CCF principle from floor (a) — the off-balance sheet
+component receives at least half the SA conversion. Floor (c) prevents the modelled EAD
+from falling below the current balance sheet exposure.
+
+For the full regulatory detail — including Art. 166D(2) expected drawdown incorporation,
+Art. 166D(6) unrecognised exposure adjustment, and worked implementation formulas — see
+the [A-IRB specification § Full-Facility EAD](../basel31/airb-calculation.md#full-facility-ead-approach-art-166d34).
 
 ## EAD Calculation
 

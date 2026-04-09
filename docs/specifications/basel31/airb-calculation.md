@@ -21,6 +21,8 @@ CCF floor at 50% of SA, double default removal, and EL monotonicity.
 | FR-4.7 | Double default treatment removal | P0 | Done |
 | FR-4.8 | EL monotonicity under PMA (Art. 158(6A)) | P0 | Done |
 | FR-4.9 | FI scalar (1.25× correlation) retained | P0 | Done |
+| FR-4.10 | Full-facility EAD approach with floors (Art. 166D(3)–(5)) | P0 | Done |
+| FR-4.11 | Expected drawdown incorporation in CCF (Art. 166D(2)) | P0 | Done |
 
 ---
 
@@ -197,25 +199,155 @@ CCF_applied = max(CCF_modelled, 0.50 × CCF_SA)
 
 The A-IRB CCF must be at least **50% of the corresponding SA CCF** (Art. 166D(5)(a)).
 
-### EAD Floor (Art. 166D(5))
+### Expected Drawdown Incorporation (Art. 166D(2))
 
-The exposure at default must not fall below the current drawn amount:
+Where both an on-balance sheet item and a revolving loan commitment relate to the same
+facility, the firm's own CCF estimate must incorporate any **expected increase in the
+on-balance sheet value** at the point of default. This means the CCF applied to the
+undrawn portion should already account for the likelihood that the drawn balance will
+increase before default — the CCF is not applied to a static snapshot of the current
+undrawn amount.
 
-```
-EAD >= current_drawn_amount
-```
+### Full-Facility EAD Approach (Art. 166D(3)/(4))
 
-Art. 166D(5) specifies three separate floor tests for A-IRB revolving facilities:
+As an alternative to the standard CCF approach (drawn + undrawn × CCF), A-IRB firms
+**may** estimate a single facility-level EAD that combines both on-balance sheet and
+off-balance sheet components into one figure. This "full-facility EAD" replaces the
+separate drawn/undrawn decomposition.
+
+The approach has two variants depending on the facility's drawdown state:
+
+#### Partially or Fully Undrawn Facilities (Art. 166D(3))
+
+For revolving facilities that are partially drawn or fully undrawn, the firm assigns
+a **single EAD estimate** to the entire facility. This replaces both:
+
+- The exposure value of any related on-balance sheet item (Art. 166A(2))
+- The exposure value of the revolving loan commitment (Art. 166D(1))
+
+The single EAD must be the firm's own estimate provided in accordance with Section 6
+(model validation requirements).
+
+#### Fully Drawn Facilities (Art. 166D(4))
+
+For revolving facilities that are currently **fully drawn** (no undrawn commitment
+remains), the firm assigns an own EAD estimate that replaces the on-balance sheet
+accounting value. This recognises that a revolving facility's exposure can exceed
+its current drawn balance — the borrower may repay and redraw, and the facility
+limit itself may fluctuate.
+
+!!! info "Why Full-Facility EAD Matters"
+    The standard CCF approach (drawn + undrawn × CCF) assumes a fixed split between
+    drawn and undrawn amounts. For revolving facilities, this split is volatile — a
+    borrower can repay and redraw repeatedly. The full-facility approach lets the model
+    estimate total exposure at default directly, capturing drawdown dynamics that a
+    static CCF may miss. This is particularly relevant for credit cards, overdrafts,
+    and revolving credit lines where utilisation patterns drive EAD.
+
+#### Input Field: `ead_modelled`
+
+To use the full-facility approach, provide the `ead_modelled` field (type: `Float64`,
+nullable) on the facility or contingent input record:
+
+- **When present (non-null):** The calculator uses this as the facility-level EAD,
+  subject to the floors below
+- **When absent or null:** The calculator falls back to the standard CCF-based
+  EAD calculation (drawn + undrawn × CCF)
+
+The field is propagated through the pipeline via `FACILITY_SCHEMA` →
+`RAW_EXPOSURE_SCHEMA` → `RESOLVED_HIERARCHY_SCHEMA` → `CLASSIFIED_EXPOSURE_SCHEMA`.
+For drawn loans without a facility commitment, `ead_modelled` is set to null
+(full-facility EAD is not applicable).
+
+### EAD Floors (Art. 166D(5))
+
+Art. 166D(5) specifies three separate floor tests ensuring A-IRB EAD estimates
+do not fall below prudent minimums. Each floor maps to a specific EAD approach:
 
 | Floor | Applies To | Formula | Reference |
 |-------|-----------|---------|-----------|
-| (a) CCF floor | Own-estimate CCFs (para 1(a)) | CCF ≥ 50% × SA CCF | Art. 166D(5)(a) |
-| (b) Facility EAD floor | Full-facility EAD (para 3) | EAD ≥ on-BS + 50% × F-IRB off-BS | Art. 166D(5)(b) |
-| (c) Fully-drawn floor | Fully-drawn revolving (para 4) | EAD ≥ on-BS exposure value | Art. 166D(5)(c) |
+| (a) CCF floor | Own-estimate CCFs (para 1(a)) | `CCF ≥ 50% × CCF_SA` | Art. 166D(5)(a) |
+| (b) Facility EAD floor | Full-facility EAD for partially/fully undrawn (para 3) | `EAD ≥ EAD_on_BS + 50% × EAD_off_BS_FIRB` | Art. 166D(5)(b) |
+| (c) Fully-drawn floor | Full-facility EAD for fully drawn (para 4) | `EAD ≥ EAD_on_BS` | Art. 166D(5)(c) |
 
-See the [CRR CCF specification](../crr/credit-conversion-factors.md) for full
-implementation detail including the full-facility EAD approach (Art. 166D(3)/(4)),
-the `ead_modelled` input field, and all three floor calculations.
+#### Floor (a): CCF Floor
+
+See [CCF Floor](#ccf-floor-art-166d5a--cre3227) above. The modelled CCF must be
+at least 50% of the SA CCF for the same commitment type.
+
+#### Floor (b): Facility-Level EAD Floor (Art. 166D(5)(b))
+
+When using the full-facility approach for partially or fully undrawn facilities
+(Art. 166D(3)), the modelled EAD must not be lower than:
+
+```
+EAD_floor_b = EAD_on_BS + 50% × EAD_off_BS_FIRB
+```
+
+Where:
+
+- **`EAD_on_BS`** = exposure value of the on-balance sheet item calculated per
+  Art. 166A(2), disregarding Art. 166D (i.e., the drawn balance as it would be
+  calculated without the full-facility approach)
+- **`EAD_off_BS_FIRB`** = exposure value of the off-balance sheet item under the
+  **Foundation IRB Approach** per Art. 166C(1) (i.e., undrawn nominal × SA CCF,
+  since F-IRB CCFs are aligned to SA under Basel 3.1)
+
+The 50% factor on the off-balance sheet component mirrors the 50%-of-SA-CCF floor
+in floor (a) — both enforce a minimum credit conversion of half the SA rate.
+
+**Implementation:**
+
+```
+floor_b = on_balance_sheet_ead + nominal_after_provision × sa_ccf × 0.5
+ead_pre_crm = max(ead_modelled, floor_b)
+```
+
+#### Floor (c): Fully-Drawn EAD Floor (Art. 166D(5)(c))
+
+When using the full-facility approach for fully drawn facilities (Art. 166D(4)),
+the modelled EAD must not be lower than the on-balance sheet exposure value:
+
+```
+EAD_floor_c = EAD_on_BS
+```
+
+Where **`EAD_on_BS`** is calculated per Art. 166A(2), disregarding Art. 166D.
+This prevents the modelled EAD from falling below what the firm currently has
+on its balance sheet — the model may estimate higher EAD (reflecting potential
+redraw risk), but never lower.
+
+**Implementation:**
+
+```
+ead_pre_crm = max(ead_modelled, on_balance_sheet_ead)
+```
+
+!!! note "Floor Interaction"
+    When `ead_modelled` is provided, both floor (b) and floor (c) are evaluated
+    and the binding floor is the higher of the two. In practice, floor (b) is
+    typically binding for partially-drawn facilities (where there is material
+    undrawn commitment), while floor (c) is binding for fully-drawn facilities
+    (where the undrawn component is zero, making floor (b) collapse to just
+    the on-balance sheet value).
+
+### Unrecognised Exposure Adjustment (Art. 166D(6))
+
+A-IRB firms must assess EADs arising from facilities or relationships that were
+**not captured in exposure values** prior to drawdown — for example, where a
+credit exposure materialises from a facility not originally intended to create
+credit risk. Where such amounts are material, the firm must quantify an
+**unrecognised exposure adjustment** reflecting the additional RWA required.
+This adjustment is allocated to exposure classes on a best-efforts basis.
+
+!!! warning "Not Yet Implemented"
+    Art. 166D(6) unrecognised exposure adjustment is not implemented in the
+    calculator. This provision requires institution-specific judgement about
+    which facilities fall outside normal exposure capture — it cannot be
+    automated without additional input data identifying uncaptured exposures.
+
+See also the [CCF specification](../crr/credit-conversion-factors.md#basel-31-a-irb-changes-pra-ps126-art-166d--cre3227)
+for context on how the A-IRB CCF regime fits within the broader CCF framework.
 
 ---
 

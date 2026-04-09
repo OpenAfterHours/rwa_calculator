@@ -196,7 +196,7 @@ LGD floor values by collateral type for A-IRB. Only applicable under Basel 3.1
 @dataclass(frozen=True)
 class LGDFloors:
     unsecured: Decimal = Decimal("0.25")                  # 25% (Art. 161(5)(a))
-    subordinated_unsecured: Decimal = Decimal("0.50")      # Conservative fallback (see note)
+    subordinated_unsecured: Decimal = Decimal("0.50")      # WRONG: should be 0.25 (see warning)
     financial_collateral: Decimal = Decimal("0.0")         # 0%
     receivables: Decimal = Decimal("0.10")                 # 10%
     commercial_real_estate: Decimal = Decimal("0.10")      # 10%
@@ -217,12 +217,22 @@ class LGDFloors:
         Note: Values reflect PRA implementation."""
 ```
 
-!!! warning "subordinated_unsecured is a conservative fallback, not a regulatory floor"
-    Art. 161(5)(a) sets a flat 25% for **all** corporate unsecured exposures — no senior/subordinated
-    distinction. The `subordinated_unsecured = 0.50` is a conservative fallback used only when
-    `exposure_class` is unavailable and seniority is subordinated. See
-    [A-IRB LGD Floors](../specifications/crr/airb-calculation.md#lgd-floors-basel-31-only) for the
-    regulatory basis. The 50% figure originates from retail QRRE unsecured (Art. 164(4)(b)(i)).
+!!! warning "Code Divergence: subordinated_unsecured should be 0.25, not 0.50"
+    Art. 161(5)(a) sets a flat 25% for **all** corporate unsecured exposures — no
+    senior/subordinated distinction. The `subordinated_unsecured = 0.50` has **no regulatory
+    basis** and overstates the LGD floor for subordinated corporate exposures in the fallback
+    path (when `exposure_class` is unavailable but `seniority` is present). The correct value
+    is `Decimal("0.25")`, matching the `unsecured` field.
+
+    **Impact:** When input data includes a `seniority` column but no `exposure_class` column,
+    subordinated exposures receive a 50% LGD floor instead of the correct 25%
+    (`formulas.py:164,220`). When `exposure_class` IS present (the normal pipeline path),
+    the code correctly applies 25% regardless of seniority.
+
+    The 50% figure coincides with retail QRRE unsecured (Art. 164(4)(b)(i)) but that floor
+    applies only to qualifying revolving retail exposures, not corporate subordinated debt.
+    See [A-IRB LGD Floors](../specifications/crr/airb-calculation.md#lgd-floors-basel-31-only)
+    for the regulatory basis.
 
 ### `SupportingFactors`
 

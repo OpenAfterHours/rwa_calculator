@@ -562,19 +562,46 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 
 | Condition | Risk Weight |
 |-----------|-------------|
-| Specific provisions ≥ 20% of (EAD + provision_deducted) | 100% |
-| Specific provisions < 20% | 150% |
+| Specific provisions ≥ 20% of the unsecured exposure value before provisions | 100% |
+| Specific provisions < 20% of the unsecured exposure value before provisions | 150% |
+
+!!! info "CRR Art. 127(1) Denominator"
+    The CRR denominator is: "the unsecured part of the exposure value if those specific
+    credit risk adjustments and deductions were not applied" — i.e., the pre-provision
+    unsecured exposure value. The code reconstructs this as `(ead + provision_deducted) ×
+    unsecured_pct`. The numerator includes both specific credit risk adjustments and
+    amounts deducted per Art. 36(1)(m).
+
+!!! note "CRR Art. 127(3)–(4)"
+    CRR also provides flat 100% for defaulted exposures fully and completely secured by
+    mortgages on residential property (Art. 127(3)) or commercial immovable property
+    (Art. 127(4)), regardless of provision level.
 
 ### Basel 3.1 Default Risk Weights (PRA PS1/26 Art. 127)
 
 | Condition | Risk Weight |
 |-----------|-------------|
-| Specific provisions ≥ **20%** of exposure value | 100% |
-| Specific provisions < **20%** | 150% |
-| RESI RE non-dependent (Art. 124F) in default | **100% (always)** — regardless of provision level |
+| Specific provisions ≥ **20%** of the outstanding amount of the item or facility | 100% |
+| Specific provisions < **20%** of the outstanding amount of the item or facility | 150% |
+| RESI RE non-dependent (Art. 127(1A)) in default | **100% (always)** — regardless of provision level |
 
-!!! warning "Threshold Difference from CRR"
-    The Basel 3.1 provision threshold for defaulted exposures is **20%** (same as CRR). Note that the threshold denominator changes: CRR uses `EAD + provision_deducted`, while Basel 3.1 uses `exposure value`.
+!!! warning "Denominator Difference from CRR"
+    Both CRR and Basel 3.1 use a **20%** provision threshold, but the **denominator differs**:
+
+    - **CRR Art. 127(1):** "the unsecured part of the exposure value if those specific
+      credit risk adjustments and deductions were not applied" — the **pre-provision
+      unsecured** exposure value
+    - **PRA PS1/26 Art. 127(1):** "the outstanding amount of the item or facility" — the
+      **gross outstanding** amount (not limited to the unsecured portion)
+
+    The PRA denominator is typically larger (includes the secured portion), making it
+    easier to reach the 20% threshold for a given level of provisioning.
+
+!!! warning "Code Divergence — B31 Path (D3.19)"
+    The Basel 3.1 code path uses `unsecured_ead` (post-provision unsecured exposure value)
+    as the denominator, not the "outstanding amount of the item or facility" specified by
+    PRA PS1/26 Art. 127(1). This underestimates the denominator for partially collateralised
+    exposures, making it harder to reach the 20% threshold than the regulation intends.
 
 ## Basel 3.1 SA Specialised Lending (Art. 122A-122B)
 

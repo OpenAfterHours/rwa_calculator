@@ -339,9 +339,16 @@ output column is set to `True`. COREP memorandum row 0380 is populated from this
 #### Defaulted Exposures
 
 Defaulted exposures receive a risk weight based on provision coverage (PRA PS1/26 Art. 127 /
-CRE20.87-90). Where specific provisions are ≥20% of the unsecured exposure value, the risk weight
-is **100%**; otherwise **150%**. When eligible collateral is present, the secured portion retains the
-collateral-based risk weight and only the unsecured portion is subject to the provision test.
+CRE20.87-90). Where specific provisions are ≥20% of **the outstanding amount of the item or
+facility** (gross), the unsecured portion receives a risk weight of **100%**; otherwise **150%**.
+When eligible collateral is present, the secured portion retains the collateral-based risk weight
+and only the unsecured portion is subject to the provision test.
+
+!!! info "Denominator Difference from CRR"
+    CRR Art. 127(1) uses the **pre-provision unsecured** exposure value as denominator.
+    PRA PS1/26 Art. 127(1) uses the **gross outstanding amount** (the full facility). See
+    [Defaulted Exposures Specification](../../specifications/basel31/defaulted-exposures.md)
+    for details.
 
 !!! note "Basel 3.1 Exception"
     Non-income-dependent residential real estate defaulted exposures receive a flat 100% risk weight

@@ -750,8 +750,21 @@ the equity transitional, but the election covers both and is irrevocable.
 | Residential RE (not cash-flow dependent) | 100-150% | **100%** (flat) |
 
 The provision-coverage ratio determines whether a 100% or 150% risk weight applies to
-defaulted exposures (CRE20.87-90). The flat 100% for defaulted residential RE
-(not cash-flow dependent) is a Basel 3.1 simplification.
+the unsecured portion of defaulted exposures (CRE20.87-90). The flat 100% for defaulted
+residential RE (not cash-flow dependent) is a Basel 3.1 simplification.
+
+!!! info "Provision Threshold Denominator"
+    The 20% threshold denominator differs between frameworks:
+
+    - **CRR Art. 127(1):** "the unsecured part of the exposure value if those specific
+      credit risk adjustments and deductions were not applied" — the **pre-provision
+      unsecured** exposure value
+    - **PRA PS1/26 Art. 127(1):** "the outstanding amount of the item or facility" —
+      the **gross outstanding** amount (the full facility)
+
+    The PRA denominator is typically larger, making it easier to reach the 20% threshold.
+    See [Defaulted Exposures Specification](../specifications/basel31/defaulted-exposures.md)
+    for details.
 
 ### Regional Governments and Local Authorities
 

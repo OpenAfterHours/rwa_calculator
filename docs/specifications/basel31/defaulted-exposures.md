@@ -13,7 +13,7 @@ including the provision-coverage risk weight split and RESI RE exception.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-10.1 | SA defaulted: provision-coverage 100%/150% RW split | P0 | Done |
-| FR-10.2 | SA defaulted: provision threshold at 20% of unsecured EAD | P0 | Done |
+| FR-10.2 | SA defaulted: provision threshold at 20% of outstanding amount | P0 | Done |
 | FR-10.3 | SA defaulted: secured portion retains collateral-based RW | P0 | Done |
 | FR-10.4 | SA defaulted: RESI RE non-income-dependent flat 100% exception | P0 | Done |
 | FR-10.5 | IRB F-IRB defaulted: K = 0 (Art. 153(1)(ii)) | P0 | Done |
@@ -34,7 +34,7 @@ adequate provisioning.
 | Feature | CRR | Basel 3.1 | Reference |
 |---------|-----|-----------|-----------|
 | SA risk weight mechanism | Flat 100%/150% | Provision-coverage split | Art. 127 |
-| Provision threshold denominator | Ambiguous | 20% of **unsecured** EAD | Art. 127(1) |
+| Provision threshold denominator | Pre-provision unsecured exposure value | **Outstanding amount** of the item or facility (gross) | Art. 127(1) |
 | RESI RE non-income exception | None | Flat 100% regardless of provisions | Art. 127(1A) |
 | IRB F-IRB defaulted | K = 0 (with 1.06 scaling) | K = 0 (no scaling) | Art. 153(1)(ii) |
 | IRB A-IRB defaulted | K = max(0, LGD − BEEL) (with 1.06) | K = max(0, LGD − BEEL) (no scaling) | Art. 154(1)(i) |
@@ -45,28 +45,42 @@ adequate provisioning.
 
 ### Provision-Coverage Mechanism
 
-For SA defaulted exposures, the risk weight depends on the level of specific provisions
-(specific credit risk adjustments) relative to the unsecured portion of the exposure:
+For SA defaulted exposures, the risk weight for the **unsecured portion** depends on the
+level of specific provisions relative to the outstanding amount of the item or facility:
 
 ```
-provision_ratio = specific_provisions / unsecured_ead
+provision_ratio = specific_provisions / outstanding_amount
 ```
 
 | Provision Ratio | Risk Weight | Reference |
 |----------------|-------------|-----------|
-| ≥ 20% | 100% | Art. 127(1)(a) |
-| < 20% | 150% | Art. 127(1)(b) |
+| ≥ 20% | 100% | Art. 127(1)(b) |
+| < 20% | 150% | Art. 127(1)(a) |
 
 Where:
 
-- `specific_provisions` = specific credit risk adjustments allocated to the exposure
-- `unsecured_ead` = the portion of EAD not covered by eligible collateral
+- `specific_provisions` = specific credit risk adjustments per Art. 110 and Commission
+  Delegated Regulation (EU) No 183/2014
+- `outstanding_amount` = the outstanding amount of the item or facility (gross, before
+  CRM adjustments)
 
-!!! note "Denominator Change from CRR"
-    Under CRR, the provision threshold was computed against the total exposure value.
-    Under Basel 3.1, the denominator is the **unsecured portion** of the exposure only.
-    This means a partially collateralised defaulted exposure needs provisions equal to
-    20% of just the unsecured part, not 20% of the whole exposure.
+!!! warning "Denominator Differs from CRR"
+    **CRR Art. 127(1)** uses: "the unsecured part of the exposure value if those specific
+    credit risk adjustments and deductions were not applied" — the **pre-provision
+    unsecured** exposure value.
+
+    **PRA PS1/26 Art. 127(1)** uses: "the outstanding amount of the item or facility" —
+    the **gross outstanding** amount (the full facility, not limited to the unsecured
+    portion, and not net of provisions).
+
+    The PRA denominator is typically larger, making it easier to reach the 20% threshold
+    for a given level of provisioning.
+
+!!! warning "Code Divergence (D3.19)"
+    The code currently uses `unsecured_ead` (post-provision unsecured exposure value) as
+    the B31 denominator (`calculator.py:1250-1275`). PRA PS1/26 Art. 127(1) specifies the
+    "outstanding amount of the item or facility" which is the gross balance. This
+    underestimates the denominator for partially collateralised exposures.
 
 ### Secured Portion Treatment
 
@@ -163,8 +177,8 @@ and the firm's estimate of loss is captured directly by BEEL.
 
 | Scenario ID | Description | Expected Outcome |
 |-------------|-------------|------------------|
-| B31-K1 | SA defaulted, provisions ≥ 20% of unsecured EAD | 100% RW |
-| B31-K2 | SA defaulted, provisions < 20% of unsecured EAD | 150% RW |
+| B31-K1 | SA defaulted, provisions ≥ 20% of outstanding amount | 100% RW |
+| B31-K2 | SA defaulted, provisions < 20% of outstanding amount | 150% RW |
 | B31-K3 | SA defaulted, partially secured (collateral covers 50%) | Blended: secured at collateral RW, unsecured at provision-based RW |
 | B31-K4 | SA defaulted, RESI RE non-income-dependent | 100% RW (flat, Art. 127(1A)) |
 | B31-K5 | SA defaulted, RESI RE income-dependent (buy-to-let) | Provision-coverage split applies |
@@ -172,7 +186,7 @@ and the firm's estimate of loss is captured directly by BEEL.
 | B31-K7 | F-IRB defaulted, senior unsecured | K=0, RW from max(0, 12.5×(LGD−BEEL)) |
 | B31-K8 | A-IRB defaulted, own LGD estimate | K=max(0, LGD−BEEL) |
 | B31-K9 | F-IRB defaulted with CRM collateral | K=0, EAD adjusted for CRM |
-| B31-K10 | SA defaulted, provisions exactly at 20% threshold | 100% RW (≥ threshold) |
+| B31-K10 | SA defaulted, provisions exactly at 20% of outstanding amount | 100% RW (≥ threshold) |
 | B31-K11 | A-IRB defaulted, LGD < BEEL (no capital charge) | K=0 (floor at zero) |
 | B31-K12 | SA defaulted with full collateral coverage | Secured portion at collateral RW, no unsecured portion |
 

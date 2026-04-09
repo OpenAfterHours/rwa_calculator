@@ -96,7 +96,11 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 
 ### Basel 3.1 Risk Weights
 
-Basel 3.1 replaces the CRR maturity-based split with two tables — non-HVCRE and HVCRE:
+Basel 3.1 restructures the CRR maturity-split tables into a single Table A with subgrade
+columns (A/B for Strong, C/D for Good). The tables below show the **default column**
+values (B/D per Art. 153(5)(c)). Firms may optionally use the lower A/C column values
+for exposures with < 2.5 years residual maturity (Art. 153(5)(d)) or enhanced underwriting
+(Art. 153(5)(e)/(f)). See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all columns.
 
 **Non-HVCRE (OF, CF, PF, IPRE):**
 

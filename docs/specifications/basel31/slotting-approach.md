@@ -82,20 +82,40 @@ High-Volatility Commercial Real Estate receives elevated weights to reflect the 
     cash flows and the speculative nature of the development. The classification is determined
     during the hierarchy/classification stage based on the `specialised_lending_type` input field.
 
-### Subgrade Treatment
+### Subgrade Treatment (Table A Columns A/B/C/D)
 
-Within each slotting category, firms may assign sub-grades (A or B) for more granular
-risk differentiation:
+PRA PS1/26 Art. 153(5) Table A uses subgrade columns for **Strong** (columns A and B) and
+**Good** (columns C and D). Satisfactory, Weak, and Default have single columns. The full
+Table A structure:
 
-| Category | Sub-grade A | Sub-grade B |
-|----------|------------|------------|
-| Strong | 70% (non-HVCRE) / 95% (HVCRE) | 70% (non-HVCRE) / 95% (HVCRE) |
-| Good | 90% (non-HVCRE) / 120% (HVCRE) | 90% (non-HVCRE) / 120% (HVCRE) |
+| Exposure Type | Strong A | Strong B | Good C | Good D | Satisfactory | Weak | Default |
+|---------------|----------|----------|--------|--------|--------------|------|---------|
+| OF, CF, PF, IPRE | 50% | 70% | 70% | 90% | 115% | 250% | 0% |
+| HVCRE | 70% | 95% | 95% | 120% | 140% | 250% | 0% |
 
-!!! note "Basel 3.1 Subgrade Simplification"
-    Under Basel 3.1, the removal of the maturity split means sub-grades A and B receive
-    the same risk weight. Under CRR, sub-grade A received the shorter-maturity weight
-    and sub-grade B the longer-maturity weight.
+**Column assignment rules (Art. 153(5)(c)–(f)):**
+
+- **(c) Default:** Strong → column **B**; Good → column **D**. These are the risk weights
+  in the non-HVCRE and HVCRE tables above.
+- **(d) Short maturity:** If remaining maturity < 2.5 years, firms **may** assign column
+  **A** (Strong) or **C** (Good) instead — providing lower risk weights.
+- **(e) IPRE enhanced:** IPRE Strong exposures **may** use column **A** if: underwriting
+  substantially stronger than Strong criteria, very low LTV, investment-grade tenant
+  income (≥ 100% debt service), and no ADC characteristics.
+- **(f) PF enhanced:** PF Strong exposures **may** use column **A** if underwriting and
+  characteristics are substantially stronger than required for Strong.
+
+!!! info "PRA vs BCBS — Maturity Differentiation Preserved"
+    BCBS CRE33 removes maturity-based differentiation entirely and uses flat risk weights.
+    PRA PS1/26 **retains** the maturity-based differentiation from CRR by structuring Table A
+    with A/B/C/D columns. The values are identical to the CRR maturity-split tables
+    (CRR "≥ 2.5yr" = column B/D; CRR "< 2.5yr" = column A/C). Column A/C assignment is
+    explicitly optional ("may") under Art. 153(5)(d)–(f).
+
+!!! warning "Not Yet Implemented — Column A/C Concession"
+    The calculator assigns all Basel 3.1 slotting exposures to columns B/D (the default
+    per Art. 153(5)(c)). The optional column A/C short-maturity concession and
+    enhanced-underwriting concessions are not yet implemented.
 
 ## Default Category (0% RW, EL Treatment)
 

@@ -511,7 +511,11 @@ Basel 3.1 restructures CRM methods with clearer names and applicability:
 
 ## Specialised Lending
 
-Slotting remains available with updated risk weights (PRA PS1/26 Art. 153(5) Table A):
+Slotting remains available with updated risk weights (PRA PS1/26 Art. 153(5) Table A).
+The table below shows the **default column** values (column B for Strong, column D for Good
+per Art. 153(5)(c)). Lower column A/C weights are available for exposures with < 2.5 years
+residual maturity (Art. 153(5)(d)) or enhanced underwriting criteria
+(Art. 153(5)(e)/(f)). See [Key Differences](../../framework-comparison/key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full Table A with all subgrade columns.
 
 | Category | Strong | Good | Satisfactory | Weak | Default |
 |----------|--------|------|--------------|------|---------|

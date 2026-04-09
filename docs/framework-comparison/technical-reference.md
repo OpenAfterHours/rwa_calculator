@@ -251,21 +251,24 @@ PRA PS1/26 Art. 153(5) Table A defines two slotting weight tables — non-HVCRE 
 | Weak | 250% |
 | Default | 0% (EL) |
 
-### Slotting Subgrades
+### Slotting Subgrades (Table A Columns A/B/C/D)
 
-Basel 3.1 allows residual maturity-based differentiation within the Strong and Good
-categories using subgrades:
+PRA PS1/26 Art. 153(5) Table A splits **Strong** into columns A and B, and **Good** into
+columns C and D:
 
-| Category | Subgrade A (< 2.5yr residual) | Subgrade B (≥ 2.5yr residual) |
-|----------|-------------------------------|-------------------------------|
-| Strong A / Strong B | 50% / 70% (PF Operational) | 70% / 70% |
-| Good C / Good D | 70% / 90% (PF Operational) | 90% / 90% |
+| Exposure Type | Strong A | Strong B | Good C | Good D | Satisfactory | Weak | Default |
+|---------------|----------|----------|--------|--------|--------------|------|---------|
+| OF, CF, PF, IPRE | 50% | 70% | 70% | 90% | 115% | 250% | 0% |
+| HVCRE | 70% | 95% | 95% | 120% | 140% | 250% | 0% |
 
-IPRE "Strong A" requires specific criteria: low LTV, adequate tenant income, and no ADC
-characteristics. These subgrades provide finer risk differentiation within the broader
-slotting categories.
+**Column B/D** is the default assignment (Art. 153(5)(c)). Column A/C may be used when:
 
-Compare with CRR slotting weights in the [Slotting Approach](../specifications/crr/slotting-approach.md) specification.
+- **< 2.5yr** remaining maturity (Art. 153(5)(d)) — optional for all SL types
+- **IPRE** Strong meets enhanced criteria: very low LTV, investment-grade tenant income, no ADC (Art. 153(5)(e))
+- **PF** Strong meets enhanced underwriting criteria (Art. 153(5)(f))
+
+The values are identical to CRR — PRA restructured the format from maturity-split tables
+to A/B/C/D columns but preserved all risk weight values. See [Key Differences](key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full comparison and [Slotting Approach spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for implementation details.
 
 ## Financial Institution Correlation Multiplier (CRE31.5)
 

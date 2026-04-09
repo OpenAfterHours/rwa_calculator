@@ -59,9 +59,13 @@ Under CRR Art. 153(5), risk weights are differentiated by HVCRE status and remai
 
 Under Basel 3.1, PRA PS1/26 Art. 153(5) Table A uses subgrade columns A/B (Strong) and
 C/D (Good) for maturity-based differentiation. Art. 153(5)(c) assigns column B (Strong) and
-column D (Good) as the default. Art. 153(5)(d) says firms **may** use column A/C (lower weights)
-when less than 2.5 years remain until maturity — this is optional, not mandatory.
-Satisfactory/Weak/Default have no maturity split.
+column D (Good) as the default. Column A/C (lower weights) may be used in three cases:
+
+- **Art. 153(5)(d):** remaining maturity **< 2.5 years** — optional for all SL types
+- **Art. 153(5)(e):** IPRE Strong with enhanced criteria (very low LTV, investment-grade tenant income, no ADC)
+- **Art. 153(5)(f):** PF Strong with substantially stronger underwriting
+
+Satisfactory/Weak/Default have no maturity split. See [Basel 3.1 Slotting spec](../basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for full details.
 
 !!! note "PRA vs BCBS B31 Slotting Structure"
     BCBS CRE33 removes the maturity distinction and uses flat risk weights for B31 slotting. PRA PS1/26 Art. 153(5) Table A preserves maturity-based subgrade columns from CRR. Column A/C = short maturity (<2.5yr), Column B/D = standard (≥2.5yr). The values below reflect the PRA structure.

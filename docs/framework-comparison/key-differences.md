@@ -749,6 +749,33 @@ PRA PS1/26 Art. 111 Table A1 replaces CRR Annex I with a 7-row structure. Key ch
 
 **Note:** Under CRR, HVCRE has a separate risk weight table (Art. 153(5) Table 2) with higher weights than non-HVCRE.
 
+### Slotting Subgrades — Table A Column Structure (Art. 153(5))
+
+PRA PS1/26 restructures the CRR maturity-split tables into a single **Table A** with
+7 columns. **Strong** is split into columns **A** and **B**; **Good** into **C** and **D**.
+Satisfactory, Weak, and Default have a single column each.
+
+The comparison tables above show the **default column** values (B/D). The full Table A
+includes optional lower-weight columns (A/C):
+
+| Exposure Type | Strong A | Strong B | Good C | Good D | Satisfactory | Weak | Default |
+|---------------|----------|----------|--------|--------|--------------|------|---------|
+| OF, CF, PF, IPRE | 50% | 70% | 70% | 90% | 115% | 250% | 0% |
+| HVCRE | 70% | 95% | 95% | 120% | 140% | 250% | 0% |
+
+**Column assignment rules (Art. 153(5)(c)–(f)):**
+
+- **(c) Default:** Strong → column **B** (70% / 95%); Good → column **D** (90% / 120%)
+- **(d) Short maturity:** If remaining maturity **< 2.5 years**, firms **may** use column **A** for Strong (50% / 70%) or column **C** for Good (70% / 95%)
+- **(e) IPRE enhanced:** IPRE exposures in Strong **may** use column **A** if all criteria met: substantially stronger underwriting, very low LTV, investment-grade tenant income (≥ 100% debt service), and no ADC characteristics
+- **(f) PF enhanced:** PF exposures in Strong **may** use column **A** if underwriting and characteristics are substantially stronger than required for Strong
+
+!!! info "CRR vs PRA PS1/26 — Format Change, Values Preserved"
+    Under CRR, the short-maturity concession was expressed as separate tables (Table 1 ≥ 2.5yr, Table 1 < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. The **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks.
+
+!!! warning "Not Yet Implemented — Column A/C Concession"
+    The calculator currently assigns all Basel 3.1 slotting exposures to columns B/D (the default per Art. 153(5)(c)). The optional column A/C short-maturity concession (Art. 153(5)(d)) and enhanced-underwriting concessions (Art. 153(5)(e)/(f)) are not yet implemented. CRR maturity-based differentiation IS implemented via separate short/long maturity tables.
+
 ## SA Specialised Lending (Art. 122A-122B)
 
 Basel 3.1 introduces explicit SA risk weights for specialised lending, separate from

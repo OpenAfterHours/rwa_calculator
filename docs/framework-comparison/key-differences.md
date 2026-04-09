@@ -179,10 +179,19 @@ Note: The retail unsecured LGDU used in the LGD* formula for secured exposures i
 | Financial Sector Entity (Senior) | 45% | **45%** | — |
 | Other Corporate (Senior) | 45% | **40%** | -5pp |
 | Corporate/Institution (Subordinated) | 75% | **75%** | - |
+| Covered Bonds | 11.25% | **11.25%** | Art. restructured |
 | Secured - Financial Collateral | 0% | **0%** | - |
 | Secured - Receivables | 35% | **20%** | -15pp |
 | Secured - CRE/RRE | 35% | **20%** | -15pp |
 | Secured - Other Physical | 40% | **25%** | -15pp |
+
+!!! info "Covered Bond LGD — Article Restructured, Value Unchanged"
+    CRR Art. 161(1)(d) already assigns 11.25% LGD for covered bonds eligible under
+    Art. 129(4) or (5) — this is not a Basel 3.1 introduction. Basel 3.1 restructures
+    the provision into a new Art. 161(1B) paragraph but retains the identical 11.25% value.
+    The CRR text uses permissive language ("may be assigned"); the B31 text may formalise this
+    as mandatory. See [CRR F-IRB spec](../specifications/crr/firb-calculation.md#supervisory-lgd-values-crr-art-161)
+    for the full Art. 161(1)(a)–(g) breakdown.
 
 ### IRB Approach Restrictions
 

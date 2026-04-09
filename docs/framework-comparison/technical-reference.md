@@ -75,8 +75,8 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 | Financial Sector Entity (Senior) | 45% | 45% | Art. 161(1)(a) |
 | Other Corporate/Institution (Senior) | 45% | 40% | Art. 161(1)(aa) |
 | Corporate/Institution (Subordinated) | 75% | 75% | Art. 161(1)(b) |
-| Covered Bonds | — | 11.25% | Art. 161(1B) |
-| Secured - Financial Collateral | 0% | 0% | Art. 161(1)(d) |
+| Covered Bonds | 11.25% | 11.25% | Art. 161(1)(d) → Art. 161(1B) |
+| Secured - Financial Collateral | 0% | 0% | Art. 230 Table 5 |
 | Secured - Receivables | 35% | 20% | Art. 230 |
 | Secured - CRE/RRE | 35% | 20% | Art. 230 |
 | Secured - Other Physical | 40% | 25% | Art. 230 |

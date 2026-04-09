@@ -131,7 +131,7 @@ differentiated by whether the counterparty is a **financial sector entity (FSE)*
 | Financial Sector Entity (Senior) | 45% | **45%** |
 | Other Corporate/Institution (Senior) | 45% | **40%** |
 | Corporate/Institution (Subordinated) | 75% | **75%** |
-| Covered Bonds | — | **11.25%** |
+| Covered Bonds | 11.25% | **11.25%** |
 | Secured - Financial Collateral | 0% | **0%** |
 | Secured - Receivables | 35% | **20%** |
 | Secured - CRE/RRE | 35% | **20%** |
@@ -144,6 +144,10 @@ differentiated by whether the counterparty is a **financial sector entity (FSE)*
     input flag drives this distinction. See the
     [F-IRB specification](../../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
     for full detail.
+
+!!! info "Covered Bond LGD — Value Unchanged"
+    The 11.25% covered bond LGD already exists in CRR Art. 161(1)(d) for bonds eligible under
+    Art. 129(4)/(5). Basel 3.1 restructures this into Art. 161(1B) with the same value.
 
 ### 7. Revised SA Risk Weights
 

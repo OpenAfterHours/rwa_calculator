@@ -21,15 +21,29 @@ Foundation IRB calculation with supervisory LGD, PD floors, and correlation form
 
 Under F-IRB, LGD is prescribed by the regulator based on collateral type:
 
-| Collateral Type | Supervisory LGD |
-|----------------|-----------------|
-| Unsecured (senior) | 45% |
-| Subordinated | 75% |
-| Financial collateral | 0% |
-| Receivables | 35% |
-| Residential real estate | 35% |
-| Commercial real estate | 35% |
-| Other physical | 40% |
+| Collateral Type | Supervisory LGD | Reference |
+|----------------|-----------------|-----------|
+| Unsecured (senior) | 45% | Art. 161(1)(a) |
+| Subordinated | 75% | Art. 161(1)(b) |
+| Covered bonds (Art. 129(4)/(5) eligible) | 11.25% | Art. 161(1)(d) |
+| Financial collateral | 0% | Art. 230 Table 5 |
+| Receivables | 35% | Art. 230 Table 5 |
+| Residential real estate | 35% | Art. 230 Table 5 |
+| Commercial real estate | 35% | Art. 230 Table 5 |
+| Other physical | 40% | Art. 230 Table 5 |
+
+!!! info "Covered Bond LGD (Art. 161(1)(d))"
+    CRR Art. 161(1)(d) provides a permissive (&ldquo;may be assigned&rdquo;) 11.25% LGD for covered
+    bonds eligible under Art. 129(4) or (5). Basel 3.1 restructures this into a separate paragraph
+    Art. 161(1B) with the same 11.25% value. The 0% financial collateral and 35%/40% secured LGDs
+    are not in Art. 161 itself — they derive from Art. 230 Table 5 (Foundation Collateral Method).
+
+!!! warning "Art. 161 vs Art. 230 Distinction"
+    The per-collateral-type LGD values for financial collateral, receivables, real estate, and
+    other physical collateral are technically Art. 230 Table 5 LGDS values (Foundation Collateral
+    Method), not Art. 161 sub-paragraphs. Art. 161(1)(a)-(g) covers unsecured, subordinated,
+    covered bonds, purchased receivables, and dilution risk only. See D4.7 for full article
+    reference audit.
 
 ### Basel 3.1 F-IRB LGD Changes (PRA PS1/26 Art. 161(1))
 
@@ -40,8 +54,8 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 | Unsecured (senior, non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
 | Unsecured (senior, FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated | 75% | 75% | Art. 161(1)(b) |
-| Covered bonds | — | **11.25%** | Art. 161(1B) |
-| Financial collateral | 0% | 0% | Art. 161(1)(d) |
+| Covered bonds | 11.25% | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
+| Financial collateral | 0% | 0% | Art. 230 Table 5 |
 | Receivables | 35% | **20%** | CRE32.9 |
 | Residential real estate | 35% | **20%** | CRE32.10 |
 | Commercial real estate | 35% | **20%** | CRE32.11 |

@@ -333,6 +333,7 @@ HVCRE has **higher** risk weights than standard specialised lending.
 |---------------|-----|
 | Senior unsecured | 45% |
 | Subordinated | 75% |
+| Covered bonds (Art. 129(4)/(5)) | 11.25% |
 | Secured — Financial collateral | 0% |
 | Secured — Receivables | 35% |
 | Secured — Residential RE | 35% |
@@ -345,6 +346,7 @@ HVCRE has **higher** risk weights than standard specialised lending.
 |---------------|-----|--------|
 | Senior unsecured | **40%** | ↓ from 45% |
 | Subordinated | 75% | — |
+| Covered bonds | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
 | Secured — Financial collateral | 0% | — |
 | Secured — Receivables | **20%** | ↓ from 35% |
 | Secured — Residential RE | **20%** | ↓ from 35% |
@@ -356,6 +358,7 @@ HVCRE has **higher** risk weights than standard specialised lending.
 | Collateral Type | Min Ratio | Min Threshold |
 |-----------------|-----------|---------------|
 | Financial | 1.0x | 0% of EAD |
+| Covered bonds | 1.0x | 0% of EAD |
 | Receivables | 1.25x | 0% of EAD |
 | Real estate | 1.4x | 30% of EAD |
 | Other physical | 1.4x | 30% of EAD |

@@ -72,7 +72,7 @@ Where LGD is the supervisory LGD from the [F-IRB Specification](firb-calculation
 | Senior unsecured (non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
 | Senior unsecured (FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated | 75% | 75% | Art. 161(1)(b) |
-| Covered bonds | — | **11.25%** | Art. 161(1B) |
+| Covered bonds | 11.25% | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
 
 The reduction from 45% to 40% for non-FSE senior exposures directly reduces F-IRB expected
 loss by approximately 11% ((45−40)/45 ≈ 11.1%), leading to:

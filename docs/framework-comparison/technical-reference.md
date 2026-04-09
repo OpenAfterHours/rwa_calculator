@@ -49,7 +49,7 @@ PRA PS1/26 Art. 163(1):
 | Other physical | 15%* |
 
 !!! note "No senior/subordinated distinction"
-    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures. Unlike F-IRB supervisory LGD (which distinguishes senior 40% / subordinated 75%), A-IRB LGD floors have no subordinated uplift.
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures. Unlike F-IRB supervisory LGD (which distinguishes non-FSE senior 40% / FSE senior 45% / subordinated 75%), A-IRB LGD floors have no subordinated uplift.
 
 **Retail (Art. 164(4)):**
 
@@ -61,16 +61,25 @@ PRA PS1/26 Art. 163(1):
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
-## F-IRB Supervisory LGD (CRE32)
+## F-IRB Supervisory LGD (Art. 161)
 
-| Exposure Type | CRR | Basel 3.1 |
-|---------------|-----|-----------|
-| Corporate/Institution (Senior) | 45% | 40% |
-| Corporate/Institution (Subordinated) | 75% | 75% |
-| Secured - Financial Collateral | 0% | 0% |
-| Secured - Receivables | 35% | 20% |
-| Secured - CRE/RRE | 35% | 20% |
-| Secured - Other Physical | 40% | 25% |
+| Exposure Type | CRR | Basel 3.1 | Reference |
+|---------------|-----|-----------|-----------|
+| Financial Sector Entity (Senior) | 45% | 45% | Art. 161(1)(a) |
+| Other Corporate/Institution (Senior) | 45% | 40% | Art. 161(1)(aa) |
+| Corporate/Institution (Subordinated) | 75% | 75% | Art. 161(1)(b) |
+| Covered Bonds | — | 11.25% | Art. 161(1B) |
+| Secured - Financial Collateral | 0% | 0% | Art. 161(1)(d) |
+| Secured - Receivables | 35% | 20% | Art. 230 |
+| Secured - CRE/RRE | 35% | 20% | Art. 230 |
+| Secured - Other Physical | 40% | 25% | Art. 230 |
+
+!!! note "FSE Distinction — New in Basel 3.1"
+    Basel 3.1 Art. 161(1)(aa) reduces the senior unsecured LGD from 45% to 40% for non-FSE
+    corporates only. Financial sector entities (Art. 4(1)(27)) retain 45% under Art. 161(1)(a),
+    reflecting higher observed loss severity for financial institution defaults. Institutions are
+    implicitly FSEs. See [Key Differences](key-differences.md#f-irb-supervisory-lgd) for change
+    summary.
 
 ## Output Floor
 

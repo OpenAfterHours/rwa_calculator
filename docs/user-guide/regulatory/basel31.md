@@ -93,7 +93,7 @@ New minimum LGD values for Advanced IRB. Corporate and retail floors are defined
 | Secured - Other Physical | 15%* |
 
 !!! note "No senior/subordinated distinction"
-    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt.
+    Art. 161(5)(a) sets a flat 25% floor for **all** corporate unsecured exposures (both senior and subordinated). The 50% floor applies only to retail QRRE unsecured (Art. 164(4)(b)(i)), not corporate subordinated debt. Unlike F-IRB supervisory LGD, A-IRB LGD floors do not distinguish FSE from non-FSE.
 
 **Retail (Art. 164(4)):**
 
@@ -105,18 +105,29 @@ New minimum LGD values for Advanced IRB. Corporate and retail floors are defined
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
-### 6. F-IRB Supervisory LGD Changes (CRE32)
+### 6. F-IRB Supervisory LGD Changes (Art. 161)
 
-Basel 3.1 recalibrates F-IRB supervisory LGD values:
+Basel 3.1 recalibrates F-IRB supervisory LGD values. Notably, senior unsecured LGD is now
+differentiated by whether the counterparty is a **financial sector entity (FSE)**:
 
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
-| Corporate/Institution (Senior) | 45% | **40%** |
+| Financial Sector Entity (Senior) | 45% | **45%** |
+| Other Corporate/Institution (Senior) | 45% | **40%** |
 | Corporate/Institution (Subordinated) | 75% | **75%** |
+| Covered Bonds | — | **11.25%** |
 | Secured - Financial Collateral | 0% | **0%** |
 | Secured - Receivables | 35% | **20%** |
 | Secured - CRE/RRE | 35% | **20%** |
 | Secured - Other Physical | 40% | **25%** |
+
+!!! note "FSE Distinction — New in Basel 3.1"
+    Art. 161(1)(aa) reduces the senior unsecured LGD from 45% to 40% for non-FSE corporates
+    only. FSEs (banks, investment firms, insurance companies — Art. 4(1)(27)) retain 45% under
+    Art. 161(1)(a), reflecting higher observed loss severity. The `is_financial_sector_entity`
+    input flag drives this distinction. See the
+    [F-IRB specification](../../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
+    for full detail.
 
 ### 7. Revised SA Risk Weights
 

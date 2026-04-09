@@ -31,8 +31,8 @@ consequently affecting the EL shortfall/excess comparison.
 
 | Feature | CRR | Basel 3.1 | Reference |
 |---------|-----|-----------|-----------|
-| F-IRB senior LGD (non-FSE) | 45% | 40% | Art. 161(1)(a) |
-| F-IRB senior LGD (FSE) | 45% | 45% | Art. 161(1)(aa) |
+| F-IRB senior LGD (non-FSE) | 45% | 40% | Art. 161(1)(aa) |
+| F-IRB senior LGD (FSE) | 45% | 45% | Art. 161(1)(a) |
 | 1.06 scaling factor | Applied | Removed | Art. 153(1) |
 | EL monotonicity (A-IRB PMA) | Not required | Required (Art. 158(6A)) | Art. 158(6A) |
 | EL shortfall/excess mechanism | 50/50, cap 0.6% | Unchanged | Art. 159, 36(1)(d), 62(d) |
@@ -69,8 +69,8 @@ Where LGD is the supervisory LGD from the [F-IRB Specification](firb-calculation
 
 | Collateral Type | CRR LGD | Basel 3.1 LGD | Reference |
 |----------------|---------|---------------|-----------|
-| Senior unsecured (non-FSE) | 45% | **40%** | Art. 161(1)(a) |
-| Senior unsecured (FSE) | 45% | **45%** | Art. 161(1)(aa) |
+| Senior unsecured (non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
+| Senior unsecured (FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated | 75% | 75% | Art. 161(1)(b) |
 | Covered bonds | — | **11.25%** | Art. 161(1B) |
 

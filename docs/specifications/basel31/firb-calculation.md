@@ -13,7 +13,7 @@ Basel 3.1 Foundation IRB changes: reduced senior LGD, higher PD floors, covered 
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-3.1 | Revised supervisory LGD: 40% non-FSE senior (was 45%) | P0 | Done |
-| FR-3.2 | FSE senior LGD distinction: 45% (Art. 161(1)(aa)) | P0 | Done |
+| FR-3.2 | FSE senior LGD distinction: 45% (Art. 161(1)(a)) | P0 | Done |
 | FR-3.3 | PD floor increase: 0.05% corporate (was 0.03%) | P0 | Done |
 | FR-3.4 | Retail PD floors: mortgage 0.10%, QRRE revolver 0.10%, other 0.05% | P0 | Done |
 | FR-3.5 | 1.06 scaling factor removed | P0 | Done |
@@ -32,8 +32,8 @@ internal models by tightening supervisory parameters and removing the scaling fa
 
 | Parameter | CRR | Basel 3.1 | Reference |
 |-----------|-----|-----------|-----------|
-| Senior unsecured LGD (non-FSE) | 45% | **40%** | Art. 161(1)(a) |
-| Senior unsecured LGD (FSE) | 45% | **45%** | Art. 161(1)(aa) |
+| Senior unsecured LGD (non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
+| Senior unsecured LGD (FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated LGD | 75% | 75% | Art. 161(1)(b) |
 | Covered bond LGD | — | **11.25%** | Art. 161(1B) |
 | Corporate PD floor | 0.03% | **0.05%** | Art. 160(1) |
@@ -49,8 +49,8 @@ internal models by tightening supervisory parameters and removing the scaling fa
 
 | Category | LGD | Reference |
 |----------|-----|-----------|
-| Senior unsecured (non-FSE) | **40%** | Art. 161(1)(a) |
-| Senior unsecured (FSE) | **45%** | Art. 161(1)(aa) |
+| Senior unsecured (non-FSE) | **40%** | Art. 161(1)(aa) |
+| Senior unsecured (FSE) | **45%** | Art. 161(1)(a) |
 | Subordinated | **75%** | Art. 161(1)(b) |
 | Covered bonds | **11.25%** | Art. 161(1B) |
 

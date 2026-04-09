@@ -416,6 +416,28 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 ### Retail Exposures
 
+#### Classification Threshold
+
+| Parameter | CRR (Art. 123(c)) | Basel 3.1 (Art. 123(1)(b)(ii)) | Change |
+|-----------|-------------------|-------------------------------|--------|
+| Aggregate exposure limit | EUR 1m (FX-converted) | **GBP 880,000** (fixed) | Currency-fixed |
+| QRRE individual limit | EUR 100k (FX-converted) | **GBP 90,000** (Art. 147(5A)(c)) | Currency-fixed |
+
+Under CRR, the retail threshold is EUR 1m dynamically converted to GBP at the prevailing EUR/GBP
+rate (default 0.8732, yielding ~GBP 873k). Under Basel 3.1, the PRA replaces this with a fixed
+**GBP 880,000** threshold — no FX conversion is required.
+
+!!! warning "PRA deviation from BCBS"
+    The BCBS framework (CRE20.65) retains EUR 1m. The PRA's fixed GBP threshold eliminates
+    FX volatility from retail classification, ensuring stable portfolio boundaries regardless of
+    exchange rate movements.
+
+Both thresholds apply to the total amount owed by the obligor or connected group, **excluding**
+residential real estate exposures assigned to the RE exposure class (Art. 123(c) CRR /
+Art. 123(1)(b)(ii) Basel 3.1).
+
+#### Risk Weights
+
 | Type | CRR | Basel 3.1 | Change |
 |------|-----|-----------|--------|
 | Regulatory Retail QRRE | 75% | 75% | — |
@@ -424,7 +446,7 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 | Retail Other | 75% | 75% | — |
 
 Transactor status requires full repayment each billing cycle. Payroll/pension loans are a
-new Basel 3.1 category for loans repaid directly from salary or pension.
+new Basel 3.1 category for loans repaid directly from salary or pension (Art. 123(3)).
 
 ### Currency Mismatch Multiplier (CRE20.76)
 

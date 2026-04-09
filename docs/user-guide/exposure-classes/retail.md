@@ -10,7 +10,7 @@ Retail exposures must meet ALL of the following criteria:
 |-----------|-------------|
 | **Counterparty** | Individual or small business |
 | **Product** | Revolving credit, personal loans, mortgages, or small business facilities |
-| **Size** | Total exposure ≤ EUR 1m (GBP 880k) |
+| **Size** | Total exposure ≤ EUR 1m (CRR, FX-converted) or ≤ GBP 880k (Basel 3.1, fixed) |
 | **Management** | Managed as part of a portfolio with similar characteristics |
 
 !!! info "Conceptual Logic"
@@ -98,7 +98,7 @@ All retail exposures not qualifying as mortgage or QRRE:
 - Personal loans
 - Auto finance
 - Consumer durable financing
-- Small business facilities (< EUR 1m total exposure)
+- Small business facilities (below retail threshold: EUR 1m CRR / GBP 880k Basel 3.1)
 
 ### SA Risk Weight
 
@@ -193,7 +193,7 @@ RWA = £17,813
 RW = 35.6%
 ```
 
-## Lending Groups and EUR 1m Threshold
+## Lending Groups and Retail Threshold
 
 ### Retail Lending Groups
 
@@ -202,9 +202,18 @@ For retail SME exposures, total exposure is calculated across the **lending grou
 - Common ownership or control
 - Aggregated for threshold purposes
 
+!!! info "CRR vs Basel 3.1 Retail Threshold"
+    Under **CRR** (Art. 123(c)), the retail aggregate exposure limit is **EUR 1,000,000** dynamically
+    converted to GBP at the prevailing EUR/GBP rate (default 0.8732 → ~GBP 873k). Under **Basel 3.1**
+    (Art. 123(1)(b)(ii)), the PRA replaces this with a fixed **GBP 880,000** — no FX conversion
+    required. This eliminates exchange rate volatility from retail classification boundaries.
+    The QRRE individual limit also changes from EUR 100k to **GBP 90,000** (Art. 147(5A)(c)).
+    See [Key Differences — Retail Classification Threshold](../../framework-comparison/key-differences.md#retail-exposures)
+    for the full comparison.
+
 ### Residential Property Exclusion (CRR Art. 123(c))
 
-**Important:** Exposures secured by residential property are **excluded** from the EUR 1m threshold calculation when they are assigned to the residential property exposure class under the Standardised Approach.
+**Important:** Exposures secured by residential property are **excluded** from the retail threshold calculation when they are assigned to the residential property exposure class under the Standardised Approach.
 
 This exclusion applies because:
 - Per CRR Art. 123(c), exposures "fully and completely secured on residential property collateral that have been assigned to the exposure class laid down in point (i) of Article 112" are excluded from the aggregation
@@ -214,8 +223,8 @@ This exclusion applies because:
 
 | Approach | Residential Property Treatment |
 |----------|-------------------------------|
-| **SA** | Excluded from EUR 1m threshold; stays as residential mortgage |
-| **IRB** | NOT excluded from EUR 1m threshold (per EBA Q&A 2018_4012) |
+| **SA** | Excluded from retail threshold; stays as residential mortgage |
+| **IRB** | NOT excluded from retail threshold (per EBA Q&A 2018_4012) |
 
 !!! info "Conceptual Logic"
     The following illustrates the residential property exclusion logic. For the actual implementation,
@@ -226,7 +235,7 @@ This exclusion applies because:
 def calculate_adjusted_exposure(exposures, residential_collateral):
     """
     Per CRR Art. 123(c), residential property secured exposures (SA)
-    are excluded from the EUR 1m retail threshold calculation.
+    are excluded from the retail threshold calculation.
     """
     for exposure in exposures:
         # Get residential collateral securing this exposure
@@ -257,8 +266,9 @@ adjusted_group_exposure = sum(
     for exp in entity.exposures
 )
 
-# Must be ≤ EUR 1m for retail treatment
-if adjusted_group_exposure <= 1_000_000:
+# Must be ≤ threshold for retail treatment
+# CRR: EUR 1m (FX-converted); Basel 3.1: GBP 880k (fixed)
+if adjusted_group_exposure <= retail_threshold:
     treatment = "RETAIL"
 else:
     treatment = "CORPORATE_SME"  # SMEs retain firm-size adjustment
@@ -310,8 +320,8 @@ Limited guarantee recognition for retail:
 
 | Topic | CRR Article | BCBS CRE | EBA Q&A |
 |-------|-------------|----------|---------|
-| Retail definition | Art. 123 | CRE20.50-60 | - |
-| EUR 1m threshold | Art. 123(c) | CRE20.65 | 2016_2626 |
+| Retail definition | Art. 123 (CRR) / Art. 123(1) (B31) | CRE20.50-60 | - |
+| Retail threshold | Art. 123(c) (EUR 1m) / Art. 123(1)(b)(ii) (GBP 880k) | CRE20.65 | 2016_2626 |
 | Residential property exclusion | Art. 123(c), Art. 112(i) | - | 2013_72, 2018_4012 |
 | Retail mortgage | Art. 125 | CRE20.70-75 | - |
 | QRRE | Art. 154 | CRE31.10-12 | - |

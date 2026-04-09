@@ -88,7 +88,12 @@ Key thresholds that depend on correct FX conversion:
 |-----------|-----------|----------------|
 | SME turnover | EUR 50m | ~GBP 43.7m |
 | SME exposure (SF tier) | EUR 2.5m | ~GBP 2.18m |
-| Retail aggregate | EUR 1m | ~GBP 880k |
+| Retail aggregate (CRR) | EUR 1m | ~GBP 873k (at 0.8732) |
 | QRRE individual | EUR 100k | ~GBP 100k |
 
 The EUR-to-GBP rate is configurable and defaults to 0.8732.
+
+!!! note "Basel 3.1 Fixed GBP Thresholds"
+    Under Basel 3.1 (PRA PS1/26), the retail aggregate threshold is replaced with a fixed
+    **GBP 880,000** (Art. 123(1)(b)(ii)) and the QRRE individual limit with **GBP 90,000**
+    (Art. 147(5A)(c)). These do not require FX conversion. The table above applies to CRR only.

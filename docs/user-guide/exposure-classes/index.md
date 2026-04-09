@@ -95,14 +95,14 @@ An entity is classified as SME if:
 An exposure qualifies as retail if:
 - To an individual or small business
 - Part of a pool of similar exposures
-- Total exposure to borrower ≤ EUR 1m (GBP 880k)
+- Total exposure to borrower ≤ EUR 1m (CRR, FX-converted) or ≤ GBP 880k (Basel 3.1, fixed)
 
 ### QRRE Criteria
 
 Qualifying Revolving Retail Exposures:
 - Revolving, unsecured
 - To individuals
-- Maximum line ≤ EUR 100k
+- Maximum line ≤ EUR 100k (CRR) or ≤ GBP 90k (Basel 3.1, Art. 147(5A)(c))
 - Unconditionally cancellable
 
 ### Specialised Lending
@@ -199,7 +199,8 @@ config = CalculationConfig.crr(
 )
 
 # SME threshold: EUR 50m → GBP 44m
-# Retail threshold: EUR 1m → GBP 880k
+# CRR retail threshold: EUR 1m → GBP ~880k (at 0.88 rate)
+# Basel 3.1 uses fixed GBP 880k (Art. 123(1)(b)(ii))
 ```
 
 ## Detailed Documentation

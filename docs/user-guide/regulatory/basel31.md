@@ -239,6 +239,11 @@ Acquisition, Development and Construction exposures receive a **150%** risk weig
 
 #### Retail Exposures
 
+**Classification threshold:** The retail aggregate exposure limit changes from **EUR 1m**
+(CRR Art. 123(c), FX-converted) to a fixed **GBP 880,000** (Art. 123(1)(b)(ii)). The QRRE
+individual limit changes from EUR 100k to **GBP 90,000** (Art. 147(5A)(c)). This eliminates
+FX volatility from retail classification boundaries.
+
 | Type | CRR | Basel 3.1 | Change |
 |------|-----|-----------|--------|
 | Regulatory Retail QRRE | 75% | 75% | — |
@@ -247,7 +252,7 @@ Acquisition, Development and Construction exposures receive a **150%** risk weig
 | Retail Other | 75% | 75% | — |
 
 Transactor status requires full repayment of outstanding balance each billing cycle.
-Payroll/pension loans are a new category for loans repaid directly from salary or pension.
+Payroll/pension loans are a new category for loans repaid directly from salary or pension (Art. 123(3)).
 
 #### Currency Mismatch Multiplier
 

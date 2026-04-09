@@ -214,7 +214,7 @@ If criteria met:
 **Retail eligibility** per CRR Art. 123:
 
 1. **Mortgage detection**: Identifies mortgages via product_type pattern matching
-2. **Threshold check**: Aggregated exposure to lending group < EUR 1m
+2. **Threshold check**: Aggregated exposure to lending group < retail threshold (EUR 1m CRR / GBP 880k Basel 3.1)
 3. **Residential exclusion**: Residential property collateral excluded from threshold (CRR Art. 123(c))
 
 ### Step 4: Corporate to Retail Reclassification

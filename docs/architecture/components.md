@@ -224,7 +224,7 @@ Step 3: _apply_sme_classification()
         Check annual_revenue < EUR 50m for CORPORATE -> CORPORATE_SME
 
 Step 4: _apply_retail_classification()
-        Aggregate by lending group, check EUR 1m threshold
+        Aggregate by lending group, check retail threshold (EUR 1m CRR / GBP 880k B31)
         Apply mortgage classification for RETAIL_MORTGAGE
 
 Step 5: _identify_defaults()
@@ -260,7 +260,7 @@ The 1.25x IRB correlation multiplier is controlled by the user-supplied `apply_f
 - **Dual exposure class mapping**: SA and IRB classes tracked separately
 - **Entity type as single source**: No conflicting boolean flags
 - **SME identification**: Corporate exposures with revenue < EUR 50m
-- **Retail threshold checking**: Lending group aggregation against EUR 1m
+- **Retail threshold checking**: Lending group aggregation against retail threshold (EUR 1m CRR / GBP 880k Basel 3.1)
 - **Mortgage detection**: Product type pattern matching
 - **FI scalar**: User-controlled `apply_fi_scalar` flag
 - **Infrastructure classification**: For supporting factor eligibility

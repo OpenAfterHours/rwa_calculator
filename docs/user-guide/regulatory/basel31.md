@@ -403,6 +403,13 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
 | CQS 5 | 100% | — |
 | CQS 6 | 150% | — |
 
+!!! warning "Table 4A — Short-Term ECAI (Art. 120(2B))"
+    Institutions with a specific **short-term credit assessment** use Table 4A
+    (CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%) instead of the general
+    Table 4 short-term preferential weights (CQS 1-3 = 20%, CQS 4-5 = 50%). The
+    `has_short_term_ecai` schema field is not yet implemented — all short-term exposures
+    currently fall back to Table 4. See [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
 Standardised Credit Risk Assessment Approach (SCRA):
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |

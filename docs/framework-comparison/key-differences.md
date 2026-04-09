@@ -416,6 +416,18 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 | CQS 5 | 100% | 100% | 50% | — |
 | CQS 6 | 150% | 150% | 150% | — |
 
+!!! warning "Table 4A — Short-Term ECAI Assessment (Art. 120(2B))"
+    The "Basel 3.1 (≤3m)" column above shows **Table 4** weights — a long-term ECAI
+    rating applied to a short-term exposure. Basel 3.1 also introduces **Table 4A** for
+    institutions with a specific short-term credit assessment:
+    CQS 1 = 20%, CQS 2 = **50%**, CQS 3 = **100%**, Others = **150%**.
+    Art. 120(3) governs the interaction: where no short-term assessment exists, Table 4
+    applies; where a short-term assessment yields a more favourable or equal RW, Table 4A
+    applies for that exposure only.
+    **Not yet implemented** — the `has_short_term_ecai` schema field does not exist. All
+    short-term institution exposures currently fall back to Table 4 weights. See
+    [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
 **Unrated institutions — SCRA (Standardised Credit Risk Assessment Approach):**
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |

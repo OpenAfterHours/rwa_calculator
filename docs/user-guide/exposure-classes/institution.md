@@ -38,20 +38,48 @@ F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03
 
 ## Short-Term Exposures
 
-Exposures with original maturity ≤ 3 months may receive preferential treatment:
+### Table 4 — General Short-Term Preferential (Art. 120(2))
 
-| CQS | CRR RW | B31 ECRA RW | Short-Term RW |
-|-----|--------|-------------|---------------|
-| CQS 1 | 20% | 20% | 20% |
-| CQS 2 | 50% | 30% | 20% |
-| CQS 3 | 50% | 50% | 20% |
-| CQS 4-5 | 100% | 100% | 50% |
-| CQS 6 | 150% | 150% | 150% |
+Rated institution exposures with original maturity ≤ 3 months receive preferential
+treatment under Table 4. Trade finance exposures (movement of goods) with original
+maturity ≤ 6 months also qualify (Art. 120(2A)).
 
-**Eligibility:**
-- Original maturity ≤ 3 months
-- Funded in domestic currency
-- Cleared through domestic payments system
+| CQS | Standard RW (>3m) | Table 4 RW (≤3m) |
+|-----|-------------------|-------------------|
+| CQS 1 | 20% | 20% |
+| CQS 2 | 30% | 20% |
+| CQS 3 | 50% | 20% |
+| CQS 4-5 | 100% | 50% |
+| CQS 6 | 150% | 150% |
+
+### Table 4A — Short-Term ECAI Assessment (Art. 120(2B))
+
+Where an institution has a specific **short-term credit assessment** from a nominated
+ECAI (as opposed to a long-term rating applied to a short-term exposure), Table 4A
+applies:
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| CQS 1 | 20% |
+| CQS 2 | 50% |
+| CQS 3 | 100% |
+| Others | 150% |
+
+!!! warning "Not Yet Implemented — Schema Gap"
+    The `has_short_term_ecai` schema field does not exist. The calculator cannot
+    distinguish Table 4A exposures (specific short-term ECAI) from Table 4 exposures
+    (long-term ECAI applied to short-term tenor). All short-term institution exposures
+    currently receive Table 4 weights, which **understates risk** for CQS 2 (20% applied
+    vs correct 50%) and CQS 3 (20% vs 100%). See D3.8 in the docs implementation plan
+    and [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
+### Art. 120(3) — Interaction Rules
+
+The interaction between Table 4 and Table 4A is governed by Art. 120(3):
+
+- **(a)** No short-term assessment → Table 4 applies
+- **(b)** Short-term assessment yields more favourable or equal RW → Table 4A for that exposure only; other short-term exposures still use Table 4
+- **(c)** Short-term assessment yields less favourable RW → Table 4 preferential treatment withdrawn; all unrated short-term claims against that obligor receive the Table 4A weight
 
 ## Interbank Exposures
 

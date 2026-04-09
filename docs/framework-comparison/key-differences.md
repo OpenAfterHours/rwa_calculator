@@ -977,18 +977,24 @@ Basel 3.1 restructures CRM with clearer method names and explicit applicability 
 
 ### Haircut Changes
 
-Significant increases for equities and long-dated bonds. Maturity bands expand from 3 to 5.
+Significant increases for equities, gold, and long-dated bonds
+(CRR Art. 224 Table 4 / PRA PS1/26 Art. 224 Table 3).
+Maturity bands expand from 3 to 5.
 
 | Collateral Type | CRR | Basel 3.1 | Change |
 |-----------------|-----|-----------|--------|
 | Main index equities | 15% | **20%** | +5pp |
 | Other listed equities | 25% | **30%** | +5pp |
+| Gold | 15% | **20%** | +5pp |
 | Govt bonds CQS 2-3 (10y+) | 6% | **12%** | +6pp |
 | Corp bonds CQS 1 (10y+) | 8% | **12%** | +4pp |
 | Corp bonds CQS 2-3 (5-10y / 10y+) | 12% | **15%** | +3pp |
 
 CRR maturity bands: 0-1y, 1-5y, 5y+.
 Basel 3.1 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+.
+
+See [Supervisory Haircut Comparison](technical-reference.md#supervisory-haircut-comparison)
+for the full haircut tables across all maturity bands.
 
 ### Overcollateralisation (Foundation Collateral Method)
 

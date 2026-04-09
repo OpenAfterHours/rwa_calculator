@@ -163,7 +163,11 @@ breakdown, risk weight breakdown, memorandum items).
 - Excel export: Complete — produces per-exposure-class sheets for all templates.
 - Integration: Done (`ResultExporter.export_to_corep()`, `CalculationResponse.to_corep()`)
 - Tests: Complete — 700+ COREP tests across multiple test files covering all template families.
-- Known sub-gaps: C 08.01 col 0120 ("Of which: off balance sheet") still null; B31 CIU sub-rows 0284/0285 not populated; CCR rows null (out of scope).
+- Known sub-gaps:
+    - **C 07.00 / OF 07.00**: Section 2 rows 0090–0130 (SFT netting sets, derivatives, cross-product netting) always null — CCR out of scope. Columns 0210/0211 ("Of which: arising from CCR" / "CCR excl. CCP") always null.
+    - **C 08.01 / OF 08.01**: Section 2 rows 0040–0060 (SFT, derivatives, cross-product netting) always null — CCR out of scope. B31 rows 0031–0035 (off-BS CCF bucket breakdown) null. Column 0130 ("Of which: arising from CCR") null. Column 0120 ("Of which: off balance sheet" under Exposure Value) null (Phase 2B). Column 0030 ("Of which: LFSE") null (Phase 2F).
+    - **B31 CIU sub-rows**: OF 07.00 rows 0284/0285 not populated.
+    - **OF 34.07**: IRB CCR template not yet implemented (see Missing Templates above).
 - Detailed feature docs: Done — see [COREP Reporting](../features/corep-reporting.md) (all 10 template families documented)
 
 ## Pillar III Disclosure Templates

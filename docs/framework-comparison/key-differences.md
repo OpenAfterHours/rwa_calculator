@@ -456,11 +456,31 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 | 60–80% | 1.25× | 125% |
 | > 80% | 1.375× | 137.5% |
 
-### ADC Exposures (CRE20.85)
+### ADC Exposures (Art. 124K)
 
-| Type | CRR | Basel 3.1 |
-|------|-----|-----------|
-| Acquisition, Development & Construction | 100% | **150%** |
+Basel 3.1 introduces explicit ADC (Acquisition, Development, and Construction) treatment
+under Art. 124K, replacing the CRR high-risk item approach (Art. 128, omitted from UK law
+by SI 2021/1078).
+
+| Type | CRR | Basel 3.1 | Change |
+|------|-----|-----------|--------|
+| ADC (standard) | 100% (corporate unrated) | **150%** | Art. 128 omitted → Art. 124K(1) |
+| ADC (qualifying residential, pre-sold/equity at risk) | — | **100%** | New concession (Art. 124K(2)) |
+| ADC (commercial) | 100% (corporate unrated) | **150%** | No qualifying reduction available |
+
+!!! info "Art. 124K(2) Qualifying Conditions — Residential ADC Only"
+    The 100% concession requires **both**: (a) prudent underwriting standards including
+    property valuation; **and** (b) at least one of: (i) legally binding pre-sale/pre-lease
+    contracts with substantial forfeitable deposits covering a significant portion of total
+    contracts, or (ii) the borrower has substantial equity at risk. Commercial ADC always
+    receives 150% — no qualifying reduction exists.
+
+!!! warning "ADC Exclusion from Regulatory RE"
+    ADC exposures are explicitly excluded from regulatory real estate treatment (Art. 124A).
+    They cannot qualify for LTV-based loan-splitting (Art. 124F–124H) or income-producing
+    tables (Art. 124I). The `is_adc` flag takes priority over all other RE classification.
+
+See also: [B31 ADC specification](../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
 
 ### Retail Exposures
 

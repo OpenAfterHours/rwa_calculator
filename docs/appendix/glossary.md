@@ -7,6 +7,9 @@ This glossary provides definitions for key terms used throughout the documentati
 ### A-IRB (Advanced Internal Ratings-Based)
 An IRB approach where the bank estimates PD, LGD, and EAD using internal models, subject to regulatory floors and approval.
 
+### ADC (Acquisition, Development, and Construction)
+An exposure to a corporate or SPE financing land acquisition for development and construction, or financing development and construction of residential or commercial real estate. ADC exposures are excluded from the regulatory real estate framework (Art. 124A) and receive standalone risk weights under Art. 124K: 150% standard, 100% for qualifying residential with pre-sales or substantial borrower equity at risk.
+
 ### Asset Correlation
 A measure of how closely the value of an asset moves with systematic risk factors. Higher correlation means more sensitivity to economic conditions.
 

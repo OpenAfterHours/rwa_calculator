@@ -243,9 +243,23 @@ The PRA adopted loan-splitting for general residential (not income-dependent):
 
 **Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
 
-#### ADC Exposures (CRE20.85)
+#### ADC Exposures (Art. 124K)
 
-Acquisition, Development and Construction exposures receive a **150%** risk weight (up from 100% under CRR).
+Acquisition, Development and Construction (ADC) exposures — loans to corporates or SPEs
+financing land acquisition for development/construction, or financing RE
+development/construction — receive a default **150%** risk weight (Art. 124K(1)),
+up from 100% (standard corporate unrated) under CRR where Art. 128 was omitted.
+
+A reduced **100%** risk weight is available for **residential ADC only** where both:
+(a) the exposure has prudent underwriting standards; and (b) either legally binding
+pre-sale/pre-lease contracts with substantial forfeitable deposits cover a significant
+portion of total contracts, or the borrower has substantial equity at risk (Art. 124K(2)).
+Commercial ADC always receives 150%.
+
+Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
+overrides all LTV-based RE treatment. See the
+[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
+for full qualifying conditions.
 
 #### Retail Exposures
 

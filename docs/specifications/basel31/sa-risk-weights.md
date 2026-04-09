@@ -25,6 +25,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.10 | Currency mismatch multiplier 1.5× (Art. 123A) | P0 | Done |
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
 | FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
+| FR-1.13 | ADC exposures 150% / qualifying residential 100% (Art. 124K) | P0 | Done |
 
 ---
 
@@ -264,6 +265,87 @@ Exposures that fail any Art. 124A criterion are "other real estate":
     RE branches. The six Art. 124A(1) criteria must be pre-evaluated by the reporting
     institution — the calculator does not validate individual criteria. If the field is
     omitted, the exposure defaults to qualifying (`True`) for backward compatibility.
+
+## Real Estate — ADC Exposures (Art. 124K)
+
+ADC (Acquisition, Development, and Construction) exposures are loans to corporates or SPEs
+financing land acquisition for development and construction, or financing development and
+construction of residential or commercial real estate. ADC exposures are explicitly excluded
+from the regulatory real estate framework (Art. 124A) and receive standalone treatment.
+
+**Regulatory Reference:** PRA PS1/26 Art. 124K (p.58), Glossary definition (p.3)
+
+### Risk Weights
+
+| Scenario | Risk Weight | Conditions | Reference |
+|----------|-------------|------------|-----------|
+| Standard (non-qualifying) ADC | **150%** | Default for all ADC exposures | Art. 124K(1) |
+| Qualifying residential ADC | **100%** | Residential RE only, subject to both conditions below | Art. 124K(2) |
+
+### Qualifying Conditions for 100% (Art. 124K(2))
+
+The reduced 100% risk weight is available **only** for ADC exposures financing land
+acquisition for residential RE development/construction, or financing residential RE
+development/construction. **Both** of the following must be met:
+
+**(a) Prudent underwriting** (Art. 124K(2)(a)):
+
+- The exposure is subject to prudent underwriting standards, including for the valuation of
+  any real estate used as security for the exposure.
+
+**(b) At least one of** (Art. 124K(2)(b)):
+
+| Condition | Requirement |
+|-----------|-------------|
+| **(b)(i)** Pre-sales/pre-leases | Legally binding pre-sale or pre-lease contracts, where the purchaser/tenant has made a **substantial cash deposit subject to forfeiture** if the contract is terminated, amount to a **significant portion** of total contracts |
+| **(b)(ii)** Borrower equity at risk | The borrower has **substantial equity at risk** |
+
+!!! info "Key Restrictions"
+    - **Residential only:** The 100% concession is not available for commercial ADC exposures.
+      Commercial ADC always receives 150%.
+    - **Corporate/SPE obligors:** ADC exposures are defined as loans to corporates or SPEs —
+      natural persons cannot have ADC exposures per the PRA glossary definition.
+    - **No regulatory RE treatment:** ADC exposures cannot qualify for LTV-based loan-splitting
+      (Art. 124F–124H) or income-producing tables (Art. 124I) regardless of collateral quality.
+
+### CRR Comparison
+
+Under current UK CRR (pre-2027), Art. 128 (high-risk items including speculative immovable
+property financing) was omitted by SI 2021/1078 effective 1 Jan 2022. Without Art. 128,
+ADC-type exposures fall to standard corporate treatment (100% unrated). Basel 3.1 Art. 124K
+re-introduces explicit ADC treatment at a higher 150% default, with a 100% concession for
+qualifying residential exposures.
+
+See also: [CRR ADC treatment](../crr/sa-risk-weights.md#adc-exposures-art-124k)
+
+### Implementation
+
+The calculator uses two input fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic |
+| `is_presold` | Boolean | Flags the ADC exposure as meeting Art. 124K(2) qualifying conditions — reduces RW from 150% to 100% |
+
+**Code:** `b31_adc_rw_expr()` in `data/tables/b31_risk_weights.py` dispatches on `is_presold`.
+ADC sits at priority 4 in the Basel 3.1 SA when-chain (`engine/sa/calculator.py`), after
+subordinated debt but before all other RE branches — `is_adc=True` overrides any LTV-based
+or income-producing treatment.
+
+!!! warning "Qualifying assessment is external"
+    The calculator does not validate whether Art. 124K(2) conditions are met. The reporting
+    institution must pre-evaluate prudent underwriting standards and pre-sale/equity-at-risk
+    thresholds, then set `is_presold = True` accordingly. PRA does not define quantitative
+    thresholds for "substantial" or "significant portion" — these are institution-level
+    judgements subject to supervisory review.
+
+### Key Scenarios
+
+| ID | Scenario | is_adc | is_presold | Expected RW | Reference |
+|----|----------|--------|------------|-------------|-----------|
+| B31-A12 | Standard ADC exposure | True | False | 150% | Art. 124K(1) |
+| B31-A13 | Qualifying residential ADC (pre-sold) | True | True | 100% | Art. 124K(2) |
+| B31-A14 | ADC overrides RE LTV treatment | True | False | 150% | Art. 124K(1) priority |
 
 ---
 

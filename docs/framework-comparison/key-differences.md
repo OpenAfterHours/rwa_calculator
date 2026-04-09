@@ -777,16 +777,45 @@ Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):
 | Rated RGLAs | Sovereign-based | Own ECAI rating (20-150%) |
 | Unrated RGLAs | Sovereign-based | Based on sovereign CQS |
 
-### Covered Bonds
+### Covered Bonds (Art. 129)
 
-| CQS | CRR | Basel 3.1 |
-|-----|-----|-----------|
-| CQS 1 | 10% | 10% |
-| CQS 2 | 20% | **15%** (Art. 129A) |
-| CQS 3 | 20% | 20% |
-| CQS 4-5 | 50% | 50% |
-| CQS 6 | 100% | **50%** (Art. 129A) |
-| Unrated | Derived from issuer (40%→20% UK) | Derived from issuer via SCRA (A_ENHANCED→15%, A→20%, B→35%, C→100%) |
+!!! warning "PRA Deviation from BCBS — Rated Risk Weights Unchanged"
+    BCBS CRE20.28–29 reduced rated covered bond risk weights (CQS 2: 20%→15%, CQS 4–6:
+    collapsed to 50%). **PRA PS1/26 Art. 129(4) Table 7 did not adopt these reductions** — all
+    six rated CQS values are identical to CRR Table 6A.
+
+| CQS | CRR (Table 6A) | Basel 3.1 (Table 7) | Change |
+|-----|----------------|---------------------|--------|
+| CQS 1 | 10% | 10% | Unchanged |
+| CQS 2 | 20% | 20% | Unchanged |
+| CQS 3 | 20% | 20% | Unchanged |
+| CQS 4 | 50% | 50% | Unchanged |
+| CQS 5 | 50% | 50% | Unchanged |
+| CQS 6 | 100% | 100% | Unchanged |
+
+**Unrated (Art. 129(5)):** Risk weight is derived from the issuing institution's senior
+unsecured RW. Basel 3.1 expands the derivation table from 4 to 7 entries to accommodate
+new institution RWs (ECRA 30%, SCRA 40%/75%):
+
+| Institution RW | CRR CB RW | B31 CB RW | Change |
+|---------------|-----------|-----------|--------|
+| 20% | 10% | 10% | Unchanged |
+| 30% | — | **15%** | New (Art. 129(5)(aa)) |
+| 40% | — | **20%** | New (Art. 129(5)(ab)) |
+| 50% | 20% | **25%** | ↑ from 20% |
+| 75% | — | **35%** | New (Art. 129(5)(ba)) |
+| 100% | 50% | 50% | Unchanged |
+| 150% | 100% | 100% | Unchanged |
+
+!!! info "Art. 129(4A) — New Due Diligence Requirement"
+    Basel 3.1 adds Art. 129(4A): institutions must assess whether external ratings
+    adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
+    must assign at least one CQS step higher.
+
+!!! warning "Code Divergence — B31 Rated Values"
+    `B31_COVERED_BOND_RISK_WEIGHTS` uses **BCBS CRE20** values (CQS 2 = 15%,
+    CQS 6 = 50%) instead of PRA Table 7 values (identical to CRR). The unrated derivation
+    is correct. See [SA risk weights spec](../specifications/crr/sa-risk-weights.md#covered-bond-exposures-crr-art-129) for details.
 
 ## Credit Conversion Factors
 

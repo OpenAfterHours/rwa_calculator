@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.180] — 2026-04-09
+
+### Fixed
+- **Docs**: Replaced fabricated double-default formula in `crm.md` with correct CRR Art. 153(3) formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)` (D3.7). Added eligibility requirements (Art. 202/217), guarantor RW floor, and Basel 3.1 removal warning with cross-link to A-IRB spec.
+
 ## [0.1.179] — 2026-04-09
 
 ### Fixed

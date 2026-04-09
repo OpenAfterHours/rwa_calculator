@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-09 (D2.30: Art. 124G(2) junior-charge uplift 1.25× for income-producing RRE documented across 4 files.)
+Last updated: 2026-04-09 (D3.7: Replaced fabricated double-default formula in crm.md with correct CRR Art. 153(3) formula and eligibility requirements.)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -124,7 +124,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 ### Double Default Formula
 
-- [ ] **D3.7** — `crm.md` (lines 207-213) shows `PD_joint = PD_obligor x PD_guarantor x (1 + correlation)` which is NOT the Art. 153(3) / 202-203 regulatory double-default formula. Fix or remove the illustrative formula.
+- [x] **D3.7** — ~~`crm.md` (lines 207-213) shows `PD_joint = PD_obligor x PD_guarantor x (1 + correlation)` which is NOT the Art. 153(3) / 202-203 regulatory double-default formula.~~ **FIXED:** Replaced fabricated `PD_joint` formula with correct CRR Art. 153(3) double-default formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)`. Added explanation of scaling factor mechanism, eligibility requirements (Art. 202: eligible protection providers with CQS 2+ PD; Art. 217: corporate/RGLA/PSE/SME underlying, no same-group, A-IRB required), guarantor RW floor, and `!!! warning` admonition noting Basel 3.1 removal (Art. 153(3)/202/217 blanked) with cross-link to B31 A-IRB spec. Formula and eligibility verified against CRR PDF page 149 (Art. 153(3)) and pages 200/211 (Art. 202/217). Code verified: `formulas.py:696-737` implements `0.15 + 160 × PD_g`; `guarantee.py:334-420` implements full eligibility and floor logic. (2026-04-09)
 
 ### New Phase 2 Code-Docs Findings
 
@@ -246,6 +246,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 - [x] **D2.28** — CRE loan-splitting 60% secured rate added to `key-differences.md`, `technical-reference.md`, and `regulatory-tables.md` as part of D2.22 fix. (2026-04-09)
 - [x] **D2.26** — UK residential mortgage commitments 50% CCF (Art. 111 Table A1 Row 4(b)) documented across 4 files. `credit-conversion-factors.md` restructured from 6-row to 7-row Table A1 matching PDF (Rows 3/4 split, Row 4(b) PRA deviation admonition, F-IRB table similarly updated, B31-D.CCF9 scenario added). `key-differences.md` CCF table replaced with full 7-row comparison. `basel31.md` mortgage commitment bullet added. `technical-reference.md` CCF summary paragraph added. PDF verified: pages 30-32. (2026-04-09)
 - [x] **D2.29** — Slotting Table A subgrade A/B/C/D columns documented across 6 files: `key-differences.md` (full 7-column Table A with assignment rules, CRR-vs-PRA format admonition, implementation warning), `specifications/basel31/slotting-approach.md` (corrected wrong claim that subgrades A/B get same weight — PRA preserves maturity differentiation), `framework-comparison/technical-reference.md` (replaced confusing table with full Table A + HVCRE), `specifications/crr/slotting-approach.md` (added Art. 153(5)(e)/(f) enhanced underwriting concessions), `user-guide/methodology/specialised-lending.md` (corrected misleading intro), `user-guide/regulatory/basel31.md` (added subgrade explanation + cross-link). PDF verified: Art. 153(5) Table A page 103. (2026-04-09)
+- [x] **D3.7** — Fabricated double-default formula in `crm.md` replaced with correct CRR Art. 153(3) formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)`. Added eligibility requirements (Art. 202/217), guarantor RW floor, and B31 removal warning with cross-link to A-IRB spec. PDF verified: CRR page 149. (2026-04-09)
 
 ---
 

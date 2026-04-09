@@ -202,16 +202,38 @@ flowchart LR
 3. **Irrevocable** - cannot be cancelled
 4. **Legally enforceable** in relevant jurisdictions
 
-### Double Default (CRR)
+### Double Default (CRR Only)
 
-For qualifying guarantees, the double default treatment may apply:
+For qualifying guarantees under CRR, the double default treatment (Art. 153(3)) scales the
+obligor's IRB capital requirement by a factor that reflects the guarantor's creditworthiness:
 
-```python
-# Probability both obligor AND guarantor default
-PD_joint = PD_obligor × PD_guarantor × (1 + correlation)
-
-# Typically results in lower RWA
 ```
+K_dd = K_obligor × (0.15 + 160 × PD_guarantor)
+```
+
+Where `K_obligor` is the IRB capital requirement calculated using the obligor's PD and the
+guarantor's LGD (Art. 161(4)), and `PD_guarantor` is the protection provider's probability of
+default. The scaling factor `(0.15 + 160 × PD_guarantor)` is always less than 1 for investment-grade
+guarantors, providing significant capital relief.
+
+**Eligibility (Art. 202, Art. 217):**
+
+- Underlying exposure must be corporate, RGLA, PSE, or SME retail
+- Protection provider must be an institution, investment firm, insurance undertaking, or export
+  credit agency with internal PD equivalent to CQS 2 or better (CQS 3 maintained threshold)
+- Obligor and protection provider must not be in the same group
+- A-IRB permission required (the firm must model PD internally for the guarantor)
+- Risk weight must not already factor in any aspect of the credit protection
+
+The resulting risk-weighted amount is floored at the guarantor's own risk weight (Art. 153(3)
+paragraph 2).
+
+!!! warning "Removed under Basel 3.1"
+    PRA PS1/26 blanks Art. 153(3), Art. 202, and Art. 217 — the double default treatment is
+    **removed entirely**. Guaranteed exposures must use parameter substitution (Art. 236) or
+    risk weight substitution (Art. 235) instead. See
+    [A-IRB Specification](../../specifications/basel31/airb-calculation.md#double-default-removal)
+    for details.
 
 ### Guarantee Example
 

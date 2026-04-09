@@ -97,6 +97,7 @@ Covers CRM techniques:
 - Guarantee substitution (CRR Art. 213-217)
 - Multi-level collateral allocation (exposure, facility, counterparty)
 - Maturity mismatch adjustment (CRR Art. 238)
+- Advanced CRM (D7–D14): non-beneficial guarantees, sovereign guarantees, CDS restructuring exclusion, gold/equity collateral, overcollateralisation, full CRM chain
 
 ### Group E: Slotting
 Covers specialised lending:
@@ -131,6 +132,14 @@ Covers defaulted exposure treatment:
 - A-IRB defaulted (K=max(0, LGD−BEEL), CRR Art. 154(1)(i))
 - Defaulted with CRM adjustments
 
+### Group J: Equity
+Covers equity exposure treatment:
+
+- SA equity flat 100% (CRR Art. 133(2)) — listed, unlisted, PE/VC
+- IRB Simple risk weights (CRR Art. 155(2)) — exchange-traded 290%, PE diversified 190%, other 370%
+- CIU treatment — mandate-based, look-through, fallback (CRR Art. 132)
+- RWA arithmetic validation
+
 ### Basel 3.1 Groups
 Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:
 
@@ -163,10 +172,12 @@ Each scenario is tagged with an identifier for traceability:
 | `CRR-G` | CRR Provisions |
 | `CRR-H` | CRR Complex/Combined |
 | `CRR-I` | CRR Defaulted Exposures |
+| `CRR-J` | CRR Equity |
 | `B31-A` | Basel 3.1 Standardised Approach |
 | `B31-B` | Basel 3.1 Foundation IRB |
 | `B31-C` | Basel 3.1 Advanced IRB |
 | `B31-D` | Basel 3.1 Credit Risk Mitigation |
+| `B31-D7` | Basel 3.1 Parameter Substitution |
 | `B31-E` | Basel 3.1 Slotting Approach |
 | `B31-F` | Basel 3.1 Output Floor |
 | `B31-G` | Basel 3.1 Provisions |
@@ -177,6 +188,7 @@ Each scenario is tagged with an identifier for traceability:
 | `M3.1` | Dual-framework comparison |
 | `M3.2` | Capital impact analysis |
 | `M3.3` | Transitional floor modelling |
+| `STRESS` | Pipeline stress tests (10K–100K scale) |
 | `HIER-` | Hierarchy scenarios |
 | `CLASS-` | Classification scenarios |
 

@@ -47,6 +47,17 @@ from rwa_calc.reporting.corep.generator import COREPGenerator
 # Helpers (same pattern as test_b31_approach_restrictions.py)
 # =============================================================================
 
+_TEST_MODEL_ID = "TEST_MODEL"
+
+
+def _full_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
+    """Model permissions granting all IRB approaches for all exposure classes."""
+    rows = []
+    for ec in ExposureClass:
+        for approach in ["advanced_irb", "foundation_irb", "slotting"]:
+            rows.append({"model_id": model_id, "exposure_class": ec.value, "approach": approach})
+    return pl.DataFrame(rows).lazy()
+
 
 def _make_counterparty(
     ref: str = "CP001",
@@ -101,6 +112,7 @@ def _make_exposure(
             "lending_group_reference": [None],
             "lending_group_total_exposure": [0.0],
             "internal_pd": [internal_pd],
+            "model_id": [_TEST_MODEL_ID],
         }
     ).lazy()
 
@@ -109,6 +121,7 @@ def _make_bundle(
     exposures: pl.LazyFrame,
     counterparties: pl.LazyFrame,
     specialised_lending: pl.LazyFrame | None = None,
+    model_permissions: pl.LazyFrame | None = None,
 ) -> ResolvedHierarchyBundle:
     enriched_cp = counterparties.with_columns(
         [
@@ -168,7 +181,7 @@ def _make_bundle(
         guarantees=pl.LazyFrame(),
         provisions=pl.LazyFrame(),
         specialised_lending=specialised_lending,
-        model_permissions=None,
+        model_permissions=model_permissions,
         lending_group_totals=pl.LazyFrame(
             schema={
                 "lending_group_reference": pl.String,
@@ -204,7 +217,12 @@ def _classify(
 ) -> pl.DataFrame:
     cp = _make_counterparty(entity_type=entity_type, default_status=default_status)
     exp = _make_exposure(lgd=lgd, internal_pd=internal_pd)
-    bundle = _make_bundle(exp, cp, specialised_lending=specialised_lending)
+    bundle = _make_bundle(
+        exp,
+        cp,
+        specialised_lending=specialised_lending,
+        model_permissions=_full_model_permissions(),
+    )
 
     if framework == "b31":
         config = CalculationConfig.basel_3_1(

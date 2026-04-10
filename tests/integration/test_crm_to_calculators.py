@@ -35,6 +35,7 @@ from .conftest import (
     make_counterparty,
     make_facility,
     make_loan,
+    make_model_permission,
     make_raw_data_bundle,
 )
 
@@ -43,6 +44,33 @@ from .conftest import (
 # =============================================================================
 
 _RATING_DATE = date(2024, 6, 1)
+_MODEL_ID = "MODEL_01"
+
+
+def _full_model_permissions() -> list[dict[str, Any]]:
+    """Model permissions granting all IRB approaches for common exposure classes."""
+    rows = []
+    for ec in [
+        "corporate",
+        "institution",
+        "retail",
+        "specialised_lending",
+        "central_govt_central_bank",
+        "corporate_sme",
+        "retail_sme",
+        "retail_mortgage",
+        "retail_qrre",
+        "retail_other",
+    ]:
+        for approach in ["advanced_irb", "foundation_irb", "slotting"]:
+            rows.append(
+                make_model_permission(
+                    model_id=_MODEL_ID,
+                    exposure_class=ec,
+                    approach=approach,
+                )
+            )
+    return rows
 
 
 def _make_internal_rating(
@@ -61,6 +89,7 @@ def _make_internal_rating(
         "pd": pd,
         "rating_date": _RATING_DATE,
         "is_solicited": True,
+        "model_id": _MODEL_ID,
     }
     defaults.update(overrides)
     return defaults
@@ -71,16 +100,21 @@ def _make_bundle_with_ratings(
     loans: list[dict[str, Any]] | None = None,
     facilities: list[dict[str, Any]] | None = None,
     ratings: list[dict[str, Any]] | None = None,
+    model_permissions: list[dict[str, Any]] | None = None,
     **kwargs: Any,
 ) -> RawDataBundle:
     """Build a RawDataBundle that includes ratings (for IRB eligibility).
 
     Wraps make_raw_data_bundle and injects ratings into the bundle.
+    If model_permissions is not provided, full IRB permissions are used.
     """
+    if model_permissions is None:
+        model_permissions = _full_model_permissions()
     bundle = make_raw_data_bundle(
         counterparties=counterparties,
         loans=loans,
         facilities=facilities,
+        model_permissions=model_permissions,
         **kwargs,
     )
     ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None

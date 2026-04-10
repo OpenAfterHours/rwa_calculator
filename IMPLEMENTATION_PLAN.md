@@ -1,8 +1,8 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-08 (comprehensive audit phase 5 — 21 parallel Sonnet + 3 Opus subagents, full regulatory PDF cross-check, source code verification)
-**Package version:** 0.1.53 (pyproject.toml) | **Test suite:** 5,188 selectable (5,199 total, 11 deselected benchmarks)
-**Test run (2026-04-08):** 5,167 passed, 21 skipped (conditional fixture guards), 11 deselected (benchmarks)
+**Last updated:** 2026-04-10 (comprehensive audit phase 7 — full regulatory PDF extraction, spec update, source code verification with Opus agents)
+**Package version:** 0.1.53 (pyproject.toml) | **Test suite:** 5,210 selectable (5,210 total, 11 deselected benchmarks)
+**Test run (2026-04-10):** 5,178 passed, 21 skipped (conditional fixture guards), 11 deselected (benchmarks)
 **CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests) | **Stress:** 56 tests (+ 4 slow)
 **Unit:** 4,397 | **Contract:** 145 | **Integration:** 122 | **Acceptance:** 497 selectable
 **Acceptance tests skipped at runtime:** 21 (all conditional fixture-data guards — B31 FIRB 8, CRR FIRB 7, B31 CRM 7, provisions 15, output floor 4, stress 2; no unconditional skips)
@@ -21,7 +21,7 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P1.94** [ ] **NEW** — B31 currency mismatch 1.5x missing 150% cap. `sa/calculator.py:1762` applies `risk_weight * 1.5` without a cap. PS1/26 Art. 123B final text confirms "capped at 150%". Exposures with base RW > 100% (e.g., defaulted 150%) produce 225% instead of correct 150%. **Effort: S** | Ref: PRA PS1/26 Art. 123B
 - **P1.95** [ ] **NEW** — B31 guarantee substitution uses CRR CQS-based institution RW instead of SCRA grades for unrated institution guarantors. `sa/calculator.py:1568-1582` applies 40% (UK deviation) for unrated institution guarantors regardless of framework. Under B31, unrated institutions use SCRA grades (A→40%, B→75%, C→150%), not CQS-derived sovereign fallback. **Effort: M** | Ref: PRA PS1/26 Art. 121/235
 - **P1.96** [ ] **NEW** — Covered bond collateral haircut falls through to `other_physical` (40% default). `haircuts.py:_normalize_collateral_type_expr` does not recognise `covered_bond`/`covered_bonds` as a distinct collateral type for supervisory haircut lookup. CRR Art. 197/224 gives covered bonds their own haircut row. **Effort: S** | Ref: CRR Art. 197, 224
-- **P1.97** [ ] **NEW** — B31 slotting missing subgrade maturity differentiation (Art. 153(5)(d)). PRA Table A has columns A/B (Strong) and C/D (Good) with maturity-based subgrades: Strong A=50% (<2.5yr) vs B=70% (≥2.5yr), Good C=70% vs D=90%; HVCRE Strong A=70% vs B=95%, Good C=95% vs D=120%. Code has no B31 `_SHORT` table variants and `namespace.py:408-416` ignores `is_short` for B31. Art. 153(5)(d) says firms "may" use lower weights — optional but should be supported. **Effort: S** | Ref: PRA PS1/26 Art. 153(5)(d) Table A columns A-D
+- **P1.97** [ ] **NEW** — B31 slotting missing non-HVCRE subgrade maturity differentiation (Art. 153(5)(d)). PRA Table A has columns A/B (Strong) and C/D (Good) with maturity-based subgrades: Strong A=50% (<2.5yr) vs B=70% (>=2.5yr), Good C=70% vs D=90%. Code has no B31 `_SHORT` table variants and `namespace.py:408-416` ignores `is_short` for B31. Art. 153(5)(d) says firms "may" use lower weights — optional but should be supported. Non-HVCRE only; HVCRE subgrades tracked separately as P1.117. **Effort: S** | Ref: PRA PS1/26 Art. 153(5)(d) Table A columns A-D
 - **P1.98** [ ] **NEW** — Subordinated corporate A-IRB LGD floor fallback uses 50% instead of 25%. `formulas.py:157-166` applies `floors.subordinated_unsecured` (50%) when `exposure_class` absent and `seniority` contains "sub". Art. 161(5) makes no senior/subordinated distinction — all corporate unsecured = 25%. Only affects fallback path but is regulatory non-compliant. **Effort: S** | Ref: PRA PS1/26 Art. 161(5)
 - **P1.99** [ ] **NEW** — CRR short-term institution risk weights (Art. 120 Table 4) not applied. Short-term (<= 3 months) domestic-currency institution exposures should get lower RW (e.g., CQS 2 = 20% instead of 30%). CRR code path has no short-term institution treatment — falls through to long-term table. **Effort: S** | Ref: CRR Art. 120(1)-(2)
 - **P1.100** [ ] **NEW** — Art. 137 ECA score-to-CQS mapping not implemented. Unrated sovereigns with ECA risk scores 0-7 should map to CQS 1-6 per Table 9. No `eca_score` field in schema. Unrated sovereigns default to 100% instead of potentially 0% (ECA 0-1). **Effort: S** | Ref: CRR Art. 137
@@ -31,11 +31,26 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P1.104** [ ] **NEW** — FCSM Art. 222(7) maturity eligibility check missing. Simple Method requires collateral residual maturity >= exposure residual maturity (no mismatch allowed). `simple_method.py:compute_fcsm_columns()` never checks maturity relationship. Collateral with shorter maturity than exposure is incorrectly recognised. **Effort: S** | Ref: CRR Art. 222(7)
 - **P1.106** [ ] **NEW** — FCSM collateral RW for institution bonds ignores UK deviation. `simple_method.py:90-91` uses CQS 2-3 = 50% for all institution bonds. CRR Art. 119 with UK deviation gives CQS 2 = 30%. Conservative overstatement (50% > 30%). `_derive_collateral_rw_expr()` takes `is_basel_3_1` but not `use_uk_deviation`. **Effort: S** | Ref: CRR Art. 119, UK CRR deviation
 - **P1.107** [ ] **NEW** — FCSM collateral RW for B31 corporate CQS 3 bonds uses 100% instead of 75%. `simple_method.py:110-111` gives CQS 3 = 100%. B31 Art. 122 Table 6 gives CQS 3 = 75%. Conservative overstatement. **Effort: S** | Ref: PRA PS1/26 Art. 122(2) Table 6
-- **P1.108** [ ] **NEW** — CRR 1.06 scaling factor incorrectly applied to retail IRB exposures. `formulas.py:360` and `namespace.py:488` apply 1.06 to ALL exposure classes when CRR. Art. 153(1) specifies 1.06 for corporate/institution/sovereign only. Art. 154(1) (retail) formula has NO 1.06. **Overstates retail IRB RWA by 6% under CRR.** B31 unaffected. Defaulted path at `adjustments.py:83` correctly exempts retail. **Effort: S** | Ref: CRR Art. 153(1) vs Art. 154(1)
+- **P1.108** [~] **DISPUTED** — CRR 1.06 scaling factor applied to retail IRB exposures. `formulas.py:360` and `namespace.py:488` apply 1.06 to ALL CRR exposure classes including retail. BCBS CRE31.23 (retail formula) has NO 1.06, but **UK-onshored CRR Art. 154(1) text (page 151 of CRR PDF) includes `× 12.5 × 1.06` in the retail formula**. If the UK CRR text is authoritative, the code is CORRECT. Needs PRA legal clarification on whether this is a transcription artefact or intentional UK deviation. B31 unaffected (1.06 removed entirely). Defaulted path at `adjustments.py:83` correctly exempts retail. **Effort: S (if confirmed as bug)** | Ref: CRR Art. 153(1), Art. 154(1), BCBS CRE31.23
 - **P1.109** [ ] **NEW** — Art. 237-238 maturity mismatch not applied to unfunded credit protection (guarantees/CDS). `guarantees.py` applies FX haircut but NO maturity mismatch. When guarantee maturity < exposure maturity, Art. 238 requires `GA = G* × (t-0.25)/(T-0.25)` reduction. Art. 237(2) requires ineligibility when residual < 3 months or original < 1 year. **Understates capital** for exposures with short-dated guarantees. **Effort: M** | Ref: CRR Art. 237-238
 - **P1.110** [ ] **NEW** — B31 guarantee substitution CQS table uses CRR corporate weights (CQS 3=100%). `sa/calculator.py:1630-1631` maps corporate guarantor CQS 3-4 to 100% under both CRR and B31. B31 Table 6 gives CQS 3=75%. **Overstates capital** for B31 exposures with CQS 3 corporate guarantors. Related to P1.95 (SCRA) but distinct: P1.95 is about unrated institution guarantors, P1.110 is about rated corporate guarantors. **Effort: S** | Ref: PRA PS1/26 Art. 122(2) Table 6, Art. 235
 - **P1.111** [ ] **NEW** — B31 RRE income-producing junior multiplier capped at 105% instead of allowing 131.25%. `b31_risk_weights.py:441` applies `pl.min_horizontal(base_income * junior_multiplier, pl.lit(1.05))`, capping the Art. 124G(2) 1.25x result at the base table maximum. At LTV > 100% with junior lien, base=105% × 1.25 should give 131.25%, not 105%. CRE income-producing at line 496 correctly has no cap. **Understates capital** for junior-lien RRE income-producing exposures at high LTV. **Effort: S** | Ref: PRA PS1/26 Art. 124G(2)
 - **P1.112** [ ] **NEW** — Non-UK unrated PSE/RGLA default to 100% instead of sovereign-derived lookup. `sa/calculator.py:676-680` (B31 PSE), `696-700` (B31 RGLA), `996-1000` (CRR PSE), `1013-1017` (CRR RGLA) all use `cp_country_code == "GB" → 20%, otherwise → 100%`. Art. 116(1) Table 2 / Art. 115(1)(a) Table 1A require sovereign CQS-derived weights (e.g., CQS 1 sovereign → 20%). `cp_sovereign_cqs` field is available in schema. **Overstates capital** for non-UK PSE/RGLA with low sovereign CQS. **Effort: S** | Ref: CRR Art. 115(1)(a), Art. 116(1)
+- **P1.113** [ ] **NEW** — B31 rated covered bond risk weights use BCBS CRE20.28 values, not PRA Table 7. `b31_risk_weights.py:276-283` and `:311` (DataFrame) set CQS 2 = 15% and CQS 6 = 50%. PRA PS1/26 Art. 129(4) Table 7 gives CQS 2 = 20% and CQS 6 = 100%. CQS 1/3/4/5 are correct (10%/20%/50%/50%). **Understates capital for CQS 2 covered bonds (15% vs 20%) and CQS 6 (50% vs 100%).** Both dict and DataFrame lookup tables affected. Effort: S | Ref: PRA PS1/26 Art. 129(4) Table 7
+- **P1.114** [ ] **NEW** — Classifier null propagation in `str.contains()` for book_code/country_code silently routes to SA. `classifier.py:805,809` — when `cp_country_code` or `book_code` is null on an exposure row and the model_permissions field is non-null, `str.contains(null)` propagates null into `permission_valid`, causing silent SA fallback. Fix: add `.fill_null("")` on exposure columns before `str.contains()`. Effort: S | Ref: classifier model_permissions resolution
+- **P1.115** [ ] **NEW** — CRR Art. 230 Table 5 subordinated F-IRB LGDS not implemented. `crm/constants.py:92-100` has no seniority distinction in `CRR_SUPERVISORY_LGD`. Subordinated exposures secured by receivables/RE/other physical should use LGDS = 65%/65%/70% instead of senior 35%/35%/40%. **Understates capital for subordinated F-IRB secured exposures.** Effort: S | Ref: CRR Art. 230 Table 5
+- **P1.116** [ ] **NEW** — EL shortfall deduction uses 50% CET1 + 50% T2 instead of 100% CET1. `_el_summary.py:239-241` applies `effective_shortfall * 0.5` to both. CRR Art. 36(1)(d) requires full shortfall deducted from CET1. This affects OF-ADJ calculation (uses `el_summary.cet1_deduction`). Effort: S | Ref: CRR Art. 36(1)(d), Art. 159
+- **P1.117** [ ] **NEW** — B31 HVCRE short-maturity subgrades not implemented (distinct from P1.97). P1.97 covers non-HVCRE (Strong A=50%/B=70%, Good C=70%/D=90%). HVCRE Table A also has maturity-based subgrades: Strong A=70%/B=95%, Good C=95%/D=120%. No `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` table exists. `namespace.py:408-416` ignores `is_short` for all B31 slotting. Effort: S | Ref: PRA PS1/26 Art. 153(5)(d)
+- **P1.118** [ ] **NEW** — Art. 162(3) short-maturity IRB override not implemented. Qualified short-term exposures (FX settlement, trade finance <=1yr, repos) should get M = maturity value per Art. 162(3) instead of default M = 2.5. The `has_one_day_maturity_floor` flag exists but only affects CRM maturity mismatch, not the IRB capital formula. Effort: M | Ref: CRR Art. 162(3), PRA PS1/26 Art. 162(3)
+- **P1.119** [ ] **NEW** — CIU fallback risk weight wrong under BOTH frameworks. Art. 132(2) requires **1,250%** for CIU exposures using the fallback approach. CRR code applies 150% (`crr_equity_rw.py:48` has `CIU: Decimal("1.50")`); B31 code applies 250%/400% (`b31_equity_rw.py:49` + `calculator.py:571-582`). P1.90 "fixed" B31 CIU fallback by splitting listed/unlisted but used Art. 133 equity weights instead of Art. 132(2)'s 1,250% — **P1.90 fix was wrong**. Tests CRR-J9, CRR-J17, B31-L11, B31-L12 validate wrong values. **Impact: Severe capital understatement** (1,250% vs 150% CRR = 8.3x; 1,250% vs 250%/400% B31 = 3-5x). **Effort: S** | Ref: CRR Art. 132(2), PRA PS1/26 Art. 132(2), D3.15, `equity-approach.md`
+- **P1.120** [ ] **NEW** — B31 SA defaulted provision-ratio denominator wrong (D3.19). Art. 127(1) requires `specific_provisions / gross_outstanding_amount` but code uses `unsecured_ead` (post-provision, post-CRM). For partially collateralised exposures, the smaller denominator can push the ratio below 20%, inflating RW from 100% to 150%. **Impact: Capital overstatement for collateralised defaulted exposures**. **Effort: S** | Ref: PRA PS1/26 Art. 127(1), `calculator.py:1250-1275`
+- **P1.121** [ ] **NEW** — CRR Art. 121(3) unrated institution short-term 20% not applied. CRR code path has no handling for unrated institutions with residual maturity <= 3 months denominated in domestic currency. These should get 20% instead of 40% (UK) or 100% (standard). Capital overstated by up to 100%. **Effort: S** | Ref: CRR Art. 121(3)
+- **P1.122** [ ] **NEW** — Guarantee substitution has no B31 framework branching. `_apply_guarantee_substitution()` at `sa/calculator.py:1428-1709` has zero `is_basel_3_1` checks. Uses single CQS table for both CRR and B31. Affects: (a) corporate CQS 3 = 100% (should be 75% under B31 per Table 6), (b) unrated institutions use CRR sovereign-derived (should use SCRA grades), (c) no short-term guarantor institution treatment. P1.95 and P1.110 are symptoms of this broader issue. **Effort: M** | Ref: PRA PS1/26 Art. 122/121/235
+- **P1.123** [ ] **NEW** — FCCM missing exposure volatility haircut (HE) for SFT exposures. Art. 223(5) formula: `E* = max(0, E(1+HE) - CVA(1-HC-HFX))`. `collateral.py` omits the `(1+HE)` gross-up on the exposure side. HE=0 for standard lending (correct), but HE>0 for SFTs where exposure is a debt security. **Understates E* and hence RWA for SFT portfolios.** **Effort: M** | Ref: CRR Art. 223(5)
+- **P1.124** [ ] **NEW** — Art. 237(2) guarantee ineligibility conditions not enforced. Guarantees with residual maturity < 3 months or original maturity < 1 year should be rejected entirely. Collateral maturity checks are correctly implemented in `haircuts.py:476-480`, but `guarantees.py` has no equivalent maturity eligibility check. Subset of P1.109 but distinct: P1.109 is the maturity mismatch *adjustment*, this is the eligibility *rejection*. **Effort: S** | Ref: CRR Art. 237(2)
+- **P1.125** [ ] **NEW** — Classifier missing FSE column warning under B31. When `cp_is_financial_sector_entity` column is absent, `classifier.py:989-994` silently defaults `_is_fse = pl.lit(False)`, letting all FSEs get A-IRB instead of F-IRB (Art. 147A(1)(e)). Classifier already emits warnings for missing QRRE columns and retail pool management columns but not for FSE. **Effort: S** | Ref: PRA PS1/26 Art. 147A(1)(e)
+- **P1.126** [ ] **NEW** — Classifier Art. 147A(1)(d) null revenue defaults to "not large" (A-IRB permitted). `classifier.py:995-997` uses `fill_null(False)` on the large corporate check. Corporates with unknown revenue that exceed GBP 440m could get A-IRB instead of F-IRB. Should either conservatively treat null as "large" or emit a warning. **Effort: S** | Ref: PRA PS1/26 Art. 147A(1)(d)
+- **P1.127** [ ] **NEW** — Art. 159 Pool B composition: upstream per-exposure EL shortfall may not include AVA/other own funds reductions. Aggregator `_el_summary.py:197-201` correctly implements the two-branch rule but relies on upstream `el_shortfall`/`el_excess` columns. If IRB/slotting calculators compute shortfall as `max(0, EL - provisions)` without including AVA (Art. 34/105) and other own funds reductions in Pool B, the two-branch condition may be incorrectly evaluated. **Needs upstream verification.** **Effort: S** | Ref: CRR Art. 159(1)
 - **P1.30(e)** [ ] Art. 234 partial protection tranching — structured protection covering only part of the loss range. Not modelled. **Effort: L** | Ref: PRA PS1/26 Art. 234
 - **P1.105** [ ] **NEW** — B31 Table 4A short-term institution ECAI risk weights not applied. `has_short_term_ecai` flag missing from schema. Table 4A gives CQS2=50%, CQS3=100% vs Table 4 fallback of 20% for both — current code *understates* risk for CQS 2-3 short-term-rated institutions. Also blocks Art. 122(3) Table 6A (P1.103). **Effort: S** | Ref: PRA PS1/26 Art. 120(2B), Art. 122(3)
 - **P1.10** [ ] Unfunded credit protection transitional (PRA Rule 4.11) — narrow eligibility carve-out for legacy contracts during 1 Jan 2027–30 Jun 2028. Requires Art. 213 eligibility validation first. **Effort: M** | Ref: PRA PS1/26 Rule 4.11
@@ -48,14 +63,23 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P5.12** [ ] **NEW** — Missing B31 acceptance tests for Art. 129A covered bond changes (SCRA-derived unrated RW). Only unit tests exist. **Effort: S**
 - **P5.13** [ ] **NEW** — Missing acceptance tests for Art. 124A-124L RE treatment scenarios under B31 (income-dependent/non-dependent, commercial sub-types, Other RE Art. 124J). Only unit tests. **Effort: S**
 - **P5.14** [ ] **NEW** — No integration/acceptance tests for COREP or Pillar III reporting generators. All 663+ COREP tests and 197+ Pillar III tests are unit tests with synthetic data. No test validates full pipeline → reporting output. **Effort: M**
+- **P5.15** [ ] **NEW** — Art. 123A(1)(b)(ii) 0.2% portfolio granularity sub-condition not implemented or tracked. The retail qualifying check only enforces the GBP 880k threshold, not the condition that no single exposure may exceed 0.2% of the total retail portfolio. The spec claims "Condition 2 (granularity threshold): Implemented" without noting the 0.2% is missing. Low impact (most portfolios satisfy this naturally). **Effort: M**
 
 ### Tier 3 — COREP Reporting Completeness
 
-- **P2.13** [ ] **NEW** — FCCM exposure volatility haircut (HE) absent from E* formula for SFT/repo exposures. Art. 223(5) defines `E* = max(0, E(1+HE) - CVA(1-HC-HFX))` but `collateral.py:759` omits the HE gross-up. Correct for standard lending (HE=0) but wrong for SFTs where the exposure is a debt security. Narrow scope. **Effort: S** | Ref: CRR Art. 223(5)
+- **P2.14** [ ] **NEW** — CRR engine applies Art. 128 high-risk 150% RW despite UK omission (D3.12). Art. 128 was removed from UK onshored CRR by SI 2021/1078 effective 1 Jan 2022 — no legal basis for the HIGH_RISK exposure class under CRR until Basel 3.1 reintroduces it from 2027. Conservative overstatement (150% vs whatever the alternative classification would yield). **Effort: S** | Ref: SI 2021/1078, `calculator.py:1051-1055`
+- **P2.13** [~] **UPGRADED TO P1.123** — FCCM exposure volatility haircut (HE) upgraded to P1 (Tier 1) as P1.123 after Phase 7 audit confirmed SFT capital understatement impact.
 - **P2.12** [ ] **NEW** — C 07.00 / OF 07.00 missing col 0020 "Exposures deducted from own funds". Standard column between 0010 (Original exposure) and 0030 (Value adjustments). Template submission validation will flag this. **Effort: S**
 - **P2.1** [~] COREP template rework — generator uses simplified column sets vs full-width template definitions. Multiple sub-gaps: C 08.01 col 0120 (off-BS EAD), B31 CIU sub-rows 0284/0285, OF 08.01 off-BS CCF sub-rows 0031-0035, slotting FCCM cols 0101-0104. **Effort: L**
 - **P2.5** [~] COREP missing row structure — OF 02.00 sub-class breakdown rows (0295-0297, 0355-0356, 0382-0385) need `cp_is_fse`/`is_sme` pipeline columns. OF 08.01 revolving row 0017 needs pipeline column. **Effort: M**
 - **P2.7** [~] COREP pre-credit-derivative RWEA (row 0310) — approximated as total RWEA. Accurate split requires per-exposure pre/post CD tracking in CRM pipeline. **Effort: M**
+- **P2.17** [ ] **NEW** — CRR payroll/pension loan 35% RW not applied in CRR code path. `calculator.py:993-995` applies flat 75% to all CRR retail. CRR2 (Reg 2019/876) introduced Art. 123 second subparagraph giving 35% for qualifying payroll/pension loans. `is_payroll_loan` flag and 35% logic exist only in B31 branch (line 831-834). Conservative overstatement (75% vs 35%). **Effort: S** | Ref: CRR Art. 123 (CRR2 amendment)
+- **P2.16** [ ] **NEW** — Output floor edge cases: (a) GCRA cap not enforced when S-TREA=0 (`_floor.py:77` passes GCRA uncapped; should be 0.0 per "1.25% of S-TREA"); (b) S-TREA fallback to `rwa_final` when `sa_rwa` absent (`aggregator.py:138`) skews GCRA cap on audit path. **Effort: S** | Ref: PRA PS1/26 Art. 92(2A)
+- **P2.15** [ ] **NEW** — Equity transitional Rules 4.7-4.8 (CIU underlyings for IRB-permissioned firms) not implemented. Code excludes CIU look-through/mandate-based from transitional floor entirely — correct for SA-only firms (Rules 4.1-4.3) but wrong for IRB firms where Art. 155 CIU underlyings should use higher-of IRB/transitional SA. Also, opt-out election (Rules 4.9-4.10) has no config flag. **Effort: S** | Ref: PRA PS1/26 Rules 4.7-4.10, `calculator.py:690-693`
+- **P2.18** [ ] **NEW** — Art. 226(1) non-daily revaluation haircut scaling missing. When collateral revalued less frequently than daily, supervisory haircuts should be scaled by `sqrt((NR + T_m - 1) / T_m)`. `haircuts.py` scales by liquidation period but has no NR (revaluation frequency) factor. No `revaluation_frequency_days` input field. **Effort: S** | Ref: CRR Art. 226(1)
+- **P2.19** [ ] **NEW** — Higher-risk equity Art. 133(4) definition relies on pre-classified `equity_type` instead of evaluating regulatory conditions dynamically. No `is_held_for_short_term_resale` or `is_derived_from_derivative` flags in schema. If input data doesn't pre-classify correctly, unlisted equity held for short-term resale gets 250% instead of 400%. **Effort: S** | Ref: PRA PS1/26 Art. 133(4)
+- **P2.20** [ ] **NEW** — `OutputFloorSummary.total_rwa_post_floor` field name misleading — only contains floored IRB+slotting component, excludes SA and equity RWA. Consumers expecting total portfolio RWA will be misled. **Effort: S** | Ref: `_floor.py:253`
+- **P2.21** [ ] **NEW** — Pipeline error conversion drops `regulatory_reference` field. `pipeline.py:583-592` converts `CalculationError` to `PipelineError` (which has no `regulatory_reference`), then back to `CalculationError` — losing the reference. Audit trail quality issue. **Effort: S**
 - **P2.9** [ ] OF 34.07 — IRB CCR template. CCR is out of scope; document as known gap or add placeholder. **Effort: S**
 - **P4.20** [ ] C 08.02 PD bands use fixed buckets instead of firm-specific internal rating grades. **Effort: M**
 
@@ -72,8 +96,8 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P4.8** [~] COREP template spec thin in `output-reporting.md` — detailed in `corep-reporting.md` feature doc. Cross-reference needed. **Effort: S**
 - **P4.9** [~] Type checker inconsistency — docs disagree with CLAUDE.md (`mypy` vs `ty`). **Effort: S**
 - **P4.10** [~] `model_permissions` not in architecture spec. **Effort: S**
-- **P4.11** [~] SA risk weight spec missing Art. 137 ECA Table 9 (MEIP score to CQS mapping). Niche feature for unrated sovereigns. **Effort: S**
-- **P4.12** [~] Equity spec still has BCBS CQS speculative tier references. **Effort: S**
+- **P4.11** [x] SA risk weight spec missing Art. 137 ECA Table 9. **FIXED (Phase 7)** — Added Art. 131 Table 7 and Art. 137 ECA/MEIP content to CRR SA spec.
+- **P4.12** [x] Equity spec BCBS CQS speculative tier references. **FIXED (Phase 7)** — Removed from both CRR and B31 equity specs; replaced with PRA Art. 133(4) higher-risk definition.
 - **P4.23** [ ] **NEW** — Stale test counts in `regulatory-compliance.md` (shows 97 CRR, 116 B31, 275 total; actual: 169 CRR, 212 B31, 497 acceptance). **Effort: S**
 - **P4.24** [ ] **NEW** — Stale NFR metrics in `nfr.md` (shows 1,844+ total tests; actual: 5,188). **Effort: S**
 - **P4.25** [ ] **NEW** — Stale acceptance test scenario counts in `index.md` (spec says 97 CRR, 116 B31). **Effort: S**
@@ -85,6 +109,19 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P4.31** [ ] **NEW** — Skill reference `slotting-changes.md` shows BCBS pre-op PF weights (80/100/120/350%) as PRA B31; PRA has no separate pre-op table (verified from PDF page 103). **Effort: S**
 - **P4.32** [ ] **NEW** — Skill reference files (`references/*.md`) need systematic audit for stale BCBS-derived values. **Effort: S**
 - **P4.33** [ ] **NEW** — Stale BCBS output floor references in source code docstrings. `comparison.py:18` says "50% (2027) to 72.5% (2032+)", `bundles.py:489` same, `ui/marimo/comparison_app.py:14-15` same. Runtime code uses correct PRA schedule. **Effort: S**
+- **P4.34** [x] SCRA Grade A Enhanced article reference wrong in B31 spec. **FIXED (Phase 7)** — Changed Art. 120(2A) to Art. 121(5) in B31 SA spec.
+- **P4.35** [x] Currency mismatch article reference wrong. **FIXED (Phase 7)** — Changed Art. 123A to Art. 123B in B31 SA spec (3 locations).
+- **P4.36** [x] B31 slotting spec "flat weights" error. **FIXED (Phase 7)** — Corrected to maturity-differentiated 7-column Table A with A/B/C/D subgrades. Added correction warning.
+- **P4.37** [x] CRR PD floor article reference wrong for retail. **FIXED (Phase 7)** — Added Art. 163(1) for retail alongside Art. 160(1) for corporate/institution.
+- **P4.38** [x] B31 provisions spec Pool A/B labelling inverted. **FIXED (Phase 7)** — Replaced with regulation's A/B/C/D scheme. Added correction admonition.
+- **P4.39** [x] B31 slotting spec EL table incomplete. **FIXED (Phase 7)** — Added short-maturity EL values (Strong=0%, Good=0.4%).
+- **P4.41** [x] B31 SA spec missing 80% high-quality PF. **FIXED (Phase 7)** — Added 80% row with Art. 122B(4)-(5) qualifying criteria.
+- **P4.42** [x] B31 SA spec Art. 124I junior charge wrong. **FIXED (Phase 7)** — Replaced single multiplier with 3-band table.
+- **P4.43** [x] CRR SA spec RGLA unrated fallback missing. **FIXED (Phase 7)** — Added "Unrated = 100%" rows to RGLA and PSE tables.
+- **P4.44** [x] B31 SA spec missing Art. 121(4) trade goods ≤6m exception. **FIXED (Phase 7)** — Added SCRA short-term trade finance subsection.
+- **P4.45** [x] B31 provisions spec missing Art. 159(3) two-branch rule. **FIXED (Phase 7)** — Fully documented all four branches with cross-subsidisation prevention.
+- **P4.46** [x] Output floor spec article numbers conflated. **FIXED (Phase 7)** — Corrected: Art. 92(2A) = formula, Art. 92(5) = transitional opt-in. Added permissive note.
+- **P4.40** [x] Equity spec Art. 133 paragraph numbering. **FIXED (Phase 7)** — Corrected CRR and B31 specs: higher-risk → Art. 133(4), subordinated → Art. 133(5), legislative → Art. 133(6).
 
 ### Tier 6 — Code Quality
 
@@ -96,15 +133,54 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P7.2** [ ] Portfolio-level concentration metrics (M4.4)
 - **P7.3** [ ] REST API (M4.5)
 - **P7.4** [ ] Additional exposure classes: securitisation, CIU beyond fallback, purchased receivables, dilution risk
+- **P7.5** [ ] **NEW** — Additional CRM methods not in scope: Art. 217 basket credit derivatives (first/nth-to-default), Art. 219 on-balance-sheet netting, Art. 214 counter-guarantees by sovereigns, Art. 215(2) mutual guarantee schemes, Art. 222(5) derivative cash collateral 0%, Art. 230(3) UK IRB 50% RW property option, Art. 197(4) unrated bond eligibility route
 - **P7.5** [ ] **NEW** — Art. 150(1A) materiality/immateriality thresholds for IRB firms using SA for immaterial classes. Currently only in COREP templates, not in the engine. **Effort: M**
 - **P7.6** [ ] **NEW** — Art. 147B roll-out class tracking in the classification engine (currently only in COREP reporting). **Effort: M**
 - **P7.7** [ ] **UPGRADED TO P1.105** — moved to Tier 1 (Table 4A can produce *higher* RWs than Table 4 fallback for CQS 2-3, causing risk understatement).
 
 ---
 
-**Open P1 items: 22 total (18S + 2M + 1L + 1M).** Highest priority: **P1.109 (guarantee maturity mismatch missing — M, capital understatement)**, **P1.111 (RRE junior multiplier capped — S, capital understatement)**, **P1.108 (CRR retail 1.06 scaling — S, 6% RWA overstatement)**, P1.92 (FCSM 0% exception floored — S), P1.93 (FCSM core market participant — M), P1.94 (currency mismatch 150% cap — S), P1.95 (guarantor SCRA — M), P1.96 (covered bond haircut — S), P1.97 (B31 slotting subgrade maturity — S, HIGH impact), P1.98 (subordinated LGD floor fallback — S), P1.99 (CRR short-term institution RW — S), P1.100 (ECA score mapping — S), P1.101 (non-daily revaluation scaling — S), P1.102 (CRR defaulted A-IRB 1.06 scaling — S), P1.103 (short-term corporate ECAI Table 6A — S), P1.104 (FCSM maturity eligibility — S), P1.105 (short-term institution ECAI Table 4A — S), P1.106 (FCSM institution bond UK deviation — S, conservative), P1.107 (FCSM B31 corporate CQS 3 — S, conservative), P1.110 (B31 guarantee CQS table — S, conservative), P1.111 (RRE junior multiplier cap — S, understatement), P1.112 (non-UK PSE/RGLA sovereign-derived — S, overstatement), P1.30(e) (partial protection tranching — L), P1.10 (transitional — M).
+**Open P1 items: 35 total (28S + 5M + 1L + 1 verification).** Highest priority: **P1.119 (CIU fallback 1,250% — S, severe capital understatement 3-8x)**, **P1.116 (EL shortfall 100% CET1 — S, OF-ADJ cascading)**, **P1.123 (FCCM HE for SFTs — M, capital understatement)**, **P1.122 (guarantee substitution no B31 branching — M, multiple incorrect RWs)**, **P1.113 (B31 covered bond CQS 2/6 — S)**, **P1.115 (subordinated F-IRB LGDS — S)**, **P1.109 (guarantee maturity mismatch — M)**, **P1.124 (guarantee eligibility rejection — S)**, **P1.92 (FCSM 0% exception — S)**, **P1.108 (CRR retail 1.06 — S, DISPUTED: UK CRR text includes 1.06 for retail)**, P1.111 (RRE junior multiplier capped — S), P1.93 (core market participant — M), P1.94 (currency mismatch cap — S), P1.95 (guarantor SCRA — M, subsumed by P1.122), P1.96 (covered bond haircut — S), P1.97 (B31 slotting subgrade — S), P1.98 (subordinated LGD floor — S), P1.99 (CRR short-term institution — S), P1.100 (ECA score — S), P1.101 (non-daily revaluation — S), P1.102 (CRR defaulted 1.06 — S), P1.103 (Table 6A — S), P1.104 (FCSM maturity — S), P1.105 (Table 4A — S), P1.106 (FCSM institution UK — S), P1.107 (FCSM B31 corp CQS 3 — S), P1.110 (guarantee CQS table — S, subsumed by P1.122), P1.112 (PSE/RGLA sovereign — S), P1.114 (classifier null — S), P1.117 (HVCRE subgrades — S), P1.118 (Art. 162(3) maturity — M), P1.121 (CRR unrated inst short-term — S), P1.125 (FSE column warning — S), P1.126 (null revenue — S), P1.127 (Pool B composition — S, verification), P1.30(e) (tranching — L), P1.10 (transitional — M).
 
-**Phase 5 audit (2026-04-08) confirmed:** 21 parallel Sonnet + 3 Opus subagents. Test run: 5,167 passed, 21 skipped, 11 deselected. Zero TODO/FIXME/HACK in source. Pre-op slotting weights verified correct. All Art. 147A restrictions enforced. Art. 123A retail criteria implemented.
+**Phase 7 audit (2026-04-10):** Full regulatory PDF extraction + spec correction + Opus code verification. 15 spec files updated. Test run: 5,178 passed, 21 skipped, 11 deselected. Zero TODO/FIXME/HACK in source.
+
+Phase 7 added **7 new P1 items**, **4 new P2 items**, upgraded P2.13→P1.123, corrected P1.113 description:
+- **P1.121** (CRR Art. 121(3) unrated institution short-term 20% missing — capital overstated by up to 100%).
+- **P1.122** (Guarantee substitution has no B31 framework branching at all — subsumes P1.95/P1.110; multiple incorrect B31 guarantee RWs).
+- **P1.123** (FCCM missing exposure volatility haircut HE for SFTs — upgraded from P2.13; understates E* for SFT portfolios).
+- **P1.124** (Art. 237(2) guarantee ineligibility conditions not enforced — short-dated guarantees accepted when they should be rejected).
+- **P1.125** (Classifier missing FSE column warning — FSEs silently get A-IRB when column absent).
+- **P1.126** (Classifier null revenue → A-IRB permitted for potentially large corporates).
+- **P1.127** (Art. 159 Pool B upstream composition — two-branch rule may be wrong if AVA not in per-exposure shortfall).
+- **P1.113 corrected**: Only CQS 2 (15%→20%) and CQS 6 (50%→100%) are wrong; CQS 4/5 are already correct at 50%.
+- **P2.18** (Art. 226(1) non-daily revaluation haircut scaling — NR factor missing).
+- **P2.19** (Higher-risk equity Art. 133(4) input flags missing — relies on pre-classification).
+- **P2.20** (`total_rwa_post_floor` naming misleading — excludes SA/equity).
+- **P2.21** (Pipeline error conversion drops `regulatory_reference`).
+
+Phase 7 also confirmed via Opus code verification + CRR PDF extraction:
+- **P1.108 DISPUTED**: UK-onshored CRR Art. 154(1) text includes 1.06 in retail formula (page 151). BCBS CRE31.23 does not. Code may be correct under UK CRR. Needs PRA legal clarification.
+- F-IRB FSE vs non-FSE LGD (45%/40%): **correctly implemented** in `crr_firb_lgd.py:46-63`
+- SME correlation GBP thresholds (4.4-44M): **correctly implemented** in `formulas.py:509-511`
+- Retail LGD floors (resi 5%, QRRE 50%, other 30%): **correctly implemented** in `config.py:134-137`
+- Retail PD floors (QRRE revolvers 0.1%, transactors 0.05%, mortgage 0.1%): **correctly implemented**
+- UK residential RW floor 10%: **implemented via PMA** in `adjustments.py:205-229`
+- Art. 159 two-branch rule: **correctly implemented** in `_el_summary.py:217-231`
+- Art. 159(d) 0.6% T2 cap: **correctly implemented** in `_el_summary.py:236`
+- Double default A-IRB restriction: **correctly implemented** in `guarantee.py:371-379`
+- Output floor PRA 4-year transitional: **correctly implemented** in `config.py:429-434`
+
+Phase 6 added **6 new P1 items**, **6 new P4 items**, and **1 new P5 item:**
+- **P1.113** (B31 rated covered bond RW uses BCBS CRE20.28 values — CQS 2 = 15% vs PRA 20%, CQS 6 = 50% vs PRA 100%. Capital understatement).
+- **P1.114** (Classifier null propagation in str.contains() for model_permissions — silent SA fallback when country_code/book_code is null).
+- **P1.115** (CRR Art. 230 Table 5 subordinated F-IRB LGDS missing — 35%/35%/40% used for all seniorities, should be 65%/65%/70% for subordinated. Capital understatement).
+- **P1.116** (EL shortfall deduction 50% CET1 + 50% T2 instead of 100% CET1 per Art. 36(1)(d). Affects OF-ADJ).
+- **P1.117** (B31 HVCRE short-maturity subgrades — distinct from P1.97; Strong A=70%/B=95%, Good C=95%/D=120%).
+- **P1.118** (Art. 162(3) short-maturity IRB override — qualified short-term exposures should use actual maturity not M=2.5).
+- **P1.119** (CIU fallback RW wrong under BOTH frameworks: CRR 150% and B31 250%/400% instead of 1,250% per Art. 132(2). P1.90 fix was wrong. Tests CRR-J9/J17 + B31-L11/L12 validate wrong values).
+- **P1.120** (B31 SA defaulted provision-ratio denominator uses unsecured_ead instead of gross_outstanding_amount per Art. 127(1). Capital overstatement for collateralised defaults. D3.19).
+- **P4.34-P4.39** (6 documentation items: SCRA article ref, currency mismatch article ref, slotting flat weight contradiction, retail PD floor article ref, provisions Pool A/B labelling, slotting EL rate table).
+- **P5.15** (Art. 123A(1)(b)(ii) 0.2% portfolio granularity sub-condition not implemented).
 
 Phase 5 added **7 new P1 items** and **1 new P4 item:**
 - **P1.108** (CRR 1.06 scaling applied to retail IRB — 6% overstatement, most impactful finding). Affects all CRR retail IRB exposures — non-defaulted path uniformly applies 1.06 but Art. 154(1) has no 1.06 for retail. Defaulted path already correctly exempts retail.
@@ -286,14 +362,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Fix:** Add `covered_bond`/`covered_bonds` to the normalisation expression mapping to a `"covered_bond"` key, and add covered bond rows to the supervisory haircut lookup table with CQS-dependent values.
 - **Tests needed:** Unit tests for covered bond haircut lookup at each CQS level; integration test verifying end-to-end EAD with covered bond collateral.
 
-### P1.97 B31 slotting missing subgrade maturity differentiation (Art. 153(5)(d))
+### P1.97 B31 slotting missing non-HVCRE subgrade maturity differentiation (Art. 153(5)(d))
 - **Status:** [ ] Not started (2026-04-08; PRA PDF verified 2026-04-08)
-- **Impact:** PRA PS1/26 Art. 153(5) Table A uses subgrade columns A/B (Strong) and C/D (Good) for maturity-based differentiation. Art. 153(5)(d) says firms "may" use column A/C (short-maturity <2.5yr) instead of B/D (≥2.5yr) — optional but should be supported. Non-HVCRE subgrades: Strong A=50% vs B=70%, Good C=70% vs D=90%. HVCRE subgrades: Strong A=70% vs B=95%, Good C=95% vs D=120%. Satisfactory/Weak/Default have no maturity split. The CRR implementation correctly has 4 table variants (`SLOTTING_RISK_WEIGHTS`, `_SHORT`, `_HVCRE`, `_HVCRE_SHORT`), but B31 only has 3 (`B31_SLOTTING_RISK_WEIGHTS`, `_PREOP`, `_HVCRE`) — no `_SHORT` variants. The `lookup_rw()` method in `namespace.py:408-416` ignores `is_short` for B31. Impact: Strong non-HVCRE uses 70% instead of 50% (<2.5yr), Good uses 90% instead of 70% — up to 40% RW overstatement on well-rated short-dated SL. For HVCRE: Strong uses 95% instead of 70%, Good uses 120% instead of 95%.
+- **Impact:** PRA PS1/26 Art. 153(5) Table A uses subgrade columns A/B (Strong) and C/D (Good) for maturity-based differentiation. Art. 153(5)(d) says firms "may" use column A/C (short-maturity <2.5yr) instead of B/D (>=2.5yr) — optional but should be supported. Non-HVCRE subgrades: Strong A=50% vs B=70%, Good C=70% vs D=90%. Satisfactory/Weak/Default have no maturity split. The CRR implementation correctly has 4 table variants (`SLOTTING_RISK_WEIGHTS`, `_SHORT`, `_HVCRE`, `_HVCRE_SHORT`), but B31 only has 3 (`B31_SLOTTING_RISK_WEIGHTS`, `_PREOP`, `_HVCRE`) — no `_SHORT` variants. The `lookup_rw()` method in `namespace.py:408-416` ignores `is_short` for B31. Impact: Strong non-HVCRE uses 70% instead of 50% (<2.5yr), Good uses 90% instead of 70% — up to 40% RW overstatement on well-rated short-dated SL. HVCRE subgrades tracked separately as P1.117.
 - **Note:** `B31_SLOTTING_RISK_WEIGHTS_PREOP` correctly uses same weights as operational — PRA PS1/26 does NOT adopt BCBS CRE33.7 separate pre-operational PF table (confirmed from PRA PDF page 103: all SL types including PF use the same Table A).
-- **File:Line:** `data/tables/b31_slotting.py` (missing SHORT tables), `engine/slotting/namespace.py:408-416` (B31 branch ignores `is_short`), `engine/slotting/namespace.py:217-221` (missing `is_short` arg for B31)
+- **File:Line:** `data/tables/b31_slotting.py` (missing SHORT table), `engine/slotting/namespace.py:408-416` (B31 branch ignores `is_short`), `engine/slotting/namespace.py:217-221` (missing `is_short` arg for B31)
 - **Spec ref:** PRA PS1/26 Art. 153(5)(c)-(d) Table A columns A-D
-- **Fix:** Add `B31_SLOTTING_RISK_WEIGHTS_SHORT` (Strong=50%, Good=70%, Satisfactory=115%, Weak=250%) and `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` (Strong=70%, Good=95%, Satisfactory=140%, Weak=250%) to `b31_slotting.py`. Update `lookup_rw()` B31 branch to check `is_short`. Update caller to pass `is_short=col("is_short_maturity")` for B31.
-- **Tests needed:** Unit tests for B31 short-maturity slotting RW lookup; acceptance tests for B31-E slotting scenarios with <2.5yr residual maturity.
+- **Fix:** Add `B31_SLOTTING_RISK_WEIGHTS_SHORT` (Strong=50%, Good=70%, Satisfactory=115%, Weak=250%) to `b31_slotting.py`. Update `lookup_rw()` B31 non-HVCRE branch to check `is_short`. Update caller to pass `is_short=col("is_short_maturity")` for B31. HVCRE SHORT table tracked in P1.117.
+- **Tests needed:** Unit tests for B31 non-HVCRE short-maturity slotting RW lookup; acceptance tests for B31-E slotting scenarios with <2.5yr residual maturity.
 
 ### P1.98 Subordinated corporate A-IRB LGD floor fallback uses 50% instead of 25%
 - **Status:** [ ] Not started (2026-04-08)
@@ -370,6 +446,54 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Spec ref:** PRA PS1/26 Art. 122(2) Table 6 (CQS 3 = 75%)
 - **Fix:** In the `is_basel_3_1` branch, add CQS 3 → 75% for corporate bonds. Also verify CQS 4 (CRR 100% vs B31 100% — no change needed).
 - **Tests needed:** Unit tests for FCSM collateral RW with B31 corporate CQS 3 bonds.
+
+### P1.113 B31 rated covered bond risk weights use BCBS CRE20.28 values, not PRA Table 7
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** **Capital understatement for CQS 2 and CQS 6 covered bonds under B31.** `b31_risk_weights.py:276-283` defines covered bond risk weights using BCBS CRE20.28 values: CQS 1=10%, CQS 2=15%, CQS 3=20%, CQS 4=25%, CQS 5=35%, CQS 6=50%. PRA PS1/26 Art. 129(4) Table 7 specifies: CQS 1=10%, CQS 2=20%, CQS 3=20%, CQS 4=50%, CQS 5=50%, CQS 6=100%. Discrepancies at CQS 2 (15% vs 20%, 33% understatement) and CQS 6 (50% vs 100%, 50% understatement). CQS 4 and 5 also differ (25%/35% vs 50%/50%).
+- **File:Line:** `data/tables/b31_risk_weights.py:276-283`
+- **Spec ref:** PRA PS1/26 Art. 129(4) Table 7
+- **Fix:** Update the covered bond risk weight table in `b31_risk_weights.py` to match PRA Table 7 values: CQS 2→20%, CQS 4→50%, CQS 5→50%, CQS 6→100%.
+- **Tests needed:** Unit tests for B31 covered bond risk weights at each CQS level; acceptance tests verifying end-to-end RWA for covered bonds.
+
+### P1.114 Classifier null propagation in str.contains() for model_permissions resolution
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** When `cp_country_code` or `book_code` is null on an exposure row and the model_permissions field is non-null, `str.contains(null)` propagates null into `permission_valid` in the classifier model_permissions resolution logic at `classifier.py:805,809`. This causes the entire permission check to evaluate to null, which then causes silent SA fallback for exposures that should qualify for IRB based on other permission criteria (e.g., exposure class match alone). Primarily affects exposures with incomplete counterparty data that have valid model permissions.
+- **File:Line:** `engine/classifier.py:805,809`
+- **Spec ref:** Classifier model_permissions resolution logic
+- **Fix:** Add `.fill_null("")` on the `cp_country_code` and `book_code` columns before they enter `str.contains()` in the permission validation expression. Empty string will not match any country/book restriction, correctly failing the geographic constraint rather than propagating null.
+- **Tests needed:** Unit tests for model_permissions resolution with null country_code and null book_code.
+
+### P1.115 CRR Art. 230 Table 5 subordinated F-IRB LGDS not implemented
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** **Capital understatement for subordinated F-IRB secured exposures.** CRR Art. 230 Table 5 defines separate supervisory LGD values for senior and subordinated exposures: senior receivables/RE/other physical = 35%/35%/40%, subordinated = 65%/65%/70%. `crm/constants.py:92-100` (`CRR_SUPERVISORY_LGD`) has no seniority distinction — all exposures get senior LGDS regardless of seniority. Subordinated exposures secured by receivables/RE/other physical are materially understated (35% vs 65%, 35% vs 65%, 40% vs 70%).
+- **File:Line:** `engine/crm/constants.py:92-100` (CRR_SUPERVISORY_LGD)
+- **Spec ref:** CRR Art. 230 Table 5
+- **Fix:** Add seniority-aware LGDS lookup. Either extend `CRR_SUPERVISORY_LGD` to a nested structure (senior/subordinated keys) or add a separate `CRR_SUPERVISORY_LGD_SUBORDINATED` constant. Update the LGDS lookup in `collateral.py` to check seniority before selecting the appropriate value.
+- **Tests needed:** Unit tests for subordinated F-IRB exposures with receivables/RE/other physical collateral.
+
+### P1.116 EL shortfall deduction uses 50% CET1 + 50% T2 instead of 100% CET1
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** `_el_summary.py:239-241` applies `effective_shortfall * 0.5` to both `cet1_deduction` and `t2_deduction`. CRR Art. 36(1)(d) requires the full EL shortfall (EL > provisions) to be deducted from CET1. The 50/50 split was an older Basel II treatment; current CRR requires 100% CET1 deduction. This directly affects the OF-ADJ calculation which uses `el_summary.cet1_deduction` — understating the CET1 deduction by 50% means OF-ADJ is too favourable.
+- **File:Line:** `engine/aggregator/_el_summary.py:239-241`
+- **Spec ref:** CRR Art. 36(1)(d), Art. 159
+- **Fix:** Change `cet1_deduction = effective_shortfall * 1.0` (full amount to CET1) and `t2_deduction = Decimal("0")` (no T2 deduction). Review downstream consumers of `t2_deduction` field for any impact.
+- **Tests needed:** Unit tests for EL shortfall deduction split; integration test verifying OF-ADJ computation with corrected CET1 deduction.
+
+### P1.117 B31 HVCRE short-maturity subgrades not implemented
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** PRA PS1/26 Art. 153(5)(d) Table A defines HVCRE maturity-based subgrades distinct from non-HVCRE (tracked in P1.97). HVCRE subgrades: Strong A=70% (<2.5yr) vs B=95% (>=2.5yr), Good C=95% (<2.5yr) vs D=120% (>=2.5yr). Currently `namespace.py:408-416` ignores `is_short` for ALL B31 slotting including HVCRE. No `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` table exists in `b31_slotting.py`. Using 95% instead of 70% for short-maturity Strong HVCRE overstates by 36%; using 120% instead of 95% for short-maturity Good HVCRE overstates by 26%.
+- **File:Line:** `data/tables/b31_slotting.py` (missing HVCRE_SHORT table), `engine/slotting/namespace.py:408-416` (ignores is_short for B31)
+- **Spec ref:** PRA PS1/26 Art. 153(5)(d) Table A columns A-D
+- **Fix:** Add `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` table (Strong=70%, Good=95%, Satisfactory=140%, Weak=250%) to `b31_slotting.py`. Update `lookup_rw()` B31 HVCRE branch to check `is_short`. Coordinate with P1.97 fix (non-HVCRE SHORT table).
+- **Tests needed:** Unit tests for B31 HVCRE short-maturity slotting RW lookup; acceptance tests for B31-E HVCRE scenarios with <2.5yr maturity.
+
+### P1.118 Art. 162(3) short-maturity IRB override not implemented
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** CRR Art. 162(3) and PRA PS1/26 Art. 162(3) specify that qualified short-term exposures should use M = actual maturity value (often << 2.5 years) instead of the default M = 2.5 in the IRB capital formula. Qualified exposures include: (a) OTC derivative contracts with maturity <= 1 year, (b) securities financing transactions (repos, securities lending) with maturity <= 1 year, (c) short-term self-liquidating trade finance, (d) certain FX settlement exposures. The `has_one_day_maturity_floor` flag exists in the schema but only affects CRM maturity mismatch treatment, not the maturity adjustment (MA) component of the IRB K formula. Without this, short-term repos and trade finance exposures get M=2.5 instead of their actual maturity, significantly overstating the maturity adjustment.
+- **File:Line:** `engine/irb/formulas.py` (maturity adjustment calculation), `data/schemas.py` (has_one_day_maturity_floor)
+- **Spec ref:** CRR Art. 162(3), PRA PS1/26 Art. 162(3)
+- **Fix:** Add `is_qualified_short_term` Boolean field (or derive from exposure characteristics). In the IRB maturity adjustment calculation, when `is_qualified_short_term=True`, use actual residual maturity (floored at 1 day per Art. 162(3)) instead of default M=2.5. Requires `residual_maturity_years` field on exposures.
+- **Tests needed:** Unit tests for IRB MA with qualified short-term exposures (repos, trade finance); acceptance tests verifying M != 2.5 for qualified exposures.
 
 ---
 
@@ -771,6 +895,36 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **File:Line:** `engine/comparison.py:18`, `contracts/bundles.py:489`, `ui/marimo/comparison_app.py:14-15`
 - **Fix:** Update all three docstrings to PRA 4-year schedule: 60% (2027) to 72.5% (2030+).
 
+### P4.34 SCRA Grade A Enhanced article reference wrong in B31 spec
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** `docs/specifications/crr/sa-risk-weights.md` references Art. 120(2A) for the SCRA Grade A Enhanced rate but the correct article is Art. 121(5). Art. 120 covers ECRA (rated institutions), Art. 121 covers SCRA (unrated institutions). Misleading regulatory reference.
+- **Fix:** Update article reference from Art. 120(2A) to Art. 121(5) in the SA risk weights spec.
+
+### P4.35 Currency mismatch article reference wrong in both specs
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** Multiple locations in spec files reference Art. 123A for currency mismatch but the correct article is Art. 123B. Art. 123A is "Regulatory Retail Exposures" (retail qualifying criteria). Art. 123B is "Currency mismatch". Incorrect cross-references.
+- **Fix:** Find and replace all currency mismatch references from Art. 123A to Art. 123B in spec files.
+
+### P4.36 B31 slotting spec says "flat weights regardless of maturity" but PRA preserves maturity differentiation
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** The B31 slotting specification claims flat risk weights regardless of maturity, but PRA PS1/26 Art. 153(5)(c)-(d) preserves maturity differentiation via Table A columns A-D. The "flat" behaviour is BCBS CRE33 only, not PRA. Internal contradiction in the spec that has led to P1.97/P1.117 code issues.
+- **Fix:** Correct the spec to document PRA maturity differentiation (Table A columns A/B for Strong, C/D for Good) and remove "flat regardless of maturity" language.
+
+### P4.37 CRR PD floor article reference wrong for retail
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** `docs/specifications/crr/firb-calculation.md` cites Art. 160(1) for all PD floors including retail. The retail PD floor is Art. 163(1), not Art. 160(1). Art. 160 covers corporate/institution/sovereign PD estimation; Art. 163 covers retail PD estimation.
+- **Fix:** Add Art. 163(1) reference for retail PD floor alongside the existing Art. 160(1) reference for non-retail.
+
+### P4.38 B31 provisions spec Pool A/B labelling inverted
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** `docs/specifications/crr/provisions.md` labels Pool A as non-defaulted EL and Pool B as defaulted provisions. The regulation is the opposite: Pool A = provisions for defaulted exposures (Art. 159(1)), Pool B = EL for non-defaulted exposures (Art. 158). Inverted labelling creates confusion for readers cross-referencing with regulatory text.
+- **Fix:** Swap Pool A/B labels to match regulation: Pool A = defaulted provisions, Pool B = non-defaulted EL.
+
+### P4.39 B31 slotting spec EL rate table incomplete
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** The slotting EL rate table in the spec shows only >=2.5yr EL values (Strong=0.4%, Good=0.8%, Satisfactory=2.8%, Weak=8.0%) but omits short-maturity values (Strong=0%, Good=0.4%, Satisfactory=2.8%, Weak=8.0%). The short-maturity EL rates differ for Strong and Good categories.
+- **Fix:** Add short-maturity (<2.5yr) column to the EL rate table in the slotting spec.
+
 ---
 
 ## Priority 5 -- Test Coverage Gaps
@@ -914,6 +1068,14 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Impact:** All 663+ COREP tests and 197+ Pillar III tests are unit tests with synthetic LazyFrames. No test validates the full pipeline path: loader → classifier → CRM → calculator → aggregator → COREP/Pillar III generator. This means a regression in any pipeline stage that changes column names, exposure class values, or approach labels could silently break reporting output without any test failure.
 - **Fix:** Add 2-3 integration tests per generator that run the full pipeline with fixture data and verify the COREP/Pillar III output has expected row counts, non-null key columns, and correct aggregation.
 - **Tests needed:** ~10 integration tests in `tests/integration/test_reporting_integration.py`.
+
+### P5.15 Art. 123A(1)(b)(ii) 0.2% portfolio granularity sub-condition not implemented
+- **Status:** [ ] Not started (2026-04-10 — identified in regulatory PDF cross-check)
+- **Impact:** PRA PS1/26 Art. 123A(1)(b)(ii) requires that no single exposure to a counterparty exceeds 0.2% of the total regulatory retail portfolio for the exposure to qualify as retail. The current retail qualifying check (implemented in P1.91) only enforces the GBP 880k threshold (Art. 123A(1)(b)(i)), not the 0.2% granularity condition. The spec claims "Condition 2 (granularity threshold): Implemented" without noting the 0.2% sub-condition is missing. Low practical impact — most retail portfolios naturally satisfy this condition due to diversification.
+- **File:Line:** `engine/classifier.py` (_build_qualifies_as_retail_expr)
+- **Spec ref:** PRA PS1/26 Art. 123A(1)(b)(ii)
+- **Fix:** The 0.2% check requires knowledge of total retail portfolio size at classification time. Two approaches: (a) two-pass classification (first pass sums potential retail EAD, second pass checks 0.2%), or (b) accept the portfolio size as config input (simpler). Add the check to `_build_qualifies_as_retail_expr()` with the chosen approach. Document the limitation for single-exposure calculations.
+- **Tests needed:** Unit tests for the 0.2% granularity check with small/large portfolios; edge case where a single exposure exceeds 0.2%.
 
 ---
 

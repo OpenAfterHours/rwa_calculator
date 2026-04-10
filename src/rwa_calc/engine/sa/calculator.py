@@ -396,6 +396,16 @@ class SACalculator:
         # Step 5: Apply supporting factors
         exposures = self._apply_supporting_factors(exposures, config)
 
+        # Step 6: Standardize output for aggregator
+        schema = exposures.collect_schema()
+        approach_expr = (
+            pl.col("approach") if "approach" in schema.names() else pl.lit(ApproachType.SA.value)
+        )
+        exposures = exposures.with_columns(
+            approach_expr.alias("approach_applied"),
+            pl.col("rwa_post_factor").alias("rwa_final"),
+        )
+
         return exposures
 
     def _apply_risk_weights(

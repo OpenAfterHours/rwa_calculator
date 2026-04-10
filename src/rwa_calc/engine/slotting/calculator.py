@@ -105,8 +105,17 @@ class SlottingCalculator:
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
         exposures = self._apply_supporting_factors(exposures, config, errors=errors)
 
-        return exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
+        exposures = exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
             errors=errors
+        )
+
+        # Standardize output for aggregator
+        schema = exposures.collect_schema()
+        rwa_col = "rwa_final" if "rwa_final" in schema.names() else "rwa"
+        approach_expr = pl.col("approach") if "approach" in schema.names() else pl.lit("slotting")
+        return exposures.with_columns(
+            approach_expr.alias("approach_applied"),
+            pl.col(rwa_col).alias("rwa_final"),
         )
 
     def _apply_supporting_factors(

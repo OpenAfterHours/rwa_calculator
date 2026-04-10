@@ -17,19 +17,19 @@ FAILED=0
 
 # Architectural linter
 ARCH_OUT=$(uv run python scripts/arch_check.py 2>&1)
-if [ $? -ne 0 ]; then
+if [[ $? -ne 0 ]]; then
     FAILED=1
     ERRORS="${ARCH_OUT}"$'\n'
 fi
 
 # Ruff lint check
 RUFF_OUT=$(uv run ruff check src/ 2>&1)
-if [ $? -ne 0 ]; then
+if [[ $? -ne 0 ]]; then
     FAILED=1
     ERRORS="${ERRORS}${RUFF_OUT}"$'\n'
 fi
 
-if [ $FAILED -ne 0 ]; then
+if [[ $FAILED -ne 0 ]]; then
     python -c "
 import json, sys
 errors = sys.stdin.read()

@@ -5,6 +5,8 @@
 1. Your task is to implement functionality per the specifications using parallel subagents. Follow @IMPLEMENTATION_PLAN.md and **choose the single most important item to address — complete only this one item, then commit and stop.** Before making changes, search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 10 parallel Sonnet subagents for searches/reads and only 1 Opus subagent for build/tests. Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
 2. After implementing functionality or resolving problems, run the tests for that unit of code that was improved. If functionality is missing then it's your job to add it as per the application specifications. Ultrathink.
 2a. VALIDATION GATE: Run `uv run python scripts/arch_check.py && uv run ruff check src/ && uv run ruff format --check src/ && uv run pytest tests/contracts/ --benchmark-skip -q`. These check architectural invariants (future annotations, no ABC, no raw .collect().lazy(), no engine= in collects), lint compliance, and protocol/bundle contracts. Fix all violations before committing.
+2b. Run /simplify to review all changed code for reuse, quality, and efficiency. Fix any issues found.
+2c. Re-run the validation gate from 2a to confirm /simplify changes didn't break anything. Fix any violations before committing.
 3. When you discover issues, immediately update @IMPLEMENTATION_PLAN.md with your findings using a subagent. When resolved, update and remove the item.
 4. When the tests pass, update @IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with a message describing the changes. After the commit, `git push`.
 

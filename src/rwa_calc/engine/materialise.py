@@ -65,7 +65,7 @@ def materialise_barrier(
         return lf.collect().lazy()
 
     # Streaming mode: sink to parquet for out-of-core support
-    return _sink_and_scan(lf, config, label)
+    return _spill_to_disk(lf, config, label)
 
 
 def materialise_branches(
@@ -96,7 +96,7 @@ def materialise_branches(
     # Streaming mode: sink each branch individually
     results: list[pl.DataFrame] = []
     for lf, label in zip(branches, labels, strict=True):
-        scanned = _sink_and_scan(lf, config, label)
+        scanned = _spill_to_disk(lf, config, label)
         results.append(scanned.collect())
     return results
 
@@ -113,7 +113,7 @@ def cleanup_spill_files() -> None:
     _spill_files.clear()
 
 
-def _sink_and_scan(
+def _spill_to_disk(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     label: str,

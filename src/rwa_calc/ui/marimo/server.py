@@ -328,7 +328,7 @@ async def publish_to_team(name: str, folder: str = "") -> dict[str, str]:
 @gateway.post("/api/team/commit")
 async def commit_team(message: str = "") -> dict[str, object]:
     """Stage all changes in team/, commit, and push."""
-    from rwa_calc.ui.marimo.git_ops import commit_and_push, find_repo_root
+    from rwa_calc.ui.marimo.git_ops import find_repo_root, publish_changes
 
     try:
         repo_root = find_repo_root(team_dir)
@@ -344,7 +344,7 @@ async def commit_team(message: str = "") -> dict[str, object]:
         names = sorted({f.stem for f in files})
         message = f"workbench: update {', '.join(names)}"
 
-    result = commit_and_push(team_dir, repo_root, files, message)
+    result = publish_changes(team_dir, repo_root, files, message)
     return {
         "success": result.success,
         "message": result.message,

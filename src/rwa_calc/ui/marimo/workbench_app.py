@@ -991,8 +991,8 @@ def _(Path, commit_btn, mo):
 
     _team_dir = Path(__file__).parent / "workspaces" / "team"
     try:
-        from rwa_calc.ui.marimo.git_ops import commit_and_push as _commit_and_push
         from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
+        from rwa_calc.ui.marimo.git_ops import publish_changes as _publish_changes
 
         _repo_root = _find_repo_root(_team_dir)
         _files = [f for f in _team_dir.rglob("*.py") if f.stem != "__init__"]
@@ -1001,7 +1001,7 @@ def _(Path, commit_btn, mo):
         else:
             _names = sorted({f.stem for f in _files})
             _message = f"workbench: update {', '.join(_names)}"
-            _result = _commit_and_push(_team_dir, _repo_root, _files, _message)
+            _result = _publish_changes(_team_dir, _repo_root, _files, _message)
             if _result.success:
                 mo.callout(mo.md(f"**{_result.message}**"), kind="success")
             else:

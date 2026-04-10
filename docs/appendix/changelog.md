@@ -5,6 +5,16 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.183] — 2026-04-10
+
+### Changed
+- **Naming**: Renamed functions with "and" in their names to better reflect single responsibility:
+  - `_classify_sme_and_retail` -> `_classify_exposure_subtypes` (classifier)
+  - `_determine_approach_and_finalize` -> `_assign_approach` (classifier)
+  - `_sink_and_scan` -> `_spill_to_disk` (materialise)
+  - `_combine_irb_and_slotting` -> `_merge_el_sources` (EL summary aggregator)
+  - `commit_and_push` -> `publish_changes` (git ops)
+
 ## [0.1.182] — 2026-04-10
 
 ### Changed

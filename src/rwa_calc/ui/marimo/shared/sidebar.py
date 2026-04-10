@@ -4,9 +4,8 @@ Shared sidebar for all RWA Calculator marimo apps.
 Provides a single definition of the navigation sidebar so that changes
 (new links, styling, workbook listing logic) only need to be made once.
 
-Theme is applied via css_file="shared/theme.css" in each app's marimo.App()
-config, which injects the CSS into <head> where it properly overrides
-marimo's default variables.
+Theme is applied project-wide via [tool.marimo.display.custom_css] in
+pyproject.toml, which marimo injects into <head> at render time.
 """
 
 from __future__ import annotations

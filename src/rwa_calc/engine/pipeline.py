@@ -522,18 +522,17 @@ class PipelineOrchestrator:
 
             # Process each branch (all still lazy)
             if config.output_floor.enabled:
-                # SA already calculated by calculate_unified above
-                sa_result = sa_branch
+                # SA already calculated by calculate_unified above —
+                # add aggregator columns that calculate_branch normally provides
+                sa_result = sa_branch.with_columns(
+                    pl.col("approach").alias("approach_applied"),
+                    pl.col("rwa_post_factor").alias("rwa_final"),
+                )
             else:
                 sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
 
             irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
             slotting_result = self._slotting_calculator.calculate_branch(slotting_branch, config)
-
-            # Standardize output columns on each branch
-            sa_result = self._standardize_branch_output(sa_result)
-            irb_result = self._standardize_branch_output(irb_result)
-            slotting_result = self._standardize_branch_output(slotting_result)
 
             # Collect all branches. In cpu mode, uses collect_all with CSE so
             # shared upstream computes once. In streaming mode, sinks each
@@ -558,30 +557,6 @@ class PipelineOrchestrator:
                 )
             )
             return self._create_error_result()
-
-    @staticmethod
-    def _standardize_branch_output(exposures: pl.LazyFrame) -> pl.LazyFrame:
-        """Add approach_applied and rwa_final columns for aggregation."""
-        schema = exposures.collect_schema()
-        cols = []
-
-        if "approach" in schema.names():
-            cols.append(pl.col("approach").alias("approach_applied"))
-
-        if "rwa_post_factor" in schema.names():
-            cols.append(
-                pl.coalesce(
-                    pl.col("rwa_post_factor"),
-                    pl.col("rwa") if "rwa" in schema.names() else pl.lit(0.0),
-                ).alias("rwa_final")
-            )
-        elif "rwa" in schema.names():
-            cols.append(pl.col("rwa").alias("rwa_final"))
-
-        if cols:
-            exposures = exposures.with_columns(cols)
-
-        return exposures
 
     def _aggregate_results(
         self,

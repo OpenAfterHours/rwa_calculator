@@ -250,7 +250,8 @@ class SACalculatorProtocol(Protocol):
             config: Calculation configuration
 
         Returns:
-            LazyFrame with SA RWA columns populated
+            LazyFrame with SA RWA columns populated.
+            Must include ``approach_applied`` and ``rwa_final``.
         """
         ...
 
@@ -302,7 +303,8 @@ class IRBCalculatorProtocol(Protocol):
             config: Calculation configuration
 
         Returns:
-            LazyFrame with IRB RWA columns populated
+            LazyFrame with IRB RWA columns populated.
+            Must include ``approach_applied`` and ``rwa_final``.
         """
         ...
 
@@ -370,7 +372,8 @@ class SlottingCalculatorProtocol(Protocol):
             config: Calculation configuration
 
         Returns:
-            LazyFrame with slotting RWA columns populated
+            LazyFrame with slotting RWA columns populated.
+            Must include ``approach_applied`` and ``rwa_final``.
         """
         ...
 

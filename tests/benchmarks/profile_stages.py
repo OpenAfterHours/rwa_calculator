@@ -361,13 +361,6 @@ def profile_pipeline_stages(
         results,
     )
 
-    # Standardize output columns
-    from rwa_calc.engine.pipeline import PipelineOrchestrator
-
-    sa_result = PipelineOrchestrator._standardize_branch_output(sa_result)
-    irb_result = PipelineOrchestrator._standardize_branch_output(irb_result)
-    slotting_result = PipelineOrchestrator._standardize_branch_output(slotting_result)
-
     # --- Stage 7: collect_all ---
     sa_df, irb_df, slotting_df = _time(
         lambda: pl.collect_all([sa_result, irb_result, slotting_result]),

@@ -891,7 +891,7 @@ class TestLGDHandlingByApproach:
 
         # Under full_irb, AIRB is available for corporate — LGD is NOT cleared
         assert df["approach"][0] == ApproachType.AIRB.value
-        assert df["lgd"][0] == 0.20
+        assert df["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_airb_sme_corporate_keeps_lgd(
         self,
@@ -932,7 +932,7 @@ class TestLGDHandlingByApproach:
         # Under full_irb, AIRB is available — stays CORPORATE_SME with LGD preserved
         assert df["approach"][0] == ApproachType.AIRB.value
         assert df["reclassified_to_retail"][0] is False
-        assert df["lgd"][0] == 0.20
+        assert df["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_individual_exceeding_threshold_gets_airb_lgd_preserved(
         self,
@@ -983,4 +983,4 @@ class TestLGDHandlingByApproach:
         ]
         # Under full_irb, AIRB available for corporate — LGD preserved
         assert df["approach"][0] == ApproachType.AIRB.value
-        assert df["lgd"][0] == 0.25
+        assert df["lgd"][0] == pytest.approx(0.25, abs=1e-10)

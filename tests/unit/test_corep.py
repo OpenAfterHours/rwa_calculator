@@ -17,6 +17,7 @@ aggregation path with hand-calculated expected values.
 from __future__ import annotations
 
 import importlib.util
+import math
 import sys
 from pathlib import Path
 
@@ -434,8 +435,8 @@ class TestTemplateDefinitions:
 
     def test_pd_bands_cover_full_range(self) -> None:
         """PD bands must cover 0% to 100%+ without gaps."""
-        assert PD_BANDS[0][0] == 0.0
-        assert PD_BANDS[-1][1] == float("inf")
+        assert PD_BANDS[0][0] == pytest.approx(0.0, abs=1e-10)
+        assert math.isinf(PD_BANDS[-1][1])
 
         for i in range(len(PD_BANDS) - 1):
             assert PD_BANDS[i][1] == PD_BANDS[i + 1][0], f"Gap between bands {i} and {i + 1}"
@@ -4414,9 +4415,9 @@ class TestC0803TemplateDefinitions:
         from rwa_calc.reporting.corep.templates import C08_03_PD_RANGES
 
         # First range starts at 0
-        assert C08_03_PD_RANGES[0][0] == 0.0
+        assert C08_03_PD_RANGES[0][0] == pytest.approx(0.0, abs=1e-10)
         # Last range upper bound is infinity (captures 100% default)
-        assert C08_03_PD_RANGES[-1][1] == float("inf")
+        assert math.isinf(C08_03_PD_RANGES[-1][1])
         # Ranges are contiguous (upper of i == lower of i+1)
         for i in range(len(C08_03_PD_RANGES) - 1):
             assert C08_03_PD_RANGES[i][1] == C08_03_PD_RANGES[i + 1][0]

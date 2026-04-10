@@ -401,8 +401,8 @@ def print_summary(output_path: Path) -> None:
         print(f"  {row['guarantee_type']}: GBP {row['total_covered']:,.0f}")
 
     print("\nCoverage distribution:")
-    full_coverage = df.filter(pl.col("percentage_covered") == 1.0).height
-    partial_coverage = df.filter(pl.col("percentage_covered") < 1.0).height
+    full_coverage = df.filter((pl.col("percentage_covered") - 1.0).abs() < 1e-10).height
+    partial_coverage = df.filter(pl.col("percentage_covered") < 1.0 - 1e-10).height
     print(f"  Full coverage (100%): {full_coverage}")
     print(f"  Partial coverage: {partial_coverage}")
 

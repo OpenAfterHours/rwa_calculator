@@ -417,16 +417,16 @@ class TestOfAdjConfig:
     def test_default_values_zero(self) -> None:
         """OF-ADJ config fields default to zero."""
         config = OutputFloorConfig.basel_3_1()
-        assert config.gcra_amount == 0.0
-        assert config.sa_t2_credit == 0.0
-        assert config.art_40_deductions == 0.0
+        assert config.gcra_amount == pytest.approx(0.0, abs=1e-10)
+        assert config.sa_t2_credit == pytest.approx(0.0, abs=1e-10)
+        assert config.art_40_deductions == pytest.approx(0.0, abs=1e-10)
 
     def test_crr_config_has_defaults(self) -> None:
         """CRR config has OF-ADJ fields at zero (floor disabled anyway)."""
         config = OutputFloorConfig.crr()
-        assert config.gcra_amount == 0.0
-        assert config.sa_t2_credit == 0.0
-        assert config.art_40_deductions == 0.0
+        assert config.gcra_amount == pytest.approx(0.0, abs=1e-10)
+        assert config.sa_t2_credit == pytest.approx(0.0, abs=1e-10)
+        assert config.art_40_deductions == pytest.approx(0.0, abs=1e-10)
 
     def test_calculation_config_propagates_of_adj_inputs(self) -> None:
         """CalculationConfig.basel_3_1() propagates OF-ADJ inputs."""

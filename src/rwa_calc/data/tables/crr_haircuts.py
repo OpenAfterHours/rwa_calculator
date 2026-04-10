@@ -160,7 +160,7 @@ def scale_haircut_for_liquidation_period(
     Returns:
         Scaled haircut for the target liquidation period
     """
-    if liquidation_period_days == 10 or base_haircut_10day == 0.0:
+    if liquidation_period_days == 10 or math.isclose(base_haircut_10day, 0.0, abs_tol=1e-10):
         return base_haircut_10day
     return base_haircut_10day * math.sqrt(liquidation_period_days / 10.0)
 

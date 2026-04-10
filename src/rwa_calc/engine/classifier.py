@@ -47,7 +47,10 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
-from rwa_calc.data.tables.b31_risk_weights import B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
+from rwa_calc.data.tables.b31_risk_weights import (
+    B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP,
+    B31_SME_TURNOVER_THRESHOLD_GBP,
+)
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -547,7 +550,7 @@ class ExposureClassifier:
         """
         if config.is_basel_3_1:
             # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-            sme_threshold_gbp = 44_000_000.0
+            sme_threshold_gbp = float(B31_SME_TURNOVER_THRESHOLD_GBP)
         else:
             # CRR: EUR 50m converted to GBP via FX rate
             sme_threshold_gbp = float(
@@ -672,7 +675,7 @@ class ExposureClassifier:
 
         if config.is_basel_3_1:
             # PRA PS1/26 Art. 153(4): native GBP 44m threshold
-            sme_turnover_threshold = 44_000_000.0
+            sme_turnover_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
         else:
             # CRR: EUR 50m converted to GBP via FX rate
             sme_turnover_threshold = float(
@@ -1171,7 +1174,7 @@ class ExposureClassifier:
 
         # Basel 3.1: Art. 123A two-path qualifying criteria
         # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-        sme_threshold = 44_000_000.0
+        sme_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
 
         # Art. 123A(1)(a): SME auto-qualification — revenue > 0 and < threshold
         is_sme_for_art_123a = (pl.col("cp_annual_revenue").fill_null(0.0) > 0) & (

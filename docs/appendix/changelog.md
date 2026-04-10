@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.183] — 2026-04-10
 
 ### Changed
-- **Classifier**: Moved `B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP` (PRA PS1/26 Art. 147A(1)(d)) from `engine/classifier.py` to `data/tables/b31_risk_weights.py` for consistency with other B31 regulatory thresholds. Converted from `float` to `Decimal`.
+- **Classifier**: Moved `B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP` (PRA PS1/26 Art. 147A(1)(d)) and `B31_SME_TURNOVER_THRESHOLD_GBP` (PRA PS1/26 Art. 153(4)) from `engine/classifier.py` to `data/tables/b31_risk_weights.py` for consistency with other B31 regulatory thresholds. Converted from `float` to `Decimal`.
 
 ## [0.1.182] — 2026-04-10
 

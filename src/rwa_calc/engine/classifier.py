@@ -51,6 +51,7 @@ from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
+    PermissionMode,
     SpecialisedLendingType,
 )
 
@@ -910,8 +911,13 @@ class ExposureClassifier:
             # Model-level SL permissions: per-row flags from _resolve_model_permissions
             sl_airb = pl.col("model_airb_permitted")
             sl_slotting = pl.col("model_slotting_permitted")
+        elif config.permission_mode == PermissionMode.IRB:
+            # IRB mode requires model_permissions to gate per-model approval.
+            # Without it, no exposure can be granted IRB — fall back to SA.
+            sl_airb = pl.lit(False)
+            sl_slotting = pl.lit(False)
         else:
-            # Org-wide SL permissions from config (STD mode or IRB fallback)
+            # SA-only mode: org-wide SL permissions from config
             sl_airb = pl.lit(
                 config.irb_permissions.is_permitted(
                     ExposureClass.SPECIALISED_LENDING,
@@ -951,6 +957,12 @@ class ExposureClassifier:
                 & has_internal_rating
                 & ~(pl.col("model_airb_permitted") & has_modelled_lgd)
             )
+        elif config.permission_mode == PermissionMode.IRB:
+            # IRB mode requires model_permissions to gate per-model approval.
+            # Without it, no exposure can be granted IRB — fall back to SA.
+            airb_permitted_expr = pl.lit(False)
+            firb_permitted_expr = pl.lit(False)
+            firb_clear_expr = pl.lit(False)
         else:
             # --- Org-wide permissions: pre-compute booleans Python-side ---
             airb_permitted_expr, firb_permitted_expr, firb_clear_expr = (

@@ -229,18 +229,15 @@ class PipelineOrchestrator:
             # Validate input data values
             self._validate_input_data(data)
 
-            # IRB mode without model_permissions → org-wide IRBPermissions drive
-            # routing. The classifier's _build_orgwide_permission_exprs path
-            # handles this correctly using internal_pd eligibility. We surface a
-            # pipeline-level error so the user can see that per-model gating is
-            # off. Crucially, we must NOT call dataclasses.replace on
-            # permission_mode — that rebuilds the config and re-runs
-            # CalculationConfig.__post_init__, which derives irb_permissions to
-            # sa_only() and silently wipes the user's declared IRB routing.
+            # IRB mode without model_permissions → all exposures fall back to SA.
+            # The classifier forces all permission expressions to False when
+            # has_model_permissions=False in IRB mode. We surface a pipeline-level
+            # error so the user can see that per-model gating is off.
             if config.permission_mode == PermissionMode.IRB and data.model_permissions is None:
                 logger.warning(
                     "IRB permission mode selected but no model_permissions data provided. "
-                    "Using org-wide IRB permissions from config; per-model gating disabled."
+                    "All exposures will route to SA; supply a model_permissions table "
+                    "to enable IRB."
                 )
                 self._errors.append(
                     PipelineError(
@@ -248,10 +245,9 @@ class PipelineOrchestrator:
                         error_type="missing_model_permissions",
                         message=(
                             "IRB permission mode selected but no model_permissions "
-                            "data was provided. Org-wide IRBPermissions from config "
-                            "will be used for approach routing; per-model gating is "
-                            "DISABLED. Supply a model_permissions table to enable "
-                            "per-model control."
+                            "data was provided. All exposures will route to SA. "
+                            "Supply a model_permissions table to enable per-model "
+                            "IRB approach routing."
                         ),
                     )
                 )

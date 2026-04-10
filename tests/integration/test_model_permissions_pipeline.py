@@ -1008,20 +1008,16 @@ class TestModelPermissionsDiagnostics:
 
 
 class TestPipelineIRBWithoutModelPermissions:
-    """Bug #1 coverage: IRB mode without a model_permissions file no longer
-    wipes org-wide IRB permissions.
+    """IRB mode without a model_permissions file falls back to SA.
 
-    Before the fix, ``PipelineOrchestrator.run_with_data`` called
-    ``dataclasses.replace(config, permission_mode=STANDARDISED)`` which
-    re-ran ``__post_init__`` and derived ``irb_permissions = sa_only()``,
-    silently forcing every exposure to SA. After the fix, the org-wide
-    IRBPermissions defined by ``CalculationConfig.crr(... IRB)`` still
-    drive routing via the classifier's ``_build_orgwide_permission_exprs``
-    path, and a pipeline-level error is emitted so the user can see that
-    per-model gating is disabled.
+    When ``permission_mode=IRB`` but no ``model_permissions`` table is
+    provided, no exposure can be granted IRB — the classifier forces all
+    permission expressions to False. A pipeline-level error is emitted so
+    the user can see that per-model gating is off and all exposures route
+    to SA.
     """
 
-    def test_irb_mode_without_permissions_file_retains_irb_routing(
+    def test_irb_mode_without_permissions_file_falls_back_to_sa(
         self,
         hierarchy_resolver,
         classifier,
@@ -1032,7 +1028,7 @@ class TestPipelineIRBWithoutModelPermissions:
         equity_calculator,
         crr_firb_config,
     ):
-        """Full pipeline: IRB mode + no model_permissions → exposure still routes to IRB."""
+        """Full pipeline: IRB mode + no model_permissions → exposure routes to SA."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
                 counterparties=[
@@ -1043,7 +1039,7 @@ class TestPipelineIRBWithoutModelPermissions:
                 ],
                 loans=[make_loan()],
                 facilities=[make_facility()],
-                # No model_permissions — the omission that triggers Bug #1.
+                # No model_permissions — triggers SA fallback.
             ),
             ratings=[
                 _make_internal_rating(
@@ -1065,16 +1061,11 @@ class TestPipelineIRBWithoutModelPermissions:
         )
         result = pipeline.run_with_data(bundle, crr_firb_config)
 
-        # Loan routes to IRB via org-wide IRB permissions (corporate + internal_pd).
-        # CRR full_irb permits both FIRB and AIRB for corporate; AIRB wins by
-        # priority in _determine_approach_and_finalize.
+        # Without model_permissions, IRB mode falls back to SA.
         all_results = result.results.collect()
         loan_row = all_results.filter(pl.col("exposure_reference") == "LN001")
         assert loan_row.height >= 1
-        assert loan_row["approach"][0] in (
-            ApproachType.FIRB.value,
-            ApproachType.AIRB.value,
-        )
+        assert loan_row["approach"][0] == ApproachType.SA.value
 
-        # Pipeline emits an error explaining that per-model gating is disabled.
+        # Pipeline emits an error explaining that model_permissions is missing.
         assert any("model_permissions" in str(e) for e in result.errors)

@@ -29,6 +29,18 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 
+_TEST_MODEL_ID = "TEST_MODEL"
+
+
+def _full_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
+    """Model permissions granting all IRB approaches for all exposure classes."""
+    rows = []
+    for ec in ExposureClass:
+        for approach in ["advanced_irb", "foundation_irb", "slotting"]:
+            rows.append({"model_id": model_id, "exposure_class": ec.value, "approach": approach})
+    return pl.DataFrame(rows).lazy()
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -63,6 +75,13 @@ def create_test_bundle(
     if "internal_pd" not in exposures_data:
         n = len(next(iter(exposures_data.values())))
         exposures_data = {**exposures_data, "internal_pd": [0.005] * n}
+    # Default model_id and book_code for model permissions resolution
+    if "model_id" not in exposures_data:
+        n = len(next(iter(exposures_data.values())))
+        exposures_data = {**exposures_data, "model_id": [_TEST_MODEL_ID] * n}
+    if "book_code" not in exposures_data:
+        n = len(next(iter(exposures_data.values())))
+        exposures_data = {**exposures_data, "book_code": ["CORP"] * n}
     exposures = pl.DataFrame(exposures_data).lazy()
     counterparties = pl.DataFrame(counterparties_data).lazy()
 
@@ -109,6 +128,7 @@ def create_test_bundle(
         provisions=pl.DataFrame().lazy(),
         counterparty_lookup=counterparty_lookup,
         lending_group_totals=lending_group_totals,
+        model_permissions=_full_model_permissions(),
         hierarchy_errors=[],
     )
 

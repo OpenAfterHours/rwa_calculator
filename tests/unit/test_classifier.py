@@ -1166,10 +1166,13 @@ class TestApproachAssignment:
                 "lending_group_reference": [None],
                 "lending_group_total_exposure": [0.0],
                 "internal_pd": [0.005],
+                "model_id": [_TEST_MODEL_ID],
             }
         ).lazy()
 
-        bundle = create_resolved_bundle(exposures, counterparties)
+        bundle = create_resolved_bundle(
+            exposures, counterparties, model_permissions=_full_model_permissions()
+        )
         result = classifier.classify(bundle, crr_config_with_irb)
 
         df = result.all_exposures.collect()
@@ -1337,10 +1340,13 @@ class TestApproachAssignment:
                 "lending_group_reference": [None],
                 "lending_group_total_exposure": [0.0],
                 "internal_pd": [0.001],
+                "model_id": [_TEST_MODEL_ID],
             }
         ).lazy()
 
-        bundle = create_resolved_bundle(exposures, counterparties)
+        bundle = create_resolved_bundle(
+            exposures, counterparties, model_permissions=_full_model_permissions()
+        )
         result = classifier.classify(bundle, crr_config_with_irb)
 
         df = result.all_exposures.collect()
@@ -1592,6 +1598,18 @@ class TestReturnTypes:
 # =============================================================================
 
 
+_TEST_MODEL_ID = "TEST_MODEL"
+
+
+def _full_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
+    """Model permissions granting all IRB approaches for all exposure classes."""
+    rows = []
+    for ec in ExposureClass:
+        for approach in ["advanced_irb", "foundation_irb", "slotting"]:
+            rows.append({"model_id": model_id, "exposure_class": ec.value, "approach": approach})
+    return pl.DataFrame(rows).lazy()
+
+
 def _make_model_permissions_df(**overrides: object) -> pl.LazyFrame:
     """Helper to create a model_permissions LazyFrame."""
     data = {
@@ -1833,19 +1851,19 @@ class TestModelPermissions:
         df = result.all_exposures.collect()
         assert df["approach"][0] == ApproachType.FIRB.value
 
-    def test_no_model_permissions_uses_orgwide(
+    def test_no_model_permissions_falls_back_to_sa(
         self,
         classifier: ExposureClassifier,
         crr_config_with_irb: CalculationConfig,
     ) -> None:
-        """No model_permissions file -> org-wide IRBPermissions still work (backward compat)."""
+        """No model_permissions file -> IRB mode falls back to SA."""
         exposures, cps = _make_exposure_with_model_id(model_id=None)
         bundle = create_resolved_bundle(exposures, cps, model_permissions=None)
         result = classifier.classify(bundle, crr_config_with_irb)
 
         df = result.all_exposures.collect()
-        # With full_irb org-wide permissions and internal_pd, should get AIRB
-        assert df["approach"][0] == ApproachType.AIRB.value
+        # IRB mode without model_permissions: no exposure can be granted IRB
+        assert df["approach"][0] == ApproachType.SA.value
 
     def test_missing_country_codes_column_permits_all_geographies(
         self,

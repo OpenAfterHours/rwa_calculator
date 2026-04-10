@@ -1,7 +1,7 @@
 # Slotting Approach Specification
 
-Basel 3.1 revised risk weights for specialised lending slotting categories, with maturity
-split removal and no separate pre-operational project finance distinction.
+Basel 3.1 revised risk weights for specialised lending slotting categories, with subgrade
+maturity differentiation and no separate pre-operational project finance distinction.
 
 **Regulatory Reference:** PRA PS1/26 Art. 147(8), Art. 153(5), CRE33
 **Test Group:** B31-E
@@ -12,7 +12,7 @@ split removal and no separate pre-operational project finance distinction.
 
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
-| FR-5.1 | Revised slotting risk weight tables (flat, no maturity split) | P0 | Done |
+| FR-5.1 | Revised slotting risk weight tables (subgrade maturity differentiation) | P0 | Done |
 | FR-5.2 | No separate pre-operational PF table (PRA deviation from BCBS) | P0 | Done |
 | FR-5.3 | HVCRE elevated risk weights | P0 | Done |
 | FR-5.4 | Default category EL treatment (0% RW) | P0 | Done |
@@ -23,21 +23,30 @@ split removal and no separate pre-operational project finance distinction.
 
 Basel 3.1 revises the specialised lending slotting approach risk weights. The key changes are:
 
-1. **Maturity split removed** — CRR distinguished < 2.5 years from ≥ 2.5 years; Basel 3.1 uses
-   flat weights regardless of maturity
+1. **Maturity differentiation preserved via subgrades** — PRA PS1/26 Art. 153(5) Table A uses
+   A/B columns (Strong) and C/D columns (Good) to preserve maturity-based differentiation.
+   Column A/C (short maturity < 2.5yr) may be used optionally; column B/D (standard, >= 2.5yr)
+   is the default assignment per Art. 153(5)(c).
 2. **No pre-operational PF distinction** — PRA does not adopt the BCBS separate table for
    pre-operational project finance (CRE33.6 Table 6); all PF uses the standard non-HVCRE table
-3. **Revised weight levels** — lower weights for Strong/Good categories, higher for Weak
+3. **HVCRE introduced** — elevated weights for high-volatility commercial real estate
+
+!!! warning "Correction: PRA Retains Maturity Differentiation"
+    This section previously stated "maturity split removed" and "flat weights regardless of
+    maturity". This was **wrong** — it described the BCBS CRE33 approach, not the PRA PS1/26
+    approach. PRA PS1/26 Art. 153(5)(c)-(d) preserves maturity-based differentiation through
+    the subgrade column structure (A/B for Strong, C/D for Good). See
+    [Subgrade Treatment](#subgrade-treatment-table-a-columns-abcd) for full details.
 
 ### Key Changes from CRR
 
-| Category | CRR (< 2.5yr / ≥ 2.5yr) | Basel 3.1 (flat) | Change |
-|----------|--------------------------|-------------------|--------|
-| Strong | 50% / 70% | 70% | Increase for short, same for long |
-| Good | 70% / 90% | 90% | Increase for short, same for long |
-| Satisfactory | 115% / 115% | 115% | Unchanged |
-| Weak | 250% / 250% | 250% | Unchanged |
-| Default | 0% (EL) / 0% (EL) | 0% (EL) | Unchanged |
+| Category | CRR (< 2.5yr / ≥ 2.5yr) | Basel 3.1 (B/D default) | Basel 3.1 (A/C short maturity) | Change |
+|----------|--------------------------|-------------------------|-------------------------------|--------|
+| Strong | 50% / 70% | 70% | 50% | Same structure, subgrade columns |
+| Good | 70% / 90% | 90% | 70% | Same structure, subgrade columns |
+| Satisfactory | 115% / 115% | 115% | 115% | Unchanged |
+| Weak | 250% / 250% | 250% | 250% | Unchanged |
+| Default | 0% (EL) / 0% (EL) | 0% (EL) | 0% (EL) | Unchanged |
 
 !!! warning "PRA Deviation from BCBS — No Pre-Operational PF Table"
     BCBS CRE33.6 Table 6 defines separate elevated weights for pre-operational project finance
@@ -51,17 +60,19 @@ Basel 3.1 revises the specialised lending slotting approach risk weights. The ke
 
 ### Non-HVCRE Specialised Lending (PF, IPRE, OF, CF)
 
-**Art. 153(5), Table**
+**Art. 153(5), Table A**
 
 Applies to: Project Finance, Income-Producing Real Estate, Object Finance, Commodities Finance.
+Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short maturity
+(< 2.5yr) may use column A (Strong) / C (Good) per Art. 153(5)(d).
 
-| Slotting Category | Risk Weight | EL Component |
-|-------------------|-------------|--------------|
-| Strong | 70% | 0.4% |
-| Good | 90% | 0.8% |
-| Satisfactory | 115% | 2.8% |
-| Weak | 250% | 8.0% |
-| Default | 0% | 50.0% |
+| Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (>= 2.5yr, col B) | EL (< 2.5yr, col A) |
+|-------------------|------------------------|------------------------|----------------------|---------------------|
+| Strong | 70% | 50% | 0.4% | 0% |
+| Good | 90% | 70% | 0.8% | 0.4% |
+| Satisfactory | 115% | 115% | 2.8% | 2.8% |
+| Weak | 250% | 250% | 8.0% | 8.0% |
+| Default | 0% | 0% | 50.0% | 50.0% |
 
 ### HVCRE Specialised Lending
 
@@ -73,15 +84,17 @@ Applies to: Project Finance, Income-Producing Real Estate, Object Finance, Commo
     The original EU CRR had a separate Table 2, but it was not retained in UK onshoring.
     See [CRR Slotting spec](../crr/slotting-approach.md#table-1-art-1535) for details.
 
-High-Volatility Commercial Real Estate receives elevated weights to reflect the higher risk profile:
+High-Volatility Commercial Real Estate receives elevated weights to reflect the higher risk profile.
+Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short maturity
+(< 2.5yr) may use column A (Strong) / C (Good) per Art. 153(5)(d).
 
-| Slotting Category | Risk Weight | EL Component |
-|-------------------|-------------|--------------|
-| Strong | 95% | 0.4% |
-| Good | 120% | 0.8% |
-| Satisfactory | 140% | 2.8% |
-| Weak | 250% | 8.0% |
-| Default | 0% | 50.0% |
+| Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (>= 2.5yr, col B) | EL (< 2.5yr, col A) |
+|-------------------|------------------------|------------------------|----------------------|---------------------|
+| Strong | 95% | 70% | 0.4% | 0.4% |
+| Good | 120% | 95% | 0.4% | 0.4% |
+| Satisfactory | 140% | 140% | 2.8% | 2.8% |
+| Weak | 250% | 250% | 8.0% | 8.0% |
+| Default | 0% | 0% | 50.0% | 50.0% |
 
 !!! note "HVCRE vs Non-HVCRE"
     HVCRE is distinguished from standard CRE by the volatility of the underlying property
@@ -136,14 +149,20 @@ This treatment is unchanged from CRR.
 
 ## Routing to Slotting
 
-Under Basel 3.1, exposures are routed to slotting when:
+Under Basel 3.1, exposures are routed to slotting based on specialised lending type:
 
-1. The exposure is classified as specialised lending (PF, IPRE, HVCRE, OF, CF)
-2. The firm does **not** have A-IRB permission for the sub-class (Art. 147A(2))
-3. The firm has F-IRB or slotting permission
+**IPRE / HVCRE (Art. 147A(2)):** Must use slotting. These sub-types cannot use F-IRB or A-IRB
+under Basel 3.1 (unless the firm has specific A-IRB approval, which is rare).
 
-If the firm has A-IRB permission for the specific specialised lending sub-class, the exposure
-may use A-IRB instead of slotting (see [Model Permissions](model-permissions.md)).
+**PF, OF, CF:** Routed to slotting when:
+
+1. The exposure is classified as specialised lending
+2. The firm does **not** have A-IRB permission for the sub-class
+3. The firm has F-IRB or slotting permission — PF/OF/CF may use F-IRB if the firm has F-IRB
+   permission and can estimate PD
+
+If the firm has A-IRB permission for the specific SL sub-class, the exposure may use A-IRB
+instead of slotting (see [Model Permissions](model-permissions.md)).
 
 ---
 

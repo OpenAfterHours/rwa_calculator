@@ -372,39 +372,174 @@ Provisions are resolved **before** the CRM waterfall (and before CCF application
 
 ## CRM Method Selection (PRA PS1/26 Art. 191A)
 
-Basel 3.1 introduces a formal decision tree framework for CRM method selection (Appendix 1):
+Basel 3.1 replaces the old Art. 108 with Art. 191A, introducing a formal decision tree
+for CRM method selection. Key structural rules:
+
+- **Para 2(d)**: No double-counting — funded and unfunded CRM must not be recognised
+  simultaneously on the same portion of an exposure.
+- **Para 3**: Consistency — an institution must use the same CRM method for the same type
+  of unfunded credit protection across its portfolio.
+- **Para 5 (Art. 193)**: Multiple CRM forms on a single exposure require the exposure to
+  be subdivided into separately-covered parts.
+- **Para 6 (Art. 193)**: Multiple items of the same CRM form with different maturities
+  require the exposure to be subdivided by maturity.
+- **Para 7 (Art. 193)**: Single collateral item covering multiple exposures must be allocated
+  without double-counting.
 
 ### Part 1 — Funded CRM with CCR Exposure
-CCR exposures → IMM / SFT VaR Method / Financial Collateral Comprehensive Method / Financial Collateral Simple Method (SA only)
+CCR exposures → IMM / SFT VaR Method / Financial Collateral Comprehensive Method (FCCM) /
+Financial Collateral Simple Method (FCSM, SA only)
 
 ### Part 2 — Funded CRM without CCR
 1. On-balance sheet netting → Art. 219
-2. Financial collateral → Comprehensive Method (Art. 223) or Simple Method (Art. 222, SA only)
-3. Immovable property / receivables / other physical → Foundation Collateral Method (Art. 229-231, IRB only)
+2. Financial collateral → FCSM (Art. 222, SA only) / FCCM (Art. 223)
+3. Immovable property / receivables / other physical → Foundation Collateral Method
+   (Art. 229-231, F-IRB) / LGD Modelling (A-IRB)
 4. Life insurance / instruments from institutions → Other Funded Protection Method (Art. 232)
 
 ### Part 3 — Unfunded CRM
 - SA / Slotting → Risk-Weight Substitution Method (Art. 235)
-- FIRB / AIRB → Parameter Substitution Method (Art. 236)
-- AIRB (own estimates) → LGD Adjustment Method (Art. 183)
+- F-IRB / A-IRB → Parameter Substitution Method (Art. 236)
+- A-IRB (own estimates) → LGD Adjustment Method (Art. 183)
 
 ### Part 4 — Unfunded Covered by Funded
-Nested application of Parts 1-3 where unfunded protection is itself collateralised.
+Where an unfunded credit protection contract is itself covered by funded credit protection,
+the funded CRM is applied to the unfunded protection first (Parts 1-2), then the adjusted
+unfunded protection is applied to the original exposure (Part 3).
 
-## Financial Collateral Simple Method (Art. 222)
+## CRM Eligibility Principles (Art. 193-194)
 
-SA-only method (FCSM). The risk weight of the collateral substitutes for the exposure risk weight on the secured portion:
+### Art. 193 — General Principles
 
-- **Floor**: 20% minimum risk weight (except qualifying repo-style transactions per Art. 222(4): 0%)
-- **Art. 222(6) 0% condition**: 0% RW applies where exposure and collateral are same currency AND either (a) cash/deposit collateral, or (b) 0%-RW sovereign bond collateral with a **20% market value discount** applied
-- **Eligibility**: Collateral must be eligible financial collateral per Art. 197
-- **Maturity**: Collateral maturity must cover exposure maturity (no mismatch allowed)
-- **Formula**: `RW_secured = max(20%, RW_collateral)`, `RW_unsecured = RW_obligor`
+- **Para 5**: Where multiple forms of CRM cover a single exposure (e.g., collateral + guarantee),
+  the institution must subdivide the exposure into the portion covered by each form and
+  calculate the risk-weighted exposure amount for each portion separately.
+- **Para 6**: Where multiple items of the **same** CRM form have different maturities (e.g.,
+  two guarantees with different expiry dates), the institution must subdivide the exposure
+  according to the maturity of each protection item.
+- **Para 7**: Where a single collateral item covers multiple exposures, the institution must
+  allocate the collateral value across the exposures without double-counting. The total
+  recognised collateral value across all covered exposures must not exceed the collateral's
+  market value.
+
+### Art. 194 — Eligibility Conditions
+
+**Funded credit protection** (Art. 194(1)-(4)):
+
+- Must be from the eligible lists in Art. 197-200
+- Must be sufficiently liquid and stable in value over time
+- No material positive correlation between the collateral value and the obligor's credit quality
+  (own-issued debt is excluded)
+
+**Unfunded credit protection** (Art. 194(5)-(6)):
+
+- Must be an eligible agreement type per Art. 203 (guarantees) or Art. 204(1) (credit derivatives)
+- Must be legally effective and enforceable in all relevant jurisdictions
+- Protection provider must be from the eligible list in Art. 201
+
+## Eligible Collateral (Art. 197)
+
+Art. 197 lists eligible financial collateral for the FCSM, FCCM, and Foundation Collateral
+Method:
+
+| Art. 197(1) Para | Collateral Type | CQS Eligibility |
+|------------------|-----------------|-----------------|
+| (a) | Cash on deposit or cash-assimilated instruments | N/A |
+| (b) | Central government/CB debt securities | CQS 1-4 (CQS 5-6 ineligible) |
+| (c) | Institution/PSE debt securities | CQS 1-3 (CQS 4-6 ineligible) |
+| (d) | Other entity debt securities (corporate rules) | CQS 1-3 (CQS 4-6 ineligible) |
+| (e) | Short-term credit assessment debt securities | CQS 1-3 |
+| (f) | Main index equities and convertible bonds | N/A |
+| (g) | Gold | N/A |
+| (h) | Non-resecuritisation securitisation positions | RW <= 100% |
+
+## Eligible Unfunded Protection Providers (Art. 201)
+
+| Provider Type | SA + F-IRB | A-IRB (additional) |
+|---------------|------------|-------------------|
+| Central governments and central banks | Yes | Yes |
+| Regional governments and local authorities | Yes | Yes |
+| Multilateral development banks | Yes | Yes |
+| International organisations (0% RW) | Yes | Yes |
+| Public sector entities | Yes | Yes |
+| Institutions | Yes | Yes |
+| Externally-rated corporates (investment grade) | Yes | Yes |
+| Qualifying central counterparties | Yes | Yes |
+| Internally-rated corporates (with internal PD) | No | Yes (Parameter Substitution only) |
+
+## Financial Collateral Simple Method — FCSM (Art. 222)
+
+SA-only method. The risk weight of the collateral substitutes for the exposure risk weight
+on the secured portion.
+
+### Art. 222(1) — 20% RW Floor
+
+All collateral-secured portions receive a minimum **20%** risk weight under the FCSM,
+regardless of the collateral's own risk weight.
+
+### Art. 222(4) — 0% Floor Exceptions
+
+The 20% floor is reduced to **0%** for the following repo-style / SFT transactions where
+the collateral is denominated in the **same currency** as the exposure:
+
+- **(a)** Cash deposits or cash-assimilated instruments as collateral
+- **(d)** Core market participant repos/SFTs where the collateral is sovereign/CB debt,
+  PSE debt, or institution debt rated CQS 1-2
+
+The "core market participant" definition includes central governments, central banks,
+institutions, recognised investment firms, qualifying CCPs, and regulated CIUs.
+
+### Art. 222(7) — No Maturity Mismatch
+
+Under the FCSM, the **residual maturity of the collateral must be at least equal to the
+residual maturity of the exposure**. Where the collateral has a shorter residual maturity
+than the exposure, the FCSM may not be used (the maturity mismatch adjustment in Art. 238
+does not apply to the FCSM).
+
+### FCSM Formula
+
+```
+RW_secured = max(20%, RW_collateral)   [or 0% if Art. 222(4) exception applies]
+RW_unsecured = RW_obligor
+```
+
+Eligibility: Collateral must be eligible financial collateral per Art. 197.
 
 The calculator uses the Financial Collateral Comprehensive Method by default.
 
 !!! note "Basel 3.1 FCSM Retention"
-    Under Basel 3.1 (PRA PS1/26), the FCSM remains available for SA exposures only. IRB exposures must use the Comprehensive Method or LGD Modelling Collateral Method.
+    Under Basel 3.1 (PRA PS1/26), the FCSM remains available for SA exposures only.
+    IRB exposures must use the Comprehensive Method or LGD Modelling Collateral Method.
+
+## Financial Collateral Comprehensive Method — FCCM (Art. 223)
+
+The FCCM adjusts both the exposure value and the collateral value using volatility haircuts,
+producing a net adjusted exposure value (E*).
+
+### Art. 223(5) — E* Formula
+
+```
+E* = max(0, E(1 + HE) - CVA(1 - HC - HFX))
+```
+
+Where:
+
+| Variable | Definition |
+|----------|-----------|
+| E | Current exposure value |
+| HE | Exposure volatility haircut (applies when the exposure is a debt security, e.g., in SFTs; HE = 0 for standard lending) |
+| CVA | Current value of the collateral received |
+| HC | Collateral volatility haircut (from Art. 224 tables) |
+| HFX | FX mismatch haircut (8% at 10-day; 0% if same currency) |
+
+The resulting E* is the exposure value after CRM. If E* = 0, the exposure is fully
+collateralised (subject to the 0% floor on E*). If E* > 0, the residual is the
+unsecured portion.
+
+For **F-IRB exposures**, the FCCM result feeds into the LGD* formula (Art. 230) rather
+than directly substituting the risk weight.
+
+---
 
 ## Credit-Linked Notes (Art. 218)
 

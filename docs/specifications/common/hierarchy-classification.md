@@ -115,7 +115,7 @@ PRA PS1/26 Art. 112 Table A2 defines 16 exposure classes with a strict priority 
 !!! note "Specialised Lending is a Corporate Sub-Type"
     Under SA, specialised lending is classified within the corporate class (Art. 112(1)(g)) with distinct risk weights via Art. 122A-122B. There is no separate Art. 112(1)(ga) — the "(ga)" reference does not exist in the regulation. SL exposures are assigned to the corporate SA class and then sub-classified for risk weight purposes.
 
-**Calculator coverage**: The calculator currently implements classes for: central govt/CB, RGLA, PSE, MDB, institution, corporate, specialised lending, retail, equity, real estate, ADC, and default. Securitisation, CIU (beyond 250% fallback), and covered bonds are tracked as future enhancements.
+**Calculator coverage**: The calculator currently implements classes for: central govt/CB, RGLA, PSE, MDB, institution, corporate, specialised lending, retail, equity, real estate, ADC, and default. Securitisation, CIU (beyond 1,250% fallback per Art. 132(2) / Art. 132c), and covered bonds are tracked as future enhancements.
 
 !!! info "High-Risk Items (Art. 128)"
     Art. 128 was omitted from UK CRR by SI 2021/1078 (effective 1 Jan 2022) and is

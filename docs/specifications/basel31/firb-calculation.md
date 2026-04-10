@@ -69,7 +69,7 @@ internal models by tightening supervisory parameters and removing the scaling fa
     Basel 3.1 introduces a new distinction for financial sector entities (FSEs). Non-FSE senior
     unsecured exposures benefit from a reduced 40% LGD, while FSE senior unsecured retains the
     CRR 45% rate. This recognises the higher loss severity observed for financial institution
-    defaults. FSE is defined per Art. 4(1)(146).
+    defaults. FSE is defined per Art. 4(1)(27); "large FSE" per Art. 4(1)(146).
 
 !!! info "Purchased Receivables Changes (Art. 161(1)(e)–(g))"
     Art. 161(1)(e) aligns the senior purchased receivables LGD with the new non-FSE rate
@@ -218,9 +218,10 @@ asset correlation:
 R_fse = R x 1.25
 ```
 
-Triggered by `apply_fi_scalar = True` in the input data. See
+Triggered by `apply_fi_scalar = True` in the input data. Applies to large FSEs (total assets
+>= EUR 70bn / GBP 79bn, Art. 4(1)(146)) and all unregulated FSEs (Art. 153(2)). See
 [Model Permissions](model-permissions.md) for the distinction between the FI scalar
-(EUR 70bn total assets, Art. 4(1)(146)) and Art. 147A approach restrictions (£440m revenue).
+(correlation multiplier) and Art. 147A approach restrictions (all FSEs → F-IRB only).
 
 ### Effective Maturity (Art. 162)
 

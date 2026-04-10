@@ -22,7 +22,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.7 | Residential RE loan-splitting (Art. 124F–124G) | P0 | Done |
 | FR-1.8 | Commercial RE loan-splitting and income-producing (Art. 124H–124I) | P0 | Done |
 | FR-1.9 | SA Specialised Lending (Art. 122A–122B) | P0 | Done |
-| FR-1.10 | Currency mismatch multiplier 1.5× (Art. 123A) | P0 | Done |
+| FR-1.10 | Currency mismatch multiplier 1.5× (Art. 123B) | P0 | Done |
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
 | FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
 | FR-1.13 | ADC exposures 150% / qualifying residential 100% (Art. 124K) | P0 | Done |
@@ -96,7 +96,8 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
 | CQS 1 | 20% |
 | CQS 2 | 50% |
 | CQS 3 | 100% |
-| Others | 150% |
+| CQS 4 | 150% |
+| CQS 5 | 150% |
 
 !!! note "Table 4A Schema Gap"
     The `has_short_term_ecai` schema field is not yet implemented. The calculator
@@ -112,16 +113,24 @@ This replaces the CRR sovereign-derived approach (Art. 121, Table 5).
 
 | Grade | Risk Weight | Short-Term (≤3m) | Criteria |
 |-------|-------------|------------------|----------|
-| Grade A enhanced | **30%** | 20% | CET1 ≥ 14%, leverage ratio ≥ 5% (Art. 120(2A)(a)) |
+| Grade A enhanced | **30%** | 20% | CET1 ≥ 14%, leverage ratio ≥ 5% (Art. 121(5)) |
 | Grade A | **40%** | 20% | Meets all minimum prudential requirements and buffers (Art. 120(2A)(b)) |
 | Grade B | **75%** | 50% | Does not meet Grade A criteria but not materially deficient |
 | Grade C | **150%** | 150% | Material deficiency in prudential standards |
 
 !!! info "Grade A vs Grade A Enhanced"
-    Grade A enhanced (30%, Art. 120(2A)) requires **quantitative** thresholds: CET1 ≥ 14% and
+    Grade A enhanced (30%, Art. 121(5)) requires **quantitative** thresholds: CET1 ≥ 14% and
     leverage ratio ≥ 5%. Grade A (40%) requires only **qualitative** compliance: the institution
     meets all minimum requirements and capital buffers. This distinction is new in Basel 3.1
     (CRE20.19).
+
+### SCRA Short-Term Trade Finance Exception (Art. 121(4))
+
+Self-liquidating trade-related exposures arising from the movement of goods with an
+original maturity ≤ 6 months may receive the short-term risk weight applicable to
+Table 5A (Grade A/A enhanced: 20%, Grade B: 50%, Grade C: 150%) even if the exposure
+is not otherwise eligible for short-term preferential treatment. This exception ensures
+trade finance exposures are not penalised by the full-term SCRA weights.
 
 ---
 
@@ -203,7 +212,7 @@ progression.
 
 The retail threshold is changed from EUR 1m to **GBP 880,000** under PRA PS1/26 Art. 123(1)(b)(ii).
 
-### Currency Mismatch Multiplier (Art. 123A)
+### Currency Mismatch Multiplier (Art. 123B)
 
 New in Basel 3.1. For unhedged retail and residential RE exposures where the borrower's income
 currency differs from the lending currency:
@@ -211,6 +220,9 @@ currency differs from the lending currency:
 ```
 RW_adjusted = min(RW x 1.5, 150%)
 ```
+
+The 1.5x multiplier is **capped at 150%** — exposures already at or above 150% RW are not
+further increased by this multiplier.
 
 Triggered by setting `cp_borrower_income_currency` in the input data to a currency different
 from the exposure currency. Output column: `currency_mismatch_multiplier_applied`.
@@ -408,7 +420,8 @@ risk weight on entire exposure:
 
 **Junior charge multiplier** (Art. 124G(2)): Where prior-ranking charges exist that the
 institution does not hold, the whole-loan risk weight is multiplied by **1.25×** for
-LTV > 50%.
+LTV > 50%. The multiplied risk weight is **not capped** at the table maximum (105%) —
+it may exceed the highest table band (e.g., 105% x 1.25 = 131.25%).
 
 ---
 
@@ -439,9 +452,16 @@ For income-dependent commercial RE (cash flows from the property):
     BCBS CRE20.86 uses a 3-band table (≤60%: 70%, >60–80%: 90%, >80%: 110%).
     The PRA simplifies to 2 bands with higher weights for the lower LTV tiers.
 
-### Junior Charge Multiplier for Income-Producing RE (Art. 124I(3))
+### Junior Charge Multiplier for Income-Producing CRE (Art. 124I(3))
 
-Where there are prior-ranking charges, the risk weight is multiplied by **1.25×** for LTV > 50%.
+Where there are prior-ranking charges that the institution does not hold, the risk weight
+is multiplied by a band-dependent factor:
+
+| LTV Band | Junior Charge Multiplier |
+|----------|------------------------|
+| ≤ 60% | 1.0x (no adjustment) |
+| 60–80% | 1.25x |
+| > 80% | 1.375x |
 
 ### Large Corporate CRE (Art. 124H(3))
 
@@ -464,9 +484,21 @@ SA risk weights:
 |---------|-------------|-----------|
 | Project finance (pre-operational) | **130%** | Art. 122A(1)(a) |
 | Project finance (operational) | **100%** | Art. 122A(1)(b) |
+| Project finance (high-quality operational) | **80%** | Art. 122B(4)–(5) |
 | Object finance | **100%** | Art. 122A(2) |
 | Commodities finance | **100%** | Art. 122A(3) |
 | IPRE (income-producing) | Follows Art. 124H–124I | Art. 122B |
+
+**High-quality operational project finance** (Art. 122B(4)–(5)): A reduced 80% risk weight
+applies to operational project finance exposures that meet **all** of the following criteria:
+
+- **(a)** The obligor can meet its financial obligations even under severely stressed conditions
+- **(b)** The obligor has sufficient reserve funds or other financial arrangements to cover contingency funding and working capital requirements over the lifetime of the project
+- **(c)** The cash flows generated by the project are predictable
+
+These conditions are assessed by the institution; no specific quantitative thresholds are
+prescribed by the PRA. The assessment must reflect the project's ability to service debt under
+adverse scenarios.
 
 **Rated** specialised lending falls through to the corporate CQS table per Art. 122A(3).
 
@@ -481,12 +513,34 @@ Secured portion retains collateral-based RW. RESI RE non-income exception: flat 
 
 ---
 
+## CIU Exposures (Art. 132)
+
+Under Basel 3.1, CIU (Collective Investment Undertaking) exposures that cannot be looked
+through receive a **1,250%** fallback risk weight (Art. 132(2)). This is a significant
+increase from the CRR treatment and differs from the equity risk weights (250%/400%)
+that might otherwise apply.
+
+!!! warning "CIU Fallback = 1,250%"
+    The 1,250% fallback applies to CIUs where the institution cannot apply the
+    look-through approach (Art. 132a) or the mandate-based approach (Art. 132b).
+    This is equivalent to a full capital deduction and applies regardless of the
+    underlying asset composition of the fund.
+
+---
+
 ## Equity (Art. 133)
 
 See [Equity Approach Specification](equity-approach.md) for the full treatment.
 
 Summary: exchange-traded/listed/unlisted 250%, higher-risk/PE/VC 400%, subordinated debt 150%,
-central bank 0%, government-supported 100%. Transitional phase-in 2027–2030.
+central bank 0%, government-supported 100%. Transitional phase-in 2027–2030. The end-state
+risk weights apply from **1 January 2030**:
+
+| Equity Type | End-State RW | Reference |
+|-------------|-------------|-----------|
+| Standard equity (listed/unlisted) | 250% | Art. 133(3) |
+| Higher risk (PE/VC, unlisted <5yr) | 400% | Art. 133(5) |
+| Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
 
 ---
 
@@ -500,10 +554,13 @@ central bank 0%, government-supported 100%. Transitional phase-in 2027–2030.
 - **RRE loan-splitting** (Art. 124F–124G): Secured 20% / unsecured counterparty — Done
 - **CRE loan-splitting** (Art. 124H): Secured 60% / unsecured counterparty — Done
 - **CRE income-producing** (Art. 124I): PRA 2-band (100%/110%) — Done
-- **SA Specialised Lending** (Art. 122A–122B): Type-specific weights — Done
-- **Currency mismatch** (Art. 123A): 1.5× multiplier, 150% cap — Done
+- **SA Specialised Lending** (Art. 122A–122B): Type-specific weights, incl. 80% high-quality PF — Done
+- **Currency mismatch** (Art. 123B): 1.5× multiplier, 150% cap — Done
 - **Defaulted provision-coverage** (Art. 127): 100%/150% split — Done
 - **Retail threshold** (Art. 123): Changed to GBP 880,000 — Done
+- **CIU fallback** (Art. 132(2)): 1,250% for non-look-through CIUs — Documented
+- **Short-term ECAI** (Art. 120(2B), Art. 122(3)): New Tables 4A / 6A for short-term assessments — Schema gap
+- **SCRA trade finance** (Art. 121(4)): ≤6m trade goods exception for short-term weights — Documented
 - **Supporting factors removed** (Art. 501/501a): SME replaced by 85% class — Done
 
 ---

@@ -153,6 +153,13 @@ The aggregator computes a portfolio-level `ELPortfolioSummary` with:
 | `cet1_deduction` | `total_el_shortfall × 0.5` | Art. 36(1)(d) |
 | `t2_deduction` | `total_el_shortfall × 0.5` | Art. 62(d) |
 
+!!! warning "CRR vs Basel 3.1: EL Shortfall Deduction"
+    Under **CRR** (current UK retained law), the EL shortfall is split 50/50 between CET1
+    and T2, deriving from Art. 36(1)(d) (CET1 half) and the corresponding T2 deduction.
+    Under **Basel 3.1** (PRA PS1/26), Art. 36(1)(d) requires the **full** EL shortfall to be
+    deducted from CET1 — there is no 50/50 split. The B31 treatment is more conservative.
+    See the [B31 Provisions Spec](../basel31/provisions.md) for the corrected B31 formula.
+
 !!! note "Citation Correction"
     The 50/50 split derives from Art. 36(1)(d) (CET1 deduction) and Art. 62(d) (T2 deduction), not Art. 159. Art. 159 only produces the "negative amount" (shortfall) and "positive amount" (excess).
 

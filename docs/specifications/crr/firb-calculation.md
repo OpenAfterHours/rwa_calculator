@@ -125,7 +125,8 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 
 ## PD Floor
 
-**CRR:** Single floor of **0.03%** (3 basis points) for all non-defaulted exposure classes (Art. 160(1)).
+**CRR:** Single floor of **0.03%** (3 basis points) for all non-defaulted exposure classes
+(Art. 160(1) for corporate/sovereign/institution; Art. 163(1) for retail).
 
 ### Basel 3.1 PD Floors by Exposure Class (PRA PS1/26 Art. 160/163)
 
@@ -329,9 +330,15 @@ for full details.
 
 ## RWA Calculation
 
-**CRR:** `RWA = K x 12.5 x 1.06 x EAD x MA`
+**CRR Corporate/Institution (Art. 153):** `RWA = K x 12.5 x 1.06 x EAD x MA`
 
-The 1.06 is the CRR scaling factor (not present in Basel 3.1).
+The 1.06 is the CRR scaling factor from Art. 153(3) (not present in Basel 3.1 — Art. 153(3)
+is "[Provision left blank]" in PS1/26).
+
+!!! note "Retail — No 1.06 Scaling"
+    CRR Art. 154(1) retail formula does **not** include the 1.06 scaling factor. The 1.06 applies
+    only to corporate and institution exposures under Art. 153. Retail RWA = K x 12.5 x EAD
+    (with MA = 1.0 for retail).
 
 ## Expected Loss
 

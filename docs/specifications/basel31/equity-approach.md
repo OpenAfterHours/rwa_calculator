@@ -37,12 +37,12 @@ Basel 3.1 fundamentally changes equity treatment by:
 | Feature | CRR | Basel 3.1 | Reference |
 |---------|-----|-----------|-----------|
 | SA equity (standard) | 100% flat | **250%** | Art. 133(3) |
-| SA equity (higher risk) | 100% flat | **400%** | Art. 133(4)–(5) |
-| Subordinated debt | 100% | **150%** | Art. 133(1) |
-| Central bank equity | 100% | **0%** | Art. 133(6) |
+| SA equity (higher risk) | 100% flat | **400%** | Art. 133(4) |
+| Subordinated debt / non-equity own funds | 100% | **150%** | Art. 133(5) |
+| Legislative equity (carve-out) | 100% | **100%** | Art. 133(6) |
 | IRB Simple approach | Available (Art. 155) | **Removed** | Art. 147A(1)(a) |
 | IRB PD/LGD approach | Available | **Removed** | Art. 147A(1)(a) |
-| CIU fallback | 1,250% (Art. 132(2)) | 1,250% (unchanged) | Art. 132(2) |
+| CIU fallback | 1,250% (Art. 132(2)) | **1,250%** (unchanged) | Art. 132(2) |
 
 ---
 
@@ -52,30 +52,36 @@ Basel 3.1 fundamentally changes equity treatment by:
 
 | Equity Sub-Category | Risk Weight | Reference |
 |--------------------|-------------|-----------|
-| Central bank | **0%** | Art. 133(6) |
-| Government-supported | **100%** | Legislative programme |
-| Subordinated debt | **150%** | Art. 133(1) |
-| Exchange-traded / listed | **250%** | Art. 133(3) |
-| Unlisted | **250%** | Art. 133(3) |
-| Other | **250%** | Art. 133(3) |
-| Speculative | **400%** | Art. 133(4) |
-| Private equity (PE) | **400%** | Art. 133(5) |
-| Private equity (diversified) | **400%** | Art. 133(5) |
+| Legislative equity (government-mandated) | **100%** | Art. 133(6) |
+| Subordinated debt / non-equity own funds | **150%** | Art. 133(5) |
+| Standard equity (listed, exchange-traded) | **250%** | Art. 133(3) |
+| Unlisted equity (non-higher-risk) | **250%** | Art. 133(3) |
+| Other equity | **250%** | Art. 133(3) |
+| Higher-risk equity (see definition below) | **400%** | Art. 133(4) |
+| Private equity / venture capital | **400%** | Art. 133(4) |
 
-!!! note "Government-Supported at 100%"
-    The `GOVERNMENT_SUPPORTED` category at 100% reflects legislatively-mandated holdings
-    (e.g., government-backed investment programmes). This is a PRA-specific treatment with
-    no direct Art. 133 paragraph reference.
+!!! note "Legislative Equity at 100%"
+    The `GOVERNMENT_SUPPORTED` / legislative equity category at 100% reflects holdings
+    mandated by government legislation (e.g., national development policy programmes).
+    This is Art. 133(6), a specific PRA carve-out — not a general 100% weight category.
 
-### Higher-Risk Classification
+### Higher-Risk Classification (Art. 133(4))
 
-An equity exposure is classified as **higher risk** (400%) if:
+An equity exposure is classified as **higher risk** (400%) if it is:
 
-- `is_speculative = True` — speculative unlisted equity (Art. 133(4)), OR
-- `equity_type` is `PRIVATE_EQUITY` or `PRIVATE_EQUITY_DIVERSIFIED` — PE/VC holdings (Art. 133(5))
+- **Not listed on a recognised exchange** AND held for **short-term resale**, OR
+- **Not listed on a recognised exchange** AND derived from a **derivative position**, OR
+- **Private equity** or **venture capital** holdings
 
-All other equity (not central bank, not government-supported, not subordinated debt) receives
-the standard **250%** weight.
+!!! warning "Correction: No CQS Speculative Tiers in PRA"
+    The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated
+    by CQS. PRA PS1/26 Art. 133 does **not** use CQS-based speculative tiers for equity.
+    All non-legislative, non-subordinated equity is either standard (250%, Art. 133(3))
+    or higher-risk (400%, Art. 133(4)). The calculator's `is_speculative` flag maps to
+    the Art. 133(4) higher-risk definition, not a BCBS CQS tier.
+
+All other equity (not legislative, not subordinated debt, not higher-risk) receives
+the standard **250%** weight under Art. 133(3).
 
 ---
 
@@ -131,7 +137,7 @@ The following equity sub-categories are **excluded** from the transitional floor
 
 - **Central bank** (0%) — already below the floor, exclusion is moot
 - **Government-supported** (100%) — legislative programme holdings (Art. 133(6))
-- **Subordinated debt** (150%) — fixed rate (Art. 133(5))
+- **Subordinated debt / non-equity own funds** (150%) — fixed rate (Art. 133(5))
 - **CIU look-through** — weight derives from underlying assets, not Art. 133
 - **CIU mandate-based** — weight derives from fund mandate, not Art. 133
 
@@ -249,12 +255,13 @@ The approach is determined by the `ciu_approach` input column:
 When classifying equity exposures, the following priority order applies:
 
 1. **CIU** (Art. 132) — if the exposure is a fund holding
-2. **Central bank** (Art. 133(6)) — 0%
-3. **Equity** (Art. 133) — 250%/400% by sub-category
+2. **Central bank / sovereign equity** — 0% (sovereign treatment, not Art. 133)
+3. **Equity** (Art. 133) — 250%/400% by sub-category, including legislative (100%, Art. 133(6))
+   and subordinated debt (150%, Art. 133(5))
 4. **High-risk** (Art. 128) — 150% (re-introduced in B31, see [SA Risk Weights](sa-risk-weights.md))
 
 Equity exposures take priority over high-risk classification. PE/VC is classified as equity
-(Art. 133(5), 400%), not high-risk (Art. 128, 150%).
+(Art. 133(4), 400%), not high-risk (Art. 128, 150%).
 
 ---
 

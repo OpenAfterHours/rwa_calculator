@@ -47,6 +47,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
+from rwa_calc.data.tables.b31_risk_weights import B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -136,10 +137,6 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
     "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
-
-# PRA PS1/26 Art. 147A(1)(d): Large corporate revenue threshold (GBP)
-# Corporates with consolidated annual revenue > GBP 440m → F-IRB only (no A-IRB)
-B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP = 440_000_000.0
 
 # SL types restricted to slotting-only under B31 Art. 147A(1)(c)
 _B31_SLOTTING_ONLY_SL_TYPES = {
@@ -993,7 +990,7 @@ class ExposureClassifier:
                     .fill_null(False)
                 )
             _is_large_corp = (
-                pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
+                pl.col("cp_annual_revenue") > float(B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP)
             ).fill_null(False)
 
             # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)

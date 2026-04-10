@@ -19,6 +19,7 @@ Covers:
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import polars as pl
@@ -120,7 +121,7 @@ def _sa_exposure(
         "drawn_amount": drawn,
         "interest": 0.0,
         "nominal_amount": nominal,
-        "risk_type": "FR" if nominal == 0.0 else "MR",
+        "risk_type": "FR" if math.isclose(nominal, 0.0, abs_tol=1e-10) else "MR",
         "lgd": 0.45,
         "seniority": "senior",
         "parent_facility_reference": facility_ref,
@@ -145,7 +146,7 @@ def _irb_exposure(
         "drawn_amount": drawn,
         "interest": 0.0,
         "nominal_amount": nominal,
-        "risk_type": "FR" if nominal == 0.0 else "MR",
+        "risk_type": "FR" if math.isclose(nominal, 0.0, abs_tol=1e-10) else "MR",
         "lgd": 0.45,
         "seniority": "senior",
         "parent_facility_reference": facility_ref,

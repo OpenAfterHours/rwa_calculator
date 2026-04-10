@@ -205,64 +205,76 @@ class TestCollateralRWDerivation:
         return result["rw"][0]
 
     def test_cash_zero_rw(self):
-        assert self._compute_rw("cash") == 0.0
+        assert self._compute_rw("cash") == pytest.approx(0.0, abs=1e-10)
 
     def test_deposit_zero_rw(self):
-        assert self._compute_rw("deposit") == 0.0
+        assert self._compute_rw("deposit") == pytest.approx(0.0, abs=1e-10)
 
     def test_gold_zero_rw(self):
-        assert self._compute_rw("gold") == 0.0
+        assert self._compute_rw("gold") == pytest.approx(0.0, abs=1e-10)
 
     def test_sovereign_cqs1_zero_rw(self):
-        assert self._compute_rw("government_bond", "sovereign", 1) == 0.0
+        assert self._compute_rw("government_bond", "sovereign", 1) == pytest.approx(0.0, abs=1e-10)
 
     def test_sovereign_cqs2_twenty_pct(self):
-        assert self._compute_rw("government_bond", "sovereign", 2) == 0.20
+        assert self._compute_rw("government_bond", "sovereign", 2) == pytest.approx(0.20, abs=1e-10)
 
     def test_sovereign_cqs3_fifty_pct(self):
-        assert self._compute_rw("government_bond", "sovereign", 3) == 0.50
+        assert self._compute_rw("government_bond", "sovereign", 3) == pytest.approx(0.50, abs=1e-10)
 
     def test_sovereign_cqs4_hundred_pct(self):
-        assert self._compute_rw("government_bond", "sovereign", 4) == 1.00
+        assert self._compute_rw("government_bond", "sovereign", 4) == pytest.approx(1.00, abs=1e-10)
 
     def test_sovereign_cqs6_one_fifty_pct(self):
-        assert self._compute_rw("government_bond", "sovereign", 6) == 1.50
+        assert self._compute_rw("government_bond", "sovereign", 6) == pytest.approx(1.50, abs=1e-10)
 
     def test_institution_cqs1_twenty_pct(self):
-        assert self._compute_rw("corporate_bond", "institution", 1) == 0.20
+        assert self._compute_rw("corporate_bond", "institution", 1) == pytest.approx(
+            0.20, abs=1e-10
+        )
 
     def test_institution_cqs2_fifty_pct(self):
-        assert self._compute_rw("corporate_bond", "institution", 2) == 0.50
+        assert self._compute_rw("corporate_bond", "institution", 2) == pytest.approx(
+            0.50, abs=1e-10
+        )
 
     def test_institution_unrated_hundred_pct(self):
-        assert self._compute_rw("corporate_bond", "institution", None) == 1.00
+        assert self._compute_rw("corporate_bond", "institution", None) == pytest.approx(
+            1.00, abs=1e-10
+        )
 
     def test_corporate_cqs1_twenty_pct(self):
-        assert self._compute_rw("corporate_bond", "corporate", 1) == 0.20
+        assert self._compute_rw("corporate_bond", "corporate", 1) == pytest.approx(0.20, abs=1e-10)
 
     def test_corporate_cqs2_fifty_pct(self):
-        assert self._compute_rw("corporate_bond", "corporate", 2) == 0.50
+        assert self._compute_rw("corporate_bond", "corporate", 2) == pytest.approx(0.50, abs=1e-10)
 
     def test_corporate_cqs3_hundred_pct(self):
-        assert self._compute_rw("corporate_bond", "corporate", 3) == 1.00
+        assert self._compute_rw("corporate_bond", "corporate", 3) == pytest.approx(1.00, abs=1e-10)
 
     def test_corporate_cqs5_crr_hundred_pct(self):
         """CRR Art. 122 Table 5: CQS 5 = 100%."""
-        assert self._compute_rw("corporate_bond", "corporate", 5, is_basel_3_1=False) == 1.00
+        assert self._compute_rw(
+            "corporate_bond", "corporate", 5, is_basel_3_1=False
+        ) == pytest.approx(1.00, abs=1e-10)
 
     def test_corporate_cqs5_b31_one_fifty_pct(self):
         """B31 Art. 122(2) Table 6: CQS 5 = 150%."""
-        assert self._compute_rw("corporate_bond", "corporate", 5, is_basel_3_1=True) == 1.50
+        assert self._compute_rw(
+            "corporate_bond", "corporate", 5, is_basel_3_1=True
+        ) == pytest.approx(1.50, abs=1e-10)
 
     def test_equity_hundred_pct(self):
-        assert self._compute_rw("equity") == 1.00
+        assert self._compute_rw("equity") == pytest.approx(1.00, abs=1e-10)
 
     def test_equity_main_index_hundred_pct(self):
-        assert self._compute_rw("equity_main_index") == 1.00
+        assert self._compute_rw("equity_main_index") == pytest.approx(1.00, abs=1e-10)
 
     def test_unknown_type_defaults_to_corporate(self):
         """Unknown collateral type treated as corporate bond (conservative)."""
-        assert self._compute_rw("other_instrument", "corporate", 1) == 0.20
+        assert self._compute_rw("other_instrument", "corporate", 1) == pytest.approx(
+            0.20, abs=1e-10
+        )
 
 
 # =============================================================================
@@ -319,7 +331,7 @@ class TestComputeFCSMColumns:
         result = _add_default_fcsm_columns(exposures).collect()
         assert "fcsm_collateral_value" in result.columns
         assert "fcsm_collateral_rw" in result.columns
-        assert result["fcsm_collateral_value"][0] == 0.0
+        assert result["fcsm_collateral_value"][0] == pytest.approx(0.0, abs=1e-10)
 
 
 # =============================================================================

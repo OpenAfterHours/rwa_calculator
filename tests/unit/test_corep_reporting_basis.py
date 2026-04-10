@@ -277,7 +277,7 @@ class TestOF0200FloorIndicatorRows:
         )
         row = _get_c02_row(bundle, "0034")
         assert row is not None
-        assert row["0010"] == 0.0
+        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
 
     def test_exempt_entity_multiplier_zero(self) -> None:
         """Exempt entity: row 0035 (multiplier) = 0.0."""
@@ -289,7 +289,7 @@ class TestOF0200FloorIndicatorRows:
         )
         row = _get_c02_row(bundle, "0035")
         assert row is not None
-        assert row["0010"] == 0.0
+        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
 
     def test_exempt_entity_of_adj_zero(self) -> None:
         """Exempt entity: row 0036 (OF-ADJ) = 0.0."""
@@ -301,7 +301,7 @@ class TestOF0200FloorIndicatorRows:
         )
         row = _get_c02_row(bundle, "0036")
         assert row is not None
-        assert row["0010"] == 0.0
+        assert row["0010"] == pytest.approx(0.0, abs=1e-10)
 
     def test_applicable_entity_floor_activated(self) -> None:
         """Applicable entity with binding floor: row 0034 = 1.0."""
@@ -314,7 +314,7 @@ class TestOF0200FloorIndicatorRows:
         row = _get_c02_row(bundle, "0034")
         assert row is not None
         # rwa_final (60k) > rwa_pre_floor (50k) → floor activated
-        assert row["0010"] == 1.0
+        assert row["0010"] == pytest.approx(1.0, abs=1e-10)
 
     def test_no_config_backward_compat(self) -> None:
         """No config → floor is assumed applicable (backward compat)."""
@@ -326,7 +326,7 @@ class TestOF0200FloorIndicatorRows:
         row = _get_c02_row(bundle, "0034")
         assert row is not None
         # rwa_final (60k) > rwa_pre_floor (50k) → floor activated
-        assert row["0010"] == 1.0
+        assert row["0010"] == pytest.approx(1.0, abs=1e-10)
 
     def test_crr_no_floor_indicator_rows(self) -> None:
         """CRR: rows 0034-0036 not present in C 02.00."""
@@ -354,7 +354,9 @@ class TestOF0200FloorIndicatorRows:
         for ref in ("0034", "0035", "0036"):
             row = _get_c02_row(bundle, ref)
             assert row is not None
-            assert row["0010"] == 0.0, f"Row {ref} should be 0.0 for exempt entity"
+            assert row["0010"] == pytest.approx(0.0, abs=1e-10), (
+                f"Row {ref} should be 0.0 for exempt entity"
+            )
 
 
 # =============================================================================
@@ -541,9 +543,9 @@ class TestEntityTypeCombinations:
         assert row is not None
         if expect_applicable:
             # Floor binds: rwa_final (60k) > rwa_pre_floor (50k)
-            assert row["0010"] == 1.0
+            assert row["0010"] == pytest.approx(1.0, abs=1e-10)
         else:
-            assert row["0010"] == 0.0
+            assert row["0010"] == pytest.approx(0.0, abs=1e-10)
 
 
 # =============================================================================

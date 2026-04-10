@@ -23,6 +23,7 @@ the fixed-format disclosure templates for both CRR and Basel 3.1.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import polars as pl
@@ -253,8 +254,8 @@ class TestTemplateDefinitions:
 
     def test_cr6_pd_ranges_cover_full_range(self):
         """PD ranges should cover 0% to 100% default."""
-        assert CR6_PD_RANGES[0][0] == 0.0
-        assert CR6_PD_RANGES[-1][1] == float("inf")
+        assert CR6_PD_RANGES[0][0] == pytest.approx(0.0, abs=1e-10)
+        assert math.isinf(CR6_PD_RANGES[-1][1])
 
     def test_cr6a_columns_count(self):
         assert len(CR6A_COLUMNS) == 5
@@ -1288,8 +1289,8 @@ class TestCR9TemplateDefinitions:
     def test_cr9_uses_same_pd_ranges_as_cr6(self):
         """CR9 uses the same 17 fixed PD range buckets as CR6."""
         assert len(CR6_PD_RANGES) == 17
-        assert CR6_PD_RANGES[0][0] == 0.0
-        assert CR6_PD_RANGES[-1][1] == float("inf")
+        assert CR6_PD_RANGES[0][0] == pytest.approx(0.0, abs=1e-10)
+        assert math.isinf(CR6_PD_RANGES[-1][1])
 
 
 class TestCR9Generation:

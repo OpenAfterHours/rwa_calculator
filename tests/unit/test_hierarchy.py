@@ -843,7 +843,7 @@ class TestLendingGroupAggregation:
 
         # Standalone loan should have 0 lending group total
         standalone = df.filter(pl.col("exposure_reference") == "STANDALONE_LOAN")
-        assert standalone["lending_group_total_exposure"][0] == 0.0
+        assert standalone["lending_group_total_exposure"][0] == pytest.approx(0.0, abs=1e-10)
 
 
 # =============================================================================

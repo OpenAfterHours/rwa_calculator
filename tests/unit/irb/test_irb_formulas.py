@@ -684,38 +684,38 @@ class TestCorrelationParams:
 
     def test_corporate_params(self) -> None:
         p = get_correlation_params("CORPORATE")
-        assert p.r_min == 0.12
-        assert p.r_max == 0.24
+        assert p.r_min == pytest.approx(0.12, abs=1e-10)
+        assert p.r_max == pytest.approx(0.24, abs=1e-10)
         assert p.decay_factor == 50.0
 
     def test_retail_mortgage_fixed(self) -> None:
         p = get_correlation_params("RETAIL_MORTGAGE")
         assert p.correlation_type == "fixed"
-        assert p.fixed == 0.15
+        assert p.fixed == pytest.approx(0.15, abs=1e-10)
 
     def test_qrre_fixed(self) -> None:
         p = get_correlation_params("RETAIL_QRRE")
         assert p.correlation_type == "fixed"
-        assert p.fixed == 0.04
+        assert p.fixed == pytest.approx(0.04, abs=1e-10)
 
     def test_retail_other_params(self) -> None:
         p = get_correlation_params("RETAIL_OTHER")
-        assert p.r_min == 0.03
-        assert p.r_max == 0.16
+        assert p.r_min == pytest.approx(0.03, abs=1e-10)
+        assert p.r_max == pytest.approx(0.16, abs=1e-10)
         assert p.decay_factor == 35.0
 
     def test_substring_matching_mortgage(self) -> None:
         p = get_correlation_params("residential_mortgage")
-        assert p.fixed == 0.15
+        assert p.fixed == pytest.approx(0.15, abs=1e-10)
 
     def test_substring_matching_government(self) -> None:
         p = get_correlation_params("GOVERNMENT_BOND")
-        assert p.r_min == 0.12  # Corporate params
+        assert p.r_min == pytest.approx(0.12, abs=1e-10)  # Corporate params
 
     def test_unknown_defaults_to_corporate(self) -> None:
         p = get_correlation_params("SOME_UNKNOWN")
-        assert p.r_min == 0.12
-        assert p.r_max == 0.24
+        assert p.r_min == pytest.approx(0.12, abs=1e-10)
+        assert p.r_max == pytest.approx(0.24, abs=1e-10)
 
 
 # =============================================================================
@@ -734,7 +734,7 @@ class TestCapitalK:
     def test_k_zero_for_pd_zero(self) -> None:
         """K = 0 when PD = 0 (scalar wrapper short-circuit)."""
         k = calculate_k(0.0, 0.45, 0.20)
-        assert k == 0.0
+        assert k == pytest.approx(0.0, abs=1e-10)
 
     def test_k_equals_lgd_for_pd_one(self) -> None:
         """K = LGD when PD = 1.0 (certain default, scalar wrapper)."""
@@ -992,8 +992,8 @@ class TestCalculateIRBRWA:
             lgd_floor=None,
         )
         assert result["rwa"] > 0
-        assert result["pd_floored"] == 0.01  # Above floor
-        assert result["scaling_factor"] == 1.06
+        assert result["pd_floored"] == pytest.approx(0.01, abs=1e-10)  # Above floor
+        assert result["scaling_factor"] == pytest.approx(1.06, abs=1e-10)
 
     def test_crr_scaling_factor(self) -> None:
         """CRR applies 1.06 scaling factor."""
@@ -1008,7 +1008,7 @@ class TestCalculateIRBRWA:
             pd_floor=0.0003,
             lgd_floor=None,
         )
-        assert result["scaling_factor"] == 1.06
+        assert result["scaling_factor"] == pytest.approx(1.06, abs=1e-10)
 
     def test_b31_no_scaling_factor(self) -> None:
         """Basel 3.1 uses scaling factor = 1.0."""
@@ -1023,7 +1023,7 @@ class TestCalculateIRBRWA:
             pd_floor=0.0005,
             lgd_floor=None,
         )
-        assert result["scaling_factor"] == 1.0
+        assert result["scaling_factor"] == pytest.approx(1.0, abs=1e-10)
 
     def test_pd_floor_applied(self) -> None:
         """PD below floor is raised to floor value."""
@@ -1038,7 +1038,7 @@ class TestCalculateIRBRWA:
             pd_floor=0.0005,
             lgd_floor=None,
         )
-        assert result["pd_floored"] == 0.0005
+        assert result["pd_floored"] == pytest.approx(0.0005, abs=1e-10)
 
     def test_lgd_floor_applied(self) -> None:
         """LGD below floor is raised to floor value."""
@@ -1053,7 +1053,7 @@ class TestCalculateIRBRWA:
             pd_floor=0.0003,
             lgd_floor=0.25,
         )
-        assert result["lgd_floored"] == 0.25
+        assert result["lgd_floored"] == pytest.approx(0.25, abs=1e-10)
 
     def test_no_maturity_adjustment(self) -> None:
         """Without maturity adjustment, MA forced to 1.0."""
@@ -1068,7 +1068,7 @@ class TestCalculateIRBRWA:
             pd_floor=0.0003,
             lgd_floor=None,
         )
-        assert result["maturity_adjustment"] == 1.0
+        assert result["maturity_adjustment"] == pytest.approx(1.0, abs=1e-10)
 
     def test_risk_weight_formula(self) -> None:
         """risk_weight = K × 12.5 × scaling × MA."""

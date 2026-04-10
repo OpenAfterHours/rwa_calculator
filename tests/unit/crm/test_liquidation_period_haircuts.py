@@ -19,6 +19,7 @@ import math
 from decimal import Decimal
 
 import polars as pl
+import pytest
 
 from rwa_calc.data.tables.crr_haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
@@ -91,7 +92,7 @@ class TestScalingFormula:
 
     def test_10_day_no_scaling(self) -> None:
         """10-day period returns base value unchanged."""
-        assert scale_haircut_for_liquidation_period(0.20, 10) == 0.20
+        assert scale_haircut_for_liquidation_period(0.20, 10) == pytest.approx(0.20, abs=1e-10)
 
     def test_5_day_repo_scaling(self) -> None:
         """5-day (repo) scales down by sqrt(0.5)."""
@@ -107,7 +108,7 @@ class TestScalingFormula:
 
     def test_zero_haircut_not_scaled(self) -> None:
         """Zero haircut (cash) stays zero regardless of period."""
-        assert scale_haircut_for_liquidation_period(0.0, 20) == 0.0
+        assert scale_haircut_for_liquidation_period(0.0, 20) == pytest.approx(0.0, abs=1e-10)
 
     def test_gold_b31_5day(self) -> None:
         """B31 gold 5-day: 20% × sqrt(0.5) ≈ 14.142%."""

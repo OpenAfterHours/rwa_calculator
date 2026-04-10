@@ -152,7 +152,7 @@ class TestExtractFloorMetrics:
             0.50,
         )
         assert metrics["year"] == 2027
-        assert metrics["floor_percentage"] == 0.50
+        assert metrics["floor_percentage"] == pytest.approx(0.50, abs=1e-10)
         assert metrics["floor_binding_count"] == 1  # Only EXP001 binds
         assert metrics["total_floor_impact"] == pytest.approx(50_000.0)
         assert metrics["total_rwa_pre_floor"] == pytest.approx(1_250_000.0)
@@ -176,7 +176,7 @@ class TestExtractFloorMetrics:
             0.65,
         )
         assert metrics["floor_binding_count"] == 0
-        assert metrics["total_floor_impact"] == 0.0
+        assert metrics["total_floor_impact"] == pytest.approx(0.0, abs=1e-10)
         assert metrics["total_irb_exposure_count"] == 0
 
     def test_sa_rwa_back_calculated(self, mock_result_with_floor):

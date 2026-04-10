@@ -31,6 +31,7 @@ References:
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -418,7 +419,7 @@ class Pillar3Generator:
         rows_out: list[dict[str, object]] = []
 
         for lower, upper, row_ref, label in CR6_PD_RANGES:
-            if upper == float("inf"):
+            if math.isinf(upper):
                 bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
             else:
                 bucket = class_data.filter(
@@ -795,7 +796,7 @@ class Pillar3Generator:
         rows_out: list[dict[str, object]] = []
 
         for lower, upper, row_ref, label in CR6_PD_RANGES:
-            if upper == float("inf"):
+            if math.isinf(upper):
                 bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
             else:
                 bucket = class_data.filter(

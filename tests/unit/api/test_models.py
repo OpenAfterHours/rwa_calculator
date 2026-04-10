@@ -210,7 +210,7 @@ class TestPerformanceMetrics:
             duration_seconds=0.0,
             exposure_count=1000,
         )
-        assert metrics.exposures_per_second == 0.0
+        assert metrics.exposures_per_second == pytest.approx(0.0, abs=1e-10)
 
 
 # =============================================================================

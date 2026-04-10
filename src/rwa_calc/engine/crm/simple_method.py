@@ -148,7 +148,7 @@ def _is_zero_rw_exception_expr() -> pl.Expr:
 
     # (b) 0%-RW sovereign bond in same currency (CQS 1 sovereign → 0% RW)
     is_zero_rw_sovereign = (
-        (pl.col("_fcsm_item_rw") == 0.0)
+        (pl.col("_fcsm_item_rw").abs() < 1e-10)
         & is_same_currency
         & ~ctype.is_in(["cash", "deposit", "gold", "equity", "equity_main_index", "equity_other"])
     )
@@ -290,7 +290,7 @@ def compute_fcsm_columns(
         .fill_null("")
         .str.to_lowercase()
         .is_in(["sovereign", "central_government", "central_bank"])
-        & (pl.col("_fcsm_item_rw") == 0.0)
+        & (pl.col("_fcsm_item_rw").abs() < 1e-10)
         & ~pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit", "gold"])
     )
     coll_with_exp = coll_with_exp.with_columns(

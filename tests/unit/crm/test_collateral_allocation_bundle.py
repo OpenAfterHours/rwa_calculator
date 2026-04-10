@@ -14,6 +14,7 @@ IMPLEMENTATION_PLAN.md P6.20.
 
 from __future__ import annotations
 
+import math
 from datetime import date
 
 import polars as pl
@@ -118,7 +119,7 @@ def _sa_exposure(
         "drawn_amount": drawn,
         "interest": 0.0,
         "nominal_amount": nominal,
-        "risk_type": "FR" if nominal == 0.0 else "MR",
+        "risk_type": "FR" if math.isclose(nominal, 0.0, abs_tol=1e-10) else "MR",
         "lgd": 0.45,
         "seniority": "senior",
         "parent_facility_reference": "FAC_DEFAULT",

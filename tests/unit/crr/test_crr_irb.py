@@ -190,7 +190,7 @@ class TestCapitalRequirementK:
     def test_k_zero_for_zero_pd(self) -> None:
         """K should be zero when PD is zero."""
         k = calculate_k(pd=0.0, lgd=0.45, correlation=0.15)
-        assert k == 0.0
+        assert k == pytest.approx(0.0, abs=1e-10)
 
     def test_k_equals_lgd_for_defaulted(self) -> None:
         """K should equal LGD for defaulted exposure (PD=100%)."""

@@ -88,7 +88,7 @@ class TestBlendedExpressionDirect:
         """CRR has no LGD floors — blended expression returns 0."""
         lf = _make_df(crm_alloc_other_physical=60_000.0)
         result = lf.with_columns(_lgd_floor_blended_expression(CRR).alias("floor")).collect()
-        assert result["floor"][0] == 0.0
+        assert result["floor"][0] == pytest.approx(0.0, abs=1e-10)
 
     def test_fully_unsecured_retail_other_returns_null(self):
         """Fully unsecured retail_other: blended returns null (defers to fallback)."""

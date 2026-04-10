@@ -17,6 +17,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import polars as pl
+import pytest
 
 from rwa_calc.data.tables.b31_firb_lgd import (
     B31_FIRB_LGD_COMMERCIAL_RE,
@@ -191,7 +192,7 @@ class TestB31FIRBLGDDataFrame:
             & (pl.col("is_fse") == False)  # noqa: E712
         )
         assert len(non_fse) == 1
-        assert non_fse["lgd"][0] == 0.40
+        assert non_fse["lgd"][0] == pytest.approx(0.40, abs=1e-10)
 
     def test_dataframe_fse_senior_unsecured_value(self) -> None:
         """FSE senior unsecured row has LGD = 0.45."""
@@ -202,49 +203,49 @@ class TestB31FIRBLGDDataFrame:
             & (pl.col("is_fse") == True)  # noqa: E712
         )
         assert len(fse) == 1
-        assert fse["lgd"][0] == 0.45
+        assert fse["lgd"][0] == pytest.approx(0.45, abs=1e-10)
 
     def test_dataframe_subordinated_value(self) -> None:
         """Subordinated row has LGD = 0.75."""
         df = get_b31_firb_lgd_table()
         sub = df.filter(pl.col("seniority") == "subordinated")
         assert len(sub) == 1
-        assert sub["lgd"][0] == 0.75
+        assert sub["lgd"][0] == pytest.approx(0.75, abs=1e-10)
 
     def test_dataframe_covered_bond_value(self) -> None:
         """Covered bond row has LGD = 0.1125."""
         df = get_b31_firb_lgd_table()
         cb = df.filter(pl.col("collateral_type") == "covered_bond")
         assert len(cb) == 1
-        assert cb["lgd"][0] == 0.1125
+        assert cb["lgd"][0] == pytest.approx(0.1125, abs=1e-10)
 
     def test_dataframe_receivables_value(self) -> None:
         """Receivables row has LGD = 0.20 (CRR: 0.35)."""
         df = get_b31_firb_lgd_table()
         recv = df.filter(pl.col("collateral_type") == "receivables")
         assert len(recv) == 1
-        assert recv["lgd"][0] == 0.20
+        assert recv["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_residential_re_value(self) -> None:
         """Residential RE row has LGD = 0.20 (CRR: 0.35)."""
         df = get_b31_firb_lgd_table()
         rre = df.filter(pl.col("collateral_type") == "residential_re")
         assert len(rre) == 1
-        assert rre["lgd"][0] == 0.20
+        assert rre["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_commercial_re_value(self) -> None:
         """Commercial RE row has LGD = 0.20 (CRR: 0.35)."""
         df = get_b31_firb_lgd_table()
         cre = df.filter(pl.col("collateral_type") == "commercial_re")
         assert len(cre) == 1
-        assert cre["lgd"][0] == 0.20
+        assert cre["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_other_physical_value(self) -> None:
         """Other physical row has LGD = 0.25 (CRR: 0.40)."""
         df = get_b31_firb_lgd_table()
         op = df.filter(pl.col("collateral_type") == "other_physical")
         assert len(op) == 1
-        assert op["lgd"][0] == 0.25
+        assert op["lgd"][0] == pytest.approx(0.25, abs=1e-10)
 
     def test_dataframe_re_overcoll_ratio_one_forty(self) -> None:
         """Real estate rows have 140% overcollateralisation ratio."""
@@ -252,13 +253,16 @@ class TestB31FIRBLGDDataFrame:
         re_rows = df.filter(
             pl.col("collateral_type").is_in(["residential_re", "commercial_re", "real_estate"])
         )
-        assert all(r == 1.40 for r in re_rows["overcollateralisation_ratio"].to_list())
+        assert all(
+            r == pytest.approx(1.40, abs=1e-10)
+            for r in re_rows["overcollateralisation_ratio"].to_list()
+        )
 
     def test_dataframe_receivables_overcoll_ratio_one_twenty_five(self) -> None:
         """Receivables have 125% overcollateralisation ratio."""
         df = get_b31_firb_lgd_table()
         recv = df.filter(pl.col("collateral_type") == "receivables")
-        assert recv["overcollateralisation_ratio"][0] == 1.25
+        assert recv["overcollateralisation_ratio"][0] == pytest.approx(1.25, abs=1e-10)
 
     def test_dataframe_re_min_threshold_thirty_percent(self) -> None:
         """Real estate and other physical have 30% minimum threshold."""
@@ -268,14 +272,16 @@ class TestB31FIRBLGDDataFrame:
                 ["residential_re", "commercial_re", "real_estate", "other_physical"]
             )
         )
-        assert all(t == 0.30 for t in rows["min_threshold"].to_list())
+        assert all(t == pytest.approx(0.30, abs=1e-10) for t in rows["min_threshold"].to_list())
 
     def test_dataframe_financial_no_overcoll(self) -> None:
         """Financial collateral has no overcollateralisation requirement."""
         df = get_b31_firb_lgd_table()
         fin = df.filter(pl.col("collateral_type").is_in(["financial_collateral", "cash"]))
-        assert all(r == 1.0 for r in fin["overcollateralisation_ratio"].to_list())
-        assert all(t == 0.0 for t in fin["min_threshold"].to_list())
+        assert all(
+            r == pytest.approx(1.0, abs=1e-10) for r in fin["overcollateralisation_ratio"].to_list()
+        )
+        assert all(t == pytest.approx(0.0, abs=1e-10) for t in fin["min_threshold"].to_list())
 
 
 # =============================================================================
@@ -477,8 +483,10 @@ class TestB31VsCRRComparisonTable:
         df = get_b31_vs_crr_lgd_comparison()
         fse = df.filter(pl.col("collateral_type") == "unsecured_senior_fse")
         assert len(fse) == 1
-        assert fse["crr_lgd"][0] == 0.45  # CRR has no FSE split — uses senior unsecured
-        assert fse["b31_lgd"][0] == 0.45
+        assert fse["crr_lgd"][0] == pytest.approx(
+            0.45, abs=1e-10
+        )  # CRR has no FSE split — uses senior unsecured
+        assert fse["b31_lgd"][0] == pytest.approx(0.45, abs=1e-10)
 
 
 # =============================================================================
@@ -497,7 +505,7 @@ class TestB31FIRBLGDConsistency:
             & (pl.col("seniority") == "senior")
             & (pl.col("is_fse") == False)  # noqa: E712
         )
-        assert row["lgd"][0] == float(B31_FIRB_LGD_UNSECURED_SENIOR)
+        assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_UNSECURED_SENIOR), abs=1e-10)
 
     def test_dataframe_matches_constants_fse_senior(self) -> None:
         """DataFrame FSE senior LGD matches named constant."""
@@ -507,19 +515,19 @@ class TestB31FIRBLGDConsistency:
             & (pl.col("seniority") == "senior")
             & (pl.col("is_fse") == True)  # noqa: E712
         )
-        assert row["lgd"][0] == float(B31_FIRB_LGD_UNSECURED_SENIOR_FSE)
+        assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_UNSECURED_SENIOR_FSE), abs=1e-10)
 
     def test_dataframe_matches_constants_receivables(self) -> None:
         """DataFrame receivables LGD matches named constant."""
         df = get_b31_firb_lgd_table()
         row = df.filter(pl.col("collateral_type") == "receivables")
-        assert row["lgd"][0] == float(B31_FIRB_LGD_RECEIVABLES)
+        assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_RECEIVABLES), abs=1e-10)
 
     def test_dataframe_matches_constants_other_physical(self) -> None:
         """DataFrame other physical LGD matches named constant."""
         df = get_b31_firb_lgd_table()
         row = df.filter(pl.col("collateral_type") == "other_physical")
-        assert row["lgd"][0] == float(B31_FIRB_LGD_OTHER_PHYSICAL)
+        assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_OTHER_PHYSICAL), abs=1e-10)
 
     def test_lookup_matches_constants_all_types(self) -> None:
         """Scalar lookup returns values consistent with named constants."""

@@ -269,7 +269,7 @@ After exposure class assignment, the classifier resolves per-model IRB approach 
 1. Left-join exposures to `model_permissions` on `model_id`
 2. A permission row is valid when: `exposure_class` matches, geography passes (`country_codes` is null or `cp_country_code` is in the list), and the book code is not excluded
 3. Per-exposure boolean flags are computed: `model_airb_permitted`, `model_firb_permitted`, `model_slotting_permitted`
-4. These flags feed `_determine_approach_and_finalize()`, which applies Art. 147A hard constraints before model-level permissions
+4. These flags feed `_assign_approach()`, which applies Art. 147A hard constraints before model-level permissions
 
 Exposures without a `model_id` receive all permission flags as `False` and fall back to SA. When the `model_permissions` table is absent, the org-wide `IRBPermissions` configuration applies instead.
 

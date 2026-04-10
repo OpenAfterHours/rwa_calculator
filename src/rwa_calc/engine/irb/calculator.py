@@ -236,7 +236,13 @@ class IRBCalculator:
             .irb.compute_el_shortfall_excess(errors=sf_errors)
             .irb.apply_guarantee_substitution(config)
         )
-        return self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+
+        # Standardize output for aggregator
+        return exposures.with_columns(
+            pl.col("approach").alias("approach_applied"),
+            pl.col("rwa").alias("rwa_final"),
+        )
 
     def _apply_supporting_factors(
         self,

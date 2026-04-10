@@ -47,6 +47,10 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
+from rwa_calc.data.tables.b31_risk_weights import (
+    B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP,
+    B31_SME_TURNOVER_THRESHOLD_GBP,
+)
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -136,10 +140,6 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
     "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
-
-# PRA PS1/26 Art. 147A(1)(d): Large corporate revenue threshold (GBP)
-# Corporates with consolidated annual revenue > GBP 440m → F-IRB only (no A-IRB)
-B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP = 440_000_000.0
 
 # SL types restricted to slotting-only under B31 Art. 147A(1)(c)
 _B31_SLOTTING_ONLY_SL_TYPES = {
@@ -550,7 +550,7 @@ class ExposureClassifier:
         """
         if config.is_basel_3_1:
             # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-            sme_threshold_gbp = 44_000_000.0
+            sme_threshold_gbp = float(B31_SME_TURNOVER_THRESHOLD_GBP)
         else:
             # CRR: EUR 50m converted to GBP via FX rate
             sme_threshold_gbp = float(
@@ -675,7 +675,7 @@ class ExposureClassifier:
 
         if config.is_basel_3_1:
             # PRA PS1/26 Art. 153(4): native GBP 44m threshold
-            sme_turnover_threshold = 44_000_000.0
+            sme_turnover_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
         else:
             # CRR: EUR 50m converted to GBP via FX rate
             sme_turnover_threshold = float(
@@ -993,7 +993,7 @@ class ExposureClassifier:
                     .fill_null(False)
                 )
             _is_large_corp = (
-                pl.col("cp_annual_revenue") > B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP
+                pl.col("cp_annual_revenue") > float(B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP)
             ).fill_null(False)
 
             # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
@@ -1174,7 +1174,7 @@ class ExposureClassifier:
 
         # Basel 3.1: Art. 123A two-path qualifying criteria
         # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-        sme_threshold = 44_000_000.0
+        sme_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
 
         # Art. 123A(1)(a): SME auto-qualification — revenue > 0 and < threshold
         is_sme_for_art_123a = (pl.col("cp_annual_revenue").fill_null(0.0) > 0) & (

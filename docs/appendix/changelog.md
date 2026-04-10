@@ -5,6 +5,12 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.182] — 2026-04-10
+
+### Changed
+- **Pipeline**: Renamed private methods in `PipelineOrchestrator` to remove stale fan-out/single-pass terminology: `_run_crm_processor_unified` -> `_run_crm_processor`, `_run_single_pass` -> `_run_calculators`, `_aggregate_single_pass` -> `_aggregate_results`. Section header renamed from "Single-Pass Pipeline" to "Calculation".
+- **Pipeline**: Removed dead code `_run_sa_calculator` and `_run_irb_calculator` (never called from production; superseded by `calculate_branch()` in the single-pass path). Associated tests removed.
+
 ## [0.1.181] — 2026-04-09
 
 ### Fixed

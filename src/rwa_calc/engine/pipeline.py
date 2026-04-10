@@ -38,10 +38,8 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
     EquityResultBundle,
-    IRBResultBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
-    SAResultBundle,
 )
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
@@ -262,13 +260,13 @@ class PipelineOrchestrator:
             if classified is None:
                 return self._create_error_result()
 
-            # Stage 4: Apply CRM (unified — no fan-out split)
-            crm_adjusted = self._run_crm_processor_unified(classified, config)
+            # Stage 4: Apply CRM
+            crm_adjusted = self._run_crm_processor(classified, config)
             if crm_adjusted is None:
                 return self._create_error_result()
 
-            # Stages 5-8: Single-pass calculation and aggregation
-            result = self._run_single_pass(crm_adjusted, config)
+            # Stages 5-8: Calculation and aggregation
+            result = self._run_calculators(crm_adjusted, config)
 
             # Add pipeline errors to result
             if self._errors:
@@ -422,64 +420,6 @@ class PipelineOrchestrator:
             )
             return None
 
-    def _run_sa_calculator(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> SAResultBundle | None:
-        """Run SA calculation stage."""
-        try:
-            result = self._sa_calculator.get_sa_result_bundle(data, config)
-            # Accumulate SA errors
-            if result.errors:
-                for error in result.errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="sa_calculator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        )
-                    )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="sa_calculator",
-                    error_type="sa_calculation_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    def _run_irb_calculator(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> IRBResultBundle | None:
-        """Run IRB calculation stage."""
-        try:
-            result = self._irb_calculator.get_irb_result_bundle(data, config)
-            # Accumulate IRB errors
-            if result.errors:
-                for error in result.errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="irb_calculator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        )
-                    )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="irb_calculator",
-                    error_type="irb_calculation_error",
-                    message=str(e),
-                )
-            )
-            return None
-
     def _run_equity_calculator(
         self,
         data: CRMAdjustedBundle,
@@ -510,15 +450,15 @@ class PipelineOrchestrator:
             return None
 
     # =========================================================================
-    # Private Methods - Single-Pass Pipeline
+    # Private Methods - Calculation
     # =========================================================================
 
-    def _run_crm_processor_unified(
+    def _run_crm_processor(
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
     ) -> CRMAdjustedBundle | None:
-        """Run CRM processing without fan-out split (single-pass mode)."""
+        """Run CRM processing on the unified exposure frame."""
         try:
             result = self._crm_processor.get_crm_unified_bundle(data, config)
             if result.crm_errors:
@@ -541,7 +481,7 @@ class PipelineOrchestrator:
             )
             return None
 
-    def _run_single_pass(
+    def _run_calculators(
         self,
         crm_adjusted: CRMAdjustedBundle,
         config: CalculationConfig,
@@ -608,12 +548,12 @@ class PipelineOrchestrator:
             equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
             # Aggregate from already-collected DataFrames
-            return self._aggregate_single_pass(sa_df, irb_df, slotting_df, equity_bundle, config)
+            return self._aggregate_results(sa_df, irb_df, slotting_df, equity_bundle, config)
         except Exception as e:
             self._errors.append(
                 PipelineError(
-                    stage="single_pass",
-                    error_type="single_pass_error",
+                    stage="calculators",
+                    error_type="calculation_error",
                     message=str(e),
                 )
             )
@@ -643,7 +583,7 @@ class PipelineOrchestrator:
 
         return exposures
 
-    def _aggregate_single_pass(
+    def _aggregate_results(
         self,
         sa_df: pl.DataFrame,
         irb_df: pl.DataFrame,

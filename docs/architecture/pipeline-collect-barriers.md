@@ -85,7 +85,7 @@ LAZY ─────────────────────────
   CRM: collateral allocation, guarantees, finalize_ead
     │   (no final CRM collect — plan tree is shallow post-collateral)
     │
-  Pipeline: _run_single_pass()
+  Pipeline: _run_calculators()
     │
 EAGER ─── COLLECT #3: pre-branch flatten ── Category 1 ───────
     │   (pipeline.py:631 — materialise CRM output before split)

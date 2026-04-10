@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Stage6[Stage 6: Aggregation]
-        I["_aggregate_single_pass()"]
+        I["_aggregate_results()"]
         I1[AggregatedResultBundle]
     end
 

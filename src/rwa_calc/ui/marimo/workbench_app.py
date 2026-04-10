@@ -49,8 +49,9 @@ def _(mo):
 @app.cell
 def _():
     EDIT_PORT = 8002
+    RUN_PORT = 8000
     SKIP_DIRS = frozenset({"shared", "__marimo__", "__pycache__"})
-    return EDIT_PORT, SKIP_DIRS
+    return EDIT_PORT, RUN_PORT, SKIP_DIRS
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +222,18 @@ def _():
   transition: opacity 0.2s;
 }
 .wb-card-action:hover {
+  opacity: 0.8;
+}
+
+/* Run-as-app link (green accent) */
+.wb-card-action-run {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #22c55e;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.wb-card-action-run:hover {
   opacity: 0.8;
 }
 
@@ -395,6 +408,7 @@ def _(WB_STYLES, current_folder, mo):
 @app.cell
 def _(
     EDIT_PORT,
+    RUN_PORT,
     Path,
     SKIP_DIRS,
     WB_STYLES,
@@ -499,9 +513,11 @@ def _(
         for _i, _f in enumerate(_files):
             _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
             _rel = f"local/{_cf}/{_f.name}" if _cf else f"local/{_f.name}"
+            _run_rel = f"local/{_cf}/{_f.stem}" if _cf else f"local/{_f.stem}"
             _edit_link = mo.md(
                 f"[Open in Editor \u2192](http://localhost:{EDIT_PORT}/?file={_rel})"
             )
+            _run_link = mo.md(f"[Run as App \u25b6](http://localhost:{RUN_PORT}/run/{_run_rel})")
             _cards.append(
                 mo.callout(
                     mo.vstack(
@@ -510,6 +526,7 @@ def _(
                             mo.md(f"_Modified {_mod_time:%Y-%m-%d %H:%M}_"),
                             mo.hstack(
                                 [
+                                    _run_link,
                                     _edit_link,
                                     wb_actions[f"move_{_i}"],
                                     wb_actions[f"pub_{_i}"],
@@ -875,7 +892,7 @@ def _(WB_STYLES, mo):
 
 
 @app.cell
-def _(EDIT_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
+def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
     refresh_trigger  # noqa: B018
 
     _team_dir = Path(__file__).parent / "workspaces" / "team"
@@ -917,6 +934,7 @@ def _(EDIT_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
             _status_dot = f'<span class="wb-status wb-status-{_status}"></span>'
             _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
             _rel = f"team/{_rel_to_team.as_posix()}"
+            _run_rel = f"team/{_rel_to_team.with_suffix('').as_posix()}"
             _folder_prefix = f"{_rel_to_team.parent}/" if len(_rel_to_team.parts) > 1 else ""
 
             _card_html.append(
@@ -926,6 +944,8 @@ def _(EDIT_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
                 f'  <span class="wb-card-desc">{_folder_prefix}Team workbook</span>'
                 f'  <span class="wb-card-meta">Modified {_mod_time:%Y-%m-%d %H:%M}</span>'
                 f'  <div class="wb-card-actions">'
+                f'    <a href="http://localhost:{RUN_PORT}/run/{_run_rel}"'
+                f'       class="wb-card-action-run">Run as App \u25b6</a>'
                 f'    <a href="http://localhost:{EDIT_PORT}/?file={_rel}"'
                 f'       class="wb-card-action">Open in Editor \u2192</a>'
                 f"  </div>"

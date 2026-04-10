@@ -1,17 +1,24 @@
 """Tests for input value validation in the pipeline.
 
-Verifies that the pipeline detects invalid column values, reports them
-as errors, and continues execution (non-blocking validation).
+Verifies that:
+- The loader validates bundle values and attaches errors to RawDataBundle
+- The pipeline propagates RawDataBundle.errors to the final result
+- The pipeline continues execution despite validation errors (non-blocking)
 """
 
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.engine.loader import _run_bundle_validation
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 
 def _make_minimal_bundle(**overrides) -> RawDataBundle:
-    """Create a minimal RawDataBundle suitable for pipeline validation testing."""
+    """Create a minimal RawDataBundle suitable for pipeline validation testing.
+
+    Runs loader-level validation and attaches any errors to the bundle,
+    matching the behaviour of a real loader.
+    """
     from datetime import date
 
     facilities = pl.LazyFrame(
@@ -90,7 +97,12 @@ def _make_minimal_bundle(**overrides) -> RawDataBundle:
         "lending_mappings": lending_mappings,
     }
     defaults.update(overrides)
-    return RawDataBundle(**defaults)
+    bundle = RawDataBundle(**defaults)
+    # Run loader-level validation to match real loader behaviour
+    errors = _run_bundle_validation(bundle)
+    if errors:
+        return RawDataBundle(**{**defaults, "errors": errors})
+    return bundle
 
 
 def _make_config():
@@ -103,7 +115,7 @@ def _make_config():
 
 
 class TestPipelineInputValidation:
-    """Tests that pipeline detects and reports invalid input values."""
+    """Tests that loader validation errors propagate through the pipeline."""
 
     def test_valid_data_no_validation_errors(self):
         """Valid input data should produce no validation errors."""
@@ -114,9 +126,7 @@ class TestPipelineInputValidation:
         result = pipeline.run_with_data(bundle, config)
 
         validation_errors = [
-            e
-            for e in result.errors
-            if hasattr(e, "message") and "input_validation" in str(e.message)
+            e for e in result.errors if hasattr(e, "field_name") and e.field_name is not None
         ]
         assert validation_errors == []
 

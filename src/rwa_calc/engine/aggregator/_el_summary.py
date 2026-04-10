@@ -41,7 +41,7 @@ def _to_decimal(value: float) -> Decimal:
     return Decimal(str(value))
 
 
-def _combine_irb_and_slotting(
+def _merge_el_sources(
     irb_results: pl.LazyFrame | None,
     slotting_results: pl.LazyFrame | None,
 ) -> pl.LazyFrame | None:
@@ -172,7 +172,7 @@ def compute_el_portfolio_summary(
     IRB credit-risk RWA from Part Three, Title II, Chapter 3 which includes
     the slotting approach under Art. 153(5)).
     """
-    combined = _combine_irb_and_slotting(irb_results, slotting_results)
+    combined = _merge_el_sources(irb_results, slotting_results)
     if combined is None:
         return None
 

@@ -253,8 +253,8 @@ class ExposureClassifier:
         # Step 2: Derive all independent flags (1 .with_columns)
         classified = self._derive_independent_flags(exposures, config, schema_names)
 
-        # Step 3: SME + retail classification (1 .with_columns)
-        classified = self._classify_sme_and_retail(classified, config, schema_names)
+        # Step 3: Exposure subtype classification (1 .with_columns)
+        classified = self._classify_exposure_subtypes(classified, config, schema_names)
 
         # Step 4: Corporate → retail reclassification (1 .with_columns)
         classified = self._reclassify_corporate_to_retail(
@@ -265,7 +265,7 @@ class ExposureClassifier:
 
         # Step 4b: Model-level permission resolution (optional, 1 join + filter)
         # When model_permissions data is present, resolve per-row AIRB/FIRB permissions.
-        # Otherwise, falls back to org-wide IRBPermissions in _determine_approach_and_finalize.
+        # Otherwise, falls back to org-wide IRBPermissions in _assign_approach.
         model_permissions = data.model_permissions
         if model_permissions is not None:
             classified = self._resolve_model_permissions(
@@ -289,8 +289,8 @@ class ExposureClassifier:
                 )
             classified = classified.drop("_model_permission_diagnostic")
 
-        # Step 5: Approach assignment + finalization (1 .with_columns)
-        classified = self._determine_approach_and_finalize(
+        # Step 5: Approach assignment (1 .with_columns)
+        classified = self._assign_approach(
             classified,
             config,
             schema_names,
@@ -527,10 +527,10 @@ class ExposureClassifier:
         ).drop(["_sa_class", "_irb_class", "_pt_upper"])
 
     # =========================================================================
-    # Phase 3: SME + retail classification (1 .with_columns — 5 expressions)
+    # Phase 3: Exposure subtype classification (1 .with_columns — 5 expressions)
     # =========================================================================
 
-    def _classify_sme_and_retail(
+    def _classify_exposure_subtypes(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
@@ -877,10 +877,10 @@ class ExposureClassifier:
         return result
 
     # =========================================================================
-    # Phase 5: Approach assignment + finalization (1 .with_columns)
+    # Phase 5: Approach assignment (1 .with_columns)
     # =========================================================================
 
-    def _determine_approach_and_finalize(
+    def _assign_approach(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,

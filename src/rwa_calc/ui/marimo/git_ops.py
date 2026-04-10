@@ -153,7 +153,7 @@ def publish(source: Path, team_dir: Path) -> Path:
     return dest
 
 
-def commit_and_push(
+def publish_changes(
     team_dir: Path,
     repo_root: Path,
     files: list[Path],

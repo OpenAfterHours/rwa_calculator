@@ -194,13 +194,13 @@ exposure_class      # Unified class (SA class for backwards compatibility)
 **HVCRE Flag**:
 - `is_hvcre = True` if sl_type == "hvcre"
 
-### Step 3: SME and Retail Classification
+### Step 3: Exposure Subtype Classification
 
 ```python
-_classify_sme_and_retail(exposures, config)
+_classify_exposure_subtypes(exposures, config)
 ```
 
-Applies SME and retail classification in a single `.with_columns()` call.
+Applies SME, retail, and QRRE subtype classification in a single `.with_columns()` call.
 
 **SME criteria** per CRR Art. 501:
 - Entity must be classified as CORPORATE
@@ -250,10 +250,10 @@ no org-wide fallback — exposures without a matching model permission use SA.
 
 See [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema) for the data schema.
 
-### Step 6: Determine Approach and Finalize
+### Step 6: Assign Approach
 
 ```python
-_determine_approach_and_finalize(exposures, config, has_model_permissions)
+_assign_approach(exposures, config, has_model_permissions)
 ```
 
 Assigns calculation approach and builds classification audit trail in a single

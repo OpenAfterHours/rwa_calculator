@@ -1063,3 +1063,65 @@ class TestEdgeCases:
 
         empty_schema_lf = pl.LazyFrame(schema={})
         assert has_rows(empty_schema_lf) is False
+
+
+# =============================================================================
+# Bundle Validation Tests
+# =============================================================================
+
+
+class TestBundleValidation:
+    """Tests that the loader validates bundle values and attaches errors."""
+
+    def test_loader_attaches_errors_to_bundle(self, temp_parquet_dir: Path) -> None:
+        """Loader should attach validation errors to the bundle."""
+        loader = ParquetLoader(temp_parquet_dir)
+        bundle = loader.load()
+
+        assert isinstance(bundle.errors, list)
+        # temp_parquet_dir has collateral_type='PROPERTY' which is invalid,
+        # so we expect at least one validation error
+        assert len(bundle.errors) >= 1
+        assert any("collateral_type" in e.field_name for e in bundle.errors if e.field_name)
+
+    def test_invalid_categorical_values_produce_errors(self) -> None:
+        """Loader validation should catch invalid categorical column values."""
+        from rwa_calc.engine.loader import _run_bundle_validation
+
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=pl.LazyFrame(),
+            counterparties=pl.LazyFrame({"entity_type": ["sovereign", "INVALID_TYPE"]}),
+            facility_mappings=pl.LazyFrame(),
+            lending_mappings=pl.LazyFrame(),
+        )
+
+        errors = _run_bundle_validation(bundle)
+        assert len(errors) >= 1
+        assert any("INVALID_TYPE" in e.message for e in errors)
+
+    def test_run_bundle_validation_returns_empty_for_valid_data(self) -> None:
+        """_run_bundle_validation returns empty list when all values are valid."""
+        from rwa_calc.engine.loader import _run_bundle_validation
+
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=pl.LazyFrame(),
+            counterparties=pl.LazyFrame({"entity_type": ["sovereign", "corporate"]}),
+            facility_mappings=pl.LazyFrame(),
+            lending_mappings=pl.LazyFrame(),
+        )
+
+        errors = _run_bundle_validation(bundle)
+        assert errors == []
+
+    def test_errors_field_default_is_empty_list(self) -> None:
+        """RawDataBundle.errors defaults to an empty list."""
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=pl.LazyFrame(),
+            counterparties=pl.LazyFrame(),
+            facility_mappings=pl.LazyFrame(),
+            lending_mappings=pl.LazyFrame(),
+        )
+        assert bundle.errors == []

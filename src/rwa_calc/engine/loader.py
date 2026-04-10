@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -30,6 +31,7 @@ import polars as pl
 
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.schemas import (
     CIU_HOLDINGS_SCHEMA,
     COLLATERAL_SCHEMA,
@@ -49,6 +51,8 @@ from rwa_calc.data.schemas import (
     SPECIALISED_LENDING_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
+
+logger = logging.getLogger(__name__)
 
 type ScanFn = Callable[[Path], pl.LazyFrame]
 
@@ -220,6 +224,21 @@ def _load_file_optional(
         return None
 
 
+def _run_bundle_validation(bundle: RawDataBundle) -> list[CalculationError]:
+    """Validate categorical column values in a loaded bundle.
+
+    Wraps ``validate_bundle_values`` with exception handling so that
+    validation failures never prevent the bundle from being returned.
+    """
+    try:
+        from rwa_calc.contracts.validation import validate_bundle_values
+
+        return validate_bundle_values(bundle)
+    except Exception as e:
+        logger.warning("Bundle value validation failed: %s", e)
+        return []
+
+
 def _build_bundle(
     load: Callable[[str | Path | None, dict[str, pl.DataType] | None], pl.LazyFrame],
     load_optional: Callable[
@@ -228,7 +247,7 @@ def _build_bundle(
     config: DataSourceConfig,
 ) -> RawDataBundle:
     """Build a RawDataBundle — single implementation shared by all loaders."""
-    return RawDataBundle(
+    bundle = RawDataBundle(
         facilities=load(config.facilities_file, FACILITY_SCHEMA),
         loans=load(config.loans_file, LOAN_SCHEMA),
         counterparties=load(config.counterparties_file, COUNTERPARTY_SCHEMA),
@@ -247,6 +266,29 @@ def _build_bundle(
         ),
         fx_rates=load_optional(config.fx_rates_file, FX_RATES_SCHEMA),
         model_permissions=load_optional(config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA),
+    )
+    errors = _run_bundle_validation(bundle)
+    if not errors:
+        return bundle
+    # Frozen dataclass — reconstruct with errors attached
+    return RawDataBundle(
+        facilities=bundle.facilities,
+        loans=bundle.loans,
+        counterparties=bundle.counterparties,
+        facility_mappings=bundle.facility_mappings,
+        lending_mappings=bundle.lending_mappings,
+        org_mappings=bundle.org_mappings,
+        contingents=bundle.contingents,
+        collateral=bundle.collateral,
+        guarantees=bundle.guarantees,
+        provisions=bundle.provisions,
+        ratings=bundle.ratings,
+        specialised_lending=bundle.specialised_lending,
+        equity_exposures=bundle.equity_exposures,
+        ciu_holdings=bundle.ciu_holdings,
+        fx_rates=bundle.fx_rates,
+        model_permissions=bundle.model_permissions,
+        errors=errors,
     )
 
 

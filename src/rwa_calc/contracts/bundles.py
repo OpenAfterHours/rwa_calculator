@@ -57,6 +57,7 @@ class RawDataBundle:
         equity_exposures: Equity exposure details
         fx_rates: FX rates for currency conversion (optional)
         model_permissions: Per-model IRB permissions (optional, overrides org-wide IRBPermissions)
+        errors: Validation errors found during loading
     """
 
     facilities: pl.LazyFrame
@@ -75,6 +76,7 @@ class RawDataBundle:
     ciu_holdings: pl.LazyFrame | None = None
     fx_rates: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
+    errors: list[CalculationError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

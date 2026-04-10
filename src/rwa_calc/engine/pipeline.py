@@ -224,9 +224,6 @@ class PipelineOrchestrator:
             # Ensure components are initialized (config needed for framework-specific CRM)
             self._ensure_components_initialized(config)
 
-            # Validate input data values
-            self._validate_input_data(data)
-
             # IRB mode without model_permissions → all exposures fall back to SA.
             # The classifier forces all permission expressions to False when
             # has_model_permissions=False in IRB mode. We surface a pipeline-level
@@ -268,11 +265,12 @@ class PipelineOrchestrator:
             # Stages 5-8: Calculation and aggregation
             result = self._run_calculators(crm_adjusted, config)
 
-            # Add pipeline errors to result
-            if self._errors:
-                all_errors = list(result.errors) + [
-                    self._convert_pipeline_error(e) for e in self._errors
-                ]
+            # Add loader validation errors and pipeline errors to result
+            loader_errors = list(data.errors) if data.errors else []
+            pipeline_errors = [self._convert_pipeline_error(e) for e in self._errors]
+            extra_errors = loader_errors + pipeline_errors
+            if extra_errors:
+                all_errors = list(result.errors) + extra_errors
                 result = AggregatedResultBundle(
                     results=result.results,
                     sa_results=result.sa_results,
@@ -336,29 +334,6 @@ class PipelineOrchestrator:
     # =========================================================================
     # Private Methods - Stage Execution
     # =========================================================================
-
-    def _validate_input_data(self, data: RawDataBundle) -> None:
-        """Validate input data values against column constraints."""
-        try:
-            from rwa_calc.contracts.validation import validate_bundle_values
-
-            validation_errors = validate_bundle_values(data)
-            for error in validation_errors:
-                self._errors.append(
-                    PipelineError(
-                        stage="input_validation",
-                        error_type="invalid_value",
-                        message=error.message,
-                    )
-                )
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="input_validation",
-                    error_type="validation_error",
-                    message=f"Value validation failed: {e}",
-                )
-            )
 
     def _run_hierarchy_resolver(
         self,

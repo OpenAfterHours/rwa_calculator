@@ -44,8 +44,13 @@ class LoaderProtocol(Protocol):
     """
     Protocol for data loading components.
 
-    Responsible for loading raw data from source systems and
-    converting to LazyFrames with expected schemas.
+    Responsible for loading raw data from source systems,
+    converting to LazyFrames with expected schemas, and
+    validating categorical column values.
+
+    The returned RawDataBundle carries any validation errors
+    found during loading so downstream stages can trust the
+    data at the boundary.
 
     Implementations may load from:
     - Files (CSV, Parquet, JSON)
@@ -58,7 +63,8 @@ class LoaderProtocol(Protocol):
         Load all required data and return as a RawDataBundle.
 
         Returns:
-            RawDataBundle containing all input LazyFrames
+            RawDataBundle containing all input LazyFrames and any
+            validation errors discovered during loading
 
         Raises:
             DataLoadError: If required data cannot be loaded

@@ -161,6 +161,21 @@ B31_CORPORATE_NON_INVESTMENT_GRADE_RW = Decimal("1.35")
 B31_CORPORATE_SME_RW = Decimal("0.85")
 
 # =============================================================================
+# LARGE CORPORATE REVENUE THRESHOLD (PRA PS1/26 Art. 147A(1)(d))
+# Corporates with consolidated annual revenue > GBP 440m → F-IRB only (no A-IRB)
+# =============================================================================
+
+B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP = Decimal("440000000")
+
+# =============================================================================
+# SME TURNOVER THRESHOLD (PRA PS1/26 Art. 153(4))
+# Native GBP threshold — no FX conversion needed (unlike CRR EUR 50m).
+# Counterparties with annual revenue < GBP 44m qualify as SME.
+# =============================================================================
+
+B31_SME_TURNOVER_THRESHOLD_GBP = Decimal("44000000")
+
+# =============================================================================
 # SCRA-BASED INSTITUTION RISK WEIGHTS — BASEL 3.1 (CRE20.16-21)
 # Standardised Credit Risk Assessment Approach for unrated institutions.
 # Replaces CRR due-diligence assessment for unrated.

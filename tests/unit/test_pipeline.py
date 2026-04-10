@@ -24,7 +24,6 @@ from rwa_calc.contracts.bundles import (
     CRMAdjustedBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
-    SAResultBundle,
     create_empty_raw_data_bundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
@@ -539,32 +538,9 @@ class TestPipelineStageExecution:
         pipeline = PipelineOrchestrator()
         pipeline._ensure_components_initialized()
 
-        result = pipeline._run_crm_processor_unified(mock_classified_bundle, crr_config)
+        result = pipeline._run_crm_processor(mock_classified_bundle, crr_config)
 
         assert isinstance(result, CRMAdjustedBundle)
-
-    def test_sa_calculator_stage(self, mock_crm_bundle, crr_config):
-        """Test SA calculator stage runs correctly."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
-
-        result = pipeline._run_sa_calculator(mock_crm_bundle, crr_config)
-
-        assert isinstance(result, SAResultBundle)
-        assert result.results is not None
-
-    def test_irb_calculator_stage_empty(self, mock_crm_bundle, crr_config):
-        """Test IRB calculator stage with no IRB exposures."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
-
-        # mock_crm_bundle has all SA exposures, no IRB
-        result = pipeline._run_irb_calculator(mock_crm_bundle, crr_config)
-
-        # With no IRB rows, calculator runs on empty data — returns empty bundle or None
-        if result is not None:
-            collected = result.results.collect()
-            assert collected.height == 0
 
     def test_slotting_calculator_stage_empty(self, mock_crm_bundle, crr_config):
         """Test slotting calculator stage with no slotting exposures."""

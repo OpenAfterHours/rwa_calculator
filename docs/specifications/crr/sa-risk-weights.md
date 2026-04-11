@@ -529,6 +529,25 @@ avg_RW = 0.50 × secured_share + counterparty_RW × (1.0 - secured_share)
     conditions, the code assigns 100% to the entire exposure instead of splitting: 50% on
     the portion up to 50% MV and counterparty RW on the excess.
 
+## LTV Definition for Basel 3.1 Real Estate (Art. 124C)
+
+Basel 3.1 introduces a formal regulatory LTV definition in Art. 124C. The numerator
+includes outstanding balance + undrawn committed amounts + **all prior/pari passu
+charges** (Art. 124C(3)). CRM is excluded except pledged deposit accounts meeting
+on-balance-sheet netting requirements.
+
+!!! info "Full specification"
+    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c)
+    for the complete LTV definition, prior charges stacking rules, and implementation
+    field mapping.
+
+**CRR comparison:** CRR Art. 124(1)/125(1)/126(1) reference "the value of the property"
+and "the part of the loan" but do not have an explicit Art. 124C-style LTV definition
+with prior charge stacking requirements. The obligation to include senior charges in
+the LTV numerator is a Basel 3.1 addition.
+
+---
+
 ## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
 ### General Residential — Loan-Splitting (Art. 124F)

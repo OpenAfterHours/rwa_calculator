@@ -220,6 +220,13 @@ counterparty / floor RW otherwise). See the
 [Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
 for full details.
 
+!!! info "LTV Definition (Art. 124C)"
+    Basel 3.1 defines a formal regulatory LTV: outstanding balance + undrawn committed
+    amounts + **all prior/pari passu charges** (Art. 124C(3)), divided by property value.
+    The `property_ltv` input field must reflect this stacked calculation. Where charge
+    ranking is unknown, treat other charges as pari passu (conservative default).
+    See [Art. 124C specification](../../specifications/basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c).
+
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 
 The PRA adopted loan-splitting for general residential (not income-dependent):

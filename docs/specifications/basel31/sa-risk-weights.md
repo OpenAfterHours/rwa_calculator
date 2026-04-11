@@ -26,6 +26,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
 | FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
 | FR-1.13 | ADC exposures 150% / qualifying residential 100% (Art. 124K) | P0 | Done |
+| FR-1.17 | Regulatory LTV definition and prior charges stacking (Art. 124C) | P1 | Done |
 | FR-1.14 | Covered bond rated risk weights (Art. 129(4), Table 7) — PRA values = CRR values | P0 | Done (spec correct; code bug P1.113) |
 | FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
@@ -458,6 +459,106 @@ or income-producing treatment.
 | B31-A12 | Standard ADC exposure | True | False | 150% | Art. 124K(1) |
 | B31-A13 | Qualifying residential ADC (pre-sold) | True | True | 100% | Art. 124K(2) |
 | B31-A14 | ADC overrides RE LTV treatment | True | False | 150% | Art. 124K(1) priority |
+
+---
+
+## Real Estate — LTV Definition (Art. 124C)
+
+Art. 124C defines the regulatory loan-to-value ratio used for all LTV-based real estate
+risk weights (Art. 124G income-producing residential and Art. 124I income-producing
+commercial). This definition also underpins the loan-splitting threshold calculations
+in Art. 124F (residential) and Art. 124H (commercial).
+
+**Regulatory Reference:** PRA PS1/26 Art. 124C (p.52)
+
+### LTV Formula (Art. 124C(1))
+
+```
+LTV = loan_amount / property_value
+```
+
+Where:
+- `loan_amount` is defined per Art. 124C(2)–(3)
+- `property_value` is determined per Art. 124D (see [Valuation Requirements](#valuation-requirements-art-124d))
+
+### Loan Amount — Numerator (Art. 124C(2))
+
+The loan amount includes:
+
+| Component | Included | Reference |
+|-----------|----------|-----------|
+| Outstanding loan balance | Yes | Art. 124C(2) |
+| Undrawn committed amount of the mortgage loan | Yes | Art. 124C(2) |
+| Credit risk adjustments and other own-funds reductions | **No** — excluded | Art. 124C(2) |
+| Funded or unfunded credit protection | **No** — excluded | Art. 124C(2) |
+| Pledged deposit accounts (on-balance-sheet netting) | **Exception** — may be deducted | Art. 124C(2) |
+
+The single exception to the "no CRM" rule: pledged deposit accounts with the lending
+institution that meet **all** requirements for on-balance-sheet netting (Credit Risk
+Mitigation Part) AND have been unconditionally and irrevocably pledged for the sole
+purpose of loan repayment. These may reduce the loan amount in the LTV numerator.
+
+### Prior Charges Stacking (Art. 124C(3))
+
+!!! warning "Critical Classification Rule"
+    The loan amount used in the LTV calculation **must include all other loans** secured
+    with charges ranking **ahead of** or **pari passu** with the charge securing the
+    current exposure. This is the regulatory basis for `prior_charge_ltv` in the
+    calculator's input schema.
+
+**Rules:**
+
+1. **Identify all charges on the property** — any loan secured by a charge that ranks
+   in priority ahead of the institution's charge, or ranks pari passu, must be added
+   to the numerator.
+2. **Insufficient ranking information** — where there is insufficient information to
+   determine the ranking of other charges, the institution **must treat** those charges
+   as pari passu with its own charge. This is a conservative assumption that increases
+   the reported LTV.
+3. **Effect on risk weights** — prior charge stacking increases LTV, which:
+   - Pushes whole-loan exposures (Art. 124G/124I) into higher risk weight bands
+   - Reduces the effective loan-splitting threshold (Art. 124F(2)/124H junior charges)
+   - May trigger the 1.25× junior charge multiplier (Art. 124G(2)/124I(3))
+
+**Example:**
+
+```
+Property value:             £400,000
+Institution's own loan:     £200,000 (outstanding) + £20,000 (undrawn committed)
+Senior charge (other lender): £100,000
+
+LTV = (£200,000 + £20,000 + £100,000) / £400,000 = 80%
+    (without prior charge stacking: LTV = £220,000 / £400,000 = 55%)
+```
+
+### Property Value — Denominator (Art. 124C(4))
+
+The property value is determined in accordance with Art. 124D
+([Valuation Requirements](#valuation-requirements-art-124d) above).
+
+### Implementation
+
+The calculator uses two input fields to implement Art. 124C:
+
+| Field | Type | Description | Reference |
+|-------|------|-------------|-----------|
+| `property_ltv` | Float64 | The fully-stacked LTV ratio incorporating all Art. 124C components (including prior charges per para. 3) | Art. 124C(1)–(4) |
+| `prior_charge_ltv` | Float64 | The portion of the LTV attributable to prior/pari passu charges alone — used by Art. 124F(2) and Art. 124G(2) to reduce the loan-splitting threshold and apply the junior charge multiplier | Art. 124C(3), Art. 124F(2) |
+
+The reporting institution is responsible for computing the stacked LTV externally:
+the calculator consumes the pre-computed `property_ltv` value and assumes it already
+incorporates Art. 124C(2)–(3) components. The separate `prior_charge_ltv` field
+enables the calculator to determine the junior charge effect on the loan-splitting
+threshold (55% for RRE, 60% for CRE).
+
+!!! info "Relationship between `property_ltv` and `prior_charge_ltv`"
+    - `property_ltv` = total regulatory LTV including all prior charges (the single
+      number used for risk weight band lookup in Art. 124G/124I tables)
+    - `prior_charge_ltv` = the LTV contribution of prior/pari passu charges only (used
+      to reduce the secured threshold from 55%/60% under Art. 124F(2)/124H junior charge
+      treatment)
+    - A first-charge exposure has `prior_charge_ltv = 0.0`
+    - An exposure behind a senior lien has `prior_charge_ltv > 0.0`
 
 ---
 

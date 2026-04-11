@@ -369,7 +369,8 @@ contingents = pl.DataFrame({
 | `valuation_date` | `Date` | No | Date of last valuation |
 | `valuation_type` | `String` | No | `market`, `indexed`, `independent` |
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
-| `property_ltv` | `Float64` | No | Loan-to-value ratio (RE only) |
+| `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator |
+| `prior_charge_ltv` | `Float64` | No | LTV portion from prior/pari passu charges only (Art. 124C(3)); 0.0 = first charge. Used by Art. 124F(2)/124G(2) junior charge treatment |
 | `is_income_producing` | `Boolean` | No | Material income dependence (CRE) |
 | `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
 | `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
@@ -418,7 +419,8 @@ collateral = pl.DataFrame({
     "valuation_date": [date(2024, 12, 31), date(2024, 11, 15)],
     "valuation_type": ["market", "independent"],
     "property_type": [None, "residential"],
-    "property_ltv": [None, 0.65],
+    "property_ltv": [None, 0.65],  # Art. 124C: includes prior charges in numerator
+    "prior_charge_ltv": [None, 0.0],  # Art. 124C(3): 0.0 = first charge
     "is_income_producing": [None, False],
     "is_adc": [None, False],
     "is_presold": [None, None],

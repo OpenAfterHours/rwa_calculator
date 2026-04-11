@@ -715,7 +715,7 @@ class TestELPortfolioSummary:
         aggregator: OutputAggregator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Should compute shortfall totals and 50/50 CET1/T2 deduction split."""
+        """Should compute shortfall totals and 100% CET1 deduction (Art. 36(1)(d))."""
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002"],
@@ -740,8 +740,8 @@ class TestELPortfolioSummary:
         assert el is not None
         assert float(el.total_el_shortfall) == pytest.approx(40000.0)
         assert float(el.total_el_excess) == pytest.approx(0.0)
-        assert float(el.cet1_deduction) == pytest.approx(20000.0)
-        assert float(el.t2_deduction) == pytest.approx(20000.0)
+        assert float(el.cet1_deduction) == pytest.approx(40000.0)
+        assert float(el.t2_deduction) == pytest.approx(0.0)
 
     def test_basic_excess_computation(
         self,
@@ -871,8 +871,8 @@ class TestELPortfolioSummary:
         assert float(el.total_irb_rwa) == pytest.approx(10000000.0)
         assert float(el.t2_credit_cap) == pytest.approx(60000.0)
         assert float(el.t2_credit) == pytest.approx(60000.0)
-        assert float(el.cet1_deduction) == pytest.approx(10000.0)
-        assert float(el.t2_deduction) == pytest.approx(10000.0)
+        assert float(el.cet1_deduction) == pytest.approx(20000.0)
+        assert float(el.t2_deduction) == pytest.approx(0.0)
 
     def test_uses_rwa_final_fallback(
         self,

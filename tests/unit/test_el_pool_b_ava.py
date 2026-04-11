@@ -223,7 +223,7 @@ class TestPoolBPortfolioSummary:
 
     def test_ava_reduces_cet1_deduction(self) -> None:
         """AVA in Pool B reduces effective shortfall, thus reducing CET1 deduction."""
-        # Without AVA: shortfall=4000, cet1_deduction=2000
+        # Without AVA: shortfall=4000, cet1_deduction=4000 (100% to CET1)
         lf_no_ava = _irb_frame(
             expected_loss=[10_000.0],
             provision_allocated=[6_000.0],
@@ -233,7 +233,7 @@ class TestPoolBPortfolioSummary:
         )
         summary_no_ava = compute_el_portfolio_summary(lf_no_ava)
 
-        # With AVA: shortfall=2000, cet1_deduction=1000
+        # With AVA: shortfall=2000, cet1_deduction=2000 (100% to CET1)
         lf_with_ava = _irb_frame(
             expected_loss=[10_000.0],
             provision_allocated=[6_000.0],
@@ -245,8 +245,8 @@ class TestPoolBPortfolioSummary:
 
         assert summary_no_ava is not None
         assert summary_with_ava is not None
-        assert float(summary_no_ava.cet1_deduction) == pytest.approx(2_000.0)
-        assert float(summary_with_ava.cet1_deduction) == pytest.approx(1_000.0)
+        assert float(summary_no_ava.cet1_deduction) == pytest.approx(4_000.0)
+        assert float(summary_with_ava.cet1_deduction) == pytest.approx(2_000.0)
         # AVA halved the CET1 deduction
         assert summary_with_ava.cet1_deduction < summary_no_ava.cet1_deduction
 
@@ -364,9 +364,9 @@ class TestPoolBPortfolioSummary:
         assert float(summary.total_ava_amount) == pytest.approx(1_500.0)
         assert float(summary.total_other_own_funds_reductions) == pytest.approx(800.0)
         assert float(summary.total_pool_b) == pytest.approx(7_300.0)
-        # CET1 deduction = 50% of shortfall
-        assert float(summary.cet1_deduction) == pytest.approx(1_350.0)
-        assert float(summary.t2_deduction) == pytest.approx(1_350.0)
+        # CET1 deduction = 100% of shortfall (Art. 36(1)(d))
+        assert float(summary.cet1_deduction) == pytest.approx(2_700.0)
+        assert float(summary.t2_deduction) == pytest.approx(0.0)
 
     def test_zero_ava_identical_to_provisions_only(self) -> None:
         """Zero AVA/OFR gives same result as provisions-only."""

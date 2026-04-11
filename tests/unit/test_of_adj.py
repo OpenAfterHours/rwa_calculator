@@ -222,9 +222,9 @@ class TestOfAdjAggregator:
         """IRB EL shortfall produces negative OF-ADJ via cet1_deduction.
 
         IRB RWA=50m, SA RWA=100m, shortfall=400k.
-        CET1 deduction = 400k × 0.5 = 200k.
-        OF-ADJ = 12.5 × (0 - 200k - 0 + 0) = -2.5m.
-        Floor threshold = 72.5% × 100m - 2.5m = 70.0m.
+        CET1 deduction = 400k (100% to CET1 per Art. 36(1)(d)).
+        OF-ADJ = 12.5 × (0 - 400k - 0 + 0) = -5.0m.
+        Floor threshold = 72.5% × 100m - 5.0m = 67.5m.
         """
         config = _b31_config()
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, shortfall=400_000.0)
@@ -232,9 +232,9 @@ class TestOfAdjAggregator:
 
         summary = result.output_floor_summary
         assert summary is not None
-        assert summary.irb_cet1_deduction == pytest.approx(200_000.0, rel=0.001)
-        assert summary.of_adj == pytest.approx(-2_500_000.0, rel=0.001)
-        assert summary.floor_threshold == pytest.approx(70_000_000.0, rel=0.001)
+        assert summary.irb_cet1_deduction == pytest.approx(400_000.0, rel=0.001)
+        assert summary.of_adj == pytest.approx(-5_000_000.0, rel=0.001)
+        assert summary.floor_threshold == pytest.approx(67_500_000.0, rel=0.001)
 
     def test_of_adj_with_gcra_input(self, aggregator: OutputAggregator) -> None:
         """GCRA config input reduces floor threshold.

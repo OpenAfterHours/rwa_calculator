@@ -236,9 +236,9 @@ def compute_el_portfolio_summary(
     t2_credit_cap = total_irb_rwa * T2_CREDIT_CAP_RATE
     t2_credit = min(effective_excess, t2_credit_cap)
 
-    # EL shortfall deduction: 50% CET1 + 50% T2 (CRR Art. 159)
-    cet1_deduction = effective_shortfall * 0.5
-    t2_deduction = effective_shortfall * 0.5
+    # EL shortfall deduction: 100% from CET1 (Art. 36(1)(d), Art. 159)
+    # Art. 159 computes the shortfall; Art. 36(1)(d) directs full deduction from CET1.
+    cet1_deduction = effective_shortfall
 
     return ELPortfolioSummary(
         total_expected_loss=_to_decimal(total_expected_loss),
@@ -249,7 +249,7 @@ def compute_el_portfolio_summary(
         t2_credit_cap=_to_decimal(t2_credit_cap),
         t2_credit=_to_decimal(t2_credit),
         cet1_deduction=_to_decimal(cet1_deduction),
-        t2_deduction=_to_decimal(t2_deduction),
+        t2_deduction=Decimal("0"),
         non_defaulted_el_shortfall=_to_decimal(nd_shortfall),
         non_defaulted_el_excess=_to_decimal(nd_excess),
         defaulted_el_shortfall=_to_decimal(d_shortfall),

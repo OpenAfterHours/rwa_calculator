@@ -70,7 +70,7 @@ class TestArt1593TwoBranch:
 
         Non-defaulted: shortfall=40k
         Defaulted: excess=100k
-        Deductions: CET1=20k, T2=20k (50/50 split of 40k)
+        Deductions: CET1=40k (100% to CET1 per Art. 36(1)(d)), T2=0
         """
         irb = pl.LazyFrame(
             {
@@ -88,8 +88,8 @@ class TestArt1593TwoBranch:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is True
-        assert float(result.cet1_deduction) == pytest.approx(20_000.0)
-        assert float(result.t2_deduction) == pytest.approx(20_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(40_000.0)
+        assert float(result.t2_deduction) == pytest.approx(0.0)
 
     def test_two_branch_t2_credit_uses_defaulted_excess_only(self) -> None:
         """T2 credit should use defaulted excess (not combined) when 159(3) applies.
@@ -443,7 +443,7 @@ class TestArt1593CapitalImpact:
         LOWER shortfall. With two-branch:
             effective shortfall = 50k (non-defaulted only)
             effective excess = 50k (defaulted only)
-            CET1 deduction = 25k
+            CET1 deduction = 50k (100% to CET1 per Art. 36(1)(d))
         """
         irb = pl.LazyFrame(
             {
@@ -463,8 +463,8 @@ class TestArt1593CapitalImpact:
         assert result.art_159_3_applies is True
         # Non-defaulted shortfall is not reduced by defaulted excess
         assert float(result.total_el_shortfall) == pytest.approx(50_000.0)
-        assert float(result.cet1_deduction) == pytest.approx(25_000.0)
-        assert float(result.t2_deduction) == pytest.approx(25_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(50_000.0)
+        assert float(result.t2_deduction) == pytest.approx(0.0)
 
     def test_two_branch_flag_false_when_no_cross_offset_possible(self) -> None:
         """When there's no defaulted excess, Art. 159(3) doesn't apply.
@@ -489,5 +489,5 @@ class TestArt1593CapitalImpact:
         assert result is not None
         assert result.art_159_3_applies is False
         assert float(result.total_el_shortfall) == pytest.approx(40_000.0)
-        assert float(result.cet1_deduction) == pytest.approx(20_000.0)
-        assert float(result.t2_deduction) == pytest.approx(20_000.0)
+        assert float(result.cet1_deduction) == pytest.approx(40_000.0)
+        assert float(result.t2_deduction) == pytest.approx(0.0)

@@ -1311,7 +1311,7 @@ def _provision_scenario_loans() -> list[Loan]:
 
     IRB Treatment (CRR Art. 158-159):
         - Expected Loss = PD × LGD × EAD
-        - EL Shortfall (provisions < EL): 50% CET1 + 50% T2 deduction
+        - EL Shortfall (provisions < EL): 100% CET1 deduction (Art. 36(1)(d))
         - EL Excess (provisions > EL): T2 credit capped at 0.6% IRB RWA
 
     Scenarios:

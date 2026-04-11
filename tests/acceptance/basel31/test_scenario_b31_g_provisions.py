@@ -405,15 +405,15 @@ class TestB31GroupG_PortfolioELSummary:
             f"T2 credit ({el.t2_credit:.2f}) exceeds cap ({el.t2_credit_cap:.2f})"
         )
 
-    def test_deduction_split_fifty_fifty(self, firb_pipeline_results) -> None:
-        """EL shortfall should be split 50% CET1 / 50% T2 per CRR Art. 159."""
+    def test_deduction_full_cet1(self, firb_pipeline_results) -> None:
+        """EL shortfall deducted 100% from CET1 per Art. 36(1)(d), Art. 159."""
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
         assert float(el.cet1_deduction) == pytest.approx(
-            float(el.total_el_shortfall) * 0.5, rel=1e-6
+            float(el.total_el_shortfall), rel=1e-6
         )
-        assert float(el.t2_deduction) == pytest.approx(float(el.total_el_shortfall) * 0.5, rel=1e-6)
+        assert float(el.t2_deduction) == pytest.approx(0.0, abs=1e-6)
 
 
 class TestB31GroupG_ParameterizedValidation:

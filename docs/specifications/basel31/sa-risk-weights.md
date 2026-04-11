@@ -30,6 +30,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.14 | Covered bond rated risk weights (Art. 129(4), Table 7) — PRA values = CRR values | P0 | Done (spec correct; code bug P1.113) |
 | FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
+| FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
 
 ---
 
@@ -562,6 +563,103 @@ threshold (55% for RRE, 60% for CRE).
 
 ---
 
+## Real Estate — Material Dependency Classification (Art. 124E)
+
+Art. 124E defines the test that routes residential and commercial real estate exposures
+between two treatment tracks:
+
+- **Not materially dependent** on property cash flows → loan-splitting (Art. 124F for
+  residential, Art. 124H for commercial)
+- **Materially dependent** on property cash flows → whole-loan LTV-band tables
+  (Art. 124G Table 6B for residential, Art. 124I for commercial)
+
+This classification is a Basel 3.1 addition with no CRR equivalent. Under CRR, the
+loan-splitting / whole-loan distinction was less formally defined and did not include
+quantitative thresholds such as the three-property limit.
+
+### Residential RE — Default and Exceptions (Art. 124E(1))
+
+A residential RE exposure is **materially dependent by default**. It is classified as
+**not** materially dependent only if it falls into one of five exceptions:
+
+| Exception | Condition | Reference |
+|-----------|-----------|-----------|
+| **(a) Primary residence** | Exposure to one or more natural persons, secured by a single property that is the obligor's primary residence | Art. 124E(1)(a) |
+| **(b) Three-property limit** | Exposure to one or more natural persons that individually meet the three-property limit (para 2) | Art. 124E(1)(b) |
+| **(c) SPE with guarantor** | Exposure to an entity created specifically to finance/operate immovable property, where one or more natural persons act as guarantor, receive sole economic benefit, and the entity meets the three-property limit (para 3) | Art. 124E(1)(c) |
+| **(d) Social housing** | Exposure to a UK-regulated public housing company or not-for-profit association that exists to serve social purposes and offer tenants long-term housing | Art. 124E(1)(d) |
+| **(e) Cooperative/association** | Exposure to an association or cooperative of natural persons that exists solely to grant members use of a primary residence in the securing property | Art. 124E(1)(e) |
+
+!!! info "Three-Property Limit — Natural Persons (Art. 124E(2))"
+    A natural person meets the three-property limit if they have **no more than three
+    qualifying properties**. A qualifying property is one that:
+
+    1. Is residential real estate
+    2. Is **not** the natural person's primary residence
+    3. Is security for a residential RE exposure to either:
+        - (a) the natural person directly, or
+        - (b) an SPE that the natural person guarantees and from which they receive the
+          economic benefit
+
+    Properties are counted **across all lenders**, not just the institution assessing the
+    exposure.
+
+!!! info "Three-Property Limit — SPE Entities (Art. 124E(3))"
+    An SPE entity meets the three-property limit if **all** of the following are satisfied:
+
+    1. The entity has no more than three qualifying residential properties (excluding the
+       guarantor's primary residence) securing RE exposures to the entity, across all lenders
+    2. The same guarantor(s) stand behind all residential RE exposures to the entity,
+       regardless of lender
+    3. Each guarantor individually meets the natural person three-property limit (para 2)
+
+!!! warning "Housing Unit Counting (Art. 124E(4))"
+    Each separate housing unit counts as an **individual property**, even where multiple
+    units are secured by a single charge. A block of four flats under one charge = four
+    properties for the three-property count. This is material for multi-unit buy-to-let
+    portfolios.
+
+### Reassessment Triggers (Art. 124E(5))
+
+Institutions must reassess material dependency when issuing a **new loan** secured by
+residential RE to the same obligor (including replacement loans). Reassessment at other
+times is permitted if new information is gathered and applied **consistently across the
+portfolio** — selective reassessment to reduce capital requirements is prohibited.
+
+### Commercial RE — Own-Use Test (Art. 124E(6)–(7))
+
+A commercial RE exposure is **materially dependent by default**. The sole exception:
+each property securing the exposure is **predominantly used by the borrower for its own
+business purpose**, where the business purpose does **not** include generating income from
+the property via rental agreements.
+
+Institutions must reassess commercial RE material dependency **at least annually**
+(Art. 124E(7)).
+
+### Implementation
+
+The material dependency classification is an **input-driven flag** — the engine does not
+evaluate Art. 124E conditions internally. Institutions must determine material dependency
+upstream and supply it via the `is_income_producing` field on the collateral record.
+
+| Input Field | Maps To | Values |
+|-------------|---------|--------|
+| `is_income_producing` | Art. 124E material dependency | `True` = materially dependent (whole-loan Art. 124G/124I); `False` = not materially dependent (loan-splitting Art. 124F/124H); `null` = defaults to `False` |
+
+The field flows through the pipeline as `has_income_cover` (renamed during collateral
+join) and determines the risk weight calculation path:
+
+- `False` → Art. 124F loan-splitting (residential) or Art. 124H loan-splitting (commercial)
+- `True` → Art. 124G Table 6B whole-loan (residential) or Art. 124I whole-loan (commercial)
+
+!!! warning "Data Quality Responsibility"
+    The three-property limit, SPE guarantor conditions, social housing status, and
+    own-business-use test are **not validated** by the calculator. Incorrect classification
+    routes exposures to the wrong risk weight track. Institutions must implement Art. 124E
+    assessment procedures upstream of the calculator input.
+
+---
+
 ## Real Estate — Residential (Art. 124F–124G)
 
 All residential RE risk weights below require the exposure to meet the
@@ -569,7 +667,8 @@ All residential RE risk weights below require the exposure to meet the
 
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows. The exposure is split into a secured portion
+Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows. The exposure is split into a secured portion
 (up to 55% of property value) and a residual portion:
 
 | Portion | Risk Weight | Reference |
@@ -598,7 +697,8 @@ charge. This decreases the secured portion, increasing the blended risk weight.
 
 ### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
 
-Materially dependent on cash flows (e.g., buy-to-let). Whole-loan approach — single
+[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows (e.g., buy-to-let, multi-unit rental). Whole-loan approach — single
 risk weight on entire exposure:
 
 | LTV Band | Risk Weight |
@@ -625,6 +725,10 @@ All commercial RE risk weights below require the exposure to meet the
 
 ### CRE Loan-Splitting (Art. 124H(1))
 
+Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows — the borrower uses the property predominantly for its own business
+purpose (Art. 124E(6)).
+
 | Portion | Risk Weight | Reference |
 |---------|-------------|-----------|
 | Secured (up to 60% LTV) | **60%** | Art. 124H(1) |
@@ -632,7 +736,9 @@ All commercial RE risk weights below require the exposure to meet the
 
 ### CRE Income-Producing (Art. 124I)
 
-For income-dependent commercial RE (cash flows from the property):
+[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows — income from the property (rental, sale proceeds) is the primary
+repayment source:
 
 **PRA Art. 124I — 2-Band Table**
 

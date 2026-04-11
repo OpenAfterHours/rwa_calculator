@@ -371,7 +371,7 @@ contingents = pl.DataFrame({
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
 | `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator |
 | `prior_charge_ltv` | `Float64` | No | LTV portion from prior/pari passu charges only (Art. 124C(3)); 0.0 = first charge. Used by Art. 124F(2)/124G(2) junior charge treatment |
-| `is_income_producing` | `Boolean` | No | Material income dependence (CRE) |
+| `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) |
 | `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
 | `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
 

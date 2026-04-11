@@ -550,9 +550,17 @@ the LTV numerator is a Basel 3.1 addition.
 
 ## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
+!!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
+    Basel 3.1 introduces Art. 124E, a structured classification test that replaces the
+    CRR's informal income-dependency distinction. Under CRR, Art. 125 (general) vs
+    Art. 126 (income-producing) had no formal classification gate. Art. 124E defines
+    residential RE as materially dependent by default, with five exceptions (primary
+    residence, three-property limit, SPE guarantor, social housing, cooperative). CRR
+    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows from the property. PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
+Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
 - **Secured portion** (up to 55% of property value): **20%** risk weight
 - **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)

@@ -488,6 +488,24 @@ risk weight for foreign-currency exposures. Self-liquidating trade finance ≤1y
 
 ### Residential Real Estate
 
+!!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
+    Basel 3.1 introduces Art. 124E, a formal test for routing RE exposures between
+    loan-splitting (non-dependent) and whole-loan (income-producing) treatment. CRR
+    has no equivalent — the distinction between Art. 125 (general) and Art. 126
+    (income-producing) was not gated by a structured classification rule.
+
+    **Residential RE** is materially dependent by default. The five exceptions for
+    non-dependent classification are: (a) primary residence, (b) natural person with
+    ≤3 non-primary qualifying properties (three-property limit), (c) SPE with natural
+    person guarantor meeting the same limit, (d) social housing, (e) cooperative for
+    primary residence use. Each housing unit counts as a separate property even under
+    a single charge (Art. 124E(4)).
+
+    **Commercial RE** is materially dependent unless the borrower uses each property
+    predominantly for its own business purpose, excluding rental income (Art. 124E(6)).
+
+    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+
 !!! warning "Art. 124A Qualifying Gate"
     All preferential RE risk weights below (Art. 124F–124I) require the exposure to be a
     **regulatory real estate exposure** per Art. 124A — meeting 6 criteria: (a) property

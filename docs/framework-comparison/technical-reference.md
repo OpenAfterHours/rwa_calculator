@@ -307,7 +307,8 @@ Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct resid
 !!! info "Junior Charge Multiplier (Art. 124G(2))"
     Where prior-ranking charges exist that the institution does not hold, the Table 6B risk
     weight is multiplied by **1.25×** when LTV > 50%. At LTV ≤ 50% the 30% weight applies
-    without uplift. The multiplied weight is capped at 105%.
+    without uplift. The multiplied weight is **not capped** — it may exceed 105%
+    (e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
     **Example:** junior charge at 75% LTV → 50% × 1.25 = **62.5%** whole-loan.
     CRR has no equivalent junior-charge mechanism for residential RE (Art. 125 applies flat
     35% regardless of lien position).

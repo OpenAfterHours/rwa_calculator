@@ -195,7 +195,13 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 | ≤ 50% | 1.0× | 30% (no uplift) |
 | > 50% | 1.25× | e.g. 50% × 1.25 = 62.5% (at 70–80% LTV) |
 
-The multiplied weight is capped at 105% (the Table 6B ceiling).
+The multiplied weight is **not capped** at the Table 6B ceiling — it may exceed 105%
+(e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
+
+!!! warning "Code Divergence (P1.111)"
+    The current implementation incorrectly caps the multiplied risk weight at 105%.
+    Art. 124G(2) has no express cap — the correct result for LTV > 100% with a junior
+    charge is 131.25%, not 105%. See IMPLEMENTATION_PLAN.md P1.111.
 
 **Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 

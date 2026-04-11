@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.184] — 2026-04-11
+
+### Fixed
+- **Equity (P1.119)**: CIU fallback risk weight corrected from 150% (CRR) / 250%-400% (B31) to **1,250%** per Art. 132(2). Was the highest-severity capital understatement bug (3-8x). Root cause: original implementation used Art. 133 equity risk weights instead of Art. 132(2) punitive CIU fallback. Extracted shared `CIU_FALLBACK_RW` constant and `_append_ciu_branches()` helper to eliminate CRR/B31 code duplication. Updated risk weight tables, calculator, 27 unit tests, 7 acceptance tests, and both equity spec documents.
+
 ## [0.1.183] — 2026-04-10
 
 ### Changed

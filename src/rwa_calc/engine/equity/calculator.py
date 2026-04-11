@@ -18,7 +18,7 @@ Key responsibilities:
 
 Basel 3.1 key changes from CRR:
 - Listed/exchange-traded: 100% -> 250% (Art. 133(3))
-- CIU fallback: 150% -> 250% (Art. 132(2))
+- CIU fallback: 1,250% (Art. 132(2), unchanged from CRR)
 - IRB equity removed (Art. 147A) — all equity uses SA
 - Transitional floor phases from 160%/220% (2027) to 250%/400% (2030)
 
@@ -47,6 +47,34 @@ from rwa_calc.domain.enums import ApproachType, EquityApproach
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+# Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
+# Punitive weight incentivises firms to use look-through or mandate-based approaches.
+CIU_FALLBACK_RW = 12.50
+
+
+def _append_ciu_branches(chain: pl.Expr) -> pl.Expr:
+    """Append CIU approach-aware risk weight branches to a when/then chain (Art. 132-132C).
+
+    Covers: fallback (1,250%), mandate_based (ciu_mandate_rw x1.2 if third-party),
+    look_through (ciu_look_through_rw), and unclassified CIU (1,250% default).
+    """
+    _is_ciu = pl.col("equity_type").str.to_lowercase() == "ciu"
+    return (
+        chain.when(_is_ciu & (pl.col("ciu_approach") == "fallback"))
+        .then(pl.lit(CIU_FALLBACK_RW))
+        .when(_is_ciu & (pl.col("ciu_approach") == "mandate_based"))
+        .then(
+            pl.col("ciu_mandate_rw").fill_null(CIU_FALLBACK_RW)
+            * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
+            .then(pl.lit(1.2))
+            .otherwise(pl.lit(1.0))
+        )
+        .when(_is_ciu & (pl.col("ciu_approach") == "look_through"))
+        .then(pl.col("ciu_look_through_rw").fill_null(CIU_FALLBACK_RW))
+        .when(_is_ciu)
+        .then(pl.lit(CIU_FALLBACK_RW))
+    )
 
 
 @dataclass
@@ -364,12 +392,12 @@ class EquityCalculator:
         value. This ensures RWA reflects the fund's leverage.
 
         If no holdings are available, exposures are returned unchanged
-        and the look-through CIU falls back to 250% in the when-chain.
+        and the look-through CIU falls back to 1,250% in the when-chain.
         """
         if ciu_holdings is None:
             return exposures
 
-        fallback_rw = 2.50 if config.is_basel_3_1 else 1.50
+        fallback_rw = CIU_FALLBACK_RW
 
         # Get CQS-based risk weight table for holding-level RW lookup
         from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
@@ -467,7 +495,7 @@ class EquityCalculator:
         Apply SA equity risk weights, branching by framework.
 
         CRR Art. 133(2): 100% flat (with 0% for central bank);
-            CIU via Art. 132 (150% fallback for regulated-exchange CIU)
+            CIU via Art. 132 (1,250% fallback per Art. 132(2))
         Basel 3.1 Art. 133(3)-(6): 250% / 400% / 100% (legislative) / 150% (sub debt)
         """
         if config.is_basel_3_1:
@@ -489,7 +517,7 @@ class EquityCalculator:
 
         Risk weights:
         - Central bank: 0% (sovereign treatment)
-        - CIU: Art. 132 treatment (150% fallback, look-through, mandate-based)
+        - CIU: Art. 132 treatment (1,250% fallback, look-through, mandate-based)
         - All other equity: 100% (Art. 133(2) flat)
 
         Note: PE/VC qualifying as high-risk is routed to Art. 128 (150%) via the
@@ -500,28 +528,7 @@ class EquityCalculator:
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
                 .then(pl.lit(0.00))
                 # CIU: approach-aware risk weights (Art. 132-132C)
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "fallback")
-                )
-                .then(pl.lit(1.50))  # 150% CRR Art. 132(2) fallback
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "mandate_based")
-                )
-                .then(
-                    pl.col("ciu_mandate_rw").fill_null(1.50)
-                    * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
-                    .then(pl.lit(1.2))
-                    .otherwise(pl.lit(1.0))
-                )  # Art. 132A, 1.2x for third-party (Art. 132(4))
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "look_through")
-                )
-                .then(pl.col("ciu_look_through_rw").fill_null(1.50))  # Art. 132
-                .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-                .then(pl.lit(1.50))  # CIU default: Art. 132(2) fallback
+                .pipe(_append_ciu_branches)
                 # Art. 133(2): all other equity = 100%
                 .otherwise(pl.lit(1.00))
                 .alias("risk_weight"),
@@ -543,8 +550,7 @@ class EquityCalculator:
         4. PE / VC (always higher risk): 400%  (Art. 133(5))
         5. Government-supported (legislative programme): 100%
         6. CIU: approach-dependent  (Art. 132-132C)
-           - CIU fallback listed: 250%  (Art. 132(2) + Art. 133(3))
-           - CIU fallback unlisted: 400%  (Art. 132(2) + Art. 133(5))
+           - CIU fallback: 1,250%  (Art. 132(2))
         7. All other standard equity: 250%  (Art. 133(3))
         """
         return exposures.with_columns(
@@ -567,36 +573,8 @@ class EquityCalculator:
                 .then(pl.lit(1.00))  # Legislative programme: 100%
                 .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
                 .then(pl.lit(1.00))  # Legislative programme: 100%
-                # CIU: approach-aware risk weights (B31 Art. 132-132C)
-                # CIU fallback: listed = 250% (Art. 133(3)), unlisted = 400% (Art. 133(5))
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "fallback")
-                    & (pl.col("is_exchange_traded").fill_null(False))
-                )
-                .then(pl.lit(2.50))  # B31 Art. 132(2)/133(3): 250% listed CIU fallback
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "fallback")
-                )
-                .then(pl.lit(4.00))  # B31 Art. 132(2)/133(5): 400% unlisted CIU fallback
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "mandate_based")
-                )
-                .then(
-                    pl.col("ciu_mandate_rw").fill_null(2.50)
-                    * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
-                    .then(pl.lit(1.2))
-                    .otherwise(pl.lit(1.0))
-                )  # Art. 132A, 1.2x for third-party
-                .when(
-                    (pl.col("equity_type").str.to_lowercase() == "ciu")
-                    & (pl.col("ciu_approach") == "look_through")
-                )
-                .then(pl.col("ciu_look_through_rw").fill_null(2.50))  # Art. 132
-                .when(pl.col("equity_type").str.to_lowercase() == "ciu")
-                .then(pl.lit(2.50))  # CIU default: 250%
+                # CIU: approach-aware risk weights (Art. 132-132C)
+                .pipe(_append_ciu_branches)
                 .otherwise(pl.lit(2.50))  # Art. 133(3): 250% standard
                 .alias("risk_weight"),
             ]
@@ -685,7 +663,7 @@ class EquityCalculator:
         # (always 100%) or subordinated debt (always 150%).
         # CIU look-through/mandate-based RWs are derived from underlying assets
         # (Art. 132a/132b), not from Art. 133 equity weights — exclude from floor.
-        # CIU fallback (250%/400%) is already >= transitional max, so exclusion is moot.
+        # CIU fallback (1,250%) is far above transitional max, so exclusion is moot.
         eq_type_lower = pl.col("equity_type").str.to_lowercase()
         is_ciu_non_fallback = (eq_type_lower == "ciu") & (
             (pl.col("ciu_approach") == "look_through") | (pl.col("ciu_approach") == "mandate_based")

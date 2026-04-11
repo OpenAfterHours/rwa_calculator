@@ -230,12 +230,11 @@ When neither look-through nor mandate-based is available:
 |-----------|-------------|-----------|
 | Regulatory CIU fallback | **1,250%** | Art. 132(2) |
 
-!!! warning "Code Divergence — CIU Fallback"
-    The regulatory CIU fallback is **1,250%** under both CRR2 (Regulation 2019/876) and
-    PRA PS1/26 (PDF p.62: "shall assign a risk weight of 1,250% ('fall-back approach')").
-    The code currently applies 250% (listed) / 400% (unlisted) under Basel 3.1, and 150%
-    under CRR. These values correspond to Art. 133 equity weights, not the Art. 132(2) CIU
-    fallback. See D3.15 for the code bug.
+!!! note "Fixed in v0.1.181"
+    The CIU fallback is correctly applied as **1,250%** under both CRR and Basel 3.1,
+    matching PRA PS1/26 Art. 132(2): "shall assign a risk weight of 1,250%
+    ('fall-back approach')". Prior to v0.1.181 the code incorrectly applied Art. 133
+    equity weights (250%/400%) instead.
 
 ### CIU Approach Selection
 
@@ -279,8 +278,8 @@ Equity exposures take priority over high-risk classification. PE/VC is classifie
 | B31-L8 | CIU look-through (diversified fund) | Weighted average of underlyings |
 | B31-L9 | CIU mandate-based | Mandate RW |
 | B31-L10 | CIU mandate-based with third-party calc | Mandate RW × 1.2 |
-| B31-L11 | CIU fallback (listed) | 250% (code) / 1,250% (regulation) |
-| B31-L12 | CIU fallback (unlisted) | 400% (code) / 1,250% (regulation) |
+| B31-L11 | CIU fallback (listed) | 1,250% |
+| B31-L12 | CIU fallback (unlisted) | 1,250% |
 | B31-L13 | 2027 transitional: standard equity | max(250%, 160%) = 250% |
 | B31-L14 | 2027 transitional: higher-risk equity | max(400%, 220%) = 400% |
 | B31-L15 | 2027 transitional: standard below floor | Floor binds at 160% |

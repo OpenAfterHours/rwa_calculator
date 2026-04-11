@@ -134,12 +134,10 @@ firms to use look-through or mandate-based approaches.
     equity treatment** instead: 100% (CRR) / 250% listed or 400% unlisted (Basel 3.1).
     These are NOT the Art. 132(2) "fallback" — they are reclassified equity exposures.
 
-!!! warning "Implementation Divergence"
-    The calculator currently applies 150% (CRR) / 250% listed or 400% unlisted
-    (Basel 3.1) for `ciu_approach = "fallback"`. These values correspond to
-    Art. 133 equity weights, not the true Art. 132(2) fallback of 1,250%. The
-    code constants are in `crr_equity_rw.py` (`CIU: 1.50`) and `b31_equity_rw.py`
-    (`CIU: 2.50`). This should be corrected to 12.50 (1,250%) for both frameworks.
+!!! note "Fixed in v0.1.181"
+    The CIU fallback is correctly applied as **1,250%** for both CRR and Basel 3.1,
+    matching Art. 132(2). Prior to v0.1.181 the code incorrectly applied Art. 133
+    equity weights (150% CRR / 250%–400% Basel 3.1) for `ciu_approach = "fallback"`.
 
 ## Equity Transitional Schedule (PRA Rules 4.1–4.10)
 
@@ -220,12 +218,7 @@ for detailed requirements and acceptance test scenarios.
 | CRR-J6 | Speculative equity SA | `speculative` | £150,000 | 100% | £150,000 |
 | CRR-J7 | Central bank equity SA (sovereign treatment) | `central_bank` | £1,000,000 | 0% | £0 |
 | CRR-J8 | Subordinated debt SA | `subordinated_debt` | £250,000 | 100% | £250,000 |
-| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 150% | £900,000 |
-
-!!! warning "CRR-J9 Implementation Divergence"
-    The CIU fallback should be **1,250%** per Art. 132(2), but the calculator applies 150% (the Art. 133
-    equity weight). See D3.15 for the code bug. The test expects the current code behaviour (150%),
-    not the regulatory value (1,250%).
+| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 1,250% | £7,500,000 |
 
 ### CRR IRB Simple Equity (Art. 155) — CRR-J10 to CRR-J14
 
@@ -248,7 +241,7 @@ for detailed requirements and acceptance test scenarios.
 |-------------|-------------|--------------|----------------|-----|-------------|--------------|
 | CRR-J15 | CIU mandate-based SA (Art. 132A) | `mandate_based` | `ciu_mandate_rw=0.80` | £200,000 | 80% | £160,000 |
 | CRR-J16 | CIU mandate-based + third-party 1.2× multiplier | `mandate_based` | `ciu_mandate_rw=0.80`, `ciu_third_party_calc=True` | £200,000 | 96% | £192,000 |
-| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 150% | £150,000 |
+| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 1,250% | £1,250,000 |
 
 CRR-J16 calculation: the 1.2× third-party multiplier (Art. 132(4)) scales the mandate risk weight:
 `RW = 0.80 × 1.2 = 0.96 (96%)`.

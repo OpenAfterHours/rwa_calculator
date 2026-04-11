@@ -6,7 +6,7 @@ Tests equity exposure RWA calculation under two approaches:
 Article 133 (Standardised Approach):
 - Central bank: 0% RW (sovereign treatment)
 - All other equity: 100% RW (Art. 133(2) flat)
-- CIU: 150% RW (Art. 132(2) fallback)
+- CIU: 1,250% RW (Art. 132(2) fallback)
 
 Article 155 (IRB Simple Risk Weight):
 - Private equity (diversified): 190% RW
@@ -15,7 +15,7 @@ Article 155 (IRB Simple Risk Weight):
 
 References:
 - CRR Art. 133(2): Equity = 100% flat
-- CRR Art. 132: CIU treatment (look-through, mandate-based, 150% fallback)
+- CRR Art. 132: CIU treatment (look-through, mandate-based, 1,250% fallback)
 - CRR Art. 155: Simple risk weight approach under IRB
 """
 
@@ -200,19 +200,19 @@ class TestSAEquityRiskWeights:
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_ciu_150_percent_fallback(
+    def test_ciu_1250_percent_fallback(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU gets 150% RW under CRR SA (Art. 132(2) fallback)."""
+        """CIU gets 1,250% RW under CRR SA (Art. 132(2) fallback)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="ciu",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
 
 # =============================================================================

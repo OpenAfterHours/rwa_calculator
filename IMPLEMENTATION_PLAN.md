@@ -1,8 +1,8 @@
 # Implementation Plan
 
-**Last updated:** 2026-04-10 (comprehensive audit phase 8 — full spec-vs-PDF-vs-code cross-audit with 20+ Sonnet + 3 Opus parallel agents)
-**Package version:** 0.1.55 (pyproject.toml) | **Test suite:** 5,210 selectable (5,210 total, 11 deselected benchmarks)
-**Test run (2026-04-10):** 5,178 passed, 21 skipped (conditional fixture guards), 11 deselected (benchmarks)
+**Last updated:** 2026-04-11 (P1.119 CIU fallback fix)
+**Package version:** 0.1.184 (pyproject.toml) | **Test suite:** 5,209 selectable (5,209 total, 11 deselected benchmarks)
+**Test run (2026-04-11):** 5,177 passed, 21 skipped (conditional fixture guards), 11 deselected (benchmarks)
 **CRR acceptance:** 100% (169 tests) | **Basel 3.1 acceptance:** 100% (212 tests) | **Comparison:** 100% (60 tests) | **Stress:** 56 tests (+ 4 slow)
 **Unit:** 4,397 | **Contract:** 145 | **Integration:** 122 | **Acceptance:** 497 selectable
 **Acceptance tests skipped at runtime:** 21 (all conditional fixture-data guards — B31 FIRB 8, CRR FIRB 7, B31 CRM 7, provisions 15, output floor 4, stress 2; no unconditional skips)
@@ -42,7 +42,7 @@ Items are sorted by priority. Each item notes its ID, status, and effort estimat
 - **P1.116** [ ] **NEW** — EL shortfall deduction uses 50% CET1 + 50% T2 instead of 100% CET1. `_el_summary.py:239-241` applies `effective_shortfall * 0.5` to both. CRR Art. 36(1)(d) requires full shortfall deducted from CET1. This affects OF-ADJ calculation (uses `el_summary.cet1_deduction`). Effort: S | Ref: CRR Art. 36(1)(d), Art. 159
 - **P1.117** [ ] **NEW** — B31 HVCRE short-maturity subgrades not implemented (distinct from P1.97). P1.97 covers non-HVCRE (Strong A=50%/B=70%, Good C=70%/D=90%). HVCRE Table A also has maturity-based subgrades: Strong A=70%/B=95%, Good C=95%/D=120%. No `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` table exists. `namespace.py:408-416` ignores `is_short` for all B31 slotting. Effort: S | Ref: PRA PS1/26 Art. 153(5)(d)
 - **P1.118** [ ] **NEW** — Art. 162(3) short-maturity IRB override not implemented. Qualified short-term exposures (FX settlement, trade finance <=1yr, repos) should get M = maturity value per Art. 162(3) instead of default M = 2.5. The `has_one_day_maturity_floor` flag exists but only affects CRM maturity mismatch, not the IRB capital formula. Effort: M | Ref: CRR Art. 162(3), PRA PS1/26 Art. 162(3)
-- **P1.119** [ ] **NEW** — CIU fallback risk weight wrong under BOTH frameworks. Art. 132(2) requires **1,250%** for CIU exposures using the fallback approach. CRR code applies 150% (`crr_equity_rw.py:48` has `CIU: Decimal("1.50")`); B31 code applies 250%/400% (`b31_equity_rw.py:49` + `calculator.py:571-582`). P1.90 "fixed" B31 CIU fallback by splitting listed/unlisted but used Art. 133 equity weights instead of Art. 132(2)'s 1,250% — **P1.90 fix was wrong**. Tests CRR-J9, CRR-J17, B31-L11, B31-L12 validate wrong values. **Impact: Severe capital understatement** (1,250% vs 150% CRR = 8.3x; 1,250% vs 250%/400% B31 = 3-5x). **Effort: S** | Ref: CRR Art. 132(2), PRA PS1/26 Art. 132(2), D3.15, `equity-approach.md`
+- **P1.119** [x] **FIXED v0.1.184** — CIU fallback risk weight corrected to 1,250% under both CRR and B31 (Art. 132(2)). Was 150% CRR / 250%-400% B31. Extracted shared `CIU_FALLBACK_RW` constant and `_append_ciu_branches()` helper. All CIU tests updated. **Effort: S** | Ref: CRR Art. 132(2), PRA PS1/26 Art. 132(2)
 - **P1.120** [ ] **NEW** — B31 SA defaulted provision-ratio denominator wrong (D3.19). Art. 127(1) requires `specific_provisions / gross_outstanding_amount` but code uses `unsecured_ead` (post-provision, post-CRM). For partially collateralised exposures, the smaller denominator can push the ratio below 20%, inflating RW from 100% to 150%. **Impact: Capital overstatement for collateralised defaulted exposures**. **Effort: S** | Ref: PRA PS1/26 Art. 127(1), `calculator.py:1250-1275`
 - **P1.121** [ ] **NEW** — CRR Art. 121(3) unrated institution short-term 20% not applied. CRR code path has no handling for unrated institutions with residual maturity <= 3 months denominated in domestic currency. These should get 20% instead of 40% (UK) or 100% (standard). Capital overstated by up to 100%. **Effort: S** | Ref: CRR Art. 121(3)
 - **P1.122** [ ] **NEW** — Guarantee substitution has no B31 framework branching. `_apply_guarantee_substitution()` at `sa/calculator.py:1428-1709` has zero `is_basel_3_1` checks. Uses single CQS table for both CRR and B31. Affects: (a) corporate CQS 3 = 100% (should be 75% under B31 per Table 6), (b) unrated institutions use CRR sovereign-derived (should use SCRA grades), (c) no short-term guarantor institution treatment. P1.95 and P1.110 are symptoms of this broader issue. **Effort: M** | Ref: PRA PS1/26 Art. 122/121/235
@@ -218,7 +218,7 @@ Phase 6 added **6 new P1 items**, **6 new P4 items**, and **1 new P5 item:**
 - **P1.116** (EL shortfall deduction 50% CET1 + 50% T2 instead of 100% CET1 per Art. 36(1)(d). Affects OF-ADJ).
 - **P1.117** (B31 HVCRE short-maturity subgrades — distinct from P1.97; Strong A=70%/B=95%, Good C=95%/D=120%).
 - **P1.118** (Art. 162(3) short-maturity IRB override — qualified short-term exposures should use actual maturity not M=2.5).
-- **P1.119** (CIU fallback RW wrong under BOTH frameworks: CRR 150% and B31 250%/400% instead of 1,250% per Art. 132(2). P1.90 fix was wrong. Tests CRR-J9/J17 + B31-L11/L12 validate wrong values).
+- **P1.119** ~~(CIU fallback RW wrong under BOTH frameworks)~~ **FIXED v0.1.184** — corrected to 1,250% per Art. 132(2).
 - **P1.120** (B31 SA defaulted provision-ratio denominator uses unsecured_ead instead of gross_outstanding_amount per Art. 127(1). Capital overstatement for collateralised defaults. D3.19).
 - **P4.34-P4.39** (6 documentation items: SCRA article ref, currency mismatch article ref, slotting flat weight contradiction, retail PD floor article ref, provisions Pool A/B labelling, slotting EL rate table).
 - **P5.15** (Art. 123A(1)(b)(ii) 0.2% portfolio granularity sub-condition not implemented).
@@ -537,12 +537,10 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 - **Tests needed:** Unit tests for IRB MA with qualified short-term exposures (repos, trade finance); acceptance tests verifying M != 2.5 for qualified exposures.
 
 ### P1.119 CIU fallback risk weight wrong under BOTH frameworks
-- **Status:** [ ] Not started (2026-04-10 — identified in Phase 6, severity confirmed in Phase 7)
-- **Impact:** **Severe capital understatement (3-8x).** Art. 132(2) requires **1,250%** risk weight for CIU exposures using the fallback approach (no look-through, no mandate-based). CRR code applies 150% (`crr_equity_rw.py:48` has `EquityType.CIU: Decimal("1.50")`). B31 code applies 250% listed / 400% unlisted (`b31_equity_rw.py:49` + `calculator.py:571-582`). The P1.90 fix split B31 CIU into listed/unlisted but used Art. 133 equity weights instead of Art. 132(2)'s 1,250%. Tests CRR-J9, CRR-J17, B31-L11, B31-L12 validate the wrong values.
-- **File:Line:** `data/tables/crr_equity_rw.py:48` (CIU: 1.50), `data/tables/b31_equity_rw.py:49` (CIU: 2.50), `engine/equity/calculator.py:507` (CRR CIU `pl.lit(1.50)`), `engine/equity/calculator.py:571-582` (B31 CIU listed/unlisted)
-- **Spec ref:** CRR Art. 132(2), PRA PS1/26 Art. 132(2), D3.15, `docs/specifications/crr/equity-approach.md`
-- **Fix:** Change CIU fallback to `Decimal("12.50")` / `pl.lit(12.50)` in both data tables and calculator branches. Update acceptance tests CRR-J9, CRR-J17, B31-L11, B31-L12 to expect 1,250% RW.
-- **Tests needed:** Update existing CIU acceptance tests; add regression tests confirming 1,250% for both listed and unlisted CIU fallback under both frameworks.
+- **Status:** [x] **FIXED in v0.1.184** (2026-04-11)
+- **Impact:** Was severe capital understatement (3-8x). Now corrected.
+- **What changed:** CIU fallback RW corrected from 150% (CRR) / 250%-400% (B31) to 1,250% per Art. 132(2). Extracted `CIU_FALLBACK_RW = 12.50` constant and `_append_ciu_branches()` shared helper to eliminate CRR/B31 CIU code duplication. Updated both data tables (`crr_equity_rw.py`, `b31_equity_rw.py`), calculator (`equity/calculator.py`), and `_resolve_look_through_rw()`. Updated 27 unit tests, 7 acceptance tests, and both equity spec docs.
+- **Files changed:** `data/tables/crr_equity_rw.py`, `data/tables/b31_equity_rw.py`, `engine/equity/calculator.py`, `tests/unit/test_ciu_treatment.py`, `tests/unit/crr/test_crr_equity.py`, `tests/unit/test_b31_equity_weights.py`, `tests/acceptance/crr/test_scenario_crr_j_equity.py`, `tests/acceptance/basel31/test_scenario_b31_l_equity.py`, `docs/specifications/crr/equity-approach.md`, `docs/specifications/basel31/equity-approach.md`
 
 ### P1.120 B31 SA defaulted provision-ratio denominator wrong (D3.19)
 - **Status:** [ ] Not started (2026-04-10 — identified in Phase 6)

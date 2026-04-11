@@ -2,10 +2,10 @@
 Unit tests for CIU treatment (Art. 132-132C).
 
 Tests cover:
-- Fallback approach: 1250% risk weight (Art. 132B)
-- Look-through default: 250% risk weight (Art. 132)
+- Fallback approach: 1,250% risk weight (Art. 132(2))
+- Look-through default: 1,250% risk weight when no holdings (Art. 132)
 - Mandate-based: uses ciu_mandate_rw (Art. 132A)
-- Null approach: defaults to 250% (backward compatible)
+- Null approach: defaults to 1,250% fallback (Art. 132(2))
 
 References:
 - CRR Art. 132: Look-through approach
@@ -51,12 +51,12 @@ def sa_config() -> CalculationConfig:
 class TestCIUApproachSelection:
     """Test CIU approach-aware risk weight selection."""
 
-    def test_fallback_150_percent(
+    def test_fallback_1250_percent(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with fallback approach gets 150% RW under CRR (Art. 132(2))."""
+        """CIU with fallback approach gets 1,250% RW under CRR (Art. 132(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -64,14 +64,14 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="fallback",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
-    def test_look_through_250_percent(
+    def test_look_through_no_holdings_fallback(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with look-through approach defaults to 150% when RW not computed."""
+        """CIU with look-through approach defaults to 1,250% when RW not computed."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -79,7 +79,7 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="look_through",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
     def test_mandate_based_uses_ciu_mandate_rw(
         self,
@@ -97,12 +97,12 @@ class TestCIUApproachSelection:
         )
         assert result["risk_weight"] == pytest.approx(3.50)
 
-    def test_mandate_based_no_rw_falls_to_150(
+    def test_mandate_based_no_rw_falls_to_1250(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU mandate-based with no ciu_mandate_rw falls back to 150% under CRR."""
+        """CIU mandate-based with no ciu_mandate_rw falls back to 1,250% (Art. 132(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -110,28 +110,28 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="mandate_based",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
-    def test_null_approach_defaults_250_percent(
+    def test_null_approach_defaults_to_1250(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with null approach defaults to 150% (Art. 132(2) fallback)."""
+        """CIU with null approach defaults to 1,250% (Art. 132(2) fallback)."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="ciu",
             config=sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
     def test_fallback_rwa_calculation(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU fallback RWA = EAD * 1.50 under CRR (Art. 132(2))."""
+        """CIU fallback RWA = EAD * 12.50 under CRR (Art. 132(2))."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -139,7 +139,7 @@ class TestCIUApproachSelection:
             config=sa_config,
             ciu_approach="fallback",
         )
-        assert result["rwa"] == pytest.approx(1_500_000.0)
+        assert result["rwa"] == pytest.approx(12_500_000.0)
 
 
 # =============================================================================
@@ -214,14 +214,14 @@ class TestCIUMandateBasedThirdParty:
             ciu_approach="look_through",
             ciu_third_party_calc=True,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
     def test_third_party_with_null_mandate_rw_uses_fallback(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Third-party with null mandate_rw uses 150% fallback * 1.2 = 180% under CRR."""
+        """Third-party with null mandate_rw uses 1,250% fallback * 1.2 = 1,500%."""
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
@@ -230,7 +230,7 @@ class TestCIUMandateBasedThirdParty:
             ciu_approach="mandate_based",
             ciu_third_party_calc=True,
         )
-        assert result["risk_weight"] == pytest.approx(1.80)
+        assert result["risk_weight"] == pytest.approx(15.00)
 
 
 # =============================================================================
@@ -326,12 +326,12 @@ class TestCIULookThrough:
         # 60% * 0.20 (CORPORATE CQS1) + 40% * 0.00 (CGCB CQS1) = 0.12
         assert row["risk_weight"] == pytest.approx(0.12)
 
-    def test_no_holdings_falls_back_to_250(
+    def test_no_holdings_falls_back_to_1250(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with look_through but no matching holdings falls back to 150%."""
+        """CIU with look_through but no matching holdings falls back to 1,250%."""
         bundle = _make_look_through_bundle(
             equity_data=[
                 {
@@ -354,14 +354,14 @@ class TestCIULookThrough:
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
-        assert row["risk_weight"] == pytest.approx(1.50)
+        assert row["risk_weight"] == pytest.approx(12.50)
 
     def test_null_holdings_frame_falls_back(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """CIU with look_through and ciu_holdings=None falls back to 150%."""
+        """CIU with look_through and ciu_holdings=None falls back to 1,250%."""
         bundle = _make_look_through_bundle(
             equity_data=[
                 {
@@ -376,7 +376,7 @@ class TestCIULookThrough:
         )
         result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
         row = result.results.collect().to_dicts()[0]
-        assert row["risk_weight"] == pytest.approx(1.50)
+        assert row["risk_weight"] == pytest.approx(12.50)
 
     def test_unrated_holding_defaults_100(
         self,

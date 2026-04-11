@@ -46,7 +46,7 @@ B31_SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.SPECULATIVE: Decimal("4.00"),  # Art. 133(4): 400% higher risk
     EquityType.PRIVATE_EQUITY: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
     EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
-    EquityType.CIU: Decimal("2.50"),  # Art. 132(2): 250% fallback (B31)
+    EquityType.CIU: Decimal("12.50"),  # Art. 132(2): 1,250% fallback
     EquityType.OTHER: Decimal("2.50"),  # Art. 133(3): 250% standard
 }
 

@@ -279,9 +279,7 @@ class TestDrawnOnlyTierWeighting:
         E2: 2m drawn, 2m ead (fully drawn)
         Total drawn = 4m → blended factor based on 4m, NOT 5m.
         """
-        threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
-        )
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
 
         exposures = _make_exposures(
             [
@@ -342,9 +340,7 @@ class TestDrawnOnlyTierWeighting:
         drawn_amount + interest = on-balance-sheet total for tiering.
         2m drawn + 0.2m interest = 2.2m → near threshold.
         """
-        threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
-        )
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
 
         exposures = _make_exposures(
             [
@@ -402,9 +398,7 @@ class TestDrawnOnlyTierWeighting:
         Edge case: drawn > ead (possible after collateral deductions).
         Tier should still be based on drawn amount.
         """
-        threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
-        )
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
 
         exposures = _make_exposures(
             [
@@ -542,9 +536,7 @@ class TestMissingCounterpartyReferenceWarning:
         The per-exposure fallback produces an incorrectly low factor because
         it doesn't see the counterparty aggregate exceeding the threshold.
         """
-        threshold_gbp = float(
-            crr_config.supporting_factors.sme_exposure_threshold_eur * crr_config.eur_gbp_rate
-        )
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
 
         # WITH counterparty reference — correct aggregation
         exposures_with_cp = _make_exposures(

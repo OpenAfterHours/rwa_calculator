@@ -19,9 +19,10 @@ project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.rwa_calc.config.fx_rates import (  # noqa: E402
-    CRR_REGULATORY_THRESHOLDS_EUR,
-    get_crr_threshold_gbp,
+from src.rwa_calc.contracts.config import (  # noqa: E402
+    _CRR_SME_EXPOSURE_EUR,
+    _CRR_SME_TURNOVER_EUR,
+    RegulatoryThresholds,
 )
 
 # =============================================================================
@@ -128,13 +129,13 @@ def crr_config() -> dict[str, Any]:
         "apply_sme_supporting_factor": True,
         "apply_infrastructure_factor": True,
         # SME eligibility threshold (turnover)
-        # EUR is regulatory source of truth; GBP derived from FX rate
-        "sme_turnover_threshold_gbp": get_crr_threshold_gbp("sme_turnover"),
-        "sme_turnover_threshold_eur": CRR_REGULATORY_THRESHOLDS_EUR["sme_turnover"],
+        # EUR is regulatory source of truth; GBP derived via RegulatoryThresholds
+        "sme_turnover_threshold_gbp": RegulatoryThresholds.crr().sme_turnover_threshold,
+        "sme_turnover_threshold_eur": _CRR_SME_TURNOVER_EUR,
         # SME supporting factor - tiered approach (CRR2 Art. 501)
-        # EUR is regulatory source of truth; GBP derived from FX rate
-        "sme_exposure_threshold_gbp": get_crr_threshold_gbp("sme_exposure"),
-        "sme_exposure_threshold_eur": CRR_REGULATORY_THRESHOLDS_EUR["sme_exposure"],
+        # EUR is regulatory source of truth; GBP derived via RegulatoryThresholds
+        "sme_exposure_threshold_gbp": RegulatoryThresholds.crr().sme_exposure_threshold,
+        "sme_exposure_threshold_eur": _CRR_SME_EXPOSURE_EUR,
         "sme_supporting_factor_tier1": Decimal("0.7619"),  # Up to threshold
         "sme_supporting_factor_tier2": Decimal("0.85"),  # Above threshold
         # Infrastructure factor (not tiered)

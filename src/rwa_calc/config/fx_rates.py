@@ -1,40 +1,25 @@
 """
-FX Rate Configuration for CRR Regulatory Thresholds.
+FX Rate Configuration for EUR/GBP Conversion.
 
-CRR (EU 575/2013) specifies various thresholds in EUR. For UK implementation,
-these need to be converted to GBP. This module provides:
-- A configurable EUR/GBP exchange rate
-- Conversion functions
-- Canonical EUR thresholds from CRR regulation
-- Functions to derive GBP equivalents
+Provides a configurable EUR/GBP exchange rate and conversion functions
+for use across the RWA calculator.
 
-The EUR amounts are the regulatory source of truth. GBP equivalents are
-calculated at runtime using the configured rate.
-
-Note: Basel 3.1 (UK implementation via PRA PS1/26) specifies thresholds
-directly in GBP, so this conversion is not needed for Basel 3.1 calculations.
+Note: Regulatory thresholds (CRR EUR source values and Basel 3.1 GBP values)
+are consolidated in ``rwa_calc.contracts.config.RegulatoryThresholds``.
 
 Usage:
-    from src.rwa_calc.config import EUR_GBP_RATE, get_crr_threshold_gbp
+    from rwa_calc.config import EUR_GBP_RATE, eur_to_gbp
 
-    # Get current rate
-    rate = EUR_GBP_RATE  # e.g., 0.88
-
-    # Get GBP equivalent of a threshold
-    sme_threshold_gbp = get_crr_threshold_gbp("sme_exposure")
-
-    # Convert arbitrary amounts
+    rate = EUR_GBP_RATE  # e.g., 0.8732
     gbp_amount = eur_to_gbp(Decimal("1000000"))
 
 To update the rate:
-    Modify EUR_GBP_RATE in this file. All dependent GBP thresholds will
-    automatically reflect the new rate.
+    Modify EUR_GBP_RATE in this file.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Literal
 
 # =============================================================================
 # CONFIGURABLE FX RATE
@@ -84,77 +69,3 @@ def gbp_to_eur(gbp_amount: Decimal) -> Decimal:
         Decimal('1000000')  # with rate of 0.88
     """
     return gbp_amount / EUR_GBP_RATE
-
-
-# =============================================================================
-# CANONICAL EUR THRESHOLDS (CRR Regulatory Values)
-# =============================================================================
-
-# These are the official EUR amounts from CRR regulation.
-# Do not modify these - they are regulatory constants.
-
-ThresholdKey = Literal[
-    "sme_exposure",
-    "sme_turnover",
-    "retail_exposure",
-    "qrre_limit",
-    "lfse_total_assets",
-]
-
-CRR_REGULATORY_THRESHOLDS_EUR: dict[ThresholdKey, Decimal] = {
-    # SME exposure threshold for tiered supporting factor (CRR2 Art. 501)
-    # Exposures up to this amount get 0.7619 factor
-    # Exposures above get 0.85 factor
-    "sme_exposure": Decimal("2500000"),  # EUR 2.5m
-    # SME turnover threshold for eligibility (CRR Art. 501)
-    # Counterparties with turnover below this qualify as SME
-    "sme_turnover": Decimal("50000000"),  # EUR 50m
-    # Retail exposure threshold (CRR Art. 123(c))
-    # Aggregated exposure to lending group must be below this
-    "retail_exposure": Decimal("1000000"),  # EUR 1m
-    # QRRE maximum limit per exposure (CRR Art. 123)
-    "qrre_limit": Decimal("100000"),  # EUR 100k
-    # Large financial sector entity total assets threshold (CRR Art. 4(1)(146))
-    # Entities with total assets >= this threshold are LFSE
-    "lfse_total_assets": Decimal("70000000000"),  # EUR 70bn
-}
-
-
-# =============================================================================
-# DERIVED GBP THRESHOLDS
-# =============================================================================
-
-
-def get_crr_threshold_gbp(threshold_key: ThresholdKey) -> Decimal:
-    """
-    Get the GBP equivalent of a CRR regulatory threshold.
-
-    The EUR amount is the canonical regulatory value. This function
-    converts it to GBP using the current EUR_GBP_RATE.
-
-    Args:
-        threshold_key: Key identifying the threshold
-            - "sme_exposure": EUR 2.5m threshold for tiered SME factor
-            - "sme_turnover": EUR 50m threshold for SME eligibility
-
-    Returns:
-        GBP equivalent of the threshold
-
-    Example:
-        >>> get_crr_threshold_gbp("sme_exposure")
-        Decimal('2200000')  # with rate of 0.88
-    """
-    eur_amount = CRR_REGULATORY_THRESHOLDS_EUR[threshold_key]
-    return eur_to_gbp(eur_amount)
-
-
-def get_all_crr_thresholds_gbp() -> dict[ThresholdKey, Decimal]:
-    """
-    Get all CRR thresholds converted to GBP.
-
-    Returns:
-        Dictionary of threshold keys to GBP amounts
-    """
-    return {
-        key: eur_to_gbp(eur_amount) for key, eur_amount in CRR_REGULATORY_THRESHOLDS_EUR.items()
-    }

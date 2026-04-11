@@ -25,9 +25,10 @@ References:
 from decimal import Decimal
 from typing import TypedDict
 
-from src.rwa_calc.config.fx_rates import (
-    CRR_REGULATORY_THRESHOLDS_EUR,
-    get_crr_threshold_gbp,
+from src.rwa_calc.contracts.config import (
+    _CRR_SME_EXPOSURE_EUR,
+    _CRR_SME_TURNOVER_EUR,
+    RegulatoryThresholds,
 )
 
 # =============================================================================
@@ -150,9 +151,9 @@ CRR_SME_SUPPORTING_FACTOR_TIER1: Decimal = Decimal("0.7619")
 CRR_SME_SUPPORTING_FACTOR_TIER2: Decimal = Decimal("0.85")
 
 # Exposure threshold for tiered treatment
-# EUR is canonical regulatory value; GBP derived from configurable FX rate
-CRR_SME_EXPOSURE_THRESHOLD_EUR: Decimal = CRR_REGULATORY_THRESHOLDS_EUR["sme_exposure"]
-CRR_SME_EXPOSURE_THRESHOLD_GBP: Decimal = get_crr_threshold_gbp("sme_exposure")
+# EUR is canonical regulatory value; GBP derived via RegulatoryThresholds
+CRR_SME_EXPOSURE_THRESHOLD_EUR: Decimal = _CRR_SME_EXPOSURE_EUR
+CRR_SME_EXPOSURE_THRESHOLD_GBP: Decimal = RegulatoryThresholds.crr().sme_exposure_threshold
 
 # Legacy constant for backwards compatibility (use calculate_sme_supporting_factor instead)
 CRR_SME_SUPPORTING_FACTOR: Decimal = Decimal("0.7619")
@@ -161,9 +162,9 @@ CRR_SME_SUPPORTING_FACTOR: Decimal = Decimal("0.7619")
 CRR_INFRASTRUCTURE_SUPPORTING_FACTOR: Decimal = Decimal("0.75")
 
 # SME turnover threshold (for eligibility, not the exposure threshold)
-# EUR is canonical regulatory value; GBP derived from configurable FX rate
-CRR_SME_TURNOVER_THRESHOLD_EUR: Decimal = CRR_REGULATORY_THRESHOLDS_EUR["sme_turnover"]
-CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = get_crr_threshold_gbp("sme_turnover")
+# EUR is canonical regulatory value; GBP derived via RegulatoryThresholds
+CRR_SME_TURNOVER_THRESHOLD_EUR: Decimal = _CRR_SME_TURNOVER_EUR
+CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = RegulatoryThresholds.crr().sme_turnover_threshold
 
 
 # =============================================================================

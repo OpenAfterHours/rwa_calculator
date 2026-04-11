@@ -294,12 +294,14 @@ def _apply_parameter_substitution(
         eur_gbp_rate = float(config.eur_gbp_rate)
 
         # Compute IRB risk weight from guarantor's PD and F-IRB supervisory LGD
+        sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
         guarantor_rw_irb = _parametric_irb_risk_weight_expr(
             pd_expr=guarantor_pd_floored,
             lgd=firb_lgd_senior,
             scaling_factor=scaling_factor,
             eur_gbp_rate=eur_gbp_rate,
             is_b31=config.is_basel_3_1,
+            sme_turnover_threshold_m=sme_turnover_m,
         )
 
         # Select method: IRB guarantor under Basel 3.1 -> parameter substitution,

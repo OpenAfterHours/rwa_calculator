@@ -5,6 +5,7 @@ Provides immutable configuration dataclasses for dual-framework support:
 - PDFloors: PD floor values by exposure class
 - LGDFloors: LGD floor values by collateral type (Basel 3.1 A-IRB only)
 - SupportingFactors: SME/infrastructure factors (CRR only)
+- RegulatoryThresholds: Consolidated monetary thresholds for exposure classification
 - OutputFloorConfig: 72.5% output floor (Basel 3.1 only)
 - CalculationConfig: Master configuration with factory methods
 
@@ -232,12 +233,14 @@ class SupportingFactors:
     Infrastructure Supporting Factor (CRR Art. 501a):
         - Applies to qualifying infrastructure exposures
         - Factor: 0.75
+
+    Note: SME eligibility thresholds (turnover, exposure) are in
+    RegulatoryThresholds, not here. This class holds only the factor
+    multipliers.
     """
 
     sme_factor_under_threshold: Decimal = Decimal("0.7619")
     sme_factor_above_threshold: Decimal = Decimal("0.85")
-    sme_exposure_threshold_eur: Decimal = Decimal("2500000")  # EUR 2.5m
-    sme_turnover_threshold_eur: Decimal = Decimal("50000000")  # EUR 50m
     infrastructure_factor: Decimal = Decimal("0.75")
     enabled: bool = True
 
@@ -247,8 +250,6 @@ class SupportingFactors:
         return cls(
             sme_factor_under_threshold=Decimal("0.7619"),
             sme_factor_above_threshold=Decimal("0.85"),
-            sme_exposure_threshold_eur=Decimal("2500000"),
-            sme_turnover_threshold_eur=Decimal("50000000"),
             infrastructure_factor=Decimal("0.75"),
             enabled=True,
         )
@@ -259,8 +260,6 @@ class SupportingFactors:
         return cls(
             sme_factor_under_threshold=Decimal("1.0"),
             sme_factor_above_threshold=Decimal("1.0"),
-            sme_exposure_threshold_eur=Decimal("2500000"),
-            sme_turnover_threshold_eur=Decimal("50000000"),
             infrastructure_factor=Decimal("1.0"),
             enabled=False,
         )
@@ -575,39 +574,82 @@ class PostModelAdjustmentConfig:
         )
 
 
+# =============================================================================
+# CRR EUR REGULATORY SOURCE VALUES
+# These are the official EUR amounts from CRR (EU 575/2013).
+# GBP equivalents are derived at construction time via the EUR/GBP rate.
+# =============================================================================
+_CRR_SME_TURNOVER_EUR = Decimal("50000000")  # EUR 50m — CRR Art. 501
+_CRR_SME_EXPOSURE_EUR = Decimal("2500000")  # EUR 2.5m — CRR2 Art. 501
+_CRR_RETAIL_EXPOSURE_EUR = Decimal("1000000")  # EUR 1m — CRR Art. 123(c)
+_CRR_QRRE_LIMIT_EUR = Decimal("100000")  # EUR 100k — CRR Art. 123
+_CRR_LFSE_TOTAL_ASSETS_EUR = Decimal("70000000000")  # EUR 70bn — CRR Art. 4(1)(146)
+
+
 @dataclass(frozen=True)
-class RetailThresholds:
+class RegulatoryThresholds:
     """
-    Thresholds for retail exposure classification.
+    Consolidated monetary thresholds for exposure classification.
 
-    Different thresholds apply under CRR vs Basel 3.1.
+    All values stored in GBP. CRR thresholds are derived from EUR
+    regulatory source values (defined as module-level constants above)
+    converted at the configured FX rate. Basel 3.1 thresholds are
+    PRA-specified GBP values directly.
+
+    References:
+        CRR: EU 575/2013 Art. 123, 123A, 501, 501a, Art. 4(1)(146)
+        Basel 3.1: PRA PS1/26 Art. 147(5A), 147A(1)(d), 153(4)
     """
 
-    # Maximum aggregated exposure to qualify as retail
-    max_exposure_threshold: Decimal = Decimal("1000000")  # GBP 1m (CRR)
+    # SME classification
+    sme_turnover_threshold: Decimal  # GBP: SME eligibility boundary
+    sme_exposure_threshold: Decimal  # GBP: tiered supporting factor boundary (CRR Art. 501)
 
-    # QRRE specific limits
-    qrre_max_limit: Decimal = Decimal("100000")  # GBP 100k limit per exposure
+    # Corporate classification (Basel 3.1 only; Decimal("0") under CRR)
+    large_corporate_revenue_threshold: Decimal  # GBP: A-IRB restriction (Art. 147A(1)(d))
+
+    # Retail classification
+    retail_max_exposure: Decimal  # GBP: max aggregated exposure for retail class
+    qrre_max_limit: Decimal  # GBP: max facility limit for QRRE
+
+    # Financial sector entity classification
+    lfse_total_assets_threshold: Decimal  # GBP: LFSE total assets boundary
 
     @classmethod
-    def crr(cls, eur_gbp_rate: Decimal = Decimal("0.8732")) -> RetailThresholds:
+    def crr(cls, eur_gbp_rate: Decimal = Decimal("0.8732")) -> RegulatoryThresholds:
         """
-        CRR retail thresholds (converted from EUR dynamically).
+        CRR thresholds (converted from EUR source values).
 
         Args:
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion
         """
         return cls(
-            max_exposure_threshold=Decimal("1000000") * eur_gbp_rate,  # EUR 1m
-            qrre_max_limit=Decimal("100000") * eur_gbp_rate,  # EUR 100k
+            sme_turnover_threshold=_CRR_SME_TURNOVER_EUR * eur_gbp_rate,
+            sme_exposure_threshold=_CRR_SME_EXPOSURE_EUR * eur_gbp_rate,
+            large_corporate_revenue_threshold=Decimal("0"),  # Not applicable under CRR
+            retail_max_exposure=_CRR_RETAIL_EXPOSURE_EUR * eur_gbp_rate,
+            qrre_max_limit=_CRR_QRRE_LIMIT_EUR * eur_gbp_rate,
+            lfse_total_assets_threshold=_CRR_LFSE_TOTAL_ASSETS_EUR * eur_gbp_rate,
         )
 
     @classmethod
-    def basel_3_1(cls) -> RetailThresholds:
-        """Basel 3.1 retail thresholds (GBP)."""
+    def basel_3_1(cls) -> RegulatoryThresholds:
+        """
+        Basel 3.1 thresholds (PRA PS1/26 GBP-native values).
+
+        References:
+            Art. 153(4): SME turnover GBP 44m
+            Art. 147A(1)(d): Large corporate revenue GBP 440m
+            Art. 147(5A): Retail max exposure GBP 880k
+            Art. 147(5A)(c): QRRE max limit GBP 90k
+        """
         return cls(
-            max_exposure_threshold=Decimal("880000"),  # GBP 880k
-            qrre_max_limit=Decimal("90000"),  # GBP 90k per Art. 147(5A)(c)
+            sme_turnover_threshold=Decimal("44000000"),  # GBP 44m
+            sme_exposure_threshold=Decimal("0"),  # Not applicable under Basel 3.1
+            large_corporate_revenue_threshold=Decimal("440000000"),  # GBP 440m
+            retail_max_exposure=Decimal("880000"),  # GBP 880k
+            qrre_max_limit=Decimal("90000"),  # GBP 90k
+            lfse_total_assets_threshold=Decimal("0"),  # Not applicable under Basel 3.1
         )
 
 
@@ -747,7 +789,7 @@ class CalculationConfig:
         supporting_factors: SME/infrastructure factors
         output_floor: Output floor configuration
         post_model_adjustments: Post-model adjustments (Basel 3.1 only)
-        retail_thresholds: Retail classification thresholds
+        thresholds: Consolidated regulatory thresholds for exposure classification
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
         scaling_factor: 1.06 scaling factor for IRB (CRR Art. 153), 1.0 for Basel 3.1
         use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
@@ -768,7 +810,7 @@ class CalculationConfig:
     post_model_adjustments: PostModelAdjustmentConfig = field(
         default_factory=PostModelAdjustmentConfig.crr
     )
-    retail_thresholds: RetailThresholds = field(default_factory=RetailThresholds.crr)
+    thresholds: RegulatoryThresholds = field(default_factory=RegulatoryThresholds.crr)
     permission_mode: PermissionMode = PermissionMode.STANDARDISED
     irb_permissions: IRBPermissions = field(init=False)
     equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
@@ -862,7 +904,7 @@ class CalculationConfig:
             supporting_factors=SupportingFactors.crr(),
             output_floor=OutputFloorConfig.crr(),
             post_model_adjustments=PostModelAdjustmentConfig.crr(),
-            retail_thresholds=RetailThresholds.crr(eur_gbp_rate=eur_gbp_rate),
+            thresholds=RegulatoryThresholds.crr(eur_gbp_rate=eur_gbp_rate),
             permission_mode=permission_mode,
             scaling_factor=Decimal("1.06"),
             eur_gbp_rate=eur_gbp_rate,
@@ -947,7 +989,7 @@ class CalculationConfig:
             post_model_adjustments=(
                 post_model_adjustments or PostModelAdjustmentConfig.basel_3_1()
             ),
-            retail_thresholds=RetailThresholds.basel_3_1(),
+            thresholds=RegulatoryThresholds.basel_3_1(),
             permission_mode=permission_mode,
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)

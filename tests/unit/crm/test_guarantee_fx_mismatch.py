@@ -244,6 +244,42 @@ class TestGuaranteeFXMismatchHaircut:
         assert df["guaranteed_portion"][0] == pytest.approx(920_000.0, rel=1e-6)
         assert df["unguaranteed_portion"][0] == pytest.approx(80_000.0, rel=1e-6)
 
+    def test_large_guarantee_cross_currency_still_fully_covers(
+        self,
+        crm_processor: CRMProcessor,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Guarantee >> EAD with FX mismatch: haircut on G, then cap at EAD.
+
+        Art. 233/235: G* = G × (1 - H_fx) = 200M × 0.92 = 184M.
+        Since 184M > 1M EAD, guaranteed_portion = 1M (fully covered).
+
+        Previously the code applied haircut AFTER capping, yielding
+        1M × 0.92 = 920K (incorrectly reducing coverage).
+        """
+        ead = 1_000_000.0
+        exposures = _make_exposure(ead=ead, currency="GBP")
+        # Guarantee vastly exceeds exposure — should still fully cover after haircut
+        guarantees = _make_guarantee(amount=200_000_000.0, currency="EUR")
+
+        classified_bundle = ClassifiedExposuresBundle(
+            all_exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+            guarantees=guarantees,
+            counterparty_lookup=_counterparty_lookup(
+                _default_counterparties(), _default_rating_inheritance()
+            ),
+        )
+
+        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        df = result.exposures.collect()
+
+        # G* = 200M × 0.92 = 184M → min(184M, 1M) = 1M (fully covered)
+        assert df["guaranteed_portion"][0] == pytest.approx(ead, rel=1e-6)
+        assert df["unguaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+
     def test_cross_currency_guarantee_under_basel31(
         self,
         crm_processor: CRMProcessor,
@@ -398,9 +434,10 @@ class TestMultiGuarantorFXMismatch:
         gbp_row = df.filter(pl.col("exposure_reference") == "LOAN_A__G_GUAR_GBP")
         rem_row = df.filter(pl.col("exposure_reference") == "LOAN_A__REM")
 
-        # EUR guarantor: 400k × 0.92 = 368k guaranteed, 32k unguaranteed
+        # EUR guarantor: haircut applied before split → 400k × 0.92 = 368k
+        # Sub-row EAD = 368k, fully covered by guarantor
         assert eur_row["guaranteed_portion"][0] == pytest.approx(368_000.0, rel=1e-6)
-        assert eur_row["unguaranteed_portion"][0] == pytest.approx(32_000.0, rel=1e-6)
+        assert eur_row["unguaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
         assert eur_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
 
         # GBP guarantor: same currency → 300k guaranteed, 0 unguaranteed
@@ -408,6 +445,7 @@ class TestMultiGuarantorFXMismatch:
         assert gbp_row["unguaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
         assert gbp_row["guarantee_fx_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
-        # Remainder: 300k (1M - 300k - 400k), no guarantee
+        # Remainder: 1M - 368k - 300k = 332k (includes 32k from FX haircut)
         assert rem_row["guaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
+        assert rem_row["unguaranteed_portion"][0] == pytest.approx(332_000.0, rel=1e-6)
         assert rem_row["guarantee_fx_haircut"][0] == pytest.approx(0.0, rel=1e-6)

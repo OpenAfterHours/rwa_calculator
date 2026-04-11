@@ -5,6 +5,13 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.190] — 2026-04-11
+
+### Fixed
+- **Guarantees (#239)**: Fixed two bugs in multi-guarantor handling:
+  1. **Non-beneficial guarantors consuming EAD**: When an exposure has multiple guarantors and some are non-beneficial, the pro-rata scaling no longer wastes EAD on non-beneficial guarantors. After the SA/IRB beneficial check, a new `redistribute_non_beneficial()` function reallocates freed portions to beneficial guarantors using a greedy strategy ordered by ascending risk weight (lowest RW fills first), minimising total RWA.
+  2. **FX/restructuring haircuts applied after capping**: The 8% FX mismatch haircut (Art. 233(3-4)) and 40% CDS restructuring exclusion haircut (Art. 233(2)) are now applied to the nominal credit protection value (G) *before* capping at EAD, per CRR Art. 233/235. Previously, a large cross-currency guarantee that vastly exceeded EAD would incorrectly have coverage reduced (e.g. £200m guarantee on €1m loan → was 920k, now correctly 1m).
+
 ## [0.1.189] — 2026-04-11
 
 ### Fixed

@@ -116,6 +116,13 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
         ]
     )
 
+    # Redistribute non-beneficial guarantee portions to beneficial guarantors.
+    # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
+    # to the most beneficial (lowest RW) guarantors using greedy fill.
+    from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
+
+    lf = redistribute_non_beneficial(lf)
+
     # Calculate blended RWA using substitution approach
     lf = lf.with_columns(
         [

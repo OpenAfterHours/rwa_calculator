@@ -72,21 +72,18 @@ def apply_guarantees(
 
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 
+    # Apply haircuts to guarantee amounts BEFORE splitting (Art. 233).
+    # Haircuts reduce the nominal credit protection value G, then capping
+    # at EAD happens inside the split. This ensures large cross-currency
+    # guarantees still fully cover smaller exposures after the haircut.
+    guarantees = _apply_fx_haircut_to_guarantees(guarantees, exposures)
+    guarantees = _apply_restructuring_haircut_to_guarantees(guarantees)
+
     exposures = exposures.with_columns(
         pl.col("exposure_reference").alias("parent_exposure_reference"),
     )
 
     exposures = _apply_guarantee_splits(guarantees, exposures)
-
-    # Apply FX mismatch haircut to guarantee amounts (Art. 233(3-4)).
-    # When a guarantee is denominated in a different currency from the exposure,
-    # the guaranteed amount is reduced: G* = G × (1 - H_fx) where H_fx = 8%.
-    exposures = _apply_guarantee_fx_haircut(exposures)
-
-    # Apply CDS restructuring exclusion haircut (Art. 233(2)).
-    # When a credit derivative does not include restructuring as a credit event,
-    # protection is reduced by 40% (capped at 60% of exposure value).
-    exposures = _apply_restructuring_exclusion_haircut(exposures)
 
     # Look up guarantor's entity type, country code, and CQS for risk weight substitution
     # Join with counterparty to get guarantor's entity type and country
@@ -351,6 +348,15 @@ def _apply_guarantee_splits(
     # Preserve includes_restructuring for CDS restructuring exclusion haircut (Art. 233(2)).
     if "includes_restructuring" in guar_cols:
         agg_exprs.append(pl.col("includes_restructuring").first().alias("includes_restructuring"))
+    # Preserve haircut columns (applied before split in apply_guarantees pipeline)
+    if "guarantee_fx_haircut" in guar_cols:
+        agg_exprs.append(pl.col("guarantee_fx_haircut").first().alias("guarantee_fx_haircut"))
+    if "guarantee_restructuring_haircut" in guar_cols:
+        agg_exprs.append(
+            pl.col("guarantee_restructuring_haircut")
+            .first()
+            .alias("guarantee_restructuring_haircut")
+        )
 
     guarantees = guarantees.group_by("beneficiary_reference", "guarantor").agg(agg_exprs)
 
@@ -370,6 +376,10 @@ def _apply_guarantee_splits(
         guar_select.append("guarantee_currency")
     if "includes_restructuring" in guar_cols:
         guar_select.append("includes_restructuring")
+    if "guarantee_fx_haircut" in guar_cols:
+        guar_select.append("guarantee_fx_haircut")
+    if "guarantee_restructuring_haircut" in guar_cols:
+        guar_select.append("guarantee_restructuring_haircut")
 
     # Count distinct guarantors per exposure
     guarantee_counts = guarantees.group_by("beneficiary_reference").agg(
@@ -390,7 +400,17 @@ def _apply_guarantee_splits(
     # are lost.
     _cols_to_drop_before_join = [
         c
-        for c in ("protection_type", "guarantee_currency", "includes_restructuring")
+        for c in (
+            "protection_type",
+            "guarantee_currency",
+            "includes_restructuring",
+            "guarantee_fx_haircut",
+            "guarantee_restructuring_haircut",
+            "guarantee_amount",
+            "guaranteed_portion",
+            "unguaranteed_portion",
+            "guarantor_reference",
+        )
         if c in exposures_with_counts.collect_schema().names()
     ]
     if _cols_to_drop_before_join:
@@ -402,9 +422,12 @@ def _apply_guarantee_splits(
         pl.col("ead_after_collateral").alias("unguaranteed_portion"),
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
         pl.lit(0.0).alias("guarantee_amount"),
+        pl.lit(0.0).alias("original_guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
         pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
+        pl.lit(0.0).alias("guarantee_fx_haircut"),
+        pl.lit(0.0).alias("guarantee_restructuring_haircut"),
     )
 
     # --- Path 2: Single guarantor (backward compatible, no split) ---
@@ -423,6 +446,7 @@ def _apply_guarantee_splits(
     )
 
     single = single.with_columns(
+        pl.col("guarantee_amount").alias("original_guarantee_amount"),
         pl.min_horizontal("guarantee_amount", "ead_after_collateral").alias("guaranteed_portion"),
         pl.col("guarantor").alias("guarantor_reference"),
     ).with_columns(
@@ -477,6 +501,7 @@ def _apply_guarantee_splits(
         pl.lit(0.0).alias("unguaranteed_portion"),
         pl.col("_effective_amount").alias("ead_after_collateral"),
         pl.col("_effective_amount").alias("guarantee_amount"),
+        pl.col("_guar_amount").alias("original_guarantee_amount"),
         pl.col("guarantor").alias("guarantor_reference"),
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__G_"), pl.col("guarantor")],
@@ -494,10 +519,13 @@ def _apply_guarantee_splits(
         (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("unguaranteed_portion"),
         (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("ead_after_collateral"),
         pl.lit(0.0).alias("guarantee_amount"),
+        pl.lit(0.0).alias("original_guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
         pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
+        pl.lit(0.0).alias("guarantee_fx_haircut"),
+        pl.lit(0.0).alias("guarantee_restructuring_haircut"),
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__REM")],
         ).alias("exposure_reference"),
@@ -696,6 +724,318 @@ def _allocate_guarantees_pro_rata(
         )
         .drop("exposure_reference", "_weight")
     )
+
+
+def _apply_fx_haircut_to_guarantees(
+    guarantees: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Apply FX mismatch haircut to guarantee amounts BEFORE splitting.
+
+    Reduces ``amount_covered`` by H_fx (8%) when the guarantee currency
+    differs from the exposure currency. Haircut is applied to the nominal
+    credit protection value *before* capping at EAD, per CRR Art. 233(3-4):
+
+        G* = G × (1 − H_fx)
+
+    This ensures that a large guarantee in a foreign currency still fully
+    covers a smaller exposure (e.g. £200m guarantee on €1m loan with 8%
+    haircut → £184m effective → still fully covers €1m).
+
+    References:
+        CRR Art. 233(3-4), Art. 235(1): G = nominal credit protection value
+        Art. 224 Table 4: H_fx = 8% (10-day liquidation period)
+    """
+    guar_schema = guarantees.collect_schema()
+    guar_cols = guar_schema.names()
+
+    # Determine guarantee currency column
+    if "original_currency" in guar_cols:
+        guar_ccy_col = "original_currency"
+    elif "currency" in guar_cols:
+        guar_ccy_col = "currency"
+    else:
+        return guarantees.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
+
+    # Determine exposure currency column
+    exp_schema = exposures.collect_schema()
+    exp_cols = exp_schema.names()
+    if "original_currency" in exp_cols:
+        exp_ccy_col = "original_currency"
+    elif "currency" in exp_cols:
+        exp_ccy_col = "currency"
+    else:
+        return guarantees.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
+
+    # Join guarantees with exposure currency (lightweight join)
+    exp_ccy = exposures.select(
+        pl.col("exposure_reference"),
+        pl.col(exp_ccy_col).alias("_exp_ccy"),
+    )
+
+    guarantees = guarantees.join(
+        exp_ccy,
+        left_on="beneficiary_reference",
+        right_on="exposure_reference",
+        how="left",
+    )
+
+    h_fx = float(FX_HAIRCUT)
+    has_pct = "percentage_covered" in guar_cols
+
+    # Guarantee provides coverage via amount or percentage
+    has_coverage = pl.col("amount_covered").fill_null(0.0) > 0
+    if has_pct:
+        has_coverage = has_coverage | (pl.col("percentage_covered").fill_null(0.0) > 0)
+
+    fx_mismatch = (
+        pl.col(guar_ccy_col).is_not_null()
+        & pl.col("_exp_ccy").is_not_null()
+        & (pl.col(guar_ccy_col) != pl.col("_exp_ccy"))
+        & has_coverage
+    )
+
+    haircut_exprs: list[pl.Expr] = [
+        # Amount-based: reduce amount_covered
+        pl.when(fx_mismatch)
+        .then(pl.col("amount_covered") * (1.0 - h_fx))
+        .otherwise(pl.col("amount_covered"))
+        .alias("amount_covered"),
+        # Track the haircut applied
+        pl.when(fx_mismatch)
+        .then(pl.lit(h_fx))
+        .otherwise(pl.lit(0.0))
+        .alias("guarantee_fx_haircut"),
+    ]
+
+    # Percentage-based: reduce percentage_covered (G = pct × EAD, so G* = pct × (1-H) × EAD)
+    if has_pct:
+        haircut_exprs.append(
+            pl.when(fx_mismatch)
+            .then(pl.col("percentage_covered") * (1.0 - h_fx))
+            .otherwise(pl.col("percentage_covered"))
+            .alias("percentage_covered"),
+        )
+
+    guarantees = guarantees.with_columns(haircut_exprs)
+
+    return guarantees.drop("_exp_ccy")
+
+
+def _apply_restructuring_haircut_to_guarantees(
+    guarantees: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """
+    Apply CDS restructuring exclusion haircut to guarantee amounts BEFORE splitting.
+
+    When a credit derivative does not include restructuring as a credit event,
+    ``amount_covered`` is reduced by 40%:
+
+        G* = G × (1 − H_restructuring) = G × 0.60
+
+    Applied to nominal credit protection value before capping/splitting,
+    consistent with CRR Art. 233(2).
+
+    References:
+        CRR Art. 233(2), PRA PS1/26 Art. 233(2)
+        Art. 216(1): Credit events for credit derivatives
+    """
+    schema = guarantees.collect_schema()
+    cols = schema.names()
+
+    has_protection_type = "protection_type" in cols
+    has_includes_restructuring = "includes_restructuring" in cols
+
+    if not has_protection_type or not has_includes_restructuring:
+        return guarantees.with_columns(
+            pl.lit(0.0).alias("guarantee_restructuring_haircut"),
+        )
+
+    h_restructuring = float(RESTRUCTURING_EXCLUSION_HAIRCUT)
+
+    applies = (
+        (pl.col("protection_type") == "credit_derivative")
+        & (pl.col("includes_restructuring").fill_null(True).not_())
+        & (pl.col("amount_covered").fill_null(0.0) > 0)
+    )
+
+    return guarantees.with_columns(
+        pl.when(applies)
+        .then(pl.col("amount_covered") * (1.0 - h_restructuring))
+        .otherwise(pl.col("amount_covered"))
+        .alias("amount_covered"),
+        pl.when(applies)
+        .then(pl.lit(h_restructuring))
+        .otherwise(pl.lit(0.0))
+        .alias("guarantee_restructuring_haircut"),
+    )
+
+
+def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """
+    Redistribute non-beneficial guarantee portions to beneficial guarantors.
+
+    When multi-guarantor exposures have mixed beneficial/non-beneficial sub-rows,
+    the non-beneficial portions are reallocated to beneficial guarantors using a
+    greedy strategy ordered by ascending ``guarantor_rw`` (lowest risk weight first).
+    This minimises total RWA by filling the best guarantors first.
+
+    Only operates on multi-guarantor sub-rows (created by ``_apply_guarantee_splits``).
+    Single-guarantor and non-guaranteed exposures pass through unchanged.
+
+    References:
+        CRR Art. 213: Only beneficial guarantees should be applied
+        CRR Art. 215-217: Guarantee substitution with multiple protections
+    """
+    schema = exposures.collect_schema()
+    cols = schema.names()
+
+    # Guard: need the columns created by _apply_guarantee_splits and the beneficial check
+    required = [
+        "parent_exposure_reference",
+        "exposure_reference",
+        "is_guarantee_beneficial",
+        "guaranteed_portion",
+        "ead_after_collateral",
+        "original_guarantee_amount",
+        "guarantor_rw",
+    ]
+    if not all(c in cols for c in required):
+        return exposures
+
+    # Classify row types
+    is_sub_row = pl.col("parent_exposure_reference") != pl.col("exposure_reference")
+    is_remainder = pl.col("exposure_reference").str.ends_with("__REM")
+    is_guarantor_sub = is_sub_row & ~is_remainder
+
+    # Check if any parent group has mixed beneficial/non-beneficial sub-rows.
+    # If no non-beneficial sub-rows exist at all, skip redistribution entirely.
+    has_non_ben = (
+        pl.when(~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.lit(1))
+        .otherwise(pl.lit(0))
+        .sum()
+        .over("parent_exposure_reference")
+    )
+    has_ben = (
+        pl.when(pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.lit(1))
+        .otherwise(pl.lit(0))
+        .sum()
+        .over("parent_exposure_reference")
+    )
+
+    # Only redistribute for groups that have BOTH beneficial and non-beneficial
+    needs_redistribution = (has_non_ben > 0) & (has_ben > 0) & is_sub_row
+
+    # Pre-compute group-level amounts
+    exposures = exposures.with_columns(
+        # Total non-beneficial amount to free up (per parent group)
+        pl.when(~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.col("guaranteed_portion"))
+        .otherwise(pl.lit(0.0))
+        .sum()
+        .over("parent_exposure_reference")
+        .alias("_non_ben_total"),
+        # Total parent EAD (sum of all sub-row EADs in the group)
+        pl.when(is_sub_row)
+        .then(pl.col("ead_after_collateral"))
+        .otherwise(pl.lit(0.0))
+        .sum()
+        .over("parent_exposure_reference")
+        .alias("_parent_ead"),
+    )
+
+    # For beneficial sub-rows, compute remaining capacity and sort rank
+    exposures = exposures.with_columns(
+        pl.when(pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(
+            (pl.col("original_guarantee_amount") - pl.col("guaranteed_portion")).clip(
+                lower_bound=0.0
+            )
+        )
+        .otherwise(pl.lit(0.0))
+        .alias("_remaining_capacity"),
+    )
+
+    # Greedy fill: sort beneficial guarantors by guarantor_rw ascending,
+    # compute cumulative capacity, and determine how much each absorbs.
+    # Use ordered window function so lowest-RW guarantors fill first.
+    exposures = exposures.with_columns(
+        # Cumulative capacity of beneficial guarantors sorted by RW (ascending)
+        # For non-beneficial or non-sub-rows, capacity is 0 so cumsum stays 0.
+        pl.col("_remaining_capacity")
+        .cum_sum()
+        .over("parent_exposure_reference", order_by="guarantor_rw")
+        .alias("_cum_capacity"),
+    )
+
+    exposures = exposures.with_columns(
+        # Previous cumulative (capacity of better-ranked guarantors)
+        (pl.col("_cum_capacity") - pl.col("_remaining_capacity")).alias("_prev_cum"),
+    )
+
+    # Each beneficial guarantor absorbs:
+    #   min(remaining_capacity, max(0, freed_amount - prev_cumulative))
+    absorbed = pl.min_horizontal(
+        pl.col("_remaining_capacity"),
+        (pl.col("_non_ben_total") - pl.col("_prev_cum")).clip(lower_bound=0.0),
+    )
+
+    # Compute new guaranteed portion for each row
+    new_guaranteed = (
+        pl.when(needs_redistribution & pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.col("guaranteed_portion") + absorbed)
+        .when(needs_redistribution & ~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("guaranteed_portion"))
+    )
+
+    # Compute total new beneficial EAD per group (for remainder calculation)
+    exposures = exposures.with_columns(new_guaranteed.alias("_new_guaranteed"))
+
+    new_ben_total = (
+        pl.when(is_guarantor_sub)
+        .then(pl.col("_new_guaranteed"))
+        .otherwise(pl.lit(0.0))
+        .sum()
+        .over("parent_exposure_reference")
+    )
+
+    # Update all affected columns
+    exposures = exposures.with_columns(
+        # guaranteed_portion
+        pl.col("_new_guaranteed").alias("guaranteed_portion"),
+        # ead_after_collateral: for guarantor sub-rows = guaranteed_portion,
+        # for remainder = parent_ead - sum(guarantor sub-row EADs)
+        pl.when(needs_redistribution & is_guarantor_sub)
+        .then(pl.col("_new_guaranteed"))
+        .when(needs_redistribution & is_remainder)
+        .then((pl.col("_parent_ead") - new_ben_total).clip(lower_bound=0.0))
+        .otherwise(pl.col("ead_after_collateral"))
+        .alias("ead_after_collateral"),
+        # unguaranteed_portion
+        pl.when(needs_redistribution & pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.lit(0.0))
+        .when(needs_redistribution & ~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
+        .then(pl.lit(0.0))
+        .when(needs_redistribution & is_remainder)
+        .then((pl.col("_parent_ead") - new_ben_total).clip(lower_bound=0.0))
+        .otherwise(pl.col("unguaranteed_portion"))
+        .alias("unguaranteed_portion"),
+    )
+
+    # Drop transient columns
+    transient = [
+        "_non_ben_total",
+        "_parent_ead",
+        "_remaining_capacity",
+        "_cum_capacity",
+        "_prev_cum",
+        "_new_guaranteed",
+    ]
+    return _drop_columns_if_present(exposures, transient)
 
 
 def _apply_guarantee_fx_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:

@@ -144,28 +144,37 @@ Where an exposure meets multiple criteria, the highest-priority class applies.
 
 ### LGD Floors (A-IRB Only)
 
+!!! note "CRR Portfolio-Level Floors vs Basel 3.1 Per-Exposure Input Floors"
+    CRR Art. 164(4) (as amended by CRR2) imposes **portfolio-level** minimum LGD
+    requirements: exposure-weighted average LGD ≥ 10% (retail residential RE) and ≥ 15%
+    (retail commercial RE). These are **not** per-exposure input floors — they operate at
+    the aggregate portfolio level and exclude exposures benefiting from central government
+    guarantees. Basel 3.1 Art. 164(4) **replaces** this with per-exposure input floors
+    applied to each exposure individually before the capital formula.
+
 **Corporate / Institution:**
 
 | Collateral Type | CRR | Basel 3.1 |
 |-----------------|-----|-----------|
-| Unsecured | None | 25% |
-| Financial Collateral (LGDS) | None | 0% |
-| Receivables (LGDS) | None | 10%* |
-| Commercial/Residential RE (LGDS) | None | 10%* |
-| Other Physical (LGDS) | None | 15%* |
+| Unsecured | No per-exposure floor | 25% |
+| Financial Collateral (LGDS) | No per-exposure floor | 0% |
+| Receivables (LGDS) | No per-exposure floor | 10%* |
+| Commercial/Residential RE (LGDS) | No per-exposure floor | 10%* |
+| Other Physical (LGDS) | No per-exposure floor | 15%* |
 
 **Retail:**
 
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
-| Secured by Residential RE (flat) | None | **5%** |
-| QRRE Unsecured | None | **50%** |
-| Other Unsecured Retail | None | **30%** |
-| Secured — LGDU in LGD* formula | None | **30%** |
-| Secured — Financial Collateral (LGDS) | None | 0% |
-| Secured — Receivables (LGDS) | None | 10%* |
-| Secured — Immovable Property (LGDS) | None | 10%* |
-| Secured — Other Physical (LGDS) | None | 15%* |
+| Secured by Residential RE (flat) | Portfolio avg ≥ 10% | **5%** (per-exposure) |
+| Secured by Commercial RE | Portfolio avg ≥ 15% | Via LGD* formula |
+| QRRE Unsecured | No floor | **50%** |
+| Other Unsecured Retail | No floor | **30%** |
+| Secured — LGDU in LGD* formula | No floor | **30%** |
+| Secured — Financial Collateral (LGDS) | No floor | 0% |
+| Secured — Receivables (LGDS) | No floor | 10%* |
+| Secured — Immovable Property (LGDS) | No floor | 10%* |
+| Secured — Other Physical (LGDS) | No floor | 15%* |
 
 Note: The retail unsecured LGDU used in the LGD* formula for secured exposures is
 **30%** (Art. 164(4)(c)), compared to 25% for corporates (Art. 161(5)(b)).
@@ -460,16 +469,42 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 |-------|-------------------|-------------------|----------|
 | A | 40% | 20% | Meets all minimum requirements + buffers |
 | A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
-| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
-| C | 150% | 150% | Below minimum requirements |
+| B | 75% | 50% | Meets minimum requirements (excluding buffers) but not Grade A (Art. 121(1)(b)) |
+| C | 150% | 150% | Does not meet minimum requirements, or adverse audit opinion (Art. 121(1)(c)) |
+
+!!! warning "Correction: Grade B Has No Quantitative Thresholds"
+    Prior documentation incorrectly stated Grade B criteria as "CET1 ≥ 5.5%, Leverage ≥ 3%".
+    These thresholds **do not appear** in PRA PS1/26 Art. 121 or BCBS CRE20. Grade B is a
+    **qualitative** assessment: the institution meets published minimum regulatory requirements
+    (excluding buffers) but does not qualify for Grade A. Only Grade A enhanced (30%) has
+    quantitative thresholds (CET1 ≥ 14%, leverage ≥ 5% per Art. 121(5)). If minimum
+    requirements are not publicly disclosed, the institution must be classified as Grade C.
 
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
-**Sovereign floor:** Unrated institution risk weights cannot be lower than their sovereign's
-risk weight.
+**Sovereign floor (Art. 121(6)):** Unrated institution risk weights cannot be lower than their sovereign's
+risk weight for foreign-currency exposures. Self-liquidating trade finance ≤1yr excluded.
 
 ### Residential Real Estate
+
+!!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
+    Basel 3.1 introduces Art. 124E, a formal test for routing RE exposures between
+    loan-splitting (non-dependent) and whole-loan (income-producing) treatment. CRR
+    has no equivalent — the distinction between Art. 125 (general) and Art. 126
+    (income-producing) was not gated by a structured classification rule.
+
+    **Residential RE** is materially dependent by default. The five exceptions for
+    non-dependent classification are: (a) primary residence, (b) natural person with
+    ≤3 non-primary qualifying properties (three-property limit), (c) SPE with natural
+    person guarantor meeting the same limit, (d) social housing, (e) cooperative for
+    primary residence use. Each housing unit counts as a separate property even under
+    a single charge (Art. 124E(4)).
+
+    **Commercial RE** is materially dependent unless the borrower uses each property
+    predominantly for its own business purpose, excluding rental income (Art. 124E(6)).
+
+    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
 
 !!! warning "Art. 124A Qualifying Gate"
     All preferential RE risk weights below (Art. 124F–124I) require the exposure to be a
@@ -508,7 +543,8 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
     Where prior-ranking charges exist that the institution does not hold (i.e. a junior lien),
     the Table 6B risk weight is multiplied by **1.25×** when LTV > 50%.
     At LTV ≤ 50% the 30% weight applies without uplift.
-    The multiplied weight is capped at 105% (the Table 6B ceiling).
+    The multiplied weight is **not capped** at the Table 6B ceiling — it may exceed 105%
+    (e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
     **Example:** junior charge at 75% LTV → 50% × 1.25 = **62.5%** whole-loan.
     CRR has no equivalent junior-charge multiplier for residential RE.
     See [B31 SA spec](../specifications/basel31/sa-risk-weights.md#income-producing-residential--whole-loan-art-124g-table-6b)
@@ -520,12 +556,14 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 | Portion | CRR (Art. 126) | Basel 3.1 (Art. 124H) | Change |
 |---------|----------------|----------------------|--------|
-| Secured portion | 50% (≤50% LTV) | **60%** (≤55% LTV) | Higher RW, higher threshold |
-| Unsecured residual | 100% | Counterparty RW (Art. 124L) | Risk-sensitive |
+| Secured portion | 50% (≤50% MV / 60% MLV) | **60%** (≤55% property value) | Higher RW, higher threshold |
+| Unsecured residual | Counterparty RW | Counterparty RW (Art. 124L) | Explicit lookup table added |
 
-CRR Art. 126 applies a two-part split to all CRE regardless of counterparty type.
-Basel 3.1 Art. 124H(1)–(2) restricts loan-splitting to natural persons and SMEs,
-with a higher secured RW (60% vs 50%) and a higher threshold (55% vs 50%).
+CRR Art. 126(2)(d) applies a proportion-based split to all qualifying CRE regardless of
+counterparty type: the 50% RW applies only to the part of the loan not exceeding 50% of
+market value (or 60% of MLV), with the excess falling to the counterparty's standard
+exposure class weight. Basel 3.1 Art. 124H(1)–(2) restricts loan-splitting to natural
+persons and SMEs, with a higher secured RW (60% vs 50%) and a higher threshold (55% vs 50%).
 
 !!! info "Art. 124H(3) — Large Corporate CRE (Non-Natural-Person, Non-SME)"
     For counterparties that are **not** natural persons and **not** SMEs (e.g. large corporates,
@@ -670,8 +708,14 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 | Type | CRR (Art. 133(2)) | Basel 3.1 (Fully Phased) | Change |
 |------|-----|--------------------------|--------|
 | Standard listed equities | 100% | **250%** | +150pp |
-| Higher-risk (unlisted, PE, etc.) | 100% | **400%** | +300pp |
-| Speculative / venture capital | 100% (Art. 133(2)) | **400%** | +300pp |
+| Higher-risk (unlisted + business < 5 years) | 100% | **400%** | +300pp |
+
+!!! warning "Correction: Higher-Risk Definition (Fixed D1.38)"
+    This table previously had two higher-risk rows ("Higher-risk (unlisted, PE, etc.)" and
+    "Speculative / venture capital"). PRA PS1/26 Glossary (p.5) defines "higher risk equity
+    exposure" solely as: (1) not listed on a recognised exchange AND (2) business has existed
+    for less than five years. PE/VC is **not** automatically higher-risk — only if it meets
+    both criteria. See [Equity Approach Specification](../specifications/basel31/equity-approach.md#higher-risk-classification-art-1334).
 
 IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
 is blanked in the final rules.
@@ -717,7 +761,7 @@ for equity underlyings has a material impact:
     The 1,250% fallback applies only where neither look-through nor mandate-based
     approaches are feasible. CIU equity exposures **excluded** under Art. 132B(2)
     (e.g., sovereign entities, legislative programme holdings) instead receive
-    Art. 133 equity treatment (250% listed / 400% unlisted under Basel 3.1).
+    Art. 133 equity treatment (250% standard / 400% higher-risk under Basel 3.1).
 
 !!! warning "Implementation Note"
     The calculator currently applies 150% (CRR) / 250%-400% (Basel 3.1) for
@@ -812,10 +856,9 @@ new institution RWs (ECRA 30%, SCRA 40%/75%):
     adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
     must assign at least one CQS step higher.
 
-!!! warning "Code Divergence — B31 Rated Values"
-    `B31_COVERED_BOND_RISK_WEIGHTS` uses **BCBS CRE20** values (CQS 2 = 15%,
-    CQS 6 = 50%) instead of PRA Table 7 values (identical to CRR). The unrated derivation
-    is correct. See [SA risk weights spec](../specifications/crr/sa-risk-weights.md#covered-bond-exposures-crr-art-129) for details.
+!!! success "P1.113 Fixed — B31 Rated Values"
+    `B31_COVERED_BOND_RISK_WEIGHTS` now uses PRA Table 7 values (identical to CRR).
+    Previously used BCBS CRE20 values (CQS 2=15%, CQS 6=50%) which understated capital.
 
 ## Credit Conversion Factors
 

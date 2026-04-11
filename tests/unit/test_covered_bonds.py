@@ -1,18 +1,19 @@
 """
-Unit tests for Covered Bond exposure class (CRR Art. 129, PRA PS1/26 Art. 129/129A).
+Unit tests for Covered Bond exposure class (CRR Art. 129, PRA PS1/26 Art. 129(4)).
 
 Tests cover:
 - CRR CQS-based risk weight lookup (CQS 1-6)
-- Basel 3.1 CQS-based risk weight lookup (Art. 129A: CQS 2=15%)
+- Basel 3.1 CQS-based risk weight lookup (Art. 129(4) Table 7 — same as CRR)
 - Unrated derivation from issuer institution risk weight (Art. 129(5))
-- B31 unrated derivation via SCRA grade → institution RW → CB RW
+- B31 unrated derivation via ECRA CQS → institution RW → CB RW (rated issuer)
+- B31 unrated derivation via SCRA grade → institution RW → CB RW (unrated issuer)
 - Classifier mapping from entity_type
 - COREP template row presence
 - IRBPermissions SA-only for covered bonds
 
 References:
 - CRR Art. 129: Covered bond risk weights
-- PRA PS1/26 Art. 129A: Basel 3.1 revised covered bond weights
+- PRA PS1/26 Art. 129(4) Table 7: Basel 3.1 covered bond weights (retained CRR values)
 - Art. 129(5): Unrated derivation from issuer RW
 """
 
@@ -456,11 +457,11 @@ class TestCoveredBondSABasel31:
         ("cqs", "expected_rw"),
         [
             (1, 0.10),
-            (2, 0.15),  # Art. 129A: CQS 2 = 15% under B31 (CRR: 20%)
+            (2, 0.20),  # Art. 129(4) Table 7: CQS 2 = 20% (same as CRR)
             (3, 0.20),
             (4, 0.50),
             (5, 0.50),
-            (6, 0.50),  # Art. 129A: CQS 6 = 50% under B31 (CRR: 100%)
+            (6, 1.00),  # Art. 129(4) Table 7: CQS 6 = 100% (same as CRR)
         ],
     )
     def test_rated_covered_bond_b31(
@@ -470,7 +471,7 @@ class TestCoveredBondSABasel31:
         cqs: int,
         expected_rw: float,
     ):
-        """Rated covered bond under Basel 3.1 gets correct CQS-based risk weight (Art. 129A)."""
+        """Rated covered bond under Basel 3.1 gets correct CQS-based risk weight (Art. 129(4))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -507,6 +508,66 @@ class TestCoveredBondSABasel31:
         )
         assert result["risk_weight"] == pytest.approx(expected_rw)
 
+    @pytest.mark.parametrize(
+        ("institution_cqs", "expected_cb_rw"),
+        [
+            # B31 Art. 129(5) ECRA path — UK deviation (base_currency=GBP):
+            # Issuer institution CQS → institution RW (Table 3) → CB RW (derivation table)
+            (1, 0.10),  # inst 20% → CB 10%
+            (2, 0.15),  # inst 30% (UK deviation) → CB 15%
+            (3, 0.25),  # inst 50% → CB 25%
+            (4, 0.50),  # inst 100% → CB 50%
+            (5, 0.50),  # inst 100% → CB 50%
+            (6, 1.00),  # inst 150% → CB 100%
+        ],
+    )
+    def test_unrated_covered_bond_b31_ecra_derivation(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        institution_cqs: int,
+        expected_cb_rw: float,
+    ):
+        """Art. 129(5): B31 unrated CB derives RW from ECRA-rated issuer institution CQS.
+
+        Why this matters:
+            Art. 129(5) derives CB RW from the issuing institution's senior unsecured
+            RW regardless of whether it came from ECRA or SCRA. Rated institutions
+            have CQS from ECRA — if this path is missing, CQS 1 issuers (inst 20%)
+            incorrectly get 100% CB RW instead of 10% — a 10x capital overstatement.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            institution_cqs=institution_cqs,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(expected_cb_rw)
+
+    def test_unrated_covered_bond_b31_ecra_takes_priority_over_scra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ):
+        """ECRA takes priority over SCRA when both are present on issuer.
+
+        Why this matters:
+            If an issuer has both an ECRA CQS and a SCRA grade (data quality issue),
+            the ECRA rating is more specific and should take precedence.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            institution_cqs=1,  # ECRA CQS 1 → inst 20% → CB 10%
+            scra_grade="C",  # SCRA C → CB 100% (should be ignored)
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.10)
+
     def test_unrated_covered_bond_null_scra_grade(
         self,
         sa_calculator: SACalculator,
@@ -535,20 +596,19 @@ class TestCoveredBondSABasel31:
 
 
 class TestB31CoveredBondRiskWeightTable:
-    """Test Basel 3.1 covered bond CQS-based risk weight table (Art. 129A).
+    """Test Basel 3.1 covered bond CQS-based risk weight table (Art. 129(4) Table 7).
 
-    Art. 129A changes from CRR Art. 129(4):
-    - CQS 2: 15% (was 20%)
-    - CQS 6: 50% (was 100%)
+    PRA PS1/26 retained CRR Table 6A values unchanged — did NOT adopt BCBS
+    CRE20.28 reductions. All CQS values are identical to CRR.
     """
 
     def test_b31_cqs1_ten_percent(self):
         """B31 CQS 1 covered bond gets 10% RW."""
         assert B31_COVERED_BOND_RISK_WEIGHTS[1] == Decimal("0.10")
 
-    def test_b31_cqs2_fifteen_percent(self):
-        """B31 CQS 2 covered bond gets 15% RW (CRR: 20%)."""
-        assert B31_COVERED_BOND_RISK_WEIGHTS[2] == Decimal("0.15")
+    def test_b31_cqs2_twenty_percent(self):
+        """B31 CQS 2 covered bond gets 20% RW (same as CRR, Art. 129(4) Table 7)."""
+        assert B31_COVERED_BOND_RISK_WEIGHTS[2] == Decimal("0.20")
 
     def test_b31_cqs3_twenty_percent(self):
         """B31 CQS 3 covered bond gets 20% RW."""
@@ -562,17 +622,17 @@ class TestB31CoveredBondRiskWeightTable:
         """B31 CQS 5 covered bond gets 50% RW."""
         assert B31_COVERED_BOND_RISK_WEIGHTS[5] == Decimal("0.50")
 
-    def test_b31_cqs6_fifty_percent(self):
-        """B31 CQS 6 covered bond gets 50% RW (CRR: 100%)."""
-        assert B31_COVERED_BOND_RISK_WEIGHTS[6] == Decimal("0.50")
+    def test_b31_cqs6_hundred_percent(self):
+        """B31 CQS 6 covered bond gets 100% RW (same as CRR, Art. 129(4) Table 7)."""
+        assert B31_COVERED_BOND_RISK_WEIGHTS[6] == Decimal("1.00")
 
-    def test_b31_cqs2_differs_from_crr(self):
-        """B31 CQS 2 (15%) differs from CRR CQS 2 (20%)."""
-        assert B31_COVERED_BOND_RISK_WEIGHTS[2] < COVERED_BOND_RISK_WEIGHTS[CQS.CQS2]
+    def test_b31_cqs2_matches_crr(self):
+        """B31 CQS 2 (20%) matches CRR CQS 2 (20%) — PRA retained CRR values."""
+        assert B31_COVERED_BOND_RISK_WEIGHTS[2] == COVERED_BOND_RISK_WEIGHTS[CQS.CQS2]
 
-    def test_b31_cqs6_differs_from_crr(self):
-        """B31 CQS 6 (50%) differs from CRR CQS 6 (100%)."""
-        assert B31_COVERED_BOND_RISK_WEIGHTS[6] < COVERED_BOND_RISK_WEIGHTS[CQS.CQS6]
+    def test_b31_cqs6_matches_crr(self):
+        """B31 CQS 6 (100%) matches CRR CQS 6 (100%) — PRA retained CRR values."""
+        assert B31_COVERED_BOND_RISK_WEIGHTS[6] == COVERED_BOND_RISK_WEIGHTS[CQS.CQS6]
 
 
 class TestB31CoveredBondDataFrame:
@@ -583,20 +643,20 @@ class TestB31CoveredBondDataFrame:
         df = _create_b31_covered_bond_df()
         assert len(df) == 6
 
-    def test_b31_df_cqs2_is_fifteen_percent(self):
-        """B31 covered bond DataFrame CQS 2 row has 15% RW."""
+    def test_b31_df_cqs2_is_twenty_percent(self):
+        """B31 covered bond DataFrame CQS 2 row has 20% RW (Art. 129(4) Table 7)."""
         df = _create_b31_covered_bond_df()
         cqs2_rw = df.filter(pl.col("cqs") == 2)["risk_weight"].item()
-        assert cqs2_rw == pytest.approx(0.15)
+        assert cqs2_rw == pytest.approx(0.20)
 
     def test_b31_combined_table_uses_b31_weights(self):
-        """B31 combined CQS table has B31-specific covered bond weights."""
+        """B31 combined CQS table has correct covered bond weights (Art. 129(4) Table 7)."""
         combined = get_b31_combined_cqs_risk_weights()
         cb_cqs2 = combined.filter(
             (pl.col("exposure_class") == "COVERED_BOND") & (pl.col("cqs") == 2)
         )
         assert len(cb_cqs2) == 1
-        assert cb_cqs2["risk_weight"].item() == pytest.approx(0.15)
+        assert cb_cqs2["risk_weight"].item() == pytest.approx(0.20)
 
 
 # =============================================================================
@@ -677,13 +737,13 @@ class TestB31CoveredBondRWACalculation:
         assert result["risk_weight"] == pytest.approx(0.15)
         assert result["rwa"] == pytest.approx(150_000.0)
 
-    def test_rated_cqs2_b31_vs_crr(
+    def test_rated_cqs2_b31_matches_crr(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
         crr_config: CalculationConfig,
     ):
-        """CQS 2 covered bond: B31=15% vs CRR=20% — B31 is more favourable."""
+        """CQS 2 covered bond: B31=20% == CRR=20% — PRA retained CRR values."""
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -698,17 +758,17 @@ class TestB31CoveredBondRWACalculation:
             cqs=2,
             config=crr_config,
         )
-        assert b31_result["risk_weight"] == pytest.approx(0.15)
+        assert b31_result["risk_weight"] == pytest.approx(0.20)
         assert crr_result["risk_weight"] == pytest.approx(0.20)
-        assert b31_result["rwa"] < crr_result["rwa"]
+        assert b31_result["rwa"] == pytest.approx(crr_result["rwa"])
 
-    def test_rated_cqs6_b31_vs_crr(
+    def test_rated_cqs6_b31_matches_crr(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
         crr_config: CalculationConfig,
     ):
-        """CQS 6 covered bond: B31=50% vs CRR=100% — B31 halves the RW."""
+        """CQS 6 covered bond: B31=100% == CRR=100% — PRA retained CRR values."""
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -723,5 +783,5 @@ class TestB31CoveredBondRWACalculation:
             cqs=6,
             config=crr_config,
         )
-        assert b31_result["risk_weight"] == pytest.approx(0.50)
+        assert b31_result["risk_weight"] == pytest.approx(1.00)
         assert crr_result["risk_weight"] == pytest.approx(1.00)

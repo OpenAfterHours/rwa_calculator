@@ -297,7 +297,7 @@ class ELPortfolioSummary:
       shortfall, and excess
     - Compute T2 credit cap (0.6% of IRB RWA per CRR Art. 62(d))
     - Compute T2 credit (min of total excess and cap)
-    - Compute CET1/T2 deduction split (50/50 per CRR Art. 159)
+    - Compute CET1 deduction (100% of shortfall per Art. 36(1)(d), Art. 159)
     - Apply Art. 159(3) two-branch rule: when non-defaulted EL exceeds
       non-defaulted provisions AND defaulted provisions exceed defaulted
       EL simultaneously, shortfall and excess are computed separately
@@ -327,8 +327,8 @@ class ELPortfolioSummary:
         total_irb_rwa: Total IRB RWA (denominator for T2 cap)
         t2_credit_cap: 0.6% of total IRB RWA
         t2_credit: min(total_el_excess, t2_credit_cap) — addable to T2 capital
-        cet1_deduction: 50% of total_el_shortfall — deducted from CET1
-        t2_deduction: 50% of total_el_shortfall — deducted from T2
+        cet1_deduction: 100% of total_el_shortfall — deducted from CET1 (Art. 36(1)(d))
+        t2_deduction: Always zero — no T2 deduction for shortfall (kept for API stability)
         non_defaulted_el_shortfall: Shortfall from non-defaulted exposures only
         non_defaulted_el_excess: Excess from non-defaulted exposures only
         defaulted_el_shortfall: Shortfall from defaulted exposures only

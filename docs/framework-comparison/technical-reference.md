@@ -19,7 +19,7 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | Infrastructure Factor | 0.75 | Removed | CRR Art. 501a |
 | Output Floor | None | 72.5% of SA | PRA PS1/26 |
 | PD Floor | 0.03% (all classes) | Differentiated | CRE30.55 |
-| A-IRB LGD Floors | None | Yes (by collateral type) | CRE30.41 |
+| A-IRB LGD Floors | Portfolio-level only (Art. 164(4)) | Per-exposure input floors (by collateral type) | CRE30.41 |
 | Slotting Risk Weights | Maturity-differentiated | HVCRE-differentiated (no pre-op distinction) | PRA PS1/26 |
 
 ## Differentiated PD Floors (Basel 3.1)
@@ -307,7 +307,8 @@ Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct resid
 !!! info "Junior Charge Multiplier (Art. 124G(2))"
     Where prior-ranking charges exist that the institution does not hold, the Table 6B risk
     weight is multiplied by **1.25×** when LTV > 50%. At LTV ≤ 50% the 30% weight applies
-    without uplift. The multiplied weight is capped at 105%.
+    without uplift. The multiplied weight is **not capped** — it may exceed 105%
+    (e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
     **Example:** junior charge at 75% LTV → 50% × 1.25 = **62.5%** whole-loan.
     CRR has no equivalent junior-charge mechanism for residential RE (Art. 125 applies flat
     35% regardless of lien position).
@@ -316,7 +317,8 @@ Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct resid
 
 ## SA Commercial Real Estate Risk Weights (Basel 3.1)
 
-Basel 3.1 replaces CRR Art. 126 (flat 50%/100% split for all CRE) with entity-type-differentiated
+Basel 3.1 replaces CRR Art. 126 (proportion-based split: 50% on portion up to 50% MV,
+counterparty RW on excess — applied uniformly to all CRE) with entity-type-differentiated
 treatment under Art. 124H:
 
 | Counterparty Type | Treatment | Risk Weight | Reference |

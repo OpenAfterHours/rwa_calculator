@@ -97,6 +97,10 @@ CRR_SUPERVISORY_LGD: dict[str, float] = {
     "unsecured": 0.45,
     "covered_bond": 0.1125,
     "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
+    # CRR Art. 230 Table 5 subordinated LGDS (secured portion of subordinated claims)
+    "receivables_subordinated": 0.65,
+    "real_estate_subordinated": 0.65,
+    "other_physical_subordinated": 0.70,
 }
 
 BASEL31_SUPERVISORY_LGD: dict[str, float] = {

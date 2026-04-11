@@ -853,12 +853,50 @@ class TestB31ADCExposures:
         assert result["risk_weight"] == pytest.approx(1.50)
         assert result["rwa"] == pytest.approx(3000000)  # 2m × 150%
 
-    def test_adc_presold_100pct(
+    def test_adc_presold_residential_100pct(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Pre-sold ADC exposure should get 100% RW."""
+        """Pre-sold residential ADC exposure should get 100% RW (Art. 124K(2))."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="CORPORATE",
+            is_adc=True,
+            is_presold=True,
+            property_type="residential",
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(2000000)  # 2m × 100%
+
+    def test_adc_presold_commercial_150pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Pre-sold commercial ADC must still get 150% — no concession (Art. 124K(2))."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("2000000"),
+            exposure_class="CORPORATE",
+            is_adc=True,
+            is_presold=True,
+            property_type="commercial",
+            config=b31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["rwa"] == pytest.approx(3000000)  # 2m × 150%
+
+    def test_adc_presold_no_property_type_150pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Pre-sold ADC with null property_type gets 150% — conservative default."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
@@ -868,8 +906,8 @@ class TestB31ADCExposures:
             config=b31_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(1.00)
-        assert result["rwa"] == pytest.approx(2000000)  # 2m × 100%
+        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["rwa"] == pytest.approx(3000000)  # 2m × 150%
 
     def test_adc_takes_priority_over_re(
         self,
@@ -3238,6 +3276,35 @@ class TestCurrencyMismatchMultiplier:
         )
         # CQS 1 institution = 20% — no multiplier
         assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_currency_mismatch_capped_at_150_pct(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """Art. 123B caps the 1.5x multiplier result at 150%.
+
+        Why this test matters:
+            A defaulted retail exposure with low provisions gets 150% base RW.
+            Without the cap, 150% × 1.5 = 225%. Art. 123B requires the result
+            to be capped at 150%, so the final RW must remain 150%.
+
+        References:
+        - PRA PS1/26 Art. 123B: "capped at 150%"
+        - CRE20.93: Currency mismatch for retail and RE
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("100000"),
+            exposure_class="retail_other",
+            is_defaulted=True,
+            provision_allocated=Decimal("0"),
+            currency="EUR",
+            borrower_income_currency="GBP",
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+
 
 
 # =============================================================================

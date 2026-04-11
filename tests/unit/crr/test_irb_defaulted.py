@@ -2,7 +2,7 @@
 
 Tests cover:
 - K calculation: F-IRB K=0, A-IRB K=max(0, LGD-BEEL)
-- RWA calculation: scaling, no correlation, no maturity adjustment
+- RWA calculation: no 1.06 scaling for defaulted, no correlation, no maturity adjustment
 - Expected loss: F-IRB EL=LGD*EAD, A-IRB EL=BEEL*EAD
 - Pipeline integration: mixed defaulted+performing, missing columns
 - BEEL column flow through hierarchy
@@ -153,8 +153,8 @@ class TestDefaultedRWA:
         expected_rwa = 0.15 * 12.5 * 1.0 * 25_000.0
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
 
-    def test_airb_corporate_rwa_crr_scaling(self, crr_config: CalculationConfig) -> None:
-        """A-IRB corporate defaulted CRR: 1.06 scaling applies."""
+    def test_airb_corporate_rwa_no_scaling(self, crr_config: CalculationConfig) -> None:
+        """A-IRB corporate defaulted CRR: no 1.06 scaling (Art. 153(1)(ii) has no 1.06)."""
         lf = _make_defaulted_lf(
             approach="advanced_irb",
             is_airb=True,
@@ -164,8 +164,8 @@ class TestDefaultedRWA:
             exposure_class="CORPORATE",
         )
         result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
-        # K=0.15, scaling=1.06, RWA = 0.15 * 12.5 * 1.06 * 500000 = 993,750
-        expected_rwa = 0.15 * 12.5 * 1.06 * 500_000.0
+        # K=0.15, no scaling, RWA = 0.15 * 12.5 * 500000 = 937,500
+        expected_rwa = 0.15 * 12.5 * 500_000.0
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
 
     def test_airb_corporate_rwa_basel31_no_scaling(self, basel31_config: CalculationConfig) -> None:

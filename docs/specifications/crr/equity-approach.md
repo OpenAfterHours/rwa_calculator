@@ -57,7 +57,7 @@ Significant increase in equity risk weights under Basel 3.1:
 
 !!! warning "Correction: PRA vs BCBS Equity Categories"
     - **No "CQS 1-2 speculative" tier in PRA**: The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated by CQS. PRA PS1/26 Art. 133 does **not** include these tiers — all non-legislative, non-subordinated equity is either standard (250%, Art. 133(3)) or higher-risk (400%, Art. 133(4)).
-    - **Higher-risk definition**: Under PRA Art. 133(4), "higher risk" equity means equity that is not listed on a recognised exchange AND (held for short-term resale OR derived from a derivative position), OR private equity / venture capital holdings.
+    - **Higher-risk definition**: Under PRA PS1/26 Glossary (p.5), "higher risk equity exposure" means equity that is (1) **not listed on a recognised exchange** AND (2) the underlying **business has existed for less than five years**. PE/VC is only higher-risk if it meets both criteria — there is no automatic PE/VC = 400% rule. The prior definition here (short-term resale / derivative position / PE-VC) was the BCBS CRE60.20 definition, not PRA.
     - **Art. 133(5) is subordinated debt / non-equity own funds**: 150% risk weight for subordinated debt and capital instruments that are not classified as equity exposures.
     - **Art. 133(6) is a carve-out**: Legislative equity at 100% is a carve-out for government-mandated holdings (e.g., holdings required by national development policy legislation). It is not a general 100% weight category.
 
@@ -70,17 +70,18 @@ Is it legislative equity (government-mandated, Art. 133(6) carve-out)?
   → Yes: 100% (Art. 133(6))
 Is it listed on a recognised exchange?
   → Yes: 250% (Art. 133(3))
-Is it higher risk (unlisted AND (held for short-term resale OR from derivative), OR PE/VC)?
+Is it higher risk (unlisted AND business < 5 years)?
   → Yes: 400% (Art. 133(4))
-Otherwise (unlisted, not higher-risk, not PE/VC):
+Otherwise (unlisted, business ≥ 5 years, including PE/VC not meeting higher-risk criteria):
   → 250% (Art. 133(3))
 ```
 
 !!! note "Unlisted Non-Higher-Risk Treatment"
-    For unlisted equity that does not meet the higher-risk definition (Art. 133(4))
-    and is not PE/VC, the PRA assigns the standard **250%** weight under Art. 133(3).
-    The BCBS framework would differentiate via CQS speculative tiers, but PRA does
-    not use that structure.
+    Unlisted equity where the business has existed for **five years or more** receives
+    the standard **250%** weight under Art. 133(3), including PE/VC holdings in
+    established businesses. Only unlisted equity in undertakings whose business has
+    existed for less than five years qualifies as higher-risk (400%). The BCBS framework
+    would differentiate via CQS speculative tiers, but PRA does not use that structure.
 
 ## CRR IRB Simple Risk Weight Method (Art. 155)
 
@@ -134,12 +135,10 @@ firms to use look-through or mandate-based approaches.
     equity treatment** instead: 100% (CRR) / 250% listed or 400% unlisted (Basel 3.1).
     These are NOT the Art. 132(2) "fallback" — they are reclassified equity exposures.
 
-!!! warning "Implementation Divergence"
-    The calculator currently applies 150% (CRR) / 250% listed or 400% unlisted
-    (Basel 3.1) for `ciu_approach = "fallback"`. These values correspond to
-    Art. 133 equity weights, not the true Art. 132(2) fallback of 1,250%. The
-    code constants are in `crr_equity_rw.py` (`CIU: 1.50`) and `b31_equity_rw.py`
-    (`CIU: 2.50`). This should be corrected to 12.50 (1,250%) for both frameworks.
+!!! note "Fixed in v0.1.181"
+    The CIU fallback is correctly applied as **1,250%** for both CRR and Basel 3.1,
+    matching Art. 132(2). Prior to v0.1.181 the code incorrectly applied Art. 133
+    equity weights (150% CRR / 250%–400% Basel 3.1) for `ciu_approach = "fallback"`.
 
 ## Equity Transitional Schedule (PRA Rules 4.1–4.10)
 
@@ -220,12 +219,7 @@ for detailed requirements and acceptance test scenarios.
 | CRR-J6 | Speculative equity SA | `speculative` | £150,000 | 100% | £150,000 |
 | CRR-J7 | Central bank equity SA (sovereign treatment) | `central_bank` | £1,000,000 | 0% | £0 |
 | CRR-J8 | Subordinated debt SA | `subordinated_debt` | £250,000 | 100% | £250,000 |
-| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 150% | £900,000 |
-
-!!! warning "CRR-J9 Implementation Divergence"
-    The CIU fallback should be **1,250%** per Art. 132(2), but the calculator applies 150% (the Art. 133
-    equity weight). See D3.15 for the code bug. The test expects the current code behaviour (150%),
-    not the regulatory value (1,250%).
+| CRR-J9 | CIU fallback SA (Art. 132(2)) | `ciu` | £600,000 | 1,250% | £7,500,000 |
 
 ### CRR IRB Simple Equity (Art. 155) — CRR-J10 to CRR-J14
 
@@ -248,7 +242,7 @@ for detailed requirements and acceptance test scenarios.
 |-------------|-------------|--------------|----------------|-----|-------------|--------------|
 | CRR-J15 | CIU mandate-based SA (Art. 132A) | `mandate_based` | `ciu_mandate_rw=0.80` | £200,000 | 80% | £160,000 |
 | CRR-J16 | CIU mandate-based + third-party 1.2× multiplier | `mandate_based` | `ciu_mandate_rw=0.80`, `ciu_third_party_calc=True` | £200,000 | 96% | £192,000 |
-| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 150% | £150,000 |
+| CRR-J17 | CIU no approach set (default fallback) | `None` | — | £100,000 | 1,250% | £1,250,000 |
 
 CRR-J16 calculation: the 1.2× third-party multiplier (Art. 132(4)) scales the mandate risk weight:
 `RW = 0.80 × 1.2 = 0.96 (96%)`.

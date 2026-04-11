@@ -11,6 +11,7 @@ Tests the PipelineOrchestrator component including:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from unittest.mock import MagicMock
 
@@ -27,7 +28,8 @@ from rwa_calc.contracts.bundles import (
     create_empty_raw_data_bundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, PermissionMode
 from rwa_calc.engine.pipeline import (
     PipelineError,
     PipelineOrchestrator,
@@ -601,9 +603,6 @@ class TestPipelineBundleErrorPropagation:
 
     def test_bundle_errors_propagated_to_result(self, mock_raw_data, crr_config):
         """Validation errors on RawDataBundle should appear in the final result."""
-        from rwa_calc.contracts.errors import CalculationError
-        from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-
         validation_error = CalculationError(
             code="DQ002",
             message="[counterparties] column 'entity_type': invalid values: INVALID_TYPE (1 row)",
@@ -612,27 +611,12 @@ class TestPipelineBundleErrorPropagation:
             field_name="entity_type",
         )
 
-        # Reconstruct mock_raw_data with a validation error
-        data_with_errors = RawDataBundle(
-            facilities=mock_raw_data.facilities,
-            loans=mock_raw_data.loans,
-            contingents=mock_raw_data.contingents,
-            counterparties=mock_raw_data.counterparties,
-            collateral=mock_raw_data.collateral,
-            guarantees=mock_raw_data.guarantees,
-            provisions=mock_raw_data.provisions,
-            ratings=mock_raw_data.ratings,
-            facility_mappings=mock_raw_data.facility_mappings,
-            org_mappings=mock_raw_data.org_mappings,
-            lending_mappings=mock_raw_data.lending_mappings,
-            errors=[validation_error],
-        )
+        data_with_errors = replace(mock_raw_data, errors=[validation_error])
 
         pipeline = PipelineOrchestrator()
         result = pipeline.run_with_data(data_with_errors, crr_config)
 
         assert isinstance(result, AggregatedResultBundle)
-        # The validation error should be present in the final result errors
         assert any("INVALID_TYPE" in e.message for e in result.errors)
 
     def test_empty_bundle_errors_not_added(self, mock_raw_data, crr_config):
@@ -641,8 +625,34 @@ class TestPipelineBundleErrorPropagation:
         result = pipeline.run_with_data(mock_raw_data, crr_config)
 
         assert isinstance(result, AggregatedResultBundle)
-        # No spurious errors from empty data.errors
         assert not any("entity_type" in e.message for e in result.errors)
+
+    def test_output_floor_summary_preserved_with_errors(self, mock_raw_data, basel31_config):
+        """output_floor_summary must survive bundle reconstruction when errors exist.
+
+        Regression test for P1.131: pipeline.py bundle reconstruction omitted
+        output_floor_summary, silently discarding the computed floor summary
+        whenever loader or pipeline errors were present. This caused COREP
+        OF 02.00 rows 0035/0036 to default to 0.0.
+        """
+        validation_error = CalculationError(
+            code="DQ099",
+            message="[test] synthetic error to trigger bundle reconstruction",
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.DATA_QUALITY,
+            field_name="test_field",
+        )
+
+        data_with_errors = replace(mock_raw_data, errors=[validation_error])
+
+        pipeline = PipelineOrchestrator()
+        result = pipeline.run_with_data(data_with_errors, basel31_config)
+
+        # B31 with default config always computes an output floor summary;
+        # bundle reconstruction (triggered by errors) must preserve it.
+        assert result.output_floor_summary is not None, (
+            "P1.131 regression: output_floor_summary lost during bundle reconstruction"
+        )
 
 
 class TestPipelineUtilities:

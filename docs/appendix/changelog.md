@@ -5,6 +5,21 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.189] — 2026-04-11
+
+### Fixed
+- **Equity (P1.132)**: B31 government-supported equity risk weight corrected from 100% to **250%** per Art. 133(3). Art. 133(6) is an exclusion clause (own funds deductions, Art. 89(3), Art. 48(4)), not a 100% risk weight — CRR Art. 133(3)(c) legislative equity carve-out has no equivalent in B31. Previously **understated capital** by 2.5x for government-supported equity under B31. Government-supported equity also removed from transitional floor exclusion (now subject to floor as standard equity, though 250% already exceeds all transitional floors). Updated risk weight table, calculator, transitional floor logic, 8 unit tests, 4 acceptance tests, and spec documentation. Art. 133 paragraph references corrected across codebase (subordinated debt = Art. 133(5) not 133(1); PE/VC = Art. 133(4) not 133(5)).
+
+## [0.1.187] — 2026-04-11
+
+### Fixed
+- **Covered Bonds (P1.113)**: B31 rated covered bond risk weights corrected from BCBS CRE20.28 values to PRA PS1/26 Art. 129(4) Table 7 values. CQS 2: 15%→20%, CQS 6: 50%→100%. PRA retained CRR Table 6A unchanged — did NOT adopt BCBS reductions. Previously **understated capital** for CQS 2 and CQS 6 covered bonds. Both `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` DataFrame corrected. All 77 covered bond tests updated. 3 stale doc divergence warnings converted to "Fixed" admonitions.
+
+## [0.1.184] — 2026-04-11
+
+### Fixed
+- **Equity (P1.119)**: CIU fallback risk weight corrected from 150% (CRR) / 250%-400% (B31) to **1,250%** per Art. 132(2). Was the highest-severity capital understatement bug (3-8x). Root cause: original implementation used Art. 133 equity risk weights instead of Art. 132(2) punitive CIU fallback. Extracted shared `CIU_FALLBACK_RW` constant and `_append_ciu_branches()` helper to eliminate CRR/B31 code duplication. Updated risk weight tables, calculator, 27 unit tests, 7 acceptance tests, and both equity spec documents.
+
 ## [0.1.183] — 2026-04-10
 
 ### Changed

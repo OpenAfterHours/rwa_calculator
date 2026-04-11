@@ -6,7 +6,7 @@ Provides risk weight lookup tables for equity exposures under two approaches:
 1. Article 133 - Standardised Approach (SA):
    - Central bank: 0% (sovereign treatment)
    - All other equity: 100% (Art. 133(2) flat)
-   - CIU: governed by Art. 132 (150% fallback for regulated-exchange CIU)
+   - CIU: governed by Art. 132 (1,250% fallback per Art. 132(2))
    - Note: PE/VC that qualifies as high-risk goes to Art. 128 (150%), not Art. 133
 
 2. Article 155 - IRB Simple Risk Weight Method:
@@ -45,7 +45,7 @@ SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.SPECULATIVE: Decimal("1.00"),  # Art. 133(2); if high-risk -> Art. 128 150%
     EquityType.PRIVATE_EQUITY: Decimal("1.00"),  # Art. 133(2); if VC -> Art. 128 150%
     EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("1.00"),
-    EquityType.CIU: Decimal("1.50"),  # Art. 132(2) fallback for regulated-exchange CIU
+    EquityType.CIU: Decimal("12.50"),  # Art. 132(2) fallback: 1,250%
     EquityType.OTHER: Decimal("1.00"),
 }
 

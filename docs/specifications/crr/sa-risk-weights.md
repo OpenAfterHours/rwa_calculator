@@ -162,22 +162,34 @@ The following 16 MDBs receive a **0%** risk weight:
 15. Asian Infrastructure Investment Bank (AIIB)
 16. International Development Association (IDA)
 
-### Rated MDBs — Table 2B (Art. 117(1))
+### Non-Named MDBs — Institution Treatment (Art. 117(1))
 
-Other MDBs not on the 0% list use Table 2B:
+MDBs not on the 0% list are treated **"in the same manner as exposures to institutions"** per
+Art. 117(1). They use the institution risk weight tables — Art. 120 Table 3 for ECAI-rated
+institutions, Art. 121 Table 5 for sovereign-derived. No separate CRR risk weight table
+exists for MDBs.
 
-| CQS | Risk Weight |
-|-----|-------------|
-| 1 | 20% |
-| 2 | **30%** |
-| 3 | 50% |
-| 4 | 100% |
-| 5 | 100% |
-| 6 | 150% |
-| Unrated | **50%** |
+Art. 117(1) **excludes** short-term preferential treatment (Art. 119(2), 120(2), 121(3))
+for MDB exposures — MDBs cannot receive reduced short-term risk weights available to
+institutions.
 
-!!! note "MDB Table Differs from Institution Table"
-    MDB Table 2B has CQS 2 = 30% and unrated = **50%** (institution Table 3 has CQS 2 = 50% and unrated = 40%). Do not use the institution table for MDB lookups. The MDB CQS 2 = 30% value requires verification against CRR Art. 117 — it may reflect the same misattribution as the institution "UK deviation" (see D1.30).
+Art. 117(1) also names four non-0% MDBs: Inter-American Investment Corporation, Black Sea
+Trade and Development Bank, Central American Bank for Economic Integration, and CAF —
+Development Bank of Latin America.
+
+!!! warning "Code Divergence (D3.39)"
+    The code defines a separate `MDB_RISK_WEIGHTS_TABLE_2B` in `crr_risk_weights.py` with
+    CQS 2 = 30% and unrated = 50%. This is incorrect for CRR — these are the **Basel 3.1
+    Table 2B** values (PRA PS1/26 Art. 117(1)(a)). Under CRR, non-named MDBs should use the
+    institution tables (Art. 120 Table 3: CQS 2 = **50%**, matching other institutions). The
+    30% value reflects the same misattribution identified in D1.30.
+
+!!! info "Basel 3.1 Change"
+    PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**,
+    replacing the CRR "treated as institution" approach. Table 2B gives MDBs their own CQS
+    mapping (notably CQS 2 = 30%, more favourable than institution ECRA CQS 2 = 30% or CRR
+    institution CQS 2 = 50%). See
+    [Basel 3.1 SA Risk Weights — MDB](../basel31/sa-risk-weights.md#mdb-exposures-art-117).
 
 ## International Organisations (CRR Art. 118)
 
@@ -420,12 +432,10 @@ accommodate the new institution risk weights introduced by ECRA and SCRA:
 The new entries (aa), (ab), (ba) correspond to B31 institution risk weights that did not
 exist under CRR: 30% (ECRA CQS 2), 40% (SCRA Grade A), 75% (SCRA Grade B).
 
-!!! warning "Code Divergence — B31 Rated Covered Bond Risk Weights"
-    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` (lines 261–268) uses
-    **BCBS CRE20** values (CQS 2 = 15%, CQS 6 = 50%) instead of PRA Table 7 values
-    (CQS 2 = 20%, CQS 6 = 100%). The rated table should be identical to CRR per PRA
-    PS1/26. The unrated derivation table (`COVERED_BOND_UNRATED_DERIVATION`) and
-    SCRA mapping (`B31_COVERED_BOND_UNRATED_FROM_SCRA`) are correct. See D3.21.
+!!! success "P1.113 Fixed — B31 Rated Covered Bond Risk Weights"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` now uses the correct PRA
+    Table 7 values (identical to CRR). Previously used BCBS CRE20 values which
+    understated capital for CQS 2 (15%→20%) and CQS 6 (50%→100%).
 
 !!! note "Implementation Status"
     Covered bonds are implemented as a separate exposure class under Art. 112(m).
@@ -481,16 +491,76 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 
 ## Commercial Real Estate (CRR Art. 126)
 
-| Condition | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 50% and rental income ≥ 1.5x interest costs | 50% |
-| All other CRE | 100% |
+Exposures secured by mortgages on commercial immovable property. Art. 126(2)(d) applies a
+**proportion-based split** analogous to Art. 125 for residential — the 50% risk weight applies
+only to the part of the loan that does not exceed 50% of market value (or 60% of mortgage
+lending value). The remainder falls to the counterparty's standard exposure class weight.
+
+**Art. 126(2) qualifying conditions** for the 50% secured portion:
+
+- (a) Property value does not materially depend on borrower credit quality
+- (b) Borrower risk does not materially depend on property/project performance — repayment
+  capacity from other sources (i.e. not income-dependent)
+- (c) Art. 208 requirements and Art. 229(1) valuation rules are met
+- (d) 50% RW assigned to the part of the loan not exceeding 50% of market value or 60% of MLV
+
+| LTV | Treatment |
+|-----|-----------|
+| LTV ≤ 50% | 50% on whole exposure (entire loan within secured portion) |
+| LTV > 50% | Split: 50% on portion up to 50% MV, counterparty RW on excess |
+
+**Blended formula for LTV > 50%:**
+
+```
+secured_share = min(1.0, 0.50 / LTV)
+avg_RW = 0.50 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+!!! note "Income Cover and Loss Rate Derogation"
+    Art. 126(2)(b) requires that repayment does not materially depend on cash flows from
+    the property. Art. 126(3)–(4) provides a derogation: where the PRA has determined that
+    loss rates for CRE-secured loans do not exceed 0.3% on the secured portion and 0.5%
+    overall, condition (b) may be waived (allowing income-dependent CRE to qualify).
+
+!!! bug "Code Divergence (D3.36)"
+    The calculator implements Art. 126 as a **binary whole-loan** treatment (50% if
+    LTV ≤ 50% with income cover, 100% otherwise) rather than the proportion-based split
+    required by Art. 126(2)(d). For exposures with LTV > 50% that meet all qualifying
+    conditions, the code assigns 100% to the entire exposure instead of splitting: 50% on
+    the portion up to 50% MV and counterparty RW on the excess.
+
+## LTV Definition for Basel 3.1 Real Estate (Art. 124C)
+
+Basel 3.1 introduces a formal regulatory LTV definition in Art. 124C. The numerator
+includes outstanding balance + undrawn committed amounts + **all prior/pari passu
+charges** (Art. 124C(3)). CRM is excluded except pledged deposit accounts meeting
+on-balance-sheet netting requirements.
+
+!!! info "Full specification"
+    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c)
+    for the complete LTV definition, prior charges stacking rules, and implementation
+    field mapping.
+
+**CRR comparison:** CRR Art. 124(1)/125(1)/126(1) reference "the value of the property"
+and "the part of the loan" but do not have an explicit Art. 124C-style LTV definition
+with prior charge stacking requirements. The obligation to include senior charges in
+the LTV numerator is a Basel 3.1 addition.
+
+---
 
 ## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
+!!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
+    Basel 3.1 introduces Art. 124E, a structured classification test that replaces the
+    CRR's informal income-dependency distinction. Under CRR, Art. 125 (general) vs
+    Art. 126 (income-producing) had no formal classification gate. Art. 124E defines
+    residential RE as materially dependent by default, with five exceptions (primary
+    residence, three-property limit, SPE guarantor, social housing, cooperative). CRR
+    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows from the property. PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
+Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
 - **Secured portion** (up to 55% of property value): **20%** risk weight
 - **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)
@@ -654,11 +724,11 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 |-------------|-------------|-----------|
 | Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
 | Standard equity (listed) | 250% | Art. 133(3) |
-| Higher risk (unlisted AND held < 5yr, or PE/VC) | 400% | Art. 133(5) |
+| Higher risk (unlisted + business < 5 years) | 400% | Art. 133(4) |
 | Legislative equity (carve-out for govt-mandated holdings) | 100% | Art. 133(6) |
 
 !!! warning "PRA Deviation from BCBS"
-    PRA Art. 133 does **not** include the BCBS "CQS 1-2 speculative unlisted = 100%" or "CQS 3-6/unrated speculative = 150%" tiers. PRA uses a simpler structure: listed = 250%, higher-risk (unlisted <5yr / PE/VC) = 400%.
+    PRA Art. 133 does **not** include the BCBS "CQS 1-2 speculative unlisted = 100%" or "CQS 3-6/unrated speculative = 150%" tiers. PRA uses a simpler structure: listed = 250%, higher-risk (unlisted + business < 5 years, per Glossary p.5) = 400%. PE/VC is only higher-risk if it meets both criteria.
 
 **Note:** Basel 3.1 removes IRB equity approaches (Art. 147A). All equity uses SA risk weights. See [Equity Approach](equity-approach.md) for full details including CIU treatment and transitional schedule.
 

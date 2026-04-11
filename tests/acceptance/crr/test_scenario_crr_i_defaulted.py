@@ -9,7 +9,7 @@ Key rules:
 - F-IRB defaulted: K=0, RW=0 (capital requirement addressed via provisions)
 - A-IRB defaulted: K = max(0, LGD_in_default - BEEL)
 - No Vasicek correlation or maturity adjustment for defaulted exposures
-- CRR 1.06 scaling applies to non-retail (even when defaulted)
+- No 1.06 scaling for defaulted (Art. 153(1)(ii) is self-contained, no 1.06)
 
 Regulatory References:
 - CRR Art. 153(1)(ii): Defaulted non-retail IRB risk weights
@@ -199,17 +199,20 @@ class TestCRRI2_AIRBRetailDefaulted:
 
 
 # =============================================================================
-# CRR-I3: A-IRB Corporate Defaulted with CRR Scaling
+# CRR-I3: A-IRB Corporate Defaulted
 # =============================================================================
 
 
-class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
+class TestCRRI3_AIRBCorporateDefaulted:
     """
-    CRR-I3: A-IRB corporate defaulted exposure with CRR 1.06 scaling.
+    CRR-I3: A-IRB corporate defaulted exposure.
+
+    Art. 153(1)(ii) defaulted formula has no 1.06 scaling factor.
+    The 1.06 only applies to the non-defaulted Vasicek formula in Art. 153(1)(iii).
 
     Input: Corporate loan, PD=100%, LGD_in_default=60%, BEEL=45%, EAD=500,000
     Expected: K=max(0, 0.60-0.45)=0.15,
-              RWA = 0.15 × 12.5 × 1.06 × 500,000 = 993,750
+              RWA = 0.15 × 12.5 × 500,000 = 937,500
               EL = BEEL × EAD = 0.45 × 500,000 = 225,000
     """
 
@@ -229,8 +232,11 @@ class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
         )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
-    def test_crr_i3_rwa_with_scaling(self, crr_irb_config: CalculationConfig) -> None:
-        """A-IRB corporate defaulted CRR: RWA = 0.15 × 12.5 × 1.06 × 500,000 = 993,750."""
+    def test_crr_i3_rwa_no_scaling(self, crr_irb_config: CalculationConfig) -> None:
+        """A-IRB corporate defaulted CRR: RWA = 0.15 × 12.5 × 500,000 = 937,500.
+
+        Art. 153(1)(ii) defaulted formula has no 1.06 scaling factor.
+        """
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I3_CORP",
             exposure_class="CORPORATE",
@@ -243,7 +249,7 @@ class TestCRRI3_AIRBCorporateDefaultedCRRScaling:
         result = (
             lf.irb.prepare_columns(crr_irb_config).irb.apply_all_formulas(crr_irb_config).collect()
         )
-        expected_rwa = 0.15 * 12.5 * 1.06 * 500_000.0  # 993,750
+        expected_rwa = 0.15 * 12.5 * 500_000.0  # 937,500
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
 
     def test_crr_i3_expected_loss(self, crr_irb_config: CalculationConfig) -> None:

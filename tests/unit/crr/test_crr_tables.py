@@ -498,6 +498,71 @@ class TestFIRBLGDLookup:
         assert lookup_firb_lgd("residential_re") == Decimal("0.35")
 
 
+class TestFIRBSubordinatedLGDS:
+    """Tests for CRR Art. 230 Table 5 subordinated LGDS values.
+
+    When a subordinated exposure is secured by eligible collateral, the secured
+    portion uses higher LGDS values per Art. 230 Table 5 subordinated column.
+    This is distinct from Art. 161(1)(b) subordinated unsecured LGD of 75%.
+    """
+
+    def test_subordinated_receivables_lgds_65pct(self) -> None:
+        """CRR Art. 230 Table 5: subordinated receivables LGDS = 65%."""
+        assert FIRB_SUPERVISORY_LGD["receivables_subordinated"] == Decimal("0.65")
+
+    def test_subordinated_residential_re_lgds_65pct(self) -> None:
+        """CRR Art. 230 Table 5: subordinated residential RE LGDS = 65%."""
+        assert FIRB_SUPERVISORY_LGD["residential_re_subordinated"] == Decimal("0.65")
+
+    def test_subordinated_commercial_re_lgds_65pct(self) -> None:
+        """CRR Art. 230 Table 5: subordinated commercial RE LGDS = 65%."""
+        assert FIRB_SUPERVISORY_LGD["commercial_re_subordinated"] == Decimal("0.65")
+
+    def test_subordinated_other_physical_lgds_70pct(self) -> None:
+        """CRR Art. 230 Table 5: subordinated other physical LGDS = 70%."""
+        assert FIRB_SUPERVISORY_LGD["other_physical_subordinated"] == Decimal("0.70")
+
+    def test_subordinated_financial_lgds_zero(self) -> None:
+        """CRR Art. 230 Table 5: subordinated financial collateral LGDS = 0%."""
+        assert FIRB_SUPERVISORY_LGD["financial_collateral_subordinated"] == Decimal("0.00")
+
+    def test_lookup_subordinated_receivables(self) -> None:
+        """lookup_firb_lgd returns 65% for subordinated receivables under CRR."""
+        result = lookup_firb_lgd("receivables", is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.65")
+
+    def test_lookup_subordinated_real_estate(self) -> None:
+        """lookup_firb_lgd returns 65% for subordinated RE under CRR."""
+        result = lookup_firb_lgd("residential_re", is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.65")
+
+    def test_lookup_subordinated_commercial_re(self) -> None:
+        """lookup_firb_lgd returns 65% for subordinated commercial RE under CRR."""
+        result = lookup_firb_lgd("commercial_re", is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.65")
+
+    def test_lookup_subordinated_other_physical(self) -> None:
+        """lookup_firb_lgd returns 70% for subordinated other physical under CRR."""
+        result = lookup_firb_lgd("other_physical", is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.70")
+
+    def test_lookup_subordinated_financial(self) -> None:
+        """lookup_firb_lgd returns 0% for subordinated financial under CRR."""
+        result = lookup_firb_lgd("cash", is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.00")
+
+    def test_lookup_subordinated_unsecured_still_75pct(self) -> None:
+        """lookup_firb_lgd returns 75% for subordinated unsecured (no collateral)."""
+        result = lookup_firb_lgd(None, is_subordinated=True, is_basel_3_1=False)
+        assert result == Decimal("0.75")
+
+    def test_b31_subordinated_collateral_ignores_sub_lgds(self) -> None:
+        """Basel 3.1 Art. 230(2) removes subordinated LGDS column — uses senior LGDS."""
+        result = lookup_firb_lgd("receivables", is_subordinated=True, is_basel_3_1=True)
+        # B31 receivables LGDS = 20% (no sub distinction)
+        assert result == Decimal("0.20")
+
+
 class TestIRBParameterFloors:
     """Tests for IRB parameter floors and caps."""
 

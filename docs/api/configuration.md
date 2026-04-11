@@ -189,8 +189,10 @@ class PDFloors:
 
 ### `LGDFloors`
 
-LGD floor values by collateral type for A-IRB. Only applicable under Basel 3.1
-(CRE30.41, PS1/26 Ch.5). CRR has no LGD floors.
+LGD floor values by collateral type for A-IRB. Per-exposure input floors are only applicable
+under Basel 3.1 (CRE30.41, PS1/26 Ch.5). CRR Art. 164(4) has portfolio-level floors (10% RRE,
+15% CRE exposure-weighted average) but no per-exposure input floors — the calculator's
+`LGDFloors.crr()` returns all zeros (see D3.38).
 
 ```python
 @dataclass(frozen=True)

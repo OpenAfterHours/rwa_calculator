@@ -158,12 +158,22 @@ Under CRR, residential mortgages use a split treatment based on 80% LTV threshol
 
 ### CRR Commercial Real Estate (CRR Art. 126)
 
-| Condition | Risk Weight |
-|-----------|------------|
-| LTV ≤ 50% with income cover | 50% |
-| All other | 100% |
+Under CRR, commercial RE uses a proportion-based split analogous to Art. 125 for residential.
+Art. 126(2)(d): the 50% RW applies only to the part of the loan not exceeding 50% of market
+value (or 60% of MLV). The remainder falls to the counterparty's standard exposure class weight.
+
+- LTV ≤ 50%: 50% risk weight (entire loan within secured portion)
+- LTV > 50%: 50% on portion up to 50% MV, counterparty RW on excess
+
+Art. 126(2)(a)–(c) qualifying conditions must also be met (property value independence from
+borrower credit quality, repayment not dependent on property cash flows, Art. 208/229
+compliance).
 
 **Source**: `COMMERCIAL_RE_PARAMS` in `data/tables/crr_risk_weights.py`
+
+!!! bug "Code Divergence (D3.36)"
+    The calculator implements Art. 126 as a binary whole-loan treatment (50% if LTV ≤ 50%
+    with income cover, 100% otherwise) rather than the regulatory proportion-based split.
 
 ### Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 
@@ -195,7 +205,13 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 | ≤ 50% | 1.0× | 30% (no uplift) |
 | > 50% | 1.25× | e.g. 50% × 1.25 = 62.5% (at 70–80% LTV) |
 
-The multiplied weight is capped at 105% (the Table 6B ceiling).
+The multiplied weight is **not capped** at the Table 6B ceiling — it may exceed 105%
+(e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
+
+!!! warning "Code Divergence (P1.111)"
+    The current implementation incorrectly caps the multiplied risk weight at 105%.
+    Art. 124G(2) has no express cap — the correct result for LTV > 100% with a junior
+    charge is 131.25%, not 105%. See IMPLEMENTATION_PLAN.md P1.111.
 
 **Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 
@@ -460,9 +476,22 @@ Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational s
 
 ---
 
-## A-IRB LGD Floors (Basel 3.1 only)
+## A-IRB LGD Floors
 
-Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
+### CRR Portfolio-Level Floors (Art. 164(4))
+
+CRR Art. 164(4) (as amended by CRR2) imposes **portfolio-level** minimum LGD requirements for
+retail property-secured exposures: exposure-weighted average LGD ≥ **10%** (residential RE) and
+≥ **15%** (commercial RE). These are not per-exposure input floors — they operate at the aggregate
+portfolio level. Exposures benefiting from central government guarantees are excluded.
+
+!!! warning "Code Divergence (D3.38)"
+    The calculator does not implement CRR portfolio-level LGD floors. `LGDFloors.crr()` returns
+    all zeros. See [A-IRB Specification](../specifications/crr/airb-calculation.md#crr-portfolio-level-lgd-floors-art-1644) for details.
+
+### Basel 3.1 Per-Exposure Input Floors
+
+Basel 3.1 replaces the CRR portfolio-level mechanism with per-exposure input floors:
 
 **Corporate / Institution (Art. 161(5)):**
 
@@ -531,7 +560,7 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Legislative programme | 100% | 100% (Art. 133(6)) |
 | Subordinated debt | 150% | 150% (Art. 133(1)) |
 | Standard (listed) | 250% | 250% (Art. 133(3)) |
-| Higher risk (unlisted/PE/VC) | 400% | 400% (Art. 133(5)) |
+| Higher risk (unlisted + business < 5yr) | 400% | 400% (Art. 133(4)) |
 | CIU (fallback) | 250% | 1,250% (Art. 132(2)) |
 
 ### IRB Simple Equity (CRR Art. 155)

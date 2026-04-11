@@ -60,7 +60,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | CRR-C2 | Retail own estimates | PD=0.3%, LGD=15%, EAD=£100k | Retail formula | CRR Art. 154 |
 | CRR-C3 | Specialised lending A-IRB | PD=1.5%, LGD=25% | Project finance | CRR Art. 153 |
 
-**Note**: CRR A-IRB has NO LGD floors (unlike Basel 3.1 which has 25% unsecured floor).
+**Note**: CRR A-IRB has portfolio-level LGD floors only (Art. 164(4): 10% RRE, 15% CRE exposure-weighted average) — not per-exposure input floors. Basel 3.1 replaces these with per-exposure input floors (25% unsecured, 5% RRE, 50% QRRE, 30% other retail).
 
 ### Scenario Group CRR-D: Credit Risk Mitigation (CRM)
 
@@ -114,7 +114,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | ID | Description | Key Inputs | Expected RWA | Notes |
 |----|-------------|------------|--------------|-------|
 | CRR-G1 | SA with specific provision | £1m exposure, £50k provision | £950k net | CRR Art. 110 |
-| CRR-G2 | IRB EL shortfall | EL > provisions | T2 deduction | CRR Art. 159 |
+| CRR-G2 | IRB EL shortfall | EL > provisions | CET1 deduction (Art. 36(1)(d)) | CRR Art. 159 |
 | CRR-G3 | IRB EL excess | Provisions > EL | T2 credit (capped) | CRR Art. 62(d) |
 
 ### Scenario Group CRR-H: Complex/Combined
@@ -270,8 +270,10 @@ tests/fixtures/
 - LTV >80%: Split treatment (35% on 80%, 75% on excess)
 
 **Commercial (Art. 126):**
-- LTV ≤50%: 50% (where rental income >1.5x interest)
-- Otherwise: 100%
+- LTV ≤50%: 50% on whole exposure (entire loan within secured portion)
+- LTV >50%: Split treatment — 50% on portion up to 50% MV, counterparty RW on excess
+- Qualifying conditions: Art. 126(2)(a)–(c) — property value independence, repayment not
+  dependent on property cash flows, Art. 208/229 compliance
 
 ### CCFs (Art. 111)
 

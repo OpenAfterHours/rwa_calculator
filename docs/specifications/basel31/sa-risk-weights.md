@@ -26,9 +26,11 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
 | FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
 | FR-1.13 | ADC exposures 150% / qualifying residential 100% (Art. 124K) | P0 | Done |
+| FR-1.17 | Regulatory LTV definition and prior charges stacking (Art. 124C) | P1 | Done |
 | FR-1.14 | Covered bond rated risk weights (Art. 129(4), Table 7) — PRA values = CRR values | P0 | Done (spec correct; code bug P1.113) |
 | FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
+| FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
 
 ---
 
@@ -100,6 +102,48 @@ non-UK unrated exposures.
     instead of performing the sovereign CQS lookup. This overstates capital for
     non-UK PSE/RGLA backed by well-rated (CQS 1–2) sovereigns (e.g., Germany: 20%
     vs incorrectly assigned 100%). See P1.112 in IMPLEMENTATION_PLAN.md.
+
+---
+
+## MDB Exposures (Art. 117)
+
+### Named MDBs at 0% (Art. 117(2))
+
+The 16 named MDBs receiving a **0% risk weight** are unchanged from CRR — see
+[CRR SA Risk Weights — Named MDBs](../crr/sa-risk-weights.md#named-mdbs-at-0-art-1172)
+for the full list.
+
+### Rated Non-Named MDBs — Table 2B (Art. 117(1)(a))
+
+PRA PS1/26 Art. 117(1) replaces the CRR "treated as institution" approach with a **dedicated
+MDB risk weight table (Table 2B)**. Non-named MDBs with an ECAI rating use Table 2B:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1   | 20%         |
+| 2   | 30%         |
+| 3   | 50%         |
+| 4   | 100%        |
+| 5   | 100%        |
+| 6   | 150%        |
+
+### Unrated Non-Named MDBs (Art. 117(1)(b))
+
+Unrated non-named MDBs receive a risk weight of **50%**.
+
+### Key Change from CRR
+
+| Aspect | CRR (Art. 117(1)) | Basel 3.1 (Art. 117(1)) |
+|--------|-------------------|------------------------|
+| Treatment | "Same as institutions" (use Art. 120/121 tables) | Dedicated Table 2B |
+| CQS 2 | 50% (institution Table 3) | **30%** (Table 2B) |
+| Unrated | Institution-dependent (Art. 121 sovereign-derived) | **50%** (fixed) |
+| Short-term preferential | Excluded (Art. 117(1)) | N/A (Table 2B is CQS-only) |
+
+!!! info "Four Named Non-0% MDBs"
+    Art. 117(1) names four MDBs that use Table 2B (not on the 0% list): Inter-American
+    Investment Corporation, Black Sea Trade and Development Bank, Central American Bank
+    for Economic Integration, and CAF — Development Bank of Latin America.
 
 ---
 
@@ -419,6 +463,203 @@ or income-producing treatment.
 
 ---
 
+## Real Estate — LTV Definition (Art. 124C)
+
+Art. 124C defines the regulatory loan-to-value ratio used for all LTV-based real estate
+risk weights (Art. 124G income-producing residential and Art. 124I income-producing
+commercial). This definition also underpins the loan-splitting threshold calculations
+in Art. 124F (residential) and Art. 124H (commercial).
+
+**Regulatory Reference:** PRA PS1/26 Art. 124C (p.52)
+
+### LTV Formula (Art. 124C(1))
+
+```
+LTV = loan_amount / property_value
+```
+
+Where:
+- `loan_amount` is defined per Art. 124C(2)–(3)
+- `property_value` is determined per Art. 124D (see [Valuation Requirements](#valuation-requirements-art-124d))
+
+### Loan Amount — Numerator (Art. 124C(2))
+
+The loan amount includes:
+
+| Component | Included | Reference |
+|-----------|----------|-----------|
+| Outstanding loan balance | Yes | Art. 124C(2) |
+| Undrawn committed amount of the mortgage loan | Yes | Art. 124C(2) |
+| Credit risk adjustments and other own-funds reductions | **No** — excluded | Art. 124C(2) |
+| Funded or unfunded credit protection | **No** — excluded | Art. 124C(2) |
+| Pledged deposit accounts (on-balance-sheet netting) | **Exception** — may be deducted | Art. 124C(2) |
+
+The single exception to the "no CRM" rule: pledged deposit accounts with the lending
+institution that meet **all** requirements for on-balance-sheet netting (Credit Risk
+Mitigation Part) AND have been unconditionally and irrevocably pledged for the sole
+purpose of loan repayment. These may reduce the loan amount in the LTV numerator.
+
+### Prior Charges Stacking (Art. 124C(3))
+
+!!! warning "Critical Classification Rule"
+    The loan amount used in the LTV calculation **must include all other loans** secured
+    with charges ranking **ahead of** or **pari passu** with the charge securing the
+    current exposure. This is the regulatory basis for `prior_charge_ltv` in the
+    calculator's input schema.
+
+**Rules:**
+
+1. **Identify all charges on the property** — any loan secured by a charge that ranks
+   in priority ahead of the institution's charge, or ranks pari passu, must be added
+   to the numerator.
+2. **Insufficient ranking information** — where there is insufficient information to
+   determine the ranking of other charges, the institution **must treat** those charges
+   as pari passu with its own charge. This is a conservative assumption that increases
+   the reported LTV.
+3. **Effect on risk weights** — prior charge stacking increases LTV, which:
+   - Pushes whole-loan exposures (Art. 124G/124I) into higher risk weight bands
+   - Reduces the effective loan-splitting threshold (Art. 124F(2)/124H junior charges)
+   - May trigger the 1.25× junior charge multiplier (Art. 124G(2)/124I(3))
+
+**Example:**
+
+```
+Property value:             £400,000
+Institution's own loan:     £200,000 (outstanding) + £20,000 (undrawn committed)
+Senior charge (other lender): £100,000
+
+LTV = (£200,000 + £20,000 + £100,000) / £400,000 = 80%
+    (without prior charge stacking: LTV = £220,000 / £400,000 = 55%)
+```
+
+### Property Value — Denominator (Art. 124C(4))
+
+The property value is determined in accordance with Art. 124D
+([Valuation Requirements](#valuation-requirements-art-124d) above).
+
+### Implementation
+
+The calculator uses two input fields to implement Art. 124C:
+
+| Field | Type | Description | Reference |
+|-------|------|-------------|-----------|
+| `property_ltv` | Float64 | The fully-stacked LTV ratio incorporating all Art. 124C components (including prior charges per para. 3) | Art. 124C(1)–(4) |
+| `prior_charge_ltv` | Float64 | The portion of the LTV attributable to prior/pari passu charges alone — used by Art. 124F(2) and Art. 124G(2) to reduce the loan-splitting threshold and apply the junior charge multiplier | Art. 124C(3), Art. 124F(2) |
+
+The reporting institution is responsible for computing the stacked LTV externally:
+the calculator consumes the pre-computed `property_ltv` value and assumes it already
+incorporates Art. 124C(2)–(3) components. The separate `prior_charge_ltv` field
+enables the calculator to determine the junior charge effect on the loan-splitting
+threshold (55% for RRE, 60% for CRE).
+
+!!! info "Relationship between `property_ltv` and `prior_charge_ltv`"
+    - `property_ltv` = total regulatory LTV including all prior charges (the single
+      number used for risk weight band lookup in Art. 124G/124I tables)
+    - `prior_charge_ltv` = the LTV contribution of prior/pari passu charges only (used
+      to reduce the secured threshold from 55%/60% under Art. 124F(2)/124H junior charge
+      treatment)
+    - A first-charge exposure has `prior_charge_ltv = 0.0`
+    - An exposure behind a senior lien has `prior_charge_ltv > 0.0`
+
+---
+
+## Real Estate — Material Dependency Classification (Art. 124E)
+
+Art. 124E defines the test that routes residential and commercial real estate exposures
+between two treatment tracks:
+
+- **Not materially dependent** on property cash flows → loan-splitting (Art. 124F for
+  residential, Art. 124H for commercial)
+- **Materially dependent** on property cash flows → whole-loan LTV-band tables
+  (Art. 124G Table 6B for residential, Art. 124I for commercial)
+
+This classification is a Basel 3.1 addition with no CRR equivalent. Under CRR, the
+loan-splitting / whole-loan distinction was less formally defined and did not include
+quantitative thresholds such as the three-property limit.
+
+### Residential RE — Default and Exceptions (Art. 124E(1))
+
+A residential RE exposure is **materially dependent by default**. It is classified as
+**not** materially dependent only if it falls into one of five exceptions:
+
+| Exception | Condition | Reference |
+|-----------|-----------|-----------|
+| **(a) Primary residence** | Exposure to one or more natural persons, secured by a single property that is the obligor's primary residence | Art. 124E(1)(a) |
+| **(b) Three-property limit** | Exposure to one or more natural persons that individually meet the three-property limit (para 2) | Art. 124E(1)(b) |
+| **(c) SPE with guarantor** | Exposure to an entity created specifically to finance/operate immovable property, where one or more natural persons act as guarantor, receive sole economic benefit, and the entity meets the three-property limit (para 3) | Art. 124E(1)(c) |
+| **(d) Social housing** | Exposure to a UK-regulated public housing company or not-for-profit association that exists to serve social purposes and offer tenants long-term housing | Art. 124E(1)(d) |
+| **(e) Cooperative/association** | Exposure to an association or cooperative of natural persons that exists solely to grant members use of a primary residence in the securing property | Art. 124E(1)(e) |
+
+!!! info "Three-Property Limit — Natural Persons (Art. 124E(2))"
+    A natural person meets the three-property limit if they have **no more than three
+    qualifying properties**. A qualifying property is one that:
+
+    1. Is residential real estate
+    2. Is **not** the natural person's primary residence
+    3. Is security for a residential RE exposure to either:
+        - (a) the natural person directly, or
+        - (b) an SPE that the natural person guarantees and from which they receive the
+          economic benefit
+
+    Properties are counted **across all lenders**, not just the institution assessing the
+    exposure.
+
+!!! info "Three-Property Limit — SPE Entities (Art. 124E(3))"
+    An SPE entity meets the three-property limit if **all** of the following are satisfied:
+
+    1. The entity has no more than three qualifying residential properties (excluding the
+       guarantor's primary residence) securing RE exposures to the entity, across all lenders
+    2. The same guarantor(s) stand behind all residential RE exposures to the entity,
+       regardless of lender
+    3. Each guarantor individually meets the natural person three-property limit (para 2)
+
+!!! warning "Housing Unit Counting (Art. 124E(4))"
+    Each separate housing unit counts as an **individual property**, even where multiple
+    units are secured by a single charge. A block of four flats under one charge = four
+    properties for the three-property count. This is material for multi-unit buy-to-let
+    portfolios.
+
+### Reassessment Triggers (Art. 124E(5))
+
+Institutions must reassess material dependency when issuing a **new loan** secured by
+residential RE to the same obligor (including replacement loans). Reassessment at other
+times is permitted if new information is gathered and applied **consistently across the
+portfolio** — selective reassessment to reduce capital requirements is prohibited.
+
+### Commercial RE — Own-Use Test (Art. 124E(6)–(7))
+
+A commercial RE exposure is **materially dependent by default**. The sole exception:
+each property securing the exposure is **predominantly used by the borrower for its own
+business purpose**, where the business purpose does **not** include generating income from
+the property via rental agreements.
+
+Institutions must reassess commercial RE material dependency **at least annually**
+(Art. 124E(7)).
+
+### Implementation
+
+The material dependency classification is an **input-driven flag** — the engine does not
+evaluate Art. 124E conditions internally. Institutions must determine material dependency
+upstream and supply it via the `is_income_producing` field on the collateral record.
+
+| Input Field | Maps To | Values |
+|-------------|---------|--------|
+| `is_income_producing` | Art. 124E material dependency | `True` = materially dependent (whole-loan Art. 124G/124I); `False` = not materially dependent (loan-splitting Art. 124F/124H); `null` = defaults to `False` |
+
+The field flows through the pipeline as `has_income_cover` (renamed during collateral
+join) and determines the risk weight calculation path:
+
+- `False` → Art. 124F loan-splitting (residential) or Art. 124H loan-splitting (commercial)
+- `True` → Art. 124G Table 6B whole-loan (residential) or Art. 124I whole-loan (commercial)
+
+!!! warning "Data Quality Responsibility"
+    The three-property limit, SPE guarantor conditions, social housing status, and
+    own-business-use test are **not validated** by the calculator. Incorrect classification
+    routes exposures to the wrong risk weight track. Institutions must implement Art. 124E
+    assessment procedures upstream of the calculator input.
+
+---
+
 ## Real Estate — Residential (Art. 124F–124G)
 
 All residential RE risk weights below require the exposure to meet the
@@ -426,7 +667,8 @@ All residential RE risk weights below require the exposure to meet the
 
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows. The exposure is split into a secured portion
+Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows. The exposure is split into a secured portion
 (up to 55% of property value) and a residual portion:
 
 | Portion | Risk Weight | Reference |
@@ -455,7 +697,8 @@ charge. This decreases the secured portion, increasing the blended risk weight.
 
 ### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
 
-Materially dependent on cash flows (e.g., buy-to-let). Whole-loan approach — single
+[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows (e.g., buy-to-let, multi-unit rental). Whole-loan approach — single
 risk weight on entire exposure:
 
 | LTV Band | Risk Weight |
@@ -482,6 +725,10 @@ All commercial RE risk weights below require the exposure to meet the
 
 ### CRE Loan-Splitting (Art. 124H(1))
 
+Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows — the borrower uses the property predominantly for its own business
+purpose (Art. 124E(6)).
+
 | Portion | Risk Weight | Reference |
 |---------|-------------|-----------|
 | Secured (up to 60% LTV) | **60%** | Art. 124H(1) |
@@ -489,7 +736,9 @@ All commercial RE risk weights below require the exposure to meet the
 
 ### CRE Income-Producing (Art. 124I)
 
-For income-dependent commercial RE (cash flows from the property):
+[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+on cash flows — income from the property (rental, sale proceeds) is the primary
+repayment source:
 
 **PRA Art. 124I — 2-Band Table**
 
@@ -577,11 +826,10 @@ The PRA did **not** adopt the BCBS CRE20.28–29 reductions.
     CQS 4: 50%→25%, CQS 5: 50%→35%, CQS 6: 100%→50%). The PRA retained all six
     CRR values unchanged in PRA PS1/26 Art. 129(4) Table 7.
 
-!!! warning "Code Divergence — P1.113"
-    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` currently uses the BCBS
-    CRE20 values (CQS 2 = 15%, CQS 4 = 25%, CQS 5 = 35%, CQS 6 = 50%) instead of the
-    correct PRA Table 7 values above. This understates capital for CQS 2 and CQS 6
-    covered bonds. See P1.113 in IMPLEMENTATION_PLAN.md for the fix.
+!!! success "P1.113 Fixed"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` now uses the correct PRA
+    Table 7 values (identical to CRR). Previously used BCBS CRE20 values which
+    understated capital for CQS 2 (15%→20%) and CQS 6 (50%→100%).
 
 ### Unrated Covered Bonds (Art. 129(5))
 
@@ -634,15 +882,15 @@ that might otherwise apply.
 
 See [Equity Approach Specification](equity-approach.md) for the full treatment.
 
-Summary: exchange-traded/listed/unlisted 250%, higher-risk/PE/VC 400%, subordinated debt 150%,
-central bank 0%, government-supported 100%. Transitional phase-in 2027–2030. The end-state
+Summary: exchange-traded/listed/unlisted 250%, higher-risk (unlisted + business < 5yr) 400%, subordinated debt 150%,
+central bank 0%, government-supported 250%. Transitional phase-in 2027–2030. The end-state
 risk weights apply from **1 January 2030**:
 
 | Equity Type | End-State RW | Reference |
 |-------------|-------------|-----------|
 | Standard equity (listed/unlisted) | 250% | Art. 133(3) |
-| Higher risk (PE/VC, unlisted <5yr) | 400% | Art. 133(5) |
-| Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
+| Higher risk (unlisted + business < 5 years) | 400% | Art. 133(4) |
+| Subordinated debt / non-equity own funds | 150% | Art. 133(5) |
 
 ---
 

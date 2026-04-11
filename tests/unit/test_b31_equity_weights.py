@@ -4,7 +4,7 @@ Unit tests for Basel 3.1 equity SA risk weights (PRA PS1/26 Art. 133).
 Under Basel 3.1, all equity uses SA (IRB removed per Art. 147A).
 Key changes from CRR:
 - Listed/exchange-traded: 100% -> 250% (Art. 133(3))
-- CIU fallback: 150% -> 250% (Art. 132(2))
+- CIU fallback: 1,250% (Art. 132(2), unchanged from CRR)
 - Transitional floor phases from 160%/220% (2027) to 250%/400% (2030)
 
 References:
@@ -51,9 +51,9 @@ class TestB31EquityRiskWeightTable:
         """Exchange-traded equity should be 250% under B31 (Art. 133(3))."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.EXCHANGE_TRADED] == Decimal("2.50")
 
-    def test_government_supported_100_percent(self) -> None:
-        """Government-supported equity should be 100% (legislative programme)."""
-        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.GOVERNMENT_SUPPORTED] == Decimal("1.00")
+    def test_government_supported_250_percent(self) -> None:
+        """Government-supported equity should be 250% under B31 (Art. 133(3), standard equity)."""
+        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.GOVERNMENT_SUPPORTED] == Decimal("2.50")
 
     def test_unlisted_250_percent(self) -> None:
         """Unlisted equity should be 250% under B31 (Art. 133(3))."""
@@ -67,9 +67,9 @@ class TestB31EquityRiskWeightTable:
         """Private equity should be 400% under B31 (Art. 133(5) higher risk)."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.PRIVATE_EQUITY] == Decimal("4.00")
 
-    def test_ciu_table_default_250_percent(self) -> None:
-        """CIU table default = 250% (listed fallback; actual weight depends on listed/unlisted)."""
-        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.CIU] == Decimal("2.50")
+    def test_ciu_table_default_1250_percent(self) -> None:
+        """CIU table default = 1,250% (Art. 132(2) fallback)."""
+        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.CIU] == Decimal("12.50")
 
     def test_all_equity_types_covered(self) -> None:
         """All EquityType members should have a B31 weight."""
@@ -167,15 +167,15 @@ class TestB31EquityCalculatorSAWeights:
         """B31: is_speculative=True overrides listed type to 400%."""
         assert self._apply_b31_weight("listed", is_speculative=True) == pytest.approx(4.00)
 
-    def test_government_supported_100_percent(self) -> None:
-        """B31: Government-supported equity = 100% (legislative carve-out).
+    def test_government_supported_250_percent(self) -> None:
+        """B31 Art. 133(3): Government-supported equity = 250% (standard equity).
 
-        Note: The transitional floor (250%+ during 2027-2030) overrides this to 250%
-        when applied via calculate_branch. This test verifies the base weight before floor.
+        B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
+        Art. 133(6) is an exclusion clause, not a risk weight.
         """
         assert self._apply_b31_weight(
             "government_supported", is_government_supported=True
-        ) == pytest.approx(1.00)
+        ) == pytest.approx(2.50)
 
     def test_central_bank_zero_percent(self) -> None:
         """B31 Art. 133(6): Central bank equity = 0%."""
@@ -185,15 +185,15 @@ class TestB31EquityCalculatorSAWeights:
         """B31 Art. 133(5): Private equity = 400% (higher risk PE/VC)."""
         assert self._apply_b31_weight("private_equity") == pytest.approx(4.00)
 
-    def test_ciu_fallback_unlisted_400_percent(self) -> None:
-        """B31: Unlisted CIU fallback = 400% (Art. 132(2)/133(5))."""
-        assert self._apply_b31_weight("ciu", ciu_approach="fallback") == pytest.approx(4.00)
+    def test_ciu_fallback_unlisted_1250_percent(self) -> None:
+        """B31: CIU fallback = 1,250% (Art. 132(2))."""
+        assert self._apply_b31_weight("ciu", ciu_approach="fallback") == pytest.approx(12.50)
 
-    def test_ciu_fallback_listed_250_percent(self) -> None:
-        """B31: Listed CIU fallback = 250% (Art. 132(2)/133(3))."""
+    def test_ciu_fallback_listed_1250_percent(self) -> None:
+        """B31: Listed CIU fallback = 1,250% (Art. 132(2), same as unlisted)."""
         assert self._apply_b31_weight(
             "ciu", ciu_approach="fallback", is_exchange_traded=True
-        ) == pytest.approx(2.50)
+        ) == pytest.approx(12.50)
 
     def test_other_equity_250_percent(self) -> None:
         """B31 Art. 133(3): Other equity = 250% (standard)."""
@@ -248,8 +248,8 @@ class TestB31EquityEndToEnd:
         )
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_crr_ciu_fallback_150_percent(self) -> None:
-        """CRR: CIU fallback = 150% (regression test)."""
+    def test_crr_ciu_fallback_1250_percent(self) -> None:
+        """CRR: CIU fallback = 1,250% (Art. 132(2))."""
         crr_config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         calculator = EquityCalculator()
         result = calculate_single_equity_exposure(
@@ -259,7 +259,7 @@ class TestB31EquityEndToEnd:
             ciu_approach="fallback",
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(12.50)
 
 
 # =============================================================================

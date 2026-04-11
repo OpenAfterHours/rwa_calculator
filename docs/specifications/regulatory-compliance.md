@@ -37,7 +37,7 @@
 | Art. 120–121 | Institution SA: ECRA and SCRA (replaces sovereign-derived) | Done |
 | Art. 122(5)–(11) | Corporate SA sub-categories (IG 65%, non-IG 135%, SME 85%) | Done |
 | Art. 122A–122B | SA specialised lending (rated/unrated, pre-op PF) | Done |
-| Art. 123–123A | Retail SA, currency mismatch multiplier (1.5x) | Done |
+| Art. 123–123B | Retail SA (Art. 123), qualifying criteria (Art. 123A), currency mismatch multiplier 1.5x (Art. 123B) | Done |
 | Art. 124A–124L | Real estate: loan-splitting, qualifying criteria, LTV bands | Done |
 | Art. 127(1)–(1A) | Defaulted SA: provision-coverage split (100%/150%) | Done |
 | Art. 129 | Covered bond risk weights (rated Table 6A/Table 7, unrated derivation Art. 129(5)) | Done |
@@ -48,7 +48,7 @@
 | Art. 153(5) | Revised slotting weights (maturity split removed) | Done |
 | Art. 158–159 | Provisions and EL comparison (Art. 158(6A) monotonicity) | Done |
 | Art. 161 | F-IRB supervisory LGD (40% non-FSE senior, 45% FSE) | Done |
-| Art. 164(4) | A-IRB LGD floors (25% corporate, 5%–15% retail) | Done |
+| Art. 164(4) | A-IRB per-exposure LGD floors (retail: 5% RRE, 50% QRRE, 30% other; replaces CRR portfolio-level 10%/15%) | Done |
 | Art. 166C–166D | Revised CCF: SA-aligned, full-facility EAD for revolving | Done |
 | Art. 191A–241 | Revised CRM: 5-band haircuts, equity 20%/30% | Done |
 | Art. 92(2A)–(2D) | Output floor (PRA 4-year: 60%–72.5%, 2027–2030) | Done |

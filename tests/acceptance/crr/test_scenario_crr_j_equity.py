@@ -6,7 +6,7 @@ under CRR Art. 133 (SA) and Art. 155 (IRB Simple Risk Weight Method).
 
 SA equity treatment (CRR-J1 through CRR-J9):
 - Art. 133(2): Flat 100% for all standard equity types (listed, unlisted, PE, etc.)
-- Art. 132(2): CIU fallback 150%
+- Art. 132(2): CIU fallback 1,250%
 - Sovereign treatment: Central bank equity 0%
 - No differentiated weights by listing status under CRR SA
 
@@ -26,7 +26,7 @@ RWA verification (CRR-J18 through CRR-J20):
 
 Regulatory References:
 - CRR Art. 133(2): SA equity flat 100%
-- CRR Art. 132(2): CIU fallback 150%
+- CRR Art. 132(2): CIU fallback 1,250%
 - CRR Art. 132A: CIU mandate-based approach
 - CRR Art. 155(2)(a-c): IRB Simple equity weights (290%/190%/370%)
 """
@@ -258,7 +258,7 @@ class TestCRRJ9_CIUFallbackSA:
     """
     CRR-J9: CIU equity with fallback approach under SA.
     Input: equity_type=ciu, ciu_approach=fallback, EAD=£600,000
-    Expected: Art. 132(2) fallback 150% → RWA = £900,000
+    Expected: Art. 132(2) fallback 1,250% → RWA = £7,500,000
     """
 
     def test_crr_j9_risk_weight(self, equity_calculator, crr_sa_config):
@@ -269,7 +269,7 @@ class TestCRRJ9_CIUFallbackSA:
             ciu_approach="fallback",
             config=crr_sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(12.50, abs=1e-4)
 
     def test_crr_j9_rwa(self, equity_calculator, crr_sa_config):
         result = calculate_single_equity_exposure(
@@ -279,7 +279,7 @@ class TestCRRJ9_CIUFallbackSA:
             ciu_approach="fallback",
             config=crr_sa_config,
         )
-        assert result["rwa"] == pytest.approx(900_000.0, rel=1e-4)
+        assert result["rwa"] == pytest.approx(7_500_000.0, rel=1e-4)
 
 
 # =============================================================================
@@ -496,7 +496,7 @@ class TestCRRJ17_CIUNoApproachFallback:
     """
     CRR-J17: CIU equity with no ciu_approach set (fallback default).
     Input: equity_type=ciu, ciu_approach=None, EAD=£100,000
-    Expected: Falls through to CIU fallback 150% → RWA = £150,000
+    Expected: Falls through to CIU fallback 1,250% → RWA = £1,250,000
     """
 
     def test_crr_j17_risk_weight(self, equity_calculator, crr_sa_config):
@@ -506,7 +506,7 @@ class TestCRRJ17_CIUNoApproachFallback:
             equity_type="ciu",
             config=crr_sa_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.50, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(12.50, abs=1e-4)
 
 
 # =============================================================================

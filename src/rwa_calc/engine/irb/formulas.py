@@ -464,7 +464,7 @@ def apply_irb_formulas(
     # Delegates to the single source of truth in adjustments.py to avoid divergence.
     from rwa_calc.engine.irb.adjustments import apply_defaulted_treatment
 
-    exposures = apply_defaulted_treatment(exposures, config)
+    exposures = apply_defaulted_treatment(exposures)
 
     return exposures
 

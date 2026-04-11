@@ -92,7 +92,7 @@ For certain entity types, the regulatory treatment differs between SA and IRB ap
 
 - **RGLA/PSE with sovereign treatment**: Under SA, these use dedicated RGLA/PSE risk weight tables. Under IRB, those with government guarantees or taxing powers use the central govt/central bank IRB formula.
 - **RGLA/PSE with institution treatment**: Under SA, these use RGLA/PSE tables. Under IRB, commercial PSEs without sovereign backing use the institution IRB formula.
-- **MDB/International Orgs**: Under SA, these typically receive 0% RW from the MDB table. Under IRB, they use the central govt/central bank formula.
+- **MDB/International Orgs**: Under SA, named MDBs (Art. 117(2)) receive 0% RW; other MDBs use institution tables (CRR) or dedicated Table 2B (Basel 3.1). Under IRB, they use the central govt/central bank formula.
 
 ### Additional Classification Flags
 
@@ -369,8 +369,9 @@ contingents = pl.DataFrame({
 | `valuation_date` | `Date` | No | Date of last valuation |
 | `valuation_type` | `String` | No | `market`, `indexed`, `independent` |
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
-| `property_ltv` | `Float64` | No | Loan-to-value ratio (RE only) |
-| `is_income_producing` | `Boolean` | No | Material income dependence (CRE) |
+| `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator |
+| `prior_charge_ltv` | `Float64` | No | LTV portion from prior/pari passu charges only (Art. 124C(3)); 0.0 = first charge. Used by Art. 124F(2)/124G(2) junior charge treatment |
+| `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) |
 | `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
 | `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
 
@@ -418,7 +419,8 @@ collateral = pl.DataFrame({
     "valuation_date": [date(2024, 12, 31), date(2024, 11, 15)],
     "valuation_type": ["market", "independent"],
     "property_type": [None, "residential"],
-    "property_ltv": [None, 0.65],
+    "property_ltv": [None, 0.65],  # Art. 124C: includes prior charges in numerator
+    "prior_charge_ltv": [None, 0.0],  # Art. 124C(3): 0.0 = first charge
     "is_income_producing": [None, False],
     "is_adc": [None, False],
     "is_presold": [None, None],
@@ -694,7 +696,7 @@ fx_rates = pl.DataFrame({
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `carrying_value` | `Float64` | Yes | Balance sheet value |
 | `fair_value` | `Float64` | No | Mark-to-market value |
-| `is_speculative` | `Boolean` | No | Speculative unlisted equity |
+| `is_speculative` | `Boolean` | No | Higher-risk equity (unlisted + business < 5yr) |
 | `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange |
 | `is_government_supported` | `Boolean` | No | Government-supported programme |
 | `is_significant_investment` | `Boolean` | No | >10% of CET1 |
@@ -706,11 +708,11 @@ fx_rates = pl.DataFrame({
 | `central_bank` | 0% | Central bank equity holdings (Art. 133(6)) |
 | `listed` | 100% | Exchange-traded equities |
 | `exchange_traded` | 100% | Listed on recognised exchange |
-| `government_supported` | 100% | Government-supported programme |
+| `government_supported` | 100% CRR / 250% B31 | Government-supported programme |
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
 | `private_equity_diversified` | 190% | Diversified private equity portfolio |
-| `speculative` | 400% | Speculative unlisted |
+| `speculative` | 400% | Higher-risk (unlisted + business < 5yr) |
 | `ciu` | Look-through | Collective investment undertakings |
 | `other` | 250% | Other equity exposures |
 

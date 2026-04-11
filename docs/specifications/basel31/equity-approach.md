@@ -18,8 +18,8 @@ approaches, transitional phase-in schedule, and CIU treatment.
 | FR-9.4 | CIU fallback treatment (Art. 132(2)) | P0 | Done |
 | FR-9.5 | CIU mandate-based treatment (Art. 132(4)) | P0 | Done |
 | FR-9.6 | CIU look-through treatment (Art. 132a) | P0 | Done |
-| FR-9.7 | Transitional exclusions (central bank, government-supported, CIU non-fallback) | P0 | Done |
-| FR-9.8 | Higher-risk classification (speculative, PE/VC) | P0 | Done |
+| FR-9.7 | Transitional exclusions (central bank, subordinated debt, CIU non-fallback) | P0 | Done |
+| FR-9.8 | Higher-risk classification (unlisted + business < 5 years) | P0 | Done |
 
 ---
 
@@ -39,7 +39,7 @@ Basel 3.1 fundamentally changes equity treatment by:
 | SA equity (standard) | 100% flat | **250%** | Art. 133(3) |
 | SA equity (higher risk) | 100% flat | **400%** | Art. 133(4) |
 | Subordinated debt / non-equity own funds | 100% | **150%** | Art. 133(5) |
-| Legislative equity (carve-out) | 100% | **100%** | Art. 133(6) |
+| Government-supported equity | 100% | **250%** (standard) | Art. 133(3) |
 | IRB Simple approach | Available (Art. 155) | **Removed** | Art. 147A(1)(a) |
 | IRB PD/LGD approach | Available | **Removed** | Art. 147A(1)(a) |
 | CIU fallback | 1,250% (Art. 132(2)) | **1,250%** (unchanged) | Art. 132(2) |
@@ -52,36 +52,55 @@ Basel 3.1 fundamentally changes equity treatment by:
 
 | Equity Sub-Category | Risk Weight | Reference |
 |--------------------|-------------|-----------|
-| Legislative equity (government-mandated) | **100%** | Art. 133(6) |
 | Subordinated debt / non-equity own funds | **150%** | Art. 133(5) |
-| Standard equity (listed, exchange-traded) | **250%** | Art. 133(3) |
+| Standard equity (listed, exchange-traded, government-supported) | **250%** | Art. 133(3) |
 | Unlisted equity (non-higher-risk) | **250%** | Art. 133(3) |
 | Other equity | **250%** | Art. 133(3) |
-| Higher-risk equity (see definition below) | **400%** | Art. 133(4) |
-| Private equity / venture capital | **400%** | Art. 133(4) |
+| Higher-risk equity (unlisted + business < 5 years — see [definition below](#higher-risk-classification-art-1334)) | **400%** | Art. 133(4) |
 
-!!! note "Legislative Equity at 100%"
-    The `GOVERNMENT_SUPPORTED` / legislative equity category at 100% reflects holdings
-    mandated by government legislation (e.g., national development policy programmes).
-    This is Art. 133(6), a specific PRA carve-out — not a general 100% weight category.
+!!! warning "Correction: Art. 133(6) is NOT a 100% Risk Weight (Fixed v0.1.189)"
+    Art. 133(6) is an **exclusion clause** that scopes out exposures already handled
+    elsewhere: (a) own funds deductions per Chapter 3, (b) 1,250% per Art. 89(3),
+    (c) 250% per Art. 48(4). It does **not** assign a 100% risk weight.
+    CRR Art. 133(3)(c) had a 100% legislative equity carve-out, but B31 Art. 133
+    removes it. Government-supported equity is standard 250% equity under B31.
 
 ### Higher-Risk Classification (Art. 133(4))
 
-An equity exposure is classified as **higher risk** (400%) if it is:
+An equity exposure is classified as **higher risk** (400%) if **both** of the following
+conditions are met (PRA PS1/26 Glossary, p.5):
 
-- **Not listed on a recognised exchange** AND held for **short-term resale**, OR
-- **Not listed on a recognised exchange** AND derived from a **derivative position**, OR
-- **Private equity** or **venture capital** holdings
+1. **Not listed on a recognised exchange**, AND
+2. The underlying **business has existed for less than five years**
 
-!!! warning "Correction: No CQS Speculative Tiers in PRA"
+The five-year clock starts from the date the business was first established within the
+undertaking. Where the business was transferred from another entity, the start date depends
+on whether the risk profile substantially changed on transfer (Glossary p.5, conditions
+(a)–(b)).
+
+!!! warning "Correction: Higher-Risk Definition (Fixed D1.38)"
+    This section previously defined higher-risk equity as "unlisted AND (short-term resale
+    OR derivative position), OR PE/VC". That was the **BCBS CRE60.20** definition, not PRA.
+    PRA PS1/26 Glossary (p.5) defines higher-risk equity solely by two criteria: unlisted
+    + business < 5 years. There is no short-term resale, derivative position, or automatic
+    PE/VC criterion. PE/VC is only higher-risk if it meets both conditions.
+
+!!! warning "No CQS Speculative Tiers in PRA"
     The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated
     by CQS. PRA PS1/26 Art. 133 does **not** use CQS-based speculative tiers for equity.
-    All non-legislative, non-subordinated equity is either standard (250%, Art. 133(3))
+    All non-subordinated equity is either standard (250%, Art. 133(3))
     or higher-risk (400%, Art. 133(4)). The calculator's `is_speculative` flag maps to
     the Art. 133(4) higher-risk definition, not a BCBS CQS tier.
 
-All other equity (not legislative, not subordinated debt, not higher-risk) receives
-the standard **250%** weight under Art. 133(3).
+!!! warning "Code Divergence: PE/VC Always Mapped to 400%"
+    The equity calculator (`calculator.py:570–574`) assigns 400% to **all** `private_equity`
+    and `private_equity_diversified` equity types regardless of business age. Under the PRA
+    definition, only PE/VC where the business has existed for less than five years qualifies
+    as higher-risk. Long-established PE holdings should receive standard 250%. See D3.37.
+
+All other equity (not subordinated debt, not higher-risk) receives the standard **250%**
+weight under Art. 133(3), including listed equity, government-supported equity, and
+unlisted PE/VC where the business has existed for five years or more.
 
 ---
 
@@ -136,7 +155,6 @@ The following equity sub-categories are **excluded** from the transitional floor
 (their weights apply directly without a phase-in floor):
 
 - **Central bank** (0%) — already below the floor, exclusion is moot
-- **Government-supported** (100%) — legislative programme holdings (Art. 133(6))
 - **Subordinated debt / non-equity own funds** (150%) — fixed rate (Art. 133(5))
 - **CIU look-through** — weight derives from underlying assets, not Art. 133
 - **CIU mandate-based** — weight derives from fund mandate, not Art. 133
@@ -230,12 +248,11 @@ When neither look-through nor mandate-based is available:
 |-----------|-------------|-----------|
 | Regulatory CIU fallback | **1,250%** | Art. 132(2) |
 
-!!! warning "Code Divergence — CIU Fallback"
-    The regulatory CIU fallback is **1,250%** under both CRR2 (Regulation 2019/876) and
-    PRA PS1/26 (PDF p.62: "shall assign a risk weight of 1,250% ('fall-back approach')").
-    The code currently applies 250% (listed) / 400% (unlisted) under Basel 3.1, and 150%
-    under CRR. These values correspond to Art. 133 equity weights, not the Art. 132(2) CIU
-    fallback. See D3.15 for the code bug.
+!!! note "Fixed in v0.1.181"
+    The CIU fallback is correctly applied as **1,250%** under both CRR and Basel 3.1,
+    matching PRA PS1/26 Art. 132(2): "shall assign a risk weight of 1,250%
+    ('fall-back approach')". Prior to v0.1.181 the code incorrectly applied Art. 133
+    equity weights (250%/400%) instead.
 
 ### CIU Approach Selection
 
@@ -256,12 +273,14 @@ When classifying equity exposures, the following priority order applies:
 
 1. **CIU** (Art. 132) — if the exposure is a fund holding
 2. **Central bank / sovereign equity** — 0% (sovereign treatment, not Art. 133)
-3. **Equity** (Art. 133) — 250%/400% by sub-category, including legislative (100%, Art. 133(6))
-   and subordinated debt (150%, Art. 133(5))
+3. **Equity** (Art. 133) — 250%/400% by sub-category, including subordinated debt (150%,
+   Art. 133(5)). Art. 133(6) is an exclusion clause, not a risk weight.
 4. **High-risk** (Art. 128) — 150% (re-introduced in B31, see [SA Risk Weights](sa-risk-weights.md))
 
-Equity exposures take priority over high-risk classification. PE/VC is classified as equity
-(Art. 133(4), 400%), not high-risk (Art. 128, 150%).
+Equity exposures take priority over high-risk classification. PE/VC that meets the
+higher-risk definition (unlisted + business < 5 years) is classified as equity
+(Art. 133(4), 400%), not high-risk (Art. 128, 150%). PE/VC that does not meet the
+higher-risk definition receives standard 250% (Art. 133(3)).
 
 ---
 
@@ -270,24 +289,24 @@ Equity exposures take priority over high-risk classification. PE/VC is classifie
 | Scenario ID | Description | Expected RW |
 |-------------|-------------|-------------|
 | B31-L1 | Exchange-traded equity (standard) | 250% |
-| B31-L2 | Private equity (higher risk) | 400% |
+| B31-L2 | Private equity (higher risk — business < 5yr) | 400% |
 | B31-L3 | Speculative unlisted (higher risk) | 400% |
 | B31-L4 | Central bank equity | 0% |
-| B31-L5 | Government-supported equity | 100% |
+| B31-L5 | Government-supported equity | 250% |
 | B31-L6 | Subordinated debt | 150% |
 | B31-L7 | Unlisted equity (standard) | 250% |
 | B31-L8 | CIU look-through (diversified fund) | Weighted average of underlyings |
 | B31-L9 | CIU mandate-based | Mandate RW |
 | B31-L10 | CIU mandate-based with third-party calc | Mandate RW × 1.2 |
-| B31-L11 | CIU fallback (listed) | 250% (code) / 1,250% (regulation) |
-| B31-L12 | CIU fallback (unlisted) | 400% (code) / 1,250% (regulation) |
+| B31-L11 | CIU fallback (listed) | 1,250% |
+| B31-L12 | CIU fallback (unlisted) | 1,250% |
 | B31-L13 | 2027 transitional: standard equity | max(250%, 160%) = 250% |
 | B31-L14 | 2027 transitional: higher-risk equity | max(400%, 220%) = 400% |
 | B31-L15 | 2027 transitional: standard below floor | Floor binds at 160% |
 | B31-L16 | Central bank excluded from transitional | 0% (no floor) |
-| B31-L17 | Government-supported excluded from transitional | 100% (no floor) |
+| B31-L17 | Government-supported subject to transitional | 250% (exceeds all floors) |
 | B31-L18 | CIU look-through excluded from transitional | Look-through RW (no floor) |
-| B31-L19 | PE diversified | 400% |
+| B31-L19 | PE diversified (higher risk — business < 5yr) | 400% |
 | B31-L20 | Other equity (catch-all) | 250% |
 | B31-L21 | Leveraged fund look-through | RW grossed up by leverage |
 | B31-L22 | Listed equity (standard) | 250% |

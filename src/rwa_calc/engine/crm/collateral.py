@@ -659,9 +659,28 @@ def _apply_collateral_unified(
     total_secured_expr = pl.min_horizontal(cum, ead)
 
     # Blended lgd_secured = sum(lgds_i * es_i) / total_secured
+    # CRR Art. 230 Table 5: subordinated exposures use higher LGDS for the
+    # secured portion (receivables 65%, RE 65%, other physical 70%).
+    # Basel 3.1 Art. 230(2) removes the subordinated LGDS column entirely.
+    _has_seniority = "seniority" in exposure_schema.names()
+    _build_sub = not is_basel_3_1 and _has_seniority
+
     lgd_num = pl.lit(0.0)
+    lgd_num_sub = pl.lit(0.0) if _build_sub else None
     for _, lgds_key, suffix in WATERFALL_ORDER:
-        lgd_num = lgd_num + pl.lit(lgds[lgds_key]) * pl.col(f"_es_{suffix}")
+        es_col = pl.col(f"_es_{suffix}")
+        lgd_num = lgd_num + pl.lit(lgds[lgds_key]) * es_col
+        if _build_sub:
+            sub_lgds = lgd_values.get(f"{lgds_key}_subordinated", lgd_values[lgds_key])
+            lgd_num_sub = lgd_num_sub + pl.lit(sub_lgds) * es_col
+
+    if _build_sub:
+        is_sub = (
+            pl.col("seniority").fill_null("").str.to_lowercase().is_in(["subordinated", "junior"])
+        )
+        lgd_num_final = pl.when(is_sub).then(lgd_num_sub).otherwise(lgd_num)
+    else:
+        lgd_num_final = lgd_num
 
     # Compute sequential allocations, then total + lgd_secured
     exposures = exposures.with_columns(es_exprs)
@@ -669,7 +688,7 @@ def _apply_collateral_unified(
         [
             total_secured_expr.alias("total_collateral_for_lgd"),
             pl.when(total_secured_expr > 0)
-            .then(lgd_num / total_secured_expr)
+            .then(lgd_num_final / total_secured_expr)
             .otherwise(pl.lit(lgd_unsecured))
             .alias("lgd_secured"),
         ]

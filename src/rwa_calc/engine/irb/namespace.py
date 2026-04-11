@@ -525,12 +525,12 @@ class IRBLazyFrame:
     # DEFAULTED EXPOSURE TREATMENT
     # =========================================================================
 
-    def apply_defaulted_treatment(self, config: CalculationConfig) -> pl.LazyFrame:
+    def apply_defaulted_treatment(self) -> pl.LazyFrame:
         """Apply regulatory treatment for defaulted exposures (PD=100%).
 
         Delegates to ``adjustments.apply_defaulted_treatment``.
         """
-        return _apply_defaulted_treatment(self._lf, config)
+        return _apply_defaulted_treatment(self._lf)
 
     # =========================================================================
     # POST-MODEL ADJUSTMENTS (Basel 3.1)
@@ -696,7 +696,7 @@ class IRBLazyFrame:
         )
 
         # Defaulted treatment (overrides for PD=100% exposures)
-        return lf.irb.apply_defaulted_treatment(config)
+        return lf.irb.apply_defaulted_treatment()
 
     def select_expected_loss(self) -> pl.LazyFrame:
         """

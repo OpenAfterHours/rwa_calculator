@@ -209,12 +209,12 @@ class TestCRRSubordinatedDebtCalculator:
 
 
 class TestTransitionalFloorExclusion:
-    """Tests that subordinated debt and government-supported equity are
-    excluded from the transitional risk weight floor per PRA Rule 4.3.
+    """Tests for transitional risk weight floor per PRA Rules 4.2-4.3.
 
     Transitional floor for 2027: standard=160%, higher-risk=220%.
-    Without exclusion, subordinated debt (150%) would be raised to 160%.
-    Without exclusion, government-supported (100%) would be raised to 160%.
+    Subordinated debt (150%) is excluded from the floor per Rule 4.2/4.3.
+    Government-supported equity is standard 250% equity under B31 Art. 133(3)
+    — subject to the floor, but 250% already exceeds all transitional floors.
     """
 
     @staticmethod
@@ -255,19 +255,25 @@ class TestTransitionalFloorExclusion:
         rw = self._calculate_with_transitional("subordinated_debt", date(2029, 6, 30))
         assert rw == pytest.approx(1.50)
 
-    def test_government_supported_not_floored_in_2027(self) -> None:
-        """PRA Rule 4.3: legislative equity 100% should NOT be raised to 160% in 2027."""
+    def test_government_supported_floored_in_2027(self) -> None:
+        """B31 Art. 133(3): government-supported = 250% (standard equity, subject to floor).
+
+        250% > 160% transitional floor, so result is 250% regardless.
+        """
         rw = self._calculate_with_transitional(
             "government_supported", date(2027, 6, 30), is_government_supported=True
         )
-        assert rw == pytest.approx(1.00)
+        assert rw == pytest.approx(2.50)
 
-    def test_government_supported_not_floored_in_2029(self) -> None:
-        """PRA Rule 4.3: legislative equity 100% should NOT be raised to 220% in 2029."""
+    def test_government_supported_floored_in_2029(self) -> None:
+        """B31 Art. 133(3): government-supported = 250% (standard equity, subject to floor).
+
+        250% > 220% transitional floor, so result is 250% regardless.
+        """
         rw = self._calculate_with_transitional(
             "government_supported", date(2029, 6, 30), is_government_supported=True
         )
-        assert rw == pytest.approx(1.00)
+        assert rw == pytest.approx(2.50)
 
     def test_central_bank_not_floored_in_2027(self) -> None:
         """Central bank equity 0% should NOT be raised by transitional floor."""
@@ -361,4 +367,4 @@ class TestSubordinatedDebtMixedBatch:
         assert rws[0] == pytest.approx(1.50)  # subordinated_debt
         assert rws[1] == pytest.approx(2.50)  # listed
         assert rws[2] == pytest.approx(4.00)  # speculative
-        assert rws[3] == pytest.approx(1.00)  # government_supported
+        assert rws[3] == pytest.approx(2.50)  # government_supported (Art. 133(3) standard)

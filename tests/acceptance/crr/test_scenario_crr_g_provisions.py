@@ -73,7 +73,7 @@ class TestCRRGroupG_Provisions:
         CRR-G2: IRB EL shortfall results in CET1/T2 deduction.
 
         Input: EL > Total provisions
-        Expected: Shortfall = EL - provisions, 50% deducted from CET1, 50% from T2
+        Expected: Shortfall = EL - provisions, 100% deducted from CET1 (Art. 36(1)(d))
 
         CRR Art. 159: Shortfall treatment
         """
@@ -141,7 +141,7 @@ class TestCRRGroupG_ELShortfallExcess:
 
         EL = PD(2%) x LGD(45%) x EAD(5M) = 45,000
         Provisions = 30,000
-        Shortfall = 15,000 (50% deducted from CET1, 50% from T2)
+        Shortfall = 15,000 (100% deducted from CET1 per Art. 36(1)(d))
         """
         result = get_result_for_exposure(irb_pipeline_results_df, "LOAN_PROV_G2")
         if result is None:
@@ -207,7 +207,7 @@ class TestCRRGroupG_PortfolioELSummary:
     CRR-G Portfolio-level EL summary acceptance tests.
 
     Validates that the aggregator correctly computes the T2 credit cap
-    per CRR Art. 62(d) and the 50/50 CET1/T2 deduction split per CRR Art. 159
+    per CRR Art. 62(d) and the 100% CET1 deduction per Art. 36(1)(d), Art. 159
     across all IRB exposures in the fixture portfolio.
     """
 
@@ -256,17 +256,17 @@ class TestCRRGroupG_PortfolioELSummary:
             f"got {el.t2_credit:.2f}"
         )
 
-    def test_deduction_split_fifty_fifty(self, irb_pipeline_results) -> None:
-        """EL shortfall should be split 50% CET1 / 50% T2 per CRR Art. 159."""
+    def test_deduction_full_cet1(self, irb_pipeline_results) -> None:
+        """EL shortfall deducted 100% from CET1 per Art. 36(1)(d), Art. 159."""
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
         assert float(el.cet1_deduction) == pytest.approx(
-            float(el.total_el_shortfall) * 0.5, rel=1e-6
-        ), f"CET1 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
+            float(el.total_el_shortfall), rel=1e-6
+        ), f"CET1 deduction should be 100% of shortfall ({el.total_el_shortfall:.2f})"
         assert float(el.t2_deduction) == pytest.approx(
-            float(el.total_el_shortfall) * 0.5, rel=1e-6
-        ), f"T2 deduction should be 50% of shortfall ({el.total_el_shortfall:.2f})"
+            0.0, abs=1e-6
+        ), f"T2 deduction should be 0 (no T2 shortfall deduction under CRR)"
 
 
 class TestCRRGroupG_ParameterizedValidation:

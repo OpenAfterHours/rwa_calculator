@@ -489,7 +489,7 @@ def _commercial_real_estate() -> list[Collateral]:
             is_adc=True,
             is_presold=False,
         ),
-        # Pre-sold ADC property (100% RW)
+        # Pre-sold commercial ADC property (150% RW — Art. 124K(2) concession is residential-only)
         Collateral(
             collateral_reference="COLL_CRE_004",
             collateral_type="real_estate",

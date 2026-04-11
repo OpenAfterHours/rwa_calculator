@@ -174,7 +174,7 @@ class EquityType(StrEnum):
     CENTRAL_BANK = "central_bank"                          # 0% SA (Art. 133(6))
     LISTED = "listed"                                      # 100% SA / 290% IRB
     EXCHANGE_TRADED = "exchange_traded"                     # 100% SA / 290% IRB
-    GOVERNMENT_SUPPORTED = "government_supported"           # 100% SA / 190% IRB (code mapping; no Art. 155 basis)
+    GOVERNMENT_SUPPORTED = "government_supported"           # 100% CRR SA / 250% B31 SA / 190% IRB
     UNLISTED = "unlisted"                                  # 250% SA / 370% IRB
     SPECULATIVE = "speculative"                            # 400% SA / 370% IRB
     PRIVATE_EQUITY = "private_equity"                      # 250% SA / 370% IRB
@@ -200,9 +200,9 @@ Used for unrated institution exposures under Basel 3.1:
 
 ```python
 class SCRAGrade(StrEnum):
-    A = "A"  # CET1 > 14%, Leverage > 5% → 40% RW
-    B = "B"  # CET1 > 5.5%, Leverage > 3% → 75% RW
-    C = "C"  # Below minimum requirements → 150% RW
+    A = "A"  # Meets all minimum requirements + buffers → 40% RW (30% if CET1 ≥ 14%, leverage ≥ 5%)
+    B = "B"  # Meets minimum requirements (excl. buffers) but not Grade A → 75% RW
+    C = "C"  # Does not meet minimum requirements → 150% RW
 ```
 
 ### Off-Balance Sheet

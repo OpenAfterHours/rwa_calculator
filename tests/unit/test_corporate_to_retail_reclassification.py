@@ -1,17 +1,14 @@
 """Unit tests for corporate-to-retail reclassification in classifier.
 
 Tests cover:
-- Reclassification criteria under full_irb(): with AIRB available for corporates,
-  reclassification is short-circuited (corporates get AIRB directly)
-- Property collateral detection for mortgage classification
-- Approach routing: exposures with internal_pd + lgd → AIRB, without lgd → FIRB
+- Reclassification criteria: retail outranks corporate in the exposure class
+  waterfall (CRR Art. 147(5)). Qualifying corporates are always reclassified
+  to retail when eligibility conditions are met.
+- Property collateral detection for mortgage vs other retail classification
+- Approach routing: reclassified retail exposures get AIRB via model permissions
 - FIRB LGD clearing applies only to FIRB (not AIRB) exposures
 - Turnover threshold for SME definition per CRR Art. 501
-
-Note: Under PermissionMode.IRB (which maps to full_irb()), AIRB is permitted for
-both corporate and retail classes. The corporate-to-retail reclassification only
-triggers when AIRB is NOT permitted for corporate but IS permitted for retail
-(a hybrid configuration no longer available via PermissionMode).
+- Negative cases: missing managed_as_retail, exceeding threshold, no LGD, etc.
 """
 
 from __future__ import annotations
@@ -139,23 +136,24 @@ def create_test_bundle(
 
 
 class TestReclassificationEligibility:
-    """Tests for corporate classification and approach routing under full_irb.
+    """Tests for corporate-to-retail reclassification eligibility.
 
-    Under PermissionMode.IRB (full_irb()), AIRB is permitted for corporate classes,
-    so reclassification to retail is short-circuited. These tests verify that
-    corporates with lgd + internal_pd get AIRB directly, and those without lgd
-    but managed_as_retail + qualifies_as_retail fall to SA.
+    Retail outranks corporate in the exposure class waterfall (CRR Art. 147(5)).
+    Corporates meeting all criteria (managed_as_retail, qualifies_as_retail,
+    has LGD, SME turnover) are reclassified to retail. The approach is then
+    determined by model_permissions in the subsequent phase.
     """
 
-    def test_corporate_with_lgd_gets_airb_directly(
+    def test_corporate_with_lgd_reclassified_to_retail(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Corporate with internal_pd + LGD gets AIRB directly (no reclassification needed).
+        """Corporate meeting all retail criteria is reclassified to retail_other.
 
-        Under full_irb(), AIRB is permitted for corporate classes, so reclassification
-        to retail is short-circuited. The exposure stays corporate with AIRB approach.
+        Retail outranks corporate in the waterfall. When managed_as_retail=True,
+        qualifies_as_retail=True, lgd present, and SME turnover, the exposure
+        is reclassified to retail_other and gets AIRB via model permissions.
         """
         bundle = create_test_bundle(
             exposures_data={
@@ -188,9 +186,9 @@ class TestReclassificationEligibility:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, corporate gets AIRB directly — no reclassification
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert df["reclassified_to_retail"][0] is False
+        # Meets all reclassification criteria → reclassified to retail_other
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
     def test_corporate_not_reclassified_when_not_managed_as_retail(
@@ -421,16 +419,15 @@ class TestReclassificationEligibility:
         assert df["reclassified_to_retail"][0] is False
         assert df["approach"][0] == ApproachType.AIRB.value
 
-    def test_sme_corporate_gets_airb_directly_under_full_irb(
+    def test_sme_corporate_reclassified_to_retail(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """SME corporate with lgd + internal_pd gets AIRB directly under full_irb.
+        """SME corporate meeting retail criteria is reclassified to retail_other.
 
-        Under full_irb(), reclassification to retail is short-circuited because
-        AIRB is permitted for corporate classes. The exposure stays CORPORATE_SME
-        with AIRB approach.
+        Retail outranks corporate in the waterfall. SME corporate with
+        managed_as_retail + lgd + qualifying exposure is reclassified.
         """
         bundle = create_test_bundle(
             exposures_data={
@@ -462,9 +459,9 @@ class TestReclassificationEligibility:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, stays as CORPORATE_SME with AIRB (no reclassification)
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert df["reclassified_to_retail"][0] is False
+        # Meets all reclassification criteria → reclassified to retail_other
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
 
@@ -474,19 +471,18 @@ class TestReclassificationEligibility:
 
 
 class TestPropertyCollateralReclassification:
-    """Tests for property collateral detection on corporate exposures.
+    """Tests for property collateral detection during corporate-to-retail reclassification.
 
-    Under full_irb(), reclassification to retail is short-circuited because
-    AIRB is available for corporate classes directly. These tests verify that
-    corporates stay corporate with AIRB regardless of property collateral.
+    When a corporate meets retail reclassification criteria, property collateral
+    determines whether the reclassified class is RETAIL_MORTGAGE or RETAIL_OTHER.
     """
 
-    def test_corporate_with_residential_property_stays_corporate_airb(
+    def test_corporate_with_residential_property_reclassified_to_mortgage(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Corporate with residential property collateral stays CORPORATE_SME with AIRB."""
+        """Corporate with residential property collateral reclassified to RETAIL_MORTGAGE."""
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": ["CORP001"],
@@ -518,20 +514,20 @@ class TestPropertyCollateralReclassification:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, stays corporate with AIRB — no reclassification
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert df["reclassified_to_retail"][0] is False
+        # Residential property → reclassified to retail_mortgage
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
-    def test_corporate_with_commercial_property_stays_corporate_airb(
+    def test_corporate_with_commercial_property_reclassified_to_mortgage(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Corporate with COMMERCIAL property collateral stays CORPORATE_SME with AIRB.
+        """Corporate with commercial property collateral reclassified to RETAIL_MORTGAGE.
 
-        Under full_irb, property collateral type does not trigger reclassification
-        because AIRB is already available for corporate classes.
+        Property collateral (residential or commercial) routes the reclassified
+        exposure to RETAIL_MORTGAGE rather than RETAIL_OTHER.
         """
         bundle = create_test_bundle(
             exposures_data={
@@ -565,17 +561,17 @@ class TestPropertyCollateralReclassification:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, stays corporate with AIRB — no reclassification
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert df["reclassified_to_retail"][0] is False
+        # Commercial property → reclassified to retail_mortgage
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
-    def test_corporate_without_property_collateral_stays_corporate_airb(
+    def test_corporate_without_property_reclassified_to_retail_other(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Corporate without property collateral stays CORPORATE_SME with AIRB."""
+        """Corporate without property collateral reclassified to RETAIL_OTHER."""
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": ["CORP001"],
@@ -608,9 +604,9 @@ class TestPropertyCollateralReclassification:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, stays corporate with AIRB — no reclassification
-        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert df["reclassified_to_retail"][0] is False
+        # No property collateral → reclassified to retail_other
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
 
@@ -620,14 +616,19 @@ class TestPropertyCollateralReclassification:
 
 
 class TestReclassificationIRBContext:
-    """Tests for reclassification behavior under different IRB permissions."""
+    """Tests for reclassification behavior under IRB permissions.
 
-    def test_no_reclassification_with_full_irb(
+    Reclassification is an exposure-class decision, independent of approach
+    permissions. Corporate exposures meeting retail criteria are always
+    reclassified regardless of whether AIRB is available for corporate.
+    """
+
+    def test_qualifying_corporate_reclassified_under_full_irb(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """With full IRB, corporates don't need reclassification (AIRB available)."""
+        """Corporate meeting retail criteria is reclassified even under full IRB."""
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": ["CORP001"],
@@ -658,24 +659,20 @@ class TestReclassificationIRBContext:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # With full IRB, corporate stays as corporate but gets AIRB directly
-        assert df["exposure_class"][0] in [
-            ExposureClass.CORPORATE.value,
-            ExposureClass.CORPORATE_SME.value,
-        ]
-        assert df["reclassified_to_retail"][0] is False
+        # Retail outranks corporate — reclassified to retail_other with AIRB
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
-    def test_no_reclassification_with_irb_mode_has_lgd(
+    def test_qualifying_corporate_with_lgd_reclassified_under_irb_mode(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Under IRB mode with lgd, corporate gets AIRB directly (no reclassification).
+        """Corporate with LGD meeting retail criteria is reclassified under IRB mode.
 
-        Previously this tested FIRB-only permissions, but PermissionMode.IRB maps
-        to full_irb() which permits AIRB for all classes. Since AIRB is available
-        for corporates, reclassification is not triggered.
+        Reclassification is an exposure-class decision independent of approach.
+        The exposure is reclassified to retail and gets AIRB via model permissions.
         """
         bundle = create_test_bundle(
             exposures_data={
@@ -707,12 +704,9 @@ class TestReclassificationIRBContext:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # With full IRB, corporate stays corporate and gets AIRB (has lgd + internal_pd)
-        assert df["exposure_class"][0] in [
-            ExposureClass.CORPORATE.value,
-            ExposureClass.CORPORATE_SME.value,
-        ]
-        assert df["reclassified_to_retail"][0] is False
+        # Retail outranks corporate — reclassified to retail_other with AIRB
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
 
 
@@ -729,21 +723,20 @@ class TestMixedPortfolioReclassification:
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """Mixed portfolio should have correct classification for each exposure.
+        """Mixed portfolio: qualifying corporates reclassified, others stay corporate.
 
-        Under full_irb(), reclassification to retail is short-circuited, so all
-        corporates with lgd + internal_pd get AIRB directly. Corporates without
-        lgd but managed_as_retail + qualifies_as_retail get SA.
+        Reclassification criteria: managed_as_retail + qualifies_as_retail + lgd + SME
+        turnover. Exposures failing any condition stay corporate.
         """
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": [
-                    "CORP_WITH_PROP",  # Has residential property — stays CORPORATE_SME, AIRB
-                    "CORP_WITH_COMM",  # Has commercial property — stays CORPORATE_SME, AIRB
-                    "CORP_NO_PROP",  # No property — stays CORPORATE_SME, AIRB
-                    "CORP_NO_LGD",  # No LGD, managed_as_retail — SA
-                    "CORP_LARGE",  # > threshold, has LGD — AIRB
-                    "CORP_NOT_MANAGED",  # Not managed as retail, has LGD — AIRB
+                    "CORP_WITH_PROP",  # Residential property → RETAIL_MORTGAGE, AIRB
+                    "CORP_WITH_COMM",  # Commercial property → RETAIL_MORTGAGE, AIRB
+                    "CORP_NO_PROP",  # No property → RETAIL_OTHER, AIRB
+                    "CORP_NO_LGD",  # No LGD → stays corporate, SA
+                    "CORP_LARGE",  # > threshold → stays corporate (qualifies_as_retail=False)
+                    "CORP_NOT_MANAGED",  # Not managed as retail → stays corporate, AIRB
                 ],
                 "counterparty_reference": ["CP001", "CP002", "CP003", "CP004", "CP005", "CP006"],
                 "drawn_amount": [300000.0, 350000.0, 400000.0, 500000.0, 1500000.0, 600000.0],
@@ -805,36 +798,36 @@ class TestMixedPortfolioReclassification:
         # Sort by exposure_reference for consistent ordering
         df = df.sort("exposure_reference")
 
-        # CORP_LARGE: has lgd + internal_pd → AIRB (reclassification short-circuited)
-        row = df.filter(pl.col("exposure_reference") == "CORP_LARGE")
-        assert row["reclassified_to_retail"][0] is False
+        # CORP_WITH_PROP: residential property → reclassified to RETAIL_MORTGAGE
+        row = df.filter(pl.col("exposure_reference") == "CORP_WITH_PROP")
+        assert row["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert row["reclassified_to_retail"][0] is True
         assert row["approach"][0] == ApproachType.AIRB.value
 
-        # CORP_NOT_MANAGED: has lgd + internal_pd → AIRB
-        row = df.filter(pl.col("exposure_reference") == "CORP_NOT_MANAGED")
-        assert row["reclassified_to_retail"][0] is False
+        # CORP_WITH_COMM: commercial property → reclassified to RETAIL_MORTGAGE
+        row = df.filter(pl.col("exposure_reference") == "CORP_WITH_COMM")
+        assert row["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert row["reclassified_to_retail"][0] is True
         assert row["approach"][0] == ApproachType.AIRB.value
 
-        # CORP_NO_LGD: managed_as_retail + qualifies_as_retail + no lgd → SA
+        # CORP_NO_PROP: no property → reclassified to RETAIL_OTHER
+        row = df.filter(pl.col("exposure_reference") == "CORP_NO_PROP")
+        assert row["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert row["reclassified_to_retail"][0] is True
+        assert row["approach"][0] == ApproachType.AIRB.value
+
+        # CORP_NO_LGD: no lgd → stays corporate, SA
         row = df.filter(pl.col("exposure_reference") == "CORP_NO_LGD")
         assert row["reclassified_to_retail"][0] is False
         assert row["approach"][0] == ApproachType.SA.value
 
-        # CORP_NO_PROP: has lgd + internal_pd → AIRB, stays CORPORATE_SME
-        row = df.filter(pl.col("exposure_reference") == "CORP_NO_PROP")
-        assert row["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
+        # CORP_LARGE: exceeds retail threshold → stays corporate, AIRB
+        row = df.filter(pl.col("exposure_reference") == "CORP_LARGE")
         assert row["reclassified_to_retail"][0] is False
         assert row["approach"][0] == ApproachType.AIRB.value
 
-        # CORP_WITH_PROP: has lgd + internal_pd → AIRB, stays CORPORATE_SME
-        row = df.filter(pl.col("exposure_reference") == "CORP_WITH_PROP")
-        assert row["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
-        assert row["reclassified_to_retail"][0] is False
-        assert row["approach"][0] == ApproachType.AIRB.value
-
-        # CORP_WITH_COMM: has lgd + internal_pd → AIRB, stays CORPORATE_SME
-        row = df.filter(pl.col("exposure_reference") == "CORP_WITH_COMM")
-        assert row["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
+        # CORP_NOT_MANAGED: not managed as retail → stays corporate, AIRB
+        row = df.filter(pl.col("exposure_reference") == "CORP_NOT_MANAGED")
         assert row["reclassified_to_retail"][0] is False
         assert row["approach"][0] == ApproachType.AIRB.value
 
@@ -847,10 +840,8 @@ class TestMixedPortfolioReclassification:
 class TestLGDHandlingByApproach:
     """Tests for LGD handling based on approach assignment.
 
-    Under full_irb(), AIRB is permitted for all corporate classes. Exposures
-    with internal_pd + lgd get AIRB (LGD preserved). FIRB LGD clearing only
-    applies when an exposure is assigned FIRB (no AIRB permission or no lgd),
-    but under full_irb there are no FIRB-only classes.
+    LGD is preserved for AIRB exposures (including reclassified retail).
+    FIRB LGD clearing only applies when an exposure is assigned FIRB.
     """
 
     def test_airb_corporate_keeps_lgd(
@@ -893,12 +884,12 @@ class TestLGDHandlingByApproach:
         assert df["approach"][0] == ApproachType.AIRB.value
         assert df["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
-    def test_airb_sme_corporate_keeps_lgd(
+    def test_reclassified_retail_keeps_lgd(
         self,
         classifier: ExposureClassifier,
         irb_config: CalculationConfig,
     ) -> None:
-        """SME corporate with lgd + internal_pd gets AIRB — LGD preserved."""
+        """SME corporate reclassified to retail keeps LGD (AIRB, not FIRB)."""
         bundle = create_test_bundle(
             exposures_data={
                 "exposure_reference": ["CORP001"],
@@ -929,9 +920,10 @@ class TestLGDHandlingByApproach:
         result = classifier.classify(bundle, irb_config)
         df = result.all_exposures.collect()
 
-        # Under full_irb, AIRB is available — stays CORPORATE_SME with LGD preserved
+        # Reclassified to retail_other with AIRB — LGD preserved
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
         assert df["approach"][0] == ApproachType.AIRB.value
-        assert df["reclassified_to_retail"][0] is False
         assert df["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_individual_exceeding_threshold_gets_airb_lgd_preserved(
@@ -984,3 +976,266 @@ class TestLGDHandlingByApproach:
         # Under full_irb, AIRB available for corporate — LGD preserved
         assert df["approach"][0] == ApproachType.AIRB.value
         assert df["lgd"][0] == pytest.approx(0.25, abs=1e-10)
+
+
+# =============================================================================
+# Model Permission Reclassification Tests
+# =============================================================================
+
+
+def _hybrid_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
+    """Model permissions with FIRB for corporate and AIRB for retail classes.
+
+    Simulates a model approved for FIRB on corporate exposures but AIRB
+    on retail classes — the scenario where corporate-to-retail reclassification
+    enables the exposure to receive retail AIRB treatment.
+    """
+    return pl.DataFrame(
+        [
+            {"model_id": model_id, "exposure_class": "corporate", "approach": "foundation_irb"},
+            {"model_id": model_id, "exposure_class": "corporate_sme", "approach": "foundation_irb"},
+            {"model_id": model_id, "exposure_class": "retail_other", "approach": "advanced_irb"},
+            {"model_id": model_id, "exposure_class": "retail_mortgage", "approach": "advanced_irb"},
+            {"model_id": model_id, "exposure_class": "retail_qrre", "approach": "advanced_irb"},
+        ]
+    ).lazy()
+
+
+class TestModelPermissionReclassification:
+    """Tests for corporate-to-retail reclassification with model-level permissions.
+
+    When model_permissions grant only FIRB for corporate but AIRB for retail,
+    reclassified exposures should match the retail AIRB permission and get AIRB
+    instead of being stuck on corporate FIRB.
+    """
+
+    def test_reclassified_corporate_gets_retail_airb_via_model_permissions(
+        self,
+        classifier: ExposureClassifier,
+        irb_config: CalculationConfig,
+    ) -> None:
+        """Corporate with hybrid model perms: reclassified to retail, gets AIRB.
+
+        Model has FIRB for corporate, AIRB for retail. Exposure meets retail
+        reclassification criteria. After reclassification, the retail AIRB
+        model permission matches and the exposure gets AIRB.
+        """
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [100000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [100000.0],
+                "exposure_for_retail_threshold": [100000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "apply_fi_scalar": [True],
+                "is_managed_as_retail": [True],
+            },
+        )
+        # Override the bundle's model_permissions with hybrid permissions
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures,
+            collateral=bundle.collateral,
+            guarantees=bundle.guarantees,
+            provisions=bundle.provisions,
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=_hybrid_model_permissions(),
+            hierarchy_errors=bundle.hierarchy_errors,
+        )
+
+        result = classifier.classify(bundle, irb_config)
+        df = result.all_exposures.collect()
+
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
+        assert df["approach"][0] == ApproachType.AIRB.value
+        assert df["lgd"][0] == pytest.approx(0.45, abs=1e-10)
+
+    def test_reclassified_corporate_to_mortgage_gets_airb(
+        self,
+        classifier: ExposureClassifier,
+        irb_config: CalculationConfig,
+    ) -> None:
+        """Corporate with property collateral and hybrid perms → RETAIL_MORTGAGE, AIRB."""
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [100000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.35],
+                "product_type": ["MORTGAGE"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [200000.0],
+                "property_collateral_value": [200000.0],
+                "collateral_type": ["residential"],
+                "lending_group_adjusted_exposure": [100000.0],
+                "exposure_for_retail_threshold": [100000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "apply_fi_scalar": [True],
+                "is_managed_as_retail": [True],
+            },
+        )
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures,
+            collateral=bundle.collateral,
+            guarantees=bundle.guarantees,
+            provisions=bundle.provisions,
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=_hybrid_model_permissions(),
+            hierarchy_errors=bundle.hierarchy_errors,
+        )
+
+        result = classifier.classify(bundle, irb_config)
+        df = result.all_exposures.collect()
+
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_MORTGAGE.value
+        assert df["reclassified_to_retail"][0] is True
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_corporate_stays_firb_when_no_retail_model_permission(
+        self,
+        classifier: ExposureClassifier,
+        irb_config: CalculationConfig,
+    ) -> None:
+        """Corporate with only FIRB model perms (no retail): stays corporate FIRB.
+
+        When model_permissions only have FIRB for corporate and no retail entries,
+        the exposure is reclassified to retail but model permissions don't match
+        any retail class, so it falls back to SA.
+        """
+        firb_only_perms = pl.DataFrame(
+            [
+                {
+                    "model_id": _TEST_MODEL_ID,
+                    "exposure_class": "corporate",
+                    "approach": "foundation_irb",
+                },
+                {
+                    "model_id": _TEST_MODEL_ID,
+                    "exposure_class": "corporate_sme",
+                    "approach": "foundation_irb",
+                },
+            ]
+        ).lazy()
+
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [100000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [100000.0],
+                "exposure_for_retail_threshold": [100000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "apply_fi_scalar": [True],
+                "is_managed_as_retail": [True],
+            },
+        )
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures,
+            collateral=bundle.collateral,
+            guarantees=bundle.guarantees,
+            provisions=bundle.provisions,
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=firb_only_perms,
+            hierarchy_errors=bundle.hierarchy_errors,
+        )
+
+        result = classifier.classify(bundle, irb_config)
+        df = result.all_exposures.collect()
+
+        # Reclassified to retail, but no retail model permission → SA fallback
+        assert df["exposure_class"][0] == ExposureClass.RETAIL_OTHER.value
+        assert df["reclassified_to_retail"][0] is True
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_corporate_not_reclassified_when_conditions_not_met(
+        self,
+        classifier: ExposureClassifier,
+        irb_config: CalculationConfig,
+    ) -> None:
+        """Corporate not managed as retail stays corporate even with hybrid perms."""
+        bundle = create_test_bundle(
+            exposures_data={
+                "exposure_reference": ["CORP001"],
+                "counterparty_reference": ["CP001"],
+                "drawn_amount": [100000.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "product_type": ["TERM_LOAN"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2029, 1, 1)],
+                "currency": ["GBP"],
+                "residential_collateral_value": [0.0],
+                "lending_group_adjusted_exposure": [100000.0],
+                "exposure_for_retail_threshold": [100000.0],
+            },
+            counterparties_data={
+                "counterparty_reference": ["CP001"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10000000.0],
+                "total_assets": [5000000.0],
+                "default_status": [False],
+                "apply_fi_scalar": [True],
+                "is_managed_as_retail": [False],  # NOT managed as retail
+            },
+        )
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures,
+            collateral=bundle.collateral,
+            guarantees=bundle.guarantees,
+            provisions=bundle.provisions,
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=_hybrid_model_permissions(),
+            hierarchy_errors=bundle.hierarchy_errors,
+        )
+
+        result = classifier.classify(bundle, irb_config)
+        df = result.all_exposures.collect()
+
+        # Not managed as retail → stays corporate, gets FIRB from model perms
+        assert df["exposure_class"][0] == ExposureClass.CORPORATE_SME.value
+        assert df["reclassified_to_retail"][0] is False
+        assert df["approach"][0] == ApproachType.FIRB.value

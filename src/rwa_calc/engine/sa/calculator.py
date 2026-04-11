@@ -1793,7 +1793,7 @@ class SACalculator:
         exposures = exposures.with_columns(
             [
                 pl.when(mismatch_applies)
-                .then(pl.col("risk_weight") * 1.5)
+                .then((pl.col("risk_weight") * 1.5).clip(upper_bound=pl.lit(1.50)))
                 .otherwise(pl.col("risk_weight"))
                 .alias("risk_weight"),
                 mismatch_applies.alias("currency_mismatch_multiplier_applied"),

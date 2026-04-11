@@ -577,11 +577,10 @@ The PRA did **not** adopt the BCBS CRE20.28–29 reductions.
     CQS 4: 50%→25%, CQS 5: 50%→35%, CQS 6: 100%→50%). The PRA retained all six
     CRR values unchanged in PRA PS1/26 Art. 129(4) Table 7.
 
-!!! warning "Code Divergence — P1.113"
-    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` currently uses the BCBS
-    CRE20 values (CQS 2 = 15%, CQS 4 = 25%, CQS 5 = 35%, CQS 6 = 50%) instead of the
-    correct PRA Table 7 values above. This understates capital for CQS 2 and CQS 6
-    covered bonds. See P1.113 in IMPLEMENTATION_PLAN.md for the fix.
+!!! success "P1.113 Fixed"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` now uses the correct PRA
+    Table 7 values (identical to CRR). Previously used BCBS CRE20 values which
+    understated capital for CQS 2 (15%→20%) and CQS 6 (50%→100%).
 
 ### Unrated Covered Bonds (Art. 129(5))
 

@@ -270,18 +270,18 @@ B31_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # PRA PS1/26 Art. 127: 20% 
 B31_DEFAULTED_RESI_RE_NON_INCOME_RW = Decimal("1.00")
 
 # =============================================================================
-# COVERED BOND RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 129A)
-# Art. 129A simplifies the CQS bands vs CRR Art. 129(4):
-#   CQS 2: 15% (CRR: 20%), CQS 4-6 collapsed to 50% (CRR: 4-5=50%, 6=100%)
+# COVERED BOND RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 129(4) Table 7)
+# PRA retained CRR Table 6A values unchanged (did NOT adopt BCBS CRE20.28
+# reductions for CQS 2/4/5/6).
 # =============================================================================
 
 B31_COVERED_BOND_RISK_WEIGHTS: dict[int, Decimal] = {
     1: Decimal("0.10"),  # AAA to AA-
-    2: Decimal("0.15"),  # A+ to A- (CRR: 20%)
+    2: Decimal("0.20"),  # A+ to A- (same as CRR)
     3: Decimal("0.20"),  # BBB+ to BBB-
     4: Decimal("0.50"),  # BB+ to BB-
     5: Decimal("0.50"),  # B+ to B-
-    6: Decimal("0.50"),  # CCC+ and below (CRR: 100%)
+    6: Decimal("1.00"),  # CCC+ and below (same as CRR)
 }
 
 # Unrated covered bond derivation from issuer SCRA grade via institution RW.
@@ -303,14 +303,14 @@ B31_COVERED_BOND_UNRATED_FROM_SCRA: dict[str, Decimal] = {
 
 
 def _create_b31_covered_bond_df() -> pl.DataFrame:
-    """Create Basel 3.1 covered bond risk weight lookup DataFrame (Art. 129A).
+    """Create Basel 3.1 covered bond risk weight lookup DataFrame.
 
-    Differs from CRR: CQS 2 = 15% (CRR: 20%), CQS 6 = 50% (CRR: 100%).
+    PRA PS1/26 Art. 129(4) Table 7 — identical to CRR Table 6A.
     """
     return pl.DataFrame(
         {
             "cqs": [1, 2, 3, 4, 5, 6],
-            "risk_weight": [0.10, 0.15, 0.20, 0.50, 0.50, 0.50],
+            "risk_weight": [0.10, 0.20, 0.20, 0.50, 0.50, 1.00],
             "exposure_class": ["COVERED_BOND"] * 6,
         }
     ).with_columns(

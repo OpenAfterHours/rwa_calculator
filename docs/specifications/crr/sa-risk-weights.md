@@ -420,12 +420,10 @@ accommodate the new institution risk weights introduced by ECRA and SCRA:
 The new entries (aa), (ab), (ba) correspond to B31 institution risk weights that did not
 exist under CRR: 30% (ECRA CQS 2), 40% (SCRA Grade A), 75% (SCRA Grade B).
 
-!!! warning "Code Divergence — B31 Rated Covered Bond Risk Weights"
-    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` (lines 261–268) uses
-    **BCBS CRE20** values (CQS 2 = 15%, CQS 6 = 50%) instead of PRA Table 7 values
-    (CQS 2 = 20%, CQS 6 = 100%). The rated table should be identical to CRR per PRA
-    PS1/26. The unrated derivation table (`COVERED_BOND_UNRATED_DERIVATION`) and
-    SCRA mapping (`B31_COVERED_BOND_UNRATED_FROM_SCRA`) are correct. See D3.21.
+!!! success "P1.113 Fixed — B31 Rated Covered Bond Risk Weights"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` now uses the correct PRA
+    Table 7 values (identical to CRR). Previously used BCBS CRE20 values which
+    understated capital for CQS 2 (15%→20%) and CQS 6 (50%→100%).
 
 !!! note "Implementation Status"
     Covered bonds are implemented as a separate exposure class under Art. 112(m).

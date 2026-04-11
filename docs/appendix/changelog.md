@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.187] — 2026-04-11
+
+### Fixed
+- **Covered Bonds (P1.113)**: B31 rated covered bond risk weights corrected from BCBS CRE20.28 values to PRA PS1/26 Art. 129(4) Table 7 values. CQS 2: 15%→20%, CQS 6: 50%→100%. PRA retained CRR Table 6A unchanged — did NOT adopt BCBS reductions. Previously **understated capital** for CQS 2 and CQS 6 covered bonds. Both `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` DataFrame corrected. All 77 covered bond tests updated. 3 stale doc divergence warnings converted to "Fixed" admonitions.
+
 ## [0.1.184] — 2026-04-11
 
 ### Fixed

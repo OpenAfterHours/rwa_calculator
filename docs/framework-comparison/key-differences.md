@@ -812,10 +812,9 @@ new institution RWs (ECRA 30%, SCRA 40%/75%):
     adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
     must assign at least one CQS step higher.
 
-!!! warning "Code Divergence — B31 Rated Values"
-    `B31_COVERED_BOND_RISK_WEIGHTS` uses **BCBS CRE20** values (CQS 2 = 15%,
-    CQS 6 = 50%) instead of PRA Table 7 values (identical to CRR). The unrated derivation
-    is correct. See [SA risk weights spec](../specifications/crr/sa-risk-weights.md#covered-bond-exposures-crr-art-129) for details.
+!!! success "P1.113 Fixed — B31 Rated Values"
+    `B31_COVERED_BOND_RISK_WEIGHTS` now uses PRA Table 7 values (identical to CRR).
+    Previously used BCBS CRE20 values (CQS 2=15%, CQS 6=50%) which understated capital.
 
 ## Credit Conversion Factors
 

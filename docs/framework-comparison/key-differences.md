@@ -144,28 +144,37 @@ Where an exposure meets multiple criteria, the highest-priority class applies.
 
 ### LGD Floors (A-IRB Only)
 
+!!! note "CRR Portfolio-Level Floors vs Basel 3.1 Per-Exposure Input Floors"
+    CRR Art. 164(4) (as amended by CRR2) imposes **portfolio-level** minimum LGD
+    requirements: exposure-weighted average LGD ≥ 10% (retail residential RE) and ≥ 15%
+    (retail commercial RE). These are **not** per-exposure input floors — they operate at
+    the aggregate portfolio level and exclude exposures benefiting from central government
+    guarantees. Basel 3.1 Art. 164(4) **replaces** this with per-exposure input floors
+    applied to each exposure individually before the capital formula.
+
 **Corporate / Institution:**
 
 | Collateral Type | CRR | Basel 3.1 |
 |-----------------|-----|-----------|
-| Unsecured | None | 25% |
-| Financial Collateral (LGDS) | None | 0% |
-| Receivables (LGDS) | None | 10%* |
-| Commercial/Residential RE (LGDS) | None | 10%* |
-| Other Physical (LGDS) | None | 15%* |
+| Unsecured | No per-exposure floor | 25% |
+| Financial Collateral (LGDS) | No per-exposure floor | 0% |
+| Receivables (LGDS) | No per-exposure floor | 10%* |
+| Commercial/Residential RE (LGDS) | No per-exposure floor | 10%* |
+| Other Physical (LGDS) | No per-exposure floor | 15%* |
 
 **Retail:**
 
 | Exposure Type | CRR | Basel 3.1 |
 |---------------|-----|-----------|
-| Secured by Residential RE (flat) | None | **5%** |
-| QRRE Unsecured | None | **50%** |
-| Other Unsecured Retail | None | **30%** |
-| Secured — LGDU in LGD* formula | None | **30%** |
-| Secured — Financial Collateral (LGDS) | None | 0% |
-| Secured — Receivables (LGDS) | None | 10%* |
-| Secured — Immovable Property (LGDS) | None | 10%* |
-| Secured — Other Physical (LGDS) | None | 15%* |
+| Secured by Residential RE (flat) | Portfolio avg ≥ 10% | **5%** (per-exposure) |
+| Secured by Commercial RE | Portfolio avg ≥ 15% | Via LGD* formula |
+| QRRE Unsecured | No floor | **50%** |
+| Other Unsecured Retail | No floor | **30%** |
+| Secured — LGDU in LGD* formula | No floor | **30%** |
+| Secured — Financial Collateral (LGDS) | No floor | 0% |
+| Secured — Receivables (LGDS) | No floor | 10%* |
+| Secured — Immovable Property (LGDS) | No floor | 10%* |
+| Secured — Other Physical (LGDS) | No floor | 15%* |
 
 Note: The retail unsecured LGDU used in the LGD* formula for secured exposures is
 **30%** (Art. 164(4)(c)), compared to 25% for corporates (Art. 161(5)(b)).

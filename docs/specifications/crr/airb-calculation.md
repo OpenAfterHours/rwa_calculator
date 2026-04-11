@@ -28,13 +28,44 @@ A-IRB uses the same capital requirement formula and correlation functions as F-I
 | Parameter | F-IRB | A-IRB (CRR) | A-IRB (Basel 3.1) |
 |-----------|-------|-------------|-------------------|
 | PD | Bank estimate (floored) | Bank estimate (floored) | Bank estimate (floored) |
-| LGD | Supervisory | Bank estimate, **no floor** | Bank estimate, **with floors** |
+| LGD | Supervisory | Bank estimate, **portfolio-level floors only** | Bank estimate, **per-exposure input floors** |
 | CCF | Supervisory | Bank estimate | Bank estimate |
 | Maturity | Supervisory (2.5y default) | Bank estimate (clamped 1-5y) | Bank estimate (clamped 1-5y) |
 
-## LGD Floors (Basel 3.1 Only)
+## LGD Floors
 
-Under CRR, A-IRB has **no LGD floors**. Under Basel 3.1, the following floors apply:
+### CRR Portfolio-Level LGD Floors (Art. 164(4))
+
+CRR Art. 164(4) (as amended by CRR2, Regulation 2019/876) imposes **portfolio-level** LGD floors
+for retail exposures secured by immovable property:
+
+| Portfolio | Minimum Exposure-Weighted Average LGD | Reference |
+|-----------|--------------------------------------|-----------|
+| Retail secured by **residential** immovable property | **10%** | Art. 164(4) para 1 |
+| Retail secured by **commercial** immovable property | **15%** | Art. 164(4) para 2 |
+
+These are **not** per-exposure input floors — they require that the exposure-weighted average LGD
+across the entire retail property portfolio does not fall below the threshold. Exposures benefiting
+from central government guarantees are excluded from the calculation.
+
+Art. 164(5)–(8) grant the PRA power to set higher minimum LGD values based on periodic assessment
+of loss experience data, forward-looking market developments, and financial stability concerns.
+
+!!! warning "Code Divergence (D3.38)"
+    The calculator's `LGDFloors.crr()` factory returns all zeros — it does **not** implement the
+    CRR Art. 164(4) portfolio-level floors. This is because the calculator applies per-exposure
+    floors at the individual exposure level, while the CRR floors operate at the portfolio level
+    (exposure-weighted average across all qualifying retail exposures). Implementing portfolio-level
+    floors would require a post-aggregation validation step, which is not currently in the pipeline.
+
+!!! note "Distinction from Basel 3.1"
+    Basel 3.1 Art. 164(4) **replaces** the CRR portfolio-level mechanism with **per-exposure input
+    floors** (see below). Under Basel 3.1, each individual exposure's LGD is floored before entering
+    the capital formula — a fundamentally different approach from CRR's portfolio-average test.
+
+### Basel 3.1 Per-Exposure LGD Floors
+
+Under Basel 3.1, the following per-exposure input floors apply:
 
 ### Corporate A-IRB LGD Floors (Art. 161(5))
 

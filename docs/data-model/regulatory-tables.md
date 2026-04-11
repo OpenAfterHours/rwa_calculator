@@ -476,9 +476,22 @@ Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational s
 
 ---
 
-## A-IRB LGD Floors (Basel 3.1 only)
+## A-IRB LGD Floors
 
-Under CRR, A-IRB has no LGD floors. Basel 3.1 introduces LGD floors:
+### CRR Portfolio-Level Floors (Art. 164(4))
+
+CRR Art. 164(4) (as amended by CRR2) imposes **portfolio-level** minimum LGD requirements for
+retail property-secured exposures: exposure-weighted average LGD ≥ **10%** (residential RE) and
+≥ **15%** (commercial RE). These are not per-exposure input floors — they operate at the aggregate
+portfolio level. Exposures benefiting from central government guarantees are excluded.
+
+!!! warning "Code Divergence (D3.38)"
+    The calculator does not implement CRR portfolio-level LGD floors. `LGDFloors.crr()` returns
+    all zeros. See [A-IRB Specification](../specifications/crr/airb-calculation.md#crr-portfolio-level-lgd-floors-art-1644) for details.
+
+### Basel 3.1 Per-Exposure Input Floors
+
+Basel 3.1 replaces the CRR portfolio-level mechanism with per-exposure input floors:
 
 **Corporate / Institution (Art. 161(5)):**
 

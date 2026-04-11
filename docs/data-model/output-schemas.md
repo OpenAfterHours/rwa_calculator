@@ -338,7 +338,7 @@ from the output data alone.
 | `crr_mortgage_treatment` | `String` | `"35_pct"` or `"split_treatment"` |
 | `crr_mortgage_ltv_threshold` | `Float64` | 80% LTV threshold |
 | `crr_pd_floor` | `Float64` | 0.03% single floor |
-| `crr_airb_lgd_floor_applied` | `Boolean` | Always `False` under CRR |
+| `crr_airb_lgd_floor_applied` | `Boolean` | Always `False` under CRR (per-exposure floors not applicable; CRR Art. 164(4) portfolio-level floors are not implemented — see D3.38) |
 
 ### Basel 3.1 (PRA PS1/26) additions
 

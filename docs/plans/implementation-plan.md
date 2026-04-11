@@ -60,7 +60,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | CRR-C2 | Retail own estimates | PD=0.3%, LGD=15%, EAD=£100k | Retail formula | CRR Art. 154 |
 | CRR-C3 | Specialised lending A-IRB | PD=1.5%, LGD=25% | Project finance | CRR Art. 153 |
 
-**Note**: CRR A-IRB has NO LGD floors (unlike Basel 3.1 which has 25% unsecured floor).
+**Note**: CRR A-IRB has portfolio-level LGD floors only (Art. 164(4): 10% RRE, 15% CRE exposure-weighted average) — not per-exposure input floors. Basel 3.1 replaces these with per-exposure input floors (25% unsecured, 5% RRE, 50% QRRE, 30% other retail).
 
 ### Scenario Group CRR-D: Credit Risk Mitigation (CRM)
 

@@ -48,7 +48,7 @@
 | Art. 153(5) | Revised slotting weights (maturity split removed) | Done |
 | Art. 158–159 | Provisions and EL comparison (Art. 158(6A) monotonicity) | Done |
 | Art. 161 | F-IRB supervisory LGD (40% non-FSE senior, 45% FSE) | Done |
-| Art. 164(4) | A-IRB LGD floors (25% corporate, 5%–15% retail) | Done |
+| Art. 164(4) | A-IRB per-exposure LGD floors (retail: 5% RRE, 50% QRRE, 30% other; replaces CRR portfolio-level 10%/15%) | Done |
 | Art. 166C–166D | Revised CCF: SA-aligned, full-facility EAD for revolving | Done |
 | Art. 191A–241 | Revised CRM: 5-band haircuts, equity 20%/30% | Done |
 | Art. 92(2A)–(2D) | Output floor (PRA 4-year: 60%–72.5%, 2027–2030) | Done |

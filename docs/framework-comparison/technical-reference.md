@@ -19,7 +19,7 @@ Basel 3.1 (effective 1 January 2027 in the UK) introduces significant changes to
 | Infrastructure Factor | 0.75 | Removed | CRR Art. 501a |
 | Output Floor | None | 72.5% of SA | PRA PS1/26 |
 | PD Floor | 0.03% (all classes) | Differentiated | CRE30.55 |
-| A-IRB LGD Floors | None | Yes (by collateral type) | CRE30.41 |
+| A-IRB LGD Floors | Portfolio-level only (Art. 164(4)) | Per-exposure input floors (by collateral type) | CRE30.41 |
 | Slotting Risk Weights | Maturity-differentiated | HVCRE-differentiated (no pre-op distinction) | PRA PS1/26 |
 
 ## Differentiated PD Floors (Basel 3.1)

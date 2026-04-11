@@ -95,7 +95,10 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 
 ### 5. A-IRB LGD Floors
 
-New minimum LGD values for Advanced IRB. Corporate and retail floors are defined separately:
+Basel 3.1 introduces **per-exposure input** LGD floors for Advanced IRB, replacing the CRR
+Art. 164(4) portfolio-level mechanism (which required exposure-weighted average LGD ≥ 10% for
+retail residential RE and ≥ 15% for retail commercial RE). Corporate and retail floors are
+defined separately:
 
 **Corporate / Institution (Art. 161(5)):**
 

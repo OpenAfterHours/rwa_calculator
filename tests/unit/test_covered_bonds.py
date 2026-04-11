@@ -5,7 +5,8 @@ Tests cover:
 - CRR CQS-based risk weight lookup (CQS 1-6)
 - Basel 3.1 CQS-based risk weight lookup (Art. 129(4) Table 7 — same as CRR)
 - Unrated derivation from issuer institution risk weight (Art. 129(5))
-- B31 unrated derivation via SCRA grade → institution RW → CB RW
+- B31 unrated derivation via ECRA CQS → institution RW → CB RW (rated issuer)
+- B31 unrated derivation via SCRA grade → institution RW → CB RW (unrated issuer)
 - Classifier mapping from entity_type
 - COREP template row presence
 - IRBPermissions SA-only for covered bonds
@@ -506,6 +507,66 @@ class TestCoveredBondSABasel31:
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(expected_rw)
+
+    @pytest.mark.parametrize(
+        ("institution_cqs", "expected_cb_rw"),
+        [
+            # B31 Art. 129(5) ECRA path — UK deviation (base_currency=GBP):
+            # Issuer institution CQS → institution RW (Table 3) → CB RW (derivation table)
+            (1, 0.10),  # inst 20% → CB 10%
+            (2, 0.15),  # inst 30% (UK deviation) → CB 15%
+            (3, 0.25),  # inst 50% → CB 25%
+            (4, 0.50),  # inst 100% → CB 50%
+            (5, 0.50),  # inst 100% → CB 50%
+            (6, 1.00),  # inst 150% → CB 100%
+        ],
+    )
+    def test_unrated_covered_bond_b31_ecra_derivation(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+        institution_cqs: int,
+        expected_cb_rw: float,
+    ):
+        """Art. 129(5): B31 unrated CB derives RW from ECRA-rated issuer institution CQS.
+
+        Why this matters:
+            Art. 129(5) derives CB RW from the issuing institution's senior unsecured
+            RW regardless of whether it came from ECRA or SCRA. Rated institutions
+            have CQS from ECRA — if this path is missing, CQS 1 issuers (inst 20%)
+            incorrectly get 100% CB RW instead of 10% — a 10x capital overstatement.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            institution_cqs=institution_cqs,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(expected_cb_rw)
+
+    def test_unrated_covered_bond_b31_ecra_takes_priority_over_scra(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ):
+        """ECRA takes priority over SCRA when both are present on issuer.
+
+        Why this matters:
+            If an issuer has both an ECRA CQS and a SCRA grade (data quality issue),
+            the ECRA rating is more specific and should take precedence.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="COVERED_BOND",
+            cqs=None,
+            institution_cqs=1,  # ECRA CQS 1 → inst 20% → CB 10%
+            scra_grade="C",  # SCRA C → CB 100% (should be ignored)
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.10)
 
     def test_unrated_covered_bond_null_scra_grade(
         self,

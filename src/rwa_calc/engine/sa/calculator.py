@@ -56,6 +56,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_SME_RW,
+    B31_COVERED_BOND_UNRATED_FROM_SCRA,
     B31_DEFAULTED_PROVISION_THRESHOLD,
     B31_DEFAULTED_RESI_RE_NON_INCOME_RW,
     B31_DEFAULTED_RW_HIGH_PROVISION,
@@ -99,7 +100,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
-from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod
+from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -123,7 +124,6 @@ def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
     inst_table = (
         INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
     )
-    from rwa_calc.domain.enums import CQS
 
     # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
     cqs_to_cb_rw: dict[int, float] = {}
@@ -144,6 +144,45 @@ def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
         )
     # Fallback: cp_institution_cqs is null (unrated institution) or unexpected value
     return expr.otherwise(pl.lit(unrated_cb_rw))
+
+
+def _b31_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+    """Build Polars expression for B31 Art. 129(5) unrated covered bond RW derivation.
+
+    Derives covered bond RW from the issuing institution's senior unsecured RW,
+    which can come from either source:
+      1. ECRA (rated institution): cp_institution_cqs → institution RW → CB RW
+      2. SCRA (unrated institution): cp_scra_grade → CB RW
+
+    Art. 129(5) operates on the resulting institution RW regardless of source
+    (ECRA or SCRA). The ECRA path is checked first; if cp_institution_cqs is
+    null, falls back to the SCRA path.
+
+    References:
+        PRA PS1/26 Art. 120: ECRA institution risk weights (Table 3)
+        PRA PS1/26 Art. 120A: SCRA institution risk weights
+        PRA PS1/26 Art. 129(5): Unrated covered bond derivation from institution RW
+    """
+    inst_table = (
+        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    )
+    cqs_to_cb_rw: dict[int, float] = {}
+    for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
+        inst_rw = inst_table[cqs_val]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
+
+    # Build when/then: ECRA first (cp_institution_cqs)
+    expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))
+    for cqs_int in [2, 3, 4, 5, 6]:
+        expr = expr.when(pl.col("cp_institution_cqs") == cqs_int).then(
+            pl.lit(cqs_to_cb_rw[cqs_int])
+        )
+    # SCRA fallback (cp_scra_grade) for unrated issuers
+    for grade, cb_rw in B31_COVERED_BOND_UNRATED_FROM_SCRA.items():
+        expr = expr.when(pl.col("cp_scra_grade") == grade).then(pl.lit(float(cb_rw)))
+    # Conservative default: Grade C equivalent (100%)
+    return expr.otherwise(pl.lit(1.00))
 
 
 @dataclass
@@ -845,27 +884,14 @@ class SACalculator:
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
                     # 11. Unrated covered bonds: derive from issuer institution RW
-                    # (Art. 129(5)) — SCRA grade → institution RW → CB RW via
-                    # COVERED_BOND_UNRATED_DERIVATION table:
-                    #   A_ENHANCED (inst 30%) → CB 15%
-                    #   A (inst 40%) → CB 20%
-                    #   B (inst 75%) → CB 35%
-                    #   C (inst 150%) → CB 100%
+                    # (Art. 129(5)) — institution RW → CB RW via derivation table.
+                    # ECRA (rated issuer, cp_institution_cqs) checked first, then
+                    # SCRA (unrated issuer, cp_scra_grade) as fallback.
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(
-                        pl.when(pl.col("cp_scra_grade") == "A_ENHANCED")
-                        .then(pl.lit(0.15))
-                        .when(pl.col("cp_scra_grade") == "A")
-                        .then(pl.lit(0.20))
-                        .when(pl.col("cp_scra_grade") == "B")
-                        .then(pl.lit(0.35))
-                        .when(pl.col("cp_scra_grade") == "C")
-                        .then(pl.lit(1.00))
-                        .otherwise(pl.lit(1.00))  # Default: assume Grade C (conservative)
-                    )
+                    .then(_b31_unrated_cb_rw_expr(use_uk_deviation))
                     # 11a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.

@@ -329,8 +329,8 @@ Art. 123 second subparagraph to PRA PS1/26 Art. 123(4).
 #### Currency Mismatch Multiplier
 
 For unhedged retail and residential real estate exposures where the lending currency differs from the
-borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123A /
-CRE20.76). The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral
+borrower's income currency, a **1.5x risk weight multiplier** applies (PRA PS1/26 Art. 123B /
+CRE20.76). Art. 123A governs retail qualifying criteria, not currency mismatch. The effective risk weight is capped at 150%. This is distinct from the 8% FX collateral
 haircut used in CRM (CRR Art. 224).
 
 To trigger the multiplier, set `cp_borrower_income_currency` on each exposure. When it differs from

@@ -37,7 +37,7 @@
 | Art. 120–121 | Institution SA: ECRA and SCRA (replaces sovereign-derived) | Done |
 | Art. 122(5)–(11) | Corporate SA sub-categories (IG 65%, non-IG 135%, SME 85%) | Done |
 | Art. 122A–122B | SA specialised lending (rated/unrated, pre-op PF) | Done |
-| Art. 123–123A | Retail SA, currency mismatch multiplier (1.5x) | Done |
+| Art. 123–123B | Retail SA (Art. 123), qualifying criteria (Art. 123A), currency mismatch multiplier 1.5x (Art. 123B) | Done |
 | Art. 124A–124L | Real estate: loan-splitting, qualifying criteria, LTV bands | Done |
 | Art. 127(1)–(1A) | Defaulted SA: provision-coverage split (100%/150%) | Done |
 | Art. 129 | Covered bond risk weights (rated Table 6A/Table 7, unrated derivation Art. 129(5)) | Done |

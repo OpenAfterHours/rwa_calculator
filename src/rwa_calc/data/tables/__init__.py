@@ -68,7 +68,10 @@ from .crr_equity_rw import (
 )
 from .crr_firb_lgd import (
     BASEL31_FIRB_SUPERVISORY_LGD,
+    FIRB_MIN_COLLATERALISATION_THRESHOLDS,
+    FIRB_OVERCOLLATERALISATION_RATIOS,
     FIRB_SUPERVISORY_LGD,
+    get_crm_supervisory_lgd,
     get_firb_lgd_table,
     get_firb_lgd_table_for_framework,
 )
@@ -146,6 +149,9 @@ __all__ = [
     # F-IRB LGD — CRR
     "FIRB_SUPERVISORY_LGD",
     "BASEL31_FIRB_SUPERVISORY_LGD",
+    "FIRB_OVERCOLLATERALISATION_RATIOS",
+    "FIRB_MIN_COLLATERALISATION_THRESHOLDS",
+    "get_crm_supervisory_lgd",
     "get_firb_lgd_table",
     "get_firb_lgd_table_for_framework",
     # F-IRB LGD — Basel 3.1

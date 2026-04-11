@@ -4,9 +4,14 @@ CRR F-IRB Supervisory LGD values (CRR Art. 161).
 Provides supervisory LGD lookup tables for Foundation IRB approach
 as Polars DataFrames for efficient joins in the RWA calculation pipeline.
 
+This module is the single source of truth for supervisory LGD values,
+overcollateralisation ratios, and minimum collateralisation thresholds.
+The CRM engine imports derived dicts via ``get_crm_supervisory_lgd()``.
+
 Reference:
     CRR Art. 161: LGD for Foundation IRB approach
     CRR Art. 230: Overcollateralisation requirements for non-financial collateral
+    CRR Art. 232: Life insurance collateral LGD
     CRE32.9-12: Basel 3.1 overcollateralisation and minimum thresholds
 """
 
@@ -37,6 +42,8 @@ FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     "commercial_re": Decimal("0.35"),  # 35% for commercial RE
     # Secured by other physical collateral — Art. 230 Table 5 (senior)
     "other_physical": Decimal("0.40"),  # 40% for other physical
+    # Life insurance — Art. 232(2)(b): secured portion LGD = 40%
+    "life_insurance": Decimal("0.40"),  # 40%
     # CRR Art. 230 Table 5 subordinated LGDS (secured portion of subordinated claims)
     "financial_collateral_subordinated": Decimal("0.00"),  # 0% (same as senior)
     "receivables_subordinated": Decimal("0.65"),  # 65% (senior: 35%)
@@ -66,6 +73,8 @@ BASEL31_FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     "commercial_re": Decimal("0.20"),  # 20% (CRR: 35%)
     # Secured by other physical collateral
     "other_physical": Decimal("0.25"),  # 25% (CRR: 40%)
+    # Life insurance — Art. 232(2)(b): secured portion LGD = 40% (unchanged from CRR)
+    "life_insurance": Decimal("0.40"),  # 40%
 }
 
 
@@ -81,6 +90,44 @@ def get_firb_lgd_table_for_framework(is_basel_3_1: bool = False) -> dict[str, De
     return BASEL31_FIRB_SUPERVISORY_LGD if is_basel_3_1 else FIRB_SUPERVISORY_LGD
 
 
+def get_crm_supervisory_lgd(is_basel_3_1: bool = False) -> dict[str, float]:
+    """Return supervisory LGD dict with CRM-category keys for expression builders.
+
+    Maps the granular F-IRB table keys to the simplified category keys used by
+    the CRM waterfall (Art. 231) and collateral LGD expressions.
+
+    Keys always present: ``financial``, ``receivables``, ``real_estate``,
+    ``other_physical``, ``unsecured``, ``covered_bond``, ``life_insurance``.
+
+    CRR only: ``*_subordinated`` variants (Art. 230 Table 5).
+    Basel 3.1 only: ``unsecured_fse`` (Art. 161(1)(a)).
+
+    Args:
+        is_basel_3_1: True for Basel 3.1 values, False for CRR values
+
+    Returns:
+        Dictionary of CRM-category -> supervisory LGD as float
+    """
+    table = BASEL31_FIRB_SUPERVISORY_LGD if is_basel_3_1 else FIRB_SUPERVISORY_LGD
+    result: dict[str, float] = {
+        "financial": float(table["financial_collateral"]),
+        "receivables": float(table["receivables"]),
+        "real_estate": float(table["residential_re"]),
+        "other_physical": float(table["other_physical"]),
+        "unsecured": float(table["unsecured_senior"]),
+        "covered_bond": float(table["covered_bond"]),
+        "life_insurance": float(table["life_insurance"]),
+    }
+    if is_basel_3_1:
+        result["unsecured_fse"] = float(table["unsecured_senior_fse"])
+    else:
+        # CRR Art. 230 Table 5: subordinated LGDS for the secured portion
+        result["receivables_subordinated"] = float(table["receivables_subordinated"])
+        result["real_estate_subordinated"] = float(table["residential_re_subordinated"])
+        result["other_physical_subordinated"] = float(table["other_physical_subordinated"])
+    return result
+
+
 # =============================================================================
 # F-IRB OVERCOLLATERALISATION REQUIREMENTS (CRR Art. 230 / CRE32.9-12)
 # =============================================================================
@@ -92,6 +139,7 @@ FIRB_OVERCOLLATERALISATION_RATIOS: dict[str, float] = {
     "receivables": 1.25,  # 125% overcollateralisation
     "real_estate": 1.40,  # 140% overcollateralisation
     "other_physical": 1.40,  # 140% overcollateralisation
+    "life_insurance": 1.0,  # Art. 232: no overcollateralisation required
 }
 
 # Minimum collateralisation thresholds: if collateral value is below this
@@ -101,6 +149,7 @@ FIRB_MIN_COLLATERALISATION_THRESHOLDS: dict[str, float] = {
     "receivables": 0.0,  # No minimum threshold
     "real_estate": 0.30,  # 30% minimum threshold
     "other_physical": 0.30,  # 30% minimum threshold
+    "life_insurance": 0.0,  # Art. 232: no minimum threshold
 }
 
 # PD floor under CRR (single floor for all classes)

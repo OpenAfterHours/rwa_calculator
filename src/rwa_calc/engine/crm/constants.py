@@ -1,18 +1,31 @@
 """
 Shared constants and expression builders for CRM processing.
 
-Centralises collateral type classifications, supervisory LGD values,
-overcollateralisation ratios, and beneficiary type definitions used
-across the CRM submodules (collateral, guarantees, provisions, haircuts).
+Centralises collateral type classifications, Polars expression builders,
+and beneficiary type definitions used across the CRM submodules
+(collateral, guarantees, provisions, haircuts).
+
+Regulatory parameter values (supervisory LGD, overcollateralisation ratios,
+minimum thresholds) are sourced from ``rwa_calc.data.tables.crr_firb_lgd``
+— the single source of truth for F-IRB parameters.
 
 References:
     CRR Art. 161, 224, 230: Supervisory LGD, haircuts, overcollateralisation
+    CRR Art. 232: Life insurance collateral LGD
     CRE22.52-53, CRE32.9-12: Basel 3.1 equivalents
 """
 
 from __future__ import annotations
 
 import polars as pl
+
+from rwa_calc.data.tables.crr_firb_lgd import (
+    FIRB_MIN_COLLATERALISATION_THRESHOLDS as MIN_COLLATERALISATION_THRESHOLDS,  # noqa: E501
+)
+from rwa_calc.data.tables.crr_firb_lgd import (
+    FIRB_OVERCOLLATERALISATION_RATIOS as OVERCOLLATERALISATION_RATIOS,  # noqa: E501
+)
+from rwa_calc.data.tables.crr_firb_lgd import get_crm_supervisory_lgd
 
 # ---------------------------------------------------------------------------
 # Collateral type classifications
@@ -85,59 +98,15 @@ NON_ELIGIBLE_RE_TYPES: list[str] = [
 DIRECT_BENEFICIARY_TYPES: list[str] = ["exposure", "loan", "contingent"]
 
 # ---------------------------------------------------------------------------
-# F-IRB supervisory LGD values by framework
+# F-IRB supervisory LGD values by framework — derived from data/tables
 # CRR Art. 161 vs Basel 3.1 CRE32.9-12
 # ---------------------------------------------------------------------------
 
-CRR_SUPERVISORY_LGD: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.35,
-    "real_estate": 0.35,
-    "other_physical": 0.40,
-    "unsecured": 0.45,
-    "covered_bond": 0.1125,
-    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
-    # CRR Art. 230 Table 5 subordinated LGDS (secured portion of subordinated claims)
-    "receivables_subordinated": 0.65,
-    "real_estate_subordinated": 0.65,
-    "other_physical_subordinated": 0.70,
-}
+CRR_SUPERVISORY_LGD: dict[str, float] = get_crm_supervisory_lgd(is_basel_3_1=False)
+BASEL31_SUPERVISORY_LGD: dict[str, float] = get_crm_supervisory_lgd(is_basel_3_1=True)
 
-BASEL31_SUPERVISORY_LGD: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.20,
-    "real_estate": 0.20,
-    "other_physical": 0.25,
-    "unsecured": 0.40,  # Art. 161(1)(aa): non-FSE corporates
-    "unsecured_fse": 0.45,  # Art. 161(1)(a): financial sector entities
-    "covered_bond": 0.1125,  # Art. 161(1)(d)
-    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
-}
-
-# ---------------------------------------------------------------------------
-# Overcollateralisation ratios — same under both frameworks
-# CRR Art. 230 / CRE32.9-12
-# ---------------------------------------------------------------------------
-
-OVERCOLLATERALISATION_RATIOS: dict[str, float] = {
-    "financial": 1.0,
-    "receivables": 1.25,
-    "real_estate": 1.40,
-    "other_physical": 1.40,
-    "life_insurance": 1.0,  # Art. 232: no overcollateralisation required
-}
-
-# ---------------------------------------------------------------------------
-# Minimum collateralisation thresholds — same under both frameworks
-# ---------------------------------------------------------------------------
-
-MIN_COLLATERALISATION_THRESHOLDS: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.0,
-    "real_estate": 0.30,
-    "other_physical": 0.30,
-    "life_insurance": 0.0,  # Art. 232: no minimum collateralisation threshold
-}
+# OVERCOLLATERALISATION_RATIOS and MIN_COLLATERALISATION_THRESHOLDS are
+# imported directly from data/tables/crr_firb_lgd.py (aliased above).
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +121,7 @@ def _coll_type_lower() -> pl.Expr:
 
 def supervisory_lgd_values(is_basel_3_1: bool) -> dict[str, float]:
     """Return the appropriate supervisory LGD dict for the framework."""
-    return BASEL31_SUPERVISORY_LGD if is_basel_3_1 else CRR_SUPERVISORY_LGD
+    return get_crm_supervisory_lgd(is_basel_3_1)
 
 
 def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:

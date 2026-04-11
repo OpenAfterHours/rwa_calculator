@@ -3306,7 +3306,6 @@ class TestCurrencyMismatchMultiplier:
         assert float(result["risk_weight"]) == pytest.approx(1.50)
 
 
-
 # =============================================================================
 # DEFAULTED RESI RE — ALWAYS 100% (PRA PS1/26 Art. 127 / CRE20.88)
 # =============================================================================

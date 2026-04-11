@@ -410,9 +410,7 @@ class TestB31GroupG_PortfolioELSummary:
         el = firb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.cet1_deduction) == pytest.approx(
-            float(el.total_el_shortfall), rel=1e-6
-        )
+        assert float(el.cet1_deduction) == pytest.approx(float(el.total_el_shortfall), rel=1e-6)
         assert float(el.t2_deduction) == pytest.approx(0.0, abs=1e-6)
 
 

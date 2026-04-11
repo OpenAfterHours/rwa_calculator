@@ -437,14 +437,16 @@ Standardised Credit Risk Assessment Approach (SCRA):
 |-------|-------------------|-------------------|----------|
 | A | 40% | 20% | Meets all minimum requirements + buffers |
 | A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
-| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
-| C | 150% | 150% | Below minimum requirements |
+| B | 75% | 50% | Meets minimum requirements (excluding buffers) but not Grade A (Art. 121(1)(b)) |
+| C | 150% | 150% | Does not meet minimum requirements, or adverse audit opinion (Art. 121(1)(c)) |
 
 !!! info "SCRA Grade A vs A (enhanced)"
-    Standard Grade A (40%) requires a qualitative assessment that the institution meets all
-    minimum capital requirements plus applicable buffers. Grade A enhanced (30%) additionally
-    requires quantitative thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
-    (Art. 120(2A), CRE20.19).
+    Standard Grade A (40%) requires a **qualitative** assessment that the institution meets all
+    minimum capital requirements plus applicable buffers (Art. 121(1)(a)). Grade A enhanced (30%)
+    additionally requires **quantitative** thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
+    (Art. 121(5)). Grade B has **no quantitative thresholds** — it is the qualitative residual
+    for institutions meeting minimum requirements (excluding buffers) but not qualifying for
+    Grade A. If minimum requirements are not publicly disclosed, the institution is Grade C.
 
 ### Subordinated Debt
 

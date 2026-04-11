@@ -460,14 +460,22 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 |-------|-------------------|-------------------|----------|
 | A | 40% | 20% | Meets all minimum requirements + buffers |
 | A (enhanced) | 30% | 20% | CET1 ≥ 14% AND leverage ratio ≥ 5% |
-| B | 75% | 50% | CET1 ≥ 5.5%, Leverage ≥ 3% |
-| C | 150% | 150% | Below minimum requirements |
+| B | 75% | 50% | Meets minimum requirements (excluding buffers) but not Grade A (Art. 121(1)(b)) |
+| C | 150% | 150% | Does not meet minimum requirements, or adverse audit opinion (Art. 121(1)(c)) |
+
+!!! warning "Correction: Grade B Has No Quantitative Thresholds"
+    Prior documentation incorrectly stated Grade B criteria as "CET1 ≥ 5.5%, Leverage ≥ 3%".
+    These thresholds **do not appear** in PRA PS1/26 Art. 121 or BCBS CRE20. Grade B is a
+    **qualitative** assessment: the institution meets published minimum regulatory requirements
+    (excluding buffers) but does not qualify for Grade A. Only Grade A enhanced (30%) has
+    quantitative thresholds (CET1 ≥ 14%, leverage ≥ 5% per Art. 121(5)). If minimum
+    requirements are not publicly disclosed, the institution must be classified as Grade C.
 
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
-**Sovereign floor:** Unrated institution risk weights cannot be lower than their sovereign's
-risk weight.
+**Sovereign floor (Art. 121(6)):** Unrated institution risk weights cannot be lower than their sovereign's
+risk weight for foreign-currency exposures. Self-liquidating trade finance ≤1yr excluded.
 
 ### Residential Real Estate
 

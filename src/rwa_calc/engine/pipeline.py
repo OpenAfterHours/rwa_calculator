@@ -27,7 +27,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -271,22 +271,7 @@ class PipelineOrchestrator:
             extra_errors = loader_errors + pipeline_errors
             if extra_errors:
                 all_errors = list(result.errors) + extra_errors
-                result = AggregatedResultBundle(
-                    results=result.results,
-                    sa_results=result.sa_results,
-                    irb_results=result.irb_results,
-                    slotting_results=result.slotting_results,
-                    equity_results=result.equity_results,
-                    floor_impact=result.floor_impact,
-                    supporting_factor_impact=result.supporting_factor_impact,
-                    summary_by_class=result.summary_by_class,
-                    summary_by_approach=result.summary_by_approach,
-                    pre_crm_summary=result.pre_crm_summary,
-                    post_crm_detailed=result.post_crm_detailed,
-                    post_crm_summary=result.post_crm_summary,
-                    el_summary=result.el_summary,
-                    errors=all_errors,
-                )
+                result = replace(result, errors=all_errors)
 
             return result
         finally:

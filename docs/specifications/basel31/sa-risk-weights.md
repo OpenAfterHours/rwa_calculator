@@ -15,7 +15,7 @@ currency mismatch multiplier, and SME corporate class.
 |----|-------------|----------|--------|
 | FR-1.1 | Sovereign risk weights (unchanged from CRR, flat 100% unrated) | P0 | Done |
 | FR-1.2 | Institution ECRA risk weights (Art. 120, Table 3) | P0 | Done |
-| FR-1.3 | Institution SCRA risk weights (Art. 120(2A), grades A–C) | P0 | Done |
+| FR-1.3 | Institution SCRA risk weights (Art. 121, grades A–C) | P0 | Done |
 | FR-1.4 | Corporate CQS-based risk weights with PRA CQS 5 = 150% | P0 | Done |
 | FR-1.5 | Corporate sub-categories: IG 65%, non-IG unrated 135%, SME 85% | P0 | Done |
 | FR-1.6 | Retail 75%, salary/pension 35% (Art. 123(4), carried from CRR2) | P0 | Done |
@@ -26,6 +26,9 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.11 | Defaulted provision-coverage split (Art. 127) | P0 | Done |
 | FR-1.12 | Real estate qualifying criteria routing (Art. 124A, 124J) | P0 | Done |
 | FR-1.13 | ADC exposures 150% / qualifying residential 100% (Art. 124K) | P0 | Done |
+| FR-1.14 | Covered bond rated risk weights (Art. 129(4), Table 7) — PRA values = CRR values | P0 | Done (spec correct; code bug P1.113) |
+| FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
+| FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
 
 ---
 
@@ -50,6 +53,53 @@ Largely unchanged from CRR. The key Basel 3.1 clarification is the treatment of 
     bifurcation (0% OECD / 100% non-OECD) — that was a Basel I/II legacy not carried forward
     into CRR or Basel 3.1. Domestic currency exemption (Art. 114(4)) is a separate provision
     allowing 0% for GBP-denominated UK government exposures.
+
+---
+
+## PSE and RGLA Risk Weights (Art. 115–116)
+
+PSE (Public Sector Entities) and RGLA (Regional Governments and Local Authorities)
+risk weights are largely unchanged from CRR. The key Basel 3.1 clarification concerns
+non-UK unrated exposures.
+
+!!! warning "Non-UK Unrated PSE/RGLA — Sovereign-Derived, Not Flat 100%"
+    Unrated non-UK PSE and RGLA exposures should use **sovereign CQS-derived weights**
+    (Art. 115(1)(a) Table 1A for RGLA, Art. 116(1) Table 2 for PSE), not a flat 100%.
+    The sovereign CQS maps to the following risk weights:
+
+    **RGLA sovereign-derived (Art. 115(1)(a), Table 1A):**
+
+    | Sovereign CQS | RGLA Risk Weight |
+    |---------------|-----------------|
+    | CQS 1 | 20% |
+    | CQS 2 | 50% |
+    | CQS 3 | 100% |
+    | CQS 4 | 100% |
+    | CQS 5 | 100% |
+    | CQS 6 | 150% |
+    | Unrated sovereign | 100% |
+
+    **PSE sovereign-derived (Art. 116(1), Table 2):**
+
+    | Sovereign CQS | PSE Risk Weight |
+    |---------------|----------------|
+    | CQS 1 | 20% |
+    | CQS 2 | 50% |
+    | CQS 3 | 100% |
+    | CQS 4 | 100% |
+    | CQS 5 | 100% |
+    | CQS 6 | 150% |
+    | Unrated sovereign | 100% |
+
+    UK PSEs and RGLAs are entitled to preferential treatment per Art. 115(5) /
+    Art. 116(3) (20% for sterling-denominated short-term). See the CRR spec for
+    full table details: [CRR SA Risk Weights — RGLA/PSE](../crr/sa-risk-weights.md).
+
+!!! warning "Code Issue — P1.112"
+    The calculator currently defaults non-UK unrated PSE/RGLA to a flat **100%**
+    instead of performing the sovereign CQS lookup. This overstates capital for
+    non-UK PSE/RGLA backed by well-rated (CQS 1–2) sovereigns (e.g., Germany: 20%
+    vs incorrectly assigned 100%). See P1.112 in IMPLEMENTATION_PLAN.md.
 
 ---
 
@@ -106,15 +156,15 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
 
 ---
 
-## Institution Risk Weights — SCRA (Art. 120(2A))
+## Institution Risk Weights — SCRA (Art. 121)
 
 The Standardised Credit Risk Assessment (SCRA) approach applies when ECAI ratings are not available.
-This replaces the CRR sovereign-derived approach (Art. 121, Table 5).
+This replaces the CRR sovereign-derived approach (CRR Art. 121, Table 5).
 
 | Grade | Risk Weight | Short-Term (≤3m) | Criteria |
 |-------|-------------|------------------|----------|
 | Grade A enhanced | **30%** | 20% | CET1 ≥ 14%, leverage ratio ≥ 5% (Art. 121(5)) |
-| Grade A | **40%** | 20% | Meets all minimum prudential requirements and buffers (Art. 120(2A)(b)) |
+| Grade A | **40%** | 20% | Meets all minimum prudential requirements and buffers (Art. 121(2)(b)) |
 | Grade B | **75%** | 50% | Does not meet Grade A criteria but not materially deficient |
 | Grade C | **150%** | 150% | Material deficiency in prudential standards |
 
@@ -158,7 +208,7 @@ New in Basel 3.1 — corporates are divided into sub-categories with differentia
 
 | Sub-Category | Risk Weight | Conditions | Reference |
 |-------------|-------------|------------|-----------|
-| SME corporate | **85%** | Turnover ≤ GBP 440m (previously EUR 50m threshold for SF) | Art. 122(4) |
+| SME corporate | **85%** | Turnover ≤ GBP 44m (previously EUR 50m threshold for SF) | Art. 122(4) |
 | Investment grade (IG) | **65%** | PRA permission + internal IG assessment (Art. 122(9)–(10)) | Art. 122(6)(a) |
 | Non-IG unrated | **135%** | PRA permission + internal assessment determines non-IG | Art. 122(6)(b) |
 | General unrated | **100%** | Default without PRA permission (Art. 122(5)) | Art. 122(5) |
@@ -504,6 +554,58 @@ adverse scenarios.
 
 ---
 
+## Covered Bond Exposures (Art. 129)
+
+PRA PS1/26 modifies Art. 129 in-place — there is no separate "Art. 129A".
+
+### Rated Covered Bonds (Art. 129(4), Table 7)
+
+PRA PS1/26 Art. 129(4) Table 7 values are **identical** to the CRR Table 6A values.
+The PRA did **not** adopt the BCBS CRE20.28–29 reductions.
+
+| CQS of Issuing Institution | Risk Weight |
+|-----------------------------|-------------|
+| CQS 1 | 10% |
+| CQS 2 | **20%** |
+| CQS 3 | 20% |
+| CQS 4 | **50%** |
+| CQS 5 | **50%** |
+| CQS 6 | **100%** |
+
+!!! warning "PRA Deviation from BCBS — PRA Table 7 Unchanged from CRR"
+    BCBS CRE20.28–29 reduced certain rated covered bond risk weights (CQS 2: 20%→15%,
+    CQS 4: 50%→25%, CQS 5: 50%→35%, CQS 6: 100%→50%). The PRA retained all six
+    CRR values unchanged in PRA PS1/26 Art. 129(4) Table 7.
+
+!!! warning "Code Divergence — P1.113"
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` currently uses the BCBS
+    CRE20 values (CQS 2 = 15%, CQS 4 = 25%, CQS 5 = 35%, CQS 6 = 50%) instead of the
+    correct PRA Table 7 values above. This understates capital for CQS 2 and CQS 6
+    covered bonds. See P1.113 in IMPLEMENTATION_PLAN.md for the fix.
+
+### Unrated Covered Bonds (Art. 129(5))
+
+The derivation table is expanded from 4 to 7 entries to accommodate new institution
+risk weights from ECRA and SCRA:
+
+| Institution Senior Unsecured RW | Covered Bond RW | Art. 129(5) Sub-Para | Change |
+|---------------------------------|-----------------|----------------------|--------|
+| 20% | 10% | (a) | Unchanged |
+| 30% | 15% | (aa) | **New** (ECRA CQS 2) |
+| 40% | 20% | (ab) | **New** (SCRA Grade A) |
+| 50% | 25% | (b) | ↓ from CRR 20% |
+| 75% | 35% | (ba) | **New** (SCRA Grade B) |
+| 100% | 50% | (c) | Unchanged |
+| 150% | 100% | (d) | Unchanged |
+
+### New Due Diligence Requirement (Art. 129(4A))
+
+Institutions must conduct due diligence on external credit assessments. If analysis
+reflects higher risk than the CQS implies, the institution must assign at least one
+CQS step higher than the external assessment.
+
+---
+
 ## Defaulted Exposures (Art. 127)
 
 See [Defaulted Exposures Specification](defaulted-exposures.md) for the full treatment.
@@ -547,7 +649,7 @@ risk weights apply from **1 January 2030**:
 ## Basel 3.1 Changes Summary
 
 - **Institution ECRA** (Art. 120): CQS 2 reduced to 30% — Done
-- **Institution SCRA** (Art. 120(2A)): New grade-based approach with Grade A enhanced 30% — Done
+- **Institution SCRA** (Art. 121): New grade-based approach with Grade A enhanced 30% — Done
 - **Corporate sub-categories** (Art. 122(4)–(11)): SME 85%, IG 65%, non-IG 135% — Done
 - **RE qualifying criteria** (Art. 124A): 6-criteria gate for preferential RE weights — Done
 - **Other RE fallback** (Art. 124J): 150% / counterparty RW / max(60%, cpty RW) — Done
@@ -562,6 +664,9 @@ risk weights apply from **1 January 2030**:
 - **Short-term ECAI** (Art. 120(2B), Art. 122(3)): New Tables 4A / 6A for short-term assessments — Schema gap
 - **SCRA trade finance** (Art. 121(4)): ≤6m trade goods exception for short-term weights — Documented
 - **Supporting factors removed** (Art. 501/501a): SME replaced by 85% class — Done
+- **Covered bonds rated** (Art. 129(4), Table 7): PRA retains CRR values — spec correct; code bug P1.113
+- **Covered bonds unrated** (Art. 129(5)): Expanded 7-entry derivation table for SCRA weights — Done
+- **Non-UK unrated PSE/RGLA**: Sovereign CQS-derived weights apply; flat 100% incorrect — code bug P1.112
 
 ---
 
@@ -577,7 +682,7 @@ risk weights apply from **1 January 2030**:
 | B31-A6 | Residential RE, 70% LTV (loan-splitting) | Blended: 20% secured + counterparty unsecured |
 | B31-A7 | Income-producing commercial RE, 75% LTV | 100% |
 | B31-A8 | Retail exposure | 75% |
-| B31-A9 | SME corporate (turnover ≤ £440m) | 85% |
+| B31-A9 | SME corporate (turnover ≤ £44m) | 85% |
 | B31-A10 | SME retail (under GBP 880k threshold) | 85% |
 | B31-A11 | Non-qualifying income-producing RE (`is_qualifying_re=False`) | 150% (Art. 124J(1)) |
 

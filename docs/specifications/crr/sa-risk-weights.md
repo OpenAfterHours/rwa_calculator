@@ -746,7 +746,7 @@ Export Credit Agency (ECA) consensus risk scores are mapped to CQS for sovereign
 | 0-1 | CQS 1 | 0% |
 | 2 | CQS 2 | 20% |
 | 3 | CQS 3 | 50% |
-| 4-6 | CQS 4-5 | 100% |
+| 4-6 | CQS 4-6 | 100% |
 | 7 | CQS 6 | 150% |
 
 This mapping is used for sovereign exposures (Art. 114) and for deriving institution risk weights from their sovereign's ECA score where the sovereign lacks an ECAI rating.

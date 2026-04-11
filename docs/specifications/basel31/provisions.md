@@ -137,6 +137,13 @@ cet1_deduction = el_shortfall      (full amount)
     CET1. This is a change from CRR, which split the shortfall 50/50 between CET1 and T2.
     The B31 treatment is more conservative — there is no T2 deduction for EL shortfall.
 
+!!! bug "Known Code Discrepancy"
+    `src/rwa_calc/engine/aggregator/_el_summary.py` lines 239–241 still compute
+    `cet1_deduction = effective_shortfall * 0.5` and `t2_deduction = effective_shortfall * 0.5`
+    (the CRR 50/50 split). This is incorrect for Basel 3.1 runs and must be corrected to
+    `cet1_deduction = effective_shortfall` and `t2_deduction = Decimal(0)`.
+    **This spec is authoritative — the code is wrong.**
+
 ### Art. 159 Component Definitions
 
 The Art. 159 comparison uses four labelled amounts (A, B, C, D):

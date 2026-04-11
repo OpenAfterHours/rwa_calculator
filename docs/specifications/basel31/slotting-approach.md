@@ -88,13 +88,18 @@ High-Volatility Commercial Real Estate receives elevated weights to reflect the 
 Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short maturity
 (< 2.5yr) may use column A (Strong) / C (Good) per Art. 153(5)(d).
 
-| Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (>= 2.5yr, col B) | EL (< 2.5yr, col A) |
-|-------------------|------------------------|------------------------|----------------------|---------------------|
-| Strong | 95% | 70% | 0.4% | 0.4% |
-| Good | 120% | 95% | 0.4% | 0.4% |
-| Satisfactory | 140% | 140% | 2.8% | 2.8% |
-| Weak | 250% | 250% | 8.0% | 8.0% |
-| Default | 0% | 0% | 50.0% | 50.0% |
+| Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (flat, no maturity split) |
+|-------------------|------------------------|------------------------|------------------------------|
+| Strong | 95% | 70% | 0.4% |
+| Good | 120% | 95% | 0.8% |
+| Satisfactory | 140% | 140% | 2.8% |
+| Weak | 250% | 250% | 8.0% |
+| Default | 0% | 0% | 50.0% |
+
+!!! note "HVCRE EL — No Maturity Split"
+    Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat (no
+    < 2.5yr / >= 2.5yr distinction). The same EL rate applies regardless of remaining maturity.
+    Risk weights still carry the A/B/C/D subgrade column structure for HVCRE Strong and Good.
 
 !!! note "HVCRE vs Non-HVCRE"
     HVCRE is distinguished from standard CRE by the volatility of the underlying property

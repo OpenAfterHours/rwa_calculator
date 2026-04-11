@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-def apply_defaulted_treatment(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
     """
     Apply regulatory treatment for defaulted exposures (PD=100%).
 
@@ -56,7 +56,6 @@ def apply_defaulted_treatment(lf: pl.LazyFrame, config: CalculationConfig) -> pl
 
     Args:
         lf: LazyFrame with IRB formula results
-        config: Calculation configuration
 
     Returns:
         LazyFrame with defaulted rows overwritten
@@ -69,20 +68,6 @@ def apply_defaulted_treatment(lf: pl.LazyFrame, config: CalculationConfig) -> pl
         return lf
 
     is_defaulted = pl.col("is_defaulted").fill_null(False)
-
-    # Determine scaling: CRR 1.06 for non-retail, 1.0 for retail; Basel 3.1 always 1.0
-    is_retail = (
-        pl.col("exposure_class")
-        .cast(pl.String)
-        .fill_null("CORPORATE")
-        .str.to_uppercase()
-        .str.contains("RETAIL")
-    )
-
-    if config.is_crr:
-        scaling = pl.when(is_retail).then(pl.lit(1.0)).otherwise(pl.lit(1.06))
-    else:
-        scaling = pl.lit(1.0)
 
     # Ensure beel column exists (default 0.0)
     if "beel" not in cols:
@@ -98,11 +83,11 @@ def apply_defaulted_treatment(lf: pl.LazyFrame, config: CalculationConfig) -> pl
         .otherwise(pl.lit(0.0))
     )
 
-    # RWA = K × 12.5 × scaling × EAD (no maturity adjustment for defaulted)
-    rwa_defaulted = k_defaulted * 12.5 * scaling * pl.col("ead_final")
+    # Art. 153(1)(ii): no maturity adjustment, no 1.06 for defaulted
+    rwa_defaulted = k_defaulted * 12.5 * pl.col("ead_final")
 
-    # Risk weight = K × 12.5 × scaling
-    rw_defaulted = k_defaulted * 12.5 * scaling
+    # Risk weight = K × 12.5
+    rw_defaulted = k_defaulted * 12.5
 
     # Expected loss: A-IRB = BEEL × EAD, F-IRB = LGD × EAD
     el_defaulted = (

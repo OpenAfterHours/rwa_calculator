@@ -639,7 +639,7 @@ class TestB31K10_AIRBRetailDefaulted:
 
 
 # =============================================================================
-# B31-K11: A-IRB Corporate Defaulted → NO 1.06 Scaling (Key B31 Difference)
+# B31-K11: A-IRB Corporate Defaulted → No 1.06 Scaling
 # =============================================================================
 
 
@@ -647,13 +647,13 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
     """
     B31-K11: A-IRB corporate defaulted under Basel 3.1 — no 1.06 scaling.
 
-    This is the KEY B31 vs CRR difference for IRB defaulted exposures. Under CRR,
-    non-retail A-IRB defaulted exposures receive 1.06 scaling (CRR-I3: RWA=993,750).
-    Under B31, scaling is always 1.0 (RWA=937,500), a 6% reduction.
+    Neither CRR nor B31 applies 1.06 to defaulted exposures. Art. 153(1)(ii)
+    defaulted formula RW = max(0, 12.5 × (LGD - ELBE)) is self-contained;
+    the 1.06 only appears in the non-defaulted Vasicek formula Art. 153(1)(iii).
 
     Input: Corporate, PD=100%, LGD_in_default=60%, BEEL=45%, EAD=500,000
     Expected: K=max(0, 0.60-0.45)=0.15
-              RWA = 0.15 × 12.5 × 1.0 × 500,000 = 937,500 (CRR: 993,750)
+              RWA = 0.15 × 12.5 × 500,000 = 937,500
               EL = BEEL × EAD = 225,000
     """
 
@@ -690,8 +690,8 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         expected_rwa = 0.15 * 12.5 * 1.0 * 500_000.0  # 937,500
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
 
-    def test_b31_k11_rwa_less_than_crr(self, b31_irb_config: CalculationConfig) -> None:
-        """B31 RWA is exactly 1/1.06 of CRR RWA for the same inputs."""
+    def test_b31_k11_rwa_matches_crr(self, b31_irb_config: CalculationConfig) -> None:
+        """B31 and CRR produce identical defaulted RWA (no 1.06 in either)."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K11_CORP",
             exposure_class="CORPORATE",
@@ -704,10 +704,10 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         result = (
             lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
         )
-        crr_rwa = 0.15 * 12.5 * 1.06 * 500_000.0  # 993,750 (CRR-I3)
+        # Art. 153(1)(ii) defaulted formula has no 1.06 under either framework
+        crr_rwa = 0.15 * 12.5 * 500_000.0  # 937,500
         b31_rwa = result["rwa"][0]
-        assert b31_rwa < crr_rwa
-        assert b31_rwa == pytest.approx(crr_rwa / 1.06, rel=1e-6)
+        assert b31_rwa == pytest.approx(crr_rwa, rel=1e-6)
 
     def test_b31_k11_expected_loss(self, b31_irb_config: CalculationConfig) -> None:
         """B31 A-IRB corporate defaulted: EL = BEEL × EAD = 225,000."""

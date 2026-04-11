@@ -51,12 +51,22 @@ floor_impact = max(0, floor_percentage × RWA_SA - RWA_IRB)
 ```
 
 The floor applies at the **portfolio level** (per entity/basis combination — see
-[Entity-Type Carve-Outs](#entity-type-carve-outs)), not to individual exposures.
+[Entity-Type Applicability](#entity-type-applicability)), not to individual exposures.
 The floor impact is allocated pro-rata to IRB exposures by their share of S-TREA.
 
 ## PRA Transitional Schedule
 
-**Art. 92(2A), Rules 3.1–3.3**
+**Art. 92(5), Rules 3.1–3.3**
+
+!!! warning "Article Number Correction (P4.46)"
+    The transitional schedule is in **Art. 92(5)**, not Art. 92(2A). Art. 92(2A) contains
+    the output floor **formula** (`TREA = max{U-TREA; x * S-TREA + OF-ADJ}`).
+    Art. 92(5) is the transitional **opt-in** allowing institutions to apply reduced
+    floor percentages during the phase-in period.
+
+The transitional percentages are **permissive** ("may apply"), not mandatory. An institution
+may elect to apply the full 72.5% floor from day one. If the transitional is elected, the
+following schedule applies:
 
 | Year | Floor Percentage | Rule Reference |
 |------|-----------------|----------------|
@@ -78,15 +88,20 @@ The TREA formula includes an OF-ADJ term that reconciles the different treatment
 under IRB and SA, ensuring the floor comparison is on a like-for-like own-funds basis:
 
 ```
-OF-ADJ = 12.5 × (IRB_T2 – IRB_CET1 – GCRA + SA_T2)
+OF-ADJ = 12.5 x (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
 ```
 
 | Component | Description | Regulatory Ref |
 |-----------|-------------|----------------|
-| IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL), capped at 0.6% of IRB credit RWAs | Art. 62(d) |
-| IRB_CET1 | IRB EL shortfall CET1 deductions (EL > provisions) + Art. 40 additional deductions | Art. 36(1)(d), Art. 40 |
-| GCRA | General credit risk adjustments included in T2, gross of tax effects, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
-| SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
+| IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL): Art. 62(d) excess, i.e., where provisions exceed EL amounts | Art. 62(d) |
+| IRB_CET1 | IRB EL shortfall CET1 deduction (EL > provisions) per Art. 36(1)(d), plus any supervisory deductions under Art. 40 | Art. 36(1)(d), Art. 40 |
+| GCRA | General credit risk adjustments included in T2, gross of tax effects. **Capped at 1.25% of S-TREA** (the standardised total risk exposure amount). | Art. 62(c), Art. 92(2A) |
+| SA_T2 | SA general credit risk adjustments recognised as T2 capital under Art. 62(c) | Art. 62(c) |
+
+!!! note "GCRA Cap"
+    The GCRA component is capped at **1.25% of S-TREA** (not 1.25% of IRB RWA). This cap
+    prevents the OF-ADJ from being inflated by large general provisions relative to the
+    standardised risk exposure base.
 
 The 12.5 multiplier converts own-funds amounts to risk-weighted equivalents (the inverse of the 8%
 minimum capital ratio). Under IRB, EL shortfall adds to capital requirements (via CET1 deduction)
@@ -100,21 +115,28 @@ the own-funds base, making the TREA comparison inconsistent.
     [output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj) for COREP
     template mapping.
 
-## Entity-Type Carve-Outs
+## Entity-Type Applicability
 
-**Art. 92(2A)(b)–(d)**
+**Art. 92(2A)(a)–(d)**
 
-The output floor formula in para 2A(a) applies only to specific entity/basis combinations. All
-other combinations use U-TREA (the un-floored amount) directly:
+The output floor formula applies only to specific entity/basis combinations. All other
+combinations use U-TREA (the un-floored amount) directly.
 
-| Art. 92 Para | Entity Type | Reporting Basis | TREA Calculation |
-|--------------|-------------|-----------------|------------------|
-| 2A(a)(i) | Standalone UK institution; ring-fenced body not in sub-consolidation group | Individual | `max{U-TREA; x × S-TREA + OF-ADJ}` |
-| 2A(a)(ii) | Ring-fenced body in sub-consolidation group | Sub-consolidated | `max{U-TREA; x × S-TREA + OF-ADJ}` |
-| 2A(a)(iii) | CRR consolidation entity (not international subsidiary) | Consolidated | `max{U-TREA; x × S-TREA + OF-ADJ}` |
-| 2A(b) | Institution other than a ring-fenced body | Sub-consolidated | U-TREA (exempt) |
-| 2A(c) | Ring-fenced body in sub-consolidation group; non-standalone UK institution | Individual | U-TREA (exempt) |
-| 2A(d) | CRR consolidation entity that is an international subsidiary | Consolidated | U-TREA (exempt) |
+### Floor Applies To
+
+| Art. 92 Para | Entity Type | Reporting Basis |
+|--------------|-------------|-----------------|
+| 2A(a)(i) | Standalone UK institution; ring-fenced body not in sub-consolidation group | Individual |
+| 2A(a)(ii) | Ring-fenced body in sub-consolidation group | Sub-consolidated |
+| 2A(a)(iii) | CRR consolidation entity (**not** an international subsidiary) | Consolidated |
+
+### Floor Does NOT Apply To
+
+| Art. 92 Para | Entity Type | Reporting Basis | Reason |
+|--------------|-------------|-----------------|--------|
+| 2A(b) | Institution other than a ring-fenced body | Sub-consolidated | Non-RFB on sub-consolidated basis |
+| 2A(c) | Ring-fenced body in sub-consolidation group; non-standalone UK institution | Individual | Individual basis where sub-consolidation applies |
+| 2A(d) | CRR consolidation entity that is an international subsidiary | Consolidated | International subsidiary exemption |
 
 !!! note "Implementation"
     Entity-type carve-outs are implemented via `OutputFloorConfig.is_floor_applicable()` which

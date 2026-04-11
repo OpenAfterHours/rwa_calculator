@@ -13,7 +13,7 @@ Art. 158(6A) EL monotonicity, and EL shortfall/excess comparison.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-7.1 | F-IRB EL calculation with revised LGD (40% non-FSE senior) | P0 | Done |
-| FR-7.2 | EL shortfall: 50/50 CET1/T2 deduction | P0 | Done |
+| FR-7.2 | EL shortfall: full CET1 deduction (Art. 36(1)(d)) | P0 | Done |
 | FR-7.3 | EL excess: T2 credit (cap at 0.6% of IRB RWA) | P0 | Done |
 | FR-7.4 | Art. 158(6A) EL monotonicity for A-IRB PMA | P0 | Done |
 | FR-7.5 | SA provision deduction from exposure (unchanged from CRR) | P0 | Done |
@@ -35,7 +35,8 @@ consequently affecting the EL shortfall/excess comparison.
 | F-IRB senior LGD (FSE) | 45% | 45% | Art. 161(1)(a) |
 | 1.06 scaling factor | Applied | Removed | Art. 153(1) |
 | EL monotonicity (A-IRB PMA) | Not required | Required (Art. 158(6A)) | Art. 158(6A) |
-| EL shortfall/excess mechanism | 50/50, cap 0.6% | Unchanged | Art. 159, 36(1)(d), 62(d) |
+| EL shortfall treatment | 50/50 CET1/T2 | **Full CET1 deduction** | Art. 36(1)(d) |
+| EL excess T2 cap | 0.6% of IRB RWA | Unchanged (0.6%) | Art. 62(d) |
 | SA provision deduction | Art. 111(1)(a)–(b) | Unchanged | Art. 111(1)(a)–(b) |
 
 ---
@@ -128,27 +129,69 @@ When total expected loss exceeds total provisions:
 
 ```
 el_shortfall = total_el - total_provisions
-cet1_deduction = el_shortfall x 0.5
-t2_deduction = el_shortfall x 0.5
+cet1_deduction = el_shortfall      (full amount)
 ```
 
-The shortfall is split 50/50 between CET1 (Art. 36(1)(d)) and Tier 2 (Art. 62(d)) deductions.
+!!! warning "Full CET1 Deduction Under Basel 3.1"
+    Under PRA PS1/26, Art. 36(1)(d) requires the **full** EL shortfall to be deducted from
+    CET1. This is a change from CRR, which split the shortfall 50/50 between CET1 and T2.
+    The B31 treatment is more conservative — there is no T2 deduction for EL shortfall.
 
-### Portfolio-Level Summary
+!!! bug "Known Code Discrepancy"
+    `src/rwa_calc/engine/aggregator/_el_summary.py` lines 239–241 still compute
+    `cet1_deduction = effective_shortfall * 0.5` and `t2_deduction = effective_shortfall * 0.5`
+    (the CRR 50/50 split). This is incorrect for Basel 3.1 runs and must be corrected to
+    `cet1_deduction = effective_shortfall` and `t2_deduction = Decimal(0)`.
+    **This spec is authoritative — the code is wrong.**
 
-The comparison is performed at the portfolio level using Pool A (non-defaulted) and Pool B (defaulted):
+### Art. 159 Component Definitions
 
-| Component | Source | Reference |
-|-----------|--------|-----------|
-| Pool A: EL non-defaulted | PD × LGD × EAD for each non-defaulted IRB exposure | Art. 158(5) |
-| Pool B: Provisions for defaulted | Specific provisions + AVA + other own funds reductions | Art. 159(1) |
-| Total EL | Pool A EL + Pool B EL (BEEL for defaulted) | Art. 158 |
-| Total Provisions | Pool A provisions + Pool B provisions | Art. 159 |
+The Art. 159 comparison uses four labelled amounts (A, B, C, D):
 
-!!! note "BEEL Exception"
-    For A-IRB defaulted exposures, the expected loss is BEEL (best estimate of expected loss),
-    not PD × LGD. Per Art. 158(5), BEEL is the firm's own estimate of loss given that default
-    has already occurred.
+| Label | Definition | Source |
+|-------|-----------|--------|
+| **A** | EL amounts for **non-defaulted** exposures | PD x LGD x EAD (Art. 158) |
+| **B** | Provisions for **non-defaulted** exposures | General CRAs + specific CRAs + AVA (Art. 34) + other own funds reductions |
+| **C** | EL amounts for **defaulted** exposures | BEEL for A-IRB (Art. 158(5)); PD x LGD for F-IRB |
+| **D** | Specific CRAs for **defaulted** exposures | Specific credit risk adjustments |
+
+!!! warning "Previous Spec Error Corrected (P4.38)"
+    This table previously labelled Pool A as "non-defaulted EL" and Pool B as
+    "defaulted provisions". The regulation uses A/B for non-defaulted (EL vs provisions)
+    and C/D for defaulted (EL vs specific CRAs). The labels are now corrected to match
+    the Art. 159 text.
+
+### Art. 159(3) — Two-Branch Rule
+
+When **A > B** (non-defaulted EL exceeds non-defaulted provisions) **AND** **D > C**
+(defaulted provisions exceed defaulted EL) simultaneously:
+
+- **(a)** Non-defaulted shortfall = **A - B** → deducted from CET1 (Art. 36(1)(d))
+- **(b)** Defaulted excess = **D - C** → recognised in T2 (Art. 62(d))
+
+The defaulted excess must **not** offset the non-defaulted shortfall. This prevents
+cross-subsidisation between the non-defaulted and defaulted pools.
+
+In **all other cases** (combined treatment):
+
+- **(c)** If (A + C) > (B + D): total shortfall → CET1 deduction (Art. 36(1)(d))
+- **(d)** If (B + D) > (A + C): total excess → T2 recognition, **capped at 0.6% of
+  credit-risk IRB RWA** (Art. 62(d))
+
+### Art. 159(2) — Exclusions from Provisions (B and D)
+
+The following amounts are **excluded** from the provisions side (B and D):
+
+- Defaulted balance sheet discounts (Art. 166A(2))
+- Provisions relating to securitised exposures
+- Portions covered by CRM risk-weight substitution
+
+### BEEL Exception
+
+For **A-IRB defaulted exposures**, the expected loss is BEEL (best estimate of expected
+loss), not PD x LGD. Per Art. 158(5), BEEL is the firm's own estimate of loss given
+that default has already occurred. F-IRB defaulted exposures use the standard
+PD x LGD formula.
 
 ---
 
@@ -157,7 +200,7 @@ The comparison is performed at the portfolio level using Pool A (non-defaulted) 
 | Scenario ID | Description | Expected Outcome |
 |-------------|-------------|------------------|
 | B31-G1 | SA provision deduction (unchanged from CRR) | EAD reduced by provisions |
-| B31-G2 | F-IRB EL shortfall: LGD 40% (was 45%), shortfall lower than CRR | 50/50 CET1/T2 deduction |
+| B31-G2 | F-IRB EL shortfall: LGD 40% (was 45%), shortfall lower than CRR | Full CET1 deduction (Art. 36(1)(d)) |
 | B31-G3 | F-IRB EL excess: T2 credit capped at 0.6% of IRB RWA | T2 credit = min(excess, cap) |
 
 ## Acceptance Tests

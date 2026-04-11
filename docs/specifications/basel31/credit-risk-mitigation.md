@@ -271,21 +271,130 @@ The `guarantee_method_used` output column indicates the method applied:
 
 ## CRM Method Taxonomy (Art. 191A)
 
-Basel 3.1 introduces explicit method names:
+Art. 191A replaces the old CRR Art. 108, introducing a formal four-part decision tree for
+CRM method selection with explicit method names.
+
+### Method Names
 
 | Method | Acronym | Scope |
 |--------|---------|-------|
-| Foundation Collateral Method | FCM | F-IRB: financial and physical collateral |
-| Parameter Substitution Method | PSM | F-IRB: unfunded credit protection |
-| LGD Adjustment Method | LGD-AM | A-IRB: unfunded credit protection |
+| Financial Collateral Simple Method | FCSM | SA only: financial collateral (Art. 222) |
+| Financial Collateral Comprehensive Method | FCCM | SA + IRB: financial collateral (Art. 223) |
+| Foundation Collateral Method | FCM | F-IRB: financial and physical collateral (Art. 230) |
+| Parameter Substitution Method | PSM | F-IRB / A-IRB: unfunded credit protection (Art. 236) |
+| LGD Adjustment Method | LGD-AM | A-IRB: unfunded credit protection (Art. 183) |
+| Risk-Weight Substitution Method | RWSM | SA / Slotting: unfunded credit protection (Art. 235) |
+
+### Art. 191A Decision Tree
+
+**Part 1 — Funded CRM with CCR exposure:**
+CCR exposures use IMM / SFT VaR / FCCM / FCSM (SA only).
+
+**Part 2 — Funded CRM without CCR (non-CCR exposures):**
+
+1. On-balance sheet netting (Art. 219)
+2. Financial collateral → FCSM (SA only, Art. 222) or FCCM (Art. 223)
+3. Non-financial collateral → FCM (F-IRB, Art. 229-231) / LGD Modelling (A-IRB)
+4. Life insurance / other funded CP → Other Funded Protection Method (Art. 232)
+
+**Part 3 — Unfunded CRM:**
+
+- SA / Slotting → Risk-Weight Substitution Method (Art. 235)
+- F-IRB / A-IRB → Parameter Substitution Method (Art. 236)
+- A-IRB (own estimates) → LGD Adjustment Method (Art. 183)
+
+**Part 4 — Unfunded CP covered by funded CP:**
+Where unfunded protection is itself collateralised, funded CRM is applied to the unfunded
+protection first, then the adjusted unfunded protection is applied to the original exposure.
+
+### Anti-Double-Counting and Consistency Rules
+
+- **Para 2(d)**: Funded and unfunded CRM must not be recognised simultaneously on the same
+  portion of an exposure (no double-counting).
+- **Para 3**: An institution must use the same CRM method for the same type of unfunded
+  credit protection across its portfolio (consistency requirement).
 
 ### Method Selection by Approach
 
 | Approach | Funded Protection | Unfunded Protection |
 |----------|-------------------|---------------------|
-| SA | Financial Collateral Simple Method (Art. 222) or Comprehensive Method | SA-RW substitution |
-| F-IRB | FCM (Art. 230) | PSM (PD substitution for IRB guarantors, SA-RW for SA guarantors) |
-| A-IRB | LGD modelling (Art. 169A/169B) or FCM | LGD-AM or PSM |
+| SA | FCSM (Art. 222) or FCCM (Art. 223) | RWSM — SA-RW substitution (Art. 235) |
+| F-IRB | FCM (Art. 230) or FCCM (Art. 223) | PSM — PD substitution for IRB guarantors, SA-RW for SA guarantors (Art. 236) |
+| A-IRB | LGD modelling (Art. 169A/169B) or FCM/FCCM | LGD-AM (Art. 183) or PSM (Art. 236) |
+
+---
+
+## FCSM Under Basel 3.1 (Art. 222)
+
+The Financial Collateral Simple Method is retained for SA exposures under Basel 3.1.
+
+### Art. 222(1) — 20% RW Floor
+
+All collateral-secured portions receive a minimum **20%** risk weight.
+
+### Art. 222(4) — 0% Floor Exceptions
+
+The floor is reduced to **0%** for repo-style / SFT transactions where collateral is in the
+**same currency** as the exposure and one of:
+
+- **(a)** Cash deposits or cash-assimilated instruments
+- **(d)** Core market participant repos where collateral is sovereign/CB debt, PSE debt,
+  or institution debt rated CQS 1-2
+
+### Art. 222(7) — No Maturity Mismatch
+
+Under the FCSM, the collateral's residual maturity must be at least equal to the exposure's
+residual maturity. The Art. 238 maturity mismatch adjustment does **not** apply to the FCSM.
+
+---
+
+## FCCM E* Formula (Art. 223(5))
+
+The Financial Collateral Comprehensive Method produces a net adjusted exposure value:
+
+```
+E* = max(0, E(1 + HE) - CVA(1 - HC - HFX))
+```
+
+| Variable | Definition |
+|----------|-----------|
+| E | Current exposure value |
+| HE | Exposure volatility haircut (for SFTs where exposure is a debt security; HE = 0 for standard lending) |
+| CVA | Current value of collateral received |
+| HC | Collateral volatility haircut (Art. 224 5-band tables) |
+| HFX | FX mismatch haircut (8% at 10-day; 0% if same currency) |
+
+---
+
+## Maturity Mismatch (Art. 237-238)
+
+### Art. 237(2) — Eligibility
+
+When a maturity mismatch exists (protection maturity < exposure maturity), credit protection
+is only eligible if **all** conditions are met:
+
+1. **Residual maturity >= 3 months** — protection with < 3 months residual maturity is
+   ineligible
+2. **Original maturity >= 1 year** — protection originally issued with a term < 1 year
+   is ineligible when a mismatch exists
+
+### Art. 238 — Adjustment Formula
+
+When eligible, the maturity-adjusted protection value is:
+
+```
+GA = G* x (t - 0.25) / (T - 0.25)
+```
+
+Where:
+
+| Variable | Definition |
+|----------|-----------|
+| G* | Protection value after any haircut adjustments |
+| t | Residual maturity of the protection (years) |
+| T | Residual maturity of the exposure (years), capped at 5 |
+
+When t >= T, no maturity mismatch adjustment is needed.
 
 ---
 

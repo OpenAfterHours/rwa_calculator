@@ -81,7 +81,7 @@ to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
 **Implementation:** `src/rwa_calc/engine/irb/formulas.py` — `_lgd_floor_blended_expression()` computes the weighted-average floor using the `crm_alloc_*` columns from the Art. 231 sequential waterfall. The formula: `LGD_floor = (E_unsecured / EAD) × LGDU + Σ_i (E_i / EAD) × LGDS_i`. Applies to `retail_other` (LGDU=30%) and `retail_qrre` (LGDU=50%) with collateral present. Falls back to single-type floor when allocation columns are absent.
 
 !!! note "Scope of Corporate vs Institution LGD Floors"
-    Art. 161(5) specifies the 25% unsecured LGD floor for "unsecured exposures to **corporates**". Institution exposures are restricted to F-IRB under Art. 147A(1)(b), so A-IRB LGD floors are not applicable to institutions. Art. 161(4) is "[Note: Provision left blank]" in PRA PS1/26 — only Art. 161(5) is active.
+    Art. 161(5) specifies the 25% unsecured LGD floor for "unsecured exposures to **corporates**". Institution exposures are restricted to F-IRB under Art. 147A(1)(c), so A-IRB LGD floors are not applicable to institutions. All financial sector entities are restricted to F-IRB under Art. 147A(1)(e). Art. 161(4) is "[Note: Provision left blank]" in PRA PS1/26 — only Art. 161(5) is active.
 
 !!! note "RRE LGD Floor"
     The PRA PS1/26 retail RRE LGD floor is **5%** per Art. 164(4)(a). This was changed from 10% in the near-final rules to 5% in the final PS1/26 rules. BCBS CRE32.25 also specifies 5%.

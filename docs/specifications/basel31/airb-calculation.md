@@ -100,9 +100,11 @@ LGD_floor = (E_unsecured / EAD) x LGDU_floor + sum_i((E_i / EAD) x LGDS_floor_i)
 
 !!! note "Scope of Corporate vs Retail Floors"
     Corporate LGD floors (Art. 161(5)) and retail LGD floors (Art. 164(4)) are separate
-    regulatory provisions. Institution exposures under A-IRB use the corporate floor table.
-    Sovereign exposures are restricted to SA under Basel 3.1 (Art. 147A), so sovereign
-    A-IRB LGD floors are moot.
+    regulatory provisions. Institution exposures are restricted to **F-IRB only** under
+    Art. 147A(1)(c), so A-IRB LGD floors do not apply to institutions. Sovereign exposures
+    are restricted to **SA only** under Art. 147A(1)(b), so sovereign A-IRB LGD floors
+    are moot. All financial sector entities are restricted to **F-IRB only** under
+    Art. 147A(1)(e).
 
 ---
 
@@ -360,8 +362,9 @@ recognise the joint probability of both obligor and guarantor defaulting:
 K_dd = K_obligor x (0.15 + 160 x PD_guarantor)  [CRR only]
 ```
 
-Basel 3.1 **removes double default entirely**. For guaranteed exposures under IRB, firms
-must use **parameter substitution** instead — see [CRM Specification](credit-risk-mitigation.md).
+Basel 3.1 **removes double default entirely** — Art. 153(3) is "[Provision left blank]" in
+PRA PS1/26. For guaranteed exposures under IRB, firms must use **parameter substitution**
+instead — see [CRM Specification](credit-risk-mitigation.md).
 
 ---
 

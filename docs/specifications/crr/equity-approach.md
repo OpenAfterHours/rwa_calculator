@@ -30,7 +30,7 @@ as high risk items in accordance with Article 128."
 |-------------|-------------|-----------|
 | Central bank / sovereign equity | 0% | Sovereign treatment |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
-| CIU (fallback) | 1,250% | Art. 132(2) |
+| CIU (fallback) | **1,250%** | Art. 132(2) |
 | CIU (look-through) | Underlying RW | Art. 132(1) |
 | CIU (mandate-based) | Mandate RW | Art. 132A |
 
@@ -50,33 +50,37 @@ Significant increase in equity risk weights under Basel 3.1:
 
 | Equity Type | Risk Weight | Reference |
 |-------------|-------------|-----------|
-| Subordinated debt / non-equity own funds instruments | 150% | Art. 133(1) |
 | Standard equity (listed, exchange-traded) | 250% | Art. 133(3) |
-| Higher risk equity | 400% | Art. 133(5) |
+| Higher-risk equity | 400% | Art. 133(4) |
+| Subordinated debt / non-equity own funds instruments | 150% | Art. 133(5) |
 | Legislative equity (carve-out, see below) | 100% | Art. 133(6) |
 
 !!! warning "Correction: PRA vs BCBS Equity Categories"
-    - **No "CQS 1-2 speculative" tier in PRA**: The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated by CQS. PRA PS1/26 Art. 133 does **not** include these tiers — all non-legislative, non-subordinated equity is either listed (250%) or higher-risk (400%).
-    - **Higher-risk definition**: Under PRA Art. 133(5), "higher risk" equity means equity in an **unlisted undertaking with a business age of less than 5 years** (or private equity / venture capital). The 5-year threshold refers to the **undertaking's age** (time since incorporation/establishment), not the holding period of the investment.
+    - **No "CQS 1-2 speculative" tier in PRA**: The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated by CQS. PRA PS1/26 Art. 133 does **not** include these tiers — all non-legislative, non-subordinated equity is either standard (250%, Art. 133(3)) or higher-risk (400%, Art. 133(4)).
+    - **Higher-risk definition**: Under PRA Art. 133(4), "higher risk" equity means equity that is not listed on a recognised exchange AND (held for short-term resale OR derived from a derivative position), OR private equity / venture capital holdings.
+    - **Art. 133(5) is subordinated debt / non-equity own funds**: 150% risk weight for subordinated debt and capital instruments that are not classified as equity exposures.
     - **Art. 133(6) is a carve-out**: Legislative equity at 100% is a carve-out for government-mandated holdings (e.g., holdings required by national development policy legislation). It is not a general 100% weight category.
 
 ### Classification Decision Tree
 
 ```
-Is it subordinated debt / non-equity own funds?
-  → Yes: 150%
+Is it subordinated debt / non-equity own funds instruments?
+  → Yes: 150% (Art. 133(5))
 Is it legislative equity (government-mandated, Art. 133(6) carve-out)?
-  → Yes: 100%
-Is it listed / exchange-traded?
-  → Yes: 250%
-Is it higher risk (unlisted AND undertaking business age < 5yr, OR PE/VC)?
-  → Yes: 400%
-Otherwise (unlisted, undertaking business age >= 5yr, non-PE):
-  → 250%
+  → Yes: 100% (Art. 133(6))
+Is it listed on a recognised exchange?
+  → Yes: 250% (Art. 133(3))
+Is it higher risk (unlisted AND (held for short-term resale OR from derivative), OR PE/VC)?
+  → Yes: 400% (Art. 133(4))
+Otherwise (unlisted, not higher-risk, not PE/VC):
+  → 250% (Art. 133(3))
 ```
 
-!!! note "Unlisted >= 5yr Treatment"
-    For unlisted equity in an **undertaking with business age of 5 years or more** that is not PE/VC and not legislative, the PRA treatment defaults to 250% (standard equity rate) rather than 400%. The BCBS framework would assign 150% via the CQS speculative tiers, but PRA does not use that structure.
+!!! note "Unlisted Non-Higher-Risk Treatment"
+    For unlisted equity that does not meet the higher-risk definition (Art. 133(4))
+    and is not PE/VC, the PRA assigns the standard **250%** weight under Art. 133(3).
+    The BCBS framework would differentiate via CQS speculative tiers, but PRA does
+    not use that structure.
 
 ## CRR IRB Simple Risk Weight Method (Art. 155)
 

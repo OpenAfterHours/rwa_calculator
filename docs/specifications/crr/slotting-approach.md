@@ -133,13 +133,18 @@ EL rates for slotting exposures are maturity-dependent, unlike the flat values i
 
 #### HVCRE — Table B
 
-| Category | EL Rate |
-|----------|---------|
-| Strong | 0.4% |
-| Good | 0.8% |
-| Satisfactory | 2.8% |
-| Weak | 8% |
-| Default | 50% |
+| Category | EL Rate (< 2.5yr, col A) | EL Rate (>= 2.5yr, col B) |
+|----------|--------------------------|----------------------------|
+| Strong | 0.4% | 0.4% |
+| Good | 0.4% | 0.4% |
+| Satisfactory | 2.8% | 2.8% |
+| Weak | 8% | 8% |
+| Default | 50% | 50% |
+
+!!! note "HVCRE EL Rates"
+    HVCRE Table B EL rates are the same regardless of maturity band for most categories.
+    Strong and Good both use 0.4% in all columns, unlike non-HVCRE where Strong short-maturity
+    has 0% EL and Good short-maturity has 0.4% EL.
 
 !!! warning "Previous Values Were Wrong"
     The EL rates previously documented here (Strong=5%, Good=10%, Satisfactory=35%, Weak=50%, Default=50%) were **BCBS CRE33 values**, not PRA PS1/26 values. The PRA Table B values above are dramatically lower for Strong/Good categories (e.g., Strong 0% vs 5%, Good 0.4% vs 10%). Using the BCBS values would massively overstate the EL shortfall for well-categorised slotting exposures.
@@ -171,7 +176,8 @@ Risk weights by equity type (listed, unlisted, strategic holdings).
 
 ### Basel 3.1
 
-Removal of equity IRB — all equity falls to SA treatment.
+Removal of equity IRB — Art. 155 is entirely "[Provision left blank]" in PRA PS1/26. All
+equity falls to SA treatment under Art. 147A(1)(a).
 
 ## Key Scenarios
 

@@ -36,8 +36,8 @@ adequate provisioning.
 | SA risk weight mechanism | Flat 100%/150% | Provision-coverage split | Art. 127 |
 | Provision threshold denominator | Pre-provision unsecured exposure value | **Outstanding amount** of the item or facility (gross) | Art. 127(1) |
 | RESI RE non-income exception | None | Flat 100% regardless of provisions | Art. 127(1A) |
-| IRB F-IRB defaulted | K = 0 (with 1.06 scaling) | K = 0 (no scaling) | Art. 153(1)(ii) |
-| IRB A-IRB defaulted | K = max(0, LGD − BEEL) (with 1.06) | K = max(0, LGD − BEEL) (no scaling) | Art. 154(1)(i) |
+| IRB F-IRB defaulted | K = 0; RW includes 1.06 | K = 0; no 1.06 (Art. 153(3) left blank) | Art. 153(1)(ii) |
+| IRB A-IRB defaulted | K = max(0, LGD − BEEL); 1.06 in RW | K = max(0, LGD − BEEL); no 1.06 | Art. 154(1)(i) |
 
 ---
 
@@ -138,8 +138,9 @@ Where:
 - `BEEL` = best estimate of expected loss — the firm's estimate of loss given default has occurred
 
 !!! note "1.06 Scaling Factor Removed"
-    Under CRR, the IRB capital formula included a 1.06 scaling factor. Basel 3.1 removes this
-    factor entirely (Art. 153(1)). This applies to all IRB exposures, not just defaulted.
+    Under CRR, the IRB capital formula included a 1.06 scaling factor (Art. 153(3)). Basel 3.1
+    removes this — Art. 153(3) is "[Provision left blank]" in PRA PS1/26. This applies to all
+    IRB exposures, not just defaulted.
 
 ### A-IRB Defaulted (Art. 154(1)(i))
 

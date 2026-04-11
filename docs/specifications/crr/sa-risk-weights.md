@@ -80,6 +80,7 @@ Where RGLA exposures lack their own ECAI rating, use the **sovereign's CQS** wit
 | 4 | 100% |
 | 5 | 100% |
 | 6 | 150% |
+| Unrated | 100% |
 
 Under PRA rules, UK devolved administrations (Scotland, Wales, Northern Ireland) receive **0%** risk weight.
 
@@ -117,6 +118,7 @@ UK PSEs without own ECAI rating use the **sovereign's CQS** with Table 2:
 | 4 | 100% |
 | 5 | 100% |
 | 6 | 150% |
+| Unrated | 100% |
 
 ### Sub-treatment 2 — Own-Rating — Table 2A (Art. 116(2))
 
@@ -130,6 +132,7 @@ UK PSEs with own ECAI rating use Table 2A:
 | 4 | 100% |
 | 5 | 100% |
 | 6 | 150% |
+| Unrated | 100% |
 
 !!! note "Art. 116(4) left blank"
     PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE sub-treatment under the PRA rules. UK PSEs use Tables 2/2A above.
@@ -219,9 +222,30 @@ Art. 121(3).
 | 1 | 20% |
 | 2 | 20% |
 | 3 | 20% |
-| 4-5 | 50% |
+| 4 | 50% |
+| 5 | 50% |
 | 6 | 150% |
 | Unrated | 20% (Art. 121(3)) |
+
+### Unrated Institutions — Sovereign-Derived (CRR Art. 121, Table 5)
+
+Where an institution lacks its own ECAI rating, risk weights are derived from its
+sovereign's CQS:
+
+**Table 5 — Unrated Institution Sovereign-Derived (CRR Art. 121(1))**
+
+| Sovereign CQS | Institution RW |
+|---------------|----------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 150% |
+| Unrated | 100% |
+
+Unrated institutions with residual maturity ≤ 3 months receive **20%** regardless of
+sovereign CQS (Art. 121(3)).
 
 !!! warning "Correction: CRR has no Table 4A"
     CRR Tables 3 and 4 both use the **institution's own ECAI rating** — Table 3 for
@@ -233,11 +257,11 @@ Art. 121(3).
 !!! info "Basel 3.1 — Table 4A: Short-Term ECAI Assessments (Art. 120(2B))"
     Basel 3.1 introduces Table 4A for institutions with a specific **short-term ECAI
     assessment** (as opposed to a long-term rating applied to a short-term exposure).
-    Table 4A uses the short-term CQS scale with only 3 steps:
+    Table 4A uses the short-term CQS scale:
 
-    | Short-Term CQS | 1 | 2 | 3 | Others |
-    |----------------|---|---|---|--------|
-    | Risk Weight | 20% | 50% | 100% | 150% |
+    | Short-Term CQS | 1 | 2 | 3 | 4 | 5 |
+    |----------------|---|---|---|---|---|
+    | Risk Weight | 20% | 50% | 100% | 150% | 150% |
 
     Art. 120(3) governs the interaction: where no short-term rating exists, Table 4
     applies; where a short-term rating yields a lower or equal RW, Table 4A applies;
@@ -255,6 +279,36 @@ Art. 121(3).
 | 5 | 150% |
 | 6 | 150% |
 | Unrated | 100% |
+
+## Short-Term Assessments (CRR Art. 131, Table 7)
+
+Where an exposure has a specific short-term ECAI assessment, Art. 131 provides a dedicated
+CQS mapping. This applies to short-term assessments on institutions and corporates.
+
+**Table 7 — Short-Term ECAI Assessment Risk Weights (Art. 131)**
+
+| Short-Term CQS | Risk Weight |
+|----------------|-------------|
+| 1 | 20% |
+| 2 | 50% |
+| 3 | 100% |
+| 4 | 150% |
+| 5 | 150% |
+| 6 | 150% |
+
+!!! note "Implementation Status"
+    Short-term ECAI assessment mapping (Art. 131) is not yet implemented. The calculator
+    currently uses long-term CQS tables for all exposures. A `has_short_term_ecai` schema
+    field would be needed to route to this table.
+
+## CIU Exposures (CRR Art. 132)
+
+!!! warning "Art. 132 Omitted from UK CRR"
+    Art. 132 was **omitted from UK onshored CRR** and CIU treatment is instead governed by
+    the **PRA Rulebook** via Art. 132a–132c. Under PRA rules, the fallback risk weight for
+    CIUs that cannot be looked through is **1,250%** (Art. 132(2) as modified). Institutions
+    may use a look-through approach (Art. 132a), a mandate-based approach (Art. 132b), or
+    apply the 1,250% fallback (Art. 132c).
 
 ## Retail Exposures (CRR Art. 123)
 
@@ -583,7 +637,13 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 |-------------|-------------|-----------|
 | Central bank / sovereign equity | 0% | Sovereign treatment |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
-| CIU (fallback) | 1,250% | Art. 132(2) |
+| CIU (fallback) | 1,250% | Art. 132c (PRA Rulebook) |
+
+!!! note "Art. 132 Omitted from UK CRR"
+    Original Art. 132 was omitted from UK onshored CRR. CIU treatment is governed by
+    PRA Rulebook Art. 132a (look-through), Art. 132b (mandate-based), and Art. 132c
+    (fallback at 1,250%). Cross-references from Art. 133 to Art. 128 (high-risk items)
+    are dead letters under UK CRR since Art. 128 was also omitted by SI 2021/1078.
 
 !!! warning "Previous Spec Error Corrected"
     This table previously showed Unlisted=150% (Art. 133(3)) and PE/VC=190% (Art. 133(4)). These paragraph numbers and values were fabricated. The 150%/190% values are from **Art. 155** (IRB Simple Method), not Art. 133. PE/VC that qualifies as high-risk is treated under Art. 128 (150%), not Art. 133. See [Equity Approach Specification](equity-approach.md) for full details.
@@ -686,7 +746,7 @@ Export Credit Agency (ECA) consensus risk scores are mapped to CQS for sovereign
 | 0-1 | CQS 1 | 0% |
 | 2 | CQS 2 | 20% |
 | 3 | CQS 3 | 50% |
-| 4-6 | CQS 4-5 | 100% |
+| 4-6 | CQS 4-6 | 100% |
 | 7 | CQS 6 | 150% |
 
 This mapping is used for sovereign exposures (Art. 114) and for deriving institution risk weights from their sovereign's ECA score where the sovereign lacks an ECAI rating.
@@ -716,12 +776,15 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Retail transactor/non-transactor** (Art. 123): 45% QRRE transactors vs 75% non-transactors — Done
 - **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (Basel 3.1 only; CRR code gap)
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
-- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100% — Done
+- **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100%, high-quality PF=80% — Done
 - **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
 - **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
 - **Covered bonds** (Art. 129): CQS-based risk weights, eligibility criteria, unrated derivation, PRA deviation — Added
 - **RGLA/PSE/MDB/Int'l Org tables** (Art. 115-118): Missing from original spec — Added
 - **ECA consensus scores** (Art. 137 Table 9): ECA-to-CQS mapping for unrated sovereigns — Added
+- **Short-term assessments** (Art. 131 Table 7): Short-term ECAI CQS mapping — Added
+- **CIU treatment** (Art. 132/132a-132c): UK CRR omission noted, PRA Rulebook governs CIU — Added
+- **Unrated institution sovereign-derived** (Art. 121 Table 5): Full sovereign-derived table — Added
 - **Removal of SME supporting factor**: No longer applicable under Basel 3.1
 - **Removal of 1.06 scaling factor**: Scaling factor set to 1.0 under Basel 3.1
 

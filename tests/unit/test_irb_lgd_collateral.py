@@ -305,6 +305,214 @@ class TestFIRBLGDWithCollateral:
         assert df["lgd_post_crm"][0] == pytest.approx(0.75, abs=0.01)
 
 
+class TestFIRBSubordinatedCollateralisedLGD:
+    """Tests for CRR Art. 230 Table 5 subordinated LGDS in the LGD* formula.
+
+    When a subordinated F-IRB exposure is secured by collateral, the secured
+    portion uses higher LGDS values (65%/70%) per CRR Art. 230 Table 5.
+    The unsecured portion uses 75% (Art. 161(1)(b)).
+    """
+
+    def test_firb_subordinated_fully_secured_re_gets_65pct_lgd(
+        self,
+        processor: CRMProcessor,
+        firb_config: CalculationConfig,
+    ) -> None:
+        """Subordinated F-IRB fully secured by RE should have LGD=65% (not 35%)."""
+        bundle = create_classified_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000000.0],
+                "ead_pre_crm": [1000000.0],
+                "lgd": [None],
+                "seniority": ["subordinated"],
+                "currency": ["GBP"],
+                "maturity_date": [date(2029, 1, 1)],
+            },
+            collateral_data={
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["exposure"],
+                "collateral_type": ["real_estate"],
+                "market_value": [1500000.0],  # Over-collateralised
+                "value_after_haircut": [1500000.0],
+                "residual_maturity_years": [10.0],
+                "currency": ["GBP"],
+                "property_type": ["residential"],
+            },
+        )
+
+        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        df = result.exposures.collect()
+
+        # Fully secured by RE: subordinated LGDS = 65% (Art. 230 Table 5)
+        assert df["lgd_post_crm"][0] == pytest.approx(0.65, abs=0.01)
+
+    def test_firb_subordinated_fully_secured_other_physical_gets_70pct_lgd(
+        self,
+        processor: CRMProcessor,
+        firb_config: CalculationConfig,
+    ) -> None:
+        """Subordinated F-IRB fully secured by other physical should have LGD=70%."""
+        # Other physical gets 40% supervisory haircut (CRR Art. 224), so need
+        # market_value * 0.60 / 1.40 >= EAD for full coverage.
+        bundle = create_classified_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000000.0],
+                "ead_pre_crm": [1000000.0],
+                "lgd": [None],
+                "seniority": ["subordinated"],
+                "currency": ["GBP"],
+                "maturity_date": [date(2029, 1, 1)],
+            },
+            collateral_data={
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["exposure"],
+                "collateral_type": ["other_physical"],
+                "market_value": [2500000.0],  # After 40% HC: 1.5M; eff_sec=1.5M/1.4=1.07M>1M
+                "value_after_haircut": [2500000.0],
+                "residual_maturity_years": [10.0],
+                "currency": ["GBP"],
+                "property_type": [None],
+            },
+        )
+
+        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        df = result.exposures.collect()
+
+        # Fully secured by other physical: subordinated LGDS = 70% (Art. 230 Table 5)
+        assert df["lgd_post_crm"][0] == pytest.approx(0.70, abs=0.01)
+
+    def test_firb_subordinated_partial_re_collateral_weighted_lgd(
+        self,
+        processor: CRMProcessor,
+        firb_config: CalculationConfig,
+    ) -> None:
+        """Subordinated F-IRB partially secured by RE uses subordinated LGDS in blend."""
+        bundle = create_classified_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000000.0],
+                "ead_pre_crm": [1000000.0],
+                "lgd": [None],
+                "seniority": ["subordinated"],
+                "currency": ["GBP"],
+                "maturity_date": [date(2029, 1, 1)],
+            },
+            collateral_data={
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["exposure"],
+                "collateral_type": ["real_estate"],
+                "market_value": [500000.0],  # 50% raw coverage
+                "value_after_haircut": [500000.0],
+                "residual_maturity_years": [10.0],
+                "currency": ["GBP"],
+                "property_type": ["residential"],
+            },
+        )
+
+        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        df = result.exposures.collect()
+
+        # RE overcollateralisation: effectively_secured = 500K / 1.4 = 357,143
+        # Subordinated LGDS = 65% (not 35%), LGDU = 75%
+        # LGD = (0.65 * 357,143 + 0.75 * 642,857) / 1M ≈ 0.7143
+        assert df["lgd_post_crm"][0] == pytest.approx(0.7143, abs=0.005)
+
+    def test_firb_subordinated_fully_secured_financial_still_zero(
+        self,
+        processor: CRMProcessor,
+        firb_config: CalculationConfig,
+    ) -> None:
+        """Subordinated F-IRB fully secured by financial collateral: LGD=0%."""
+        bundle = create_classified_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000000.0],
+                "ead_pre_crm": [1000000.0],
+                "lgd": [None],
+                "seniority": ["subordinated"],
+                "currency": ["GBP"],
+                "maturity_date": [date(2029, 1, 1)],
+            },
+            collateral_data={
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["exposure"],
+                "collateral_type": ["cash"],
+                "market_value": [1200000.0],
+                "value_after_haircut": [1200000.0],
+                "residual_maturity_years": [5.0],
+                "currency": ["GBP"],
+                "property_type": [None],
+            },
+        )
+
+        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        df = result.exposures.collect()
+
+        # Financial collateral LGDS = 0% (same for senior and subordinated)
+        assert df["lgd_post_crm"][0] == pytest.approx(0.0, abs=0.01)
+
+    def test_firb_senior_re_still_gets_35pct_lgd(
+        self,
+        processor: CRMProcessor,
+        firb_config: CalculationConfig,
+    ) -> None:
+        """Confirm senior F-IRB fully secured by RE still has LGD=35% (regression)."""
+        bundle = create_classified_bundle(
+            exposures_data={
+                "exposure_reference": ["EXP001"],
+                "counterparty_reference": ["CP001"],
+                "parent_facility_reference": [None],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+                "drawn_amount": [1000000.0],
+                "ead_pre_crm": [1000000.0],
+                "lgd": [None],
+                "seniority": ["senior"],
+                "currency": ["GBP"],
+                "maturity_date": [date(2029, 1, 1)],
+            },
+            collateral_data={
+                "collateral_reference": ["COLL001"],
+                "beneficiary_reference": ["EXP001"],
+                "beneficiary_type": ["exposure"],
+                "collateral_type": ["real_estate"],
+                "market_value": [1500000.0],
+                "value_after_haircut": [1500000.0],
+                "residual_maturity_years": [10.0],
+                "currency": ["GBP"],
+                "property_type": ["residential"],
+            },
+        )
+
+        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        df = result.exposures.collect()
+
+        # Senior RE LGDS = 35% (unchanged)
+        assert df["lgd_post_crm"][0] == pytest.approx(0.35, abs=0.01)
+
+
 class TestAIRBLGDNoAdjustment:
     """Tests for A-IRB exposures keeping their modelled LGD."""
 

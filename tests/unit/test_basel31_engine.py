@@ -1497,23 +1497,41 @@ class TestFIRBSupervisoryLGD:
         )
         assert result == Decimal("0.40")
 
-    def test_lookup_crr_subordinated(self) -> None:
-        """lookup_firb_lgd CRR: subordinated returns 75%."""
+    def test_lookup_crr_subordinated_unsecured(self) -> None:
+        """lookup_firb_lgd CRR: subordinated unsecured returns 75%."""
         result = lookup_firb_lgd(
-            collateral_type="financial_collateral",
+            collateral_type=None,
             is_subordinated=True,
             is_basel_3_1=False,
         )
         assert result == Decimal("0.75")
 
-    def test_lookup_basel31_subordinated(self) -> None:
-        """lookup_firb_lgd Basel 3.1: subordinated returns 75% (unchanged)."""
+    def test_lookup_crr_subordinated_financial_collateral(self) -> None:
+        """lookup_firb_lgd CRR: subordinated + financial collateral LGDS = 0%."""
+        result = lookup_firb_lgd(
+            collateral_type="financial_collateral",
+            is_subordinated=True,
+            is_basel_3_1=False,
+        )
+        assert result == Decimal("0.00")
+
+    def test_lookup_basel31_subordinated_unsecured(self) -> None:
+        """lookup_firb_lgd Basel 3.1: subordinated unsecured returns 75%."""
+        result = lookup_firb_lgd(
+            collateral_type=None,
+            is_subordinated=True,
+            is_basel_3_1=True,
+        )
+        assert result == Decimal("0.75")
+
+    def test_lookup_basel31_subordinated_financial_collateral(self) -> None:
+        """lookup_firb_lgd Basel 3.1: subordinated + financial collateral LGDS = 0%."""
         result = lookup_firb_lgd(
             collateral_type="financial_collateral",
             is_subordinated=True,
             is_basel_3_1=True,
         )
-        assert result == Decimal("0.75")
+        assert result == Decimal("0.00")
 
     def test_lookup_crr_receivables(self) -> None:
         """lookup_firb_lgd CRR: receivables returns 35%."""

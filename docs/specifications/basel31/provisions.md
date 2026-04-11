@@ -35,7 +35,7 @@ consequently affecting the EL shortfall/excess comparison.
 | F-IRB senior LGD (FSE) | 45% | 45% | Art. 161(1)(a) |
 | 1.06 scaling factor | Applied | Removed | Art. 153(1) |
 | EL monotonicity (A-IRB PMA) | Not required | Required (Art. 158(6A)) | Art. 158(6A) |
-| EL shortfall treatment | 50/50 CET1/T2 | **Full CET1 deduction** | Art. 36(1)(d) |
+| EL shortfall treatment | Full CET1 deduction | Full CET1 deduction (unchanged) | Art. 36(1)(d) |
 | EL excess T2 cap | 0.6% of IRB RWA | Unchanged (0.6%) | Art. 62(d) |
 | SA provision deduction | Art. 111(1)(a)–(b) | Unchanged | Art. 111(1)(a)–(b) |
 
@@ -132,17 +132,17 @@ el_shortfall = total_el - total_provisions
 cet1_deduction = el_shortfall      (full amount)
 ```
 
-!!! warning "Full CET1 Deduction Under Basel 3.1"
-    Under PRA PS1/26, Art. 36(1)(d) requires the **full** EL shortfall to be deducted from
-    CET1. This is a change from CRR, which split the shortfall 50/50 between CET1 and T2.
-    The B31 treatment is more conservative — there is no T2 deduction for EL shortfall.
+!!! note "Full CET1 Deduction"
+    Art. 36(1)(d) requires the **full** EL shortfall to be deducted from CET1. This is
+    **unchanged from CRR** — the 50/50 CET1/T2 split was a Basel II treatment that was
+    superseded by the CRR. Art. 62(d) addresses only EL excess (positive amounts), not
+    shortfall. There is no T2 deduction for shortfall under either framework.
 
-!!! bug "Known Code Discrepancy"
-    `src/rwa_calc/engine/aggregator/_el_summary.py` lines 239–241 still compute
-    `cet1_deduction = effective_shortfall * 0.5` and `t2_deduction = effective_shortfall * 0.5`
-    (the CRR 50/50 split). This is incorrect for Basel 3.1 runs and must be corrected to
-    `cet1_deduction = effective_shortfall` and `t2_deduction = Decimal(0)`.
-    **This spec is authoritative — the code is wrong.**
+!!! success "Code Correct (P1.116)"
+    `src/rwa_calc/engine/aggregator/_el_summary.py` line 241: `cet1_deduction =
+    effective_shortfall` (full amount). Line 252: `t2_deduction = Decimal("0")`.
+    Previously this code computed a 50/50 split — that was a Basel II-era error,
+    corrected under P1.116.
 
 ### Art. 159 Component Definitions
 

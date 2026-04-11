@@ -114,7 +114,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | ID | Description | Key Inputs | Expected RWA | Notes |
 |----|-------------|------------|--------------|-------|
 | CRR-G1 | SA with specific provision | £1m exposure, £50k provision | £950k net | CRR Art. 110 |
-| CRR-G2 | IRB EL shortfall | EL > provisions | T2 deduction | CRR Art. 159 |
+| CRR-G2 | IRB EL shortfall | EL > provisions | CET1 deduction (Art. 36(1)(d)) | CRR Art. 159 |
 | CRR-G3 | IRB EL excess | Provisions > EL | T2 credit (capped) | CRR Art. 62(d) |
 
 ### Scenario Group CRR-H: Complex/Combined

@@ -409,8 +409,8 @@ class ELPortfolioSummary:
     total_irb_rwa: float              # Total IRB RWA (denominator for T2 cap)
     t2_credit_cap: float              # 0.6% of total IRB RWA
     t2_credit: float                  # min(total_el_excess, t2_credit_cap)
-    cet1_deduction: float             # 50% of total_el_shortfall
-    t2_deduction: float               # 50% of total_el_shortfall
+    cet1_deduction: float             # 100% of total_el_shortfall (Art. 36(1)(d))
+    t2_deduction: float               # Always zero (no T2 deduction for shortfall)
 ```
 
 ### Other result bundles

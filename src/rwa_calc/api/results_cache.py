@@ -42,6 +42,7 @@ class CachedResults:
     results_path: Path
     summary_by_class_path: Path | None = None
     summary_by_approach_path: Path | None = None
+    classification_audit_path: Path | None = None
     metadata_path: Path | None = None
 
     def scan_results(self) -> pl.LazyFrame:
@@ -58,6 +59,12 @@ class CachedResults:
         """Lazy-scan the approach summary parquet, or None if not available."""
         if self.summary_by_approach_path and self.summary_by_approach_path.exists():
             return pl.scan_parquet(self.summary_by_approach_path)
+        return None
+
+    def scan_classification_audit(self) -> pl.LazyFrame | None:
+        """Lazy-scan the classification audit parquet, or None if not available."""
+        if self.classification_audit_path and self.classification_audit_path.exists():
+            return pl.scan_parquet(self.classification_audit_path)
         return None
 
 
@@ -100,6 +107,7 @@ class ResultsCache:
         results: pl.LazyFrame | pl.DataFrame,
         summary_by_class: pl.LazyFrame | pl.DataFrame | None = None,
         summary_by_approach: pl.LazyFrame | pl.DataFrame | None = None,
+        classification_audit: pl.LazyFrame | pl.DataFrame | None = None,
         metadata: dict | None = None,
     ) -> CachedResults:
         """
@@ -113,6 +121,7 @@ class ResultsCache:
             results: Main results (LazyFrame streamed, or DataFrame written directly)
             summary_by_class: Optional class summary
             summary_by_approach: Optional approach summary
+            classification_audit: Optional classification audit trail
             metadata: Optional metadata dict written as JSON
 
         Returns:
@@ -122,6 +131,7 @@ class ResultsCache:
         metadata_path = self._cache_dir / "last_results_meta.json"
         class_path = self._cache_dir / "last_summary_by_class.parquet"
         approach_path = self._cache_dir / "last_summary_by_approach.parquet"
+        audit_path = self._cache_dir / "last_classification_audit.parquet"
 
         # Write main results to parquet
         if isinstance(results, pl.DataFrame):
@@ -156,6 +166,19 @@ class ResultsCache:
             except Exception:
                 logger.warning("Failed to write summary_by_approach parquet")
 
+        audit_out = None
+        if classification_audit is not None:
+            try:
+                df = (
+                    classification_audit
+                    if isinstance(classification_audit, pl.DataFrame)
+                    else classification_audit.collect()
+                )
+                df.write_parquet(audit_path)
+                audit_out = audit_path
+            except Exception:
+                logger.warning("Failed to write classification_audit parquet")
+
         # Write metadata JSON
         if metadata is not None:
             metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -164,6 +187,7 @@ class ResultsCache:
             results_path=results_path,
             summary_by_class_path=class_out,
             summary_by_approach_path=approach_out,
+            classification_audit_path=audit_out,
             metadata_path=metadata_path if metadata is not None else None,
         )
 
@@ -181,11 +205,13 @@ class ResultsCache:
         metadata_path = self._cache_dir / "last_results_meta.json"
         class_path = self._cache_dir / "last_summary_by_class.parquet"
         approach_path = self._cache_dir / "last_summary_by_approach.parquet"
+        audit_path = self._cache_dir / "last_classification_audit.parquet"
 
         return CachedResults(
             results_path=results_path,
             summary_by_class_path=class_path if class_path.exists() else None,
             summary_by_approach_path=approach_path if approach_path.exists() else None,
+            classification_audit_path=audit_path if audit_path.exists() else None,
             metadata_path=metadata_path if metadata_path.exists() else None,
         )
 

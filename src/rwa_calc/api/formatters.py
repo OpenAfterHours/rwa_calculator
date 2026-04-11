@@ -120,11 +120,17 @@ class ResultFormatter:
             "exposure_count": summary.exposure_count,
         }
 
+        # Collect classification audit separately (different plan root from results)
+        classification_audit_df: pl.DataFrame | None = None
+        if bundle.classification_audit is not None:
+            classification_audit_df = bundle.classification_audit.collect()
+
         # Write results + summaries to parquet via cache (no re-execution)
         cached = cache.sink_results(
             results=results_df,
             summary_by_class=summary_by_class_df,
             summary_by_approach=summary_by_approach_df,
+            classification_audit=classification_audit_df,
             metadata=metadata,
         )
 
@@ -143,6 +149,7 @@ class ResultFormatter:
             results_path=cached.results_path,
             summary_by_class_path=cached.summary_by_class_path,
             summary_by_approach_path=cached.summary_by_approach_path,
+            classification_audit_path=cached.classification_audit_path,
             errors=errors,
             performance=performance,
         )

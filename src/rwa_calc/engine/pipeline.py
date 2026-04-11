@@ -265,6 +265,12 @@ class PipelineOrchestrator:
             # Stages 5-8: Calculation and aggregation
             result = self._run_calculators(crm_adjusted, config)
 
+            # Thread classification audit to final result (bypasses CRM/calculators)
+            if classified.classification_audit is not None:
+                result = replace(
+                    result, classification_audit=classified.classification_audit,
+                )
+
             # Add loader validation errors and pipeline errors to result
             loader_errors = list(data.errors) if data.errors else []
             pipeline_errors = [self._convert_pipeline_error(e) for e in self._errors]

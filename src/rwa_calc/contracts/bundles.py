@@ -425,6 +425,7 @@ class AggregatedResultBundle:
         post_crm_detailed: Post-CRM detailed view (split rows for guarantees)
         post_crm_summary: Post-CRM summary (net view by effective class)
         el_summary: Portfolio-level EL summary with T2 credit cap (IRB only)
+        classification_audit: Classification decision audit trail with explanations
         errors: All errors accumulated throughout pipeline
     """
 
@@ -442,6 +443,7 @@ class AggregatedResultBundle:
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None
     el_summary: ELPortfolioSummary | None = None
+    classification_audit: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 

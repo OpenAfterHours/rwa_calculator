@@ -183,6 +183,7 @@ class CalculationResponse:
         results_path: Path to cached results parquet file
         summary_by_class_path: Path to class summary parquet (or None)
         summary_by_approach_path: Path to approach summary parquet (or None)
+        classification_audit_path: Path to classification audit parquet (or None)
         errors: List of errors/warnings encountered
         performance: Performance metrics for the run
     """
@@ -194,6 +195,7 @@ class CalculationResponse:
     results_path: Path
     summary_by_class_path: Path | None = None
     summary_by_approach_path: Path | None = None
+    classification_audit_path: Path | None = None
     errors: list[APIError] = field(default_factory=list)
     performance: PerformanceMetrics | None = None
 
@@ -216,6 +218,12 @@ class CalculationResponse:
         """Lazy-scan the approach summary parquet, or None if not available."""
         if self.summary_by_approach_path and self.summary_by_approach_path.exists():
             return pl.scan_parquet(self.summary_by_approach_path)
+        return None
+
+    def scan_classification_audit(self) -> pl.LazyFrame | None:
+        """Lazy-scan the classification audit parquet, or None if not available."""
+        if self.classification_audit_path and self.classification_audit_path.exists():
+            return pl.scan_parquet(self.classification_audit_path)
         return None
 
     def to_parquet(self, output_dir: Path) -> ExportResult:

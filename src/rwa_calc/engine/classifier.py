@@ -1009,6 +1009,11 @@ class ExposureClassifier:
         # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
         is_ccp = pl.col("cp_entity_type") == "ccp"
 
+        # SL conditions reused by both approach and reason expressions
+        _is_sl = pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+        _sl_airb_eligible = _is_sl & sl_airb & has_internal_rating
+        _sl_slotting_eligible = _is_sl & sl_slotting
+
         approach_expr = (
             pl.when(managed_as_retail_without_lgd)
             .then(pl.lit(ApproachType.SA.value))
@@ -1022,16 +1027,10 @@ class ExposureClassifier:
             .when(_b31_ipre_hvcre_forced_slotting)
             .then(pl.lit(ApproachType.SLOTTING.value))
             # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31)
-            .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-                & sl_airb
-                & has_internal_rating
-            )
+            .when(_sl_airb_eligible)
             .then(pl.lit(ApproachType.AIRB.value))
             # SL slotting fallback (slotting does not require internal rating)
-            .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
-            )
+            .when(_sl_slotting_eligible)
             .then(pl.lit(ApproachType.SLOTTING.value))
             # A-IRB (model or org-wide, with B31 FSE/large-corp restriction applied)
             .when(airb_permitted_expr)
@@ -1045,6 +1044,143 @@ class ExposureClassifier:
             .then(pl.lit(ApproachType.EQUITY.value))
             .otherwise(pl.lit(ApproachType.SA.value))
             .alias("approach")
+        )
+
+        # --- Approach reason expression ---
+        # Mirrors the approach waterfall above with human-readable explanations.
+        approach_reason_expr = (
+            pl.when(managed_as_retail_without_lgd)
+            .then(pl.lit("SA: Retail exposure without modelled LGD"))
+            .when(_is_eu_domestic_sovereign)
+            .then(
+                pl.lit(
+                    "SA: EU domestic sovereign in domestic currency"
+                    " — forced to SA per Art. 114(4) for 0% RW"
+                )
+            )
+            .when(is_ccp)
+            .then(pl.lit("SA: CCP trade exposure (CRR Art. 300-311)"))
+            .when(_b31_ipre_hvcre_forced_slotting)
+            .then(
+                pl.lit(
+                    "Slotting: IPRE/HVCRE specialised lending"
+                    " — slotting required per Art. 147A(1)(c)"
+                )
+            )
+            .when(_sl_airb_eligible)
+            .then(pl.lit("AIRB: Specialised lending with AIRB permission and internal rating"))
+            .when(_sl_slotting_eligible)
+            .then(pl.lit("Slotting: Specialised lending with slotting permission"))
+            .when(airb_permitted_expr)
+            .then(pl.lit("AIRB: Internal rating and modelled LGD present; AIRB permission granted"))
+        )
+        # B31 FIRB sub-reasons: explain WHY AIRB was blocked
+        if config.is_basel_3_1:
+            approach_reason_expr = (
+                approach_reason_expr.when(firb_permitted_expr & _b31_institution_no_airb)
+                .then(pl.lit("FIRB: Institution exposure — AIRB not permitted per Art. 147A(1)(b)"))
+                .when(firb_permitted_expr & _is_fse)
+                .then(
+                    pl.lit("FIRB: Financial Sector Entity — AIRB not permitted per Art. 147A(1)(d)")
+                )
+                .when(firb_permitted_expr & _is_large_corp)
+                .then(
+                    pl.lit(
+                        "FIRB: Large corporate (revenue > threshold)"
+                        " — AIRB not permitted per Art. 147A(1)(e)"
+                    )
+                )
+            )
+        approach_reason_expr = (
+            approach_reason_expr.when(firb_permitted_expr)
+            .then(
+                pl.lit(
+                    "FIRB: Internal rating present; FIRB permission granted;"
+                    " AIRB not permitted or no modelled LGD"
+                )
+            )
+            .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
+            .then(pl.lit("Equity: Equity exposure class"))
+            .otherwise(
+                pl.lit(
+                    "SA: No IRB permission or no internal rating — default to Standardised Approach"
+                )
+            )
+            .alias("approach_reason")
+        )
+
+        # --- Retail reason expression ---
+        # Explains why the exposure was or was not reclassified to retail.
+        max_retail_exposure = float(config.thresholds.retail_max_exposure)
+        sme_threshold = float(config.thresholds.sme_turnover_threshold)
+        _is_corporate_class = pl.col("exposure_class").is_in(
+            [
+                ExposureClass.CORPORATE.value,
+                ExposureClass.CORPORATE_SME.value,
+            ]
+        ) | pl.col("exposure_class_irb").is_in(
+            [
+                ExposureClass.CORPORATE.value,
+                ExposureClass.CORPORATE_SME.value,
+            ]
+        )
+        retail_reason_expr = (
+            pl.when(pl.col("reclassified_to_retail"))
+            .then(
+                pl.lit(
+                    "Retail: Reclassified from corporate — meets threshold, SME, and pool criteria"
+                )
+            )
+            .when(~_is_corporate_class)
+            .then(
+                pl.lit(
+                    "Not applicable: Exposure class not eligible"
+                    " for corporate-to-retail reclassification"
+                )
+            )
+            .when(pl.col("lending_group_adjusted_exposure") > max_retail_exposure)
+            .then(
+                pl.concat_str(
+                    [
+                        pl.lit("Not retail: Lending group exposure ("),
+                        pl.col("lending_group_adjusted_exposure").round(0).cast(pl.String),
+                        pl.lit(f") exceeds threshold ({max_retail_exposure:,.0f})"),
+                        pl.lit(" — Art. 123"),
+                    ]
+                )
+            )
+            .when(pl.col("qualifies_as_retail") == False)  # noqa: E712
+            .then(
+                pl.lit(
+                    "Not retail: Does not meet retail qualification criteria (Art. 123 / Art. 123A)"
+                )
+            )
+            .when(pl.col("lgd").is_null())
+            .then(
+                pl.lit("Not retail: No modelled LGD — reclassification requires bank-estimated LGD")
+            )
+            .when(
+                (pl.col("cp_annual_revenue").fill_null(0.0) <= 0)
+                | (pl.col("cp_annual_revenue") >= sme_threshold)
+            )
+            .then(
+                pl.concat_str(
+                    [
+                        pl.lit("Not retail: Counterparty not SME (revenue "),
+                        pl.col("cp_annual_revenue").fill_null(0.0).round(0).cast(pl.String),
+                        pl.lit(f", threshold {sme_threshold:,.0f})"),
+                    ]
+                )
+            )
+            .when(~pl.col("cp_is_managed_as_retail").fill_null(True))
+            .then(
+                pl.lit(
+                    "Not retail: Counterparty not managed as retail pool"
+                    " — Art. 123A(1)(b)(iii) not met"
+                )
+            )
+            .otherwise(pl.lit("Not retail: Reclassification conditions not met"))
+            .alias("retail_reason")
         )
 
         # --- FIRB LGD clearing ---
@@ -1061,6 +1197,8 @@ class ExposureClassifier:
             [
                 approach_expr,
                 lgd_expr,
+                approach_reason_expr,
+                retail_reason_expr,
             ]
         )
 
@@ -1230,6 +1368,8 @@ class ExposureClassifier:
                 pl.col("residential_collateral_value"),
                 pl.col("lending_group_adjusted_exposure"),
                 pl.col("reclassified_to_retail"),
+                pl.col("approach_reason"),
+                pl.col("retail_reason"),
                 pl.concat_str(
                     [
                         pl.lit("entity_type="),

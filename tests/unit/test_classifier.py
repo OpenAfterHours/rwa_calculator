@@ -1548,6 +1548,275 @@ class TestClassificationAudit:
         assert "approach" in audit_df.columns
         assert "classification_reason" in audit_df.columns
 
+    def test_audit_trail_has_approach_reason(
+        self,
+        classifier: ExposureClassifier,
+        simple_exposures: pl.LazyFrame,
+        corporate_counterparties: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Audit trail should include approach_reason column."""
+        bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
+        result = classifier.classify(bundle, crr_config)
+
+        audit_df = result.classification_audit.collect()
+
+        assert "approach_reason" in audit_df.columns
+        # All SA under default CRR config (no IRB permissions)
+        for reason in audit_df["approach_reason"]:
+            assert reason is not None
+            assert reason.startswith("SA:")
+
+    def test_audit_trail_has_retail_reason(
+        self,
+        classifier: ExposureClassifier,
+        simple_exposures: pl.LazyFrame,
+        corporate_counterparties: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Audit trail should include retail_reason column."""
+        bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
+        result = classifier.classify(bundle, crr_config)
+
+        audit_df = result.classification_audit.collect()
+
+        assert "retail_reason" in audit_df.columns
+        for reason in audit_df["retail_reason"]:
+            assert reason is not None
+
+    def test_approach_reason_sa_no_irb_permission(
+        self,
+        classifier: ExposureClassifier,
+        simple_exposures: pl.LazyFrame,
+        corporate_counterparties: pl.LazyFrame,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SA exposures should have approach_reason explaining no IRB permission."""
+        bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
+        result = classifier.classify(bundle, crr_config)
+
+        audit_df = result.classification_audit.collect()
+        sa_reasons = audit_df.filter(pl.col("approach") == ApproachType.SA.value)["approach_reason"]
+
+        for reason in sa_reasons:
+            assert "SA:" in reason
+
+    def test_approach_reason_firb_with_model_permissions(
+        self,
+        classifier: ExposureClassifier,
+        crr_config_with_irb: CalculationConfig,
+    ) -> None:
+        """FIRB exposures should have approach_reason explaining FIRB selection."""
+        # Create exposure with internal rating but no modelled LGD (→ FIRB)
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_FIRB"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CORP_FIRB"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [None],  # No modelled LGD → FIRB not AIRB
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CORP_FIRB"],
+                "counterparty_name": ["FIRB Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [50000000.0],
+                "total_assets": [250000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        # Model permissions granting both FIRB and AIRB for corporate
+        model_perms = pl.DataFrame(
+            {
+                "model_id": ["CORP_PD"],
+                "exposure_class": [ExposureClass.CORPORATE.value],
+                "approach": [ApproachType.FIRB.value],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(
+            exposures,
+            counterparties,
+            model_permissions=model_perms,
+        )
+        # Add internal_pd via ratings (normally done by hierarchy resolver)
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures.with_columns(
+                pl.lit(0.02).alias("internal_pd"),
+                pl.lit("CORP_PD").alias("model_id"),
+            ),
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=model_perms,
+        )
+
+        result = classifier.classify(bundle, crr_config_with_irb)
+        audit_df = result.classification_audit.collect()
+
+        assert len(audit_df) == 1
+        assert audit_df["approach"][0] == ApproachType.FIRB.value
+        assert "FIRB:" in audit_df["approach_reason"][0]
+
+    def test_retail_reason_threshold_exceeded(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Corporate exposure exceeding retail threshold should explain why."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_LARGE_CORP"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CORP_BIG"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CORP_BIG"],
+                "counterparty_name": ["Big Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [100000000.0],
+                "total_assets": [500000000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(exposures, counterparties)
+        result = classifier.classify(bundle, crr_config)
+
+        audit_df = result.classification_audit.collect()
+
+        # Corporate with large exposure should not qualify as retail
+        reason = audit_df["retail_reason"][0]
+        assert "Not retail" in reason or "Not applicable" in reason
+
+    def test_approach_reason_b31_institution_firb(
+        self,
+        classifier: ExposureClassifier,
+    ) -> None:
+        """B31 institution should get FIRB with Art. 147A(1)(b) reason."""
+        b31_config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 1, 1),
+            permission_mode=PermissionMode.IRB,
+        )
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_INST"],
+                "exposure_type": ["loan"],
+                "product_type": ["INTERBANK_DEPOSIT"],
+                "book_code": ["FI"],
+                "counterparty_reference": ["INST_01"],
+                "value_date": [date(2027, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [10000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["INST_01"],
+                "counterparty_name": ["Bank ABC"],
+                "entity_type": ["bank"],
+                "country_code": ["GB"],
+                "annual_revenue": [5000000000.0],
+                "total_assets": [100000000000.0],
+                "default_status": [False],
+                "sector_code": ["BANK"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        model_perms = _full_model_permissions()
+
+        bundle = create_resolved_bundle(
+            exposures,
+            counterparties,
+            model_permissions=model_perms,
+        )
+        bundle = ResolvedHierarchyBundle(
+            exposures=bundle.exposures.with_columns(
+                pl.lit(0.005).alias("internal_pd"),
+                pl.lit(_TEST_MODEL_ID).alias("model_id"),
+            ),
+            counterparty_lookup=bundle.counterparty_lookup,
+            lending_group_totals=bundle.lending_group_totals,
+            model_permissions=model_perms,
+        )
+
+        result = classifier.classify(bundle, b31_config)
+        audit_df = result.classification_audit.collect()
+
+        assert len(audit_df) == 1
+        assert audit_df["approach"][0] == ApproachType.FIRB.value
+        reason = audit_df["approach_reason"][0]
+        assert "Institution" in reason
+        assert "147A(1)(b)" in reason
+
 
 # =============================================================================
 # Factory Function Tests

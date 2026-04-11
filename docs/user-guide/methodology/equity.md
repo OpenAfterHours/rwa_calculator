@@ -24,7 +24,7 @@ Under CRR, Art. 133(2) assigns a **flat 100% risk weight** to all equity exposur
 | Central bank / sovereign equity | 0% | Sovereign treatment |
 | All other equity (listed, unlisted, PE, etc.) | 100% | Art. 133(2) flat |
 
-PE/VC and speculative equity that qualifies as high-risk may be reclassified under Art. 128 (150%), but that is a separate exposure class treatment, not an Art. 133 weight.
+Under Basel 3.1, equity that is unlisted and where the business has existed for less than five years is classified as "higher-risk" (400%, Art. 133(4)). PE/VC is only higher-risk if it meets both criteria — long-established PE holdings receive standard 250%.
 
 !!! warning "Common Confusion: CRR vs Basel 3.1 Art. 133"
     CRR Art. 133 assigns a flat 100% to all equity. **Basel 3.1** rewrites Art. 133 with differentiated weights: 250% (standard), 400% (higher risk), 150% (subordinated debt), 100% (legislative). Do not confuse the two. See the [Equity Approach Specification](../../specifications/crr/equity-approach.md) for full details including CIU treatment and the Basel 3.1 transitional schedule.

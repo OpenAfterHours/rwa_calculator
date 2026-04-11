@@ -461,8 +461,7 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
 | Equity Type | Risk Weight (Fully Phased) |
 |-------------|---------------------------|
 | Standard listed equities | **250%** |
-| Higher-risk equities (unlisted, < 5 years) | **400%** |
-| Speculative / venture capital | **400%** |
+| Higher-risk equities (unlisted + business < 5 years) | **400%** |
 
 **Transitional phase-in schedule:**
 

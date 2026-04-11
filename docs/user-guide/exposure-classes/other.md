@@ -15,7 +15,7 @@ Equity exposures include:
 
 ### SA Risk Weights
 
-CRR assigns a flat 100% SA risk weight to all equity under Art. 133(2), with higher weights under IRB Simple (Art. 155: 290% exchange-traded, 370% PE/VC). Basel 3.1 removes IRB equity approaches and significantly increases SA weights to 250% (standard listed, Art. 133(3)) and 400% (higher risk: unlisted held <5 years, PE/VC, Art. 133(5)), with a transitional phase-in from 2027.
+CRR assigns a flat 100% SA risk weight to all equity under Art. 133(2), with higher weights under IRB Simple (Art. 155: 290% exchange-traded, 370% other). Basel 3.1 removes IRB equity approaches and significantly increases SA weights to 250% (standard, Art. 133(3)) and 400% (higher risk: unlisted + business < 5 years, Art. 133(4)), with a transitional phase-in from 2027.
 
 !!! warning "Basel 3.1"
     IRB approaches for equity are **removed** under Basel 3.1. Only SA is permitted.
@@ -45,7 +45,7 @@ Total_RWA = £10,000,000
 # Exchange-traded: £7m (standard listed: 250%)
 RWA_exchange = £7,000,000 × 250% = £17,500,000
 
-# Private equity: £3m (higher risk: 400%)
+# Private equity: £3m (higher risk — unlisted, business < 5yr: 400%)
 RWA_private = £3,000,000 × 400% = £12,000,000
 
 # Total

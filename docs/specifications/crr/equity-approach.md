@@ -57,7 +57,7 @@ Significant increase in equity risk weights under Basel 3.1:
 
 !!! warning "Correction: PRA vs BCBS Equity Categories"
     - **No "CQS 1-2 speculative" tier in PRA**: The BCBS framework (CRE60.20) includes speculative unlisted equity tiers differentiated by CQS. PRA PS1/26 Art. 133 does **not** include these tiers — all non-legislative, non-subordinated equity is either standard (250%, Art. 133(3)) or higher-risk (400%, Art. 133(4)).
-    - **Higher-risk definition**: Under PRA Art. 133(4), "higher risk" equity means equity that is not listed on a recognised exchange AND (held for short-term resale OR derived from a derivative position), OR private equity / venture capital holdings.
+    - **Higher-risk definition**: Under PRA PS1/26 Glossary (p.5), "higher risk equity exposure" means equity that is (1) **not listed on a recognised exchange** AND (2) the underlying **business has existed for less than five years**. PE/VC is only higher-risk if it meets both criteria — there is no automatic PE/VC = 400% rule. The prior definition here (short-term resale / derivative position / PE-VC) was the BCBS CRE60.20 definition, not PRA.
     - **Art. 133(5) is subordinated debt / non-equity own funds**: 150% risk weight for subordinated debt and capital instruments that are not classified as equity exposures.
     - **Art. 133(6) is a carve-out**: Legislative equity at 100% is a carve-out for government-mandated holdings (e.g., holdings required by national development policy legislation). It is not a general 100% weight category.
 
@@ -70,17 +70,18 @@ Is it legislative equity (government-mandated, Art. 133(6) carve-out)?
   → Yes: 100% (Art. 133(6))
 Is it listed on a recognised exchange?
   → Yes: 250% (Art. 133(3))
-Is it higher risk (unlisted AND (held for short-term resale OR from derivative), OR PE/VC)?
+Is it higher risk (unlisted AND business < 5 years)?
   → Yes: 400% (Art. 133(4))
-Otherwise (unlisted, not higher-risk, not PE/VC):
+Otherwise (unlisted, business ≥ 5 years, including PE/VC not meeting higher-risk criteria):
   → 250% (Art. 133(3))
 ```
 
 !!! note "Unlisted Non-Higher-Risk Treatment"
-    For unlisted equity that does not meet the higher-risk definition (Art. 133(4))
-    and is not PE/VC, the PRA assigns the standard **250%** weight under Art. 133(3).
-    The BCBS framework would differentiate via CQS speculative tiers, but PRA does
-    not use that structure.
+    Unlisted equity where the business has existed for **five years or more** receives
+    the standard **250%** weight under Art. 133(3), including PE/VC holdings in
+    established businesses. Only unlisted equity in undertakings whose business has
+    existed for less than five years qualifies as higher-risk (400%). The BCBS framework
+    would differentiate via CQS speculative tiers, but PRA does not use that structure.
 
 ## CRR IRB Simple Risk Weight Method (Art. 155)
 

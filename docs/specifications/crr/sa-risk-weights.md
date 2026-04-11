@@ -685,11 +685,11 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 |-------------|-------------|-----------|
 | Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
 | Standard equity (listed) | 250% | Art. 133(3) |
-| Higher risk (unlisted AND held < 5yr, or PE/VC) | 400% | Art. 133(5) |
+| Higher risk (unlisted + business < 5 years) | 400% | Art. 133(4) |
 | Legislative equity (carve-out for govt-mandated holdings) | 100% | Art. 133(6) |
 
 !!! warning "PRA Deviation from BCBS"
-    PRA Art. 133 does **not** include the BCBS "CQS 1-2 speculative unlisted = 100%" or "CQS 3-6/unrated speculative = 150%" tiers. PRA uses a simpler structure: listed = 250%, higher-risk (unlisted <5yr / PE/VC) = 400%.
+    PRA Art. 133 does **not** include the BCBS "CQS 1-2 speculative unlisted = 100%" or "CQS 3-6/unrated speculative = 150%" tiers. PRA uses a simpler structure: listed = 250%, higher-risk (unlisted + business < 5 years, per Glossary p.5) = 400%. PE/VC is only higher-risk if it meets both criteria.
 
 **Note:** Basel 3.1 removes IRB equity approaches (Art. 147A). All equity uses SA risk weights. See [Equity Approach](equity-approach.md) for full details including CIU treatment and transitional schedule.
 

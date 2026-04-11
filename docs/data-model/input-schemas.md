@@ -694,7 +694,7 @@ fx_rates = pl.DataFrame({
 | `currency` | `String` | Yes | ISO 4217 currency code |
 | `carrying_value` | `Float64` | Yes | Balance sheet value |
 | `fair_value` | `Float64` | No | Mark-to-market value |
-| `is_speculative` | `Boolean` | No | Speculative unlisted equity |
+| `is_speculative` | `Boolean` | No | Higher-risk equity (unlisted + business < 5yr) |
 | `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange |
 | `is_government_supported` | `Boolean` | No | Government-supported programme |
 | `is_significant_investment` | `Boolean` | No | >10% of CET1 |
@@ -710,7 +710,7 @@ fx_rates = pl.DataFrame({
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
 | `private_equity_diversified` | 190% | Diversified private equity portfolio |
-| `speculative` | 400% | Speculative unlisted |
+| `speculative` | 400% | Higher-risk (unlisted + business < 5yr) |
 | `ciu` | Look-through | Collective investment undertakings |
 | `other` | 250% | Other equity exposures |
 

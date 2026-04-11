@@ -681,8 +681,14 @@ exposure is not hedged. Distinct from the 8% FX collateral haircut in CRM.
 | Type | CRR (Art. 133(2)) | Basel 3.1 (Fully Phased) | Change |
 |------|-----|--------------------------|--------|
 | Standard listed equities | 100% | **250%** | +150pp |
-| Higher-risk (unlisted, PE, etc.) | 100% | **400%** | +300pp |
-| Speculative / venture capital | 100% (Art. 133(2)) | **400%** | +300pp |
+| Higher-risk (unlisted + business < 5 years) | 100% | **400%** | +300pp |
+
+!!! warning "Correction: Higher-Risk Definition (Fixed D1.38)"
+    This table previously had two higher-risk rows ("Higher-risk (unlisted, PE, etc.)" and
+    "Speculative / venture capital"). PRA PS1/26 Glossary (p.5) defines "higher risk equity
+    exposure" solely as: (1) not listed on a recognised exchange AND (2) business has existed
+    for less than five years. PE/VC is **not** automatically higher-risk — only if it meets
+    both criteria. See [Equity Approach Specification](../specifications/basel31/equity-approach.md#higher-risk-classification-art-1334).
 
 IRB is **removed** for equity under Basel 3.1 — SA only. The PD/LGD method (CRR Art. 155)
 is blanked in the final rules.
@@ -728,7 +734,7 @@ for equity underlyings has a material impact:
     The 1,250% fallback applies only where neither look-through nor mandate-based
     approaches are feasible. CIU equity exposures **excluded** under Art. 132B(2)
     (e.g., sovereign entities, legislative programme holdings) instead receive
-    Art. 133 equity treatment (250% listed / 400% unlisted under Basel 3.1).
+    Art. 133 equity treatment (250% standard / 400% higher-risk under Basel 3.1).
 
 !!! warning "Implementation Note"
     The calculator currently applies 150% (CRR) / 250%-400% (Basel 3.1) for

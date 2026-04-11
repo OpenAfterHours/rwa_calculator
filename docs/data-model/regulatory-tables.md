@@ -547,7 +547,7 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Legislative programme | 100% | 100% (Art. 133(6)) |
 | Subordinated debt | 150% | 150% (Art. 133(1)) |
 | Standard (listed) | 250% | 250% (Art. 133(3)) |
-| Higher risk (unlisted/PE/VC) | 400% | 400% (Art. 133(5)) |
+| Higher risk (unlisted + business < 5yr) | 400% | 400% (Art. 133(4)) |
 | CIU (fallback) | 250% | 1,250% (Art. 132(2)) |
 
 ### IRB Simple Equity (CRR Art. 155)

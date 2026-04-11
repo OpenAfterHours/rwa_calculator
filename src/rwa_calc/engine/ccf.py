@@ -85,7 +85,7 @@ def sa_ccf_expression(
     - FRC / full_risk_commitment: 100% (Row 2 — repos, factoring, forward deposits)
     - MR / medium_risk: 50%
     - MLR / medium_low_risk: 20%
-    - OC / other_commit: 0% (no separate category under CRR)
+    - OC / other_commit: 50% conservative default (CRR: 50% if >1yr, 20% if <=1yr)
     - LR / low_risk: 0%
 
     Basel 3.1 (PRA Art. 111 Table A1):
@@ -103,9 +103,10 @@ def sa_ccf_expression(
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
     # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1 Row 6)
     lr_ccf = 0.10 if is_basel_3_1 else 0.0
-    # Basel 3.1: "Other commitments" gets 40% (Table A1 Row 5); CRR has no
-    # separate category — these were 0% (lumped with LR/UCC).
-    oc_ccf = 0.40 if is_basel_3_1 else 0.0
+    # Basel 3.1: "Other commitments" gets 40% (Table A1 Row 5); CRR: 50%
+    # conservative default (maturity-dependent override to 20% in _compute_ccf
+    # for <=1yr). Under CRR, OC mapped to MR (50%) or MLR (20%) by maturity.
+    oc_ccf = 0.40 if is_basel_3_1 else 0.50
     return (
         pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
         .then(pl.lit(1.0))
@@ -126,7 +127,8 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
 
     CRR Art. 166(8): 75% for commitments, with exceptions:
     - FR/FRC = 100%
-    - LR/OC = 0%
+    - LR = 0%
+    - OC = 75% (CRR: no separate category; maps to MR/MLR, both 75%)
     - MLR with is_short_term_trade_lc = 20% (Art. 166(9))
     - MR/MLR otherwise = 75%
 
@@ -137,8 +139,10 @@ def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
     return (
         pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
         .then(pl.lit(1.0))
-        .when(normalized.is_in(["lr", "low_risk", "oc", "other_commit"]))
+        .when(normalized.is_in(["lr", "low_risk"]))
         .then(pl.lit(0.0))
+        .when(normalized.is_in(["oc", "other_commit"]))
+        .then(pl.lit(0.75))
         .when(
             normalized.is_in(["mlr", "medium_low_risk"])
             & pl.col("is_short_term_trade_lc").fill_null(False)
@@ -291,6 +295,27 @@ class CCFCalculator:
                 "_nominal_is_zero"
             ),
         )
+
+        # CRR maturity-dependent OC override: under CRR, "other commitments" mapped
+        # to MR (50%, >1yr) or MLR (20%, <=1yr). The sa_ccf_expression gives OC 50%
+        # as the conservative default; override to 20% when remaining maturity <= 1yr.
+        if not is_b31:
+            normalized_rt = pl.col("risk_type").fill_null("").str.to_lowercase()
+            is_oc = normalized_rt.is_in(["oc", "other_commit"])
+            schema_names = exposures.collect_schema().names()
+            if "maturity_date" in schema_names:
+                is_short_maturity = pl.col("maturity_date").is_not_null() & (
+                    (
+                        pl.col("maturity_date").cast(pl.Date) - pl.lit(config.reporting_date)
+                    ).dt.total_days()
+                    <= 365
+                )
+                exposures = exposures.with_columns(
+                    pl.when(is_oc & is_short_maturity)
+                    .then(pl.lit(0.2))
+                    .otherwise(pl.col("_sa_ccf_from_risk_type"))
+                    .alias("_sa_ccf_from_risk_type"),
+                )
 
         # Art. 111(1)(c): commitment-to-issue lower-of rule.
         # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.

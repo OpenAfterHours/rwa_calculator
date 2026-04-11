@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.190] — 2026-04-11
+
+### Fixed
+- **CCF (P1.166)**: CRR OC (Other Commitments) CCF corrected from **0%** to maturity-dependent values. Under CRR, the OC category did not exist — commitments were classified by maturity: >1yr → MR (50% SA / 75% F-IRB), ≤1yr → MLR (20% SA / 75% F-IRB). The only 0% category was LR (unconditionally cancellable). Previously **understated capital** for all OC-tagged exposures under CRR. SA CRR: OC now receives 50% (>1yr) or 20% (≤1yr, based on maturity_date vs reporting_date); 50% conservative default when maturity_date absent. F-IRB CRR: OC moved from 0% to 75% (both MR and MLR are 75% under F-IRB). Basel 3.1 OC (40%) unchanged. Updated `sa_ccf_expression()`, `_firb_ccf_for_col()`, and `_compute_ccf()` with maturity-aware override. Spec F-IRB table corrected. 7 unit tests updated, 6 new tests added.
+
 ## [0.1.189] — 2026-04-11
 
 ### Fixed

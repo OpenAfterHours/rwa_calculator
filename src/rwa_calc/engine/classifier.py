@@ -633,35 +633,20 @@ class ExposureClassifier:
         schema_names: set[str],
     ) -> pl.LazyFrame:
         """
-        Reclassify qualifying corporates to retail for AIRB treatment.
+        Reclassify qualifying corporates to retail.
 
-        Per CRR Art. 147(5) / Basel CRE30.16-17, corporate exposures can be
-        treated as retail if:
+        Retail outranks corporate in the exposure class waterfall per
+        CRR Art. 147(5) / Basel CRE30.16-17. Corporate exposures are
+        reclassified to retail when all of:
         1. Managed as part of a retail pool (is_managed_as_retail=True)
         2. Aggregated exposure < EUR 1m (qualifies_as_retail=True)
         3. Has internally modelled LGD (lgd IS NOT NULL)
         4. Turnover < EUR 50m (SME definition per CRR Art. 501)
 
-        Only applies when AIRB is permitted for retail but not for corporate.
+        Reclassification is an exposure-class decision, independent of
+        approach permissions. The approach (AIRB/FIRB/SA) is determined
+        later by _assign_approach using model_permissions.
         """
-        airb_for_retail = config.irb_permissions.is_permitted(
-            ExposureClass.RETAIL_OTHER,
-            ApproachType.AIRB,
-        )
-        airb_for_corporate = config.irb_permissions.is_permitted(
-            ExposureClass.CORPORATE,
-            ApproachType.AIRB,
-        )
-
-        # Short-circuit: reclassification not relevant
-        if airb_for_corporate or not airb_for_retail:
-            return exposures.with_columns(
-                [
-                    pl.lit(False).alias("reclassified_to_retail"),
-                    pl.lit(False).alias("has_property_collateral"),
-                ]
-            )
-
         sme_turnover_threshold = float(config.thresholds.sme_turnover_threshold)
 
         # Reclassification eligibility expression (inlined — not a column ref)

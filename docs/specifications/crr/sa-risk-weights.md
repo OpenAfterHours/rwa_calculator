@@ -479,10 +479,43 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 
 ## Commercial Real Estate (CRR Art. 126)
 
-| Condition | Risk Weight |
-|-----------|-------------|
-| LTV ≤ 50% and rental income ≥ 1.5x interest costs | 50% |
-| All other CRE | 100% |
+Exposures secured by mortgages on commercial immovable property. Art. 126(2)(d) applies a
+**proportion-based split** analogous to Art. 125 for residential — the 50% risk weight applies
+only to the part of the loan that does not exceed 50% of market value (or 60% of mortgage
+lending value). The remainder falls to the counterparty's standard exposure class weight.
+
+**Art. 126(2) qualifying conditions** for the 50% secured portion:
+
+- (a) Property value does not materially depend on borrower credit quality
+- (b) Borrower risk does not materially depend on property/project performance — repayment
+  capacity from other sources (i.e. not income-dependent)
+- (c) Art. 208 requirements and Art. 229(1) valuation rules are met
+- (d) 50% RW assigned to the part of the loan not exceeding 50% of market value or 60% of MLV
+
+| LTV | Treatment |
+|-----|-----------|
+| LTV ≤ 50% | 50% on whole exposure (entire loan within secured portion) |
+| LTV > 50% | Split: 50% on portion up to 50% MV, counterparty RW on excess |
+
+**Blended formula for LTV > 50%:**
+
+```
+secured_share = min(1.0, 0.50 / LTV)
+avg_RW = 0.50 × secured_share + counterparty_RW × (1.0 - secured_share)
+```
+
+!!! note "Income Cover and Loss Rate Derogation"
+    Art. 126(2)(b) requires that repayment does not materially depend on cash flows from
+    the property. Art. 126(3)–(4) provides a derogation: where the PRA has determined that
+    loss rates for CRE-secured loans do not exceed 0.3% on the secured portion and 0.5%
+    overall, condition (b) may be waived (allowing income-dependent CRE to qualify).
+
+!!! bug "Code Divergence (D3.36)"
+    The calculator implements Art. 126 as a **binary whole-loan** treatment (50% if
+    LTV ≤ 50% with income cover, 100% otherwise) rather than the proportion-based split
+    required by Art. 126(2)(d). For exposures with LTV > 50% that meet all qualifying
+    conditions, the code assigns 100% to the entire exposure instead of splitting: 50% on
+    the portion up to 50% MV and counterparty RW on the excess.
 
 ## Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 

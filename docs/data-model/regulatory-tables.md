@@ -158,12 +158,22 @@ Under CRR, residential mortgages use a split treatment based on 80% LTV threshol
 
 ### CRR Commercial Real Estate (CRR Art. 126)
 
-| Condition | Risk Weight |
-|-----------|------------|
-| LTV ≤ 50% with income cover | 50% |
-| All other | 100% |
+Under CRR, commercial RE uses a proportion-based split analogous to Art. 125 for residential.
+Art. 126(2)(d): the 50% RW applies only to the part of the loan not exceeding 50% of market
+value (or 60% of MLV). The remainder falls to the counterparty's standard exposure class weight.
+
+- LTV ≤ 50%: 50% risk weight (entire loan within secured portion)
+- LTV > 50%: 50% on portion up to 50% MV, counterparty RW on excess
+
+Art. 126(2)(a)–(c) qualifying conditions must also be met (property value independence from
+borrower credit quality, repayment not dependent on property cash flows, Art. 208/229
+compliance).
 
 **Source**: `COMMERCIAL_RE_PARAMS` in `data/tables/crr_risk_weights.py`
+
+!!! bug "Code Divergence (D3.36)"
+    The calculator implements Art. 126 as a binary whole-loan treatment (50% if LTV ≤ 50%
+    with income cover, 100% otherwise) rather than the regulatory proportion-based split.
 
 ### Basel 3.1 Residential Real Estate (PRA PS1/26 Art. 124F-124G)
 

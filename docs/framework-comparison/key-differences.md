@@ -529,12 +529,14 @@ Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875
 
 | Portion | CRR (Art. 126) | Basel 3.1 (Art. 124H) | Change |
 |---------|----------------|----------------------|--------|
-| Secured portion | 50% (≤50% LTV) | **60%** (≤55% LTV) | Higher RW, higher threshold |
-| Unsecured residual | 100% | Counterparty RW (Art. 124L) | Risk-sensitive |
+| Secured portion | 50% (≤50% MV / 60% MLV) | **60%** (≤55% property value) | Higher RW, higher threshold |
+| Unsecured residual | Counterparty RW | Counterparty RW (Art. 124L) | Explicit lookup table added |
 
-CRR Art. 126 applies a two-part split to all CRE regardless of counterparty type.
-Basel 3.1 Art. 124H(1)–(2) restricts loan-splitting to natural persons and SMEs,
-with a higher secured RW (60% vs 50%) and a higher threshold (55% vs 50%).
+CRR Art. 126(2)(d) applies a proportion-based split to all qualifying CRE regardless of
+counterparty type: the 50% RW applies only to the part of the loan not exceeding 50% of
+market value (or 60% of MLV), with the excess falling to the counterparty's standard
+exposure class weight. Basel 3.1 Art. 124H(1)–(2) restricts loan-splitting to natural
+persons and SMEs, with a higher secured RW (60% vs 50%) and a higher threshold (55% vs 50%).
 
 !!! info "Art. 124H(3) — Large Corporate CRE (Non-Natural-Person, Non-SME)"
     For counterparties that are **not** natural persons and **not** SMEs (e.g. large corporates,

@@ -270,8 +270,10 @@ tests/fixtures/
 - LTV >80%: Split treatment (35% on 80%, 75% on excess)
 
 **Commercial (Art. 126):**
-- LTV ≤50%: 50% (where rental income >1.5x interest)
-- Otherwise: 100%
+- LTV ≤50%: 50% on whole exposure (entire loan within secured portion)
+- LTV >50%: Split treatment — 50% on portion up to 50% MV, counterparty RW on excess
+- Qualifying conditions: Art. 126(2)(a)–(c) — property value independence, repayment not
+  dependent on property cash flows, Art. 208/229 compliance
 
 ### CCFs (Art. 111)
 

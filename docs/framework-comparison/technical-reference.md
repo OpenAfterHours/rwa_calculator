@@ -317,7 +317,8 @@ Basel 3.1 replaces CRR Art. 125 (flat 35% up to 80% LTV) with two distinct resid
 
 ## SA Commercial Real Estate Risk Weights (Basel 3.1)
 
-Basel 3.1 replaces CRR Art. 126 (flat 50%/100% split for all CRE) with entity-type-differentiated
+Basel 3.1 replaces CRR Art. 126 (proportion-based split: 50% on portion up to 50% MV,
+counterparty RW on excess — applied uniformly to all CRE) with entity-type-differentiated
 treatment under Art. 124H:
 
 | Counterparty Type | Treatment | Risk Weight | Reference |

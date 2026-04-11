@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.190] — 2026-04-11
 
 ### Fixed
+- **Guarantees (#239)**: Fixed two bugs in multi-guarantor handling:
+  1. **Non-beneficial guarantors consuming EAD**: When an exposure has multiple guarantors and some are non-beneficial, the pro-rata scaling no longer wastes EAD on non-beneficial guarantors. After the SA/IRB beneficial check, a new `redistribute_non_beneficial()` function reallocates freed portions to beneficial guarantors using a greedy strategy ordered by ascending risk weight (lowest RW fills first), minimising total RWA.
+  2. **FX/restructuring haircuts applied after capping**: The 8% FX mismatch haircut (Art. 233(3-4)) and 40% CDS restructuring exclusion haircut (Art. 233(2)) are now applied to the nominal credit protection value (G) *before* capping at EAD, per CRR Art. 233/235. Previously, a large cross-currency guarantee that vastly exceeded EAD would incorrectly have coverage reduced (e.g. £200m guarantee on €1m loan → was 920k, now correctly 1m).
 - **CCF (P1.166)**: CRR OC (Other Commitments) CCF corrected from **0%** to maturity-dependent values. Under CRR, the OC category did not exist — commitments were classified by maturity: >1yr → MR (50% SA / 75% F-IRB), ≤1yr → MLR (20% SA / 75% F-IRB). The only 0% category was LR (unconditionally cancellable). Previously **understated capital** for all OC-tagged exposures under CRR. SA CRR: OC now receives 50% (>1yr) or 20% (≤1yr, based on maturity_date vs reporting_date); 50% conservative default when maturity_date absent. F-IRB CRR: OC moved from 0% to 75% (both MR and MLR are 75% under F-IRB). Basel 3.1 OC (40%) unchanged. Updated `sa_ccf_expression()`, `_firb_ccf_for_col()`, and `_compute_ccf()` with maturity-aware override. Spec F-IRB table corrected. 7 unit tests updated, 6 new tests added.
 
 ## [0.1.189] — 2026-04-11

@@ -1688,6 +1688,13 @@ class SACalculator:
             ]
         )
 
+        # Redistribute non-beneficial guarantee portions to beneficial guarantors.
+        # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
+        # to the most beneficial (lowest RW) guarantors using greedy fill.
+        from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
+
+        exposures = redistribute_non_beneficial(exposures)
+
         # Calculate blended risk weight using substitution approach
         # Only apply if guarantee is beneficial
         # RWA = (unguaranteed_portion * borrower_rw + guaranteed_portion * guarantor_rw) / ead_final

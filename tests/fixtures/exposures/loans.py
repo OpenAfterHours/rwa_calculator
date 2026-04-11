@@ -24,11 +24,11 @@ from pathlib import Path
 
 import polars as pl
 
-from rwa_calc.config.fx_rates import get_crr_threshold_gbp
+from rwa_calc.contracts.config import RegulatoryThresholds
 from rwa_calc.data.schemas import LOAN_SCHEMA
 
 # SME exposure threshold in GBP (derived from EUR 2.5m using FX rate)
-SME_EXPOSURE_THRESHOLD_GBP = float(get_crr_threshold_gbp("sme_exposure"))
+SME_EXPOSURE_THRESHOLD_GBP = float(RegulatoryThresholds.crr().sme_exposure_threshold)
 
 
 def main() -> None:

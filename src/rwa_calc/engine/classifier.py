@@ -47,10 +47,6 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
-from rwa_calc.data.tables.b31_risk_weights import (
-    B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP,
-    B31_SME_TURNOVER_THRESHOLD_GBP,
-)
 from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
 from rwa_calc.domain.enums import (
     ApproachType,
@@ -450,7 +446,7 @@ class ExposureClassifier:
           backward compatibility.
         - CRR: threshold check only (no Art. 123A).
         """
-        max_retail_exposure = float(config.retail_thresholds.max_exposure_threshold)
+        max_retail_exposure = float(config.thresholds.retail_max_exposure)
 
         # SL override: exposures with sl_type (from specialised_lending join) get
         # SPECIALISED_LENDING class regardless of counterparty entity_type.
@@ -548,15 +544,8 @@ class ExposureClassifier:
 
         Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
         """
-        if config.is_basel_3_1:
-            # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-            sme_threshold_gbp = float(B31_SME_TURNOVER_THRESHOLD_GBP)
-        else:
-            # CRR: EUR 50m converted to GBP via FX rate
-            sme_threshold_gbp = float(
-                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-            )
-        qrre_max_limit = float(config.retail_thresholds.qrre_max_limit)
+        sme_threshold_gbp = float(config.thresholds.sme_turnover_threshold)
+        qrre_max_limit = float(config.thresholds.qrre_max_limit)
 
         # Conditions reused across expressions (reading Phase 2 columns)
         is_corporate_sme = (
@@ -673,14 +662,7 @@ class ExposureClassifier:
                 ]
             )
 
-        if config.is_basel_3_1:
-            # PRA PS1/26 Art. 153(4): native GBP 44m threshold
-            sme_turnover_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
-        else:
-            # CRR: EUR 50m converted to GBP via FX rate
-            sme_turnover_threshold = float(
-                config.supporting_factors.sme_turnover_threshold_eur * config.eur_gbp_rate
-            )
+        sme_turnover_threshold = float(config.thresholds.sme_turnover_threshold)
 
         # Reclassification eligibility expression (inlined — not a column ref)
         reclassification_expr = (
@@ -993,7 +975,8 @@ class ExposureClassifier:
                     .fill_null(False)
                 )
             _is_large_corp = (
-                pl.col("cp_annual_revenue") > float(B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP)
+                pl.col("cp_annual_revenue")
+                > float(config.thresholds.large_corporate_revenue_threshold)
             ).fill_null(False)
 
             # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
@@ -1173,8 +1156,7 @@ class ExposureClassifier:
             )
 
         # Basel 3.1: Art. 123A two-path qualifying criteria
-        # PRA PS1/26 Art. 153(4): native GBP 44m threshold, no FX conversion
-        sme_threshold = float(B31_SME_TURNOVER_THRESHOLD_GBP)
+        sme_threshold = float(config.thresholds.sme_turnover_threshold)
 
         # Art. 123A(1)(a): SME auto-qualification — revenue > 0 and < threshold
         is_sme_for_art_123a = (pl.col("cp_annual_revenue").fill_null(0.0) > 0) & (

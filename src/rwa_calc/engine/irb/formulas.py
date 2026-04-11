@@ -415,10 +415,13 @@ def apply_irb_formulas(
     # Step 3: Calculate correlation using pure Polars expressions
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
+    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
     exposures = exposures.with_columns(
-        _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
-            "correlation"
-        )
+        _polars_correlation_expr(
+            eur_gbp_rate=eur_gbp_rate,
+            is_b31=config.is_basel_3_1,
+            sme_turnover_threshold_m=sme_turnover_m,
+        ).alias("correlation")
     )
 
     # Step 4: Calculate K using pure Polars with polars-normal-stats
@@ -479,6 +482,7 @@ def _correlation_expr_from_pd(
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
     is_b31: bool = False,
+    sme_turnover_threshold_m: float = 44.0,
 ) -> pl.Expr:
     """
     Shared correlation expression accepting an arbitrary PD expression.
@@ -505,11 +509,14 @@ def _correlation_expr_from_pd(
         sme_threshold: SME threshold in EUR millions (default 50.0, CRR only)
         eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (CRR only)
         is_b31: If True, use GBP-native parameters per PRA PS1/26 Art. 153(4)
+        sme_turnover_threshold_m: Basel 3.1 SME turnover threshold in GBP millions
+            (default 44.0). Floor and range are derived: floor = threshold * 0.1,
+            range = threshold - floor.
     """
-    # Basel 3.1 SME correlation parameters (PRA PS1/26 Art. 153(4))
-    _B31_SME_THRESHOLD_M = 44.0  # GBP 44m
-    _B31_SME_FLOOR_M = 4.4  # GBP 4.4m
-    _B31_SME_RANGE = 39.6  # 44.0 - 4.4
+    # Basel 3.1 SME correlation parameters derived from threshold
+    _b31_sme_threshold_m = sme_turnover_threshold_m
+    _b31_sme_floor_m = sme_turnover_threshold_m * 0.1
+    _b31_sme_range = sme_turnover_threshold_m - _b31_sme_floor_m
 
     exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
@@ -535,12 +542,10 @@ def _correlation_expr_from_pd(
 
     if is_b31:
         # Basel 3.1: use GBP turnover directly with PRA-mandated thresholds
-        # s = max(4.4, min(turnover_GBP, 44))
-        # adjustment = 0.04 × (1 - (s - 4.4) / 39.6)
-        s_clamped = turnover_float.clip(_B31_SME_FLOOR_M, _B31_SME_THRESHOLD_M)
-        sme_adjustment = 0.04 * (1.0 - (s_clamped - _B31_SME_FLOOR_M) / _B31_SME_RANGE)
+        s_clamped = turnover_float.clip(_b31_sme_floor_m, _b31_sme_threshold_m)
+        sme_adjustment = 0.04 * (1.0 - (s_clamped - _b31_sme_floor_m) / _b31_sme_range)
         has_valid_turnover = turnover_float.is_not_null() & turnover_float.is_finite()
-        is_sme = has_valid_turnover & (turnover_float < _B31_SME_THRESHOLD_M)
+        is_sme = has_valid_turnover & (turnover_float < _b31_sme_threshold_m)
     else:
         # CRR: convert GBP turnover to EUR, then apply EUR thresholds
         # turnover_eur = turnover_gbp / eur_gbp_rate
@@ -585,6 +590,7 @@ def _polars_correlation_expr(
     sme_threshold: float = 50.0,
     eur_gbp_rate: float = 0.8732,
     is_b31: bool = False,
+    sme_turnover_threshold_m: float = 44.0,
 ) -> pl.Expr:
     """
     Pure Polars expression for correlation calculation using pd_floored column.
@@ -595,9 +601,14 @@ def _polars_correlation_expr(
         sme_threshold: SME threshold in EUR millions (default 50.0, CRR only)
         eur_gbp_rate: EUR/GBP exchange rate for converting GBP turnover to EUR (CRR only)
         is_b31: If True, use GBP-native parameters per PRA PS1/26 Art. 153(4)
+        sme_turnover_threshold_m: Basel 3.1 SME turnover threshold in GBP millions
     """
     return _correlation_expr_from_pd(
-        pl.col("pd_floored"), sme_threshold, eur_gbp_rate, is_b31=is_b31
+        pl.col("pd_floored"),
+        sme_threshold,
+        eur_gbp_rate,
+        is_b31=is_b31,
+        sme_turnover_threshold_m=sme_turnover_threshold_m,
     )
 
 
@@ -748,6 +759,7 @@ def _parametric_irb_risk_weight_expr(
     scaling_factor: float = 1.0,
     eur_gbp_rate: float = 0.8732,
     is_b31: bool = False,
+    sme_turnover_threshold_m: float = 44.0,
 ) -> pl.Expr:
     """
     Compute IRB risk weight from arbitrary PD expression and fixed LGD.
@@ -766,11 +778,17 @@ def _parametric_irb_risk_weight_expr(
         scaling_factor: 1.06 for CRR, 1.0 for Basel 3.1
         eur_gbp_rate: EUR/GBP rate for SME turnover conversion (CRR only)
         is_b31: If True, use GBP-native SME parameters per PRA PS1/26 Art. 153(4)
+        sme_turnover_threshold_m: Basel 3.1 SME turnover threshold in GBP millions
 
     Returns:
         Expression computing risk_weight = K × 12.5 × scaling × MA
     """
-    correlation = _correlation_expr_from_pd(pd_expr, eur_gbp_rate=eur_gbp_rate, is_b31=is_b31)
+    correlation = _correlation_expr_from_pd(
+        pd_expr,
+        eur_gbp_rate=eur_gbp_rate,
+        is_b31=is_b31,
+        sme_turnover_threshold_m=sme_turnover_threshold_m,
+    )
     k = _capital_k_expr_from_params(pd_expr, pl.lit(lgd), correlation)
     ma = _maturity_adjustment_expr_from_pd(pd_expr)
 
@@ -867,7 +885,12 @@ def _run_scalar_via_vectorized(
     if output_col == "correlation":
         eur_gbp_rate = inputs.get("eur_gbp_rate", 0.8732)
         is_b31 = bool(inputs.get("is_b31", False))
-        expr = _polars_correlation_expr(eur_gbp_rate=float(eur_gbp_rate), is_b31=is_b31)
+        sme_threshold_m = float(inputs.get("sme_turnover_threshold_m", 44.0))
+        expr = _polars_correlation_expr(
+            eur_gbp_rate=float(eur_gbp_rate),
+            is_b31=is_b31,
+            sme_turnover_threshold_m=sme_threshold_m,
+        )
     elif output_col == "k":
         expr = _polars_capital_k_expr()
     elif output_col == "maturity_adjustment":

@@ -420,10 +420,13 @@ class IRBLazyFrame:
 
         # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
+        sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
         return lf.with_columns(
-            _polars_correlation_expr(eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1).alias(
-                "correlation"
-            )
+            _polars_correlation_expr(
+                eur_gbp_rate=eur_gbp_rate,
+                is_b31=config.is_basel_3_1,
+                sme_turnover_threshold_m=sme_turnover_m,
+            ).alias("correlation")
         )
 
     def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:
@@ -652,6 +655,7 @@ class IRBLazyFrame:
         # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
         # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
+        sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
         is_retail = (
             pl.col("exposure_class")
             .cast(pl.String)
@@ -662,7 +666,9 @@ class IRBLazyFrame:
         lf = lf.with_columns(
             [
                 _polars_correlation_expr(
-                    eur_gbp_rate=eur_gbp_rate, is_b31=config.is_basel_3_1
+                    eur_gbp_rate=eur_gbp_rate,
+                    is_b31=config.is_basel_3_1,
+                    sme_turnover_threshold_m=sme_turnover_m,
                 ).alias("correlation"),
                 pl.when(is_retail)
                 .then(pl.lit(1.0))

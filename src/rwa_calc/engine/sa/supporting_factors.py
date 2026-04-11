@@ -86,8 +86,7 @@ class SupportingFactorCalculator:
             return Decimal("1.0")
 
         # Get thresholds and factors from config
-        threshold_eur = config.supporting_factors.sme_exposure_threshold_eur
-        threshold_gbp = threshold_eur * config.eur_gbp_rate
+        threshold_gbp = config.thresholds.sme_exposure_threshold
 
         factor_tier1 = config.supporting_factors.sme_factor_under_threshold
         factor_tier2 = config.supporting_factors.sme_factor_above_threshold
@@ -210,9 +209,7 @@ class SupportingFactorCalculator:
             )
 
         # Get threshold in GBP
-        threshold_gbp = float(
-            config.supporting_factors.sme_exposure_threshold_eur * config.eur_gbp_rate
-        )
+        threshold_gbp = float(config.thresholds.sme_exposure_threshold)
         factor_tier1 = float(config.supporting_factors.sme_factor_under_threshold)
         factor_tier2 = float(config.supporting_factors.sme_factor_above_threshold)
         infra_factor = float(config.supporting_factors.infrastructure_factor)

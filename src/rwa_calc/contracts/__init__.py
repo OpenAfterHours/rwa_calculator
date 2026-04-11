@@ -48,7 +48,7 @@ from rwa_calc.contracts.config import (
     OutputFloorConfig,
     PDFloors,
     PostModelAdjustmentConfig,
-    RetailThresholds,
+    RegulatoryThresholds,
     SupportingFactors,
 )
 
@@ -139,7 +139,7 @@ __all__ = [
     "OutputFloorConfig",
     "PDFloors",
     "PostModelAdjustmentConfig",
-    "RetailThresholds",
+    "RegulatoryThresholds",
     "SupportingFactors",
     # Errors
     "CalculationError",

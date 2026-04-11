@@ -695,38 +695,38 @@ class TestConvertEquityExposures:
 # =============================================================================
 
 
-class TestRetailThresholdsDynamicRate:
-    """Tests for dynamic EUR/GBP rate in RetailThresholds."""
+class TestRegulatoryThresholdsDynamicRate:
+    """Tests for dynamic EUR/GBP rate in RegulatoryThresholds."""
 
-    def test_crr_retail_thresholds_use_dynamic_rate(self) -> None:
-        """Test RetailThresholds.crr() uses the provided eur_gbp_rate."""
-        from rwa_calc.contracts.config import RetailThresholds
+    def test_crr_thresholds_use_dynamic_rate(self) -> None:
+        """Test RegulatoryThresholds.crr() uses the provided eur_gbp_rate."""
+        from rwa_calc.contracts.config import RegulatoryThresholds
 
         rate = Decimal("0.90")
-        thresholds = RetailThresholds.crr(eur_gbp_rate=rate)
+        thresholds = RegulatoryThresholds.crr(eur_gbp_rate=rate)
 
         # EUR 1m * 0.90 = GBP 900k
-        assert thresholds.max_exposure_threshold == Decimal("1000000") * rate
+        assert thresholds.retail_max_exposure == Decimal("1000000") * rate
         # EUR 100k * 0.90 = GBP 90k
         assert thresholds.qrre_max_limit == Decimal("100000") * rate
 
-    def test_crr_retail_thresholds_default_rate(self) -> None:
-        """Test RetailThresholds.crr() with default rate."""
-        from rwa_calc.contracts.config import RetailThresholds
+    def test_crr_thresholds_default_rate(self) -> None:
+        """Test RegulatoryThresholds.crr() with default rate."""
+        from rwa_calc.contracts.config import RegulatoryThresholds
 
-        thresholds = RetailThresholds.crr()
+        thresholds = RegulatoryThresholds.crr()
 
         # Default rate is 0.8732
-        assert thresholds.max_exposure_threshold == Decimal("1000000") * Decimal("0.8732")
+        assert thresholds.retail_max_exposure == Decimal("1000000") * Decimal("0.8732")
         assert thresholds.qrre_max_limit == Decimal("100000") * Decimal("0.8732")
 
-    def test_crr_config_passes_rate_to_retail_thresholds(self) -> None:
-        """Test CalculationConfig.crr() passes eur_gbp_rate to RetailThresholds."""
+    def test_crr_config_passes_rate_to_thresholds(self) -> None:
+        """Test CalculationConfig.crr() passes eur_gbp_rate to RegulatoryThresholds."""
         rate = Decimal("0.85")
         config = CalculationConfig.crr(
             reporting_date=date(2026, 1, 1),
             eur_gbp_rate=rate,
         )
 
-        assert config.retail_thresholds.max_exposure_threshold == Decimal("1000000") * rate
-        assert config.retail_thresholds.qrre_max_limit == Decimal("100000") * rate
+        assert config.thresholds.retail_max_exposure == Decimal("1000000") * rate
+        assert config.thresholds.qrre_max_limit == Decimal("100000") * rate

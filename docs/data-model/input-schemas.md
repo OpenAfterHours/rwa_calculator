@@ -92,7 +92,7 @@ For certain entity types, the regulatory treatment differs between SA and IRB ap
 
 - **RGLA/PSE with sovereign treatment**: Under SA, these use dedicated RGLA/PSE risk weight tables. Under IRB, those with government guarantees or taxing powers use the central govt/central bank IRB formula.
 - **RGLA/PSE with institution treatment**: Under SA, these use RGLA/PSE tables. Under IRB, commercial PSEs without sovereign backing use the institution IRB formula.
-- **MDB/International Orgs**: Under SA, these typically receive 0% RW from the MDB table. Under IRB, they use the central govt/central bank formula.
+- **MDB/International Orgs**: Under SA, named MDBs (Art. 117(2)) receive 0% RW; other MDBs use institution tables (CRR) or dedicated Table 2B (Basel 3.1). Under IRB, they use the central govt/central bank formula.
 
 ### Additional Classification Flags
 

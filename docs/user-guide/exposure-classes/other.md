@@ -234,28 +234,49 @@ in the counterparty data for these institutions.
     Items (o) IDA and (p) AIIB were added by CRR2 (Regulation (EU) 2019/876). The list is
     unchanged in PRA PS1/26 Art. 117(2).
 
-### Other MDBs — Table 2B (Art. 117(1))
+### Other MDBs (Art. 117(1))
 
-MDBs not on the 0% list use **Table 2B** risk weights based on their external credit assessment.
+MDBs not on the 0% list receive risk weights based on their external credit assessment.
 Set `entity_type = "mdb"` in the counterparty data for these institutions.
 
-| CQS | Risk Weight |
-|-----|-------------|
-| 1   | 20%         |
-| 2   | 30%         |
-| 3   | 50%         |
-| 4   | 100%        |
-| 5   | 100%        |
-| 6   | 150%        |
-| Unrated | 50%     |
+=== "CRR"
 
-!!! warning "Table 2B differs from institution tables"
-    MDB Table 2B has CQS 2 = 30% and unrated = 50%, compared to institution Table 3 (CQS 2 = 50%,
-    unrated = 40% sovereign-derived). Do not use institution risk weights for non-named MDBs.
+    Under CRR Art. 117(1), non-named MDBs are treated **"in the same manner as exposures to
+    institutions"** — they use the institution risk weight tables (Art. 120 Table 3 for ECAI-rated,
+    Art. 121 Table 5 for sovereign-derived). No separate MDB table exists in the CRR.
 
-Art. 117(1) also names four MDBs that are **not** on the 0% list and therefore use Table 2B:
-Inter-American Investment Corporation, Black Sea Trade and Development Bank, Central American
-Bank for Economic Integration, and CAF — Development Bank of Latin America.
+    Short-term preferential treatment (Art. 119(2), 120(2), 121(3)) is excluded for MDB exposures.
+
+    See [Institution](institution.md) for the CRR institution risk weight tables.
+
+=== "Basel 3.1"
+
+    PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**, replacing
+    the CRR "treated as institution" approach:
+
+    | CQS     | Risk Weight |
+    |---------|-------------|
+    | 1       | 20%         |
+    | 2       | 30%         |
+    | 3       | 50%         |
+    | 4       | 100%        |
+    | 5       | 100%        |
+    | 6       | 150%        |
+    | Unrated | 50%         |
+
+    Notable differences from CRR institution treatment: Table 2B CQS 2 = **30%** (vs CRR
+    institution Table 3 CQS 2 = 50%). Unrated = **50%** (fixed, vs CRR institution sovereign-derived
+    treatment which varies by the institution's home sovereign rating).
+
+!!! warning "Code Divergence (D3.39)"
+    The code applies Table 2B values (CQS 2 = 30%) under **both** frameworks. Under CRR, non-named
+    MDBs should use institution risk weight tables (Art. 120/121), giving CQS 2 = **50%**. The
+    separate `MDB_RISK_WEIGHTS_TABLE_2B` in `crr_risk_weights.py` is the Basel 3.1 table
+    misattributed to CRR. See D1.40.
+
+Art. 117(1) also names four MDBs that are **not** on the 0% list: Inter-American Investment
+Corporation, Black Sea Trade and Development Bank, Central American Bank for Economic Integration,
+and CAF — Development Bank of Latin America.
 
 ### Calculation Examples
 
@@ -269,13 +290,14 @@ risk_weight = 0.00
 rwa = 25_000_000 * 0.00  # = £0
 ```
 
-**Non-named MDB (Table 2B):**
+**Non-named MDB (rated):**
 
 - £10m loan to a CQS 3 rated development bank not on the Art. 117(2) list
 
 ```python
-# entity_type = "mdb" → Table 2B lookup
-risk_weight = 0.50  # CQS 3 = 50%
+# entity_type = "mdb" → institution treatment (CRR) or Table 2B (B31)
+# CQS 3 = 50% under both frameworks (identical at this CQS)
+risk_weight = 0.50
 rwa = 10_000_000 * 0.50  # = £5,000,000
 ```
 
@@ -502,7 +524,7 @@ a flat **150%** risk weight.
 | Defaulted | 50-150% | Yes |
 | PSE | 0–150% | Yes (SA-only if 0% RW under B31) |
 | MDB (named, Art. 117(2)) | 0% | N/A |
-| MDB (other, Table 2B) | 20–150% | N/A |
+| MDB (other, Art. 117(1)) | 20–150% | N/A |
 | RGLA | 0–150% | Yes (SA-only if 0% RW under B31) |
 | International Org | 0% | N/A |
 | Covered Bonds | 10–100% | Varies |

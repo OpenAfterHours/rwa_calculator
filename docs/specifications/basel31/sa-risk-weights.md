@@ -103,6 +103,48 @@ non-UK unrated exposures.
 
 ---
 
+## MDB Exposures (Art. 117)
+
+### Named MDBs at 0% (Art. 117(2))
+
+The 16 named MDBs receiving a **0% risk weight** are unchanged from CRR — see
+[CRR SA Risk Weights — Named MDBs](../crr/sa-risk-weights.md#named-mdbs-at-0-art-1172)
+for the full list.
+
+### Rated Non-Named MDBs — Table 2B (Art. 117(1)(a))
+
+PRA PS1/26 Art. 117(1) replaces the CRR "treated as institution" approach with a **dedicated
+MDB risk weight table (Table 2B)**. Non-named MDBs with an ECAI rating use Table 2B:
+
+| CQS | Risk Weight |
+|-----|-------------|
+| 1   | 20%         |
+| 2   | 30%         |
+| 3   | 50%         |
+| 4   | 100%        |
+| 5   | 100%        |
+| 6   | 150%        |
+
+### Unrated Non-Named MDBs (Art. 117(1)(b))
+
+Unrated non-named MDBs receive a risk weight of **50%**.
+
+### Key Change from CRR
+
+| Aspect | CRR (Art. 117(1)) | Basel 3.1 (Art. 117(1)) |
+|--------|-------------------|------------------------|
+| Treatment | "Same as institutions" (use Art. 120/121 tables) | Dedicated Table 2B |
+| CQS 2 | 50% (institution Table 3) | **30%** (Table 2B) |
+| Unrated | Institution-dependent (Art. 121 sovereign-derived) | **50%** (fixed) |
+| Short-term preferential | Excluded (Art. 117(1)) | N/A (Table 2B is CQS-only) |
+
+!!! info "Four Named Non-0% MDBs"
+    Art. 117(1) names four MDBs that use Table 2B (not on the 0% list): Inter-American
+    Investment Corporation, Black Sea Trade and Development Bank, Central American Bank
+    for Economic Integration, and CAF — Development Bank of Latin America.
+
+---
+
 ## Institution Risk Weights — ECRA (Art. 120)
 
 The External Credit Risk Assessment (ECRA) approach uses the institution's own ECAI rating.

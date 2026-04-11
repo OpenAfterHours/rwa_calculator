@@ -162,22 +162,34 @@ The following 16 MDBs receive a **0%** risk weight:
 15. Asian Infrastructure Investment Bank (AIIB)
 16. International Development Association (IDA)
 
-### Rated MDBs — Table 2B (Art. 117(1))
+### Non-Named MDBs — Institution Treatment (Art. 117(1))
 
-Other MDBs not on the 0% list use Table 2B:
+MDBs not on the 0% list are treated **"in the same manner as exposures to institutions"** per
+Art. 117(1). They use the institution risk weight tables — Art. 120 Table 3 for ECAI-rated
+institutions, Art. 121 Table 5 for sovereign-derived. No separate CRR risk weight table
+exists for MDBs.
 
-| CQS | Risk Weight |
-|-----|-------------|
-| 1 | 20% |
-| 2 | **30%** |
-| 3 | 50% |
-| 4 | 100% |
-| 5 | 100% |
-| 6 | 150% |
-| Unrated | **50%** |
+Art. 117(1) **excludes** short-term preferential treatment (Art. 119(2), 120(2), 121(3))
+for MDB exposures — MDBs cannot receive reduced short-term risk weights available to
+institutions.
 
-!!! note "MDB Table Differs from Institution Table"
-    MDB Table 2B has CQS 2 = 30% and unrated = **50%** (institution Table 3 has CQS 2 = 50% and unrated = 40%). Do not use the institution table for MDB lookups. The MDB CQS 2 = 30% value requires verification against CRR Art. 117 — it may reflect the same misattribution as the institution "UK deviation" (see D1.30).
+Art. 117(1) also names four non-0% MDBs: Inter-American Investment Corporation, Black Sea
+Trade and Development Bank, Central American Bank for Economic Integration, and CAF —
+Development Bank of Latin America.
+
+!!! warning "Code Divergence (D3.39)"
+    The code defines a separate `MDB_RISK_WEIGHTS_TABLE_2B` in `crr_risk_weights.py` with
+    CQS 2 = 30% and unrated = 50%. This is incorrect for CRR — these are the **Basel 3.1
+    Table 2B** values (PRA PS1/26 Art. 117(1)(a)). Under CRR, non-named MDBs should use the
+    institution tables (Art. 120 Table 3: CQS 2 = **50%**, matching other institutions). The
+    30% value reflects the same misattribution identified in D1.30.
+
+!!! info "Basel 3.1 Change"
+    PRA PS1/26 Art. 117(1) introduces a **dedicated MDB risk weight table (Table 2B)**,
+    replacing the CRR "treated as institution" approach. Table 2B gives MDBs their own CQS
+    mapping (notably CQS 2 = 30%, more favourable than institution ECRA CQS 2 = 30% or CRR
+    institution CQS 2 = 50%). See
+    [Basel 3.1 SA Risk Weights — MDB](../basel31/sa-risk-weights.md#mdb-exposures-art-117).
 
 ## International Organisations (CRR Art. 118)
 

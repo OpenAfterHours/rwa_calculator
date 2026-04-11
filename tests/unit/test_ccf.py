@@ -1103,7 +1103,7 @@ class TestSACCFExpression:
                 ]
             }
         ).select(sa_ccf_expression().alias("ccf"))
-        assert df["ccf"].to_list() == pytest.approx([1.0, 1.0, 0.5, 0.0, 0.2, 0.0])
+        assert df["ccf"].to_list() == pytest.approx([1.0, 1.0, 0.5, 0.5, 0.2, 0.0])
 
     def test_case_insensitive(self) -> None:
         """Risk type matching should be case insensitive."""
@@ -1130,11 +1130,11 @@ class TestSACCFExpression:
         assert df["ccf"].to_list() == pytest.approx([1.0, 0.0])
 
     def test_all_risk_types_batch(self) -> None:
-        """Verify all SA CCFs in a single batch (CRR — OC maps to 0%)."""
+        """Verify all SA CCFs in a single batch (CRR — OC maps to 50%)."""
         df = pl.DataFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}).select(
             sa_ccf_expression().alias("ccf")
         )
-        expected = [1.0, 1.0, 0.5, 0.0, 0.2, 0.0]
+        expected = [1.0, 1.0, 0.5, 0.5, 0.2, 0.0]
         assert df["ccf"].to_list() == pytest.approx(expected)
 
 
@@ -1144,11 +1144,12 @@ class TestSACCFExpression:
 
 
 class TestOtherCommitCCF:
-    """Tests for the Basel 3.1 'other commitments' 40% CCF category.
+    """Tests for the 'other commitments' CCF category.
 
     PRA PS1/26 Art. 111 Table A1 Row 5 introduces a new 40% CCF for
     'all other commitments not in other categories'. Under CRR, this
-    category did not exist (0%).
+    category did not exist — commitments were classified by maturity
+    into MR (50% SA / 75% F-IRB) or MLR (20% SA / 75% F-IRB).
 
     References:
         PRA PS1/26 Art. 111 Table A1
@@ -1182,12 +1183,12 @@ class TestOtherCommitCCF:
         )
         assert df["ccf"].to_list() == pytest.approx([0.4, 0.4, 0.4, 0.4])
 
-    def test_oc_returns_0_percent_crr(self) -> None:
-        """OC should return 0% under CRR (no separate category)."""
+    def test_oc_returns_50_percent_crr(self) -> None:
+        """OC should return 50% conservative default under CRR (>1yr MR equivalent)."""
         df = pl.DataFrame({"risk_type": ["OC"]}).select(
             sa_ccf_expression(is_basel_3_1=False).alias("ccf")
         )
-        assert df["ccf"][0] == pytest.approx(0.0)
+        assert df["ccf"][0] == pytest.approx(0.5)
 
     def test_all_risk_types_b31_batch(self) -> None:
         """Verify all SA CCFs including OC and FRC in a single Basel 3.1 batch."""
@@ -1202,7 +1203,7 @@ class TestOtherCommitCCF:
         df = pl.DataFrame({"risk_type": ["FR", "FRC", "MR", "OC", "MLR", "LR"]}).select(
             sa_ccf_expression(is_basel_3_1=False).alias("ccf")
         )
-        expected = [1.0, 1.0, 0.5, 0.0, 0.2, 0.0]
+        expected = [1.0, 1.0, 0.5, 0.5, 0.2, 0.0]
         assert df["ccf"].to_list() == pytest.approx(expected)
 
     # --- Pipeline-level SA tests ---
@@ -1228,12 +1229,12 @@ class TestOtherCommitCCF:
         assert result["ccf"][0] == pytest.approx(0.4)
         assert result["ead_from_ccf"][0] == pytest.approx(40000.0)
 
-    def test_sa_pipeline_oc_0_percent_crr(
+    def test_sa_pipeline_oc_50_percent_crr_no_maturity(
         self,
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """SA pipeline should apply 0% CCF for OC risk_type under CRR."""
+        """SA pipeline: OC without maturity_date gets conservative 50% under CRR."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["OC_CRR"],
@@ -1246,8 +1247,8 @@ class TestOtherCommitCCF:
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
 
-        assert result["ccf"][0] == pytest.approx(0.0)
-        assert result["ead_from_ccf"][0] == pytest.approx(0.0)
+        assert result["ccf"][0] == pytest.approx(0.5)
+        assert result["ead_from_ccf"][0] == pytest.approx(50000.0)
 
     # --- F-IRB pipeline tests ---
 
@@ -1272,12 +1273,12 @@ class TestOtherCommitCCF:
         assert result["ccf"][0] == pytest.approx(0.4)
         assert result["ead_from_ccf"][0] == pytest.approx(80000.0)
 
-    def test_firb_oc_0_percent_crr(
+    def test_firb_oc_75_percent_crr(
         self,
         ccf_calculator: CCFCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR F-IRB OC should get 0% (no separate CRR category)."""
+        """CRR F-IRB OC should get 75% (maps to MR/MLR, both 75% under F-IRB)."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["FIRB_OC_CRR"],
@@ -1290,7 +1291,140 @@ class TestOtherCommitCCF:
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
 
-        assert result["ccf"][0] == pytest.approx(0.0)
+        assert result["ccf"][0] == pytest.approx(0.75)
+
+    # --- CRR maturity-dependent OC tests ---
+
+    def test_sa_pipeline_oc_20_percent_crr_short_maturity(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR SA: OC with maturity <=1yr from reporting_date -> 20% CCF."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_SHORT"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+                "maturity_date": [date(2025, 6, 30)],  # ~6 months from 2024-12-31
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.2)
+        assert result["ead_from_ccf"][0] == pytest.approx(20000.0)
+
+    def test_sa_pipeline_oc_50_percent_crr_long_maturity(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR SA: OC with maturity >1yr from reporting_date -> 50% CCF."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_LONG"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+                "maturity_date": [date(2026, 6, 30)],  # ~18 months from 2024-12-31
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.5)
+        assert result["ead_from_ccf"][0] == pytest.approx(50000.0)
+
+    def test_sa_pipeline_oc_boundary_exactly_1yr(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR SA: OC with maturity exactly 365 days from reporting_date -> 20% (<=1yr)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_BOUNDARY"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+                "maturity_date": [date(2025, 12, 31)],  # exactly 365 days from 2024-12-31
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.2)
+
+    def test_sa_pipeline_oc_null_maturity_conservative_50(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR SA: OC with null maturity_date -> conservative 50%."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_NULL_MAT"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100000.0],
+                "risk_type": ["OC"],
+                "approach": ["standardised"],
+                "maturity_date": [None],
+            },
+            schema_overrides={"maturity_date": pl.Date},
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.5)
+
+    def test_firb_oc_75_percent_crr_independent_of_maturity(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR F-IRB: OC -> 75% regardless of maturity (MR=MLR=75% under F-IRB)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_OC_SHORT", "FIRB_OC_LONG"],
+                "drawn_amount": [0.0, 0.0],
+                "nominal_amount": [200000.0, 200000.0],
+                "risk_type": ["OC", "OC"],
+                "approach": ["foundation_irb", "foundation_irb"],
+                "maturity_date": [date(2025, 6, 30), date(2026, 6, 30)],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+        assert result["ccf"][1] == pytest.approx(0.75)
+
+    def test_b31_oc_40_percent_ignores_maturity(
+        self,
+        ccf_calculator: CCFCalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 SA: OC -> 40% regardless of maturity (maturity distinction removed)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["OC_B31_SHORT", "OC_B31_LONG"],
+                "drawn_amount": [0.0, 0.0],
+                "nominal_amount": [100000.0, 100000.0],
+                "risk_type": ["OC", "OC"],
+                "approach": ["standardised", "standardised"],
+                "maturity_date": [date(2028, 6, 30), date(2030, 1, 1)],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, b31_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.4)
+        assert result["ccf"][1] == pytest.approx(0.4)
 
     # --- A-IRB pipeline tests ---
 
@@ -3005,10 +3139,10 @@ class TestCommitmentToIssueLowerOf:
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
         assert result["ccf"][0] == pytest.approx(0.0)
 
-    def test_crr_sa_commitment_oc_to_issue_fr_oc_is_zero(
+    def test_crr_sa_commitment_oc_to_issue_fr_uses_oc_ccf(
         self, ccf_calculator: CCFCalculator, crr_config: CalculationConfig
     ) -> None:
-        """CRR: OC commitment (0%) to issue FR guarantee (100%) → min(0%,100%) = 0%."""
+        """CRR: OC commitment (50%) to issue FR guarantee (100%) → min(50%,100%) = 50%."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["CRR_OC_FR"],
@@ -3020,7 +3154,7 @@ class TestCommitmentToIssueLowerOf:
         ).lazy()
 
         result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
-        assert result["ccf"][0] == pytest.approx(0.0)
+        assert result["ccf"][0] == pytest.approx(0.5)
 
     # --- F-IRB tests ---
 

@@ -43,14 +43,42 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.domain.enums import ApproachType, EquityApproach
+from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
+from rwa_calc.data.tables.crr_equity_rw import (
+    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
+    SA_EQUITY_RISK_WEIGHTS,
+)
+from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
+# Float-converted risk weight tables for Polars expressions.
+# Authoritative Decimal values live in data/tables/*_equity_rw.py;
+# these are derived once at module load for use with pl.lit().
+_CRR_SA_RW = {k: float(v) for k, v in SA_EQUITY_RISK_WEIGHTS.items()}
+_B31_SA_RW = {k: float(v) for k, v in B31_SA_EQUITY_RISK_WEIGHTS.items()}
+_IRB_RW = {k: float(v) for k, v in IRB_SIMPLE_EQUITY_RISK_WEIGHTS.items()}
+
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
-CIU_FALLBACK_RW = 12.50
+CIU_FALLBACK_RW = _CRR_SA_RW[EquityType.CIU]
+
+# Art. 132b(2): multiplier for third-party CIU mandate calculations (20% uplift)
+_CIU_THIRD_PARTY_MULTIPLIER = 1.2
+
+# No multiplier for internally-managed CIU mandate calculations
+_CIU_INTERNAL_MULTIPLIER = 1.0
+
+# Sentinel for null CQS in join operations (data processing convention)
+_NULL_CQS_SENTINEL = -1
+
+# Default holding risk weight when CQS lookup returns null (Art. 132a)
+_DEFAULT_HOLDING_RW = 1.00
+
+# Audit formatting: convert decimal RW to percentage display
+_RW_TO_PERCENT = 100
+_AUDIT_RWA_ROUND = 0
 
 
 def _append_ciu_branches(chain: pl.Expr) -> pl.Expr:
@@ -67,8 +95,8 @@ def _append_ciu_branches(chain: pl.Expr) -> pl.Expr:
         .then(
             pl.col("ciu_mandate_rw").fill_null(CIU_FALLBACK_RW)
             * pl.when(pl.col("ciu_third_party_calc").fill_null(False))
-            .then(pl.lit(1.2))
-            .otherwise(pl.lit(1.0))
+            .then(pl.lit(_CIU_THIRD_PARTY_MULTIPLIER))
+            .otherwise(pl.lit(_CIU_INTERNAL_MULTIPLIER))
         )
         .when(_is_ciu & (pl.col("ciu_approach") == "look_through"))
         .then(pl.col("ciu_look_through_rw").fill_null(CIU_FALLBACK_RW))
@@ -413,21 +441,21 @@ class EquityCalculator:
             rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
         # Join holdings to RW table by (exposure_class, cqs)
-        # Use sentinel -1 for null CQS to allow join
+        # Use sentinel for null CQS to allow join
         holdings_with_rw = (
             ciu_holdings.with_columns(
-                pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+                pl.col("cqs").fill_null(_NULL_CQS_SENTINEL).cast(pl.Int8).alias("cqs"),
                 pl.col("exposure_class").str.to_uppercase().alias("exposure_class"),
             )
             .join(
                 rw_table.with_columns(
-                    pl.col("cqs").fill_null(-1).cast(pl.Int8).alias("cqs"),
+                    pl.col("cqs").fill_null(_NULL_CQS_SENTINEL).cast(pl.Int8).alias("cqs"),
                 ),
                 on=["exposure_class", "cqs"],
                 how="left",
             )
             .with_columns(
-                pl.col("risk_weight").fill_null(1.00).alias("holding_rw"),
+                pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW).alias("holding_rw"),
             )
         )
 
@@ -526,11 +554,11 @@ class EquityCalculator:
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-                .then(pl.lit(0.00))
+                .then(pl.lit(_CRR_SA_RW[EquityType.CENTRAL_BANK]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
                 # Art. 133(2): all other equity = 100%
-                .otherwise(pl.lit(1.00))
+                .otherwise(pl.lit(_CRR_SA_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
             ]
         )
@@ -559,22 +587,22 @@ class EquityCalculator:
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-                .then(pl.lit(0.00))  # Sovereign treatment: 0%
+                .then(pl.lit(_B31_SA_RW[EquityType.CENTRAL_BANK]))
                 # Art. 133(5): subordinated debt / non-equity own funds = 150%
                 .when(pl.col("equity_type").str.to_lowercase() == "subordinated_debt")
-                .then(pl.lit(1.50))  # Art. 133(5): 150%
+                .then(pl.lit(_B31_SA_RW[EquityType.SUBORDINATED_DEBT]))
                 .when(pl.col("is_speculative") == True)  # noqa: E712
-                .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
+                .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
                 .when(pl.col("equity_type").str.to_lowercase() == "speculative")
-                .then(pl.lit(4.00))  # Art. 133(4): 400% higher risk
+                .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
                 # Art. 133(4): PE/VC is always higher risk (400%)
                 .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
-                .then(pl.lit(4.00))  # Art. 133(4): 400% PE/VC higher risk
+                .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY]))
                 .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-                .then(pl.lit(4.00))  # Art. 133(4): 400% PE/VC higher risk
+                .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
-                .otherwise(pl.lit(2.50))  # Art. 133(3): 250% standard
+                .otherwise(pl.lit(_B31_SA_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
             ]
         )
@@ -596,7 +624,7 @@ class EquityCalculator:
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
-                .then(pl.lit(0.00))
+                .then(pl.lit(_IRB_RW[EquityType.CENTRAL_BANK]))
                 .when(
                     (pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
                     | (
@@ -604,18 +632,18 @@ class EquityCalculator:
                         & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
                     )
                 )
-                .then(pl.lit(1.90))
+                .then(pl.lit(_IRB_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
                 .when(pl.col("is_government_supported") == True)  # noqa: E712
-                .then(pl.lit(1.90))
+                .then(pl.lit(_IRB_RW[EquityType.GOVERNMENT_SUPPORTED]))
                 .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-                .then(pl.lit(1.90))
+                .then(pl.lit(_IRB_RW[EquityType.GOVERNMENT_SUPPORTED]))
                 .when(pl.col("is_exchange_traded") == True)  # noqa: E712
-                .then(pl.lit(2.90))
+                .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
                 .when(pl.col("equity_type").str.to_lowercase() == "listed")
-                .then(pl.lit(2.90))
+                .then(pl.lit(_IRB_RW[EquityType.LISTED]))
                 .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
-                .then(pl.lit(2.90))
-                .otherwise(pl.lit(3.70))
+                .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
+                .otherwise(pl.lit(_IRB_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
             ]
         )
@@ -753,9 +781,11 @@ class EquityCalculator:
                         pl.lit(f"Equity ({article}): Type="),
                         pl.col("equity_type"),
                         pl.lit(", RW="),
-                        (pl.col("risk_weight") * 100).round(0).cast(pl.String),
+                        (pl.col("risk_weight") * _RW_TO_PERCENT)
+                        .round(_AUDIT_RWA_ROUND)
+                        .cast(pl.String),
                         pl.lit("%, RWA="),
-                        pl.col("rwa").round(0).cast(pl.String),
+                        pl.col("rwa").round(_AUDIT_RWA_ROUND).cast(pl.String),
                     ]
                 ).alias("equity_calculation"),
             ]

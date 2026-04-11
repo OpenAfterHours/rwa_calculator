@@ -891,8 +891,10 @@ values above.
 | FR / FRC | 100% | 100% | Unchanged |
 | MR | 75% | **50%** | Down from 75% |
 | MLR | 75% | **20%** | Down from 75% |
-| OC | 0% | **40%** | New Table A1 Row 5 category |
+| OC | 75%* | **40%** | New Table A1 Row 5 category |
 | LR (UCC) | 0% | **10%** | Up from 0% |
+
+*\* Under CRR, "Other Commitments" had no separate F-IRB category. These commitments were classified by maturity: >1yr → MR (75%), ≤1yr → MLR (75%). Both received 75% under F-IRB Art. 166(8).*
 
 !!! info "Art. 166(9) Trade LC Exception Removed"
     CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC carve-out

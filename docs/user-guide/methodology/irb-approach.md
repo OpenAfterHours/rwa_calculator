@@ -106,8 +106,10 @@ for details.
     | FR / FRC | 100% | 100% | Unchanged |
     | MR | 75% | **50%** | Down from 75% |
     | MLR | 75% | **20%** | Down from 75% |
-    | OC | 0% | **40%** | Up from 0% (new Table A1 Row 5) |
+    | OC | 75%* | **40%** | New Table A1 Row 5 category |
     | LR (UCC) | 0% | **10%** | Up from 0% |
+
+    *\* Under CRR, OC had no separate category. These commitments were classified by maturity into MR/MLR, both 75% under F-IRB Art. 166(8).*
 
     !!! warning "Art. 166(9) Trade LC Exception Removed"
         CRR Art. 166(9) is **blanked by PRA PS1/26**. The 20% short-term trade LC

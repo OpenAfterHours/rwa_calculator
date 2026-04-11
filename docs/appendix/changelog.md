@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.189] — 2026-04-11
+
+### Fixed
+- **Equity (P1.132)**: B31 government-supported equity risk weight corrected from 100% to **250%** per Art. 133(3). Art. 133(6) is an exclusion clause (own funds deductions, Art. 89(3), Art. 48(4)), not a 100% risk weight — CRR Art. 133(3)(c) legislative equity carve-out has no equivalent in B31. Previously **understated capital** by 2.5x for government-supported equity under B31. Government-supported equity also removed from transitional floor exclusion (now subject to floor as standard equity, though 250% already exceeds all transitional floors). Updated risk weight table, calculator, transitional floor logic, 8 unit tests, 4 acceptance tests, and spec documentation. Art. 133 paragraph references corrected across codebase (subordinated debt = Art. 133(5) not 133(1); PE/VC = Art. 133(4) not 133(5)).
+
 ## [0.1.187] — 2026-04-11
 
 ### Fixed

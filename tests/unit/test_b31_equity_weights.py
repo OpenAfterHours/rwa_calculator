@@ -51,9 +51,9 @@ class TestB31EquityRiskWeightTable:
         """Exchange-traded equity should be 250% under B31 (Art. 133(3))."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.EXCHANGE_TRADED] == Decimal("2.50")
 
-    def test_government_supported_100_percent(self) -> None:
-        """Government-supported equity should be 100% (legislative programme)."""
-        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.GOVERNMENT_SUPPORTED] == Decimal("1.00")
+    def test_government_supported_250_percent(self) -> None:
+        """Government-supported equity should be 250% under B31 (Art. 133(3), standard equity)."""
+        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.GOVERNMENT_SUPPORTED] == Decimal("2.50")
 
     def test_unlisted_250_percent(self) -> None:
         """Unlisted equity should be 250% under B31 (Art. 133(3))."""
@@ -167,15 +167,15 @@ class TestB31EquityCalculatorSAWeights:
         """B31: is_speculative=True overrides listed type to 400%."""
         assert self._apply_b31_weight("listed", is_speculative=True) == pytest.approx(4.00)
 
-    def test_government_supported_100_percent(self) -> None:
-        """B31: Government-supported equity = 100% (legislative carve-out).
+    def test_government_supported_250_percent(self) -> None:
+        """B31 Art. 133(3): Government-supported equity = 250% (standard equity).
 
-        Note: The transitional floor (250%+ during 2027-2030) overrides this to 250%
-        when applied via calculate_branch. This test verifies the base weight before floor.
+        B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
+        Art. 133(6) is an exclusion clause, not a risk weight.
         """
         assert self._apply_b31_weight(
             "government_supported", is_government_supported=True
-        ) == pytest.approx(1.00)
+        ) == pytest.approx(2.50)
 
     def test_central_bank_zero_percent(self) -> None:
         """B31 Art. 133(6): Central bank equity = 0%."""

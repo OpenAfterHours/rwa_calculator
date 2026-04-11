@@ -6,12 +6,12 @@ under PRA PS1/26 Art. 133 (amended), with IRB equity approaches removed
 (Art. 147A) and transitional phase-in schedule (PRA Rules 4.1-4.3).
 
 SA equity weights (B31-L1 through B31-L9):
-- Art. 133(1): Subordinated debt / non-equity own funds 150%
-- Art. 133(3): Standard equity (listed, unlisted, exchange-traded) 250%
-- Art. 133(5): Higher-risk equity (speculative, PE/VC, young unlisted <5yr) 400%
-- Art. 133(6): Legislative (government-supported) equity 100%
+- Art. 133(5): Subordinated debt / non-equity own funds 150%
+- Art. 133(3): Standard equity (listed, unlisted, exchange-traded, govt-supported) 250%
+- Art. 133(4): Higher-risk equity (speculative, PE/VC, young unlisted <5yr) 400%
+- Art. 133(6): Exclusion clause (own funds deductions, not a risk weight)
 - Central bank equity 0% (sovereign treatment)
-- CIU fallback: listed 250% / unlisted 400% (aligns with Art. 133)
+- CIU fallback: 1,250% (Art. 132(2))
 
 Art. 147A IRB removal (B31-L10):
 - IRB config still routes equity to SA (Art. 147A removes equity IRB)
@@ -205,9 +205,12 @@ class TestB31L4_SpeculativeHigherRiskEquitySA:
 
 class TestB31L5_GovernmentSupportedEquitySA:
     """
-    B31-L5: Government-supported (legislative programme) equity under Basel 3.1 SA.
+    B31-L5: Government-supported equity under Basel 3.1 SA.
     Input: equity_type=government_supported, is_government_supported=True, EAD=£400,000
-    Expected: Art. 133(6) 100% → RWA = £400,000
+    Expected: Art. 133(3) 250% → RWA = £1,000,000
+
+    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
+    Art. 133(6) is an exclusion clause (own funds deductions), not a RW.
     """
 
     def test_b31_l5_risk_weight(self, equity_calculator, b31_config):
@@ -218,7 +221,7 @@ class TestB31L5_GovernmentSupportedEquitySA:
             is_government_supported=True,
             config=b31_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.00, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
 
     def test_b31_l5_rwa(self, equity_calculator, b31_config):
         result = calculate_single_equity_exposure(
@@ -228,7 +231,7 @@ class TestB31L5_GovernmentSupportedEquitySA:
             is_government_supported=True,
             config=b31_config,
         )
-        assert result["rwa"] == pytest.approx(400_000.0, rel=1e-4)
+        assert result["rwa"] == pytest.approx(1_000_000.0, rel=1e-4)
 
 
 class TestB31L6_SubordinatedDebtSA:
@@ -458,14 +461,18 @@ class TestB31L13_TransitionalExclusionSubordinatedDebt:
         assert result["risk_weight"] == pytest.approx(1.50, abs=1e-4)
 
 
-class TestB31L14_TransitionalExclusionGovernmentSupported:
+class TestB31L14_TransitionalGovernmentSupported:
     """
-    B31-L14: Government-supported equity excluded from transitional floor.
+    B31-L14: Government-supported equity subject to transitional floor.
     Input: equity_type=government_supported, is_government_supported=True, EAD=£300,000
-    Expected: 100% across all years — never raised to standard floor (160%+).
+    Expected: 250% across all years — base weight (Art. 133(3)) exceeds all floors.
+
+    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
+    Government-supported is standard equity, subject to the transitional floor.
+    Since 250% > max transitional floor (220%), result is always 250%.
     """
 
-    def test_b31_l14_year1_not_floored(self, equity_calculator, b31_2027_config):
+    def test_b31_l14_year1_250_pct(self, equity_calculator, b31_2027_config):
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("300000"),
@@ -473,9 +480,9 @@ class TestB31L14_TransitionalExclusionGovernmentSupported:
             is_government_supported=True,
             config=b31_2027_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.00, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
 
-    def test_b31_l14_year3_not_floored(self, equity_calculator, b31_2029_config):
+    def test_b31_l14_year3_250_pct(self, equity_calculator, b31_2029_config):
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("300000"),
@@ -483,7 +490,7 @@ class TestB31L14_TransitionalExclusionGovernmentSupported:
             is_government_supported=True,
             config=b31_2029_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.00, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
 
 
 class TestB31L15_TransitionalExclusionCentralBank:

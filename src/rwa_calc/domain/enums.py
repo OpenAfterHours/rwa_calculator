@@ -445,7 +445,7 @@ class EquityType(StrEnum):
     """Explicitly exchange-traded - 100% CRR SA / 250% B31 SA / 290% IRB Simple"""
 
     GOVERNMENT_SUPPORTED = "government_supported"
-    """Government programme equity - 100% CRR SA / 100% B31 SA / 190% IRB Simple"""
+    """Government programme equity - 100% CRR SA / 250% B31 SA (Art. 133(3)) / 190% IRB Simple"""
 
     UNLISTED = "unlisted"
     """Unlisted equity - 100% CRR SA (Art. 133(2)) / 250% B31 SA / 370% IRB Simple"""

@@ -5,17 +5,17 @@ Under Basel 3.1, all equity exposures must use the Standardised Approach
 (IRB equity methods removed per Art. 147A / CRE20.58-62).
 
 PRA PS1/26 Art. 133 SA equity risk weights:
-- Art. 133(3): Standard equity = 250%
-- Art. 133(4)/(5): Higher risk (speculative / PE / VC / unlisted <5yr) = 400%
-- Art. 133(1): Subordinated debt / non-equity own funds = 150%
-- Art. 133(6): Central bank equity = 0%
-- Legislative programme equity = 100%
+- Art. 133(3): Standard equity = 250% (including government-supported)
+- Art. 133(4): Higher risk (speculative / PE / VC / unlisted <5yr) = 400%
+- Art. 133(5): Subordinated debt / non-equity own funds = 150%
+- Art. 133(6): Exclusion clause (own funds deductions, Art. 89(3), Art. 48(4))
+- Central bank equity = 0%
 
 Key PRA deviation from BCBS:
     PRA does not use BCBS CQS-differentiated speculative tiers.
     All higher-risk equity gets a flat 400% under PRA.
 
-Note: PE/VC is always higher-risk under Art. 133(5) regardless of
+Note: PE/VC is always higher-risk under Art. 133(4) regardless of
 diversification status. The 190% diversified PE rate only applied
 under IRB Simple (Art. 155), which is removed under Basel 3.1.
 
@@ -38,14 +38,14 @@ from rwa_calc.domain.enums import EquityType
 
 B31_SA_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.CENTRAL_BANK: Decimal("0.00"),  # Art. 133(6): 0%
-    EquityType.SUBORDINATED_DEBT: Decimal("1.50"),  # Art. 133(1): 150%
+    EquityType.SUBORDINATED_DEBT: Decimal("1.50"),  # Art. 133(5): 150%
     EquityType.LISTED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.EXCHANGE_TRADED: Decimal("2.50"),  # Art. 133(3): 250% standard
-    EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),  # Legislative programme: 100%
+    EquityType.GOVERNMENT_SUPPORTED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.UNLISTED: Decimal("2.50"),  # Art. 133(3): 250% standard
     EquityType.SPECULATIVE: Decimal("4.00"),  # Art. 133(4): 400% higher risk
-    EquityType.PRIVATE_EQUITY: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
-    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("4.00"),  # Art. 133(5): 400% higher risk (PE/VC)
+    EquityType.PRIVATE_EQUITY: Decimal("4.00"),  # Art. 133(4): 400% higher risk (PE/VC)
+    EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("4.00"),  # Art. 133(4): 400% higher risk (PE/VC)
     EquityType.CIU: Decimal("12.50"),  # Art. 132(2): 1,250% fallback
     EquityType.OTHER: Decimal("2.50"),  # Art. 133(3): 250% standard
 }

@@ -706,7 +706,7 @@ fx_rates = pl.DataFrame({
 | `central_bank` | 0% | Central bank equity holdings (Art. 133(6)) |
 | `listed` | 100% | Exchange-traded equities |
 | `exchange_traded` | 100% | Listed on recognised exchange |
-| `government_supported` | 100% | Government-supported programme |
+| `government_supported` | 100% CRR / 250% B31 | Government-supported programme |
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
 | `private_equity_diversified` | 190% | Diversified private equity portfolio |

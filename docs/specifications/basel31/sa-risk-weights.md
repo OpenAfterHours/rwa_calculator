@@ -634,14 +634,14 @@ that might otherwise apply.
 See [Equity Approach Specification](equity-approach.md) for the full treatment.
 
 Summary: exchange-traded/listed/unlisted 250%, higher-risk/PE/VC 400%, subordinated debt 150%,
-central bank 0%, government-supported 100%. Transitional phase-in 2027–2030. The end-state
+central bank 0%, government-supported 250%. Transitional phase-in 2027–2030. The end-state
 risk weights apply from **1 January 2030**:
 
 | Equity Type | End-State RW | Reference |
 |-------------|-------------|-----------|
 | Standard equity (listed/unlisted) | 250% | Art. 133(3) |
-| Higher risk (PE/VC, unlisted <5yr) | 400% | Art. 133(5) |
-| Subordinated debt / non-equity own funds | 150% | Art. 133(1) |
+| Higher risk (PE/VC, unlisted <5yr) | 400% | Art. 133(4) |
+| Subordinated debt / non-equity own funds | 150% | Art. 133(5) |
 
 ---
 

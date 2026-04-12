@@ -29,6 +29,9 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check src/ tests/
 
+      - name: Architectural invariants
+        run: uv run python scripts/arch_check.py
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest

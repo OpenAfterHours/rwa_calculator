@@ -511,7 +511,7 @@ VALID_COLLATERAL_TYPES = {
 # "residential_property" for residential real estate, "govt_bond" / "gilt" for
 # sovereign debt). VALID_COLLATERAL_TYPES is the canonical input set used by
 # validate_bundle_values; these engine lists drive Polars expression builders
-# in engine/crm/constants.py for category-based dispatch.
+# in engine/crm/expressions.py for category-based dispatch.
 #
 # References: CRR Art. 161 / 230, CRE22.40-78
 

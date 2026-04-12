@@ -355,7 +355,7 @@ class TestCRMAllocColumnsPreserved:
 
     def test_allocation_column_names(self):
         """CRM_ALLOC_COLUMNS mapping covers all waterfall types."""
-        from rwa_calc.engine.crm.constants import CRM_ALLOC_COLUMNS, WATERFALL_ORDER
+        from rwa_calc.engine.crm.expressions import CRM_ALLOC_COLUMNS, WATERFALL_ORDER
 
         suffixes = {suffix for _, _, suffix in WATERFALL_ORDER}
         assert set(CRM_ALLOC_COLUMNS.keys()) == suffixes

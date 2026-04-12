@@ -934,7 +934,7 @@ class CRMProcessor:
         References:
             CRR Art. 230-231, PRA PS1/26 Art. 230-231
         """
-        from rwa_calc.engine.crm.constants import CRM_ALLOC_COLUMNS
+        from rwa_calc.engine.crm.expressions import CRM_ALLOC_COLUMNS
 
         alloc_cols = list(CRM_ALLOC_COLUMNS.values())
         return exposures.select(

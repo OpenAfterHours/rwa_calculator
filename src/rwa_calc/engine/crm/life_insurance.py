@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.engine.crm.constants import LIFE_INSURANCE_TYPES
+from rwa_calc.data.schemas import LIFE_INSURANCE_COLLATERAL_TYPES
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -97,7 +97,9 @@ def compute_life_insurance_columns(
     if ctype_col not in coll_schema.names():
         return _add_default_life_ins_columns(exposures)
 
-    li_coll = collateral.filter(pl.col(ctype_col).str.to_lowercase().is_in(LIFE_INSURANCE_TYPES))
+    li_coll = collateral.filter(
+        pl.col(ctype_col).str.to_lowercase().is_in(LIFE_INSURANCE_COLLATERAL_TYPES)
+    )
 
     # Check if insurer_risk_weight column exists
     has_insurer_rw = "insurer_risk_weight" in coll_schema.names()

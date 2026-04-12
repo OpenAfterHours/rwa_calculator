@@ -159,7 +159,7 @@ def _join_collateral_to_lookups(
 
     When beneficiary_type is absent, falls back to a single direct join.
     """
-    from rwa_calc.engine.crm.constants import DIRECT_BENEFICIARY_TYPES
+    from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 
     coll_schema = collateral.collect_schema()
 

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
@@ -30,7 +31,6 @@ from rwa_calc.engine.ccf import (
     sa_ccf_expression,
 )
 from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
-from rwa_calc.engine.crm.constants import DIRECT_BENEFICIARY_TYPES
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

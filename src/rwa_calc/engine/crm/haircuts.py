@@ -28,6 +28,10 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.schemas import (
+    REAL_ESTATE_COLLATERAL_TYPES,
+    RECEIVABLE_COLLATERAL_TYPES,
+)
 from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
 from rwa_calc.data.tables.crr_haircuts import (
     FX_HAIRCUT,
@@ -36,10 +40,6 @@ from rwa_calc.data.tables.crr_haircuts import (
     get_haircut_table,
     lookup_collateral_haircut,
     lookup_fx_haircut,
-)
-from rwa_calc.engine.crm.constants import (
-    REAL_ESTATE_TYPES,
-    RECEIVABLE_TYPES,
 )
 
 if TYPE_CHECKING:
@@ -390,9 +390,9 @@ class HaircutCalculator:
             .then(pl.lit("corp_bond"))
             .when(ct.is_in(["equity", "shares", "stock"]))
             .then(pl.lit("equity"))
-            .when(ct.is_in(RECEIVABLE_TYPES))
+            .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
             .then(pl.lit("receivables"))
-            .when(ct.is_in(REAL_ESTATE_TYPES))
+            .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
             .then(pl.lit("real_estate"))
             .otherwise(pl.lit("other_physical"))
         )

@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import interest_for_ead
-from rwa_calc.engine.crm.constants import DIRECT_BENEFICIARY_TYPES
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

@@ -502,6 +502,98 @@ VALID_COLLATERAL_TYPES = {
     "credit_linked_note",
 }
 
+# =============================================================================
+# Engine-side collateral classification (CRM)
+# =============================================================================
+# These lists capture every collateral_type string the CRM engine recognises,
+# grouped by the regulatory category it maps to. They are broader than
+# VALID_COLLATERAL_TYPES because the engine accepts synonyms (e.g. "rre" /
+# "residential_property" for residential real estate, "govt_bond" / "gilt" for
+# sovereign debt). VALID_COLLATERAL_TYPES is the canonical input set used by
+# validate_bundle_values; these engine lists drive Polars expression builders
+# in engine/crm/constants.py for category-based dispatch.
+#
+# References: CRR Art. 161 / 230, CRE22.40-78
+
+FINANCIAL_COLLATERAL_TYPES: list[str] = [
+    "cash",
+    "deposit",
+    "gold",
+    "financial_collateral",
+    "government_bond",
+    "corporate_bond",
+    "equity",
+    "credit_linked_note",
+]
+
+RECEIVABLE_COLLATERAL_TYPES: list[str] = ["receivables", "trade_receivables"]
+
+REAL_ESTATE_COLLATERAL_TYPES: list[str] = [
+    "real_estate",
+    "property",
+    "rre",
+    "cre",
+    "residential_re",
+    "commercial_re",
+    "residential",
+    "commercial",
+    "residential_property",
+    "commercial_property",
+]
+
+OTHER_PHYSICAL_COLLATERAL_TYPES: list[str] = [
+    "other_physical",
+    "equipment",
+    "inventory",
+    "other",
+]
+
+COVERED_BOND_COLLATERAL_TYPES: list[str] = ["covered_bond", "covered_bonds"]
+
+LIFE_INSURANCE_COLLATERAL_TYPES: list[str] = ["life_insurance"]
+
+CREDIT_LINKED_NOTE_COLLATERAL_TYPES: list[str] = ["credit_linked_note"]
+
+# Art. 227(2)(a): collateral types eligible for zero-haircut treatment in repos.
+# Both the exposure and collateral must be cash or 0%-RW sovereign debt securities.
+ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
+    "cash",
+    "deposit",
+    "govt_bond",
+    "sovereign_bond",
+    "government_bond",
+    "gilt",
+]
+
+# Subset of real estate types that are NOT eligible financial collateral
+# (used for SA EAD reduction eligibility check).
+NON_ELIGIBLE_RE_TYPES: list[str] = [
+    "real_estate",
+    "property",
+    "rre",
+    "cre",
+    "residential_property",
+    "commercial_property",
+]
+
+# Beneficiary types treated as direct attachment to a single exposure
+# (vs. facility-level or counterparty-level pro-rata allocation).
+DIRECT_BENEFICIARY_TYPES: list[str] = ["exposure", "loan", "contingent"]
+
+# Canonical mapping from accepted collateral_type string to its CRM category.
+# Single source of truth for engine-side categorisation. Engine code can use
+# either the per-category lists above (is_in checks) or this mapping
+# (category-resolution joins).
+COLLATERAL_TYPE_CATEGORY: dict[str, str] = {
+    **dict.fromkeys(FINANCIAL_COLLATERAL_TYPES, "financial"),
+    **dict.fromkeys(RECEIVABLE_COLLATERAL_TYPES, "receivables"),
+    **dict.fromkeys(REAL_ESTATE_COLLATERAL_TYPES, "real_estate"),
+    **dict.fromkeys(OTHER_PHYSICAL_COLLATERAL_TYPES, "other_physical"),
+    **dict.fromkeys(COVERED_BOND_COLLATERAL_TYPES, "covered_bond"),
+    **dict.fromkeys(LIFE_INSURANCE_COLLATERAL_TYPES, "life_insurance"),
+}
+
+
 VALID_PROPERTY_TYPES = {"residential", "commercial", "adc"}
 
 VALID_ISSUER_TYPES = {"sovereign", "pse", "corporate", "securitisation"}

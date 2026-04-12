@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
 from rwa_calc.data.tables.crr_haircuts import (
     FX_HAIRCUT,
     calculate_adjusted_collateral_value,
@@ -39,7 +40,6 @@ from rwa_calc.data.tables.crr_haircuts import (
 from rwa_calc.engine.crm.constants import (
     REAL_ESTATE_TYPES,
     RECEIVABLE_TYPES,
-    ZERO_HAIRCUT_MAX_SOVEREIGN_CQS,
 )
 
 if TYPE_CHECKING:

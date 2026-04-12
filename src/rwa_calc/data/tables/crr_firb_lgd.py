@@ -92,6 +92,7 @@ FIRB_OVERCOLLATERALISATION_RATIOS: dict[str, float] = {
     "receivables": 1.25,  # 125% overcollateralisation
     "real_estate": 1.40,  # 140% overcollateralisation
     "other_physical": 1.40,  # 140% overcollateralisation
+    "life_insurance": 1.0,  # Art. 232: no overcollateralisation required
 }
 
 # Minimum collateralisation thresholds: if collateral value is below this
@@ -101,6 +102,7 @@ FIRB_MIN_COLLATERALISATION_THRESHOLDS: dict[str, float] = {
     "receivables": 0.0,  # No minimum threshold
     "real_estate": 0.30,  # 30% minimum threshold
     "other_physical": 0.30,  # 30% minimum threshold
+    "life_insurance": 0.0,  # Art. 232: no minimum collateralisation threshold
 }
 
 # PD floor under CRR (single floor for all classes)

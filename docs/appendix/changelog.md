@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.192] — 2026-04-12
+
+### Changed
+- **Data tables**: Eliminated duplicated regulatory values in `data/tables/`. Previously most `_create_*_df` builders hardcoded numeric literals that were already defined in the module's constant dicts (`CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS`, `CORPORATE_RISK_WEIGHTS`, `COLLATERAL_HAIRCUTS`, `BASEL31_FIRB_SUPERVISORY_LGD`, etc.), meaning a regulatory update required changes in 2+ places. Builders now derive their values by iterating the authoritative dict: new helpers `_build_cqs_rw_df` (crr), `_build_int_cqs_rw_df` (b31), `_build_haircut_df` (haircuts), and `_build_firb_lgd_df` / `_build_b31_firb_lgd_df` (firb_lgd) read values from the dicts via small row-spec tuples that define column ordering. `B31_FIRB_LGD_*` scalar aliases now derive from `BASEL31_FIRB_SUPERVISORY_LGD`. Matches the gold-standard pattern already used in `b31_equity_rw.py`. New test `tests/unit/test_tables_dict_dataframe_parity.py` (18 cases) locks in the invariant so regressions cannot reintroduce duplication. DataFrame schemas, column/row ordering, and public API are unchanged — no regulatory values changed.
+
 ## [0.1.191] — 2026-04-12
 
 ### Changed

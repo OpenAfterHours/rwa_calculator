@@ -287,16 +287,21 @@ B31_COVERED_BOND_UNRATED_FROM_SCRA: dict[str, Decimal] = {
 }
 
 
-def _create_b31_covered_bond_df() -> pl.DataFrame:
-    """Create Basel 3.1 covered bond risk weight lookup DataFrame.
+def _build_int_cqs_rw_df(
+    weights: dict[int | None, Decimal],
+    exposure_class: str,
+    order: tuple[int | None, ...],
+) -> pl.DataFrame:
+    """Build a CQS risk-weight lookup DataFrame from an int-keyed dict.
 
-    PRA PS1/26 Art. 129(4) Table 7 — identical to CRR Table 6A.
+    Used for Basel 3.1 tables whose constant dicts are keyed by the raw
+    CQS integer (1..6, or None for unrated) rather than the CQS enum.
     """
     return pl.DataFrame(
         {
-            "cqs": [1, 2, 3, 4, 5, 6],
-            "risk_weight": [0.10, 0.20, 0.20, 0.50, 0.50, 1.00],
-            "exposure_class": ["COVERED_BOND"] * 6,
+            "cqs": list(order),
+            "risk_weight": [float(weights[k]) for k in order],
+            "exposure_class": [exposure_class] * len(order),
         }
     ).with_columns(
         [
@@ -306,19 +311,28 @@ def _create_b31_covered_bond_df() -> pl.DataFrame:
     )
 
 
+_B31_CQS_RATED_ORDER: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
+_B31_CQS_ORDER_WITH_UNRATED: tuple[int | None, ...] = (1, 2, 3, 4, 5, 6, None)
+
+
+def _create_b31_covered_bond_df() -> pl.DataFrame:
+    """Create Basel 3.1 covered bond risk weight lookup DataFrame.
+
+    PRA PS1/26 Art. 129(4) Table 7 — identical to CRR Table 6A.
+    """
+    return _build_int_cqs_rw_df(
+        B31_COVERED_BOND_RISK_WEIGHTS,
+        "COVERED_BOND",
+        order=_B31_CQS_RATED_ORDER,
+    )
+
+
 def _create_b31_corporate_df() -> pl.DataFrame:
     """Create Basel 3.1 corporate risk weight lookup DataFrame."""
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.20, 0.50, 0.75, 1.00, 1.50, 1.50, 1.00],
-            "exposure_class": ["CORPORATE"] * 7,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    return _build_int_cqs_rw_df(
+        B31_CORPORATE_RISK_WEIGHTS,
+        "CORPORATE",
+        order=_B31_CQS_ORDER_WITH_UNRATED,
     )
 
 

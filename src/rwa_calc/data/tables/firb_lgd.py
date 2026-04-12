@@ -120,137 +120,274 @@ CRR_MATURITY_CAP: Decimal = Decimal("5.0")  # 5 year maximum
 CRR_K_SCALING_FACTOR: Decimal = Decimal("1.06")
 
 
-def _create_firb_lgd_df() -> pl.DataFrame:
-    """Create F-IRB supervisory LGD lookup DataFrame.
+# =============================================================================
+# DATAFRAME ROW SPECIFICATIONS
+#
+# Each row-spec tuple names the dict keys from which the LGD, OC ratio, and
+# min threshold are looked up. Row ordering is part of the DataFrame contract
+# and must be preserved.
+# =============================================================================
 
-    Includes overcollateralisation ratios and minimum thresholds per CRR Art. 230 / CRE32.9-12.
-    """
-    rows = [
-        # Unsecured exposures
-        {
-            "collateral_type": "unsecured",
-            "seniority": "senior",
-            "lgd": 0.45,
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Unsecured senior claims",
-        },
-        {
-            "collateral_type": "unsecured",
-            "seniority": "subordinated",
-            "lgd": 0.75,
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Subordinated claims",
-        },
-        # Financial collateral (eligible)
-        {
-            "collateral_type": "financial_collateral",
-            "seniority": "senior",
-            "lgd": 0.00,
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Eligible financial collateral (after haircuts)",
-        },
-        {
-            "collateral_type": "cash",
-            "seniority": "senior",
-            "lgd": 0.00,
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Cash collateral",
-        },
-        # Receivables — Art. 230 Table 5
-        {
-            "collateral_type": "receivables",
-            "seniority": "senior",
-            "lgd": 0.35,
-            "overcollateralisation_ratio": 1.25,
-            "min_threshold": 0.0,
-            "description": "Secured by receivables (senior)",
-        },
-        {
-            "collateral_type": "receivables",
-            "seniority": "subordinated",
-            "lgd": 0.65,
-            "overcollateralisation_ratio": 1.25,
-            "min_threshold": 0.0,
-            "description": "Secured by receivables (subordinated)",
-        },
-        # Real estate — Art. 230 Table 5
-        {
-            "collateral_type": "residential_re",
-            "seniority": "senior",
-            "lgd": 0.35,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by residential real estate (senior)",
-        },
-        {
-            "collateral_type": "residential_re",
-            "seniority": "subordinated",
-            "lgd": 0.65,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by residential real estate (subordinated)",
-        },
-        {
-            "collateral_type": "commercial_re",
-            "seniority": "senior",
-            "lgd": 0.35,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by commercial real estate (senior)",
-        },
-        {
-            "collateral_type": "commercial_re",
-            "seniority": "subordinated",
-            "lgd": 0.65,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by commercial real estate (subordinated)",
-        },
-        {
-            "collateral_type": "real_estate",
-            "seniority": "senior",
-            "lgd": 0.35,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by real estate (general, senior)",
-        },
-        {
-            "collateral_type": "real_estate",
-            "seniority": "subordinated",
-            "lgd": 0.65,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Secured by real estate (general, subordinated)",
-        },
-        # Other physical collateral — Art. 230 Table 5
-        {
-            "collateral_type": "other_physical",
-            "seniority": "senior",
-            "lgd": 0.40,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Other eligible physical collateral (senior)",
-        },
-        {
-            "collateral_type": "other_physical",
-            "seniority": "subordinated",
-            "lgd": 0.70,
-            "overcollateralisation_ratio": 1.40,
-            "min_threshold": 0.30,
-            "description": "Other eligible physical collateral (subordinated)",
-        },
-    ]
+# CRR spec tuple fields:
+#   (collateral_type, seniority, lgd_key, oc_key, description)
+_FirbRowSpec = tuple[str, str, str, str, str]
 
-    return pl.DataFrame(rows).with_columns(
+_CRR_FIRB_ROW_SPECS: tuple[_FirbRowSpec, ...] = (
+    # Unsecured exposures
+    ("unsecured", "senior", "unsecured_senior", "financial", "Unsecured senior claims"),
+    ("unsecured", "subordinated", "subordinated", "financial", "Subordinated claims"),
+    # Financial collateral (eligible)
+    (
+        "financial_collateral",
+        "senior",
+        "financial_collateral",
+        "financial",
+        "Eligible financial collateral (after haircuts)",
+    ),
+    ("cash", "senior", "financial_collateral", "financial", "Cash collateral"),
+    # Receivables — Art. 230 Table 5
+    (
+        "receivables",
+        "senior",
+        "receivables",
+        "receivables",
+        "Secured by receivables (senior)",
+    ),
+    (
+        "receivables",
+        "subordinated",
+        "receivables_subordinated",
+        "receivables",
+        "Secured by receivables (subordinated)",
+    ),
+    # Real estate — Art. 230 Table 5
+    (
+        "residential_re",
+        "senior",
+        "residential_re",
+        "real_estate",
+        "Secured by residential real estate (senior)",
+    ),
+    (
+        "residential_re",
+        "subordinated",
+        "residential_re_subordinated",
+        "real_estate",
+        "Secured by residential real estate (subordinated)",
+    ),
+    (
+        "commercial_re",
+        "senior",
+        "commercial_re",
+        "real_estate",
+        "Secured by commercial real estate (senior)",
+    ),
+    (
+        "commercial_re",
+        "subordinated",
+        "commercial_re_subordinated",
+        "real_estate",
+        "Secured by commercial real estate (subordinated)",
+    ),
+    (
+        "real_estate",
+        "senior",
+        "residential_re",
+        "real_estate",
+        "Secured by real estate (general, senior)",
+    ),
+    (
+        "real_estate",
+        "subordinated",
+        "residential_re_subordinated",
+        "real_estate",
+        "Secured by real estate (general, subordinated)",
+    ),
+    # Other physical collateral — Art. 230 Table 5
+    (
+        "other_physical",
+        "senior",
+        "other_physical",
+        "other_physical",
+        "Other eligible physical collateral (senior)",
+    ),
+    (
+        "other_physical",
+        "subordinated",
+        "other_physical_subordinated",
+        "other_physical",
+        "Other eligible physical collateral (subordinated)",
+    ),
+)
+
+
+# Basel 3.1 spec tuple fields:
+#   (collateral_type, seniority, is_fse, lgd_key, oc_key, description)
+_B31FirbRowSpec = tuple[str, str, bool, str, str, str]
+
+_B31_FIRB_ROW_SPECS: tuple[_B31FirbRowSpec, ...] = (
+    # Unsecured — non-FSE (Art. 161(1)(aa))
+    (
+        "unsecured",
+        "senior",
+        False,
+        "unsecured_senior",
+        "financial",
+        "Unsecured senior claims — non-FSE (Art. 161(1)(aa))",
+    ),
+    # Unsecured — FSE (Art. 161(1)(a))
+    (
+        "unsecured",
+        "senior",
+        True,
+        "unsecured_senior_fse",
+        "financial",
+        "Unsecured senior claims — FSE (Art. 161(1)(a))",
+    ),
+    # Subordinated — unchanged
+    (
+        "unsecured",
+        "subordinated",
+        False,
+        "subordinated",
+        "financial",
+        "Subordinated claims (Art. 161(1)(b))",
+    ),
+    # Covered bonds — Art. 161(1B)
+    (
+        "covered_bond",
+        "senior",
+        False,
+        "covered_bond",
+        "financial",
+        "Covered bonds (Art. 161(1B))",
+    ),
+    # Financial collateral — unchanged
+    (
+        "financial_collateral",
+        "senior",
+        False,
+        "financial_collateral",
+        "financial",
+        "Eligible financial collateral (after haircuts)",
+    ),
+    (
+        "cash",
+        "senior",
+        False,
+        "financial_collateral",
+        "financial",
+        "Cash collateral",
+    ),
+    # Receivables — reduced (CRE32.9)
+    (
+        "receivables",
+        "senior",
+        False,
+        "receivables",
+        "receivables",
+        "Secured by receivables (CRR: 35%)",
+    ),
+    # Real estate — reduced (CRE32.10-11)
+    (
+        "residential_re",
+        "senior",
+        False,
+        "residential_re",
+        "real_estate",
+        "Secured by residential RE (CRR: 35%)",
+    ),
+    (
+        "commercial_re",
+        "senior",
+        False,
+        "commercial_re",
+        "real_estate",
+        "Secured by commercial RE (CRR: 35%)",
+    ),
+    (
+        "real_estate",
+        "senior",
+        False,
+        "residential_re",
+        "real_estate",
+        "Secured by real estate — general (CRR: 35%)",
+    ),
+    # Other physical — reduced (CRE32.12)
+    (
+        "other_physical",
+        "senior",
+        False,
+        "other_physical",
+        "other_physical",
+        "Other eligible physical collateral (CRR: 40%)",
+    ),
+)
+
+
+def _build_firb_lgd_df(
+    row_specs: tuple[_FirbRowSpec, ...],
+    lgd_dict: dict[str, Decimal],
+    oc_ratios: dict[str, float],
+    min_thresholds: dict[str, float],
+) -> pl.DataFrame:
+    """Build a CRR F-IRB LGD DataFrame from row specs + authoritative dicts."""
+    return pl.DataFrame(
+        {
+            "collateral_type": [spec[0] for spec in row_specs],
+            "seniority": [spec[1] for spec in row_specs],
+            "lgd": [float(lgd_dict[spec[2]]) for spec in row_specs],
+            "overcollateralisation_ratio": [oc_ratios[spec[3]] for spec in row_specs],
+            "min_threshold": [min_thresholds[spec[3]] for spec in row_specs],
+            "description": [spec[4] for spec in row_specs],
+        }
+    ).with_columns(
         [
             pl.col("lgd").cast(pl.Float64),
             pl.col("overcollateralisation_ratio").cast(pl.Float64),
             pl.col("min_threshold").cast(pl.Float64),
         ]
+    )
+
+
+def _build_b31_firb_lgd_df(
+    row_specs: tuple[_B31FirbRowSpec, ...],
+    lgd_dict: dict[str, Decimal],
+    oc_ratios: dict[str, float],
+    min_thresholds: dict[str, float],
+) -> pl.DataFrame:
+    """Build a Basel 3.1 F-IRB LGD DataFrame from row specs + authoritative dicts."""
+    return pl.DataFrame(
+        {
+            "collateral_type": [spec[0] for spec in row_specs],
+            "seniority": [spec[1] for spec in row_specs],
+            "is_fse": [spec[2] for spec in row_specs],
+            "lgd": [float(lgd_dict[spec[3]]) for spec in row_specs],
+            "overcollateralisation_ratio": [oc_ratios[spec[4]] for spec in row_specs],
+            "min_threshold": [min_thresholds[spec[4]] for spec in row_specs],
+            "description": [spec[5] for spec in row_specs],
+        }
+    ).with_columns(
+        [
+            pl.col("lgd").cast(pl.Float64),
+            pl.col("overcollateralisation_ratio").cast(pl.Float64),
+            pl.col("min_threshold").cast(pl.Float64),
+        ]
+    )
+
+
+def _create_firb_lgd_df() -> pl.DataFrame:
+    """Create F-IRB supervisory LGD lookup DataFrame.
+
+    Values are sourced from ``FIRB_SUPERVISORY_LGD`` (LGD),
+    ``FIRB_OVERCOLLATERALISATION_RATIOS`` and
+    ``FIRB_MIN_COLLATERALISATION_THRESHOLDS`` (Art. 230 / CRE32.9-12).
+    """
+    return _build_firb_lgd_df(
+        _CRR_FIRB_ROW_SPECS,
+        FIRB_SUPERVISORY_LGD,
+        FIRB_OVERCOLLATERALISATION_RATIOS,
+        FIRB_MIN_COLLATERALISATION_THRESHOLDS,
     )
 
 
@@ -565,161 +702,54 @@ def apply_maturity_bounds(maturity: Decimal | float) -> Decimal:
 # - Financial collateral: 0% unchanged
 # - Subordinated: 75% unchanged
 
-B31_FIRB_LGD_UNSECURED_SENIOR: Decimal = Decimal("0.40")
+# The following scalars are thin aliases over ``BASEL31_FIRB_SUPERVISORY_LGD``.
+# The dict above is the single source of truth — update it to change a value.
+B31_FIRB_LGD_UNSECURED_SENIOR: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior"]
 """Non-FSE senior unsecured LGD under Basel 3.1 (Art. 161(1)(aa))."""
 
-B31_FIRB_LGD_UNSECURED_SENIOR_FSE: Decimal = Decimal("0.45")
+B31_FIRB_LGD_UNSECURED_SENIOR_FSE: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior_fse"]
 """FSE senior unsecured LGD under Basel 3.1 (Art. 161(1)(a))."""
 
-B31_FIRB_LGD_SUBORDINATED: Decimal = Decimal("0.75")
+B31_FIRB_LGD_SUBORDINATED: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["subordinated"]
 """Subordinated LGD, unchanged from CRR (Art. 161(1)(b))."""
 
-B31_FIRB_LGD_COVERED_BOND: Decimal = Decimal("0.1125")
+B31_FIRB_LGD_COVERED_BOND: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"]
 """Covered bond LGD (Art. 161(1B))."""
 
-B31_FIRB_LGD_FINANCIAL_COLLATERAL: Decimal = Decimal("0.00")
+B31_FIRB_LGD_FINANCIAL_COLLATERAL: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["financial_collateral"]
 """Financial collateral LGD, unchanged from CRR."""
 
-B31_FIRB_LGD_RECEIVABLES: Decimal = Decimal("0.20")
+B31_FIRB_LGD_RECEIVABLES: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["receivables"]
 """Receivables LGDS under Basel 3.1 (CRR: 35%, CRE32.9)."""
 
-B31_FIRB_LGD_RESIDENTIAL_RE: Decimal = Decimal("0.20")
+B31_FIRB_LGD_RESIDENTIAL_RE: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["residential_re"]
 """Residential RE LGDS under Basel 3.1 (CRR: 35%, CRE32.10)."""
 
-B31_FIRB_LGD_COMMERCIAL_RE: Decimal = Decimal("0.20")
+B31_FIRB_LGD_COMMERCIAL_RE: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["commercial_re"]
 """Commercial RE LGDS under Basel 3.1 (CRR: 35%, CRE32.11)."""
 
-B31_FIRB_LGD_OTHER_PHYSICAL: Decimal = Decimal("0.25")
+B31_FIRB_LGD_OTHER_PHYSICAL: Decimal = BASEL31_FIRB_SUPERVISORY_LGD["other_physical"]
 """Other physical collateral LGDS under Basel 3.1 (CRR: 40%, CRE32.12)."""
 
 
 def _create_b31_firb_lgd_df() -> pl.DataFrame:
     """Create Basel 3.1 F-IRB supervisory LGD lookup DataFrame.
 
-    Includes FSE/non-FSE distinction for unsecured exposures and all
-    B31-revised collateral LGDS values. Overcollateralisation ratios
-    are unchanged from CRR (Art. 230).
+    Values are sourced from ``BASEL31_FIRB_SUPERVISORY_LGD`` (LGD),
+    ``FIRB_OVERCOLLATERALISATION_RATIOS`` and
+    ``FIRB_MIN_COLLATERALISATION_THRESHOLDS`` (Art. 230 / CRE32.9-12,
+    unchanged from CRR). Includes FSE/non-FSE distinction for unsecured
+    exposures per Art. 161(1)(a) vs (aa).
 
     Returns:
         DataFrame with columns: collateral_type, seniority, is_fse, lgd,
         overcollateralisation_ratio, min_threshold, description
     """
-    rows = [
-        # Unsecured — non-FSE (Art. 161(1)(aa))
-        {
-            "collateral_type": "unsecured",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_UNSECURED_SENIOR),
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Unsecured senior claims — non-FSE (Art. 161(1)(aa))",
-        },
-        # Unsecured — FSE (Art. 161(1)(a))
-        {
-            "collateral_type": "unsecured",
-            "seniority": "senior",
-            "is_fse": True,
-            "lgd": float(B31_FIRB_LGD_UNSECURED_SENIOR_FSE),
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Unsecured senior claims — FSE (Art. 161(1)(a))",
-        },
-        # Subordinated — unchanged
-        {
-            "collateral_type": "unsecured",
-            "seniority": "subordinated",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_SUBORDINATED),
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Subordinated claims (Art. 161(1)(b))",
-        },
-        # Covered bonds — Art. 161(1B)
-        {
-            "collateral_type": "covered_bond",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_COVERED_BOND),
-            "overcollateralisation_ratio": 1.0,
-            "min_threshold": 0.0,
-            "description": "Covered bonds (Art. 161(1B))",
-        },
-        # Financial collateral — unchanged
-        {
-            "collateral_type": "financial_collateral",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_FINANCIAL_COLLATERAL),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["financial"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["financial"],
-            "description": "Eligible financial collateral (after haircuts)",
-        },
-        {
-            "collateral_type": "cash",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_FINANCIAL_COLLATERAL),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["financial"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["financial"],
-            "description": "Cash collateral",
-        },
-        # Receivables — reduced (CRE32.9)
-        {
-            "collateral_type": "receivables",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_RECEIVABLES),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["receivables"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["receivables"],
-            "description": "Secured by receivables (CRR: 35%)",
-        },
-        # Real estate — reduced (CRE32.10-11)
-        {
-            "collateral_type": "residential_re",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_RESIDENTIAL_RE),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["real_estate"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["real_estate"],
-            "description": "Secured by residential RE (CRR: 35%)",
-        },
-        {
-            "collateral_type": "commercial_re",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_COMMERCIAL_RE),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["real_estate"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["real_estate"],
-            "description": "Secured by commercial RE (CRR: 35%)",
-        },
-        {
-            "collateral_type": "real_estate",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_RESIDENTIAL_RE),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["real_estate"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["real_estate"],
-            "description": "Secured by real estate — general (CRR: 35%)",
-        },
-        # Other physical — reduced (CRE32.12)
-        {
-            "collateral_type": "other_physical",
-            "seniority": "senior",
-            "is_fse": False,
-            "lgd": float(B31_FIRB_LGD_OTHER_PHYSICAL),
-            "overcollateralisation_ratio": FIRB_OVERCOLLATERALISATION_RATIOS["other_physical"],
-            "min_threshold": FIRB_MIN_COLLATERALISATION_THRESHOLDS["other_physical"],
-            "description": "Other eligible physical collateral (CRR: 40%)",
-        },
-    ]
-
-    return pl.DataFrame(rows).with_columns(
-        [
-            pl.col("lgd").cast(pl.Float64),
-            pl.col("overcollateralisation_ratio").cast(pl.Float64),
-            pl.col("min_threshold").cast(pl.Float64),
-        ]
+    return _build_b31_firb_lgd_df(
+        _B31_FIRB_ROW_SPECS,
+        BASEL31_FIRB_SUPERVISORY_LGD,
+        FIRB_OVERCOLLATERALISATION_RATIOS,
+        FIRB_MIN_COLLATERALISATION_THRESHOLDS,
     )
 
 

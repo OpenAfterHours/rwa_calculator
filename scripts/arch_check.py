@@ -6,6 +6,13 @@ Checks machine-verifiable invariants from CLAUDE.md:
 2. No ABC imports (Protocol only)
 3. No raw .collect().lazy() outside materialise.py (use materialise_barrier)
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
+5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
+6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
+
+Checks 5 and 6 enforce the data/engine separation established by PRs
+#244, #246, #247, #248, #249. Rare intentional exceptions are listed in
+REGULATORY_SCALAR_ALLOWLIST / VALIDATION_ENUM_ALLOWLIST below; adding a new
+entry there should be a deliberate, reviewed decision.
 
 Usage:
     python scripts/arch_check.py [path]  # defaults to src/rwa_calc/
@@ -17,12 +24,52 @@ Exit codes:
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 # The abstraction layer itself is allowed to use raw collect patterns
 COLLECT_ALLOWLIST = {"materialise.py"}
+
+# Existing module-level regulatory-like scalars in engine/** that were
+# deliberately kept in place (see PR notes next to each). New entries require
+# explicit regulatory justification — regulatory values otherwise belong in
+# src/rwa_calc/data/tables/.
+REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
+    # float alias of imported Decimal (PR #248)
+    "engine/aggregator/_floor.py": {"GCRA_CAP_RATE"},
+    # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
+    "engine/aggregator/_schemas.py": {"T2_CREDIT_CAP_RATE"},
+    # float alias of imported CRR_K_SCALING_FACTOR Decimal (PR #248)
+    "engine/comparison.py": {"_CRR_SCALING_FACTOR"},
+    "engine/equity/calculator.py": {
+        "_CIU_THIRD_PARTY_MULTIPLIER",  # Art. 132b(2) 20% uplift multiplier
+        "_RW_TO_PERCENT",  # audit formatting constant (not regulatory)
+    },
+    # Inverse standard-normal at 0.999 used by IRB formulas (mathematical, not reg)
+    "engine/irb/formulas.py": {"G_999"},
+    # CRR Art. 153(5) short-maturity threshold — candidate for relocation
+    "engine/slotting/namespace.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
+}
+
+# Existing engine-side string collections that are internal approach/column/driver
+# identifiers, not input-domain validation enums. Adding a new entry should be a
+# deliberate, reviewed decision — input-domain validation enums belong in
+# src/rwa_calc/data/schemas.py.
+VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
+    # ApproachType enum values + aggregator fallback labels (internal routing)
+    "engine/aggregator/_schemas.py": {"IRB_APPROACHES"},
+    "engine/comparison.py": {
+        "_COMPARISON_COLUMNS",  # output column names
+        "_OPTIONAL_COLUMNS",  # output column names
+        "_IRB_APPROACHES",  # approach IDs
+        "_ATTRIBUTION_DRIVERS",  # internal driver labels
+    },
+    # Art. 231 allocation column mapping (PR #249 — retained as engine config)
+    "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS"},
+}
 
 
 def _is_excluded(py_file: Path) -> bool:
@@ -115,6 +162,160 @@ def check_no_engine_arg(path: Path) -> list[str]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Data/engine separation checks (PRs #244, #246, #247, #248, #249)
+# ---------------------------------------------------------------------------
+
+
+def _is_upper_const_name(name: str) -> bool:
+    """True when name is UPPER_SNAKE_CASE (leading underscores allowed)."""
+    stripped = name.lstrip("_")
+    if not stripped:
+        return False
+    if not any(c.isalpha() for c in stripped):
+        return False
+    return stripped == stripped.upper()
+
+
+def _iter_module_assignments(tree: ast.Module) -> Iterator[tuple[int, str, ast.AST]]:
+    """Yield (lineno, target_name, value_node) for top-level `NAME = value` assigns."""
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign) and stmt.value is not None:
+            for tgt in stmt.targets:
+                if isinstance(tgt, ast.Name):
+                    yield stmt.lineno, tgt.id, stmt.value
+        elif (
+            isinstance(stmt, ast.AnnAssign)
+            and stmt.value is not None
+            and isinstance(stmt.target, ast.Name)
+        ):
+            yield stmt.lineno, stmt.target.id, stmt.value
+
+
+def _rhs_is_regulatory_scalar(node: ast.AST) -> bool:
+    """True when the RHS looks like a hardcoded regulatory scalar literal.
+
+    Covers:
+    - bare numeric literals (int/float) other than the trivial 0, 1, -1
+    - Decimal("...") / Decimal(...) calls
+    - float(...) / int(...) calls with a single argument (typical alias pattern)
+    """
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool):
+            return False
+        if isinstance(node.value, (int, float)):
+            return node.value not in (0, 1, -1)
+        return False
+    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
+        val = node.operand.value
+        if isinstance(val, bool):
+            return False
+        if isinstance(val, (int, float)):
+            return val not in (0, 1)
+        return False
+    if isinstance(node, ast.Call):
+        fn = node.func
+        fn_name: str | None = None
+        if isinstance(fn, ast.Name):
+            fn_name = fn.id
+        elif isinstance(fn, ast.Attribute):
+            fn_name = fn.attr
+        if fn_name == "Decimal":
+            return True
+        if fn_name in {"float", "int"} and len(node.args) == 1 and not node.keywords:
+            return True
+    return False
+
+
+def _rhs_is_str_collection(node: ast.AST) -> bool:
+    """True when the RHS is a non-trivial all-string-literal collection.
+
+    Matches:
+    - list/tuple/set literal with >= 2 string-literal elements
+    - dict with >= 2 string-literal keys AND all string-literal values
+    - frozenset(...)/set(...)/tuple(...)/list(...) wrapping such a collection
+    """
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        elts = node.elts
+        if len(elts) < 2:
+            return False
+        return all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in elts)
+    if isinstance(node, ast.Dict):
+        if len(node.keys) < 2:
+            return False
+        keys_ok = all(
+            k is not None and isinstance(k, ast.Constant) and isinstance(k.value, str)
+            for k in node.keys
+        )
+        vals_ok = all(isinstance(v, ast.Constant) and isinstance(v.value, str) for v in node.values)
+        return keys_ok and vals_ok
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"frozenset", "set", "tuple", "list"}
+        and len(node.args) == 1
+    ):
+        return _rhs_is_str_collection(node.args[0])
+    return False
+
+
+def _iter_engine_files(path: Path) -> Iterator[Path]:
+    """Yield every .py file under `<path>/engine/`, skipping __init__.py."""
+    engine_root = path / "engine"
+    if not engine_root.exists():
+        return
+    for py_file in sorted(engine_root.rglob("*.py")):
+        if py_file.name == "__init__.py":
+            continue
+        yield py_file
+
+
+def check_no_regulatory_scalars_in_engine(path: Path) -> list[str]:
+    """Module-level regulatory scalar literals belong in data/tables/, not engine/**."""
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        allowed = REGULATORY_SCALAR_ALLOWLIST.get(rel, set())
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for lineno, name, value in _iter_module_assignments(tree):
+            if not _is_upper_const_name(name):
+                continue
+            if name in allowed:
+                continue
+            if _rhs_is_regulatory_scalar(value):
+                violations.append(
+                    f"  {py_file}:{lineno}: {name} -- regulatory scalar in engine/ "
+                    "(move to src/rwa_calc/data/tables/ or allowlist in arch_check.py)"
+                )
+    return violations
+
+
+def check_no_validation_enums_in_engine(path: Path) -> list[str]:
+    """Module-level string-enum collections belong in data/schemas.py, not engine/**."""
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        allowed = VALIDATION_ENUM_ALLOWLIST.get(rel, set())
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for lineno, name, value in _iter_module_assignments(tree):
+            if not _is_upper_const_name(name):
+                continue
+            if name in allowed:
+                continue
+            if _rhs_is_str_collection(value):
+                violations.append(
+                    f"  {py_file}:{lineno}: {name} -- string-literal collection in engine/ "
+                    "(move to src/rwa_calc/data/schemas.py or allowlist in arch_check.py)"
+                )
+    return violations
+
+
 def main() -> int:
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("src/rwa_calc")
     if not target.exists():
@@ -126,6 +327,14 @@ def main() -> int:
         ("No ABC imports (use Protocol)", check_no_abc),
         ("No .collect().lazy() (use materialise_barrier)", check_no_collect_lazy),
         ("No engine= in collect (use materialise.py)", check_no_engine_arg),
+        (
+            "No regulatory scalars in engine/ (use data/tables/)",
+            check_no_regulatory_scalars_in_engine,
+        ),
+        (
+            "No validation string-enums in engine/ (use data/schemas.py)",
+            check_no_validation_enums_in_engine,
+        ),
     ]
 
     all_violations: list[tuple[str, list[str]]] = []

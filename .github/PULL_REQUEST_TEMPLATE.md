@@ -20,6 +20,7 @@
 - [ ] Unit tests pass
 - [ ] Calculation outputs verified against manual/Excel check
 - [ ] Edge cases considered (e.g. missing data, boundary values)
+- [ ] Any new regulatory value lives in `src/rwa_calc/data/tables/`; any new input-domain validation enum lives in `src/rwa_calc/data/schemas.py` (not in `engine/**`) — `uv run python scripts/arch_check.py` passes
 
 ## Assumptions & Interpretations
 <!-- Document any regulatory interpretation decisions made - these are valuable for audit trail -->

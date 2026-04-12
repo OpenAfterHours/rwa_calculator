@@ -17,6 +17,7 @@ Each stage receives an immutable bundle, returns a new immutable bundle. Never m
 - **Frozen dataclass bundles** (`contracts/bundles.py`): All inter-stage data transfer uses `@dataclass(frozen=True)`. Never use plain dicts for stage outputs.
 - **Polars custom namespaces**: Domain logic is exposed via registered namespace extensions (e.g., `df.rwa_sa.calculate()`). Place namespace code in `namespace.py` within each engine subpackage.
 - **Factory methods on config**: Use `CalculationConfig.crr()` / `.basel_3_1()` for self-documenting configuration. Don't construct configs with raw kwargs.
+- **Data/engine separation**: Regulatory values (risk weights, LGDs, CCFs, floors, scaling factors) live in `src/rwa_calc/data/tables/*.py`. Input-domain / validation constants (eligible type-strings, category maps) live in `src/rwa_calc/data/schemas.py`. `engine/**` imports these — it must not declare its own regulatory scalars or string-enum collections at module scope. Enforced by `scripts/arch_check.py` (checks 5 & 6) and `tests/contracts/test_data_layer_boundary.py`; new exceptions must be justified in the allowlist at the top of `arch_check.py`.
 - **Error accumulation**: Errors are collected in `list[CalculationError]` and propagated through bundles — never raise exceptions for data quality issues. Reserve exceptions for programming errors only.
 
 ## Reference Documentation

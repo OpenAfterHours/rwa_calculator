@@ -112,6 +112,10 @@ CRR_PD_FLOOR: Decimal = Decimal("0.0003")  # 0.03%
 CRR_MATURITY_FLOOR: Decimal = Decimal("1.0")  # 1 year minimum
 CRR_MATURITY_CAP: Decimal = Decimal("5.0")  # 5 year maximum
 
+# IRB K scaling factor (CRR Art. 153(1)). Removed under Basel 3.1 (set to 1.0).
+# Used in CRR-vs-B31 attribution math to isolate the scaling-factor delta.
+CRR_K_SCALING_FACTOR: Decimal = Decimal("1.06")
+
 
 def _create_firb_lgd_df() -> pl.DataFrame:
     """Create F-IRB supervisory LGD lookup DataFrame.

@@ -42,11 +42,14 @@ from __future__ import annotations
 import polars as pl
 
 from rwa_calc.contracts.bundles import OutputFloorSummary
+from rwa_calc.data.tables.output_floor import GCRA_CAP_RATE as _GCRA_CAP_RATE_DECIMAL
 from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES, FLOOR_IMPACT_SCHEMA
 from rwa_calc.engine.aggregator._utils import col_or_default, empty_frame, resolve_rwa_col
 
-# GCRA cap: 1.25% of S-TREA per Art. 92 para 2A definition
-GCRA_CAP_RATE = 0.0125
+# GCRA cap: 1.25% of S-TREA per Art. 92 para 2A definition.
+# Stored as Decimal in data/tables/output_floor.py; the aggregator works in
+# float space, so it's converted once at import time.
+GCRA_CAP_RATE: float = float(_GCRA_CAP_RATE_DECIMAL)
 
 
 def compute_of_adj(

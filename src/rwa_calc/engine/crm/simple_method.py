@@ -20,21 +20,17 @@ References:
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.tables.crr_simple_method import (
+    SOVEREIGN_BOND_DISCOUNT,
+)
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
-
-# Art. 222(1): minimum 20% RW floor for secured portion (general case)
-FCSM_RW_FLOOR = Decimal("0.20")
-
-# Art. 222(4)(b): 20% market value discount for 0%-RW sovereign bonds
-SOVEREIGN_BOND_DISCOUNT = Decimal("0.20")
 
 
 def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:

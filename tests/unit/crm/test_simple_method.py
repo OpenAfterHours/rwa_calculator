@@ -33,12 +33,14 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.tables.crr_simple_method import (
+    FCSM_RW_FLOOR,
+    SOVEREIGN_BOND_DISCOUNT,
+)
 from rwa_calc.domain.enums import (
     CRMCollateralMethod,
 )
 from rwa_calc.engine.crm.simple_method import (
-    FCSM_RW_FLOOR,
-    SOVEREIGN_BOND_DISCOUNT,
     _add_default_fcsm_columns,
     _derive_collateral_rw_expr,
     compute_fcsm_columns,

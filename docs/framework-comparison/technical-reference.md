@@ -247,7 +247,7 @@ H_m = H_n × sqrt(T_m / T_n)
 | Capital market | 10 days | × 1.000 (no scaling) |
 | Secured lending | 20 days | × 1.414 (`sqrt(2)`) |
 
-**Implementation:** `scale_haircut_for_liquidation_period()` in `data/tables/crr_haircuts.py`;
+**Implementation:** `scale_haircut_for_liquidation_period()` in `data/tables/haircuts.py`;
 applied via `liquidation_period_days` column in `engine/crm/haircuts.py`.
 
 ### Art. 226(1) — Non-Daily Revaluation Adjustment

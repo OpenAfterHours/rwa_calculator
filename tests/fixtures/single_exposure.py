@@ -21,7 +21,7 @@ from decimal import Decimal
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_firb_lgd import lookup_firb_lgd
+from rwa_calc.data.tables.firb_lgd import lookup_firb_lgd
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator

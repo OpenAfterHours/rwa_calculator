@@ -1,33 +1,34 @@
 """
-CRM-shape supervisory values for F-IRB collateral processing.
+CRM-shape supervisory values for F-IRB collateral processing — CRR Art. 161 /
+230 and PRA PS1/26 / CRE32.9-12.
 
 Pipeline position:
     Data Tables -> CRM Processor (collateral.py, haircuts.py)
 
 Key responsibilities:
-- Hold the CRM-shape view of CRR Art. 161 / 230 / CRE32 supervisory data
+- Hold the CRM-shape view of supervisory data for both CRR and Basel 3.1
 - Provide LGD, overcollateralisation ratio, and minimum threshold dicts
   keyed by simple collateral category (financial, receivables, real_estate,
   other_physical, covered_bond, life_insurance, unsecured) for use by
   Polars expression builders in engine/crm/
 
 Sibling modules:
-- crr_firb_lgd.py / b31_firb_lgd.py hold the FIRB-shape view (split into
-  residential_re/commercial_re, FSE/non-FSE, senior/subordinated) used by
-  IRB-direct lookups. Both shapes encode the same regulatory data — this
-  module is the canonical CRM-side view.
+- firb_lgd.py holds the FIRB-shape view (split into residential_re/
+  commercial_re, FSE/non-FSE, senior/subordinated) used by IRB-direct
+  lookups. Both shapes encode the same regulatory data — this module is
+  the canonical CRM-side view.
 
 References:
-- CRR Art. 161: Supervisory LGD for F-IRB
+- CRR Art. 161 / PRA PS1/26 Art. 161: Supervisory LGD for F-IRB
 - CRR Art. 222(3), 227(3): Zero-haircut sovereign eligibility
-- CRR Art. 230 (Table 5): Overcollateralisation ratios and minimum thresholds
+- CRR Art. 230 (Table 5) / CRE32.9-12: Overcollateralisation ratios and thresholds
 - CRR Art. 232: Life insurance treatment (no overcollateralisation)
-- CRE22.52-53, CRE32.9-12: Basel 3.1 equivalents
+- CRE22.52-53: Basel 3.1 supervisory haircut equivalents
 """
 
 from __future__ import annotations
 
-from .crr_firb_lgd import (
+from .firb_lgd import (
     FIRB_MIN_COLLATERALISATION_THRESHOLDS,
     FIRB_OVERCOLLATERALISATION_RATIOS,
 )
@@ -72,7 +73,7 @@ BASEL31_SUPERVISORY_LGD: dict[str, float] = {
 
 # ---------------------------------------------------------------------------
 # Overcollateralisation ratios and minimum thresholds — same under both
-# frameworks (CRR Art. 230 / CRE32.9-12). Re-exported from crr_firb_lgd.py
+# frameworks (CRR Art. 230 / CRE32.9-12). Re-exported from firb_lgd.py
 # under CRM-shape names; the underlying dicts are the single source of truth.
 # ---------------------------------------------------------------------------
 

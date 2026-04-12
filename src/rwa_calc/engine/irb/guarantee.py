@@ -278,7 +278,7 @@ def _apply_parameter_substitution(
 ) -> pl.LazyFrame:
     """Apply Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85)."""
     if use_parameter_substitution:
-        from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 
         firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
         firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.40
@@ -439,7 +439,7 @@ def _adjust_expected_loss(
     # SA guarantor: no EL concept -- only unguaranteed portion retains IRB EL
     # IRB guarantor (parameter sub): EL = guarantor_pd x firb_lgd x guaranteed_portion
     if use_parameter_substitution:
-        from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 
         firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
         firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
@@ -489,7 +489,7 @@ def _adjust_expected_loss(
 
     has_guarantor_pd = "guarantor_pd" in lf.collect_schema().names()
     if has_guarantor_pd:
-        from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 
         firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
         firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.45 CRR

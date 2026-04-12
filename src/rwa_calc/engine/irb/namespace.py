@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_firb_lgd import get_firb_lgd_table_for_framework
+from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.adjustments import (
     apply_defaulted_treatment as _apply_defaulted_treatment,

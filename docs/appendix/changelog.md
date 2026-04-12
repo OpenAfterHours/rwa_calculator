@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.191] — 2026-04-12
+
+### Changed
+- **Data tables**: Renamed `data/tables/crr_haircuts.py` -> `data/tables/haircuts.py` and `data/tables/crr_firb_lgd.py` -> `data/tables/firb_lgd.py`; both files already held dual-framework content (CRR Art. 224/161 and PRA PS1/26 equivalents), so the `crr_` prefix was misleading. Merged `data/tables/b31_firb_lgd.py` into `firb_lgd.py` — it was a thin re-export of the Basel 3.1 LGD dict that physically lived in the CRR-prefixed file. All `BASEL31_*` / `B31_*` constants, lookup helpers (`lookup_b31_firb_lgd`, `get_b31_firb_lgd_table`, `get_b31_vs_crr_lgd_comparison`), and framework-shared helpers (`FIRB_OVERCOLLATERALISATION_RATIOS`, `FIRB_MIN_COLLATERALISATION_THRESHOLDS`, `CRR_K_SCALING_FACTOR`) are now in `firb_lgd.py`. Module docstrings updated to reflect dual-framework scope; `crm_supervisory.py` docstring updated to match. Import sites updated across `engine/`, tests, and docs; public `data/tables/__init__.py` re-exports preserved. No regulatory values changed.
+
 ## [0.1.190] — 2026-04-11
 
 ### Fixed

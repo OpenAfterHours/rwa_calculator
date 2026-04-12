@@ -19,7 +19,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.b31_firb_lgd import (
+from rwa_calc.data.tables.firb_lgd import (
     B31_FIRB_LGD_COMMERCIAL_RE,
     B31_FIRB_LGD_COVERED_BOND,
     B31_FIRB_LGD_FINANCIAL_COLLATERAL,
@@ -29,13 +29,11 @@ from rwa_calc.data.tables.b31_firb_lgd import (
     B31_FIRB_LGD_SUBORDINATED,
     B31_FIRB_LGD_UNSECURED_SENIOR,
     B31_FIRB_LGD_UNSECURED_SENIOR_FSE,
+    BASEL31_FIRB_SUPERVISORY_LGD,
+    FIRB_SUPERVISORY_LGD,
     get_b31_firb_lgd_table,
     get_b31_vs_crr_lgd_comparison,
     lookup_b31_firb_lgd,
-)
-from rwa_calc.data.tables.crr_firb_lgd import (
-    BASEL31_FIRB_SUPERVISORY_LGD,
-    FIRB_SUPERVISORY_LGD,
 )
 
 # =============================================================================

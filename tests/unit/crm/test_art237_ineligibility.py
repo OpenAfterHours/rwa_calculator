@@ -24,7 +24,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_haircuts import calculate_maturity_mismatch_adjustment
+from rwa_calc.data.tables.haircuts import calculate_maturity_mismatch_adjustment
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
 # ---------------------------------------------------------------------------

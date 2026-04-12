@@ -1,8 +1,10 @@
 """
-CRM supervisory haircuts (CRR Art. 224 / PRA PS1/26 Art. 224).
+CRM supervisory haircuts — CRR Art. 224 and PRA PS1/26 Art. 224.
 
-Provides collateral haircut lookup tables as Polars DataFrames for efficient
-joins in the RWA calculation pipeline. Supports both CRR and Basel 3.1 frameworks.
+Canonical home for both the CRR and Basel 3.1 collateral haircut tables;
+framework selection happens at the call site via ``CalculationConfig``.
+Provides the haircut dicts plus Polars DataFrame views for efficient joins
+in the RWA calculation pipeline.
 
 All haircut values are the 10-business-day base haircuts (Art. 224(2)(b) default).
 For other liquidation periods, use ``scale_haircut_for_liquidation_period()``:

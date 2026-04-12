@@ -20,7 +20,7 @@ from rwa_calc.data.tables.crm_supervisory import (
     BASEL31_SUPERVISORY_LGD,
     CRR_SUPERVISORY_LGD,
 )
-from rwa_calc.engine.crm.constants import (
+from rwa_calc.engine.crm.expressions import (
     WATERFALL_ORDER,
     collateral_category_expr,
     collateral_lgd_expr,

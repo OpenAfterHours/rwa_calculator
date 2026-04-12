@@ -26,7 +26,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
-from rwa_calc.engine.crm.constants import CRM_ALLOC_COLUMNS
+from rwa_calc.engine.crm.expressions import CRM_ALLOC_COLUMNS
 from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================

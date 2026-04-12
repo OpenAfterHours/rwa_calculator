@@ -1,16 +1,23 @@
 """
 Polars expression builders for CRM collateral and beneficiary classification.
 
-Input-domain collateral type-set lists (FINANCIAL, RECEIVABLE, REAL_ESTATE,
-OTHER_PHYSICAL, COVERED_BOND, LIFE_INSURANCE) and the canonical
-collateral_type -> category mapping live in data/schemas.py alongside
-VALID_COLLATERAL_TYPES. Regulatory values (supervisory LGD,
-overcollateralisation ratios, minimum thresholds, zero-haircut sovereign
-CQS cap) live in data/tables/crm_supervisory.py. Both are imported here
-for use by the expression builders below.
+Holds the Polars expression builders used across the CRM pipeline to
+classify collateral into regulatory categories, derive supervisory LGD,
+overcollateralisation ratios, and minimum collateralisation thresholds
+per row, plus the waterfall ordering (WATERFALL_ORDER) and allocation
+column naming (CRM_ALLOC_COLUMNS) that drive the Art. 231 sequential
+fill in collateral.py.
+
+Sibling modules providing the data this module consumes:
+- data/schemas.py: input-domain collateral type-set lists and the
+  canonical collateral_type -> category mapping
+- data/tables/crm_supervisory.py: regulatory values (supervisory LGD,
+  overcollateralisation ratios, minimum thresholds, zero-haircut
+  sovereign CQS cap)
 
 References:
-    CRR Art. 161, 224, 230: Supervisory LGD, haircuts, overcollateralisation
+    CRR Art. 161, 224, 230, 231: Supervisory LGD, haircuts,
+        overcollateralisation, waterfall
     CRE22.52-53, CRE32.9-12: Basel 3.1 equivalents
 """
 

@@ -37,10 +37,8 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.engine.crm.constants import (
-    ZERO_HAIRCUT_ELIGIBLE_TYPES,
-    ZERO_HAIRCUT_MAX_SOVEREIGN_CQS,
-)
+from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
+from rwa_calc.engine.crm.constants import ZERO_HAIRCUT_ELIGIBLE_TYPES
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
 # =============================================================================

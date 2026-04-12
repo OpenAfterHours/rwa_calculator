@@ -1,9 +1,11 @@
 """
-Shared constants and expression builders for CRM processing.
+Shared collateral type classifications and Polars expression builders for CRM.
 
-Centralises collateral type classifications, supervisory LGD values,
-overcollateralisation ratios, and beneficiary type definitions used
-across the CRM submodules (collateral, guarantees, provisions, haircuts).
+Holds input-domain string lists for collateral classification and the
+expression builders that consume them. Regulatory values (supervisory
+LGD, overcollateralisation ratios, minimum thresholds, zero-haircut
+sovereign CQS cap) live in data/tables/crm_supervisory.py and are
+imported here for use by the expression builders below.
 
 References:
     CRR Art. 161, 224, 230: Supervisory LGD, haircuts, overcollateralisation
@@ -13,6 +15,13 @@ References:
 from __future__ import annotations
 
 import polars as pl
+
+from rwa_calc.data.tables.crm_supervisory import (
+    BASEL31_SUPERVISORY_LGD,
+    CRR_SUPERVISORY_LGD,
+    MIN_COLLATERALISATION_THRESHOLDS,
+    OVERCOLLATERALISATION_RATIOS,
+)
 
 # ---------------------------------------------------------------------------
 # Collateral type classifications
@@ -63,10 +72,6 @@ ZERO_HAIRCUT_ELIGIBLE_TYPES: list[str] = [
     "gilt",
 ]
 
-# Art. 227(3): maximum CQS for sovereign bonds eligible for zero-haircut treatment.
-# Only CQS 1 (0%-RW) sovereign debt qualifies.
-ZERO_HAIRCUT_MAX_SOVEREIGN_CQS: int = 1
-
 # Subset of real estate types that are NOT eligible financial collateral
 # (used for SA EAD reduction eligibility check)
 NON_ELIGIBLE_RE_TYPES: list[str] = [
@@ -83,62 +88,6 @@ NON_ELIGIBLE_RE_TYPES: list[str] = [
 # ---------------------------------------------------------------------------
 
 DIRECT_BENEFICIARY_TYPES: list[str] = ["exposure", "loan", "contingent"]
-
-# ---------------------------------------------------------------------------
-# F-IRB supervisory LGD values by framework
-# CRR Art. 161 vs Basel 3.1 CRE32.9-12
-# ---------------------------------------------------------------------------
-
-CRR_SUPERVISORY_LGD: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.35,
-    "real_estate": 0.35,
-    "other_physical": 0.40,
-    "unsecured": 0.45,
-    "covered_bond": 0.1125,
-    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
-    # CRR Art. 230 Table 5 subordinated LGDS (secured portion of subordinated claims)
-    "receivables_subordinated": 0.65,
-    "real_estate_subordinated": 0.65,
-    "other_physical_subordinated": 0.70,
-}
-
-BASEL31_SUPERVISORY_LGD: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.20,
-    "real_estate": 0.20,
-    "other_physical": 0.25,
-    "unsecured": 0.40,  # Art. 161(1)(aa): non-FSE corporates
-    "unsecured_fse": 0.45,  # Art. 161(1)(a): financial sector entities
-    "covered_bond": 0.1125,  # Art. 161(1)(d)
-    "life_insurance": 0.40,  # Art. 232(2)(b): secured portion LGD = 40%
-}
-
-# ---------------------------------------------------------------------------
-# Overcollateralisation ratios — same under both frameworks
-# CRR Art. 230 / CRE32.9-12
-# ---------------------------------------------------------------------------
-
-OVERCOLLATERALISATION_RATIOS: dict[str, float] = {
-    "financial": 1.0,
-    "receivables": 1.25,
-    "real_estate": 1.40,
-    "other_physical": 1.40,
-    "life_insurance": 1.0,  # Art. 232: no overcollateralisation required
-}
-
-# ---------------------------------------------------------------------------
-# Minimum collateralisation thresholds — same under both frameworks
-# ---------------------------------------------------------------------------
-
-MIN_COLLATERALISATION_THRESHOLDS: dict[str, float] = {
-    "financial": 0.0,
-    "receivables": 0.0,
-    "real_estate": 0.30,
-    "other_physical": 0.30,
-    "life_insurance": 0.0,  # Art. 232: no minimum collateralisation threshold
-}
-
 
 # ---------------------------------------------------------------------------
 # Polars expression builders

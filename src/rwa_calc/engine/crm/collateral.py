@@ -27,10 +27,10 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.tables.crm_supervisory import MIN_COLLATERALISATION_THRESHOLDS
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.constants import (
     CRM_ALLOC_COLUMNS,
-    MIN_COLLATERALISATION_THRESHOLDS,
     NON_ELIGIBLE_RE_TYPES,
     WATERFALL_ORDER,
     beneficiary_level_expr,

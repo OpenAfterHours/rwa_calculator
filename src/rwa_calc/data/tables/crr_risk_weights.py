@@ -27,6 +27,68 @@ import polars as pl
 from rwa_calc.domain.enums import CQS
 
 # =============================================================================
+# INTERNAL DATAFRAME-BUILD HELPERS
+#
+# Each `_create_*_df` builder below derives its numeric values from the
+# corresponding regulatory constant dict declared in this module. The helpers
+# guarantee there is exactly one source of truth for every regulatory scalar —
+# update the dict and the DataFrame tracks automatically.
+# =============================================================================
+
+_CQS_ORDER_WITH_UNRATED: tuple[CQS, ...] = (
+    CQS.CQS1,
+    CQS.CQS2,
+    CQS.CQS3,
+    CQS.CQS4,
+    CQS.CQS5,
+    CQS.CQS6,
+    CQS.UNRATED,
+)
+_CQS_ORDER_RATED_ONLY: tuple[CQS, ...] = _CQS_ORDER_WITH_UNRATED[:-1]
+
+
+def _cqs_to_int(c: CQS) -> int | None:
+    """Map a CQS enum member to its DataFrame `cqs` column value.
+
+    UNRATED maps to SQL NULL (``None``) so downstream joins can match
+    unrated rows via null-safe joins.
+    """
+    return None if c is CQS.UNRATED else int(c.value)
+
+
+def _build_cqs_rw_df(
+    weights: dict[CQS, Decimal],
+    exposure_class: str,
+    order: tuple[CQS, ...] = _CQS_ORDER_WITH_UNRATED,
+    extra_cols: dict[str, list[object]] | None = None,
+) -> pl.DataFrame:
+    """Build a CQS risk-weight lookup DataFrame from a CQS-keyed dict.
+
+    Args:
+        weights: CQS → risk weight (Decimal) mapping
+        exposure_class: Value for the `exposure_class` column
+        order: Iteration order controlling row order in the output DataFrame
+        extra_cols: Optional additional columns (same length as ``order``)
+
+    Returns:
+        DataFrame with columns [cqs (Int8), risk_weight (Float64), exposure_class, ...]
+    """
+    data: dict[str, list[object]] = {
+        "cqs": [_cqs_to_int(c) for c in order],
+        "risk_weight": [float(weights[c]) for c in order],
+        "exposure_class": [exposure_class] * len(order),
+    }
+    if extra_cols:
+        data.update(extra_cols)
+    return pl.DataFrame(data).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+# =============================================================================
 # CENTRAL GOVT / CENTRAL BANK RISK WEIGHTS (CRR Art. 114)
 # =============================================================================
 
@@ -43,17 +105,9 @@ CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS: dict[CQS, Decimal] = {
 
 def _create_cgcb_df() -> pl.DataFrame:
     """Create central govt/central bank risk weight lookup DataFrame."""
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.00, 0.20, 0.50, 1.00, 1.00, 1.50, 1.00],
-            "exposure_class": ["CENTRAL_GOVT_CENTRAL_BANK"] * 7,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    return _build_cqs_rw_df(
+        CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+        "CENTRAL_GOVT_CENTRAL_BANK",
     )
 
 
@@ -85,23 +139,12 @@ INSTITUTION_RISK_WEIGHTS_STANDARD: dict[CQS, Decimal] = {
 
 def _create_institution_df(use_uk_deviation: bool = True) -> pl.DataFrame:
     """Create institution risk weight lookup DataFrame."""
-    if use_uk_deviation:
-        weights = [0.20, 0.30, 0.50, 1.00, 1.00, 1.50, 0.40]
-    else:
-        weights = [0.20, 0.50, 0.50, 1.00, 1.00, 1.50, 1.00]
-
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": weights,
-            "exposure_class": ["INSTITUTION"] * 7,
-            "uk_deviation": [use_uk_deviation] * 7,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    weights = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+    n = len(_CQS_ORDER_WITH_UNRATED)
+    return _build_cqs_rw_df(
+        weights,
+        "INSTITUTION",
+        extra_cols={"uk_deviation": [use_uk_deviation] * n},
     )
 
 
@@ -146,17 +189,10 @@ def _create_pse_df() -> pl.DataFrame:
     Rated PSEs join against this table via their own CQS.
     Unrated PSEs use sovereign-derived treatment handled in the SA calculator.
     """
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6],
-            "risk_weight": [0.20, 0.50, 0.50, 1.00, 1.00, 1.50],
-            "exposure_class": ["PSE"] * 6,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    return _build_cqs_rw_df(
+        PSE_RISK_WEIGHTS_OWN_RATING,
+        "PSE",
+        order=_CQS_ORDER_RATED_ONLY,
     )
 
 
@@ -208,17 +244,10 @@ def _create_rgla_df() -> pl.DataFrame:
     Unrated RGLAs use sovereign-derived treatment handled in the SA calculator.
     UK devolved govts (0%) and UK local authorities (20%) are overrides in the calculator.
     """
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6],
-            "risk_weight": [0.20, 0.50, 0.50, 1.00, 1.00, 1.50],
-            "exposure_class": ["RGLA"] * 6,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    return _build_cqs_rw_df(
+        RGLA_RISK_WEIGHTS_OWN_RATING,
+        "RGLA",
+        order=_CQS_ORDER_RATED_ONLY,
     )
 
 
@@ -253,18 +282,7 @@ def _create_mdb_df() -> pl.DataFrame:
     Rated non-named MDBs join against this table via their own CQS.
     Unrated non-named MDBs get 50% (Table 2B unrated row).
     """
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.20, 0.30, 0.50, 1.00, 1.00, 1.50, 0.50],
-            "exposure_class": ["MDB"] * 7,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
-    )
+    return _build_cqs_rw_df(MDB_RISK_WEIGHTS_TABLE_2B, "MDB")
 
 
 # =============================================================================
@@ -293,18 +311,7 @@ CORPORATE_RISK_WEIGHTS: dict[CQS, Decimal] = {
 
 def _create_corporate_df() -> pl.DataFrame:
     """Create corporate risk weight lookup DataFrame."""
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6, None],
-            "risk_weight": [0.20, 0.50, 1.00, 1.00, 1.50, 1.50, 1.00],
-            "exposure_class": ["CORPORATE"] * 7,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
-    )
+    return _build_cqs_rw_df(CORPORATE_RISK_WEIGHTS, "CORPORATE")
 
 
 # =============================================================================
@@ -355,7 +362,7 @@ def _create_retail_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "cqs": [None],
-            "risk_weight": [0.75],
+            "risk_weight": [float(RETAIL_RISK_WEIGHT)],
             "exposure_class": ["RETAIL"],
         }
     ).with_columns(
@@ -399,9 +406,9 @@ def _create_residential_mortgage_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "exposure_class": ["RESIDENTIAL_MORTGAGE"],
-            "ltv_threshold": [0.80],
-            "rw_low_ltv": [0.35],
-            "rw_high_ltv": [0.75],
+            "ltv_threshold": [float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])],
+            "rw_low_ltv": [float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])],
+            "rw_high_ltv": [float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])],
         }
     ).with_columns(
         [
@@ -443,9 +450,9 @@ def _create_commercial_re_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "exposure_class": ["COMMERCIAL_RE"],
-            "ltv_threshold": [0.50],
-            "rw_low_ltv": [0.50],
-            "rw_standard": [1.00],
+            "ltv_threshold": [float(COMMERCIAL_RE_PARAMS["ltv_threshold"])],
+            "rw_low_ltv": [float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])],
+            "rw_standard": [float(COMMERCIAL_RE_PARAMS["rw_standard"])],
             "income_cover_required": [True],
         }
     ).with_columns(
@@ -485,17 +492,10 @@ COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = {
 
 def _create_covered_bond_df() -> pl.DataFrame:
     """Create covered bond risk weight lookup DataFrame (CRR Art. 129)."""
-    return pl.DataFrame(
-        {
-            "cqs": [1, 2, 3, 4, 5, 6],
-            "risk_weight": [0.10, 0.20, 0.20, 0.50, 0.50, 1.00],
-            "exposure_class": ["COVERED_BOND"] * 6,
-        }
-    ).with_columns(
-        [
-            pl.col("cqs").cast(pl.Int8),
-            pl.col("risk_weight").cast(pl.Float64),
-        ]
+    return _build_cqs_rw_df(
+        COVERED_BOND_RISK_WEIGHTS,
+        "COVERED_BOND",
+        order=_CQS_ORDER_RATED_ONLY,
     )
 
 

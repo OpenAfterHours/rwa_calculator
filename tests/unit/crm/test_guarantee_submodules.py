@@ -27,7 +27,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
+from rwa_calc.data.tables.haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.guarantees import (
     _allocate_guarantees_pro_rata,

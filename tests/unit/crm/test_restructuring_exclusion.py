@@ -408,6 +408,6 @@ class TestRestructuringHaircutConstant:
     def test_constant_value(self) -> None:
         from decimal import Decimal
 
-        from rwa_calc.data.tables.crr_haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT
+        from rwa_calc.data.tables.haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT
 
         assert Decimal("0.40") == RESTRUCTURING_EXCLUSION_HAIRCUT

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
-from rwa_calc.data.tables.crr_haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
+from rwa_calc.data.tables.haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import (
     drawn_for_ead,

@@ -201,7 +201,7 @@ Phase 7 added **7 new P1 items**, **4 new P2 items**, upgraded P2.13→P1.123, c
 
 Phase 7 also confirmed via Opus code verification + CRR PDF extraction:
 - **P1.108 DISPUTED**: UK-onshored CRR Art. 154(1) text includes 1.06 in retail formula (page 151). BCBS CRE31.23 does not. Code may be correct under UK CRR. Needs PRA legal clarification.
-- F-IRB FSE vs non-FSE LGD (45%/40%): **correctly implemented** in `crr_firb_lgd.py:46-63`
+- F-IRB FSE vs non-FSE LGD (45%/40%): **correctly implemented** in `firb_lgd.py:46-63`
 - SME correlation GBP thresholds (4.4-44M): **correctly implemented** in `formulas.py:509-511`
 - Retail LGD floors (resi 5%, QRRE 50%, other 30%): **correctly implemented** in `config.py:134-137`
 - Retail PD floors (QRRE revolvers 0.1%, transactors 0.05%, mortgage 0.1%): **correctly implemented**
@@ -506,8 +506,8 @@ These items affect regulatory calculation accuracy under CRR or Basel 3.1.
 
 ### P1.115 CRR Art. 230 subordinated F-IRB LGDS missing for collateralised exposures
 - **Status:** [x] FIXED v0.1.191 (2026-04-11)
-- **Impact:** **Capital understatement for CRR subordinated collateralised F-IRB exposures.** CRR PDF extraction (p.228) confirms UK-onshored CRR Art. 230 Table 5 retains subordinated LGDS: receivables 65%, RE 65%, other physical 70%. The code's `crr_firb_lgd.py` DataFrame (lines 113-191) has collateral-specific LGD rows for `seniority="senior"` only — no subordinated rows. `lookup_firb_lgd()` returns 75% (unsecured subordinated LGDU) for all subordinated regardless of collateral, but Table 5 subordinated LGDS (65%/65%/70%) are lower than LGDU (75%) for collateralised portions. PRA PS1/26 Art. 230 has **no subordinated LGDS** — code is correct for B31. This is CRR-only.
-- **File:Line:** `data/tables/crr_firb_lgd.py:113-191` (DataFrame missing subordinated rows), `:25-40` (dict missing subordinated collateral entries)
+- **Impact:** **Capital understatement for CRR subordinated collateralised F-IRB exposures.** CRR PDF extraction (p.228) confirms UK-onshored CRR Art. 230 Table 5 retains subordinated LGDS: receivables 65%, RE 65%, other physical 70%. The code's `firb_lgd.py` DataFrame (lines 113-191) has collateral-specific LGD rows for `seniority="senior"` only — no subordinated rows. `lookup_firb_lgd()` returns 75% (unsecured subordinated LGDU) for all subordinated regardless of collateral, but Table 5 subordinated LGDS (65%/65%/70%) are lower than LGDU (75%) for collateralised portions. PRA PS1/26 Art. 230 has **no subordinated LGDS** — code is correct for B31. This is CRR-only.
+- **File:Line:** `data/tables/firb_lgd.py:113-191` (DataFrame missing subordinated rows), `:25-40` (dict missing subordinated collateral entries)
 - **Spec ref:** CRR Art. 230 Table 5 (confirmed from PDF p.228); PRA PS1/26 Art. 230 (no subordinated — correct)
 - **Fix:** Add subordinated rows to the CRR F-IRB LGD DataFrame and dict: `receivables_subordinated: 0.65`, `residential_re_subordinated: 0.65`, `commercial_re_subordinated: 0.65`, `other_physical_subordinated: 0.70`. Update `lookup_firb_lgd()` to use collateral-specific subordinated LGDS when both `is_subordinated=True` and collateral is present.
 - **Tests needed:** Unit tests for CRR subordinated collateralised LGD lookup at each collateral type; acceptance test for CRR F-IRB subordinated exposure with RE collateral (expect 65% not 75%).

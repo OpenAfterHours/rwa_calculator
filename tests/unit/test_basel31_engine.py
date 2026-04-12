@@ -29,7 +29,7 @@ from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - register namespace
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_firb_lgd import (
+from rwa_calc.data.tables.firb_lgd import (
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
     get_firb_lgd_table_for_framework,

@@ -55,7 +55,7 @@ from rwa_calc.contracts.bundles import (
     ComparisonBundle,
     TransitionalScheduleBundle,
 )
-from rwa_calc.data.tables.crr_firb_lgd import CRR_K_SCALING_FACTOR as _CRR_K_SCALING_FACTOR_DECIMAL
+from rwa_calc.data.tables.firb_lgd import CRR_K_SCALING_FACTOR as _CRR_K_SCALING_FACTOR_DECIMAL
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 

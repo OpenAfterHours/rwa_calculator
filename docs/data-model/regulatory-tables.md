@@ -330,7 +330,7 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 |-----------|--------|
 | Currency mismatch | +8% |
 
-**Source**: `COLLATERAL_HAIRCUTS`, `BASEL31_COLLATERAL_HAIRCUTS`, `FX_HAIRCUT` in `data/tables/crr_haircuts.py`
+**Source**: `COLLATERAL_HAIRCUTS`, `BASEL31_COLLATERAL_HAIRCUTS`, `FX_HAIRCUT` in `data/tables/haircuts.py`
 
 ---
 
@@ -472,7 +472,7 @@ Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational s
 | Real estate | 1.4x | 30% of EAD |
 | Other physical | 1.4x | 30% of EAD |
 
-**Source**: `FIRB_SUPERVISORY_LGD`, `BASEL31_FIRB_SUPERVISORY_LGD`, `FIRB_OVERCOLLATERALISATION_RATIOS` in `data/tables/crr_firb_lgd.py`
+**Source**: `FIRB_SUPERVISORY_LGD`, `BASEL31_FIRB_SUPERVISORY_LGD`, `FIRB_OVERCOLLATERALISATION_RATIOS` in `data/tables/firb_lgd.py`
 
 ---
 
@@ -528,7 +528,7 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Retail QRRE (revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
 
-**Source**: `CRR_PD_FLOOR` in `data/tables/crr_firb_lgd.py`, `PDFloors` in `contracts/config.py`
+**Source**: `CRR_PD_FLOOR` in `data/tables/firb_lgd.py`, `PDFloors` in `contracts/config.py`
 
 ---
 
@@ -604,7 +604,7 @@ The code maps the `EquityType` enum to these three buckets:
 | Maturity floor | 1 year |
 | Maturity cap | 5 years |
 
-**Source**: `CRR_PD_FLOOR`, `CRR_MATURITY_FLOOR`, `CRR_MATURITY_CAP` in `data/tables/crr_firb_lgd.py`
+**Source**: `CRR_PD_FLOOR`, `CRR_MATURITY_FLOOR`, `CRR_MATURITY_CAP` in `data/tables/firb_lgd.py`
 
 ---
 
@@ -646,7 +646,7 @@ rw, band = lookup_b31_residential_rw(ltv=Decimal("0.65"), is_income_producing=Fa
 ### Haircut Lookup
 
 ```python
-from rwa_calc.data.tables.crr_haircuts import lookup_collateral_haircut
+from rwa_calc.data.tables.haircuts import lookup_collateral_haircut
 
 haircut = lookup_collateral_haircut(
     collateral_type="bond",
@@ -661,7 +661,7 @@ haircut = lookup_collateral_haircut(
 ### F-IRB LGD Lookup
 
 ```python
-from rwa_calc.data.tables.crr_firb_lgd import lookup_firb_lgd
+from rwa_calc.data.tables.firb_lgd import lookup_firb_lgd
 
 lgd = lookup_firb_lgd(
     collateral_type="residential_re",

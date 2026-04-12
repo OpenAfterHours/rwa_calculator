@@ -33,7 +33,7 @@ from rwa_calc.data.schemas import (
     RECEIVABLE_COLLATERAL_TYPES,
 )
 from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
-from rwa_calc.data.tables.crr_haircuts import (
+from rwa_calc.data.tables.haircuts import (
     FX_HAIRCUT,
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,

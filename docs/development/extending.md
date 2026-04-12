@@ -200,7 +200,7 @@ class CollateralType(str, Enum):
 ### Step 2: Add Haircut Table
 
 ```python
-# src/rwa_calc/data/tables/crr_haircuts.py
+# src/rwa_calc/data/tables/haircuts.py
 
 NEW_COLLATERAL_HAIRCUTS = {
     "<=1yr": Decimal("0.05"),

@@ -12,24 +12,6 @@ from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_firb_lgd import (
-    CRR_MATURITY_CAP,
-    CRR_MATURITY_FLOOR,
-    CRR_PD_FLOOR,
-    FIRB_SUPERVISORY_LGD,
-    apply_maturity_bounds,
-    apply_pd_floor,
-    get_firb_lgd_table,
-    lookup_firb_lgd,
-)
-from rwa_calc.data.tables.crr_haircuts import (
-    COLLATERAL_HAIRCUTS,
-    FX_HAIRCUT,
-    calculate_adjusted_collateral_value,
-    calculate_maturity_mismatch_adjustment,
-    lookup_collateral_haircut,
-    lookup_fx_haircut,
-)
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
@@ -50,6 +32,24 @@ from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_RISK_WEIGHTS_SHORT,
     calculate_slotting_rwa,
     lookup_slotting_rw,
+)
+from rwa_calc.data.tables.firb_lgd import (
+    CRR_MATURITY_CAP,
+    CRR_MATURITY_FLOOR,
+    CRR_PD_FLOOR,
+    FIRB_SUPERVISORY_LGD,
+    apply_maturity_bounds,
+    apply_pd_floor,
+    get_firb_lgd_table,
+    lookup_firb_lgd,
+)
+from rwa_calc.data.tables.haircuts import (
+    COLLATERAL_HAIRCUTS,
+    FX_HAIRCUT,
+    calculate_adjusted_collateral_value,
+    calculate_maturity_mismatch_adjustment,
+    lookup_collateral_haircut,
+    lookup_fx_haircut,
 )
 from rwa_calc.domain.enums import CQS, SlottingCategory
 

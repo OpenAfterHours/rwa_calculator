@@ -34,12 +34,12 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_firb_lgd import (
+from rwa_calc.data.tables.firb_lgd import (
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
     lookup_firb_lgd,
 )
-from rwa_calc.data.tables.crr_haircuts import (
+from rwa_calc.data.tables.haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     get_haircut_table,

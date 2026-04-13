@@ -99,7 +99,10 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RGLA_UNRATED_DEFAULT_RW,
     get_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
+from rwa_calc.data.tables.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
@@ -558,11 +561,14 @@ class SACalculator:
             exposures = exposures.with_columns(missing_cols)
 
         # CRR Art. 114(3)/(4): Domestic CGCB exposures → 0% RW
-        # UK sovereign in GBP, or EU sovereign in that member state's domestic currency
-        _is_uk_domestic_currency = (pl.col("cp_country_code") == "GB") & (
-            pl.col("currency") == "GBP"
-        )
-        _is_eu_domestic_currency = build_eu_domestic_currency_expr("cp_country_code", "currency")
+        # UK sovereign in GBP, or EU sovereign in that member state's domestic currency.
+        # Must compare against the exposure's ORIGINAL denomination — the FX
+        # converter overwrites `currency` with the reporting currency, so using
+        # it directly would reject legitimate Art. 114(4) 0% treatment for any
+        # non-base-currency exposure.
+        _ccy_expr = denomination_currency_expr(schema.names())
+        _is_uk_domestic_currency = (pl.col("cp_country_code") == "GB") & (_ccy_expr == "GBP")
+        _is_eu_domestic_currency = build_eu_domestic_currency_expr("cp_country_code", _ccy_expr)
         _is_domestic_currency = _is_uk_domestic_currency | _is_eu_domestic_currency
 
         # Prepare exposures for join
@@ -1517,17 +1523,22 @@ class SACalculator:
         use_uk_deviation = config.base_currency == "GBP"
 
         # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS
-        # UK guarantor in GBP, or EU guarantor in that member state's domestic currency
+        # UK guarantor in GBP, or EU guarantor in that member state's domestic currency.
+        # Use the exposure's ORIGINAL denomination (pre-FX-conversion) — the FX
+        # converter overwrites `currency` with the reporting currency, which
+        # would otherwise block the Art. 114(4) 0% short-circuit.
         schema_now = exposures.collect_schema()
-        _has_country = "guarantor_country_code" in schema_now.names()
-        _has_currency = "currency" in schema_now.names()
+        _schema_names = schema_now.names()
+        _has_country = "guarantor_country_code" in _schema_names
+        _has_currency = "currency" in _schema_names or "original_currency" in _schema_names
+        _ccy_expr_guar = denomination_currency_expr(_schema_names)
         _is_uk_domestic_guarantor = (
-            (pl.col("guarantor_country_code").fill_null("") == "GB") & (pl.col("currency") == "GBP")
+            (pl.col("guarantor_country_code").fill_null("") == "GB") & (_ccy_expr_guar == "GBP")
             if (_has_country and _has_currency)
             else pl.lit(False)
         )
         _is_eu_domestic_guarantor = (
-            build_eu_domestic_currency_expr("guarantor_country_code", "currency")
+            build_eu_domestic_currency_expr("guarantor_country_code", _ccy_expr_guar)
             if (_has_country and _has_currency)
             else pl.lit(False)
         )

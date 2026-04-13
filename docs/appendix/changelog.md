@@ -5,6 +5,11 @@ All notable changes to the RWA Calculator are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.193] — 2026-04-13
+
+### Fixed
+- **EU sovereign guarantee 0% RW (CRR Art. 114(4))**: Exposures guaranteed by an EU member state central government/central bank in that state's domestic currency (e.g. a German sovereign guaranteeing a EUR-denominated exposure) were failing to receive the mandated 0% risk weight when the pipeline's FX converter was active. Root cause: `engine/fx_converter.py` overwrites the exposure's `currency` column with the reporting currency and stores the pre-conversion denomination in `original_currency`, but every downstream "denominated in domestic currency" check read the now-overwritten `currency` column. After FX conversion a DE sovereign + EUR exposure appeared as DE + GBP (or whatever the reporting currency was), so the Art. 114(4) short-circuit never fired; unrated EU sovereign guarantors then fell through to `.otherwise(1.0)` = 100% instead of 0%. Added `denomination_currency_expr()` helper in `data/tables/eu_sovereign.py` that returns `pl.col("original_currency")` when present, else `pl.col("currency")`. Extended `build_eu_domestic_currency_expr` to accept a `pl.Expr` for the currency side. Updated all seven affected call sites in `engine/sa/calculator.py` (borrower + guarantor), `engine/irb/guarantee.py` (guarantor, IRB path), and `engine/classifier.py` (forced-SA check for EU domestic sovereigns). Existing `TestSAEUDomesticSovereignTreatment` unit tests were bypassing the bug because they fabricated LazyFrames with `currency` set to the denomination directly; added `TestSAEUDomesticSovereignPostFX` / `TestIRBEUDomesticSovereignPostFX` regression classes covering the post-FX pipeline state.
+
 ## [0.1.192] — 2026-04-12
 
 ### Changed

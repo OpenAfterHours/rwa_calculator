@@ -47,7 +47,10 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
-from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
+from rwa_calc.data.tables.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
@@ -938,9 +941,14 @@ class ExposureClassifier:
 
         # Art. 114(3)/(4): EU domestic sovereign exposures must use SA
         # to receive the 0% RW — forced to standardised regardless of IRB permissions.
+        # Use original (pre-FX) denomination — `currency` is overwritten by the
+        # FX converter with the reporting currency, which would otherwise reject
+        # legitimate Art. 114(4) treatment for any non-base-currency exposure.
         _is_eu_domestic_sovereign = (
             pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
-        ) & build_eu_domestic_currency_expr("cp_country_code", "currency")
+        ) & build_eu_domestic_currency_expr(
+            "cp_country_code", denomination_currency_expr(schema_names)
+        )
 
         # --- B31 Art. 147A classifier-level approach restrictions ---
         # These supplement the permissions-level restrictions in full_irb_b31()

@@ -26,7 +26,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.tables.crr_risk_weights import QCCP_CLIENT_CLEARED_RW, QCCP_PROPRIETARY_RW
-from rwa_calc.data.tables.eu_sovereign import build_eu_domestic_currency_expr
+from rwa_calc.data.tables.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.engine.irb.formulas import (
     _double_default_multiplier_expr,
     _parametric_irb_risk_weight_expr,
@@ -192,15 +195,20 @@ def _compute_guarantor_rw_sa(
 
     _gec = pl.col("guarantor_exposure_class").fill_null("")
 
-    # Art. 114(3)/(4): Domestic CGCB guarantors -> 0% RW regardless of CQS
-    _has_country = "guarantor_country_code" in lf.collect_schema().names()
+    # Art. 114(3)/(4): Domestic CGCB guarantors -> 0% RW regardless of CQS.
+    # Use the exposure's ORIGINAL denomination (pre-FX-conversion) — the FX
+    # converter overwrites `currency` with the reporting currency, which would
+    # otherwise block the Art. 114(4) 0% short-circuit.
+    _irb_schema_names = lf.collect_schema().names()
+    _has_country = "guarantor_country_code" in _irb_schema_names
+    _ccy_expr_irb = denomination_currency_expr(_irb_schema_names)
     _is_uk_domestic_guarantor = (
-        (pl.col("guarantor_country_code").fill_null("") == "GB") & (pl.col("currency") == "GBP")
+        (pl.col("guarantor_country_code").fill_null("") == "GB") & (_ccy_expr_irb == "GBP")
         if _has_country
         else pl.lit(False)
     )
     _is_eu_domestic_guarantor = (
-        build_eu_domestic_currency_expr("guarantor_country_code", "currency")
+        build_eu_domestic_currency_expr("guarantor_country_code", _ccy_expr_irb)
         if _has_country
         else pl.lit(False)
     )

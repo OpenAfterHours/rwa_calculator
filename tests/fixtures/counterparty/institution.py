@@ -203,7 +203,7 @@ def create_institution_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(institutions, schema=COUNTERPARTY_SCHEMA)
+    return pl.DataFrame(institutions, schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
 def save_institution_counterparties(output_dir: Path | None = None) -> Path:

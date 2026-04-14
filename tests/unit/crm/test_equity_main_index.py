@@ -145,7 +145,7 @@ class TestIsMainIndexSchema:
     def test_field_type_is_boolean(self) -> None:
         from rwa_calc.data.schemas import COLLATERAL_SCHEMA
 
-        assert COLLATERAL_SCHEMA["is_main_index"] == pl.Boolean
+        assert COLLATERAL_SCHEMA["is_main_index"].dtype == pl.Boolean
 
     def test_field_distinct_from_eligibility(self) -> None:
         """is_main_index is a separate field from is_eligible_financial_collateral."""

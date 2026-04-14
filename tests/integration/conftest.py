@@ -22,6 +22,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import ColumnSpec, dtypes_of
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -233,18 +234,27 @@ def make_rating(**overrides: Any) -> dict[str, Any]:
 
 
 def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl.LazyFrame:
-    """Convert row dicts to a LazyFrame, casting to the target schema."""
+    """Convert row dicts to a LazyFrame, casting to the target schema.
+
+    ``schema`` may be a plain ``{name: dtype}`` dict or a ``{name: ColumnSpec}``
+    schema from ``rwa_calc.data.schemas`` — ColumnSpec entries are unwrapped to
+    their dtype before casting.
+    """
+    dtype_schema = dtypes_of(schema) if _is_column_spec_schema(schema) else schema
     if not rows:
-        return pl.LazyFrame(schema=schema)
+        return pl.LazyFrame(schema=dtype_schema)
     df = pl.DataFrame(rows)
-    # Cast columns to match schema types, adding missing columns with nulls
     cast_exprs = []
-    for col_name, col_type in schema.items():
+    for col_name, col_type in dtype_schema.items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
             cast_exprs.append(pl.lit(None).cast(col_type).alias(col_name))
     return df.lazy().select(cast_exprs)
+
+
+def _is_column_spec_schema(schema: dict[str, Any]) -> bool:
+    return any(isinstance(v, ColumnSpec) for v in schema.values())
 
 
 def make_raw_data_bundle(

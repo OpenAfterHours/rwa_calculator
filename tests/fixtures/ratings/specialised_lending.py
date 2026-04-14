@@ -172,7 +172,7 @@ def create_specialised_lending_data() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(rows, schema=SPECIALISED_LENDING_SCHEMA)
+    return pl.DataFrame(rows, schema=dtypes_of(SPECIALISED_LENDING_SCHEMA))
 
 
 def save_specialised_lending_data(output_dir: Path | None = None) -> Path:

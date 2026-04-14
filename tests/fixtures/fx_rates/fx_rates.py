@@ -19,6 +19,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import FX_RATES_SCHEMA
 
 
@@ -76,7 +77,7 @@ def create_fx_rates() -> pl.DataFrame:
         FXRate("USD", "USD", 1.0),  # Identity rate
     ]
 
-    return pl.DataFrame([r.to_dict() for r in rates], schema=FX_RATES_SCHEMA)
+    return pl.DataFrame([r.to_dict() for r in rates], schema=dtypes_of(FX_RATES_SCHEMA))
 
 
 def save_fx_rates(output_dir: Path | None = None) -> Path:

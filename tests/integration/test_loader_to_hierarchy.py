@@ -23,6 +23,7 @@ from typing import Any
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     COUNTERPARTY_SCHEMA,
     FACILITY_MAPPING_SCHEMA,
@@ -67,7 +68,7 @@ def _make_counterparty_df(**overrides: Any) -> pl.DataFrame:
     defaults.update(overrides)
     df = pl.DataFrame([defaults])
     cast_exprs = []
-    for col_name, col_type in COUNTERPARTY_SCHEMA.items():
+    for col_name, col_type in dtypes_of(COUNTERPARTY_SCHEMA).items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
@@ -97,7 +98,7 @@ def _make_loan_df(**overrides: Any) -> pl.DataFrame:
     defaults.update(overrides)
     df = pl.DataFrame([defaults])
     cast_exprs = []
-    for col_name, col_type in LOAN_SCHEMA.items():
+    for col_name, col_type in dtypes_of(LOAN_SCHEMA).items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
@@ -130,7 +131,7 @@ def _make_facility_df(**overrides: Any) -> pl.DataFrame:
     defaults.update(overrides)
     df = pl.DataFrame([defaults])
     cast_exprs = []
-    for col_name, col_type in FACILITY_SCHEMA.items():
+    for col_name, col_type in dtypes_of(FACILITY_SCHEMA).items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
@@ -152,7 +153,7 @@ def _make_facility_mappings_df(
         ]
     df = pl.DataFrame(rows)
     cast_exprs = []
-    for col_name, col_type in FACILITY_MAPPING_SCHEMA.items():
+    for col_name, col_type in dtypes_of(FACILITY_MAPPING_SCHEMA).items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
@@ -165,10 +166,10 @@ def _make_lending_mappings_df(
 ) -> pl.DataFrame:
     """Build lending mappings DataFrame (empty by default)."""
     if not rows:
-        return pl.DataFrame(schema=LENDING_MAPPING_SCHEMA)
+        return pl.DataFrame(schema=dtypes_of(LENDING_MAPPING_SCHEMA))
     df = pl.DataFrame(rows)
     cast_exprs = []
-    for col_name, col_type in LENDING_MAPPING_SCHEMA.items():
+    for col_name, col_type in dtypes_of(LENDING_MAPPING_SCHEMA).items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
@@ -313,7 +314,7 @@ class TestDataIntegrity:
             ]
         )
         org_cast = []
-        for col_name, col_type in ORG_MAPPING_SCHEMA.items():
+        for col_name, col_type in dtypes_of(ORG_MAPPING_SCHEMA).items():
             if col_name in org_df.columns:
                 org_cast.append(pl.col(col_name).cast(col_type, strict=False))
             else:

@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.adjustments import (
@@ -109,14 +110,10 @@ class IRBLazyFrame:
         """
         schema = self._lf.collect_schema()
 
-        lf = self._lf
-        if "approach" not in schema.names():
-            lf = lf.with_columns(
-                [
-                    pl.lit(ApproachType.FIRB.value).alias("approach"),
-                ]
-            )
-
+        lf = ensure_columns(
+            self._lf,
+            {"approach": ColumnSpec(pl.String, default=ApproachType.FIRB.value, required=False)},
+        )
         return lf.with_columns(
             [
                 (pl.col("approach") == ApproachType.AIRB.value).alias("is_airb"),
@@ -412,11 +409,11 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with correlation column
         """
-        # Ensure requires_fi_scalar column exists (defaults to False if not set by classifier)
-        schema = self._lf.collect_schema()
-        lf = self._lf
-        if "requires_fi_scalar" not in schema.names():
-            lf = lf.with_columns(pl.lit(False).alias("requires_fi_scalar"))
+        # requires_fi_scalar defaults to False if not set by classifier.
+        lf = ensure_columns(
+            self._lf,
+            {"requires_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False)},
+        )
 
         # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)

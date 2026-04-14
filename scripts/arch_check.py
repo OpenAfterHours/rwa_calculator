@@ -8,11 +8,12 @@ Checks machine-verifiable invariants from CLAUDE.md:
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
 5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
+7. No inline `"col" not in schema.names()` defaulting in engine/** (use
+   ensure_columns against a ColumnSpec schema in data/schemas.py instead)
 
-Checks 5 and 6 enforce the data/engine separation established by PRs
-#244, #246, #247, #248, #249. Rare intentional exceptions are listed in
-REGULATORY_SCALAR_ALLOWLIST / VALIDATION_ENUM_ALLOWLIST below; adding a new
-entry there should be a deliberate, reviewed decision.
+Checks 5, 6, 7 enforce the data/engine separation. Rare intentional exceptions
+are listed in the ALLOWLIST dicts below; adding a new entry there should be a
+deliberate, reviewed decision.
 
 Usage:
     python scripts/arch_check.py [path]  # defaults to src/rwa_calc/
@@ -69,6 +70,25 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     },
     # Art. 231 allocation column mapping (PR #249 — retained as engine config)
     "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS"},
+}
+
+# Files where an inline `"col" not in schema.names()` check is a legitimate
+# non-defaulting pattern (early-exit guard, optional-output-column detection,
+# combined warning+default emission). New entries require explicit justification
+# — schema-driven defaults otherwise belong in ensure_columns + ColumnSpec.
+SCHEMA_DEFAULTS_ALLOWLIST: set[str] = {
+    # Optional-output column detection for COREP comparison frame.
+    "engine/comparison.py",
+    # Early-exit guards (netting / parent-facility detection, CRM output check)
+    # — not defaulting.
+    "engine/crm/collateral.py",
+    "engine/crm/simple_method.py",
+    # Combined warning + default emission for PD / LGD under IRB — the warning
+    # is part of the data-quality contract and doesn't fit ensure_columns.
+    "engine/irb/calculator.py",
+    # `ead_final` derivation (fair_value → carrying_value → ead → 0.0) — this
+    # is a multi-source fallback, not a simple default.
+    "engine/equity/calculator.py",
 }
 
 
@@ -293,6 +313,47 @@ def check_no_regulatory_scalars_in_engine(path: Path) -> list[str]:
     return violations
 
 
+def check_no_inline_schema_defaults(path: Path) -> list[str]:
+    """No inline `"col" not in schema.names()` / `"col" not in df.columns` in engine/**.
+
+    The schema-driven replacement is ``ensure_columns(lf, <SCHEMA>)`` where
+    ``<SCHEMA>`` is a ``dict[str, ColumnSpec]`` from ``data/schemas.py`` (or an
+    ad-hoc fragment). Exemptions:
+
+    - Per-file: listed in ``SCHEMA_DEFAULTS_ALLOWLIST`` (for files that are
+      systematically exempt, e.g. early-exit guards throughout).
+    - Per-line: append ``# arch-exempt: <reason>`` to the line to document why
+      the inline pattern is the right tool (derivation, multi-source fallback,
+      etc.).
+    """
+    violations: list[str] = []
+    pattern = re.compile(
+        r'"[^"]+"\s+not\s+in\s+(?:\w+\.collect_schema\(\)\.names\(\)|\w+\.names\(\)|\w+\.columns)'
+    )
+    exempt_marker = re.compile(r"#\s*arch-exempt\b")
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        if rel in SCHEMA_DEFAULTS_ALLOWLIST:
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for i, line in enumerate(text.split("\n"), 1):
+            stripped = line.strip()
+            if stripped.startswith(("#", '"""', "'''")):
+                continue
+            if exempt_marker.search(line):
+                continue
+            if pattern.search(line):
+                violations.append(
+                    f"  {py_file}:{i}: inline `not in schema.names()` -- "
+                    "use ensure_columns against a ColumnSpec schema "
+                    "(or append '# arch-exempt: <reason>' if intentional)"
+                )
+    return violations
+
+
 def check_no_validation_enums_in_engine(path: Path) -> list[str]:
     """Module-level string-enum collections belong in data/schemas.py, not engine/**."""
     violations: list[str] = []
@@ -334,6 +395,10 @@ def main() -> int:
         (
             "No validation string-enums in engine/ (use data/schemas.py)",
             check_no_validation_enums_in_engine,
+        ),
+        (
+            "No inline `not in schema.names()` in engine/ (use ensure_columns)",
+            check_no_inline_schema_defaults,
         ),
     ]
 

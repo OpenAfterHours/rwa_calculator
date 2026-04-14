@@ -32,6 +32,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import MODEL_PERMISSIONS_SCHEMA
 
 
@@ -75,7 +76,9 @@ def create_model_permissions() -> pl.DataFrame:
         *_geography_restricted_permissions(),
     ]
 
-    return pl.DataFrame([p.to_dict() for p in permissions], schema=MODEL_PERMISSIONS_SCHEMA)
+    return pl.DataFrame(
+        [p.to_dict() for p in permissions], schema=dtypes_of(MODEL_PERMISSIONS_SCHEMA)
+    )
 
 
 def _corporate_permissions() -> list[ModelPermission]:

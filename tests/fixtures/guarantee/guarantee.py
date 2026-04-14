@@ -28,6 +28,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import GUARANTEE_SCHEMA
 
 
@@ -82,7 +83,7 @@ def create_guarantees() -> pl.DataFrame:
         *_crm_test_guarantees(),
     ]
 
-    return pl.DataFrame([g.to_dict() for g in guarantees], schema=GUARANTEE_SCHEMA)
+    return pl.DataFrame([g.to_dict() for g in guarantees], schema=dtypes_of(GUARANTEE_SCHEMA))
 
 
 def _sovereign_guarantees() -> list[Guarantee]:

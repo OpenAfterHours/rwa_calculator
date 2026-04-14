@@ -163,7 +163,7 @@ def _join_collateral_to_lookups(
 
     coll_schema = collateral.collect_schema()
 
-    if "beneficiary_type" not in coll_schema.names():
+    if "beneficiary_type" not in coll_schema.names():  # arch-exempt: early-exit guard
         # Direct-only join — single pass with all columns
         return collateral.join(
             direct_lookup.select(
@@ -268,7 +268,7 @@ def _resolve_pledge_from_joined(collateral: pl.LazyFrame) -> pl.LazyFrame:
     and non-zero.
     """
     coll_schema = collateral.collect_schema()
-    if "pledge_percentage" not in coll_schema.names():
+    if "pledge_percentage" not in coll_schema.names():  # arch-exempt: early-exit guard
         return collateral.drop("_beneficiary_ead")
 
     needs_resolve = (

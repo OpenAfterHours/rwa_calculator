@@ -20,6 +20,7 @@ from tests.fixtures.irb_test_helpers import (
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -134,7 +135,7 @@ def generate_stress_counterparties(n: int, seed: int = 42) -> pl.LazyFrame:
                 "institution_cqs": pl.Series([None] * n, dtype=pl.Int8),
             }
         )
-        .cast(COUNTERPARTY_SCHEMA)
+        .cast(dtypes_of(COUNTERPARTY_SCHEMA))
         .lazy()
     )
 
@@ -222,7 +223,7 @@ def generate_stress_loans(
                 "due_diligence_override_rw": np.full(n_loans, None),
             }
         )
-        .cast(LOAN_SCHEMA)
+        .cast(dtypes_of(LOAN_SCHEMA))
         .lazy()
     )
 
@@ -275,7 +276,7 @@ def generate_stress_facilities(
                 "has_sufficient_collateral_data": np.full(n, None),
             }
         )
-        .cast(FACILITY_SCHEMA)
+        .cast(dtypes_of(FACILITY_SCHEMA))
         .lazy()
     )
 
@@ -317,7 +318,7 @@ def generate_stress_ratings(
                 "model_id": pl.Series([None] * n_rated, dtype=pl.String),
             }
         )
-        .cast(RATINGS_SCHEMA)
+        .cast(dtypes_of(RATINGS_SCHEMA))
         .lazy()
     )
 
@@ -343,7 +344,7 @@ def generate_stress_org_mappings(
     parent_pool = np.array([i for i in range(n) if i not in set(child_indices)])
 
     if len(parent_pool) == 0:
-        return pl.LazyFrame(schema=ORG_MAPPING_SCHEMA)
+        return pl.LazyFrame(schema=dtypes_of(ORG_MAPPING_SCHEMA))
 
     parent_indices = rng.choice(parent_pool, size=n_children)
 
@@ -354,7 +355,7 @@ def generate_stress_org_mappings(
                 "child_counterparty_reference": cp_refs[child_indices],
             }
         )
-        .cast(ORG_MAPPING_SCHEMA)
+        .cast(dtypes_of(ORG_MAPPING_SCHEMA))
         .lazy()
     )
 
@@ -372,7 +373,7 @@ def generate_stress_facility_mappings(
     loan_refs = loans.select("loan_reference").collect()["loan_reference"].to_numpy()
 
     if len(fac_refs) == 0 or len(loan_refs) == 0:
-        return pl.LazyFrame(schema=FACILITY_MAPPING_SCHEMA)
+        return pl.LazyFrame(schema=dtypes_of(FACILITY_MAPPING_SCHEMA))
 
     n_mapped = int(len(loan_refs) * mapping_pct)
     mapped_loans = rng.choice(loan_refs, size=n_mapped, replace=False)
@@ -386,7 +387,7 @@ def generate_stress_facility_mappings(
                 "child_type": ["loan"] * n_mapped,
             }
         )
-        .cast(FACILITY_MAPPING_SCHEMA)
+        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
         .lazy()
     )
 
@@ -443,7 +444,7 @@ def generate_stress_contingents(
                 "due_diligence_override_rw": np.full(n_cont, None),
             }
         )
-        .cast(CONTINGENTS_SCHEMA)
+        .cast(dtypes_of(CONTINGENTS_SCHEMA))
         .lazy()
     )
 
@@ -506,7 +507,7 @@ def create_raw_bundle(
         ratings=ratings,
         facility_mappings=dataset["facility_mappings"],
         org_mappings=dataset["org_mappings"],
-        lending_mappings=pl.LazyFrame(schema=LENDING_MAPPING_SCHEMA),
+        lending_mappings=pl.LazyFrame(schema=dtypes_of(LENDING_MAPPING_SCHEMA)),
         model_permissions=model_permissions,
     )
 

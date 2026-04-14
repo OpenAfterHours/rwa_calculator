@@ -80,7 +80,7 @@ def create_provisions() -> pl.DataFrame:
         *_provision_scenario_provisions(),
     ]
 
-    return pl.DataFrame([p.to_dict() for p in provisions], schema=PROVISION_SCHEMA)
+    return pl.DataFrame([p.to_dict() for p in provisions], schema=dtypes_of(PROVISION_SCHEMA))
 
 
 def _stage1_provisions() -> list[Provision]:

@@ -34,6 +34,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns
 
@@ -294,8 +295,10 @@ class HierarchyResolver:
         sort_cols = ["rating_date", "rating_reference"]
 
         # Ensure model_id column exists on ratings (may be absent in legacy data)
-        if "model_id" not in ratings.collect_schema().names():
-            ratings = ratings.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
+        ratings = ensure_columns(
+            ratings,
+            {"model_id": ColumnSpec(pl.String, required=False)},
+        )
 
         # Best internal rating per counterparty (no CQS — that's external only)
         best_internal = (

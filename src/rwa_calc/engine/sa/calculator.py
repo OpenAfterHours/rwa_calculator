@@ -52,6 +52,12 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.schemas import (
+    CLASSIFIER_OUTPUT_SCHEMA,
+    CRM_OUTPUT_SCHEMA,
+    HIERARCHY_OUTPUT_SCHEMA,
+)
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
@@ -108,6 +114,30 @@ from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+# SA input contract — defensive defaults for columns the SA calculator reads.
+# Composed of stage-output schemas (hierarchy / CRM / classifier) plus a small
+# set of input-schema columns that may be absent when calculators are invoked
+# directly from tests or ad-hoc pipelines.
+_SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
+    **HIERARCHY_OUTPUT_SCHEMA,
+    **CRM_OUTPUT_SCHEMA,
+    **CLASSIFIER_OUTPUT_SCHEMA,
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    "seniority": ColumnSpec(pl.String, default="senior", required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "property_type": ColumnSpec(pl.String, required=False),
+    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
+    "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "sl_type": ColumnSpec(pl.String, required=False),
+}
 
 
 def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
@@ -477,88 +507,11 @@ class SACalculator:
         else:
             rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
 
-        # Ensure required columns exist (single with_columns call)
+        # Fill any missing optional columns (counterparty attrs, CRM outputs,
+        # classifier flags, defensive input-schema fallbacks) from the
+        # declarative contract. See _SA_INPUT_CONTRACT at module level.
+        exposures = ensure_columns(exposures, _SA_INPUT_CONTRACT)
         schema = exposures.collect_schema()
-        missing_cols = []
-        if "ltv" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Float64).alias("ltv"))
-        if "has_income_cover" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("has_income_cover"))
-        if "book_code" not in schema.names():
-            missing_cols.append(pl.lit("").alias("book_code"))
-        if "cp_is_managed_as_retail" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("cp_is_managed_as_retail"))
-        if "qualifies_as_retail" not in schema.names():
-            missing_cols.append(pl.lit(True).alias("qualifies_as_retail"))
-        if "property_type" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
-        if "is_adc" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_adc"))
-        if "is_presold" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_presold"))
-        if "seniority" not in schema.names():
-            missing_cols.append(pl.lit("senior").alias("seniority"))
-        if "cp_scra_grade" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_scra_grade"))
-        if "cp_is_investment_grade" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("cp_is_investment_grade"))
-        if "is_defaulted" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_defaulted"))
-        if "provision_allocated" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("provision_allocated"))
-        if "provision_deducted" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("provision_deducted"))
-        if "currency" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("currency"))
-        if "cp_country_code" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_country_code"))
-        if "cp_entity_type" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_entity_type"))
-        if "cp_is_ccp_client_cleared" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("cp_is_ccp_client_cleared"))
-        if "sl_type" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("sl_type"))
-        if "sl_project_phase" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("sl_project_phase"))
-        if "is_qrre_transactor" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_qrre_transactor"))
-        if "residual_maturity_years" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Float64).alias("residual_maturity_years"))
-        if "is_short_term_trade_lc" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_short_term_trade_lc"))
-        if "is_payroll_loan" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_payroll_loan"))
-        # Art. 124H counterparty type for CRE general treatment routing
-        if "cp_is_natural_person" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("cp_is_natural_person"))
-        if "is_sme" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("is_sme"))
-        # Art. 124A qualifying RE flag for Other RE treatment (Art. 124J)
-        if "is_qualifying_re" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
-        # Art. 124F(2) prior charge LTV for junior lien threshold reduction
-        if "prior_charge_ltv" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("prior_charge_ltv"))
-        # Art. 124L social housing counterparty type for RRE residual RW
-        if "cp_is_social_housing" not in schema.names():
-            missing_cols.append(pl.lit(False).alias("cp_is_social_housing"))
-        # Art. 121(6) / CRE20.22: Sovereign floor for FX institution exposures
-        if "cp_sovereign_cqs" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Int32).alias("cp_sovereign_cqs"))
-        if "cp_local_currency" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Utf8).alias("cp_local_currency"))
-        # Art. 129(5): issuing institution CQS for unrated covered bond derivation
-        if "cp_institution_cqs" not in schema.names():
-            missing_cols.append(pl.lit(None).cast(pl.Int8).alias("cp_institution_cqs"))
-        # CRM collateral columns for Art. 127 secured/unsecured split
-        if "collateral_re_value" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("collateral_re_value"))
-        if "collateral_receivables_value" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("collateral_receivables_value"))
-        if "collateral_other_physical_value" not in schema.names():
-            missing_cols.append(pl.lit(0.0).alias("collateral_other_physical_value"))
-        if missing_cols:
-            exposures = exposures.with_columns(missing_cols)
 
         # CRR Art. 114(3)/(4): Domestic CGCB exposures → 0% RW
         # UK sovereign in GBP, or EU sovereign in that member state's domestic currency.
@@ -1369,7 +1322,7 @@ class SACalculator:
             return exposures
 
         schema = exposures.collect_schema()
-        if "fcsm_collateral_value" not in schema.names():
+        if "fcsm_collateral_value" not in schema.names():  # arch-exempt: early-exit guard
             return exposures
 
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
@@ -1435,7 +1388,7 @@ class SACalculator:
             Exposures with blended risk weight for life-insurance-covered portion.
         """
         schema = exposures.collect_schema()
-        if "life_ins_collateral_value" not in schema.names():
+        if "life_ins_collateral_value" not in schema.names():  # arch-exempt: early-exit guard
             return exposures
 
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
@@ -1910,7 +1863,7 @@ class SACalculator:
         which is set by the classifier for equity-class rows.
         """
         schema = exposures.collect_schema()
-        if "approach" not in schema.names():
+        if "approach" not in schema.names():  # arch-exempt: early-exit guard
             return
         # Approach == "equity" is only set for equity-class rows from the main
         # tables. We detect this via a lightweight one-row collect to avoid
@@ -1982,29 +1935,18 @@ class SACalculator:
         Returns:
             Exposures with supporting factors applied
         """
-        # Ensure required columns exist for supporting factor calculation
-        schema = exposures.collect_schema()
-
-        if "is_sme" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_sme"),
-                ]
-            )
-
-        if "is_infrastructure" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_infrastructure"),
-                ]
-            )
-
-        if "ead_final" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.col("ead").alias("ead_final"),
-                ]
-            )
+        # Ensure required columns exist for supporting factor calculation.
+        exposures = ensure_columns(
+            exposures,
+            {
+                "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
+                "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
+            },
+        )
+        # ead_final is a multi-source derivation (fallback to ead), not a
+        # simple default — cannot use ensure_columns.
+        if "ead_final" not in exposures.collect_schema().names():  # arch-exempt: derivation
+            exposures = exposures.with_columns(pl.col("ead").alias("ead_final"))
 
         return self._supporting_factor_calc.apply_factors(exposures, config, errors=errors)
 

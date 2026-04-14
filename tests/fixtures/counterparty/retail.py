@@ -419,7 +419,7 @@ def create_retail_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(retail, schema=COUNTERPARTY_SCHEMA)
+    return pl.DataFrame(retail, schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
 def save_retail_counterparties(output_dir: Path | None = None) -> Path:

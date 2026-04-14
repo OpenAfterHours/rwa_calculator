@@ -25,6 +25,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA
 
 
@@ -627,7 +628,7 @@ def create_corporate_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(corporates, schema=COUNTERPARTY_SCHEMA)
+    return pl.DataFrame(corporates, schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
 def save_corporate_counterparties(output_dir: Path | None = None) -> Path:

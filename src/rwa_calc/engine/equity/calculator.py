@@ -43,6 +43,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.crr_equity_rw import (
     IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
@@ -69,6 +70,23 @@ _CIU_THIRD_PARTY_MULTIPLIER = 1.2
 
 # No multiplier for internally-managed CIU mandate calculations
 _CIU_INTERNAL_MULTIPLIER = 1.0
+
+
+# Equity input contract — defensive defaults for columns read by the equity
+# calculator. `ead_final` is derived (not defaulted) so is handled separately.
+_EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
+    "equity_type": ColumnSpec(pl.String, default="other", required=False),
+    "is_diversified_portfolio": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_speculative": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_exchange_traded": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_government_supported": ColumnSpec(pl.Boolean, default=False, required=False),
+    "ciu_approach": ColumnSpec(pl.String, required=False),
+    "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False),
+    "ciu_third_party_calc": ColumnSpec(pl.Boolean, required=False),
+    "fund_reference": ColumnSpec(pl.String, required=False),
+    "ciu_look_through_rw": ColumnSpec(pl.Float64, required=False),
+    "fund_nav": ColumnSpec(pl.Float64, required=False),
+}
 
 # Sentinel for null CQS in join operations (data processing convention)
 _NULL_CQS_SENTINEL = -1
@@ -321,86 +339,7 @@ class EquityCalculator:
                     ]
                 )
 
-        schema = exposures.collect_schema()
-
-        if "equity_type" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit("other").alias("equity_type"),
-                ]
-            )
-
-        if "is_diversified_portfolio" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_diversified_portfolio"),
-                ]
-            )
-
-        if "is_speculative" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_speculative"),
-                ]
-            )
-
-        if "is_exchange_traded" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_exchange_traded"),
-                ]
-            )
-
-        if "is_government_supported" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(False).alias("is_government_supported"),
-                ]
-            )
-
-        if "ciu_approach" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Utf8).alias("ciu_approach"),
-                ]
-            )
-
-        if "ciu_mandate_rw" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("ciu_mandate_rw"),
-                ]
-            )
-
-        if "ciu_third_party_calc" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Boolean).alias("ciu_third_party_calc"),
-                ]
-            )
-
-        if "fund_reference" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Utf8).alias("fund_reference"),
-                ]
-            )
-
-        if "ciu_look_through_rw" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("ciu_look_through_rw"),
-                ]
-            )
-
-        if "fund_nav" not in schema.names():
-            exposures = exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("fund_nav"),
-                ]
-            )
-
-        return exposures
+        return ensure_columns(exposures, _EQUITY_INPUT_CONTRACT)
 
     def _resolve_look_through_rw(
         self,

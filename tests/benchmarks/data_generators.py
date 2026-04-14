@@ -40,6 +40,7 @@ logger = logging.getLogger("rwa_calc.benchmarks")
 # Default directory for cached benchmark data
 BENCHMARK_DATA_DIR = Path(__file__).parent / "data"
 
+from rwa_calc.data.column_spec import dtypes_of  # noqa: E402
 from rwa_calc.data.schemas import (  # noqa: E402
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
@@ -194,7 +195,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "institution_cqs": pl.Series([None] * n, dtype=pl.Int8),
             }
         )
-        .cast(COUNTERPARTY_SCHEMA)
+        .cast(dtypes_of(COUNTERPARTY_SCHEMA))
         .lazy()
     )
 
@@ -282,7 +283,7 @@ def generate_org_mappings(
                 "child_counterparty_reference": child_refs,
             }
         )
-        .cast(ORG_MAPPING_SCHEMA)
+        .cast(dtypes_of(ORG_MAPPING_SCHEMA))
         .lazy()
     )
 
@@ -411,7 +412,7 @@ def generate_facilities(
                 "has_sufficient_collateral_data": np.full(n_facilities, None),  # LGD modelling flag
             }
         )
-        .cast(FACILITY_SCHEMA)
+        .cast(dtypes_of(FACILITY_SCHEMA))
         .lazy()
     )
 
@@ -607,7 +608,7 @@ def generate_loans(
             "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
             "due_diligence_override_rw": np.full(n_loans, None),  # Art. 110A override RW (B31 only)
         }
-    ).cast(LOAN_SCHEMA)
+    ).cast(dtypes_of(LOAN_SCHEMA))
 
     return df.lazy()
 
@@ -704,7 +705,7 @@ def generate_facility_mappings(
                 "child_type": all_types,
             }
         )
-        .cast(FACILITY_MAPPING_SCHEMA)
+        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
         .lazy()
     )
 
@@ -845,7 +846,7 @@ def generate_ratings(
                 "model_id": pl.Series([None] * n_rated, dtype=pl.String),
             }
         )
-        .cast(RATINGS_SCHEMA)
+        .cast(dtypes_of(RATINGS_SCHEMA))
         .lazy()
     )
 
@@ -954,7 +955,7 @@ def generate_contingents(
                 ),  # Art. 110A override RW (B31 only)
             }
         )
-        .cast(CONTINGENTS_SCHEMA)
+        .cast(dtypes_of(CONTINGENTS_SCHEMA))
         .lazy()
     )
 
@@ -1145,7 +1146,7 @@ def generate_collateral(
                 .alias("property_ltv"),
             ]
         )
-        .cast(COLLATERAL_SCHEMA)
+        .cast(dtypes_of(COLLATERAL_SCHEMA))
         .lazy()
     )
 

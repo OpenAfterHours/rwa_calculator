@@ -88,7 +88,7 @@ def create_ratings() -> pl.DataFrame:
         *_complex_scenario_external_ratings(),
     ]
 
-    return pl.DataFrame([r.to_dict() for r in ratings], schema=RATINGS_SCHEMA)
+    return pl.DataFrame([r.to_dict() for r in ratings], schema=dtypes_of(RATINGS_SCHEMA))
 
 
 def _sovereign_external_ratings() -> list[Rating]:

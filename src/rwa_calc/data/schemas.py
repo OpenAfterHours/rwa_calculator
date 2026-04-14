@@ -55,89 +55,91 @@ from __future__ import annotations
 
 import polars as pl
 
-FACILITY_SCHEMA = {
-    "facility_reference": pl.String,
-    "product_type": pl.String,
-    "book_code": pl.String,
-    "counterparty_reference": pl.String,
-    "value_date": pl.Date,
-    "maturity_date": pl.Date,
-    "currency": pl.String,
-    "limit": pl.Float64,
-    "committed": pl.Boolean,
-    "lgd": pl.Float64,
-    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
-    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
-    "beel": pl.Float64,
-    "is_revolving": pl.Boolean,
-    "is_qrre_transactor": pl.Boolean,  # QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period
-    "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
-    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
-    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
-    "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
-    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
-    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
-    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
-    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
-    "facility_termination_date": pl.Date,  # Art. 162(2A)(k): max contractual termination date for revolving facilities (Basel 3.1 M)
+from rwa_calc.data.column_spec import ColumnSpec
+
+FACILITY_SCHEMA: dict[str, ColumnSpec] = {
+    "facility_reference": ColumnSpec(pl.String),
+    "product_type": ColumnSpec(pl.String, required=False),
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    "counterparty_reference": ColumnSpec(pl.String),
+    "value_date": ColumnSpec(pl.Date, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "limit": ColumnSpec(pl.Float64, required=False),
+    "committed": ColumnSpec(pl.Boolean, default=False, required=False),
+    "lgd": ColumnSpec(pl.Float64, required=False),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False),
+    "is_revolving": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "seniority": ColumnSpec(pl.String, default="senior", required=False),
+    "risk_type": ColumnSpec(pl.String, required=False),
+    "underlying_risk_type": ColumnSpec(pl.String, required=False),
+    "ccf_modelled": ColumnSpec(pl.Float64, required=False),
+    "ead_modelled": ColumnSpec(pl.Float64, required=False),
+    "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
+    "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "facility_termination_date": ColumnSpec(pl.Date, required=False),
 }
 
-LOAN_SCHEMA = {
-    "loan_reference": pl.String,
-    "product_type": pl.String,
-    "book_code": pl.String,
-    "counterparty_reference": pl.String,
-    "value_date": pl.Date,
-    "maturity_date": pl.Date,
-    "currency": pl.String,
-    "drawn_amount": pl.Float64,
-    "interest": pl.Float64,  # Accrued interest (adds to on-balance-sheet EAD, not undrawn)
-    "lgd": pl.Float64,  # A-IRB modelled LGD (optional)
-    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
-    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
-    "beel": pl.Float64,  # Best estimate expected loss
-    "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
-    "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
-    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
-    "has_netting_agreement": pl.Boolean,  # CRR Art. 195: on-balance sheet netting
-    "netting_facility_reference": pl.String,  # Facility the netting agreement applies to (defaults to root)
-    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
-    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
+LOAN_SCHEMA: dict[str, ColumnSpec] = {
+    "loan_reference": ColumnSpec(pl.String),
+    "product_type": ColumnSpec(pl.String, required=False),
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    "counterparty_reference": ColumnSpec(pl.String),
+    "value_date": ColumnSpec(pl.Date, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "drawn_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "interest": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "lgd": ColumnSpec(pl.Float64, required=False),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False),
+    "seniority": ColumnSpec(pl.String, default="senior", required=False),
+    "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
+    "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "has_netting_agreement": ColumnSpec(pl.Boolean, default=False, required=False),
+    "netting_facility_reference": ColumnSpec(pl.String, required=False),
+    "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
+    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
 }
 
-CONTINGENTS_SCHEMA = {
-    "contingent_reference": pl.String,
-    "product_type": pl.String,
-    "book_code": pl.String,
-    "counterparty_reference": pl.String,
-    "value_date": pl.Date,
-    "maturity_date": pl.Date,
-    "currency": pl.String,
-    "nominal_amount": pl.Float64,
-    "lgd": pl.Float64,
-    "lgd_unsecured": pl.Float64,  # Art. 169B(2)(c): firm's own unsecured LGD estimate (no collateral recoveries)
-    "has_sufficient_collateral_data": pl.Boolean,  # Art. 169A/169B: True=full LGD modelling, False=Foundation fallback
-    "beel": pl.Float64,
-    "seniority": pl.String,  # senior, subordinated - affects F-IRB LGD (45% vs 75%)
-    "risk_type": pl.String,  # Mandatory: FR, FRC, MR, OC, MLR, LR - determines CCF (Art. 111)
-    "underlying_risk_type": pl.String,  # Optional: Art. 111(1)(c) - risk type of OBS item the commitment issues
-    "ccf_modelled": pl.Float64,  # Optional: A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
-    "ead_modelled": pl.Float64,  # Optional: A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
-    "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
-    "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
-    "bs_type": pl.String,  # ONB (on-balance-sheet / drawn) or OFB (off-balance-sheet / undrawn), default OFB
-    "due_diligence_performed": pl.Boolean,  # Art. 110A: firm has performed due diligence (B31 only)
-    "due_diligence_override_rw": pl.Float64,  # Art. 110A: override RW when DD reveals higher risk (B31 only)
+CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
+    "contingent_reference": ColumnSpec(pl.String),
+    "product_type": ColumnSpec(pl.String, required=False),
+    "book_code": ColumnSpec(pl.String, default="", required=False),
+    "counterparty_reference": ColumnSpec(pl.String),
+    "value_date": ColumnSpec(pl.Date, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "nominal_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "lgd": ColumnSpec(pl.Float64, required=False),
+    "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
+    "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),
+    "beel": ColumnSpec(pl.Float64, required=False),
+    "seniority": ColumnSpec(pl.String, default="senior", required=False),
+    "risk_type": ColumnSpec(pl.String, required=False),
+    "underlying_risk_type": ColumnSpec(pl.String, required=False),
+    "ccf_modelled": ColumnSpec(pl.Float64, required=False),
+    "ead_modelled": ColumnSpec(pl.Float64, required=False),
+    "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "bs_type": ColumnSpec(pl.String, default="OFB", required=False),
+    "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
+    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
 }
 
-COUNTERPARTY_SCHEMA = {
-    "counterparty_reference": pl.String,
-    "counterparty_name": pl.String,
+COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
+    "counterparty_reference": ColumnSpec(pl.String),
+    "counterparty_name": ColumnSpec(pl.String, required=False),
     # entity_type: Single source of truth for exposure class determination.
     # Maps directly to SA and IRB exposure classes. Valid values:
     #   Central govt/central bank class:
@@ -171,119 +173,104 @@ COUNTERPARTY_SCHEMA = {
     #     - "other_items_in_collection" → SA: OTHER, 20% RW (Art. 134(3))
     #     - "other_tangible"          → SA: OTHER, 100% RW (Art. 134(2))
     #     - "other_residual_lease"    → SA: OTHER, 1/t × 100% RW (Art. 134(6))
-    "entity_type": pl.String,
-    "country_code": pl.String,
-    "annual_revenue": pl.Float64,  # For SME classification (EUR 50m threshold)
-    "total_assets": pl.Float64,  # For large financial sector entity threshold (EUR 70bn, CRR Art. 4(1)(146))
-    "default_status": pl.Boolean,
-    "sector_code": pl.String,  # Based on SIC
-    # Retained boolean flags - orthogonal to entity_type classification
-    "apply_fi_scalar": pl.Boolean,  # 1.25x IRB correlation for LFSE/unregulated FSE (CRR Art. 153(2))
-    "is_managed_as_retail": pl.Boolean,  # SME managed on pooled retail basis - 75% RW (CRR Art. 123)
-    "is_natural_person": pl.Boolean,  # Natural person counterparty — Art. 124H(1) CRE loan-splitting
-    "is_social_housing": pl.Boolean,  # Art. 124L: social housing provider — max(75%, unsecured RW) for RRE
-    "is_financial_sector_entity": pl.Boolean,  # All FSEs → F-IRB only under B31 (Art. 147A(1)(e))
-    # Basel 3.1 fields (CRE20.16-21, CRE20.47-49)
-    "scra_grade": pl.String,  # SCRA grade: "A"/"A_ENHANCED"/"B"/"C" (Basel 3.1 CRE20.16-21)
-    "is_investment_grade": pl.Boolean,  # Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47)
-    # CCP fields (CRR Art. 300-311, CRE54.14-15)
-    "is_ccp_client_cleared": pl.Boolean,  # True = client-cleared (4% RW); False/null = proprietary (2% RW)
-    # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
-    "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income source
-    # Sovereign floor for FX institution exposures (Art. 121(6) / CRE20.22)
-    "sovereign_cqs": pl.Int32,  # CQS of the sovereign of the institution's jurisdiction (1-6)
-    "local_currency": pl.String,  # ISO 4217 domestic currency of the institution's jurisdiction
-    # Covered bond issuer institution CQS (Art. 129(5) derivation)
-    "institution_cqs": pl.Int8,  # CQS of the issuing institution (1-6); null = unrated
+    "entity_type": ColumnSpec(pl.String),
+    "country_code": ColumnSpec(pl.String, required=False),
+    "annual_revenue": ColumnSpec(pl.Float64, required=False),
+    "total_assets": ColumnSpec(pl.Float64, required=False),
+    "default_status": ColumnSpec(pl.Boolean, default=False, required=False),
+    "sector_code": ColumnSpec(pl.String, required=False),
+    "apply_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_natural_person": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_social_housing": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_financial_sector_entity": ColumnSpec(pl.Boolean, default=False, required=False),
+    "scra_grade": ColumnSpec(pl.String, required=False),
+    "is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
+    "borrower_income_currency": ColumnSpec(pl.String, required=False),
+    "sovereign_cqs": ColumnSpec(pl.Int32, required=False),
+    "local_currency": ColumnSpec(pl.String, required=False),
+    "institution_cqs": ColumnSpec(pl.Int8, required=False),
 }
 
-COLLATERAL_SCHEMA = {
-    "collateral_reference": pl.String,
-    "collateral_type": pl.String,  # cash, gold, equity, bond, real_estate, receivables, other_physical
-    "currency": pl.String,
-    "maturity_date": pl.Date,
-    "market_value": pl.Float64,
-    "nominal_value": pl.Float64,
-    "pledge_percentage": pl.Float64,  # Fraction of beneficiary EAD (0.5 = 50%), used when market_value not provided
-    "beneficiary_type": pl.String,  # counterparty/loan/facility/contingent
-    "beneficiary_reference": pl.String,  # reference to find on the above tables
-    # For securities collateral - haircut determination (CRE22.52-53)
-    "issuer_cqs": pl.Int8,  # Credit Quality Step of issuer (1-6) for haircut lookup
-    "issuer_type": pl.String,  # sovereign, pse, corporate, securitisation - for haircut table
-    "residual_maturity_years": pl.Float64,  # For haircut bands: <=1yr, 1-3yr, 3-5yr, 5-10yr, >10yr
-    "original_maturity_years": pl.Float64,  # Original contract term — Art. 237(2): <1yr makes protection ineligible
-    # Eligibility flags
-    "is_eligible_financial_collateral": pl.Boolean,  # Meets SA eligibility (CRR Art 197, CRE22.40)
-    "is_eligible_irb_collateral": pl.Boolean,  # Meets IRB eligibility - wider pool (CRR Art 199)
-    # Equity index membership (Art. 224 Table 3/4)
-    "is_main_index": pl.Boolean,  # True = main-index equity (CRR 15%, B31 20%); False = other listed (CRR 25%, B31 30%)
-    # Valuation requirements (CRE22.75-78)
-    "valuation_date": pl.Date,  # Date of last valuation
-    "valuation_type": pl.String,  # market, indexed, independent - RE must be independent
-    # Real estate specific fields (CRE20.71-87)
-    "property_type": pl.String,  # residential, commercial - different RW tables
-    "property_ltv": pl.Float64,  # Loan-to-value ratio for SA RW lookup (20%-70% bands)
-    "is_income_producing": pl.Boolean,  # Material income dependence affects commercial RE RW
-    "is_adc": pl.Boolean,  # Acquisition/Development/Construction - 150% RW unless pre-sold
-    "is_presold": pl.Boolean,  # ADC pre-sold to qualifying buyer - 100% RW
-    "is_qualifying_re": pl.Boolean,  # Art. 124A: meets regulatory RE criteria (valuation, lien, etc.)
-    "prior_charge_ltv": pl.Float64,  # Art. 124F(2): LTV occupied by prior/pari passu charges (0.0 = first charge)
-    "liquidation_period_days": pl.Int32,  # Art. 224(2): 5=repo, 10=capital market (default), 20=secured lending
-    # Art. 227 zero-haircut eligibility for repo-style transactions
-    "qualifies_for_zero_haircut": pl.Boolean,  # Art. 227: all 8 conditions (a)-(h) met (institution certification)
-    # Life insurance collateral (Art. 232)
-    "insurer_risk_weight": pl.Float64,  # SA risk weight of insurer (0.20, 0.30, 0.50, 0.65, 1.00, 1.35, 1.50)
-    # Credit-linked notes (Art. 218): set market_value = nominal_value - credit_event_reduction
-    "credit_event_reduction": pl.Float64,  # Reduction in CLN nominal from credit events
+COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
+    "collateral_reference": ColumnSpec(pl.String),
+    "collateral_type": ColumnSpec(pl.String),
+    "currency": ColumnSpec(pl.String, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "market_value": ColumnSpec(pl.Float64, required=False),
+    "nominal_value": ColumnSpec(pl.Float64, required=False),
+    "pledge_percentage": ColumnSpec(pl.Float64, required=False),
+    "beneficiary_type": ColumnSpec(pl.String),
+    "beneficiary_reference": ColumnSpec(pl.String),
+    "issuer_cqs": ColumnSpec(pl.Int8, required=False),
+    "issuer_type": ColumnSpec(pl.String, required=False),
+    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_main_index": ColumnSpec(pl.Boolean, default=False, required=False),
+    "valuation_date": ColumnSpec(pl.Date, required=False),
+    "valuation_type": ColumnSpec(pl.String, required=False),
+    "property_type": ColumnSpec(pl.String, required=False),
+    "property_ltv": ColumnSpec(pl.Float64, required=False),
+    "is_income_producing": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
+    "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "liquidation_period_days": ColumnSpec(pl.Int32, required=False),
+    "qualifies_for_zero_haircut": ColumnSpec(pl.Boolean, default=False, required=False),
+    "insurer_risk_weight": ColumnSpec(pl.Float64, required=False),
+    "credit_event_reduction": ColumnSpec(pl.Float64, default=0.0, required=False),
 }
 
-GUARANTEE_SCHEMA = {
-    "guarantee_reference": pl.String,
-    "guarantee_type": pl.String,
-    "guarantor": pl.String,
-    "currency": pl.String,
-    "maturity_date": pl.Date,
-    "amount_covered": pl.Float64,
-    "percentage_covered": pl.Float64,
-    "beneficiary_type": pl.String,
-    "beneficiary_reference": pl.String,
-    "protection_type": pl.String,  # "guarantee" or "credit_derivative" (CDS/CLN/TRS)
-    "includes_restructuring": pl.Boolean,  # CDS credit event coverage (Art. 233(2))
+GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
+    "guarantee_reference": ColumnSpec(pl.String),
+    "guarantee_type": ColumnSpec(pl.String, required=False),
+    "guarantor": ColumnSpec(pl.String),
+    "currency": ColumnSpec(pl.String, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
+    "amount_covered": ColumnSpec(pl.Float64, required=False),
+    "percentage_covered": ColumnSpec(pl.Float64, required=False),
+    "beneficiary_type": ColumnSpec(pl.String),
+    "beneficiary_reference": ColumnSpec(pl.String),
+    "protection_type": ColumnSpec(pl.String, default="guarantee", required=False),
+    "includes_restructuring": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
-PROVISION_SCHEMA = {
-    "provision_reference": pl.String,
-    "provision_type": pl.String,  # SCRA (Specific), GCRA (General)
-    "ifrs9_stage": pl.Int8,  # 1, 2, or 3
-    "currency": pl.String,
-    "amount": pl.Float64,
-    "as_of_date": pl.Date,
-    "beneficiary_type": pl.String,  # counterparty/loan/facility/contingent
-    "beneficiary_reference": pl.String,  # reference to find on the above tables
+PROVISION_SCHEMA: dict[str, ColumnSpec] = {
+    "provision_reference": ColumnSpec(pl.String),
+    "provision_type": ColumnSpec(pl.String, required=False),
+    "ifrs9_stage": ColumnSpec(pl.Int8, required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "amount": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "as_of_date": ColumnSpec(pl.Date, required=False),
+    "beneficiary_type": ColumnSpec(pl.String),
+    "beneficiary_reference": ColumnSpec(pl.String),
 }
 
-RATINGS_SCHEMA = {
-    "rating_reference": pl.String,
-    "counterparty_reference": pl.String,
-    "rating_type": pl.String,  # internal, external
-    "rating_agency": pl.String,  # internal, S&P, Moodys, Fitch, DBRS, etc.
-    "rating_value": pl.String,  # AAA, AA+, Aa1, etc.
-    "cqs": pl.Int8,  # Credit Quality Step 1-6
-    "pd": pl.Float64,  # Probability of Default (for internal ratings)
-    "rating_date": pl.Date,
-    "is_solicited": pl.Boolean,
-    # IRB model assignment — flows through rating inheritance pipeline to exposures
-    "model_id": pl.String,  # IRB model identifier — links to model_permissions for per-model approach gating
+RATINGS_SCHEMA: dict[str, ColumnSpec] = {
+    "rating_reference": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String),
+    "rating_type": ColumnSpec(pl.String),
+    "rating_agency": ColumnSpec(pl.String, required=False),
+    "rating_value": ColumnSpec(pl.String, required=False),
+    "cqs": ColumnSpec(pl.Int8, required=False),
+    "pd": ColumnSpec(pl.Float64, required=False),
+    "rating_date": ColumnSpec(pl.Date, required=False),
+    "is_solicited": ColumnSpec(pl.Boolean, default=True, required=False),
+    "model_id": ColumnSpec(pl.String, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
 # These are corporate exposures with specific risk characteristics requiring separate treatment
-SPECIALISED_LENDING_SCHEMA = {
-    "counterparty_reference": pl.String,  # Links to counterparty (all exposures inherit SL treatment)
-    "sl_type": pl.String,  # project_finance, object_finance, commodities_finance, ipre, hvcre
-    "project_phase": pl.String,  # pre_operational, operational, high_quality_operational (project_finance only)
-    "slotting_category": pl.String,  # strong, good, satisfactory, weak, default
-    "is_hvcre": pl.Boolean,  # High-volatility commercial real estate (higher RW)
+SPECIALISED_LENDING_SCHEMA: dict[str, ColumnSpec] = {
+    "counterparty_reference": ColumnSpec(pl.String),
+    "sl_type": ColumnSpec(pl.String),
+    "project_phase": ColumnSpec(pl.String, required=False),
+    "slotting_category": ColumnSpec(pl.String, required=False),
+    "is_hvcre": ColumnSpec(pl.Boolean, default=False, required=False),
     # Supervisory risk weights by category (CRE33.5):
     # strong: 70% (50% if <2.5yr), good: 90% (70% if <2.5yr),
     # satisfactory: 115%, weak: 250%, default: 0%
@@ -291,34 +278,32 @@ SPECIALISED_LENDING_SCHEMA = {
 
 # Equity exposures - must use SA under Basel 3.1 (CRE20.58-62, CRR Art 133)
 # IRB approaches for equity withdrawn under PRA PS1/26
-EQUITY_EXPOSURE_SCHEMA = {
-    "exposure_reference": pl.String,
-    "counterparty_reference": pl.String,
-    "equity_type": pl.String,  # central_bank, listed, exchange_traded, government_supported, unlisted, speculative, private_equity, private_equity_diversified, ciu, other
-    "currency": pl.String,
-    "carrying_value": pl.Float64,  # Balance sheet value
-    "fair_value": pl.Float64,  # For mark-to-market positions
-    # Classification flags affecting risk weight
-    "is_speculative": pl.Boolean,  # Speculative unlisted equity - 400% RW
-    "is_exchange_traded": pl.Boolean,  # Listed on recognised exchange - 100% RW
-    "is_government_supported": pl.Boolean,  # Certain govt-supported programmes - reduced RW
-    "is_significant_investment": pl.Boolean,  # >10% of CET1 - may require deduction
-    # CIU approach selection (Art. 132-132C)
-    "ciu_approach": pl.String,  # "look_through", "mandate_based", "fallback", or null
-    "ciu_mandate_rw": pl.Float64,  # Pre-computed mandate-based risk weight (Art. 132A)
-    "ciu_third_party_calc": pl.Boolean,  # Third-party calc → 1.2x factor (Art. 132(4))
-    "fund_reference": pl.String,  # CIU fund reference for look-through join
-    "fund_nav": pl.Float64,  # CIU fund NAV for leverage adjustment (Art. 132a(3))
+EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
+    "exposure_reference": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String),
+    "equity_type": ColumnSpec(pl.String, default="other", required=False),
+    "currency": ColumnSpec(pl.String, required=False),
+    "carrying_value": ColumnSpec(pl.Float64, required=False),
+    "fair_value": ColumnSpec(pl.Float64, required=False),
+    "is_speculative": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_exchange_traded": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_government_supported": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_significant_investment": ColumnSpec(pl.Boolean, default=False, required=False),
+    "ciu_approach": ColumnSpec(pl.String, required=False),
+    "ciu_mandate_rw": ColumnSpec(pl.Float64, required=False),
+    "ciu_third_party_calc": ColumnSpec(pl.Boolean, default=False, required=False),
+    "fund_reference": ColumnSpec(pl.String, required=False),
+    "fund_nav": ColumnSpec(pl.Float64, required=False),
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 
 # CIU fund holdings for look-through approach (Art. 132)
-CIU_HOLDINGS_SCHEMA = {
-    "fund_reference": pl.String,  # Links to equity exposure fund_reference
-    "holding_reference": pl.String,  # Unique holding ID
-    "exposure_class": pl.String,  # SA class of underlying (e.g., "CORPORATE")
-    "cqs": pl.Int8,  # CQS of underlying (nullable for unrated)
-    "holding_value": pl.Float64,  # Market value of the holding
+CIU_HOLDINGS_SCHEMA: dict[str, ColumnSpec] = {
+    "fund_reference": ColumnSpec(pl.String),
+    "holding_reference": ColumnSpec(pl.String),
+    "exposure_class": ColumnSpec(pl.String),
+    "cqs": ColumnSpec(pl.Int8, required=False),
+    "holding_value": ColumnSpec(pl.Float64, required=False),
 }
 
 
@@ -326,10 +311,10 @@ CIU_HOLDINGS_SCHEMA = {
 # FX RATES SCHEMA
 # =============================================================================
 
-FX_RATES_SCHEMA = {
-    "currency_from": pl.String,  # Source currency (e.g., "USD")
-    "currency_to": pl.String,  # Target currency (e.g., "GBP")
-    "rate": pl.Float64,  # Multiply source amount by rate to get target amount
+FX_RATES_SCHEMA: dict[str, ColumnSpec] = {
+    "currency_from": ColumnSpec(pl.String),
+    "currency_to": ColumnSpec(pl.String),
+    "rate": ColumnSpec(pl.Float64),
 }
 
 
@@ -337,20 +322,20 @@ FX_RATES_SCHEMA = {
 # MAPPING SCHEMAS
 # =============================================================================
 
-FACILITY_MAPPING_SCHEMA = {
-    "parent_facility_reference": pl.String,
-    "child_reference": pl.String,
-    "child_type": pl.String,  # facility, loan, contingent
+FACILITY_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
+    "parent_facility_reference": ColumnSpec(pl.String),
+    "child_reference": ColumnSpec(pl.String),
+    "child_type": ColumnSpec(pl.String, required=False),
 }
 
-ORG_MAPPING_SCHEMA = {
-    "parent_counterparty_reference": pl.String,
-    "child_counterparty_reference": pl.String,
+ORG_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
+    "parent_counterparty_reference": ColumnSpec(pl.String),
+    "child_counterparty_reference": ColumnSpec(pl.String),
 }
 
-LENDING_MAPPING_SCHEMA = {
-    "parent_counterparty_reference": pl.String,
-    "child_counterparty_reference": pl.String,
+LENDING_MAPPING_SCHEMA: dict[str, ColumnSpec] = {
+    "parent_counterparty_reference": ColumnSpec(pl.String),
+    "child_counterparty_reference": ColumnSpec(pl.String),
 }
 
 EXPOSURE_CLASS_MAPPING_SCHEMA = {
@@ -439,17 +424,14 @@ CORRELATION_PARAMETER_SCHEMA = {
 # MODEL PERMISSIONS SCHEMA
 # =============================================================================
 
-MODEL_PERMISSIONS_SCHEMA = {
-    "model_id": pl.String,  # Unique model identifier (e.g., "UK_CORP_PD_01")
-    "exposure_class": pl.String,  # ExposureClass value this permission covers
-    "approach": pl.String,  # "foundation_irb", "advanced_irb", or "slotting"
-    "country_codes": pl.String,  # Comma-separated ISO codes, null = all geographies
-    "excluded_book_codes": pl.String,  # Comma-separated book codes to exclude, null = none
+MODEL_PERMISSIONS_SCHEMA: dict[str, ColumnSpec] = {
+    "model_id": ColumnSpec(pl.String),
+    "exposure_class": ColumnSpec(pl.String),
+    "approach": ColumnSpec(pl.String),
+    # country_codes / excluded_book_codes absent → null (all geographies / no exclusions)
+    "country_codes": ColumnSpec(pl.String, required=False),
+    "excluded_book_codes": ColumnSpec(pl.String, required=False),
 }
-
-# Columns in MODEL_PERMISSIONS_SCHEMA that may be absent from input data.
-# When absent, they are treated as null (all geographies permitted / no exclusions).
-MODEL_PERMISSIONS_OPTIONAL_COLUMNS: set[str] = {"country_codes", "excluded_book_codes"}
 
 
 # =============================================================================
@@ -700,6 +682,60 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "model_permissions": {
         "approach": VALID_MODEL_PERMISSION_APPROACHES,
     },
+}
+
+
+# =============================================================================
+# STAGE-OUTPUT SCHEMAS (calculator-derived columns)
+# =============================================================================
+#
+# Columns produced by upstream pipeline stages (HierarchyResolver, CRMProcessor,
+# Classifier) and consumed by downstream calculators (SA, IRB, Equity, Slotting).
+# These are NOT input columns — they are emitted mid-pipeline. Calculators call
+# ``ensure_columns(lf, <STAGE>_OUTPUT_SCHEMA)`` to guarantee the columns exist
+# with declared defaults before using them, which previously required dozens of
+# hand-written ``if "col" not in schema.names()`` blocks per calculator.
+#
+# All columns here are ``required=False`` — they are produced optionally by the
+# upstream stage (e.g., when a counterparty has no parent, ``cp_scra_grade``
+# stays null) and defaulted when absent.
+
+# Columns joined onto exposures from counterparty data during hierarchy
+# resolution. Prefixed ``cp_`` to distinguish from exposure-native columns.
+HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
+    "cp_country_code": ColumnSpec(pl.String, required=False),
+    "cp_entity_type": ColumnSpec(pl.String, required=False),
+    "cp_is_natural_person": ColumnSpec(pl.Boolean, default=False, required=False),
+    "cp_is_social_housing": ColumnSpec(pl.Boolean, default=False, required=False),
+    "cp_is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
+    "cp_is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
+    "cp_is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
+    "cp_scra_grade": ColumnSpec(pl.String, required=False),
+    "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),
+    "cp_local_currency": ColumnSpec(pl.String, required=False),
+    "cp_institution_cqs": ColumnSpec(pl.Int8, required=False),
+}
+
+# Columns produced by the CRM stage: collateral value buckets and provision
+# allocations. Calculators consume these when computing secured/unsecured
+# splits (Art. 127) and EAD net of provisions (Art. 111(2)).
+CRM_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
+    "collateral_re_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "collateral_receivables_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "collateral_other_physical_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "provision_allocated": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "provision_deducted": ColumnSpec(pl.Float64, default=0.0, required=False),
+}
+
+# Columns produced by the classification stage: SME / retail / RE / SL flags
+# derived from counterparty attributes + exposure amounts + regulatory rules.
+CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
+    "qualifies_as_retail": ColumnSpec(pl.Boolean, default=True, required=False),
+    "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
+    "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
+    "ltv": ColumnSpec(pl.Float64, required=False),
+    "sl_project_phase": ColumnSpec(pl.String, required=False),
 }
 
 

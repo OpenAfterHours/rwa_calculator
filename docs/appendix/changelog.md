@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Domestic sovereign guarantor 0% RW vs internal rating (CRR Art. 114(4)/(7))**: When a guarantee from an EU/UK central government/central bank in its domestic currency was provided by a counterparty that the firm rates internally (i.e. carries an `internal_pd`) and the firm holds IRB permission for the CGCB exposure class, the guarantor was being routed to the IRB substitution path. The downstream `_apply_parameter_substitution` step in `engine/irb/guarantee.py` then overwrote the SA branch's correct 0% RW with the parametric F-IRB risk weight derived from the PD, so e.g. a DE sovereign + EUR guarantor with `internal_pd = 0.001` produced ~2.6% instead of the regulatory 0%. The previous EU/UK domestic 0% fix (PR #253) handled the FX-conversion edge case but only inside the SA branch — it did not change routing, so internal-PD guarantors bypassed it. Promoted the Art. 114(4)/(7) check into the guarantor-approach routing step in `engine/crm/guarantees.py`: domestic-currency CGCB guarantors are now forced to `guarantor_approach = "sa"` ahead of the internal-PD branch, so the existing SA 0% short-circuit fires regardless of whether the guarantor has an internal rating. The `guarantor_rating_type` audit field is unchanged — still reports `"internal"` when an internal PD exists, since the override is an approach decision, not a rating-source decision. Reuses `build_eu_domestic_currency_expr` and `denomination_currency_expr` (post-FX safe). Applies under both CRR (Art. 114(4) UK/GBP, Art. 114(7) EU member states) and Basel 3.1 (PRA PS1/26 preserves Art. 114(7) by cross-reference via third-country reciprocity). Added `TestDomesticSovereignGuarantorForcedToSA` regression class in `tests/unit/crm/test_guarantor_rating_type.py` covering UK/GBP, DE/EUR (post-FX), PL/PLN (non-euro EU) and a non-domestic DE/USD counter-case under both frameworks.
 
+
+## [0.1.60] - 2026-04-14
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.193] — 2026-04-13
 
 ### Fixed

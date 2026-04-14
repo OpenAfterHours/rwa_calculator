@@ -108,8 +108,6 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with approach classification
         """
-        schema = self._lf.collect_schema()
-
         lf = ensure_columns(
             self._lf,
             {"approach": ColumnSpec(pl.String, default=ApproachType.FIRB.value, required=False)},

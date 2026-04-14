@@ -22,8 +22,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
+from rwa_calc.data.tables.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.data.tables.haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
     interest_for_ead,
@@ -184,9 +188,31 @@ def apply_guarantees(
         if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
             irb_exposure_class_values.add(ec.value)
 
+    # Art. 114(4)/(7): an EU/UK domestic-currency CGCB guarantor must receive 0% RW
+    # via the SA short-circuit, even if the guarantor has an internal PD that would
+    # otherwise route to IRB parameter substitution.
+    schema_names = exposures.collect_schema().names()
+    has_currency = "original_currency" in schema_names or "currency" in schema_names
+    if has_currency:
+        ccy_expr = denomination_currency_expr(schema_names)
+        cgcb = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+        is_uk_domestic_cgcb_guarantor = (
+            (pl.col("guarantor_exposure_class") == cgcb)
+            & (pl.col("guarantor_country_code").fill_null("") == "GB")
+            & (ccy_expr == "GBP")
+        )
+        is_eu_domestic_cgcb_guarantor = (
+            pl.col("guarantor_exposure_class") == cgcb
+        ) & build_eu_domestic_currency_expr("guarantor_country_code", ccy_expr)
+        is_domestic_cgcb_guarantor = is_uk_domestic_cgcb_guarantor | is_eu_domestic_cgcb_guarantor
+    else:
+        is_domestic_cgcb_guarantor = pl.lit(False)
+
     exposures = exposures.with_columns(
         [
-            pl.when(
+            pl.when(is_domestic_cgcb_guarantor)
+            .then(pl.lit("sa"))
+            .when(
                 (pl.col("guarantor_exposure_class") != "")
                 & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
                 & pl.col("guarantor_internal_pd").is_not_null()

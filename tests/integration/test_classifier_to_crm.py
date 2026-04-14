@@ -26,6 +26,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import ColumnSpec, dtypes_of
 from rwa_calc.data.schemas import RATINGS_SCHEMA
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
@@ -74,12 +75,18 @@ def _make_internal_rating(
 
 
 def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl.LazyFrame:
-    """Convert row dicts to a LazyFrame, casting to the target schema."""
+    """Convert row dicts to a LazyFrame, casting to the target schema.
+
+    Accepts either a plain dtype dict or a ColumnSpec schema.
+    """
+    dtype_schema = (
+        dtypes_of(schema) if any(isinstance(v, ColumnSpec) for v in schema.values()) else schema
+    )
     if not rows:
-        return pl.LazyFrame(schema=schema)
+        return pl.LazyFrame(schema=dtype_schema)
     df = pl.DataFrame(rows)
     cast_exprs = []
-    for col_name, col_type in schema.items():
+    for col_name, col_type in dtype_schema.items():
         if col_name in df.columns:
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:

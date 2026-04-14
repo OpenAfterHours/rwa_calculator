@@ -31,6 +31,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COLLATERAL_SCHEMA
 
 
@@ -112,7 +113,7 @@ def create_collateral() -> pl.DataFrame:
         *_complex_scenario_collateral(),
     ]
 
-    return pl.DataFrame([c.to_dict() for c in collateral], schema=COLLATERAL_SCHEMA)
+    return pl.DataFrame([c.to_dict() for c in collateral], schema=dtypes_of(COLLATERAL_SCHEMA))
 
 
 def _cash_collateral() -> list[Collateral]:

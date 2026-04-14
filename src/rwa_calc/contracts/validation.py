@@ -25,6 +25,7 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
+from rwa_calc.data.column_spec import ColumnSpec
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import (
@@ -35,9 +36,19 @@ if TYPE_CHECKING:
     )
 
 
+def _as_dtype(entry: pl.DataType | ColumnSpec) -> pl.DataType:
+    """Unwrap a schema entry to its dtype — accepts either a raw Polars dtype or a ColumnSpec."""
+    return entry.dtype if isinstance(entry, ColumnSpec) else entry
+
+
+def _is_required(entry: pl.DataType | ColumnSpec) -> bool:
+    """True if a schema entry represents a required column (raw dtypes are treated as required)."""
+    return entry.required if isinstance(entry, ColumnSpec) else True
+
+
 def validate_schema(
     lf: pl.LazyFrame,
-    expected_schema: dict[str, pl.DataType],
+    expected_schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
     context: str = "",
     strict: bool = False,
 ) -> list[str]:
@@ -70,8 +81,11 @@ def validate_schema(
     context_prefix = f"[{context}] " if context else ""
 
     # Check for missing columns
-    for col_name, expected_type in expected_schema.items():
+    for col_name, entry in expected_schema.items():
+        expected_type = _as_dtype(entry)
         if col_name not in actual_schema:
+            if not _is_required(entry):
+                continue
             errors.append(
                 f"{context_prefix}Missing column: '{col_name}' (expected type: {expected_type})"
             )
@@ -146,7 +160,7 @@ def validate_required_columns(
 
 def validate_schema_to_errors(
     lf: pl.LazyFrame,
-    expected_schema: dict[str, pl.DataType],
+    expected_schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
     context: str = "",
     optional_columns: set[str] | None = None,
 ) -> list[CalculationError]:
@@ -158,8 +172,10 @@ def validate_schema_to_errors(
     Args:
         lf: LazyFrame to validate
         expected_schema: Dict mapping column names to expected Polars types
+            or to ColumnSpec entries. Raw dtypes are treated as required.
         context: Context string for error messages
-        optional_columns: Column names that may be absent without error
+        optional_columns: Extra column names that may be absent without error
+            (merged with any ``required=False`` markers on ColumnSpec entries).
 
     Returns:
         List of CalculationError objects for any schema issues
@@ -167,9 +183,12 @@ def validate_schema_to_errors(
     errors: list[CalculationError] = []
     actual_schema = lf.collect_schema()
 
-    for col_name, expected_type in expected_schema.items():
+    for col_name, entry in expected_schema.items():
+        expected_type = _as_dtype(entry)
         if col_name not in actual_schema:
             if optional_columns and col_name in optional_columns:
+                continue
+            if not _is_required(entry):
                 continue
             errors.append(
                 CalculationError(
@@ -201,7 +220,7 @@ def validate_schema_to_errors(
 
 def validate_raw_data_bundle(
     bundle: RawDataBundle,
-    schemas: dict[str, dict[str, pl.DataType]],
+    schemas: dict[str, dict[str, pl.DataType] | dict[str, ColumnSpec]],
 ) -> list[CalculationError]:
     """
     Validate all LazyFrames in a RawDataBundle against expected schemas.
@@ -230,21 +249,11 @@ def validate_raw_data_bundle(
         "model_permissions": bundle.model_permissions,
     }
 
-    from rwa_calc.data.schemas import MODEL_PERMISSIONS_OPTIONAL_COLUMNS
-
-    # Registry of optional columns per table (columns that may be absent from input)
-    optional_columns_registry: dict[str, set[str]] = {
-        "model_permissions": MODEL_PERMISSIONS_OPTIONAL_COLUMNS,
-    }
-
+    # Optional-column semantics now live on ColumnSpec entries (required=False);
+    # no separate optional_columns_registry is needed.
     for name, lf in frame_mapping.items():
         if name in schemas and lf is not None:
-            errors = validate_schema_to_errors(
-                lf,
-                schemas[name],
-                context=name,
-                optional_columns=optional_columns_registry.get(name),
-            )
+            errors = validate_schema_to_errors(lf, schemas[name], context=name)
             all_errors.extend(errors)
 
     return all_errors

@@ -23,6 +23,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import FACILITY_SCHEMA
 
 
@@ -100,7 +101,7 @@ def create_facilities() -> pl.DataFrame:
         *_complex_scenario_facilities(),
     ]
 
-    return pl.DataFrame([f.to_dict() for f in facilities], schema=FACILITY_SCHEMA)
+    return pl.DataFrame([f.to_dict() for f in facilities], schema=dtypes_of(FACILITY_SCHEMA))
 
 
 def _corporate_facilities() -> list[Facility]:

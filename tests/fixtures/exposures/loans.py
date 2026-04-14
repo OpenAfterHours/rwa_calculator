@@ -25,6 +25,7 @@ from pathlib import Path
 import polars as pl
 
 from rwa_calc.contracts.config import RegulatoryThresholds
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import LOAN_SCHEMA
 
 # SME exposure threshold in GBP (derived from EUR 2.5m using FX rate)
@@ -110,7 +111,7 @@ def create_loans() -> pl.DataFrame:
         *_dedicated_test_loans(),
     ]
 
-    return pl.DataFrame([ln.to_dict() for ln in loans], schema=LOAN_SCHEMA)
+    return pl.DataFrame([ln.to_dict() for ln in loans], schema=dtypes_of(LOAN_SCHEMA))
 
 
 def _sovereign_loans() -> list[Loan]:

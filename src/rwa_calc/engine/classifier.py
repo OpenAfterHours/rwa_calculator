@@ -47,6 +47,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     classification_warning,
 )
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -411,12 +412,10 @@ class ExposureClassifier:
         # Ensure cp_is_managed_as_retail always exists — nullable Boolean.
         # When absent from counterparty data, defaults to null (downstream
         # fill_null(True) preserves backward-compatible qualifying behavior).
-        joined_schema = joined.collect_schema()
-        if "cp_is_managed_as_retail" not in joined_schema.names():
-            joined = joined.with_columns(
-                pl.lit(None).cast(pl.Boolean).alias("cp_is_managed_as_retail")
-            )
-
+        joined = ensure_columns(
+            joined,
+            {"cp_is_managed_as_retail": ColumnSpec(pl.Boolean, required=False)},
+        )
         return joined
 
     # =========================================================================

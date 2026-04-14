@@ -32,6 +32,7 @@ import polars as pl
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     CIU_HOLDINGS_SCHEMA,
     COLLATERAL_SCHEMA,
@@ -59,7 +60,7 @@ type ScanFn = Callable[[Path], pl.LazyFrame]
 
 def enforce_schema(
     lf: pl.LazyFrame,
-    schema: dict[str, pl.DataType],
+    schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
     strict: bool = False,
 ) -> pl.LazyFrame:
     """
@@ -70,20 +71,29 @@ def enforce_schema(
 
     Args:
         lf: LazyFrame to enforce schema on
-        schema: Dictionary mapping column names to expected Polars types
+        schema: Dict mapping column names to expected Polars dtypes or
+            ColumnSpec entries. Raw dtype entries are treated as required.
         strict: If True, raise errors on invalid casts. If False (default),
                 invalid values become null.
 
     Returns:
         LazyFrame with columns cast to expected types
     """
+
+    def _dtype(entry: pl.DataType | ColumnSpec) -> pl.DataType:
+        return entry.dtype if isinstance(entry, ColumnSpec) else entry
+
+    is_column_spec_schema = any(isinstance(entry, ColumnSpec) for entry in schema.values())
+    if is_column_spec_schema:
+        lf = ensure_columns(lf, schema)  # type: ignore[arg-type]
+
     current_schema = lf.collect_schema()
     current_cols = set(current_schema.names())
 
     cast_exprs = [
-        pl.col(col_name).cast(expected_type, strict=strict).alias(col_name)
-        for col_name, expected_type in schema.items()
-        if col_name in current_cols and current_schema[col_name] != expected_type
+        pl.col(col_name).cast(_dtype(entry), strict=strict).alias(col_name)
+        for col_name, entry in schema.items()
+        if col_name in current_cols and current_schema[col_name] != _dtype(entry)
     ]
 
     if not cast_exprs:

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import ORG_MAPPING_SCHEMA
 
 
@@ -54,7 +55,7 @@ def create_org_mappings() -> pl.DataFrame:
             {"parent_counterparty_reference": r.parent, "child_counterparty_reference": r.child}
             for r in relationships
         ],
-        schema=ORG_MAPPING_SCHEMA,
+        schema=dtypes_of(ORG_MAPPING_SCHEMA),
     )
 
 

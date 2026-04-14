@@ -24,6 +24,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA
 
 
@@ -62,7 +63,7 @@ def create_facility_mappings() -> pl.DataFrame:
         *_hierarchy_test_mappings(),
     ]
 
-    return pl.DataFrame([m.to_dict() for m in mappings], schema=FACILITY_MAPPING_SCHEMA)
+    return pl.DataFrame([m.to_dict() for m in mappings], schema=dtypes_of(FACILITY_MAPPING_SCHEMA))
 
 
 def _corporate_facility_mappings() -> list[FacilityMapping]:

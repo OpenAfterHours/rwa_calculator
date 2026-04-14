@@ -341,7 +341,7 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(specialised_lending, schema=COUNTERPARTY_SCHEMA)
+    return pl.DataFrame(specialised_lending, schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
 def save_specialised_lending_counterparties(output_dir: Path | None = None) -> Path:

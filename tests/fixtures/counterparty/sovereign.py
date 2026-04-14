@@ -148,7 +148,7 @@ def create_sovereign_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(sovereigns, schema=COUNTERPARTY_SCHEMA)
+    return pl.DataFrame(sovereigns, schema=dtypes_of(COUNTERPARTY_SCHEMA))
 
 
 def save_sovereign_counterparties(output_dir: Path | None = None) -> Path:

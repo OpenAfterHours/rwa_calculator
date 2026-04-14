@@ -43,6 +43,7 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -146,12 +147,14 @@ class SlottingCalculator:
         # Rename rwa to rwa_pre_factor for the SupportingFactorCalculator
         exposures = exposures.with_columns(pl.col("rwa").alias("rwa_pre_factor"))
 
-        # Ensure required columns exist
-        schema = exposures.collect_schema()
-        if "is_sme" not in schema.names():
-            exposures = exposures.with_columns(pl.lit(False).alias("is_sme"))
-        if "is_infrastructure" not in schema.names():
-            exposures = exposures.with_columns(pl.lit(False).alias("is_infrastructure"))
+        # Ensure supporting-factor flags exist (classifier may not have set them).
+        exposures = ensure_columns(
+            exposures,
+            {
+                "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
+                "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
+            },
+        )
 
         sf_calc = SupportingFactorCalculator()
         exposures = sf_calc.apply_factors(exposures, config, errors=errors)

@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     REAL_ESTATE_COLLATERAL_TYPES,
     RECEIVABLE_COLLATERAL_TYPES,
@@ -254,10 +255,12 @@ class HaircutCalculator:
         H_c and H_fx are set to 0%.  The ``_is_zero_haircut`` flag is propagated so
         ``apply_haircuts`` can also zero the FX haircut.
         """
-        # Ensure issuer_type column exists for bond type normalization
+        # Ensure issuer_type column exists for bond type normalization.
+        collateral = ensure_columns(
+            collateral,
+            {"issuer_type": ColumnSpec(pl.String, required=False)},
+        )
         schema = collateral.collect_schema()
-        if "issuer_type" not in schema.names():
-            collateral = collateral.with_columns(pl.lit(None).cast(pl.String).alias("issuer_type"))
 
         # Art. 227: determine whether zero-haircut flag column is available
         has_zero_haircut_col = "qualifies_for_zero_haircut" in schema.names()

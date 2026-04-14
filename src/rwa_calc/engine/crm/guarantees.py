@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
@@ -62,17 +63,15 @@ def apply_guarantees(
     Returns:
         Exposures with guarantee effects applied
     """
-    # Default protection_type to "guarantee" if not provided (backward compatibility)
-    guar_input_schema = guarantees.collect_schema()
-    if "protection_type" not in guar_input_schema.names():
-        guarantees = guarantees.with_columns(
-            pl.lit("guarantee").alias("protection_type"),
-        )
-    else:
-        # Fill nulls with "guarantee" (default for legacy data)
-        guarantees = guarantees.with_columns(
-            pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
-        )
+    # Default protection_type to "guarantee" when absent, then fill nulls with
+    # the same default (backward compatibility for legacy data).
+    guarantees = ensure_columns(
+        guarantees,
+        {"protection_type": ColumnSpec(pl.String, default="guarantee", required=False)},
+    )
+    guarantees = guarantees.with_columns(
+        pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
+    )
 
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 
@@ -294,7 +293,7 @@ def _resolve_guarantees_multi_level(
     """
     guar_schema = guarantees.collect_schema()
 
-    if "beneficiary_type" not in guar_schema.names():
+    if "beneficiary_type" not in guar_schema.names():  # arch-exempt: early-exit guard
         return guarantees
 
     bt_lower = pl.col("beneficiary_type").str.to_lowercase()

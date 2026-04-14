@@ -28,6 +28,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import CONTINGENTS_SCHEMA
 
 
@@ -96,7 +97,7 @@ def create_contingents() -> pl.DataFrame:
         *_ccf_test_contingents(),
     ]
 
-    return pl.DataFrame([c.to_dict() for c in contingents], schema=CONTINGENTS_SCHEMA)
+    return pl.DataFrame([c.to_dict() for c in contingents], schema=dtypes_of(CONTINGENTS_SCHEMA))
 
 
 def _trade_finance_contingents() -> list[Contingent]:

@@ -45,12 +45,14 @@ def _sa_guarantee_result(
     guarantor_is_ccp_client_cleared: bool | None = None,
     currency: str = "GBP",
     original_currency: str | None = None,
+    guarantee_currency: str | None = None,
 ) -> pl.DataFrame:
     """Run SA guarantee substitution and return the result.
 
     When ``original_currency`` is provided, both ``currency`` (reporting) and
     ``original_currency`` (pre-FX-conversion denomination) columns are added,
-    simulating the post-FX-conversion pipeline state.
+    simulating the post-FX-conversion pipeline state. When ``guarantee_currency``
+    is provided, it is added to the exposure row (populated by the CRM split).
     """
     data: dict[str, list] = {
         "exposure_reference": ["EXP001"],
@@ -68,6 +70,8 @@ def _sa_guarantee_result(
         data["guarantor_country_code"] = [guarantor_country_code]
     if guarantor_is_ccp_client_cleared is not None:
         data["guarantor_is_ccp_client_cleared"] = [guarantor_is_ccp_client_cleared]
+    if guarantee_currency is not None:
+        data["guarantee_currency"] = [guarantee_currency]
 
     lf = pl.LazyFrame(data)
     calc = _make_sa_calculator()
@@ -86,12 +90,14 @@ def _irb_guarantee_result(
     guarantor_is_ccp_client_cleared: bool | None = None,
     currency: str = "GBP",
     original_currency: str | None = None,
+    guarantee_currency: str | None = None,
 ) -> pl.DataFrame:
     """Run IRB guarantee substitution and return the result.
 
     When ``original_currency`` is provided, both ``currency`` (reporting) and
     ``original_currency`` (pre-FX-conversion denomination) columns are added,
-    simulating the post-FX-conversion pipeline state.
+    simulating the post-FX-conversion pipeline state. When ``guarantee_currency``
+    is provided, it is added to the exposure row (populated by the CRM split).
     """
     data: dict[str, list] = {
         "exposure_reference": ["EXP001"],
@@ -114,6 +120,8 @@ def _irb_guarantee_result(
         data["guarantor_country_code"] = [guarantor_country_code]
     if guarantor_is_ccp_client_cleared is not None:
         data["guarantor_is_ccp_client_cleared"] = [guarantor_is_ccp_client_cleared]
+    if guarantee_currency is not None:
+        data["guarantee_currency"] = [guarantee_currency]
 
     lf = pl.LazyFrame(data)
     return lf.irb.apply_guarantee_substitution(config).collect()
@@ -397,6 +405,94 @@ class TestIRBEUDomesticSovereignPostFX:
             original_currency="SEK",
         )
         assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+
+class TestGuarantorSubstitutionReadsGuaranteeCurrency:
+    """Art. 114(4)/(7): the domestic-currency test reads the GUARANTEE currency.
+
+    Under the substitution approach (Art. 215-217) the guaranteed portion is
+    treated as an exposure to the sovereign. Whether it qualifies for 0% RW
+    under Art. 114(4)/(7) depends on whether the guarantee itself (the
+    substituted exposure) is denominated in the sovereign's domestic currency —
+    not whether the underlying loan is. The Art. 233(3) 8% FX haircut handles
+    any mismatch between guarantee and underlying separately.
+    """
+
+    def test_sa_gbp_exposure_eur_guarantee_de_sovereign_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """SA: GBP exposure + EUR guarantee + DE sovereign -> 0% RW."""
+        result = _sa_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="DE",
+            currency="GBP",
+            guarantee_currency="EUR",
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_sa_eur_exposure_gbp_guarantee_uk_sovereign_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """SA: EUR exposure + GBP guarantee + UK sovereign -> 0% RW (mirror case)."""
+        result = _sa_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="GB",
+            currency="EUR",
+            guarantee_currency="GBP",
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_sa_eur_exposure_gbp_guarantee_de_sovereign_non_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """SA: EUR exposure + GBP guarantee + DE sovereign -> NOT 0% RW.
+
+        Guards against regressing to the old behaviour of reading exposure currency:
+        the exposure happens to be in DE's domestic (EUR), but the guarantee is
+        in GBP, so the substituted exposure to the sovereign is not domestic.
+        """
+        result = _sa_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="DE",
+            currency="EUR",
+            guarantee_currency="GBP",
+        )
+        # CQS 3 CGCB = 50% RW (standard, not the 0% short-circuit)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
+
+    def test_irb_gbp_exposure_eur_guarantee_de_sovereign_zero_rw(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """IRB: GBP exposure + EUR guarantee + DE sovereign -> 0% guarantor_rw."""
+        result = _irb_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="DE",
+            currency="GBP",
+            guarantee_currency="EUR",
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.0)
+
+    def test_irb_eur_exposure_gbp_guarantee_de_sovereign_non_zero(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """IRB: EUR exposure + GBP guarantee + DE sovereign -> NOT 0% guarantor_rw."""
+        result = _irb_guarantee_result(
+            "sovereign",
+            3,
+            crr_config,
+            guarantor_country_code="DE",
+            currency="EUR",
+            guarantee_currency="GBP",
+        )
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
 
 class TestSACCPGuarantorRiskWeight:

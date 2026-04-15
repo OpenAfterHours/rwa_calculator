@@ -103,13 +103,14 @@ def _guarantee(
     beneficiary: str = "EXP001",
     protection_type: str = "guarantee",
     includes_restructuring: bool = True,
+    currency: str = "GBP",
 ) -> pl.LazyFrame:
     return pl.LazyFrame(
         {
             "guarantee_reference": ["G001"],
             "guarantee_type": ["unfunded"],
             "guarantor": [guarantor],
-            "currency": ["GBP"],
+            "currency": [currency],
             "maturity_date": [date(2029, 12, 31)],
             "amount_covered": [amount],
             "percentage_covered": [None],
@@ -511,19 +512,23 @@ class TestDomesticSovereignGuarantorForcedToSA:
     """Art. 114(4)/(7): EU/UK domestic-currency CGCB guarantor must be routed through
     SA so the 0% RW short-circuit applies — even when the guarantor has an internal
     PD that would otherwise route it to IRB parameter substitution.
+
+    The domestic-currency test is evaluated against the **guarantee** currency (the
+    currency of the substituted exposure to the sovereign), not the underlying
+    exposure currency. Art. 233(3) FX haircut handles the mismatch separately.
     """
 
-    def test_uk_sovereign_with_internal_pd_forced_to_sa(
+    def test_uk_sovereign_gbp_guarantee_with_internal_pd_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """UK sovereign guarantor + GBP + internal PD -> guarantor_approach == 'sa'.
+        """UK sovereign guarantor + GBP guarantee + internal PD -> 'sa'.
 
         Without the Art. 114(4) override, the firm's CGCB IRB permission combined with
         the internal PD would route this to 'irb' and apply parametric IRB RW.
         """
         result = apply_guarantees(
             _sovereign_exposure(currency="GBP"),
-            _guarantee(),
+            _guarantee(currency="GBP"),
             _sovereign_counterparty_lookup("GB"),
             crr_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
@@ -533,13 +538,13 @@ class TestDomesticSovereignGuarantorForcedToSA:
         # Rating type still reports the underlying rating source
         assert result["guarantor_rating_type"][0] == "internal"
 
-    def test_de_sovereign_eur_with_internal_pd_forced_to_sa(
+    def test_de_sovereign_eur_guarantee_with_internal_pd_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """DE sovereign + EUR (post-FX to GBP) + internal PD -> 'sa' via Art. 114(7)."""
+        """DE sovereign + EUR guarantee + internal PD -> 'sa' via Art. 114(7)."""
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP", original_currency="EUR"),
-            _guarantee(),
+            _sovereign_exposure(currency="GBP"),
+            _guarantee(currency="EUR"),
             _sovereign_counterparty_lookup("DE"),
             crr_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
@@ -547,13 +552,13 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_pl_sovereign_pln_with_internal_pd_forced_to_sa(
+    def test_pl_sovereign_pln_guarantee_with_internal_pd_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """PL sovereign + PLN (post-FX to GBP) + internal PD -> 'sa' (non-euro EU)."""
+        """PL sovereign + PLN guarantee + internal PD -> 'sa' (non-euro EU)."""
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP", original_currency="PLN"),
-            _guarantee(),
+            _sovereign_exposure(currency="GBP"),
+            _guarantee(currency="PLN"),
             _sovereign_counterparty_lookup("PL"),
             crr_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
@@ -561,17 +566,34 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_de_sovereign_usd_with_internal_pd_stays_irb(
+    def test_gbp_loan_eur_guarantee_de_sovereign_forced_to_sa(
         self, crr_irb_config: CalculationConfig
     ) -> None:
-        """DE sovereign + USD (non-domestic) + internal PD -> still routed to 'irb'.
+        """Cross-currency: GBP loan + EUR guarantee + DE sovereign -> 'sa'.
 
-        Non-domestic currency means Art. 114(7) does not apply, so the internal-PD
-        routing wins and the guarantor uses the parametric IRB RW.
+        Regression test for the reported bug: guarantee currency (EUR) matches
+        DE's domestic currency so Art. 114(7) fires, even though the underlying
+        loan is in GBP. Art. 233(3) 8% FX haircut handles the mismatch.
         """
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP", original_currency="USD"),
-            _guarantee(),
+            _sovereign_exposure(currency="GBP", original_currency="GBP"),
+            _guarantee(currency="EUR"),
+            _sovereign_counterparty_lookup("DE"),
+            crr_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "sa"
+
+    def test_de_sovereign_usd_guarantee_stays_irb(self, crr_irb_config: CalculationConfig) -> None:
+        """DE sovereign + USD guarantee (non-domestic) + internal PD -> 'irb'.
+
+        USD is not DE's domestic currency, so Art. 114(7) cannot apply; the
+        internal-PD branch wins and parametric IRB RW substitution is used.
+        """
+        result = apply_guarantees(
+            _sovereign_exposure(currency="GBP"),
+            _guarantee(currency="USD"),
             _sovereign_counterparty_lookup("DE"),
             crr_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
@@ -579,13 +601,32 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "irb"
 
-    def test_b31_uk_sovereign_with_internal_pd_forced_to_sa(
+    def test_exposure_ccy_matches_but_guarantee_ccy_does_not_stays_irb(
+        self, crr_irb_config: CalculationConfig
+    ) -> None:
+        """EUR loan + GBP guarantee + DE sovereign -> 'irb'.
+
+        Guards against regressing to the old behaviour that read exposure currency.
+        The exposure is in DE's domestic (EUR) but the guarantee is in GBP, so
+        the substituted exposure to the sovereign is not in DE's domestic currency.
+        """
+        result = apply_guarantees(
+            _sovereign_exposure(currency="GBP", original_currency="EUR"),
+            _guarantee(currency="GBP"),
+            _sovereign_counterparty_lookup("DE"),
+            crr_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "irb"
+
+    def test_b31_uk_sovereign_gbp_guarantee_with_internal_pd_forced_to_sa(
         self, b31_irb_config: CalculationConfig
     ) -> None:
-        """Basel 3.1: UK sovereign + GBP + internal PD -> 'sa' (Art. 114(4) preserved)."""
+        """Basel 3.1: UK sovereign + GBP guarantee + internal PD -> 'sa'."""
         result = apply_guarantees(
             _sovereign_exposure(currency="GBP"),
-            _guarantee(),
+            _guarantee(currency="GBP"),
             _sovereign_counterparty_lookup("GB"),
             b31_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
@@ -593,13 +634,13 @@ class TestDomesticSovereignGuarantorForcedToSA:
 
         assert result["guarantor_approach"][0] == "sa"
 
-    def test_b31_de_sovereign_eur_with_internal_pd_forced_to_sa(
+    def test_b31_de_sovereign_eur_guarantee_with_internal_pd_forced_to_sa(
         self, b31_irb_config: CalculationConfig
     ) -> None:
-        """Basel 3.1: DE sovereign + EUR + internal PD -> 'sa' (Art. 114(7) preserved)."""
+        """Basel 3.1: DE sovereign + EUR guarantee + internal PD -> 'sa'."""
         result = apply_guarantees(
-            _sovereign_exposure(currency="GBP", original_currency="EUR"),
-            _guarantee(),
+            _sovereign_exposure(currency="GBP"),
+            _guarantee(currency="EUR"),
             _sovereign_counterparty_lookup("DE"),
             b31_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),

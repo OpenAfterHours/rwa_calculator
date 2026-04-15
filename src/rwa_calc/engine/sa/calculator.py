@@ -106,6 +106,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import (
+    build_domestic_cgcb_guarantor_expr,
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
 )
@@ -1475,27 +1476,32 @@ class SACalculator:
         # UK deviation for institutions (30% for CQS 2 instead of 50%).
         use_uk_deviation = config.base_currency == "GBP"
 
-        # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS
-        # UK guarantor in GBP, or EU guarantor in that member state's domestic currency.
-        # Use the exposure's ORIGINAL denomination (pre-FX-conversion) — the FX
-        # converter overwrites `currency` with the reporting currency, which
-        # would otherwise block the Art. 114(4) 0% short-circuit.
+        # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS.
+        # Evaluate the domestic-currency test against the guarantee currency (the
+        # currency of the substituted exposure to the sovereign); the Art. 233(3)
+        # 8% FX haircut separately handles any mismatch between the guarantee and
+        # the underlying exposure. Fall back to the exposure's pre-FX denomination
+        # when `guarantee_currency` is missing (legacy / no-guarantee rows).
         schema_now = exposures.collect_schema()
         _schema_names = schema_now.names()
         _has_country = "guarantor_country_code" in _schema_names
-        _has_currency = "currency" in _schema_names or "original_currency" in _schema_names
-        _ccy_expr_guar = denomination_currency_expr(_schema_names)
-        _is_uk_domestic_guarantor = (
-            (pl.col("guarantor_country_code").fill_null("") == "GB") & (_ccy_expr_guar == "GBP")
-            if (_has_country and _has_currency)
+        _has_exposure_ccy = "currency" in _schema_names or "original_currency" in _schema_names
+        _has_guarantee_ccy = "guarantee_currency" in _schema_names
+        if _has_guarantee_ccy and _has_exposure_ccy:
+            _ccy_expr_guar = pl.col("guarantee_currency").fill_null(
+                denomination_currency_expr(_schema_names)
+            )
+        elif _has_guarantee_ccy:
+            _ccy_expr_guar = pl.col("guarantee_currency")
+        elif _has_exposure_ccy:
+            _ccy_expr_guar = denomination_currency_expr(_schema_names)
+        else:
+            _ccy_expr_guar = None
+        _is_domestic_guarantor = (
+            build_domestic_cgcb_guarantor_expr("guarantor_country_code", _ccy_expr_guar)
+            if (_has_country and _ccy_expr_guar is not None)
             else pl.lit(False)
         )
-        _is_eu_domestic_guarantor = (
-            build_eu_domestic_currency_expr("guarantor_country_code", _ccy_expr_guar)
-            if (_has_country and _has_currency)
-            else pl.lit(False)
-        )
-        _is_domestic_guarantor = _is_uk_domestic_guarantor | _is_eu_domestic_guarantor
 
         # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
         _gec = pl.col("guarantor_exposure_class").fill_null("")

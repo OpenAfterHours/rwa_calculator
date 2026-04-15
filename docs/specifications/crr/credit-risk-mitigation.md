@@ -312,6 +312,14 @@ G* = G × (1 - H_fx)
 
 Where `H_fx` is from Art. 224 Table 4 at the applicable liquidation period (8% at 10-day, scaled by Art. 226(1) if not daily revalued). The guaranteed amount must be reduced before applying substitution.
 
+### Art. 114(4)/(7) Domestic Sovereign Treatment Under Substitution
+
+Under the substitution approach (Art. 215-217), the guaranteed portion is treated as an exposure to the guarantor. For an EU/UK central government or central bank guarantor, Art. 114(4) (and Art. 114(7) for Basel 3.1) grants a 0% risk weight when that substituted exposure is denominated in the sovereign's domestic currency.
+
+The domestic-currency test is therefore evaluated against the **guarantee** currency, not the currency of the underlying exposure. A GBP loan guaranteed by an EU sovereign in EUR still qualifies for 0% RW on the guaranteed portion, because the substituted claim against the sovereign is in EUR. The cross-currency mismatch between the guarantee and the underlying loan is handled separately by the Art. 233(3) 8% FX haircut above.
+
+This short-circuit takes precedence over the internal-rating routing: a sovereign guarantor with an internal PD and IRB permission still receives the 0% SA treatment when the guarantee is in the sovereign's domestic currency.
+
 ### CDS Restructuring Exclusion Haircut (Art. 233(2) / Art. 216(1))
 
 If a credit derivative does not include restructuring as a credit event:

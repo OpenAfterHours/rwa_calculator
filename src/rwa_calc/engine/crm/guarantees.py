@@ -24,7 +24,7 @@ import polars as pl
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.data.tables.eu_sovereign import (
-    build_eu_domestic_currency_expr,
+    build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
 )
 from rwa_calc.data.tables.haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
@@ -189,21 +189,27 @@ def apply_guarantees(
 
     # Art. 114(4)/(7): an EU/UK domestic-currency CGCB guarantor must receive 0% RW
     # via the SA short-circuit, even if the guarantor has an internal PD that would
-    # otherwise route to IRB parameter substitution.
+    # otherwise route to IRB parameter substitution. The domestic-currency test is
+    # evaluated against the guarantee currency (the currency of the substituted
+    # exposure to the sovereign), not the underlying loan's currency — Art. 233(3)
+    # FX haircut handles any mismatch between guarantee and underlying.
     schema_names = exposures.collect_schema().names()
-    has_currency = "original_currency" in schema_names or "currency" in schema_names
-    if has_currency:
+    has_exposure_ccy = "original_currency" in schema_names or "currency" in schema_names
+    has_guarantee_ccy = "guarantee_currency" in schema_names
+    if has_guarantee_ccy and has_exposure_ccy:
+        ccy_expr = pl.col("guarantee_currency").fill_null(denomination_currency_expr(schema_names))
+    elif has_guarantee_ccy:
+        ccy_expr = pl.col("guarantee_currency")
+    elif has_exposure_ccy:
         ccy_expr = denomination_currency_expr(schema_names)
+    else:
+        ccy_expr = None
+
+    if ccy_expr is not None:
         cgcb = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
-        is_uk_domestic_cgcb_guarantor = (
-            (pl.col("guarantor_exposure_class") == cgcb)
-            & (pl.col("guarantor_country_code").fill_null("") == "GB")
-            & (ccy_expr == "GBP")
-        )
-        is_eu_domestic_cgcb_guarantor = (
+        is_domestic_cgcb_guarantor = (
             pl.col("guarantor_exposure_class") == cgcb
-        ) & build_eu_domestic_currency_expr("guarantor_country_code", ccy_expr)
-        is_domestic_cgcb_guarantor = is_uk_domestic_cgcb_guarantor | is_eu_domestic_cgcb_guarantor
+        ) & build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
     else:
         is_domestic_cgcb_guarantor = pl.lit(False)
 

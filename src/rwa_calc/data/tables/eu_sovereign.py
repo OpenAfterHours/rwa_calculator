@@ -132,6 +132,37 @@ def build_eu_domestic_currency_expr(
     )
 
 
+def build_domestic_cgcb_guarantor_expr(
+    country_col: str,
+    currency_col: str | pl.Expr,
+) -> pl.Expr:
+    """
+    Build a Polars expression that identifies a domestic-currency CGCB guarantor
+    under CRR Art. 114(3)/(4) and Art. 114(7) (Basel 3.1 preservation).
+
+    Combines the UK (GB/GBP) and EU (member state / member-state-domestic-currency)
+    branches into a single boolean expression.
+
+    Callers pass the guarantor's country code column and the currency column to
+    test against. For guarantee substitution (Art. 215-217) the currency column
+    should be the **guarantee** currency — the Art. 233(3) 8% FX haircut handles
+    any mismatch between the guarantee and the underlying exposure separately.
+
+    Args:
+        country_col: Column name containing the guarantor's ISO country code.
+        currency_col: Column name (str) or Polars expression for the currency
+            to test against the guarantor's domestic currency.
+
+    Returns:
+        Boolean Polars expression: True when the guarantor is UK CGCB in GBP or
+        an EU-member CGCB in that member state's domestic currency.
+    """
+    currency_expr = pl.col(currency_col) if isinstance(currency_col, str) else currency_col
+    is_uk_domestic = (pl.col(country_col).fill_null("") == "GB") & (currency_expr == "GBP")
+    is_eu_domestic = build_eu_domestic_currency_expr(country_col, currency_expr)
+    return is_uk_domestic | is_eu_domestic
+
+
 def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
     """
     Return the expression for an exposure's denomination (pre-FX) currency.

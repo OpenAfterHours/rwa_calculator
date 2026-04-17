@@ -1014,10 +1014,13 @@ class ExposureClassifier:
             .when(_b31_ipre_hvcre_forced_slotting)
             .then(pl.lit(ApproachType.SLOTTING.value))
             # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31)
+            # Requires both PD and modelled LGD — without LGD, fall through to slotting
+            # (CRR Art. 153(1)-(4) vs Art. 153(5))
             .when(
                 (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
                 & sl_airb
                 & has_internal_rating
+                & has_modelled_lgd
             )
             .then(pl.lit(ApproachType.AIRB.value))
             # SL slotting fallback (slotting does not require internal rating)

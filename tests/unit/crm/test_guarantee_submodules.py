@@ -782,7 +782,7 @@ class TestApplyGuaranteeSplits:
         assert result["unguaranteed_portion"][0] == pytest.approx(1_000_000.0)
 
     def test_single_guarantor_partial(self) -> None:
-        """Single guarantor covering less than EAD: guaranteed + unguaranteed sum to EAD."""
+        """Single guarantor covering less than EAD: splits into guarantor + remainder rows."""
         guarantees = pl.LazyFrame(
             {
                 "beneficiary_reference": ["EXP001"],
@@ -793,12 +793,20 @@ class TestApplyGuaranteeSplits:
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
-        assert len(result) == 1
-        assert result["guaranteed_portion"][0] == pytest.approx(400_000.0)
-        assert result["unguaranteed_portion"][0] == pytest.approx(600_000.0)
+        assert len(result) == 2
+
+        guar = result.filter(pl.col("exposure_reference") == "EXP001__G_GUAR001")
+        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
+        assert len(guar) == 1
+        assert len(rem) == 1
+
+        assert guar["guaranteed_portion"][0] == pytest.approx(400_000.0)
+        assert guar["unguaranteed_portion"][0] == pytest.approx(0.0)
+        assert rem["guaranteed_portion"][0] == pytest.approx(0.0)
+        assert rem["unguaranteed_portion"][0] == pytest.approx(600_000.0)
 
     def test_single_guarantor_full_coverage(self) -> None:
-        """Single guarantor covering full EAD: capped at EAD."""
+        """Single guarantor covering full EAD: capped at EAD, remainder is zero."""
         guarantees = pl.LazyFrame(
             {
                 "beneficiary_reference": ["EXP001"],
@@ -809,9 +817,16 @@ class TestApplyGuaranteeSplits:
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
-        assert len(result) == 1
-        assert result["guaranteed_portion"][0] == pytest.approx(1_000_000.0)
-        assert result["unguaranteed_portion"][0] == pytest.approx(0.0)
+        assert len(result) == 2
+
+        guar = result.filter(pl.col("exposure_reference") == "EXP001__G_GUAR001")
+        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
+        assert len(guar) == 1
+        assert len(rem) == 1
+
+        assert guar["guaranteed_portion"][0] == pytest.approx(1_000_000.0)
+        assert rem["unguaranteed_portion"][0] == pytest.approx(0.0)
+        assert rem["ead_after_collateral"][0] == pytest.approx(0.0)
 
     def test_multiple_guarantors_creates_subrows(self) -> None:
         """Two guarantors: creates 3 rows (2 guarantor + 1 remainder)."""
@@ -873,8 +888,10 @@ class TestApplyGuaranteeSplits:
         exposures = self._base_exposure(ead=1_000_000.0)
         result = _apply_guarantee_splits(guarantees, exposures).collect()
 
-        # 50% of 1M = 500k
-        assert result["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
+        # 50% of 1M = 500k guaranteed, 500k remainder
+        assert len(result) == 2
+        guar = result.filter(pl.col("exposure_reference") == "EXP001__G_GUAR001")
+        assert guar["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
 
 
 # =============================================================================

@@ -162,9 +162,10 @@ class TestGuaranteeFXMismatchHaircut:
         df = result.exposures.collect()
 
         # G* = 500,000 × (1 - 0.08) = 460,000
-        assert df["guaranteed_portion"][0] == pytest.approx(460_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(540_000.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(460_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(540_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
 
     def test_same_currency_guarantee_no_haircut(
         self,
@@ -188,9 +189,10 @@ class TestGuaranteeFXMismatchHaircut:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
     def test_no_guarantee_no_haircut(
         self,
@@ -241,8 +243,8 @@ class TestGuaranteeFXMismatchHaircut:
 
         # Full guarantee capped at EAD, then reduced by 8%
         # G* = 1,000,000 × (1 - 0.08) = 920,000
-        assert df["guaranteed_portion"][0] == pytest.approx(920_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(80_000.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(920_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(80_000.0, rel=1e-6)
 
     def test_large_guarantee_cross_currency_still_fully_covers(
         self,
@@ -276,9 +278,10 @@ class TestGuaranteeFXMismatchHaircut:
         df = result.exposures.collect()
 
         # G* = 200M × 0.92 = 184M → min(184M, 1M) = 1M (fully covered)
-        assert df["guaranteed_portion"][0] == pytest.approx(ead, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(ead, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(0.0, abs=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
 
     def test_cross_currency_guarantee_under_basel31(
         self,
@@ -303,8 +306,9 @@ class TestGuaranteeFXMismatchHaircut:
         df = result.exposures.collect()
 
         # Same 8% haircut under Basel 3.1
-        assert df["guaranteed_portion"][0] == pytest.approx(460_000.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(460_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
 
     def test_guarantee_without_currency_no_haircut(
         self,

@@ -206,9 +206,10 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # G* = 500,000 × (1 - 0.40) = 300,000
-        assert df["guaranteed_portion"][0] == pytest.approx(300_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(700_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(300_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(700_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
 
     def test_cds_with_restructuring_no_haircut(
         self,
@@ -221,9 +222,10 @@ class TestCDSRestructuringExclusionHaircut:
 
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
     def test_regular_guarantee_no_haircut(
         self,
@@ -237,8 +239,9 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Restructuring exclusion only applies to credit derivatives
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
     def test_null_includes_restructuring_defaults_to_no_haircut(
         self,
@@ -252,8 +255,9 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Null defaults to True → no haircut applied
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
     def test_missing_includes_restructuring_column_no_haircut(
         self,
@@ -279,8 +283,9 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Without the column, no haircut applied (backward compatible)
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
     def test_full_cds_coverage_without_restructuring(
         self,
@@ -295,9 +300,10 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Full CDS: 1M capped at EAD, then reduced to 60%: 1M × 0.60 = 600k
-        assert df["guaranteed_portion"][0] == pytest.approx(600_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(400_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(600_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(400_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
 
     def test_cds_without_restructuring_rwa_impact(
         self,
@@ -312,8 +318,8 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Guaranteed: 600k at guarantor RW; Unguaranteed: 400k at borrower RW
-        guaranteed = df["guaranteed_portion"][0]
-        unguaranteed = df["unguaranteed_portion"][0]
+        guaranteed = df["guaranteed_portion"].sum()
+        unguaranteed = df["unguaranteed_portion"].sum()
         assert guaranteed + unguaranteed == pytest.approx(ead, rel=1e-6)
 
     def test_cds_without_restructuring_under_basel31(
@@ -328,8 +334,9 @@ class TestCDSRestructuringExclusionHaircut:
         df = _run_crm(crm_processor, basel31_config, exposures, guarantees)
 
         # Same 40% haircut under Basel 3.1
-        assert df["guaranteed_portion"][0] == pytest.approx(300_000.0, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(300_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
 
 
 class TestCombinedFXAndRestructuringHaircuts:
@@ -351,10 +358,11 @@ class TestCombinedFXAndRestructuringHaircuts:
 
         # FX first: 500k × (1 - 0.08) = 460k
         # Then restructuring: 460k × (1 - 0.40) = 276k
-        assert df["guaranteed_portion"][0] == pytest.approx(276_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(724_000.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(276_000.0, rel=1e-6)
+        assert df["unguaranteed_portion"].sum() == pytest.approx(724_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.40, rel=1e-6)
 
     def test_fx_haircut_only_when_restructuring_included(
         self,
@@ -370,9 +378,10 @@ class TestCombinedFXAndRestructuringHaircuts:
         df = _run_crm(crm_processor, crr_config, exposures, guarantees)
 
         # Only FX haircut: 500k × 0.92 = 460k
-        assert df["guaranteed_portion"][0] == pytest.approx(460_000.0, rel=1e-6)
-        assert df["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
-        assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
+        assert df["guaranteed_portion"].sum() == pytest.approx(460_000.0, rel=1e-6)
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["guarantee_fx_haircut"][0] == pytest.approx(0.08, rel=1e-6)
+        assert guar_row["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
 
 
 class TestNoGuaranteeRestructuringColumn:

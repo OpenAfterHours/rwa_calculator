@@ -137,16 +137,14 @@ class TestFacilityLevelGuarantee:
         df = result.exposures.collect().sort("exposure_reference")
 
         # Assert: guarantee allocated pro-rata (60/40 split on 500k)
-        loan_a = df.filter(pl.col("exposure_reference") == "LOAN_A")
-        loan_b = df.filter(pl.col("exposure_reference") == "LOAN_B")
-
-        assert loan_a["is_guaranteed"][0] is True
-        assert loan_b["is_guaranteed"][0] is True
+        # Each exposure produces 2 sub-rows (guarantor + remainder)
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
 
         # LOAN_A: 600k / 1000k * 500k = 300k guaranteed
-        assert loan_a["guaranteed_portion"][0] == pytest.approx(300_000.0, rel=1e-6)
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(300_000.0, rel=1e-6)
         # LOAN_B: 400k / 1000k * 500k = 200k guaranteed
-        assert loan_b["guaranteed_portion"][0] == pytest.approx(200_000.0, rel=1e-6)
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(200_000.0, rel=1e-6)
 
     def test_facility_guarantee_with_percentage_covered(
         self,
@@ -208,12 +206,12 @@ class TestFacilityLevelGuarantee:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
-        loan_a = df.filter(pl.col("exposure_reference") == "LOAN_A")
-        loan_b = df.filter(pl.col("exposure_reference") == "LOAN_B")
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
 
         # 60% of each child's EAD
-        assert loan_a["guaranteed_portion"][0] == pytest.approx(360_000.0, rel=1e-6)
-        assert loan_b["guaranteed_portion"][0] == pytest.approx(240_000.0, rel=1e-6)
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(360_000.0, rel=1e-6)
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(240_000.0, rel=1e-6)
 
     def test_facility_guarantee_guarantor_substitution(
         self,
@@ -275,8 +273,10 @@ class TestFacilityLevelGuarantee:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
-        assert df["post_crm_counterparty_guaranteed"][0] == "GUAR001"
-        assert df["post_crm_exposure_class_guaranteed"][0] == "central_govt_central_bank"
+        # Guarantor sub-row should have the substituted counterparty
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert guar_row["post_crm_counterparty_guaranteed"][0] == "GUAR001"
+        assert guar_row["post_crm_exposure_class_guaranteed"][0] == "central_govt_central_bank"
 
 
 class TestCounterpartyLevelGuarantee:
@@ -342,13 +342,13 @@ class TestCounterpartyLevelGuarantee:
         df = result.exposures.collect().sort("exposure_reference")
 
         # Pro-rata: 500/1000*400=200, 300/1000*400=120, 200/1000*400=80
-        loan_a = df.filter(pl.col("exposure_reference") == "LOAN_A")
-        loan_b = df.filter(pl.col("exposure_reference") == "LOAN_B")
-        loan_c = df.filter(pl.col("exposure_reference") == "LOAN_C")
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
+        loan_c = df.filter(pl.col("parent_exposure_reference") == "LOAN_C")
 
-        assert loan_a["guaranteed_portion"][0] == pytest.approx(200_000.0, rel=1e-6)
-        assert loan_b["guaranteed_portion"][0] == pytest.approx(120_000.0, rel=1e-6)
-        assert loan_c["guaranteed_portion"][0] == pytest.approx(80_000.0, rel=1e-6)
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(200_000.0, rel=1e-6)
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(120_000.0, rel=1e-6)
+        assert loan_c["guaranteed_portion"].sum() == pytest.approx(80_000.0, rel=1e-6)
 
 
 class TestMixedLevelGuarantees:
@@ -415,13 +415,13 @@ class TestMixedLevelGuarantees:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
-        loan_a = df.filter(pl.col("exposure_reference") == "LOAN_A")
-        loan_b = df.filter(pl.col("exposure_reference") == "LOAN_B")
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
 
         # LOAN_A: 200k direct + 200k (50% of 400k facility) = 400k
-        assert loan_a["guaranteed_portion"][0] == pytest.approx(400_000.0, rel=1e-6)
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(400_000.0, rel=1e-6)
         # LOAN_B: 200k (50% of 400k facility)
-        assert loan_b["guaranteed_portion"][0] == pytest.approx(200_000.0, rel=1e-6)
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(200_000.0, rel=1e-6)
 
 
 class TestLoanLevelGuaranteeUnchanged:
@@ -486,10 +486,14 @@ class TestLoanLevelGuaranteeUnchanged:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
-        assert df["is_guaranteed"][0] is True
-        assert df["guaranteed_portion"][0] == pytest.approx(600_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(400_000.0, rel=1e-6)
-        assert df["post_crm_counterparty_guaranteed"][0] == "GUAR001"
+        # Splits into guarantor sub-row + remainder
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        rem_row = df.filter(pl.col("exposure_reference").str.ends_with("__REM"))
+
+        assert len(guar_row) == 1
+        assert guar_row["guaranteed_portion"][0] == pytest.approx(600_000.0, rel=1e-6)
+        assert rem_row["unguaranteed_portion"][0] == pytest.approx(400_000.0, rel=1e-6)
+        assert guar_row["post_crm_counterparty_guaranteed"][0] == "GUAR001"
 
     def test_guarantee_without_beneficiary_type_treated_as_direct(
         self,
@@ -550,8 +554,11 @@ class TestLoanLevelGuaranteeUnchanged:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
-        assert df["is_guaranteed"][0] is True
-        assert df["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
+        # Splits into guarantor sub-row + remainder
+        guar_row = df.filter(pl.col("guaranteed_portion") > 0)
+        assert len(guar_row) == 1
+        assert guar_row["is_guaranteed"][0] is True
+        assert guar_row["guaranteed_portion"][0] == pytest.approx(500_000.0, rel=1e-6)
 
 
 class TestBasel31FacilityGuarantee:
@@ -617,12 +624,10 @@ class TestBasel31FacilityGuarantee:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, basel31_config)
         df = result.exposures.collect().sort("exposure_reference")
 
-        loan_a = df.filter(pl.col("exposure_reference") == "LOAN_A")
-        loan_b = df.filter(pl.col("exposure_reference") == "LOAN_B")
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
 
         # LOAN_A: 700/1000 * 500k = 350k
-        assert loan_a["guaranteed_portion"][0] == pytest.approx(350_000.0, rel=1e-6)
-        assert loan_a["is_guaranteed"][0] is True
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(350_000.0, rel=1e-6)
         # LOAN_B: 300/1000 * 500k = 150k
-        assert loan_b["guaranteed_portion"][0] == pytest.approx(150_000.0, rel=1e-6)
-        assert loan_b["is_guaranteed"][0] is True
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(150_000.0, rel=1e-6)

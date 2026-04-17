@@ -336,13 +336,12 @@ def _apply_guarantee_splits(
     exposures: pl.LazyFrame,
 ) -> pl.LazyFrame:
     """
-    Split exposures with multiple guarantors into per-guarantor sub-rows.
+    Split guaranteed exposures into per-guarantor sub-rows.
 
-    For each exposure with N guarantors (N > 1), produces N+1 rows:
+    For each exposure with N guarantors (N >= 1), produces N+1 rows:
     - N guarantor sub-rows, each with that guarantor's covered amount
     - 1 remainder sub-row for the uncovered portion
 
-    Single-guarantor exposures keep the existing aggregation behavior.
     Non-guaranteed exposures pass through unchanged.
 
     References:
@@ -461,33 +460,8 @@ def _apply_guarantee_splits(
         pl.lit(0.0).alias("guarantee_restructuring_haircut"),
     )
 
-    # --- Path 2: Single guarantor (backward compatible, no split) ---
-    single_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") == 1)
-    single_guarantees = guarantees.select(guar_select)
-
-    single = single_guar_exposures.join(
-        single_guarantees,
-        left_on="exposure_reference",
-        right_on="beneficiary_reference",
-        how="inner",
-    )
-
-    single = single.with_columns(
-        _resolve_guarantee_amount_expr("percentage_covered" in guar_cols, "guarantee_amount"),
-    )
-
-    single = single.with_columns(
-        pl.col("guarantee_amount").alias("original_guarantee_amount"),
-        pl.min_horizontal("guarantee_amount", "ead_after_collateral").alias("guaranteed_portion"),
-        pl.col("guarantor").alias("guarantor_reference"),
-    ).with_columns(
-        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion")).alias(
-            "unguaranteed_portion"
-        ),
-    )
-
-    # --- Path 3: Multiple guarantors — row splitting ---
-    multi_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") > 1)
+    # --- Path 2: Guaranteed exposures — row splitting (N >= 1 guarantors) ---
+    multi_guar_exposures = exposures_with_counts.filter(pl.col("guarantee_count") >= 1)
     multi_guarantees = guarantees.select(guar_select)
 
     # Join each guarantee to its exposure (1:N → produces N rows per exposure)
@@ -526,8 +500,15 @@ def _apply_guarantee_splits(
         .alias("_total_effective"),
     )
 
+    # Compute the ratio each sub-row represents of the parent EAD, used to
+    # proportionally split stock columns (drawn_amount, etc.) so that
+    # downstream per-counterparty aggregations remain correct.
+    multi_joined = multi_joined.with_columns(
+        (pl.col("_effective_amount") / pl.col("ead_after_collateral")).alias("_guar_ratio"),
+    )
+
     # Build guarantor sub-rows: each gets its guarantor's covered amount
-    guarantor_sub_rows = multi_joined.with_columns(
+    _guar_stock_splits: list[pl.Expr] = [
         pl.col("_effective_amount").alias("guaranteed_portion"),
         pl.lit(0.0).alias("unguaranteed_portion"),
         pl.col("_effective_amount").alias("ead_after_collateral"),
@@ -537,15 +518,36 @@ def _apply_guarantee_splits(
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__G_"), pl.col("guarantor")],
         ).alias("exposure_reference"),
+    ]
+    # Stock columns that must be split proportionally so that downstream
+    # per-counterparty aggregations (e.g. SME supporting factor) and
+    # cross-approach CCF recalculations produce correct results.
+    _stock_cols = (
+        "drawn_amount",
+        "undrawn_amount",
+        "nominal_amount",
+        "interest",
+        "ead_pre_crm",
+        "ead_from_ccf",
+        "provision_deducted",
+        "provision_on_drawn",
+        "provision_on_nominal",
+        "nominal_after_provision",
     )
+    _guar_schema = multi_joined.collect_schema().names()
+    for _stock_col in _stock_cols:
+        if _stock_col in _guar_schema:
+            _guar_stock_splits.append(
+                (pl.col(_stock_col) * pl.col("_guar_ratio")).alias(_stock_col),
+            )
+    guarantor_sub_rows = multi_joined.with_columns(_guar_stock_splits)
 
-    # Build remainder sub-rows: one per multi-guarantor exposure
+    # Build remainder sub-rows: one per guaranteed exposure
     # Use first row per exposure to get the base columns
-    remainder_sub_rows = (
-        multi_joined.sort("parent_exposure_reference", "guarantor")
-        .group_by("parent_exposure_reference", maintain_order=True)
-        .first()
-    ).with_columns(
+    _rem_ratio = (pl.col("ead_after_collateral") - pl.col("_total_effective")) / pl.col(
+        "ead_after_collateral"
+    )
+    _rem_exprs: list[pl.Expr] = [
         pl.lit(0.0).alias("guaranteed_portion"),
         (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("unguaranteed_portion"),
         (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("ead_after_collateral"),
@@ -560,11 +562,24 @@ def _apply_guarantee_splits(
         pl.concat_str(
             [pl.col("parent_exposure_reference"), pl.lit("__REM")],
         ).alias("exposure_reference"),
+    ]
+    remainder_sub_rows = (
+        multi_joined.sort("parent_exposure_reference", "guarantor")
+        .group_by("parent_exposure_reference", maintain_order=True)
+        .first()
     )
+    _rem_schema = remainder_sub_rows.collect_schema().names()
+    for _stock_col in _stock_cols:
+        if _stock_col in _rem_schema:
+            _rem_exprs.append(
+                (pl.col(_stock_col) * _rem_ratio).alias(_stock_col),
+            )
+    remainder_sub_rows = remainder_sub_rows.with_columns(_rem_exprs)
 
     # Drop transient columns used during splitting
     transient = [
         "_guar_amount",
+        "_guar_ratio",
         "_total_coverage",
         "_scale",
         "_effective_amount",
@@ -577,14 +592,8 @@ def _apply_guarantee_splits(
     guarantor_sub_rows = _drop_columns_if_present(guarantor_sub_rows, transient)
     remainder_sub_rows = _drop_columns_if_present(remainder_sub_rows, transient)
 
-    # Also drop transient/join columns from single and no-guarantee paths
-    single_drop = ["amount_covered"]
-    if "percentage_covered" in guar_cols:
-        single_drop.append("percentage_covered")
-    single = _drop_columns_if_present(single, single_drop)
-
     # Concat all paths
-    parts = [no_guarantee, single, guarantor_sub_rows, remainder_sub_rows]
+    parts = [no_guarantee, guarantor_sub_rows, remainder_sub_rows]
     return pl.concat(parts, how="diagonal_relaxed")
 
 

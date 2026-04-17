@@ -358,6 +358,35 @@ class TestSLApproachRoutingUnchanged:
         df = _classify(specialised_lending=sl, framework="b31")
         assert df["approach"][0] == ApproachType.AIRB.value
 
+    def test_pf_with_pd_but_no_lgd_gets_slotting_b31(self) -> None:
+        """SL with internal_pd but no modelled LGD → SLOTTING, not AIRB.
+
+        A-IRB requires both PD and LGD estimates (CRR Art. 153(1)-(4)).
+        Without modelled LGD, the supervisory slotting approach applies
+        (Art. 153(5)).
+        """
+        sl = _make_sl_table("project_finance")
+        df = _classify(specialised_lending=sl, framework="b31", lgd=None, internal_pd=0.005)
+        assert df["approach"][0] == ApproachType.SLOTTING.value
+
+    def test_pf_with_pd_and_lgd_gets_airb_b31(self) -> None:
+        """SL with both internal_pd and modelled LGD → AIRB (unchanged)."""
+        sl = _make_sl_table("project_finance")
+        df = _classify(specialised_lending=sl, framework="b31", lgd=0.45, internal_pd=0.005)
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_pf_without_pd_gets_slotting_b31(self) -> None:
+        """SL without internal_pd → SLOTTING (slotting needs no PD)."""
+        sl = _make_sl_table("project_finance")
+        df = _classify(specialised_lending=sl, framework="b31", lgd=None, internal_pd=None)
+        assert df["approach"][0] == ApproachType.SLOTTING.value
+
+    def test_pf_with_pd_but_no_lgd_gets_slotting_crr(self) -> None:
+        """CRR: SL with internal_pd but no modelled LGD → SLOTTING."""
+        sl = _make_sl_table("project_finance")
+        df = _classify(specialised_lending=sl, framework="crr", lgd=None, internal_pd=0.005)
+        assert df["approach"][0] == ApproachType.SLOTTING.value
+
     def test_sl_entity_type_without_sl_table_gets_sa(self) -> None:
         """entity_type='specialised_lending' without SL table → SA fallback."""
         df = _classify(entity_type="specialised_lending", lgd=None, internal_pd=None)

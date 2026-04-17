@@ -595,6 +595,10 @@ def get_result_for_exposure(
     """
     Look up calculation result for a specific exposure.
 
+    Tries exact match on exposure_reference first. If not found, falls back to
+    matching via parent_exposure_reference and aggregates numeric fields across
+    guarantee sub-rows (guaranteed + remainder).
+
     Args:
         results_df: DataFrame of pipeline results
         exposure_reference: The exposure reference to find
@@ -604,9 +608,41 @@ def get_result_for_exposure(
     """
     filtered = results_df.filter(pl.col("exposure_reference") == exposure_reference)
 
+    if filtered.height > 0:
+        return filtered.row(0, named=True)
+
+    # Fall back to parent_exposure_reference for guarantee sub-rows
+    if "parent_exposure_reference" in results_df.columns:
+        filtered = results_df.filter(pl.col("parent_exposure_reference") == exposure_reference)
     if filtered.height == 0:
         return None
-    return filtered.row(0, named=True)
+
+    # Aggregate across sub-rows: sum additive fields, take first for others
+    _additive = {
+        "ead_final",
+        "ead_pre_crm",
+        "ead_after_collateral",
+        "rwa_final",
+        "rwa_pre_crm",
+        "rwa_post_factor",
+        "rwa_pre_factor",
+        "guaranteed_portion",
+        "unguaranteed_portion",
+        "drawn_amount",
+        "undrawn_amount",
+        "nominal_amount",
+        "provision_deducted",
+        "provision_on_drawn",
+        "provision_on_nominal",
+        "expected_loss",
+    }
+    result: dict = {}
+    for col_name in filtered.columns:
+        if col_name in _additive:
+            result[col_name] = filtered[col_name].sum()
+        else:
+            result[col_name] = filtered[col_name][0]
+    return result
 
 
 def get_sa_result_for_exposure(

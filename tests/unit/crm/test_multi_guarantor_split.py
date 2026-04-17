@@ -232,12 +232,12 @@ class TestMultiGuarantorSplit:
             60_000 / 140_000 * 100_000, rel=1e-6
         )
 
-    def test_single_guarantor_no_split(
+    def test_single_guarantor_splits_into_two_rows(
         self,
         crm_processor: CRMProcessor,
         crr_config: CalculationConfig,
     ) -> None:
-        """Single guarantor should NOT produce sub-rows (backward compatible)."""
+        """Single guarantor should produce 2 sub-rows: guaranteed + remainder."""
         # Arrange
         exposures = _make_exposure(ead=150_000.0)
 
@@ -279,11 +279,27 @@ class TestMultiGuarantorSplit:
         result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
-        # Assert: single row, no split
-        assert len(df) == 1
-        assert df["exposure_reference"][0] == "EXP001"
-        assert df["guaranteed_portion"][0] == pytest.approx(100_000.0, rel=1e-6)
-        assert df["unguaranteed_portion"][0] == pytest.approx(50_000.0, rel=1e-6)
+        # Assert: 2 rows (1 guarantor + remainder)
+        assert len(df) == 2, f"Expected 2 rows (guarantor + remainder), got {len(df)}"
+
+        # Both sub-rows link back to the original exposure
+        assert (df["parent_exposure_reference"] == "EXP001").all()
+
+        # Guarantor sub-row: 100k guaranteed
+        g_rows = df.filter(pl.col("guarantor_reference") == "GUAR001")
+        assert len(g_rows) == 1
+        assert g_rows["exposure_reference"][0] == "EXP001__G_GUAR001"
+        assert g_rows["guaranteed_portion"][0] == pytest.approx(100_000.0, rel=1e-6)
+        assert g_rows["unguaranteed_portion"][0] == pytest.approx(0.0, abs=1e-6)
+
+        # Remainder sub-row: 50k unguaranteed
+        rem_rows = df.filter(pl.col("exposure_reference").str.ends_with("__REM"))
+        assert len(rem_rows) == 1
+        assert rem_rows["guaranteed_portion"][0] == pytest.approx(0.0, abs=1e-6)
+        assert rem_rows["unguaranteed_portion"][0] == pytest.approx(50_000.0, rel=1e-6)
+
+        # Total EAD sums to original
+        assert df["ead_final"].sum() == pytest.approx(150_000.0, rel=1e-6)
 
     def test_no_guarantors_unchanged(
         self,

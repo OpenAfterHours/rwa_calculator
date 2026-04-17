@@ -455,12 +455,14 @@ class TestGuarantorRatingTypeEdgeCases:
         result = apply_guarantees(exposures, guarantees, cp_lookup, crr_config, ri).collect()
 
         # First exposure guaranteed by internal-rated guarantor
-        row0 = result.filter(pl.col("exposure_reference") == "EXP001")
-        assert row0["guarantor_rating_type"][0] == "internal"
+        row0 = result.filter(pl.col("parent_exposure_reference") == "EXP001")
+        guar0 = row0.filter(pl.col("guaranteed_portion") > 0)
+        assert guar0["guarantor_rating_type"][0] == "internal"
 
         # Second exposure guaranteed by external-only guarantor
-        row1 = result.filter(pl.col("exposure_reference") == "EXP002")
-        assert row1["guarantor_rating_type"][0] == "external"
+        row1 = result.filter(pl.col("parent_exposure_reference") == "EXP002")
+        guar1 = row1.filter(pl.col("guaranteed_portion") > 0)
+        assert guar1["guarantor_rating_type"][0] == "external"
 
 
 # ---------------------------------------------------------------------------

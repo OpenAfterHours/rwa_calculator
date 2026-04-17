@@ -165,6 +165,18 @@ def _base_counterparty(
     }
 
 
+def _get_rows(df: pl.DataFrame, parent_ref: str = "EXP001") -> pl.DataFrame:
+    """Get all sub-rows for a parent exposure (guaranteed + remainder)."""
+    return df.filter(pl.col("parent_exposure_reference") == parent_ref)
+
+
+def _get_guar_row(df: pl.DataFrame, parent_ref: str = "EXP001") -> pl.DataFrame:
+    """Get the guarantor sub-row for a parent exposure."""
+    return df.filter(
+        (pl.col("parent_exposure_reference") == parent_ref) & (pl.col("guaranteed_portion") > 0)
+    )
+
+
 def _run_crm(
     processor: CRMProcessor,
     config: CalculationConfig,
@@ -220,14 +232,14 @@ class TestFIRBWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "sa"
         assert row["ccf_original"][0] == pytest.approx(0.75)
         assert row["ccf_guaranteed"][0] == pytest.approx(0.50)
         assert row["ccf_unguaranteed"][0] == pytest.approx(0.75)
         assert row["guaranteed_portion"][0] == pytest.approx(402.0)
-        assert row["unguaranteed_portion"][0] == pytest.approx(298.0)
-        assert row["ead_final"][0] == pytest.approx(700.0)
+        assert _get_rows(result)["unguaranteed_portion"].sum() == pytest.approx(298.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(700.0)
 
     def test_mlr_risk_type_large_ccf_difference(
         self,
@@ -249,14 +261,14 @@ class TestFIRBWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["ccf_guaranteed"][0] == pytest.approx(0.20)
         assert row["ccf_unguaranteed"][0] == pytest.approx(0.75)
         # on_bal=520, nominal=300, ratio=0.60
         # guaranteed = 520*0.6 + 300*0.6*0.20 = 312 + 36 = 348
         # unguaranteed = 520*0.4 + 300*0.4*0.75 = 208 + 90 = 298
         assert row["guaranteed_portion"][0] == pytest.approx(348.0)
-        assert row["unguaranteed_portion"][0] == pytest.approx(298.0)
+        assert _get_rows(result)["unguaranteed_portion"].sum() == pytest.approx(298.0)
 
     def test_fr_risk_type_both_100_percent(
         self,
@@ -278,11 +290,11 @@ class TestFIRBWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["ccf_guaranteed"][0] == pytest.approx(1.0)
         assert row["ccf_unguaranteed"][0] == pytest.approx(1.0)
         # Both CCFs are 100%, so EAD = 520 + 300 = 820
-        assert row["ead_final"][0] == pytest.approx(820.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(820.0)
 
     def test_lr_risk_type_both_0_percent(
         self,
@@ -304,11 +316,11 @@ class TestFIRBWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["ccf_guaranteed"][0] == pytest.approx(0.0)
         assert row["ccf_unguaranteed"][0] == pytest.approx(0.0)
         # on_bal=520, nominal=300 but CCF=0%, so EAD = 520 + 0 = 520
-        assert row["ead_final"][0] == pytest.approx(520.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(520.0)
 
 
 # =============================================================================
@@ -347,7 +359,7 @@ class TestFIRBWithIRBGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "irb"
         assert row["ccf_original"][0] == pytest.approx(0.75)
         assert row["ccf_guaranteed"][0] == pytest.approx(0.75)
@@ -381,7 +393,7 @@ class TestFIRBWithIRBGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "sa"
         assert row["ccf_guaranteed"][0] == pytest.approx(0.50)  # SA MR CCF
 
@@ -411,7 +423,7 @@ class TestSAWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "sa"
         # SA MR CCF = 50%, no recalculation needed
         assert row["ccf_original"][0] == pytest.approx(0.50)
@@ -444,11 +456,11 @@ class TestFullyDrawnExposure:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         # No nominal → CCF doesn't matter, needs_ccf_sub = False (nominal > 0 check)
         assert row["ccf_original"][0] == pytest.approx(0.0)  # CCF=0 when nominal=0
         # EAD = drawn + interest = 520
-        assert row["ead_final"][0] == pytest.approx(520.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(520.0)
 
 
 # =============================================================================
@@ -485,7 +497,7 @@ class TestAIRBWithSAGuarantor:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "sa"
         assert row["ccf_original"][0] == pytest.approx(0.65)
         assert row["ccf_guaranteed"][0] == pytest.approx(0.50)
@@ -534,8 +546,8 @@ class TestMixedBatch:
             ],
         )
 
-        sa_row = result.filter(pl.col("exposure_reference") == "SA_EXP")
-        firb_row = result.filter(pl.col("exposure_reference") == "FIRB_EXP")
+        sa_row = _get_guar_row(result, "SA_EXP")
+        firb_row = _get_guar_row(result, "FIRB_EXP")
 
         # SA exposure: no recalculation (SA→SA)
         assert sa_row["ccf_original"][0] == pytest.approx(0.50)
@@ -571,7 +583,7 @@ class TestGuaranteeRatio:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantee_ratio"][0] <= 1.0
 
     def test_100_percent_guarantee(
@@ -591,11 +603,11 @@ class TestGuaranteeRatio:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantee_ratio"][0] == pytest.approx(1.0)
-        assert row["unguaranteed_portion"][0] == pytest.approx(0.0)
+        assert _get_rows(result)["unguaranteed_portion"].sum() == pytest.approx(0.0)
         # All EAD uses SA CCF: 520 + 300*0.5 = 670
-        assert row["ead_final"][0] == pytest.approx(670.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(670.0)
 
     def test_negative_drawn_with_sa_guarantor(
         self,
@@ -621,9 +633,9 @@ class TestGuaranteeRatio:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         # on_bal should use floored drawn (0, not -100)
-        assert row["ead_final"][0] == pytest.approx(190.0)
+        assert _get_rows(result)["ead_final"].sum() == pytest.approx(190.0)
 
 
 # =============================================================================
@@ -663,7 +675,7 @@ class TestGuarantorDualRating:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "irb"
         # IRB approach retains original CCF
         assert row["ccf_guaranteed"][0] == pytest.approx(0.75)
@@ -697,7 +709,7 @@ class TestGuarantorDualRating:
             ],
         )
 
-        row = result.filter(pl.col("exposure_reference") == "EXP001")
+        row = _get_guar_row(result)
         assert row["guarantor_approach"][0] == "sa"
         # SA approach → SA CCF for guaranteed portion
         assert row["ccf_guaranteed"][0] == pytest.approx(0.50)

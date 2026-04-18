@@ -124,10 +124,10 @@ References:
 ### Organisation
 ```
 tests/
-├── unit/          # Fast, isolated tests (~1,537 tests)
-├── acceptance/    # Scenario-based regulatory tests (~275 tests)
-├── contracts/     # Protocol/interface compliance tests (~125 tests)
-├── integration/   # Cross-component integration tests (~101 tests)
+├── unit/          # Fast, isolated tests (~4,500 tests)
+├── acceptance/    # Scenario-based regulatory tests (~500 tests)
+├── contracts/     # Protocol/interface compliance tests (~150 tests)
+├── integration/   # Cross-component integration tests (~130 tests)
 ├── benchmarks/    # Performance tests (marked @pytest.mark.benchmark)
 ├── bdd/           # BDD-style tests (step definitions)
 ├── fixtures/      # Shared test data builders

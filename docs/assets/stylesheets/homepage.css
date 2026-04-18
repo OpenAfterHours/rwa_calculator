@@ -1,283 +1,431 @@
-/* =========================================================================
-   Landing page — full-page hero with formula background
-   ========================================================================= */
+/* =============================================================
+   OpenAfterHours Docs — Landing page
+   Source of truth for the Zensical landing-page design system.
+   Single-screen constellation hero; adapts to Material's light/
+   dark colour scheme toggle.
+   ============================================================= */
 
-/* Hero container: fills viewport below the header */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;600;700&display=swap");
+
+/* ---------- Design tokens (brand) --------------------------- */
+:root {
+  --oah-orange:           #ff9100;
+  --oah-orange-bright:    #ffa724;
+  --oah-orange-hover:     #e68200;
+  --oah-orange-soft:      #ffb74d;
+  --oah-owl-body:         #c9442a;
+  --oah-owl-eye:          #ffc857;
+  --oah-terminal-green:   #3dd68c;
+
+  --oah-slate-900:        #0d0e11;
+  --oah-slate-850:        #11141a;
+  --oah-slate-800:        #161719;
+  --oah-slate-700:        #1f2430;
+  --oah-slate-600:        #2a3142;
+  --oah-slate-500:        #3b4356;
+  --oah-slate-400:        #64748b;
+  --oah-slate-300:        #a0a4ab;
+  --oah-slate-200:        #cbd0d8;
+  --oah-slate-100:        #e2e4e8;
+  --oah-slate-050:        #f1f5f9;
+
+  --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                  Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Space Grotesk", "Inter", -apple-system, sans-serif;
+  --font-mono:    "JetBrains Mono", "Roboto Mono", "Fira Code",
+                  ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Landing hero tokens (always dark) --------------- */
+/* Landing is fixed dark by design; it does not participate in
+   Material's light/dark toggle. Only docs pages respect the
+   user's palette choice. */
+body:has(.landing-hero) {
+  overflow: hidden;
+
+  --hero-bg-gradient: radial-gradient(ellipse at 50% 30%, #1a1f2e 0%, var(--oah-slate-900) 70%);
+  --hero-scrim:
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(13,14,17,0.55) 0%, rgba(13,14,17,0) 70%),
+    linear-gradient(180deg,
+      rgba(13,14,17,0.45) 0%,
+      rgba(13,14,17,0.10) 30%,
+      rgba(13,14,17,0.10) 70%,
+      rgba(13,14,17,0.65) 100%);
+  --hero-fg:            var(--oah-slate-100);
+  --hero-fg-muted:      var(--oah-slate-200);
+  --hero-fg-faint:      var(--oah-slate-300);
+  --hero-fg-mute:       var(--oah-slate-400);
+  --hero-border:        rgba(216, 222, 233, 0.18);
+  --hero-border-soft:   rgba(216, 222, 233, 0.10);
+  --hero-border-strong: rgba(216, 222, 233, 0.30);
+  --hero-install-bg:    rgba(13, 14, 17, 0.50);
+  --hero-install-border: rgba(216, 222, 233, 0.14);
+  --constellation-star-warm: #ffc857;
+  --constellation-star-cool: #e2e4e8;
+  --constellation-line:      rgba(255, 145, 0, 0.18);
+  --constellation-label:     var(--oah-orange);
+  --constellation-label-opacity: 0.65;
+}
+
+/* ---------- Hero stage -------------------------------------- */
 .landing-hero {
   position: relative;
-  min-height: calc(100vh - 64px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 100svh;
+  max-height: 1100px;
+  width: 100%;
   overflow: hidden;
+  color: var(--hero-fg);
+  font-family: var(--font-sans);
+  background: var(--hero-bg-gradient);
 }
 
-/* Formula background — fills the entire hero */
-.formula-background {
+/* ---------- Constellation background ------------------------ */
+.constellation-bg {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  user-select: none;
   z-index: 0;
+  overflow: hidden;
 }
-
-.formula-background__inner {
-  position: relative;
+.constellation-svg {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
+.constellation-spin {
+  transform-origin: 50% 50%;
+  animation: oah-constellation-rotate 240s linear infinite;
+}
+@keyframes oah-constellation-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.constellation-line {
+  stroke: var(--constellation-line);
+  stroke-width: 0.08;
+}
+.constellation-star-warm { fill: var(--constellation-star-warm); }
+.constellation-star-cool { fill: var(--constellation-star-cool); }
+.constellation-svg-label {
+  font-family: var(--font-mono);
+  font-size: 1.6px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  fill: var(--constellation-label);
+  opacity: var(--constellation-label-opacity);
+  user-select: none;
+}
 
-.formula {
+/* ---------- Scrim (readability gradient) -------------------- */
+.landing-scrim {
   position: absolute;
-  font-family: "JetBrains Mono", "Roboto Mono", "Fira Code", monospace;
-  white-space: nowrap;
-  font-size: 0.85rem;
+  inset: 0;
+  z-index: 1;
+  background: var(--hero-scrim);
+  pointer-events: none;
+}
+
+/* ---------- Hero layout ------------------------------------- */
+.hero {
+  position: relative;
+  z-index: 2;
+  min-height: 100svh;
+  max-height: 1100px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 28px 56px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* ---------- Nav --------------------------------------------- */
+.hero-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--oah-orange);
+  background: var(--oah-slate-700);
+}
+.brand-text { line-height: 1; }
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--oah-orange);
   line-height: 1;
 }
-
-/* Light mode */
-[data-md-color-scheme="default"] .formula {
-  opacity: 0.06;
-  color: #000;
+.brand-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--hero-fg-faint);
+  margin-top: 4px;
+  text-transform: uppercase;
 }
-
-/* Dark mode */
-[data-md-color-scheme="slate"] .formula {
-  opacity: 0.10;
-  color: #fff;
-}
-
-/* Individual formula positions — scattered across the hero */
-.formula--1  { top: 12%; left: 3%;  font-size: 0.9rem;  transform: rotate(-2deg); }
-.formula--2  { top: 50%; left: 58%; font-size: 1.2rem;  transform: rotate(1deg); }
-.formula--3  { top: 75%; left: 2%;  font-size: 0.75rem; transform: rotate(-1deg); }
-.formula--4  { top: 28%; left: 42%; font-size: 0.85rem; transform: rotate(2deg); }
-.formula--5  { top: 8%;  left: 65%; font-size: 0.8rem;  transform: rotate(-3deg); }
-.formula--6  { top: 88%; left: 38%; font-size: 0.95rem; transform: rotate(1.5deg); }
-.formula--7  { top: 42%; left: 8%;  font-size: 1.0rem;  transform: rotate(-0.5deg); }
-.formula--8  { top: 5%;  left: 32%; font-size: 0.7rem;  transform: rotate(2.5deg); }
-.formula--9  { top: 62%; left: 78%; font-size: 0.75rem; transform: rotate(-1.5deg); }
-.formula--10 { top: 22%; left: 82%; font-size: 0.8rem;  transform: rotate(0.5deg); }
-.formula--11 { top: 82%; left: 72%; font-size: 1.2rem;  transform: rotate(-2.5deg); }
-.formula--12 { top: 38%; left: 55%; font-size: 0.7rem;  transform: rotate(1deg); }
-
-/* =========================================================================
-   Landing content — centered over the formula background
-   ========================================================================= */
-
-.landing-content {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 2rem 1.5rem;
-  max-width: 700px;
-}
-
-.landing-logo {
-  width: 96px;
-  height: 96px;
-  margin-bottom: 1.5rem;
-  border-radius: 16px;
-}
-
-.landing-title {
-  font-size: 2.4rem;
-  font-weight: 700;
-  margin: 0 0 1rem;
-  color: var(--md-default-fg-color);
-}
-
-.landing-tagline {
-  font-size: 1.15rem;
-  line-height: 1.6;
-  margin: 0 0 2.5rem;
-  opacity: 0.7;
-  color: var(--md-default-fg-color);
-}
-
-.landing-actions {
+.nav-links {
   display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px;
+  font-size: 14px;
 }
-
-.landing-btn {
+.nav-links a {
+  color: var(--hero-fg-muted);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.nav-links a:hover { color: var(--oah-orange); }
+.github-link {
   display: inline-flex;
   align-items: center;
-  padding: 0.75rem 1.75rem;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--hero-border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.github-link:hover {
+  border-color: var(--oah-orange);
+  color: var(--oah-orange);
+}
+
+/* ---------- Hero body --------------------------------------- */
+.hero-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 780px;
+  padding: 32px 0;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--oah-orange);
+  margin-bottom: 28px;
+}
+.eyebrow .prompt {
+  color: var(--oah-terminal-green);
+  font-weight: 700;
+}
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(40px, 5.4vw, 68px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  margin: 0 0 24px;
+  color: var(--hero-fg);
+}
+.title-accent {
+  background: linear-gradient(90deg,
+    var(--oah-orange) 0%,
+    var(--oah-orange-bright) 60%,
+    var(--oah-owl-eye) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-style: italic;
+  font-weight: 500;
+}
+.lede {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--hero-fg-muted);
+  max-width: 620px;
+  margin: 0 0 36px;
+  text-wrap: pretty;
+}
+.lede .num {
+  color: var(--oah-orange);
+  font-family: var(--font-mono);
+  font-size: 15.5px;
+}
+
+/* ---------- Buttons ----------------------------------------- */
+.cta-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
   font-weight: 600;
   text-decoration: none;
-  transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+  transition: all 200ms var(--ease-std);
+  cursor: pointer;
+  border: none;
 }
-
-.landing-btn--primary {
-  background-color: #ff9100;
+.btn-primary {
+  background: var(--oah-orange);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255, 145, 0, 0.22);
+}
+.btn-primary:hover {
+  background: var(--oah-orange-bright);
+  box-shadow: 0 6px 24px rgba(255, 145, 0, 0.36);
+  transform: translateY(-1px);
   color: #fff;
 }
-
-.landing-btn--primary:hover {
-  background-color: #e68200;
-  box-shadow: 0 4px 12px rgba(255, 145, 0, 0.3);
-}
-
-.landing-btn--secondary {
-  border: 2px solid var(--md-default-fg-color--lighter);
-  color: var(--md-default-fg-color);
+.btn-ghost {
   background: transparent;
+  color: var(--hero-fg);
+  border: 1.5px solid var(--hero-border-strong);
+}
+.btn-ghost:hover {
+  border-color: var(--oah-orange);
+  color: var(--oah-orange);
+}
+.btn-ghost .ext {
+  font-family: var(--font-mono);
+  margin-left: 2px;
 }
 
-.landing-btn--secondary:hover {
-  border-color: #ff9100;
-  color: #ff9100;
+/* ---------- Install snippet --------------------------------- */
+.install {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 16px;
+  background: var(--hero-install-bg);
+  border: 1px solid var(--hero-install-border);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin-bottom: 40px;
+  width: fit-content;
+  backdrop-filter: blur(8px);
 }
-
-/* =========================================================================
-   Responsive
-   ========================================================================= */
-
-@media screen and (max-width: 76.25em) {
-  .landing-title {
-    font-size: 2rem;
-  }
-
-  .landing-tagline {
-    font-size: 1rem;
-  }
-}
-
-@media screen and (max-width: 600px) {
-  .landing-hero {
-    min-height: calc(100vh - 56px);
-  }
-
-  .landing-logo {
-    width: 72px;
-    height: 72px;
-  }
-
-  .landing-title {
-    font-size: 1.6rem;
-  }
-
-  .landing-tagline {
-    font-size: 0.9rem;
-  }
-
-  .landing-btn {
-    padding: 0.65rem 1.25rem;
-    font-size: 0.85rem;
-  }
-
-  /* Hide the longest formulas on small screens */
-  .formula--1,
-  .formula--3,
-  .formula--5 {
-    display: none;
-  }
-
-  .landing-features__grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .landing-cta-card {
-    padding: 1.5rem 1.25rem;
-  }
-
-  .landing-cta-card__title {
-    font-size: 1.2rem;
-  }
-}
-
-/* =========================================================================
-   Features section — card grid below the hero
-   ========================================================================= */
-
-.landing-features {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 3rem 1.5rem 2rem;
-}
-
-.landing-features__grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.25rem;
-}
-
-@media screen and (max-width: 76.25em) {
-  .landing-features__grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.feature-card {
-  padding: 1.75rem;
-  border-radius: 12px;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  background: var(--md-default-bg-color);
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
-}
-
-.feature-card:hover {
-  border-color: #ff9100;
-  box-shadow: 0 4px 20px rgba(255, 145, 0, 0.12);
-  transform: translateY(-2px);
-}
-
-.feature-card__icon {
-  font-size: 2rem;
-  margin-bottom: 0.75rem;
-}
-
-.feature-card__title {
-  font-size: 1.05rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: var(--md-default-fg-color);
-}
-
-.feature-card__desc {
-  font-size: 0.88rem;
-  line-height: 1.6;
-  margin: 0;
-  opacity: 0.7;
-  color: var(--md-default-fg-color);
-}
-
-/* =========================================================================
-   Interactive UI CTA card — contained card below features
-   ========================================================================= */
-
-.landing-cta-card {
-  grid-column: 1 / -1;
-  padding: 2rem 2.5rem;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 145, 0, 0.2);
-  border-left: 3px solid #ff9100;
-  background: rgba(255, 145, 0, 0.04);
-  text-align: center;
-}
-
-[data-md-color-scheme="slate"] .landing-cta-card {
-  background: rgba(255, 145, 0, 0.06);
-  border-color: rgba(255, 145, 0, 0.25);
-  border-left-color: #ff9100;
-}
-
-.landing-cta-card__title {
-  font-size: 1.4rem;
+.install .prompt {
+  color: var(--oah-terminal-green);
   font-weight: 700;
-  margin: 0 0 0.5rem;
-  color: var(--md-default-fg-color);
+}
+.install code {
+  background: none;
+  padding: 0;
+  color: var(--hero-fg);
+  font-family: var(--font-mono);
+}
+.copy-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: var(--hero-fg-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.copy-btn:hover {
+  color: var(--oah-orange);
+  background: rgba(255, 145, 0, 0.10);
+}
+.copy-btn.is-copied { color: var(--oah-terminal-green); }
+
+/* ---------- Meta row (stats) -------------------------------- */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hero-border-soft);
+}
+.meta { min-width: 0; }
+.meta-num {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--hero-fg);
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.meta-lbl {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--hero-fg-mute);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.meta-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--hero-border-soft);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--oah-terminal-green);
+  box-shadow: 0 0 0 3px rgba(61, 214, 140, 0.15);
+  animation: oah-pulse 2.4s ease-in-out infinite;
+}
+@keyframes oah-pulse {
+  50% { box-shadow: 0 0 0 7px rgba(61, 214, 140, 0); }
 }
 
-.landing-cta-card__desc {
-  font-size: 0.95rem;
-  line-height: 1.6;
-  margin: 0 0 1.5rem;
-  opacity: 0.7;
-  color: var(--md-default-fg-color);
+/* ---------- Footer ------------------------------------------ */
+.hero-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--hero-fg-mute);
+  padding-top: 12px;
+}
+.footer-meta { color: var(--hero-fg-mute); }
+
+/* ---------- Responsive -------------------------------------- */
+@media (max-width: 880px) {
+  .hero { padding: 20px 24px; }
+  .nav-links a:not(.github-link) { display: none; }
+  .meta-row { flex-wrap: wrap; gap: 16px 20px; }
+  .meta-divider { display: none; }
+  .hero-footer .footer-meta { display: none; }
+}
+
+@media (min-width: 1600px) {
+  body:has(.landing-hero) {
+    --hero-bg-gradient: radial-gradient(ellipse 65% 75% at 50% 30%, #1a1f2e 0%, var(--oah-slate-900) 75%);
+    --constellation-label-opacity: 0.78;
+  }
+}
+
+/* ---------- Reduced motion ---------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .constellation-spin,
+  .status-dot { animation: none; }
+  .btn, .nav-links a, .copy-btn { transition: none; }
 }

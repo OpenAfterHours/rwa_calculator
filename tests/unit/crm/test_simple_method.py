@@ -294,6 +294,7 @@ class TestComputeFCSMColumns:
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
         assert result["fcsm_collateral_value"][0] == pytest.approx(500_000.0)
+        # Same-currency cash carve-out: 0% RW passes through (Art. 222(4) / (6)).
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.0)
 
     def test_no_collateral_returns_zeros(self, crr_simple_config):
@@ -326,6 +327,7 @@ class TestComputeFCSMColumns:
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
         assert result["fcsm_collateral_value"][0] == pytest.approx(600_000.0)
+        # Sovereign CQS 2 = 20% (at the 20% floor — the floor binds exactly).
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.20)
 
     def test_default_fcsm_columns_utility(self):
@@ -356,8 +358,10 @@ class TestZeroRWExceptions:
         # Cash always has 0% RW, and same-currency means 0% exception applies
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.0)
 
-    def test_cross_currency_cash_still_zero_item_rw(self, crr_simple_config):
-        """Cash has 0% intrinsic RW regardless of currency — but 20% floor applies."""
+    def test_cross_currency_cash_floored_to_20pct(self, crr_simple_config):
+        """Cash has 0% intrinsic RW, but cross-currency fails the Art. 222(4) /
+        PRA Art. 222(6) carve-out, so the per-item 20% floor applies.
+        """
         exposures = _make_exposures(currency="GBP")
         collateral = _make_collateral(
             collateral_type="cash",
@@ -365,9 +369,8 @@ class TestZeroRWExceptions:
             market_value=500_000.0,
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
-        # Cash RW is 0%, but Art. 222(4) 0% exception only applies in same currency
-        # The 20% floor at SA calculator level will catch this
-        assert result["fcsm_collateral_rw"][0] == pytest.approx(0.0)
+        # Cross-currency cash: no same-currency carve-out → 20% floor applied per item.
+        assert result["fcsm_collateral_rw"][0] == pytest.approx(0.20)
 
     def test_zero_rw_sovereign_bond_same_currency(self, crr_simple_config):
         """Art. 222(4)(b): 0%-RW sovereign bond in same currency with 20% discount."""
@@ -444,8 +447,12 @@ class TestFCSMRWSubstitution:
     """Test SA calculator _apply_fcsm_rw_substitution."""
 
     def test_cash_50pct_secured_blended_rw(self, crr_simple_config):
-        """50% secured by cash (0% RW → floored to 20%), 50% unsecured (100% RW).
-        Blended = 0.5 * 20% + 0.5 * 100% = 60%.
+        """50% secured by same-currency cash (0% RW carve-out, no floor applied),
+        50% unsecured (100% RW). Blended = 0.5 * 0% + 0.5 * 100% = 50%.
+
+        The per-item 0% carve-out (CRR Art. 222(4) / PRA Art. 222(6)) is
+        encoded upstream in ``fcsm_collateral_rw``; the SA substitution does
+        not re-floor it.
         """
         exposures = pl.LazyFrame(
             {
@@ -453,19 +460,20 @@ class TestFCSMRWSubstitution:
                 "ead_final": [1_000_000.0],
                 "risk_weight": [1.0],  # 100%
                 "fcsm_collateral_value": [500_000.0],
-                "fcsm_collateral_rw": [0.0],  # cash
+                "fcsm_collateral_rw": [0.0],  # same-currency cash → 0% carve-out
                 "approach": ["standardised"],
                 "exposure_class": ["corporate"],
             }
         )
         calc = SACalculator()
         result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.60, rel=0.001)
+        assert result["risk_weight"][0] == pytest.approx(0.50, rel=0.001)
         assert result["pre_fcsm_risk_weight"][0] == pytest.approx(1.0)
 
-    def test_fully_secured_by_cash_20pct_floor(self, crr_simple_config):
-        """Fully secured by cash → secured RW = max(20%, 0%) = 20%.
-        Blended = 1.0 * 20% + 0.0 * RW = 20%.
+    def test_fully_secured_by_same_currency_cash_zero_rw(self, crr_simple_config):
+        """Fully secured by same-currency cash → 0% carve-out passes through.
+        Blended = 1.0 * 0% + 0.0 * RW = 0%. Previously this incorrectly floored
+        the aggregate to 20% (P1.92).
         """
         exposures = pl.LazyFrame(
             {
@@ -474,6 +482,27 @@ class TestFCSMRWSubstitution:
                 "risk_weight": [1.0],
                 "fcsm_collateral_value": [1_000_000.0],
                 "fcsm_collateral_rw": [0.0],
+                "approach": ["standardised"],
+                "exposure_class": ["corporate"],
+            }
+        )
+        calc = SACalculator()
+        result = calc._apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-10)
+
+    def test_fully_secured_by_cross_currency_cash_floored_20pct(self, crr_simple_config):
+        """Cross-currency cash: no carve-out, per-item 20% floor applies upstream,
+        so ``fcsm_collateral_rw`` arrives as 20% and the SA substitution reproduces
+        the floored result.
+        """
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_001"],
+                "ead_final": [1_000_000.0],
+                "risk_weight": [1.0],
+                "fcsm_collateral_value": [1_000_000.0],
+                # Floored upstream per item — see TestZeroRWExceptions.
+                "fcsm_collateral_rw": [0.20],
                 "approach": ["standardised"],
                 "exposure_class": ["corporate"],
             }
@@ -554,7 +583,9 @@ class TestFCSMRWSubstitution:
         assert result["risk_weight"][0] == pytest.approx(1.0)
 
     def test_rwa_correctness(self, crr_simple_config):
-        """RWA = EAD × blended_rw. 50% secured by cash: RWA = 1m × 60% = 600k."""
+        """RWA = EAD × blended_rw. 50% secured by same-currency cash (0%
+        carve-out): RWA = 1m × (0.5×0% + 0.5×100%) = 500k.
+        """
         exposures = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP_001"],
@@ -571,7 +602,7 @@ class TestFCSMRWSubstitution:
         result = result.with_columns(
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa")
         ).collect()
-        assert result["rwa"][0] == pytest.approx(600_000.0, rel=0.001)
+        assert result["rwa"][0] == pytest.approx(500_000.0, rel=0.001)
 
     def test_ead_calculation_method_set(self, crr_simple_config):
         """When FCSM applies, ead_calculation_method should be 'simple'."""
@@ -599,24 +630,23 @@ class TestFCSMRWSubstitution:
 class TestFCSMCapitalComparison:
     """Compare Simple Method vs Comprehensive Method capital impact."""
 
-    def test_simple_method_higher_capital_than_comprehensive_for_cash(self):
-        """Simple Method: 20% floor means cash-secured still has 20% RW on secured.
-        Comprehensive Method: cash reduces EAD to zero (H_c = 0%).
-        Simple Method produces higher capital (more conservative for cash).
+    def test_simple_and_comprehensive_converge_for_same_currency_cash(self):
+        """Both methods produce zero RWA when the exposure is fully secured by
+        same-currency cash: the Simple Method Art. 222(4)/(6) carve-out bypasses
+        the 20% floor and the Comprehensive Method reduces EAD to zero (H_c=0%).
         """
         ead = 1_000_000.0
         cash_value = 1_000_000.0  # fully secured by cash
 
-        # Simple Method: RWA = 1m × 20% = 200k
-        simple_rwa = ead * 0.20  # 20% floor on secured, 100% secured
-        assert simple_rwa == pytest.approx(200_000.0)
+        # Simple Method: same-currency cash carve-out → 0% on secured portion.
+        simple_rwa = ead * 0.0
+        assert simple_rwa == pytest.approx(0.0)
 
         # Comprehensive Method: EAD* = max(0, 1m - 1m×(1-0%)) = 0 → RWA = 0
         comprehensive_rwa = max(0, ead - cash_value) * 1.0
         assert comprehensive_rwa == pytest.approx(0.0)
 
-        # Simple Method produces higher capital (more conservative)
-        assert simple_rwa > comprehensive_rwa
+        assert simple_rwa == comprehensive_rwa
 
     def test_simple_method_lower_capital_than_comprehensive_for_volatile_equity(self):
         """Simple Method: equity RW = max(20%, 100%) = 100%.
@@ -649,7 +679,12 @@ class TestFCSMMixedBatch:
     """Test multi-exposure scenarios."""
 
     def test_multi_collateral_weighted_average_rw(self, crr_simple_config):
-        """Two collateral items → weighted-average RW."""
+        """Two collateral items → weighted-average RW after per-item floor.
+
+        Same-currency cash qualifies for the 0% carve-out, sovereign CQS 2
+        (intrinsic 20%) equals the floor, so weighted avg = (200k*0% +
+        300k*20%) / 500k = 12%.
+        """
         exposures = _make_exposures(ead=1_000_000.0)
         collateral = pl.LazyFrame(
             {
@@ -665,7 +700,48 @@ class TestFCSMMixedBatch:
             }
         )
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
-        # Cash: 200k at 0%, Sovereign CQS 2: 300k at 20%
-        # Weighted avg = (200k×0% + 300k×20%) / 500k = 60k/500k = 12%
         assert result["fcsm_collateral_value"][0] == pytest.approx(500_000.0)
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.12, rel=0.01)
+
+    def test_mixed_carve_out_and_low_rw_bond(self, crr_simple_config):
+        """Regression for P1.92: same-currency cash carve-out + CQS 1 sovereign
+        bond (intrinsic 0% but ineligible as an item because the item-level
+        Art. 222(4)/(6)(b) discount path requires same-currency — it does here).
+        Weighted avg must remain 0% and must NOT be floored to 20%.
+        """
+        exposures = _make_exposures(ead=1_000_000.0, currency="GBP")
+        collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["C1", "C2"],
+                "collateral_type": ["cash", "government_bond"],
+                "market_value": [400_000.0, 500_000.0],
+                "currency": ["GBP", "GBP"],
+                "beneficiary_reference": ["EXP_001", "EXP_001"],
+                "beneficiary_type": ["loan", "loan"],
+                "issuer_cqs": [None, 1],
+                "issuer_type": [None, "sovereign"],
+                "is_eligible_financial_collateral": [True, True],
+            }
+        )
+        result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
+        # Cash (400k) qualifies for carve-out (0%); CQS-1 same-currency sovereign
+        # gets 20% haircut (500k → 400k) and 0% carve-out. Total 800k at 0%.
+        assert result["fcsm_collateral_value"][0] == pytest.approx(800_000.0, rel=0.001)
+        assert result["fcsm_collateral_rw"][0] == pytest.approx(0.0, abs=1e-10)
+
+    def test_fully_secured_same_currency_cash_floor_bypassed_end_to_end(
+        self, crr_simple_config
+    ):
+        """End-to-end regression: fully secured by same-currency cash produces
+        0% blended RW after SA substitution (Art. 222(4)/(6) carve-out).
+        """
+        exposures = _make_exposures(ead=1_000_000.0, currency="GBP")
+        collateral = _make_collateral(
+            collateral_type="cash",
+            market_value=1_000_000.0,
+            currency="GBP",
+        )
+        with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
+        calc = SACalculator()
+        result = calc._apply_fcsm_rw_substitution(with_fcsm, crr_simple_config).collect()
+        assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-10)

@@ -1304,10 +1304,16 @@ class SACalculator:
         """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
 
         When the Simple Method is elected, the secured portion of each SA exposure
-        gets the collateral's SA risk weight (with a 20% floor) instead of the
-        exposure's own risk weight. The unsecured portion retains the original RW.
+        gets the collateral's SA risk weight instead of the exposure's own risk
+        weight. The unsecured portion retains the original RW.
 
-        Blended RW = secured_pct × max(20%, collateral_rw) + unsecured_pct × exposure_rw
+        Blended RW = secured_pct × collateral_rw + unsecured_pct × exposure_rw
+
+        The 20% floor (Art. 222(1)/(3)) and same-currency 0% carve-outs (CRR
+        Art. 222(4) / PRA PS1/26 Art. 222(6)) are applied per item in
+        ``compute_fcsm_columns``. Applying the floor again on the aggregate would
+        re-impose it on carve-out items — contrary to "except as specified in
+        paragraphs 4 to 6".
 
         This method is a no-op when the Comprehensive Method is elected (default)
         or when fcsm_collateral_value is zero/absent.
@@ -1327,7 +1333,6 @@ class SACalculator:
             return exposures
 
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-        fcsm_rw_floor = 0.20  # Art. 222(1) minimum 20% floor
 
         ead = pl.col(ead_col).fill_null(0.0)
         fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
@@ -1337,15 +1342,8 @@ class SACalculator:
         secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
         unsecured_pct = pl.lit(1.0) - secured_pct
 
-        # Secured RW: apply 20% floor per Art. 222(1)
-        # Art. 222(4) 0% exceptions are already factored into fcsm_collateral_rw
-        # per-item by compute_fcsm_columns, so the weighted avg can be < 20% when
-        # 0%-RW items (same-currency cash) dominate. The floor applies to the
-        # aggregate secured portion RW.
-        secured_rw = pl.max_horizontal(fcsm_rw, pl.lit(fcsm_rw_floor))
-
-        # Blended risk weight
-        blended_rw = secured_pct * secured_rw + unsecured_pct * pl.col("risk_weight")
+        # Blended risk weight; secured RW already reflects per-item floor + carve-outs.
+        blended_rw = secured_pct * fcsm_rw + unsecured_pct * pl.col("risk_weight")
 
         # Only apply when there is actual collateral value
         has_fcsm = fcsm_value > 0

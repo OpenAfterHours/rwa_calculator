@@ -105,6 +105,19 @@ non-UK unrated exposures.
     non-UK PSE/RGLA backed by well-rated (CQS 1–2) sovereigns (e.g., Germany: 20%
     vs incorrectly assigned 100%). See P1.112 in IMPLEMENTATION_PLAN.md.
 
+### Art. 116(4) — Competent-Authority Equivalence Not Retained
+
+PRA PS1/26 Art. 116(4) is marked `[Note: Provision left blank]` (ps126app1.pdf p.38), and the PS1/26 rule is stated to correspond only to CRR Art. 116(1)–(3). The CRR Art. 116(4) route — permitting, in **exceptional circumstances**, a PSE exposure to be treated as an exposure to the central government, regional government or local authority where an **appropriate guarantee** exists and the competent authorities determine there is no difference in risk — has **no Basel 3.1 successor**.
+
+From 1 January 2027, any guarantee-based RGLA/sovereign substitution for a PSE must be routed through the general CRM guarantee substitution regime (PS1/26 Art. 235, Chapter 4) rather than through an Art. 116-specific carve-out. See the [CRR PSE spec — Sub-treatment 3](../crr/sa-risk-weights.md#sub-treatment-3-competent-authority-equivalence-art-1164) for the CRR-side text.
+
+### Art. 116(5) — Third-Country PSE Equivalence Preserved by Cross-Reference
+
+PRA PS1/26 Art. 116(5) itself is marked `[Note: Provision not in PRA Rulebook]`, but PS1/26 Art. 116(3A) explicitly cross-refers to "Article 116(5) of CRR" to redirect the "UK public sector entities" references in paragraphs 1 and 2 to third-country PSEs when CRR Art. 116(5) applies. The Art. 112 class-mapping table (ps126app1.pdf p.34) likewise lists "Article 116 or Article 116(5) of CRR" as the basis for PSE class assignment. The CRR Art. 116(5) third-country equivalence gate (Treasury equivalence determination; otherwise flat 100%) therefore remains operative under Basel 3.1.
+
+!!! warning "Art. 116(4)/(5) Not Implemented"
+    Neither the CRR Art. 116(4) guarantee-backed equivalence nor the CRR Art. 116(5) / PS1/26 Art. 116(3A) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A and the Art. 116(3) short-term preferential. Firms relying on guarantee-backed substitution or third-country equivalence must apply the determination upstream of the engine.
+
 ---
 
 ## MDB Exposures (Art. 117)

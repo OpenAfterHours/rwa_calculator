@@ -142,10 +142,29 @@ UK PSEs with own ECAI rating use Table 2A:
 | 6 | 150% |
 | Unrated | 100% |
 
-!!! note "Art. 116(4) left blank"
-    PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE sub-treatment under the PRA rules. UK PSEs use Tables 2/2A above.
+### Sub-treatment 3 — Competent-Authority Equivalence (Art. 116(4))
+
+In **exceptional circumstances**, UK PSE exposures **may** be treated as exposures to the central government, regional government or local authority of the United Kingdom where all of the following apply (CRR Art. 116(4), crr.pdf p.115):
+
+1. An **appropriate guarantee** exists from that central government, regional government or local authority; and
+2. The competent authorities of the United Kingdom are of the opinion that there is **no difference in risk** between the guaranteed PSE exposure and a direct exposure to the guaranteeing government or authority.
+
+The effect is to substitute the guarantor's sovereign or RGLA risk weight for the Art. 116(1)/(2) PSE treatment. This is a competent-authority discretion — not a routine election — and the substitute tier (central / regional / local) must match the tier providing the guarantee.
+
+!!! info "Basel 3.1 — Art. 116(4) Not Retained"
+    PRA PS1/26 Art. 116(4) is marked `[Note: Provision left blank]` (ps126app1.pdf p.38); the accompanying note states the PS1/26 rule corresponds to CRR Art. 116(1)–(3) only. The competent-authority equivalence route has **no PS1/26 successor** — from 1 January 2027, any guarantee-based RGLA/sovereign override for a PSE must be routed through the general CRM guarantee substitution regime (Art. 235, Chapter 4), not an Art. 116-specific carve-out.
+
+### Sub-treatment 4 — Third-Country PSE Equivalence (Art. 116(5))
+
+Where a third-country competent authority applies supervisory and regulatory arrangements at least equivalent to those applied in the UK and treats exposures to its own PSEs under paragraph 1 or 2, UK institutions **may** risk weight exposures to those third-country PSEs in the same manner. Otherwise, a risk weight of **100%** applies (CRR Art. 116(5), crr.pdf p.115). Equivalence is determined by the Treasury by regulations.
+
+!!! info "Basel 3.1 — Art. 116(5) Retained by Cross-Reference"
+    PRA PS1/26 Art. 116(5) itself is marked `[Note: Provision not in PRA Rulebook]`, but Art. 116(3A) explicitly cross-refers to "Article 116(5) of CRR" — redirecting "UK PSEs" in paragraphs 1 and 2 to mean third-country PSEs when Art. 116(5) of CRR applies (ps126app1.pdf p.38). CRR Art. 116(5) therefore remains operative as the third-country equivalence gate under Basel 3.1.
 
 **Short-term exposures (≤ 3 months)**: UK PSE exposures with original effective maturity ≤ 3 months receive **20%** risk weight (Art. 116(3)). No domestic currency condition required for PSEs.
+
+!!! warning "Art. 116(4)/(5) Not Implemented"
+    Neither Art. 116(4) competent-authority equivalence nor Art. 116(5) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A plus the Art. 116(3) short-term preferential. Firms relying on Art. 116(4) guarantee-backed equivalence must apply the substitution outside the engine.
 
 ## MDB Exposures (CRR Art. 117)
 

@@ -25,7 +25,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_risk_weights import QCCP_CLIENT_CLEARED_RW, QCCP_PROPRIETARY_RW
+from rwa_calc.data.tables.crr_risk_weights import (
+    QCCP_CLIENT_CLEARED_RW,
+    QCCP_PROPRIETARY_RW,
+    build_institution_guarantor_rw_expr,
+)
 from rwa_calc.data.tables.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
@@ -175,7 +179,6 @@ def _compute_guarantor_rw_sa(
     config: CalculationConfig,
 ) -> pl.LazyFrame:
     """Compute SA risk weight for guarantor based on entity type and CQS."""
-    use_uk_deviation = config.base_currency == "GBP"
 
     # Ensure guarantor_exposure_class is available (set by CRM processor;
     # fallback for unit tests that construct LazyFrames directly)
@@ -255,19 +258,10 @@ def _compute_guarantor_rw_sa(
                 .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
             )
             # Institution/MDB guarantors (institution, bank, mdb, etc.)
+            # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA.
             .when(_gec.is_in(["institution", "mdb"]))
             .then(
-                pl.when(pl.col("guarantor_cqs") == 1)
-                .then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 2)
-                .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                .when(pl.col("guarantor_cqs") == 3)
-                .then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                .then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6)
-                .then(pl.lit(1.50))
-                .otherwise(pl.lit(0.40))
+                build_institution_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1)
             )
             # Corporate guarantors (corporate, company)
             .when(_gec.is_in(["corporate", "corporate_sme"]))

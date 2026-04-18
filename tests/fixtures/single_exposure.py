@@ -54,6 +54,7 @@ def calculate_single_sa_exposure(
     country_code: str | None = None,
     borrower_income_currency: str | None = None,
     residual_maturity_years: float | None = None,
+    original_maturity_years: float | None = None,
     entity_type: str | None = None,
     is_short_term_trade_lc: bool = False,
     collateral_re_value: Decimal | None = None,
@@ -92,6 +93,11 @@ def calculate_single_sa_exposure(
         "cp_country_code": [country_code],
         "borrower_income_currency": [borrower_income_currency],
         "residual_maturity_years": [residual_maturity_years],
+        "original_maturity_years": [
+            original_maturity_years
+            if original_maturity_years is not None
+            else residual_maturity_years
+        ],
         "cp_entity_type": [entity_type],
         "is_short_term_trade_lc": [is_short_term_trade_lc],
         "cp_is_natural_person": [cp_is_natural_person],

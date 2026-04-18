@@ -12,12 +12,14 @@ For other liquidation periods, use ``scale_haircut_for_liquidation_period()``:
 - 10 days: other capital market transactions (Art. 224(2)(b))  [default]
 - 20 days: secured lending (Art. 224(2)(c))
 
-Key differences under Basel 3.1 (PRA PS1/26 Art. 224):
+Key differences under Basel 3.1 (PRA PS1/26 Art. 224 Table 1):
 - 5 maturity bands (0-1y, 1-3y, 3-5y, 5-10y, 10y+) instead of CRR's 3 (0-1y, 1-5y, 5y+)
-- Higher haircuts for long-dated corporate bonds (CQS 1-2: 10%/12%, CQS 3: 15%)
+- Corporate/institution CQS 1 10y+ steps up to 12% (CRR 5y+: 8%)
+- Corporate/institution CQS 2-3 10y+ steps up to 20% (CRR 5y+: 12%)
 - Higher equity haircuts (main index: 20%, other: 30%)  — CRR: 15%/25%
 - Gold haircut increased to 20% (CRR: 15%)
-- Sovereign CQS 2-3 10y+ increased to 12%
+- Sovereign CQS 2-3 caps at 6% even at 10y+ (same as CRR 5y+) — 5-band split
+  is not a penal re-scale for well-rated sovereigns.
 
 Reference:
     CRR Art. 224: Supervisory haircuts under the FCCM
@@ -90,30 +92,35 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
     "govt_bond_cqs1_3_5y": Decimal("0.02"),
     "govt_bond_cqs1_5_10y": Decimal("0.04"),
     "govt_bond_cqs1_10y_plus": Decimal("0.04"),
-    # Government bonds CQS 2-3 — 10y+ increases from 6% to 12%
+    # Government bonds CQS 2-3 — PRA PS1/26 Art. 224 Table 1 (entity type (b))
+    # CQS 2-3 sovereigns cap at 6% even at 10y+; the 5-band split is not a
+    # penal re-scale for well-rated sovereigns. Verified against ps126app1.pdf p.203.
     "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
     "govt_bond_cqs2_3_1_3y": Decimal("0.03"),
-    "govt_bond_cqs2_3_3_5y": Decimal("0.04"),
+    "govt_bond_cqs2_3_3_5y": Decimal("0.03"),
     "govt_bond_cqs2_3_5_10y": Decimal("0.06"),
-    "govt_bond_cqs2_3_10y_plus": Decimal("0.12"),
+    "govt_bond_cqs2_3_10y_plus": Decimal("0.06"),
     # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, 15% flat
     "govt_bond_cqs4_0_1y": Decimal("0.15"),
     "govt_bond_cqs4_1_3y": Decimal("0.15"),
     "govt_bond_cqs4_3_5y": Decimal("0.15"),
     "govt_bond_cqs4_5_10y": Decimal("0.15"),
     "govt_bond_cqs4_10y_plus": Decimal("0.15"),
-    # Corporate bonds CQS 1 (AAA to AA-) — significant increases for long-dated
+    # Corporate bonds CQS 1 (AAA to AA-) — PRA PS1/26 Art. 224 Table 1 (entity types (c)/(d))
+    # Verified against ps126app1.pdf p.203.
     "corp_bond_cqs1_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_1_3y": Decimal("0.04"),
-    "corp_bond_cqs1_3_5y": Decimal("0.06"),
-    "corp_bond_cqs1_5_10y": Decimal("0.10"),
+    "corp_bond_cqs1_1_3y": Decimal("0.03"),
+    "corp_bond_cqs1_3_5y": Decimal("0.04"),
+    "corp_bond_cqs1_5_10y": Decimal("0.06"),
     "corp_bond_cqs1_10y_plus": Decimal("0.12"),
-    # Corporate bonds CQS 2-3 (A+ to BBB-) — significant increases for long-dated
+    # Corporate bonds CQS 2-3 (A+ to BBB-) — PRA PS1/26 Art. 224 Table 1 (entity types (c)/(d))
+    # 10y+ is 20% (not 15%, the prior flat value); intermediate bands step up
+    # 4% / 6% / 12% / 20% per Table 1.
     "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs2_3_1_3y": Decimal("0.06"),
-    "corp_bond_cqs2_3_3_5y": Decimal("0.08"),
-    "corp_bond_cqs2_3_5_10y": Decimal("0.15"),
-    "corp_bond_cqs2_3_10y_plus": Decimal("0.15"),
+    "corp_bond_cqs2_3_1_3y": Decimal("0.04"),
+    "corp_bond_cqs2_3_3_5y": Decimal("0.06"),
+    "corp_bond_cqs2_3_5_10y": Decimal("0.12"),
+    "corp_bond_cqs2_3_10y_plus": Decimal("0.20"),
     # Equity — PRA PS1/26 Art. 224 Table 3: 20%/30% at 10-day (CRR: 15%/25%)
     "equity_main_index": Decimal("0.20"),  # CRR: 15%
     "equity_other": Decimal("0.30"),  # CRR: 25%

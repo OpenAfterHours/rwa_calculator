@@ -97,13 +97,19 @@ class TestCRRSlottingELRatesShort:
 
 
 class TestCRRSlottingELRatesHVCRE:
-    """CRR Art. 158(6) Table B EL rates — HVCRE (flat, no maturity split)."""
+    """CRR Art. 158(6) Table B EL rates — HVCRE (flat, no maturity split).
+
+    Per PRA PS1/26 Art. 158(6) Table B (the only extant UK source — UK CRR
+    Art. 158 was omitted by SI 2021/1078), HVCRE collapses the subgrade
+    differentiation: Strong AND Good both flat at 0.4% across A/B/C/D columns.
+    """
 
     def test_hvcre_strong_zero_point_four(self) -> None:
         assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.STRONG] == Decimal("0.004")
 
-    def test_hvcre_good_zero_point_eight(self) -> None:
-        assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.008")
+    def test_hvcre_good_zero_point_four(self) -> None:
+        """HVCRE Good = 0.4% (not 0.8% like non-HVCRE long-maturity Good)."""
+        assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.004")
 
     def test_hvcre_satisfactory_two_point_eight(self) -> None:
         assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.SATISFACTORY] == Decimal("0.028")
@@ -114,9 +120,15 @@ class TestCRRSlottingELRatesHVCRE:
     def test_hvcre_default_fifty_percent(self) -> None:
         assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.DEFAULT] == Decimal("0.50")
 
-    def test_hvcre_matches_long_maturity_non_hvcre(self) -> None:
-        """HVCRE EL rates are same values as non-HVCRE long-maturity."""
-        assert SLOTTING_EL_RATES_HVCRE == SLOTTING_EL_RATES
+    def test_hvcre_good_diverges_from_non_hvcre_long_maturity(self) -> None:
+        """HVCRE Good (0.4%) is lower than non-HVCRE long-maturity Good (0.8%).
+
+        Regression guard for P1.150: previously HVCRE EL was assumed to mirror
+        non-HVCRE long-maturity values. PRA PS1/26 Table B treats HVCRE Good
+        the same as HVCRE Strong (0.4%), which is the lower of the two columns.
+        """
+        assert SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.004")
+        assert SLOTTING_EL_RATES[SlottingCategory.GOOD] == Decimal("0.008")
 
 
 class TestCRRSlottingELRateLookup:
@@ -187,13 +199,19 @@ class TestB31SlottingELRatesShort:
 
 
 class TestB31SlottingELRatesHVCRE:
-    """PRA PS1/26 Art. 158(6) Table B EL rates — HVCRE."""
+    """PRA PS1/26 Art. 158(6) Table B EL rates — HVCRE.
+
+    HVCRE row is flat 0.4% across both Strong (cols A/B) and Good (cols C/D)
+    per Table B in Appendix 1 p.108 — HVCRE collapses the subgrade
+    differentiation that non-HVCRE retains.
+    """
 
     def test_hvcre_strong_zero_point_four(self) -> None:
         assert B31_SLOTTING_EL_RATES_HVCRE[SlottingCategory.STRONG] == Decimal("0.004")
 
-    def test_hvcre_good_zero_point_eight(self) -> None:
-        assert B31_SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.008")
+    def test_hvcre_good_zero_point_four(self) -> None:
+        """HVCRE Good = 0.4% (not 0.8% like non-HVCRE long-maturity Good)."""
+        assert B31_SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.004")
 
 
 class TestB31SlottingELRateLookup:
@@ -645,7 +663,8 @@ class TestSlottingELAggregatorIntegration:
         ("strong", True, True, 0.004),  # HVCRE flat
         ("good", False, False, 0.008),
         ("good", False, True, 0.004),
-        ("good", True, False, 0.008),
+        ("good", True, False, 0.004),  # HVCRE Good flat 0.4% (not 0.8% non-HVCRE long)
+        ("good", True, True, 0.004),  # HVCRE Good flat — short-maturity no-op
         ("satisfactory", False, False, 0.028),
         ("satisfactory", False, True, 0.028),
         ("weak", False, False, 0.08),

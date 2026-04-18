@@ -266,16 +266,30 @@ class IRBLazyFrame:
                         )
                         .otherwise(maturity_from_date)
                     )
-                    exprs.append(
+                    maturity_expr = (
                         pl.when(pl.col("is_revolving").fill_null(False))
                         .then(maturity_from_termination)
                         .otherwise(maturity_from_date)
-                        .alias("maturity"),
                     )
                 else:
-                    exprs.append(maturity_from_date.alias("maturity"))
+                    maturity_expr = maturity_from_date
             else:
-                exprs.append(pl.lit(2.5).alias("maturity"))
+                maturity_expr = pl.lit(2.5)
+
+            # CRR Art. 162(1): F-IRB fixed supervisory maturity for repo-style SFTs.
+            # Repurchase / securities / commodities lending or borrowing → M = 0.5y.
+            # B31 deleted Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A).
+            if config.is_crr and "is_sft" in names:
+                maturity_expr = (
+                    pl.when(
+                        (pl.col("approach") == ApproachType.FIRB.value)
+                        & pl.col("is_sft").fill_null(False)
+                    )
+                    .then(pl.lit(0.5))
+                    .otherwise(maturity_expr)
+                )
+
+            exprs.append(maturity_expr.alias("maturity"))
 
         # Turnover for SME correlation adjustment
         if "turnover_m" not in names:

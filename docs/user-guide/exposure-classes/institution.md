@@ -18,12 +18,27 @@ Institution exposures include:
 
 Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 120 Table 3, CQS 2 receives **50%**. Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3) reduces CQS 2 to **30%**.
 
-Under CRR, unrated institutions receive **40%** via the sovereign-derived approach (Art. 121, Table 5). Under Basel 3.1, this is replaced by the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
+Under CRR, unrated institutions receive **100%** (Art. 120(2)). Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
 
-!!! warning "Code Divergence"
-    The code currently uses 30% for CRR CQS 2 (labelled "UK deviation"). PDF verification of UK
-    onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**. The 30% value is correct for Basel 3.1
-    ECRA only. See D1.30 in the docs implementation plan.
+!!! warning "SCRA Sovereign Floor (Art. 121(6))"
+    Where an unrated institution exposure is denominated in a foreign currency (other
+    than the local currency of the institution's jurisdiction of incorporation), its
+    risk weight cannot fall below the home sovereign's RW: `RW = max(SCRA_grade_RW,
+    sovereign_RW)`. Self-liquidating trade-related contingent items arising from the
+    movement of goods with original maturity < 1 year are carved out and retain the
+    underlying SCRA grade weight. See
+    [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216).
+
+!!! info "ECRA Due Diligence CQS Step-Up (Art. 120(4)) — Basel 3.1 only"
+    Where a rated institution exposure is risk-weighted from Table 3 (or Table 4 / Table 4A
+    for short-term exposures), Basel 3.1 Art. 120(4) requires firms to conduct due diligence
+    on the ECAI rating. If DD reveals higher risk than the assigned CQS implies, the firm
+    must assign **at least one CQS step higher**. Currently routed through the Art. 110A
+    `due_diligence_override_rw` input (no dedicated Art. 120(4) branch in the calculator).
+    Parallels Art. 122(4) for rated corporates and Art. 129(4A) for covered bonds; no CRR
+    equivalent. See
+    [B31 SA Risk Weights — Art. 120(4)](../../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
+    for the full trigger/effect table.
 
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 

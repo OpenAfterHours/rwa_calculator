@@ -71,7 +71,7 @@ def _(mo):
     - CRE20.71-73: Residential mortgage risk weights (LTV-based)
     - CRE20.83-85: Commercial real estate risk weights
     - CRE20.93-98: Credit conversion factors
-    - PRA PS1/26: UK deviation for institution CQS2 (30% instead of 50%)
+    - PRA PS1/26 Art. 120 ECRA Table 3: institution CQS 2 = 30% (vs CRR 50%)
     """)
     return
 
@@ -286,11 +286,11 @@ def _(mo):
     """Scenario A4 Header."""
     mo.md("""
     ---
-    ## Scenario A4: UK Institution CQS 2 - 30% Risk Weight (UK Deviation)
+    ## Scenario A4: Institution CQS 2 - 30% Risk Weight (PRA PS1/26 ECRA)
 
-    **Input:** £1m loan to UK bank with CQS 2 rating
-    **Expected:** 30% RW, £300k RWA (UK deviation from Basel 50%)
-    **Reference:** CRE20.16, PRA PS1/26 Ch.3
+    **Input:** £1m loan to bank with CQS 2 rating
+    **Expected:** 30% RW, £300k RWA (PRA PS1/26 Art. 120 ECRA Table 3; CRR Art. 120 would be 50%)
+    **Reference:** PRA PS1/26 Art. 120
     """)
     return
 
@@ -305,14 +305,13 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_institution_risk_weight):
     cqs_a4 = rating_a4["cqs"] if rating_a4 else 2
 
     ead_a4 = loan_a4["drawn_amount"]
-    # Use UK deviation for CQS 2 institutions
-    rw_a4 = get_institution_risk_weight(cqs_a4, use_uk_deviation=True)
+    rw_a4 = get_institution_risk_weight(cqs_a4)
     rwa_a4 = calculate_sa_rwa(ead_a4, rw_a4)
 
     result_a4 = ScenarioResult(
         scenario_id="A4",
         scenario_group="A",
-        description="UK Institution CQS 2 - 30% RW (UK deviation)",
+        description="Institution CQS 2 - 30% RW (PRA PS1/26 ECRA)",
         exposure_reference="LOAN_INST_UK_003",
         counterparty_reference="INST_UK_003",
         approach="SA",
@@ -323,9 +322,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_institution_risk_weight):
         calculation_details={
             "counterparty_name": cpty_a4["counterparty_name"],
             "cqs": cqs_a4,
-            "uk_deviation": True,
-            "basel_standard_rw": 0.50,
-            "uk_rw": 0.30,
+            "b31_ecra_rw": 0.30,
             "formula": "RWA = EAD × RW",
             "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },

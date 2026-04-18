@@ -369,15 +369,14 @@ class EquityCalculator:
         # Get CQS-based risk weight table for holding-level RW lookup
         from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
 
-        use_uk_deviation = config.base_currency == "GBP"
         if config.is_basel_3_1:
             from rwa_calc.data.tables.b31_risk_weights import (
                 get_b31_combined_cqs_risk_weights,
             )
 
-            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_b31_combined_cqs_risk_weights().lazy()
         else:
-            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_combined_cqs_risk_weights().lazy()
 
         # Join holdings to RW table by (exposure_class, cqs)
         # Use sentinel for null CQS to allow join

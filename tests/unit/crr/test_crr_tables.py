@@ -15,8 +15,8 @@ import polars as pl
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    INSTITUTION_RISK_WEIGHTS_UK,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     calculate_commercial_re_rw,
@@ -94,29 +94,30 @@ class TestSovereignRiskWeights:
 
 
 class TestInstitutionRiskWeights:
-    """Tests for institution risk weights (CRR Art. 120-121)."""
+    """Tests for institution risk weights (CRR Art. 120 vs PRA PS1/26 Art. 120 ECRA)."""
 
-    def test_uk_deviation_cqs2(self) -> None:
-        """UK deviation: CQS 2 institutions get 30% (not Basel 50%)."""
-        assert INSTITUTION_RISK_WEIGHTS_UK[CQS.CQS2] == Decimal("0.30")
-        assert INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.CQS2] == Decimal("0.50")
+    def test_cqs2_framework_split(self) -> None:
+        """CRR Art. 120 Table 3: CQS 2 = 50%. PRA PS1/26 ECRA Table 3: CQS 2 = 30%."""
+        assert INSTITUTION_RISK_WEIGHTS_CRR[CQS.CQS2] == Decimal("0.50")
+        assert INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.CQS2] == Decimal("0.30")
 
-    def test_uk_cqs1_twenty_percent(self) -> None:
-        """CQS 1 institutions get 20% RW."""
-        assert INSTITUTION_RISK_WEIGHTS_UK[CQS.CQS1] == Decimal("0.20")
+    def test_cqs1_twenty_percent(self) -> None:
+        """CQS 1 institutions get 20% RW (both frameworks)."""
+        assert INSTITUTION_RISK_WEIGHTS_CRR[CQS.CQS1] == Decimal("0.20")
+        assert INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.CQS1] == Decimal("0.20")
 
-    def test_unrated_uk_forty_percent(self) -> None:
-        """UK: Unrated institutions get 40% RW (sovereign-derived)."""
-        assert INSTITUTION_RISK_WEIGHTS_UK[CQS.UNRATED] == Decimal("0.40")
+    def test_unrated_b31_ecra_forty_percent(self) -> None:
+        """PRA PS1/26 ECRA: unrated institutions get 40% RW (sovereign-derived)."""
+        assert INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.UNRATED] == Decimal("0.40")
 
-    def test_unrated_standard_hundred_percent(self) -> None:
-        """Standard: Unrated institutions get 100% RW (Art. 120(2) Table 3)."""
-        assert INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.UNRATED] == Decimal("1.00")
+    def test_unrated_crr_hundred_percent(self) -> None:
+        """CRR Art. 120(2) Table 3: unrated institutions get 100% RW."""
+        assert INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED] == Decimal("1.00")
 
-    def test_lookup_with_uk_deviation(self) -> None:
-        """Test lookup function respects UK deviation."""
-        assert lookup_risk_weight("INSTITUTION", 2, use_uk_deviation=True) == Decimal("0.30")
-        assert lookup_risk_weight("INSTITUTION", 2, use_uk_deviation=False) == Decimal("0.50")
+    def test_lookup_framework_switch(self) -> None:
+        """Test lookup function selects framework via is_basel_3_1 flag."""
+        assert lookup_risk_weight("INSTITUTION", 2, is_basel_3_1=True) == Decimal("0.30")
+        assert lookup_risk_weight("INSTITUTION", 2, is_basel_3_1=False) == Decimal("0.50")
 
 
 class TestCorporateRiskWeights:

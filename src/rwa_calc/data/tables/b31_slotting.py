@@ -87,10 +87,12 @@ B31_SLOTTING_EL_RATES_SHORT: dict[SlottingCategory, Decimal] = {
     SlottingCategory.DEFAULT: Decimal("0.50"),  # 50%
 }
 
-# HVCRE EL rates — Table B (flat, no maturity split)
+# HVCRE EL rates — PRA PS1/26 Art. 158(6) Table B (Appendix 1 p.108).
+# HVCRE row collapses the subgrade split non-HVCRE retains: Strong AND Good
+# both flat 0.4% across cols A/B/C/D, no maturity split.
 B31_SLOTTING_EL_RATES_HVCRE: dict[SlottingCategory, Decimal] = {
     SlottingCategory.STRONG: Decimal("0.004"),  # 0.4%
-    SlottingCategory.GOOD: Decimal("0.008"),  # 0.8%
+    SlottingCategory.GOOD: Decimal("0.004"),  # 0.4%
     SlottingCategory.SATISFACTORY: Decimal("0.028"),  # 2.8%
     SlottingCategory.WEAK: Decimal("0.08"),  # 8%
     SlottingCategory.DEFAULT: Decimal("0.50"),  # 50%

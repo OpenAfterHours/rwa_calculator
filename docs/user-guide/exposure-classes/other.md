@@ -115,14 +115,34 @@ governments, regional governments, or local authorities (CRR Art. 4(1)(8)):
 
 ### Treatment Methods (CRR Art. 116)
 
-| Method | Condition | Table | Basis |
-|--------|-----------|-------|-------|
-| Sovereign-derived | No own ECAI rating | Table 2 (Art. 116(1)) | Sovereign CQS |
-| Own-rating | Has own ECAI rating | Table 2A (Art. 116(2)) | PSE's own CQS |
+| Method | Condition | Paragraph | Basis |
+|--------|-----------|-----------|-------|
+| Sovereign-derived | No own ECAI rating | Art. 116(1), Table 2 | Sovereign CQS |
+| Own-rating | Has own ECAI rating | Art. 116(2), Table 2A | PSE's own CQS |
+| Competent-authority equivalence | Exceptional circumstances + appropriate government guarantee | Art. 116(4) | Guarantor's sovereign/RGLA RW |
+| Third-country equivalence | Third-country supervisor uses para 1 or 2, and UK Treasury has determined equivalence | Art. 116(5) | Art. 116(1)/(2) applied to home-country sovereign (else 100%) |
 
-!!! note "Art. 116(4) left blank"
-    PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE
-    sub-treatment under UK rules. All UK PSEs use Tables 2/2A.
+!!! warning "CRR Art. 116(4) — Blanked under Basel 3.1"
+    The Art. 116(4) competent-authority equivalence route — allowing, in exceptional
+    circumstances, a PSE to be treated as its central government / regional government /
+    local authority where an appropriate guarantee exists — is **live under CRR** but
+    **omitted from PRA PS1/26** (ps126app1.pdf p.38: "Provision left blank"). From
+    1 January 2027, any guarantee-based RGLA/sovereign override must be routed through
+    the general CRM guarantee substitution regime (CRR/PS1/26 Art. 235), not the
+    Art. 116(4) carve-out.
+
+!!! info "CRR Art. 116(5) — Third-Country PSEs"
+    Where a third country applies supervisory and regulatory arrangements at least
+    equivalent to the UK's and treats its own PSEs under para 1 or 2, UK institutions may
+    risk weight third-country PSEs the same way; otherwise a flat **100%** applies.
+    PRA PS1/26 retains this gate by explicit cross-reference in Art. 116(3A), so the
+    Art. 116(5) equivalence test continues to apply under Basel 3.1.
+
+!!! warning "Art. 116(4)/(5) Not Implemented"
+    The SA calculator routes PSE exposures only through Art. 116(1)/(2) (Tables 2/2A)
+    plus the Art. 116(3) short-term preferential. Firms relying on Art. 116(4) guarantee-
+    backed equivalence or Art. 116(5) third-country equivalence must apply the substitution
+    upstream of the engine.
 
 ### Risk Weight Tables
 

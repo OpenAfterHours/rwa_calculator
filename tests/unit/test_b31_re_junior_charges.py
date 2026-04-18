@@ -32,9 +32,9 @@ from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
-    B31_CRE_INCOME_JUNIOR_MULTIPLIER_HIGH,
-    B31_CRE_INCOME_JUNIOR_MULTIPLIER_LOW,
-    B31_CRE_INCOME_JUNIOR_MULTIPLIER_MID,
+    B31_CRE_INCOME_JUNIOR_RW_HIGH,
+    B31_CRE_INCOME_JUNIOR_RW_LOW,
+    B31_CRE_INCOME_JUNIOR_RW_MID,
     B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD,
     B31_RESI_INCOME_JUNIOR_MULTIPLIER,
     B31_RRE_RESIDUAL_RW_NATURAL_PERSON,
@@ -92,7 +92,7 @@ class TestArt124LConstants:
 
 
 class TestJuniorChargeConstants:
-    """Verify junior charge multiplier constants."""
+    """Verify junior charge constants — RRE uses multiplier, CRE uses absolute RW."""
 
     def test_resi_income_multiplier(self) -> None:
         assert Decimal("1.25") == B31_RESI_INCOME_JUNIOR_MULTIPLIER
@@ -100,14 +100,17 @@ class TestJuniorChargeConstants:
     def test_resi_income_ltv_threshold(self) -> None:
         assert Decimal("0.50") == B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD
 
-    def test_cre_income_multiplier_low(self) -> None:
-        assert Decimal("1.0") == B31_CRE_INCOME_JUNIOR_MULTIPLIER_LOW
+    def test_cre_income_junior_rw_low(self) -> None:
+        """Art. 124I(3)(a): LTV ≤ 60% → absolute 100%."""
+        assert Decimal("1.00") == B31_CRE_INCOME_JUNIOR_RW_LOW
 
-    def test_cre_income_multiplier_mid(self) -> None:
-        assert Decimal("1.25") == B31_CRE_INCOME_JUNIOR_MULTIPLIER_MID
+    def test_cre_income_junior_rw_mid(self) -> None:
+        """Art. 124I(3)(b): 60% < LTV ≤ 80% → absolute 125%."""
+        assert Decimal("1.25") == B31_CRE_INCOME_JUNIOR_RW_MID
 
-    def test_cre_income_multiplier_high(self) -> None:
-        assert Decimal("1.375") == B31_CRE_INCOME_JUNIOR_MULTIPLIER_HIGH
+    def test_cre_income_junior_rw_high(self) -> None:
+        """Art. 124I(3)(c): LTV > 80% → absolute 137.5% (NOT 110% × 1.375 = 151.25%)."""
+        assert Decimal("1.375") == B31_CRE_INCOME_JUNIOR_RW_HIGH
 
 
 # =============================================================================
@@ -491,8 +494,9 @@ class TestArt124F2JuniorChargeCRE:
 class TestArt124G2ResiIncomeJunior:
     """Art. 124G(2): 1.25x multiplier for income-producing RESI with junior lien.
 
-    The multiplier applies when LTV > 50% and prior charges exist.
-    The resulting RW is capped at 105% (the maximum table value).
+    The multiplier applies when LTV > 50% and prior charges exist. The resulting
+    RW is NOT capped at the 105% table maximum — at LTV > 100% the base 105%
+    band becomes 131.25%. Contrast Art. 124I(3) CRE, which uses absolute RWs.
     """
 
     def test_junior_multiplier_at_ltv_70(
@@ -546,12 +550,12 @@ class TestArt124G2ResiIncomeJunior:
         )
         assert float(result["risk_weight"]) == pytest.approx(0.30, abs=1e-4)
 
-    def test_multiplier_capped_at_105(
+    def test_multiplier_not_capped_at_105(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """LTV > 100% income-producing: base 105% × 1.25 = 131.25% → cap 105%."""
+        """LTV > 100% income-producing: base 105% × 1.25 = 131.25% (uncapped, Art. 124G(2))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
@@ -561,7 +565,7 @@ class TestArt124G2ResiIncomeJunior:
             config=b31_config,
             prior_charge_ltv=Decimal("0.10"),
         )
-        assert float(result["risk_weight"]) == pytest.approx(1.05, abs=1e-4)
+        assert float(result["risk_weight"]) == pytest.approx(1.3125, abs=1e-4)
 
     def test_no_multiplier_without_junior_charge(
         self,
@@ -599,25 +603,29 @@ class TestArt124G2ResiIncomeJunior:
 
 
 # =============================================================================
-# ART. 124I(3) — CRE INCOME-PRODUCING JUNIOR MULTIPLIERS
+# ART. 124I(3) — CRE INCOME-PRODUCING JUNIOR ABSOLUTE RWs
 # =============================================================================
 
 
 class TestArt124I3CREIncomeJunior:
-    """Art. 124I(3): Tiered junior charge multipliers for income-producing CRE.
+    """Art. 124I(3): Absolute RWs (NOT multipliers) for income-producing CRE junior liens.
 
-    Three LTV bands with different multipliers:
-      ≤ 60%:  1.0x  (no change — 100%)
-      60-80%: 1.25x (100% × 1.25 = 125%)
-      > 80%:  1.375x (110% × 1.375 = 151.25%)
+    Three LTV bands with absolute risk weights that replace the Art. 124I(1)/(2) base:
+      ≤ 60%:  100%   (Art. 124I(3)(a))
+      60-80%: 125%   (Art. 124I(3)(b))
+      > 80%:  137.5% (Art. 124I(3)(c))
+
+    Why absolute and not multiplicative: applying 1.375× to the 110% >80% base gives
+    151.25%, a +13.75pp over-capital error. PS1/26 ps126app1.pdf p.57 specifies the
+    RWs as absolute values. The spec tests here guard against the multiplier regression.
     """
 
-    def test_junior_below_60_no_multiplier(
+    def test_junior_below_60(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE income LTV ≤ 60%: 1.0x → 100% (unchanged)."""
+        """CRE income LTV ≤ 60%: Art. 124I(3)(a) absolute 100%."""
         df = pl.DataFrame(
             {
                 "exposure_reference": ["CRE_J1"],
@@ -632,15 +640,14 @@ class TestArt124I3CREIncomeJunior:
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
-        # base 100% × 1.0 = 100%
         assert float(result["risk_weight"]) == pytest.approx(1.00, abs=1e-4)
 
-    def test_junior_60_to_80_125x(
+    def test_junior_60_to_80(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE income 60% < LTV ≤ 80%: 1.25x → 100% × 1.25 = 125%."""
+        """CRE income 60% < LTV ≤ 80%: Art. 124I(3)(b) absolute 125%."""
         df = pl.DataFrame(
             {
                 "exposure_reference": ["CRE_J2"],
@@ -655,15 +662,14 @@ class TestArt124I3CREIncomeJunior:
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
-        # base 100% × 1.25 = 125%
         assert float(result["risk_weight"]) == pytest.approx(1.25, abs=1e-4)
 
-    def test_junior_above_80_1375x(
+    def test_junior_above_80(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE income LTV > 80%: 1.375x → 110% × 1.375 = 151.25%."""
+        """CRE income LTV > 80%: Art. 124I(3)(c) absolute 137.5% (not 110% × 1.375)."""
         df = pl.DataFrame(
             {
                 "exposure_reference": ["CRE_J3"],
@@ -678,8 +684,8 @@ class TestArt124I3CREIncomeJunior:
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
-        # base 110% × 1.375 = 151.25%
-        assert float(result["risk_weight"]) == pytest.approx(1.5125, abs=1e-4)
+        # Art. 124I(3)(c): absolute 137.5% — replaces Art. 124I base, not multiplied
+        assert float(result["risk_weight"]) == pytest.approx(1.375, abs=1e-4)
 
     def test_no_junior_charge_standard_cre_income(
         self,
@@ -708,7 +714,7 @@ class TestArt124I3CREIncomeJunior:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE income at exactly 60%: ≤60% band → 1.0x → 100%."""
+        """CRE income at exactly 60%: ≤60% band → 100%."""
         df = pl.DataFrame(
             {
                 "exposure_reference": ["CRE_B60"],
@@ -730,7 +736,7 @@ class TestArt124I3CREIncomeJunior:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CRE income at exactly 80%: ≤80% band → 1.25x → 125%."""
+        """CRE income at exactly 80%: ≤80% band → 125%."""
         df = pl.DataFrame(
             {
                 "exposure_reference": ["CRE_B80"],
@@ -745,7 +751,6 @@ class TestArt124I3CREIncomeJunior:
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
-        # base 100% × 1.25 = 125%
         assert float(result["risk_weight"]) == pytest.approx(1.25, abs=1e-4)
 
 
@@ -787,14 +792,25 @@ class TestScalarLookupJunior:
         )
         assert float(rw) == pytest.approx(0.40, abs=1e-4)
 
-    def test_cre_scalar_income_junior_1375x(self) -> None:
-        """lookup_b31_commercial_rw income + junior at LTV > 80% → 1.375x."""
+    def test_rre_scalar_income_junior_uncapped_high_ltv(self) -> None:
+        """Art. 124G(2): LTV > 100% base 105% × 1.25 = 131.25% (uncapped)."""
+        rw, desc = lookup_b31_residential_rw(
+            ltv=Decimal("1.10"),
+            is_income_producing=True,
+            prior_charge_ltv=Decimal("0.10"),
+        )
+        assert float(rw) == pytest.approx(1.3125, abs=1e-4)
+        assert "junior" in desc.lower()
+
+    def test_cre_scalar_income_junior_high_ltv(self) -> None:
+        """lookup_b31_commercial_rw income + junior at LTV > 80% → Art. 124I(3)(c) 137.5%."""
         rw, desc = lookup_b31_commercial_rw(
             ltv=Decimal("0.90"),
             is_income_producing=True,
             prior_charge_ltv=Decimal("0.10"),
         )
-        assert float(rw) == pytest.approx(1.5125, abs=1e-4)
+        # Absolute 137.5% override, not 110% × 1.375 = 151.25%
+        assert float(rw) == pytest.approx(1.375, abs=1e-4)
         assert "junior" in desc.lower()
 
     def test_cre_scalar_loan_split_junior(self) -> None:
@@ -905,6 +921,6 @@ class TestMixedBatch:
         expected_junior = _expected_loan_split_rw(0.80, cp_rw=0.75, max_ratio=0.35)
         assert float(rw_junior) == pytest.approx(expected_junior, abs=1e-4)
 
-        # Junior CRE income: 110% × 1.375 = 151.25%
+        # Junior CRE income at LTV 90%: Art. 124I(3)(c) absolute 137.5%
         rw_cre = results.filter(pl.col("exposure_reference") == "JUNIOR_CRE_INC")["risk_weight"][0]
-        assert float(rw_cre) == pytest.approx(1.5125, abs=1e-4)
+        assert float(rw_cre) == pytest.approx(1.375, abs=1e-4)

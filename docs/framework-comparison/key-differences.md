@@ -399,19 +399,37 @@ additional detail and the [F-IRB specifications](../specifications/crr/firb-calc
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. However, PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**. The PRA did not adopt this reduction.
 
+!!! info "Art. 122(4) — New Due Diligence Requirement"
+    Basel 3.1 adds Art. 122(4): where an ECAI credit assessment is available, the institution
+    must conduct due diligence to ensure the external rating appropriately reflects the risk.
+    If due diligence reveals higher risk than implied by the CQS, the institution must assign
+    at least one CQS step higher. This is a *class-specific* application of the umbrella
+    [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below, and it
+    mirrors the parallel provisions for institutions (Art. 120(4)) and covered bonds (Art. 129(4A)).
+    See the [B31 SA spec](../specifications/basel31/sa-risk-weights.md#rated-corporate-due-diligence-cqs-step-up-art-1224) for the full trigger/effect table.
+
 #### New Basel 3.1 Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Basel 3.1 RW | Criteria |
 |-------------|-------------|----------|
 | Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
 | Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
-| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition), unrated |
 
 !!! note "PRA Permission Required"
     The 65%/135% investment grade split requires **prior PRA permission** (Art. 122(6)).
     Without permission, all unrated non-SME corporates receive 100% (Art. 122(5)).
     Investment grade is assessed by the institution's own internal credit assessment
     (Art. 122(9)–(10)), not by external ratings. SME corporates receive 85% regardless.
+
+!!! warning "PRA SME Threshold: GBP 44m (not BCBS EUR 50m)"
+    The 85% SME corporate rate under Art. 122(11) relies on the **PS1/26 Glossary
+    definition of SME** (p.9): an enterprise with annual turnover ≤ **GBP 44 million**,
+    calculated on the highest consolidated accounts of the group. This is a PRA-specific
+    fixed threshold that diverges from the BCBS CRE20.45 / CRR Art. 501 SME Supporting
+    Factor threshold of **EUR 50m**. The same GBP 44m definition is used for the
+    retail SME classification (Art. 123(1)(b)) and the IRB SME firm-size correlation
+    adjustment (Art. 153(4)). See the [B31 SA spec](../specifications/basel31/sa-risk-weights.md#corporate-sub-categories-art-122411) for the full sub-category table.
 
 #### Short-Term Corporate ECAI (Art. 122(3), Table 6A) — New in Basel 3.1
 
@@ -463,6 +481,24 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
     short-term institution exposures currently fall back to Table 4 weights. See
     [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
+!!! info "Art. 120(4) — Rated Institution Due Diligence CQS Step-Up"
+    Basel 3.1 adds Art. 120(4): where an ECAI credit assessment drives the ECRA lookup
+    above, the firm must conduct due diligence to ensure the external rating appropriately
+    reflects risk. If due diligence reveals higher risk than implied by the CQS, the firm
+    must assign **at least one CQS step higher** than the ECAI-implied weight. Sample
+    uplifts against Table 3: CQS 1 → CQS 2 (20% → 30%), CQS 2 → CQS 3 (30% → 50%),
+    CQS 3 → CQS 4 (50% → 100%), CQS 5 → CQS 6 (100% → 150%). CQS 4 → CQS 5 yields no
+    numerical change (both 100%). CQS 6 is already at the cap.
+
+    Art. 120(4) is a class-specific instance of the framework-wide
+    [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below, and it
+    mirrors the parallel provisions for corporates (Art. 122(4)) and covered bonds
+    (Art. 129(4A)). CRR has no equivalent provision — under CRR Art. 120 the ECAI weights
+    are applied without any article-level DD step-up mechanism. See the
+    [B31 SA spec](../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
+    for the full trigger/effect table, short-term applicability notes, and implementation
+    status (routed through the Art. 110A `due_diligence_override_rw` pathway).
+
 **Unrated institutions — SCRA (Standardised Credit Risk Assessment Approach):**
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
@@ -483,8 +519,50 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
-**Sovereign floor (Art. 121(6)):** Unrated institution risk weights cannot be lower than their sovereign's
-risk weight for foreign-currency exposures. Self-liquidating trade finance ≤1yr excluded.
+!!! info "SCRA Short-Term Trade Finance Exception (Art. 121(4)) — New in Basel 3.1"
+    Basel 3.1 introduces a dedicated preferential window for self-liquidating trade-finance
+    exposures to unrated institutions. An exposure with **original maturity ≤ 6 months** that
+    **arose from the movement of goods** receives Table 5A weights (Grade A / A enhanced 20%,
+    Grade B 50%, Grade C 150%), overriding the normal 3-month threshold in Art. 121(3).
+
+    **No direct CRR analogue.** Under CRR Art. 120, unrated institution exposures are assigned
+    a risk weight derived from the institution's central-government rating (Art. 121 Table 3)
+    and the general short-term preferential treatment is gated on original maturity ≤ 3 months
+    (Art. 119(2)) — there is no separate 6-month self-liquidating trade carve-out. The new
+    Art. 121(4) aligns the PRA framework with BCBS CRE20.20, preserving the capital treatment
+    historically given to cross-border documentary credits and similar short-dated trade
+    instruments.
+
+    **Interaction with Art. 121(6).** The two articles operate independently. A 9-month
+    foreign-currency self-liquidating trade exposure falls *outside* the Art. 121(4) window
+    (> 6 months) but is *carved out of* the Art. 121(6) floor (< 1 year trade carve-out in
+    (b)), so it receives the standard > 3m SCRA grade weight (e.g. Grade A 40%) — neither
+    preferential nor floored. See
+    [B31 SA Risk Weights — Art. 121(4)](../specifications/basel31/sa-risk-weights.md#scra-short-term-trade-finance-exception-art-1214)
+    for the full eligibility conditions and worked interaction with Art. 121(6).
+
+!!! warning "SCRA Sovereign Floor for Foreign-Currency Exposures (Art. 121(6))"
+    Unrated institution risk weights derived under SCRA may not fall below the risk
+    weight of the institution's home sovereign (Art. 114(1)/(2)) when **both** of these
+    apply:
+
+    - **(a)** the exposure is denominated in a currency other than the local currency
+        of the institution's jurisdiction of incorporation (or, for branch borrowings,
+        other than the local currency of the branch jurisdiction); **and**
+    - **(b)** the exposure is **not** a self-liquidating trade-related contingent item
+        from the movement of goods with original maturity less than one year.
+
+    Effective rule: `RW = max(SCRA_grade_RW, sovereign_RW)`. Example: an unrated
+    Brazilian bank (sovereign CQS 4 → 100%) classified as SCRA Grade A (40%) on a
+    USD 2-year loan is floored at **100%**. The same bank's 6-month USD documentary
+    credit financing the movement of goods would fall within the (b) carve-out and
+    keep its SCRA Grade A weight (or Art. 121(4) Table 5A 20%, if eligible).
+
+    No CRR equivalent — under CRR Art. 121, unrated institution exposures use the
+    sovereign-derived approach (Art. 121 Table 5) directly, so no separate floor is
+    required. See
+    [B31 SA Risk Weights — Art. 121(6)](../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
+    for full conditions and worked examples.
 
 ### Residential Real Estate
 
@@ -596,13 +674,15 @@ persons and SMEs, with a higher secured RW (60% vs 50%) and a higher threshold (
     BCBS CRE20.86 uses a 3-band table for CRE income-producing (≤60%: 70%, 60–80%: 90%, >80%: 110%).
     The PRA simplified this to a **2-band table** (≤80%: 100%, >80%: 110%) in Art. 124I.
 
-**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the risk weight is multiplied:
+**Junior Charge Treatment (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the whole-loan weight is **replaced by an absolute risk weight** (not multiplied on Art. 124I(1)/(2)):
 
-| LTV | Multiplier | Effective RW |
-|-----|-----------|--------------|
-| ≤ 60% | 1.0× | 100% |
-| 60–80% | 1.25× | 125% |
-| > 80% | 1.375× | 137.5% |
+| LTV | Absolute RW | Reference |
+|-----|-------------|-----------|
+| ≤ 60% | 100% | Art. 124I(3)(a) |
+| 60–80% | 125% | Art. 124I(3)(b) |
+| > 80% | **137.5%** | Art. 124I(3)(c) |
+
+Note: applying 1.375× to the 110% >80% base would produce 151.25% — an over-capital error.
 
 ### Other Real Estate (Art. 124J)
 
@@ -678,10 +758,22 @@ Art. 123(1)(b)(ii) Basel 3.1).
 | Payroll / Pension Loans | 35% | 35% | Unchanged from CRR2 |
 | Retail Other | 75% | 75% | — |
 
-Transactor status requires full repayment each billing cycle. Payroll/pension loans (35%)
-were introduced by CRR2 (Regulation (EU) 2019/876) and carried forward unchanged to Basel 3.1.
-CRR Art. 123 second subparagraph → PRA PS1/26 Art. 123(4). Four conditions apply: unconditional
-salary/pension deduction, insurance coverage, payments ≤ 20% of net income, maturity ≤ 10 years.
+!!! info "Transactor Eligibility — Behavioural Gate (Art. 123(3)(a), PRA Glossary)"
+    The 45% transactor weight is not a self-declared category. Per the PRA Glossary
+    (PS1/26 Appendix 1, p. 9), a transactor exposure is one where, over the **previous 12-month
+    period**, the obligor has either (1) repaid the revolving balance in full at each scheduled
+    repayment date (credit cards, charge cards, and similar), or (2) not drawn down the
+    overdraft at all. Art. 154(4) adds that revolving accounts with less than 12 months of
+    repayment history must be flagged non-transactor. The 12-month assessment is an upstream
+    responsibility of the reporting institution; the `is_qrre_transactor` flag is accepted
+    without revalidation. See the
+    [Basel 3.1 SA spec](../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary)
+    for the verbatim Glossary text and both behavioural limbs.
+
+Payroll/pension loans (35%) were introduced by CRR2 (Regulation (EU) 2019/876) and carried
+forward unchanged to Basel 3.1. CRR Art. 123 second subparagraph → PRA PS1/26 Art. 123(4).
+Four conditions apply: unconditional salary/pension deduction, insurance coverage, payments
+≤ 20% of net income, maturity ≤ 10 years.
 
 !!! warning "Code Divergence — CRR Path"
     The CRR code path does not implement the 35% payroll/pension treatment — all CRR retail
@@ -854,7 +946,44 @@ new institution RWs (ECRA 30%, SCRA 40%/75%):
 !!! info "Art. 129(4A) — New Due Diligence Requirement"
     Basel 3.1 adds Art. 129(4A): institutions must assess whether external ratings
     adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
-    must assign at least one CQS step higher.
+    must assign at least one CQS step higher. This is a *class-specific* application of the
+    umbrella [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below.
+
+## Due Diligence Obligation (Art. 110A)
+
+Basel 3.1 introduces a **framework-wide due diligence obligation** for the Standardised Approach. CRR has no equivalent provision.
+
+| Aspect | CRR | Basel 3.1 |
+|--------|-----|-----------|
+| Framework gate | No SA-specific DD obligation | Art. 110A — applies to every non-exempt SA exposure |
+| Uplift mechanism | N/A | Firm must apply a higher RW where internal assessment shows the calculated RW understates risk |
+| Uplift magnitude | N/A | Unbounded — not limited to one CQS step |
+| Timing | N/A | Initial DD before exposure; annual refresh thereafter (Art. 110A(4)(c)) |
+| Group-structure analysis | N/A | Required where applicable (Art. 110A(4)(e)) |
+
+**Exempt obligor classes (Art. 110A(5)):**
+
+- Central governments and central banks (Art. 112(1)(a))
+- Regional governments and local authorities (Art. 112(1)(b))
+- Public sector entities (Art. 112(1)(c))
+- Named 0% risk weight MDBs (Art. 117(2))
+- International organisations (Art. 118(1))
+
+All other obligor classes — institutions, corporates, retail, real estate, equity, CIUs, non-named MDBs (Art. 117(1) / Table 2B) — are in scope.
+
+**Distinction from class-specific CQS step-up overrides.** Art. 110A is the umbrella obligation. Three narrower rules apply to *rated* exposures where ECAI assessment is the default RW source and the DD finding is limited to a one-step CQS uplift:
+
+| Provision | Obligor class |
+|-----------|---------------|
+| Art. 120(4) | Rated institutions |
+| Art. 122(4) | Rated corporates |
+| Art. 129(4A) | Covered bonds |
+
+Art. 110A applies to every non-exempt SA exposure regardless of rating status and permits an arbitrary uplift above the class RW where the firm's internal assessment supports it.
+
+**Implementation.** The calculator exposes `due_diligence_performed` (Boolean, firm attestation) and `due_diligence_override_rw` (Float64, uplifted RW) on the facility schema. Under Basel 3.1, when `due_diligence_performed` is absent the calculator emits a `SA004` data-quality warning. Where `due_diligence_override_rw > risk_weight`, the override is applied as `RW_final = max(RW_calculated, RW_override)` *after* CRM, currency-mismatch multiplier, and before RWA = EAD × RW. A `due_diligence_override_applied` audit column flags uplifted exposures. Under CRR both columns are ignored and no warning is raised.
+
+See [Basel 3.1 SA Risk Weights § Due Diligence Obligation (Art. 110A)](../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a) for the verbatim regulatory text and full implementation sequencing.
 
 !!! success "P1.113 Fixed — B31 Rated Values"
     `B31_COVERED_BOND_RISK_WEIGHTS` now uses PRA Table 7 values (identical to CRR).
@@ -1058,12 +1187,23 @@ satisfy all conditions in Art. 122B(5):
     - (ii) Sufficient reserve funds for contingency and working capital
     - (iii) Revenues subject to rate-of-return regulation, take-or-pay, or
       availability-based contract (defined in Art. 122B(6))
-    - (iv) Revenue depends on one main counterparty rated ≤ 80% RW (sovereign, RGLA,
-      PSE, MDB at 0%, international org at 0%, or corporate ≤ 80%)
+    - (iv) Revenue depends on one main counterparty in one of three eligible
+      sub-types: sovereign / RGLA / PSE / corporate **rated ≤ 80% RW** (Art. 122B(5)(b)(iv)(1));
+      **or** an MDB at 0% under Art. 117(2) (sub-type (2)); **or** an international
+      organisation at 0% under Art. 118(1) (sub-type (3))
     - (v) Contractual provisions provide high creditor protection on default
     - (vi) Main counterparty protects creditors from termination losses
     - (vii) All assets and contracts pledged to creditors (to extent permitted by law)
     - (viii) Creditors may assume control of the entity on default
+
+!!! info "80% Corporate Counterparty Cap is the Most Material Gating Condition"
+    The (iv)(1) corporate sub-type requires the off-taker itself to attract a SA risk
+    weight of 80% or lower. In practice this means investment-grade corporates (CQS 1–3 →
+    20%/50%/75%) or Art. 122(6) IG corporates (65%). A BB-rated or unrated corporate
+    off-taker (100% RW) **disqualifies** the 80% PF weight. This is the single most common
+    reason high-quality PF status is denied. See full canonical conditions and the Art.
+    122B(6) availability-based definition in the
+    [B31 SA risk-weights spec](../specifications/basel31/sa-risk-weights.md#high-quality-pf-criteria-art-122b5).
 
 ## Credit Risk Mitigation Changes
 

@@ -68,7 +68,7 @@ Exposures are classified into regulatory categories based on the counterparty's 
 | **MDB** | Multilateral development banks | Low |
 | **Institution** | Banks, CCPs, financial institutions | Medium |
 | **Corporate** | Non-retail companies | Medium-High |
-| **Corporate SME** | Small/medium enterprises (<EUR 50m revenue) | Medium |
+| **Corporate SME** | Small/medium enterprises (turnover ≤ EUR 50m under CRR; ≤ GBP 44m under Basel 3.1) | Medium |
 | **Retail Mortgage** | Residential mortgages | Low-Medium |
 | **Retail QRRE** | Qualifying revolving retail | Medium |
 | **Retail Other** | Other retail exposures | Medium-High |

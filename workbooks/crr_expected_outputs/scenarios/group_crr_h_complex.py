@@ -505,7 +505,7 @@ def _(
 
     # Step 3: Bank guarantee (substitution approach)
     guarantee_amount_h4 = Decimal("400000")
-    guarantor_rw_h4 = get_institution_rw(cqs=2, country="GB", use_uk_deviation=True)  # 30%
+    guarantor_rw_h4 = get_institution_rw(cqs=2)  # 50% (CRR Art. 120 Table 3)
 
     # Split remaining exposure
     guaranteed_portion_h4 = min(guarantee_amount_h4, exp_after_cash_h4)

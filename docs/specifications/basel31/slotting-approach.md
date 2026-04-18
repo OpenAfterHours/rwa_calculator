@@ -91,15 +91,24 @@ Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short m
 | Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (flat, no maturity split) |
 |-------------------|------------------------|------------------------|------------------------------|
 | Strong | 95% | 70% | 0.4% |
-| Good | 120% | 95% | 0.8% |
+| Good | 120% | 95% | 0.4% |
 | Satisfactory | 140% | 140% | 2.8% |
 | Weak | 250% | 250% | 8.0% |
 | Default | 0% | 0% | 50.0% |
 
-!!! note "HVCRE EL — No Maturity Split"
-    Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat (no
-    < 2.5yr / >= 2.5yr distinction). The same EL rate applies regardless of remaining maturity.
-    Risk weights still carry the A/B/C/D subgrade column structure for HVCRE Strong and Good.
+!!! note "HVCRE EL — No Maturity Split AND No Strong/Good Differentiation"
+    Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat
+    (no < 2.5yr / >= 2.5yr distinction) **and** Strong and Good both carry the same
+    0.4% rate. Reading the Table B HVCRE row directly (Appendix 1 p.108): the seven
+    columns A | B | C | D | Satisfactory | Weak | Default give 0.4% / 0.4% / 0.4% /
+    0.4% / 2.8% / 8% / 50% — the subgrade differentiation collapses on the EL side
+    even though risk weights still carry distinct subgrade values.
+
+!!! warning "Resolved 2026-04-18 (P1.150)"
+    Prior versions of this table and the underlying constants used HVCRE Good = 0.8%,
+    mirroring non-HVCRE long-maturity. That was wrong; PRA PS1/26 Table B HVCRE row
+    is flat at 0.4% across both Strong and Good. The EL shortfall for HVCRE Good
+    exposures was overstated by a factor of two before this fix.
 
 !!! note "HVCRE vs Non-HVCRE"
     HVCRE is distinguished from standard CRE by the volatility of the underlying property

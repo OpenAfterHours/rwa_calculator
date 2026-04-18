@@ -73,11 +73,18 @@ def _build_exposure_lookups(
     # Determine whether has_one_day_maturity_floor is available
     has_floor_col = "has_one_day_maturity_floor" in exp_schema.names()
 
+    # Use pre-FX-conversion currency for downstream Art. 224 H_fx mismatch check.
+    # After FX conversion the `currency` column holds the reporting currency, so a
+    # raw `currency` join would silently zero the collateral FX haircut (P1.135).
+    exposure_ccy_col = (
+        "original_currency" if "original_currency" in exp_schema.names() else "currency"
+    )
+
     # Direct: one row per exposure
     direct_cols = [
         pl.col("exposure_reference").alias("_ben_ref_direct"),
         pl.col("ead_gross").alias("_ead_direct"),
-        pl.col("currency").alias("_currency_direct"),
+        pl.col(exposure_ccy_col).alias("_currency_direct"),
         pl.col("maturity_date").alias("_maturity_direct"),
     ]
     if has_floor_col:
@@ -92,7 +99,7 @@ def _build_exposure_lookups(
     if "parent_facility_reference" in exp_schema.names():
         facility_agg = [
             pl.col("ead_gross").sum().alias("_ead_facility"),
-            pl.col("currency").first().alias("_currency_facility"),
+            pl.col(exposure_ccy_col).first().alias("_currency_facility"),
             pl.col("maturity_date").first().alias("_maturity_facility"),
         ]
         if has_floor_col:
@@ -125,7 +132,7 @@ def _build_exposure_lookups(
     # Counterparty: aggregated per counterparty_reference
     cp_agg = [
         pl.col("ead_gross").sum().alias("_ead_cp"),
-        pl.col("currency").first().alias("_currency_cp"),
+        pl.col(exposure_ccy_col).first().alias("_currency_cp"),
         pl.col("maturity_date").first().alias("_maturity_cp"),
     ]
     if has_floor_col:

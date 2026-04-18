@@ -14,11 +14,11 @@ and routing exposures to F-IRB, slotting, or SA based on regulatory constraints.
 |----|-------------|----------|--------|
 | FR-11.1 | Art. 147A approach restriction routing | P0 | Done |
 | FR-11.2 | FSE restriction: all FSEs → F-IRB only (Art. 147A(1)(e)) | P0 | Done |
-| FR-11.3 | Large corporate restriction: revenue >£440m → F-IRB only | P0 | Done |
-| FR-11.4 | Institution exposure → F-IRB only (no A-IRB) | P0 | Done |
-| FR-11.5 | Equity exposure → SA only | P0 | Done |
-| FR-11.6 | Sovereign/PSE → SA only | P0 | Done |
-| FR-11.7 | IPRE/HVCRE → Slotting only (if no A-IRB permission) | P0 | Done |
+| FR-11.3 | Large corporate restriction: revenue >£440m → F-IRB only (Art. 147A(1)(e)) | P0 | Done |
+| FR-11.4 | Institution exposure → F-IRB only, Art. 147A(1)(b) (no A-IRB) | P0 | Done |
+| FR-11.5 | Equity exposure → SA only (Art. 147A(1)(h) per Art. 147(2)(e)) | P0 | Done |
+| FR-11.6 | Sovereign/PSE (quasi-sovereigns) → SA only (Art. 147A(1)(a)) | P0 | Done |
+| FR-11.7 | IPRE/HVCRE → Slotting only, Art. 147A(1)(c) (if no A-IRB permission) | P0 | Done |
 | FR-11.8 | Model permissions config and fallback logic | P0 | Done |
 
 ---
@@ -36,39 +36,54 @@ and before calculation. Exposures that fail the Art. 147A check are routed to a 
 
 ### Restriction Table
 
+The letter scheme in Art. 147A(1) points to sub-classes in **Art. 147(2)**
+(verified against PRA PS1/26 ps126app1.pdf pp.88, 92–93, 17 Apr 2026). Financial
+corporates and large corporates are **grouped together** under point (c)(ii) of
+Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters.
+
 | Exposure Class | Permitted Approaches | Restriction | Reference |
 |---------------|---------------------|-------------|-----------|
-| Equity | SA only | IRB equity approaches removed entirely (Art. 155 left blank) | Art. 147A(1)(a) |
-| Sovereign | SA only | No IRB permission for sovereigns | Art. 147A(1)(b) |
-| PSE (treated as sovereign) | SA only | Follows sovereign treatment | Art. 147A(1)(b) |
-| Institution | F-IRB only | A-IRB not permitted | Art. 147A(1)(c) |
-| Financial corporate (all FSEs) | F-IRB only | A-IRB not permitted for any financial sector entity | Art. 147A(1)(e) |
-| Large corporate (revenue > £440m) | F-IRB only | A-IRB not permitted | Art. 147A(1)(d) |
-| SL IPRE / HVCRE | Slotting only | Must use slotting (no F-IRB or A-IRB) | Art. 147A(2) |
-| Corporate (standard, non-FSE, revenue <= £440m) | F-IRB or A-IRB | A-IRB with permission, F-IRB otherwise | — |
-| Retail | A-IRB only | No maturity adjustment (existing rule) | Art. 147A(1)(f) |
-| Specialised lending (PF, OF, CF) | F-IRB, A-IRB, or Slotting | Subject to existing permissions | — |
+| Sovereign (incl. central banks, quasi-sovereigns) | SA only | No IRB permission | Art. 147A(1)(a) → Art. 147(2)(a) |
+| PSE (treated as sovereign) | SA only | Follows sovereign treatment | Art. 147A(1)(a) |
+| Institution | F-IRB only (SA with permission) | A-IRB not permitted | Art. 147A(1)(b) → Art. 147(2)(b) |
+| SL IPRE / HVCRE | SA or Slotting only | No F-IRB or A-IRB | Art. 147A(1)(c) → Art. 147(2)(c)(i) |
+| SL — OF / PF / CF | SA, F-IRB, A-IRB or Slotting | Subject to granted permission | Art. 147A(1)(d) → Art. 147(2)(c)(i) |
+| **Financial corporate (all FSEs) AND Large corporate (revenue > £440m)** | **F-IRB only** (SA with permission) | A-IRB not permitted — both sub-classes share one rule under Art. 147(2)(c)(ii) | **Art. 147A(1)(e)** → Art. 147(2)(c)(ii) |
+| Other general corporate (non-FSE, revenue ≤ £440m) | F-IRB (default); A-IRB with Art. 143(2A)/(2B) permission | A-IRB available only with explicit permission | Art. 147A(1)(f) → Art. 147(2)(c)(iii) |
+| Retail (mortgage, QRRE, other) | A-IRB (SA with permission) | A-IRB is the mandatory default | Art. 147A(1)(g) → Art. 147(2)(d) |
+| Equity | SA only | IRB equity approaches removed (Art. 155 left blank) | Art. 147A(1)(h) → Art. 147(2)(e) |
 
-!!! note "Art. 147A(1)(e) — All FSEs Restricted to F-IRB"
-    Art. 147A(1)(e) restricts **all** financial sector entities (as defined in Art. 4(1)(27))
-    to F-IRB, not just large FSEs. The EUR 70bn / GBP 79bn threshold (Art. 4(1)(146)) determines
-    the **1.25x correlation multiplier** (Art. 153(2)), which is a separate provision. Even small
-    regulated FSEs cannot use A-IRB under Basel 3.1.
+!!! note "Art. 147A(1)(e) — FSEs and Large Corporates Share One Restriction"
+    Under PRA PS1/26, **Art. 147A(1)(e)** covers both financial sector entities (FSEs,
+    defined in Art. 4(1)(27)) and large corporates (revenue > £440m) because Art. 147(2)(c)(ii)
+    groups them into the single sub-class "financial corporates and large corporates".
+    Both are restricted to **F-IRB** (or SA with permission) — A-IRB is not available.
+    The EUR 70bn / GBP 79bn **total-assets** threshold (Art. 4(1)(146)) is a **separate**
+    provision that drives the 1.25× correlation multiplier (Art. 153(2)); it does NOT
+    determine the approach restriction in Art. 147A(1)(e). Small FSEs below the
+    Art. 4(1)(146) threshold are still restricted to F-IRB under Art. 147A(1)(e).
+
+!!! note "Earlier drafts incorrectly cited Art. 147A(1)(d) for large corporates"
+    Previous versions of this spec cited "Art. 147A(1)(d)" for the large-corporate
+    F-IRB restriction. That letter actually covers object/project/commodities finance
+    under Art. 147(2)(c)(i). The authoritative rule for both large corporates and FSEs
+    is Art. 147A(1)(**e**), verified against ps126app1.pdf p.92.
 
 ### Large Corporate Definition
 
-**Art. 147A(1)(d):** A corporate exposure is classified as "large corporate" if:
+**Art. 147A(1)(e) via Art. 147(2)(c)(ii):** A corporate exposure is classified as
+"large corporate" if:
 
 - The obligor's **consolidated annual revenue** exceeds **£440 million** (GBP)
 
-!!! warning "Distinct from Large FSE"
-    The **£440m revenue** threshold (Art. 147A(1)(d)) for large corporate approach restriction
-    is entirely distinct from the **EUR 70bn total assets** threshold (Art. 4(1)(146)) for the
-    financial sector entity (FSE) correlation multiplier. They target different populations
-    and use different metrics:
+!!! warning "Distinct Thresholds — Approach Restriction vs Correlation Multiplier"
+    The **£440m revenue** threshold (Art. 147A(1)(e), via Art. 147(2)(c)(ii)) for the
+    large-corporate approach restriction is entirely distinct from the
+    **EUR 70bn total-assets** threshold (Art. 4(1)(146)) for the FSE correlation
+    multiplier. They target different populations and use different metrics:
 
-    - Art. 147A(1)(d): revenue-based, restricts A-IRB → F-IRB
-    - Art. 4(1)(146): asset-based, applies 1.25× correlation uplift
+    - Art. 147A(1)(e): revenue-based (large corporates) and entity-type based (all FSEs), restricts A-IRB → F-IRB
+    - Art. 4(1)(146): asset-based, applies 1.25× correlation uplift under Art. 153(2)
 
 ### Financial Sector Entity (FSE) Definition
 
@@ -86,9 +101,11 @@ are still restricted to F-IRB.
 
 ### IPRE/HVCRE Routing
 
-**Art. 147A(2):** Income-producing real estate (IPRE) and high-volatility commercial real estate (HVCRE)
-exposures must use the **slotting approach** unless the firm has specific A-IRB approval for these
-sub-classes. In practice, most firms without granular A-IRB IPRE permission will route to slotting.
+**Art. 147A(1)(c)** (via Art. 147(2)(c)(i)): Income-producing real estate (IPRE) and
+high-volatility commercial real estate (HVCRE) exposures must use either the
+**Standardised Approach** (with Art. 148 / Art. 150 permission) or the **Slotting Approach**.
+F-IRB and A-IRB are **not** available for IPRE/HVCRE. In practice, most firms without
+an Art. 148/150 SA permission for these sub-classes will route to slotting.
 
 ## Permission Configuration
 
@@ -156,17 +173,17 @@ When no model permission matches an exposure:
 | Scenario ID | Description | Expected Routing |
 |-------------|-------------|------------------|
 | B31-M1 | Corporate with AIRB permission, revenue < £440m | A-IRB |
-| B31-M2 | Corporate with AIRB permission, revenue > £440m (large corporate) | F-IRB (Art. 147A(1)(d)) |
+| B31-M2 | Corporate with AIRB permission, revenue > £440m (large corporate) | F-IRB (Art. 147A(1)(e)) |
 | B31-M3 | Large FSE with total assets > EUR 70bn | F-IRB (Art. 147A(1)(e)) |
 | B31-M3a | Small FSE with total assets < EUR 70bn | F-IRB (Art. 147A(1)(e) — all FSEs, not just large) |
-| B31-M4 | Institution with AIRB permission | F-IRB (Art. 147A(1)(c)) |
-| B31-M5 | Equity exposure | SA (Art. 147A(1)(a)) |
-| B31-M6 | Sovereign exposure | SA (Art. 147A(1)(b)) |
-| B31-M7 | PSE treated as sovereign | SA (Art. 147A(1)(b)) |
-| B31-M8 | IPRE with no A-IRB permission | Slotting (Art. 147A(2)) |
-| B31-M9 | HVCRE with no A-IRB permission | Slotting (Art. 147A(2)) |
+| B31-M4 | Institution with AIRB permission | F-IRB (Art. 147A(1)(b)) |
+| B31-M5 | Equity exposure | SA (Art. 147A(1)(h)) |
+| B31-M6 | Sovereign exposure | SA (Art. 147A(1)(a)) |
+| B31-M7 | PSE treated as sovereign | SA (Art. 147A(1)(a)) |
+| B31-M8 | IPRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
+| B31-M9 | HVCRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
 | B31-M10 | PF with A-IRB permission | A-IRB (no restriction) |
-| B31-M11 | Corporate at £440m boundary (exact threshold) | F-IRB (≥ £440m triggers) |
+| B31-M11 | Corporate at £440m boundary (exact threshold) | F-IRB (≥ £440m triggers Art. 147A(1)(e)) |
 | B31-M12 | Exposure with no model permission | SA (fallback) |
 
 ## Acceptance Tests

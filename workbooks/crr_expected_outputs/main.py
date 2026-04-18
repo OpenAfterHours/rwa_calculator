@@ -121,7 +121,7 @@ def _(mo):
 
     The SA scenarios cover basic risk weight lookups including:
     - Sovereign exposures (0% for CQS 1)
-    - Institution exposures (UK deviation: 30% for CQS 2)
+    - Institution exposures (50% for CQS 2 per CRR Art. 120 Table 3)
     - Corporate exposures (rated and unrated)
     - Retail exposures (75%)
     - Residential mortgages (35%/75% split at 80% LTV)

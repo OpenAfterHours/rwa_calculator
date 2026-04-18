@@ -30,27 +30,15 @@ CGCB_RISK_WEIGHTS: dict[int, float] = {
     0: 1.00,  # Unrated
 }
 
-# Institution risk weights - Basel standard ECRA (CRE20.16)
-INSTITUTION_RISK_WEIGHTS: dict[int, float] = {
+# Institution risk weights - PRA PS1/26 Art. 120 ECRA Table 3
+INSTITUTION_RISK_WEIGHTS_B31_ECRA: dict[int, float] = {
     1: 0.20,  # AAA to AA-
-    2: 0.50,  # A+ to A- (Basel standard)
+    2: 0.30,  # A+ to A-
     3: 0.50,  # BBB+ to BBB-
     4: 1.00,  # BB+ to BB-
     5: 1.00,  # B+ to B-
     6: 1.50,  # CCC+ and below
-    0: 0.40,  # Unrated (SCRA Grade A)
-}
-
-# Institution risk weights - UK deviation (PRA PS1/26)
-# CQS 2 gets 30% instead of 50%
-INSTITUTION_RISK_WEIGHTS_UK: dict[int, float] = {
-    1: 0.20,  # AAA to AA-
-    2: 0.30,  # A+ to A- (UK deviation - 30% instead of 50%)
-    3: 0.50,  # BBB+ to BBB-
-    4: 1.00,  # BB+ to BB-
-    5: 1.00,  # B+ to B-
-    6: 1.50,  # CCC+ and below
-    0: 0.40,  # Unrated (SCRA Grade A)
+    0: 0.40,  # Unrated (SCRA Grade A default)
 }
 
 # Corporate risk weights by CQS (CRE20.25-26)

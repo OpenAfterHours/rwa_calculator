@@ -133,7 +133,7 @@
     {
       "scenario_id": "CRR-A4",
       "scenario_group": "CRR-A",
-      "description": "UK Institution CQS 2 - 30% RW (UK deviation)",
+      "description": "Institution CQS 2 - 50% RW (CRR Art. 120 Table 3)",
       "regulatory_framework": "CRR",
       "approach": "SA",
       "exposure_class": "INSTITUTION",
@@ -146,13 +146,13 @@
       "cqs": 2,
       "ltv": null,
       "turnover": null,
-      "risk_weight": 0.3,
-      "rwa_before_sf": 300000.0,
+      "risk_weight": 0.5,
+      "rwa_before_sf": 500000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 300000.0,
+      "rwa_after_sf": 500000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRR Art. 120-121 (UK deviation)",
-      "calculation_notes": "UK deviation: CQS 2 -> 30% RW (standard Basel is 50%)"
+      "regulatory_reference": "CRR Art. 120 Table 3",
+      "calculation_notes": "Institution CQS 2 -> 50% RW per CRR Art. 120 Table 3"
     },
     {
       "scenario_id": "CRR-A5",
@@ -626,13 +626,13 @@
       "cqs": null,
       "ltv": null,
       "turnover": null,
-      "risk_weight": 0.58,
-      "rwa_before_sf": 580000.0,
+      "risk_weight": 0.7,
+      "rwa_before_sf": 700000.0,
       "supporting_factor": 1.0,
-      "rwa_after_sf": 580000.0,
+      "rwa_after_sf": 700000.0,
       "expected_loss": null,
       "regulatory_reference": "CRR Art. 213-217",
-      "calculation_notes": "Guarantor 30% RW, Borrower 100% RW. Split treatment."
+      "calculation_notes": "Guarantor 50% RW (Art. 120 Table 3), Borrower 100% RW. Split treatment."
     },
     {
       "scenario_id": "CRR-D5",

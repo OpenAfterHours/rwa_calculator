@@ -17,38 +17,12 @@ Standardised Approach risk weights by exposure class and credit quality step.
 
 ---
 
-## Due Diligence Obligation (Basel 3.1 Art. 110A)
+## Due Diligence Obligation — No CRR Equivalent
 
-Under Basel 3.1, firms must perform due diligence to ensure they understand the risk profile of their counterparties. Where due diligence is inadequate, the firm must apply a **higher risk weight** than would otherwise apply. This applies to all SA exposure classes and is a precondition for reliance on external ratings.
+CRR has no SA-specific due diligence obligation. The Basel 3.1 equivalent is Art. 110A — a framework-wide obligation introduced by PRA PS1/26 with no CRR predecessor. Under CRR the SA calculator does not emit the `SA004` warning and ignores the `due_diligence_override_rw` column.
 
-### Implementation
-
-Two optional input fields support Art. 110A:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `due_diligence_performed` | Boolean | Whether the firm has completed its DD assessment for this exposure |
-| `due_diligence_override_rw` | Float64 | Override risk weight (as decimal, e.g. 1.50 = 150%) when DD reveals higher risk |
-
-**Override behaviour:**
-- The override is applied as the **final risk weight modification** — after all standard RW determination, CRM adjustments, and currency mismatch multiplier
-- The override can only **increase** the risk weight: `RW_final = max(RW_calculated, RW_override)`
-- Null override values are silently ignored (no override applied)
-- The override is a **floor**, not a replacement — if the calculated RW already exceeds the override, the calculated RW is retained
-
-**Validation:**
-- Under Basel 3.1, if the `due_diligence_performed` column is absent from the input data, a `SA004` warning is emitted (severity: WARNING, category: DATA_QUALITY)
-- Under CRR, no warning is emitted (Art. 110A does not exist under CRR)
-
-**Audit:**
-- When the override column is present, a `due_diligence_override_applied` Boolean audit column is added to the output, indicating which exposures had their risk weight overridden
-
-**Sequencing in the SA calculator:**
-1. Standard risk weight determination (CQS lookup, class-specific rules)
-2. FCSM / life insurance / guarantee substitution (CRM)
-3. Currency mismatch multiplier (Art. 123B)
-4. **Due diligence override (Art. 110A)** ← applied here
-5. RWA calculation (EAD × RW)
+!!! info "Basel 3.1 addition — Art. 110A"
+    See [Basel 3.1 SA Risk Weights § Due Diligence Obligation (Art. 110A)](../basel31/sa-risk-weights.md#due-diligence-obligation-art-110a) for the obligation's regulatory text, exempt obligor classes, and calculator integration (input fields `due_diligence_performed` / `due_diligence_override_rw`, sequencing, audit column).
 
 ## Sovereign Exposures (CRR Art. 114)
 
@@ -100,7 +74,15 @@ Where RGLA exposures have their own ECAI rating, use Table 1B:
 
 **UK local authorities**: All UK local authorities receive **20%** risk weight per PRA designation.
 
-**Sterling-funded short-term**: RGLA exposures of the UK denominated and funded in **sterling** receive **20%** regardless of CQS (Art. 115(5)).
+**Sterling-funded UK RGLAs (Art. 115(5))**: Exposures to regional governments or local authorities of the United Kingdom that are not treated as central government under Art. 115(2)–(4) and are **denominated and funded in pounds sterling** shall be assigned a risk weight of **20%**. This treatment is **maturity-independent** — it applies regardless of the original or residual maturity of the exposure and regardless of the counterparty's CQS.
+
+!!! warning "Previous Spec Error Corrected"
+    An earlier version of this section described Art. 115(5) as applying only to short-term
+    sterling RGLA exposures. Art. 115(5) has **no maturity condition** — the 20% weight
+    applies to all sterling-denominated, sterling-funded UK RGLA exposures. The short-term
+    preferential treatments in Art. 119(2) and Art. 120(2) are separately excluded from
+    RGLAs by Art. 115(1) (for non-central-government-treated RGLAs routed through the
+    institution table), which is distinct from the Art. 115(5) sterling carve-out.
 
 ## PSE Exposures (CRR Art. 116)
 
@@ -134,10 +116,29 @@ UK PSEs with own ECAI rating use Table 2A:
 | 6 | 150% |
 | Unrated | 100% |
 
-!!! note "Art. 116(4) left blank"
-    PRA PS1/26 leaves Art. 116(4) blank — there is no "institution-equivalent" PSE sub-treatment under the PRA rules. UK PSEs use Tables 2/2A above.
+### Sub-treatment 3 — Competent-Authority Equivalence (Art. 116(4))
+
+In **exceptional circumstances**, UK PSE exposures **may** be treated as exposures to the central government, regional government or local authority of the United Kingdom where all of the following apply (CRR Art. 116(4), crr.pdf p.115):
+
+1. An **appropriate guarantee** exists from that central government, regional government or local authority; and
+2. The competent authorities of the United Kingdom are of the opinion that there is **no difference in risk** between the guaranteed PSE exposure and a direct exposure to the guaranteeing government or authority.
+
+The effect is to substitute the guarantor's sovereign or RGLA risk weight for the Art. 116(1)/(2) PSE treatment. This is a competent-authority discretion — not a routine election — and the substitute tier (central / regional / local) must match the tier providing the guarantee.
+
+!!! info "Basel 3.1 — Art. 116(4) Not Retained"
+    PRA PS1/26 Art. 116(4) is marked `[Note: Provision left blank]` (ps126app1.pdf p.38); the accompanying note states the PS1/26 rule corresponds to CRR Art. 116(1)–(3) only. The competent-authority equivalence route has **no PS1/26 successor** — from 1 January 2027, any guarantee-based RGLA/sovereign override for a PSE must be routed through the general CRM guarantee substitution regime (Art. 235, Chapter 4), not an Art. 116-specific carve-out.
+
+### Sub-treatment 4 — Third-Country PSE Equivalence (Art. 116(5))
+
+Where a third-country competent authority applies supervisory and regulatory arrangements at least equivalent to those applied in the UK and treats exposures to its own PSEs under paragraph 1 or 2, UK institutions **may** risk weight exposures to those third-country PSEs in the same manner. Otherwise, a risk weight of **100%** applies (CRR Art. 116(5), crr.pdf p.115). Equivalence is determined by the Treasury by regulations.
+
+!!! info "Basel 3.1 — Art. 116(5) Retained by Cross-Reference"
+    PRA PS1/26 Art. 116(5) itself is marked `[Note: Provision not in PRA Rulebook]`, but Art. 116(3A) explicitly cross-refers to "Article 116(5) of CRR" — redirecting "UK PSEs" in paragraphs 1 and 2 to mean third-country PSEs when Art. 116(5) of CRR applies (ps126app1.pdf p.38). CRR Art. 116(5) therefore remains operative as the third-country equivalence gate under Basel 3.1.
 
 **Short-term exposures (≤ 3 months)**: UK PSE exposures with original effective maturity ≤ 3 months receive **20%** risk weight (Art. 116(3)). No domestic currency condition required for PSEs.
+
+!!! warning "Art. 116(4)/(5) Not Implemented"
+    Neither Art. 116(4) competent-authority equivalence nor Art. 116(5) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A plus the Art. 116(3) short-term preferential. Firms relying on Art. 116(4) guarantee-backed equivalence must apply the substitution outside the engine.
 
 ## MDB Exposures (CRR Art. 117)
 
@@ -211,15 +212,7 @@ The following international organisations receive a **0%** risk weight:
 | 4 | 100% |
 | 5 | 100% |
 | 6 | 150% |
-| Unrated | 40% (Art. 121, sovereign-derived from CQS 2) |
-
-!!! warning "Code Divergence — CQS 2"
-    The code (`INSTITUTION_RISK_WEIGHTS_UK`) uses **30%** for CRR CQS 2, labelled as a
-    "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 (legislation.gov.uk,
-    current version) confirms CQS 2 = **50%**. The 30% value matches the **Basel 3.1 ECRA**
-    table (PRA PS1/26 Art. 120 Table 3), not CRR. No PRA Rulebook instrument or supervisory
-    statement has been identified that reduces CRR CQS 2 to 30%. See D1.30 in the docs
-    implementation plan.
+| Unrated | 100% (Art. 120(2)) |
 
 ### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 
@@ -351,7 +344,7 @@ The payroll/pension 35% treatment is **carried forward unchanged** from CRR2 int
 | Sub-Treatment | Risk Weight | Condition | Reference |
 |---------------|-------------|-----------|-----------|
 | Regulatory retail (non-transactor) | 75% | Meets Art. 123A qualifying criteria, non-transactor | Art. 123(3)(b) |
-| QRRE transactors | 45% | Qualifying revolving (Art. 123(2)), balance repaid monthly | Art. 123(3)(a) |
+| QRRE transactors | 45% | Qualifying revolving where balance repaid in full at each scheduled repayment date for the previous 12 months, or overdraft undrawn for the previous 12 months (PRA Glossary) | Art. 123(3)(a) |
 | QRRE non-transactors | 75% | Qualifying revolving (Art. 123(2)), non-transactor | Art. 123(3)(b) |
 | Payroll / pension loans | 35% | Carried forward from CRR2 — same 4 conditions (a)–(d) | Art. 123(4) |
 | Non-regulatory retail | 100% | Retail exposure that fails Art. 123A qualifying criteria | Art. 123(3)(c) |
@@ -626,13 +619,13 @@ Materially dependent on cash flows:
 | ≤ 80% | 100% |
 | > 80% | 110% |
 
-**Junior charge multiplier** (Art. 124I(3)):
+**Junior charge absolute override** (Art. 124I(3)) — replaces Art. 124I(1)/(2) base, not a multiplier:
 
-| LTV Band | Multiplier |
-|----------|------------|
-| ≤ 60% | 1.0× (100%) |
-| 60-80% | 1.25× (125%) |
-| > 80% | 1.375× (137.5%) |
+| LTV Band | Absolute RW |
+|----------|-------------|
+| ≤ 60% | 100% |
+| 60-80% | 125% |
+| > 80% | **137.5%** |
 
 ### Other Real Estate (Art. 124J)
 
@@ -832,7 +825,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
 - **Commercial RE other counterparties** (Art. 124H(3)): max/min formula — Done
 - **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
-- **Junior charge multipliers** (Art. 124F/G/I): 1.25x / 1.375x for subordinate liens — Done
+- **Junior charge treatment** (Art. 124F/G/I): RRE/RRE-income multipliers (125%/1.25×); CRE-income **absolute 100%/125%/137.5%** override (Art. 124I(3)) — Done
 - **Other Real Estate** (Art. 124J): 150% income-dependent, counterparty RW otherwise — Done
 - **Revised corporate CQS mapping** (Art. 122(2) Table 6): CQS 3 from 100% to 75% — Done. **Note:** PRA retains CQS 5 = 150% (BCBS CRE20.42 reduced to 100%, but PRA did not adopt this reduction)
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done

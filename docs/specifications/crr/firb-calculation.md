@@ -238,11 +238,13 @@ Institutions that have **not** received permission to use own LGDs and own conve
 | Repo-style transactions (repos, securities/commodities lending or borrowing) | **0.5 years** | Art. 162(1) |
 | All other exposures | **2.5 years** | Art. 162(1) |
 
-!!! warning "0.5-Year Repo Maturity — Not Yet Implemented"
-    The code uses a blanket 2.5-year default for all F-IRB exposures when no `maturity_date`
-    is provided (`namespace.py:259`, `formulas.py:366`). The 0.5-year supervisory maturity for
-    repo-style transactions is not applied. This overstates maturity (and therefore RWA) for
-    F-IRB repo/SFT exposures that lack an explicit maturity date.
+!!! success "0.5-Year Repo Maturity — Implemented"
+    F-IRB exposures flagged with `is_sft = True` on the Facility/Loan/Contingent input row
+    receive M = 0.5 years under CRR, overriding any `maturity_date`-derived value
+    (`engine/irb/namespace.py` prepare_columns). The override is gated on the CRR framework
+    only — Basel 3.1 deleted Art. 162(1), so B31 F-IRB calculates M per Art. 162(2A).
+    Exposures without `is_sft` (or with `is_sft = False`) retain the existing 2.5-year
+    default. Regression: `tests/unit/irb/test_firb_sft_maturity.py`.
 
 Alternatively, the competent authority may require the institution to calculate M for each
 exposure using the A-IRB methods in Art. 162(2).
@@ -330,15 +332,18 @@ for full details.
 
 ## RWA Calculation
 
-**CRR Corporate/Institution (Art. 153):** `RWA = K x 12.5 x 1.06 x EAD x MA`
+**CRR Corporate/Institution (Art. 153(1)(iii)):** `RWA = K x 12.5 x 1.06 x EAD x MA`
 
-The 1.06 is the CRR scaling factor from Art. 153(3) (not present in Basel 3.1 — Art. 153(3)
-is "[Provision left blank]" in PS1/26).
+**CRR Retail (Art. 154(1)(ii)):** `RWA = K x 12.5 x 1.06 x EAD` (MA = 1.0 for retail)
 
-!!! note "Retail — No 1.06 Scaling"
-    CRR Art. 154(1) retail formula does **not** include the 1.06 scaling factor. The 1.06 applies
-    only to corporate and institution exposures under Art. 153. Retail RWA = K x 12.5 x EAD
-    (with MA = 1.0 for retail).
+Under CRR the **1.06 scaling factor applies uniformly** to corporate, institution, sovereign and retail IRB RWA. The factor is embedded in the risk weight formulae in both Art. 153(1)(iii) (corporate/institution/sovereign) and Art. 154(1)(ii) (retail) — each ends `... × 12,5 × 1,06`.
+
+!!! warning "Previous Spec Error Corrected"
+    An earlier version of this section claimed that retail CRR RWA does not include the 1.06
+    factor. That was wrong — the factor is written explicitly into the Art. 154(1)(ii) retail
+    formula in the onshored CRR. The 1.06 scaling is removed **only** under Basel 3.1 (PRA
+    PS1/26 sets it to 1.0 for all IRB exposure classes); under CRR it applies to both
+    Art. 153 and Art. 154 outputs.
 
 ## Expected Loss
 

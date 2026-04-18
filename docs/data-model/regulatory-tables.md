@@ -28,18 +28,12 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | CQS | CRR (Art. 120) | Basel 3.1 ECRA |
 |-----|----------------|----------------|
 | 1 | 20% | 20% |
-| 2 | 50% | **30%** |
+| 2 | 50% | 30% |
 | 3 | 50% | 50% |
 | 4 | 100% | 100% |
 | 5 | 100% | 100% |
 | 6 | 150% | 150% |
-| Unrated | 40% (sovereign-derived) | SCRA (see below) |
-
-!!! warning "Code Divergence"
-    The code (`INSTITUTION_RISK_WEIGHTS_UK`) currently uses 30% for CRR CQS 2, labelled as
-    a "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**.
-    The 30% value matches Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3), not CRR. This is a known
-    code bug — see D1.30 in the docs implementation plan.
+| Unrated | 100% (Art. 120(2)) | SCRA (see below) |
 
 **Basel 3.1 SCRA** (for unrated institutions, CRE20.16-21):
 
@@ -49,7 +43,7 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | B | 75% |
 | C | 150% |
 
-**Source**: `INSTITUTION_RISK_WEIGHTS_UK`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
+**Source**: `INSTITUTION_RISK_WEIGHTS_CRR`, `INSTITUTION_RISK_WEIGHTS_B31_ECRA`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
 
 ### Short-Term Institution ECAI (Basel 3.1 Art. 120(2)/(2B))
 
@@ -104,7 +98,7 @@ Table 4A applies when a short-term assessment yields a more favourable or equal 
 |----------|------------|-----------|------------|
 | Investment grade | 65% | Art. 122(6)(a) | PRA permission required; internal IG assessment (Art. 122(9)–(10)) |
 | Non-investment grade | **135%** | Art. 122(6)(b) | PRA permission required; internal non-IG assessment |
-| SME corporate | 85% | Art. 122(4) | Turnover ≤ EUR 50m, unrated |
+| SME corporate | 85% | Art. 122(11) | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition), unrated |
 | General unrated | 100% | Art. 122(5) | Default without PRA IG/non-IG permission |
 
 !!! info "Subordinated debt"
@@ -208,10 +202,10 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 The multiplied weight is **not capped** at the Table 6B ceiling — it may exceed 105%
 (e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
 
-!!! warning "Code Divergence (P1.111)"
-    The current implementation incorrectly caps the multiplied risk weight at 105%.
-    Art. 124G(2) has no express cap — the correct result for LTV > 100% with a junior
-    charge is 131.25%, not 105%. See IMPLEMENTATION_PLAN.md P1.111.
+!!! success "Resolved (P1.111)"
+    Previously the multiplied RW was incorrectly capped at the 105% table maximum.
+    Art. 124G(2) has no express cap — LTV > 100% with a junior charge now correctly
+    resolves to 131.25%. Regression guard: `test_multiplier_not_capped_at_105`.
 
 **Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 
@@ -242,13 +236,13 @@ The multiplied weight is **not capped** at the Table 6B ceiling — it may excee
     BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
     The PRA simplified this to a **2-band table** in Art. 124I.
 
-**Junior Charge Multiplier (Art. 124I(3)):**
+**Junior Charge Treatment (Art. 124I(3)):** Absolute RW override on Art. 124I(1)/(2) base:
 
-| LTV | Multiplier | Effective RW |
-|-----|-----------|--------------|
-| ≤ 60% | 1.0× | 100% |
-| 60–80% | 1.25× | 125% |
-| > 80% | 1.375× | 137.5% |
+| LTV | Absolute RW | Reference |
+|-----|-------------|-----------|
+| ≤ 60% | 100% | Art. 124I(3)(a) |
+| 60–80% | 125% | Art. 124I(3)(b) |
+| > 80% | **137.5%** | Art. 124I(3)(c) |
 
 #### ADC Exposures
 
@@ -618,7 +612,7 @@ from rwa_calc.data.tables.crr_risk_weights import lookup_risk_weight
 rw = lookup_risk_weight(
     exposure_class="corporate",
     cqs=2,
-    use_uk_deviation=True
+    is_basel_3_1=False,
 )
 # Returns: Decimal("0.50") (50%)
 ```

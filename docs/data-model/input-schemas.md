@@ -167,7 +167,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `beel` | `Float64` | No | Best estimate expected loss |
 | `is_revolving` | `Boolean` | Yes | Revolving vs term facility |
-| `is_qrre_transactor` | `Boolean` | No | QRRE transactor flag (CRR Art. 147(5), CRE30.55) — True if borrower repays in full each period |
+| `is_qrre_transactor` | `Boolean` | No | QRRE transactor flag. Drives the Basel 3.1 SA 45% weight (Art. 123(3)(a)) and the IRB 0.05% PD floor (Art. 163(1)(c)). True iff the revolving account has been repaid in full at each scheduled repayment date for the previous 12 months, OR the overdraft has not been drawn for the previous 12 months (PRA Glossary p. 9). Per Art. 154(4), accounts with less than 12 months of repayment history must be flagged False. Assessed upstream — not validated by the calculator. See [Transactor Exposure](../appendix/glossary.md#transactor-exposure). |
 | `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
 | `risk_type` | `String` | Yes | Off-balance sheet risk category (see below) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |

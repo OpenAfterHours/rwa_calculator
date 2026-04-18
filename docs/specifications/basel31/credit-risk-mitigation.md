@@ -19,6 +19,7 @@ and IRB parameter substitution replacing double default.
 | FR-8.5 | Double default removal (replaced by parameter substitution) | P0 | Done |
 | FR-8.6 | Art. 191A method taxonomy (FCM, PSM, LGD-AM) | P1 | Done |
 | FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Not Implemented |
+| FR-8.8 | Art. 123B currency mismatch 1.5x multiplier (retail/RRE) | P1 | Partial (flag only; auto-detection and 90% hedge test not implemented) |
 
 ---
 
@@ -53,33 +54,43 @@ with parameter substitution for IRB-rated guarantors.
 
 ### Government Bond Haircuts (5-Band)
 
-**PRA PS1/26 Art. 224 Table 3 — 10-day liquidation period**
+**PRA PS1/26 Art. 224 Table 1 — 10-day liquidation period** (verified against
+ps126app1.pdf p.203, 17 Apr 2026; "entity type (b) of paragraph 1 of Article 197"
+— sovereigns / central banks / certain PSEs and MDBs treated as sovereign):
 
 | CQS | 0–1y | 1–3y | 3–5y | 5–10y | 10y+ |
 |-----|------|------|------|-------|------|
 | CQS 1 | 0.5% | 2% | 2% | 4% | 4% |
-| CQS 2 | 1% | 3% | 4% | 6% | 12% |
-| CQS 3 | 1% | 3% | 4% | 6% | 12% |
+| CQS 2–3 | 1% | 3% | 3% | 6% | **6%** |
 | CQS 4 | 15% | 15% | 15% | 15% | 15% |
 
 CQS 5–6 government bonds are **ineligible** as financial collateral (Art. 197(1)(b)).
 
-!!! note "CRR Comparison — Government Bonds"
-    CRR used 3 bands: 0–1y, 1–5y, 5y+. For CQS 1 the split has no material impact
-    (all sub-bands within 1–5y and 5y+ retain the same values). The main impact is
-    CQS 2–3 bonds with 10y+ residual maturity: haircut increases from 6% to **12%**.
+!!! note "Change log — Art. 224 Table 1 sovereign corrections (17 Apr 2026)"
+    Earlier drafts of this spec showed 4% at the CQS 2–3 / 3–5y cell and 12% at
+    the CQS 2–3 / 10y+ cell. The PRA Table 1 values are **3%** and **6%**
+    respectively — CQS 2–3 sovereigns cap out at 6% even for the longest
+    residual-maturity band. The 5-band split is not a penal re-scale for
+    well-rated sovereigns.
 
 ### Corporate and Institution Bond Haircuts (5-Band)
 
-**PRA PS1/26 Art. 224 Table 3 — 10-day liquidation period**
+**PRA PS1/26 Art. 224 Table 1 — 10-day liquidation period** (verified against
+ps126app1.pdf p.203; "entity types (c) and (d) of paragraph 1 of Article 197" —
+institutions / corporates):
 
 | CQS | 0–1y | 1–3y | 3–5y | 5–10y | 10y+ |
 |-----|------|------|------|-------|------|
-| CQS 1 | 1% | 4% | 6% | 10% | 12% |
-| CQS 2 | 2% | 6% | 8% | 15% | 15% |
-| CQS 3 | 2% | 6% | 8% | 15% | 15% |
+| CQS 1 | 1% | 3% | 4% | 6% | 12% |
+| CQS 2–3 | 2% | 4% | 6% | **12%** | **20%** |
 
 CQS 4–6 corporate/institution bonds are **ineligible** (Art. 197(1)(d)).
+
+!!! note "Change log — Art. 224 Table 1 corporate corrections (17 Apr 2026)"
+    Earlier drafts of this spec understated the CQS 2–3 haircuts for long residual
+    maturities (showing 15% flat at 5–10y and 10y+). PRA Table 1 applies
+    **12%** at 5–10y and **20%** at 10y+ for CQS 2–3 corporate/institution debt.
+    CQS 1 values have also been brought into line with Table 1 (1 / 3 / 4 / 6 / 12).
 
 ### Equity Haircuts
 
@@ -230,17 +241,37 @@ substitution applies regardless of framework.
 
 ### Calculation Method
 
-For the guaranteed portion of the exposure:
+For the guaranteed (covered) portion of the exposure Art. 236(1)(a) applies the
+IRB capital formula using the **guarantor's** PD together with an LGD drawn from
+one of two options (ps126app1.pdf p.215–216, 17 Apr 2026):
 
 ```
-guarantor_rw = IRB_formula(PD=guarantor_pd_floored, LGD=0.40, MA=MA_original, scaling=1.0)
+guarantor_rw = IRB_formula(PD=guarantor_pd_floored, LGD=LGD_covered, MA=MA_original, scaling=1.0)
 ```
 
 Where:
 
-- `guarantor_pd_floored` = guarantor's PD, subject to the same PD floors as the borrower
-- LGD = **40%** (F-IRB senior unsecured non-FSE rate under Basel 3.1)
-- Scaling factor = 1.0 (no 1.06)
+- `guarantor_pd_floored` = the PD that would be assigned to a comparable direct exposure
+  to the protection provider, after the Art. 160 PD floor and the Art. 160(4) "no better
+  than direct" uplift.
+- `LGD_covered` is one of:
+    1. **Borrower LGD, unprotected** — the LGD the exposure would carry if no unfunded
+       credit protection existed, after the Art. 161(5) input floor and the Art. 161(6)
+       uplift; or
+    2. **Guarantor F-IRB LGD** — the LGD that would apply to the guarantee if it were a
+       direct exposure to the protection provider under the F-IRB Approach, taking
+       seniority into account (Art. 161(1): 40% senior non-FSE, 45% senior FSE, 75%
+       subordinated, etc.), with the same Art. 160(4) / 161(6) uplifts.
+- Scaling factor = 1.0 (no 1.06).
+
+!!! note "Change log — Art. 236 LGD source clarified (17 Apr 2026)"
+    Earlier drafts of this spec stated `LGD = 40% (F-IRB senior unsecured non-FSE)`
+    as a fixed value. Art. 236(1)(a) does not fix LGD at 40% — the institution may
+    either retain the borrower's unprotected LGD or substitute the guarantor's F-IRB
+    LGD. In the common case of a non-FSE senior guarantor the substituted value is
+    40% under Art. 161(1)(aa), which is why the simplification was previously shown,
+    but for FSE guarantors the substituted LGD is 45% and for subordinated guarantees
+    it is 75%.
 
 ### Blended RWA
 
@@ -254,8 +285,13 @@ original IRB RW).
 ### Expected Loss Under Parameter Substitution
 
 ```
-EL_blended = EL_original x (unguaranteed / EAD) + guarantor_pd_floored x 0.40 x guaranteed_portion
+EL_blended = EL_original x (unguaranteed / EAD)
+           + guarantor_pd_floored x LGD_covered x guaranteed_portion
 ```
+
+`LGD_covered` is the same value used in the risk-weight calculation above
+(Art. 236(1A)(b)) — either the unprotected borrower LGD or the substituted
+guarantor F-IRB LGD.
 
 ### Audit Trail
 
@@ -327,24 +363,44 @@ protection first, then the adjusted unfunded protection is applied to the origin
 ## FCSM Under Basel 3.1 (Art. 222)
 
 The Financial Collateral Simple Method is retained for SA exposures under Basel 3.1.
+Paragraph references below verified against ps126app1.pdf pp.199–200 (17 Apr 2026).
 
-### Art. 222(1) — 20% RW Floor
+### Art. 222(3) — 20% RW Floor
 
-All collateral-secured portions receive a minimum **20%** risk weight.
+The risk weight of the collateralised portion is the RW that would apply to a
+direct exposure to the collateral instrument, with a minimum **20%** floor
+(Art. 222(3), second sub-paragraph), **except** as specified in paragraphs 4 and 6.
 
-### Art. 222(4) — 0% Floor Exceptions
+### Art. 222(4) — 0% / 10% Floor for SFTs (Art. 227 Criteria)
 
-The floor is reduced to **0%** for repo-style / SFT transactions where collateral is in the
-**same currency** as the exposure and one of:
+For **securities financing transactions** that meet the criteria in Art. 227, the
+collateralised portion receives a **0%** risk weight where the counterparty is a
+**core market participant**, and **10%** where the counterparty is not a core market
+participant. This paragraph replaces the flat 20% floor for qualifying SFTs.
 
-- **(a)** Cash deposits or cash-assimilated instruments
-- **(d)** Core market participant repos where collateral is sovereign/CB debt, PSE debt,
-  or institution debt rated CQS 1-2
+### Art. 222(6) — 0% Floor for Same-Currency Cash or 0%-RW Sovereign Debt
 
-### Art. 222(7) — No Maturity Mismatch
+For **non-SFT transactions** where the exposure and the collateral are denominated
+in the **same currency**, the floor drops to **0%** if either:
+
+- **(a)** the collateral is cash on deposit (or a cash-assimilated instrument) with the lending institution, or
+- **(b)** the collateral is central-government or central-bank debt that is eligible
+  for a 0% SA risk weight, with its market value discounted by 20% (Art. 222(6)(b),
+  with the extended definition of "central government / central bank debt" in
+  Art. 222(7) covering certain RGLAs, MDBs, and international organisations).
+
+!!! note "Change log — Art. 222 carve-outs clarified (17 Apr 2026)"
+    Earlier drafts mixed up the two carve-outs. Paragraph **4** is the
+    SFT-with-Art.227 rule (0% core market / 10% otherwise); paragraph **6** is
+    the same-currency cash / 0%-RW sovereign carve-out for non-SFT transactions.
+    There is no sub-point (d) in Art. 222(4); sub-points (a) and (b) sit under
+    Art. 222(**6**).
+
+### Art. 222 — No Maturity Mismatch
 
 Under the FCSM, the collateral's residual maturity must be at least equal to the exposure's
-residual maturity. The Art. 238 maturity mismatch adjustment does **not** apply to the FCSM.
+residual maturity. The Art. 238 maturity mismatch adjustment does **not** apply to the
+FCSM (Art. 239(1) excludes FCSM from the maturity-mismatch formula).
 
 ---
 
@@ -395,6 +451,98 @@ Where:
 | T | Residual maturity of the exposure (years), capped at 5 |
 
 When t >= T, no maturity mismatch adjustment is needed.
+
+---
+
+## Currency Mismatch 1.5x Multiplier (Art. 123B)
+
+### Overview
+
+PS1/26 introduces a new **1.5x risk-weight multiplier** (Art. 123B of the Credit Risk:
+Standardised Approach (CRR) Part) for unhedged retail and residential real estate exposures
+where the lending currency differs from the currency of the obligor's source of income. This
+captures FX risk on household and SME borrowers that is not otherwise reflected in the
+exposure's base risk weight.
+
+### Scope
+
+Applies to exposures assigned to the SA exposure classes at points (h) (retail) and (i)
+(residential real estate) of Art. 112(1) where **either**:
+
+- the obligor is a natural person and the lending currency differs from the currency of the
+  obligor's source of income (Art. 123B(1)(a)); **or**
+- the obligor is a special-purpose entity created to finance or operate immovable property,
+  a natural-person guarantor receives the economic benefit of the residential real estate,
+  and the lending currency differs from the currency of that guarantor's source of income
+  (Art. 123B(1)(b)).
+
+"Source of income" includes salary, rental income and remittances but **excludes** proceeds
+from asset sales or institution recourse actions (Art. 123B(4)(a)).
+
+### Multiplier and Cap
+
+```
+RW_adjusted = min(1.5 x RW_base, 150%)
+```
+
+where `RW_base` is the risk weight calculated under Art. 123 (retail) or Art. 124F-124L
+(real estate), as applicable. The multiplier is applied **after** any other risk-weight
+overrides (e.g. regulatory-RE loan-splitting, ADC floor, charge-priority adjustments), and
+is capped so the final risk weight does not exceed 150%.
+
+### Hedge Exemption (Art. 123B(2))
+
+An exposure is **hedged** (and therefore outside Art. 123B scope) only if:
+
+1. The obligor — or, for the SPE case, the obligor and/or guarantor — has a **natural hedge
+   or financial hedge** against the FX risk arising from the currency mismatch; and
+2. Those hedges together cover **at least 90% of any instalment** for the exposure.
+
+For natural hedges comprising assets held by the obligor, the hedge value is determined by
+applying volatility adjustments assuming the assets are collateral against an exposure
+without currency mismatch, using a 5-day liquidation period under Art. 223(2) and
+Art. 224-227 (Art. 123B(2)(b)).
+
+**Revolving facilities** (Art. 123B(2A)): instalment amount is the greater of (a) the
+contractual minimum, (b) the fully-drawn contractual amount; for multi-currency facilities
+the instalment is calculated ignoring current drawings and assuming full draw in a currency
+which both mismatches the income currency and for which hedges cover less than 90%
+(conservative drawing assumption).
+
+### Fallback Rule (Art. 123B(3))
+
+Where an institution is unable to identify which exposures have a currency mismatch and the
+exposure was incurred **prior to 1 January 2027**, the 1.5x multiplier must be applied to
+**all** unhedged retail and residential real estate exposures in scope of points (h)/(i) of
+Art. 112(1) — **except** where the lending currency equals the domestic currency of the
+obligor's country of residence **or** country of employment — subject to the 150% cap.
+
+### Reporting
+
+The multiplier-affected exposures appear in:
+
+- **OF 07.00** row 0380 — "Retail and real estate exposures subject to the currency
+  mismatch multiplier (Art. 112(1)(h)/(i))".
+- **UKB CR5** — reported against the base (pre-multiplier) risk weight, but the RWEA column
+  reflects the multiplier (per Annex XX CR5 instructions).
+
+### Implementation Status
+
+!!! warning "Implementation Status"
+    Engine support for Art. 123B is tracked in IMPLEMENTATION_PLAN.md. The calculator
+    currently requires an explicit `currency_mismatch_unhedged` input flag; automatic
+    identification (lending-currency vs income-currency comparison) and the Art. 123B(2)
+    90%-coverage hedge test are not performed. The Art. 123B(3) pre-2027 fallback is
+    likewise not implemented — portfolios with unknown mismatch status will not receive the
+    conservative blanket multiplier.
+
+### References
+
+- PS1/26 Appendix 1, Credit Risk: Standardised Approach (CRR) Part, **Article 123B** —
+  Retail exposures and residential real estate exposures with a currency mismatch
+  (Annex D, pages 49–50 of ps126app1.pdf).
+- BCBS CRE20.88 (currency mismatch multiplier for retail and RRE exposures — underlying
+  methodology).
 
 ---
 

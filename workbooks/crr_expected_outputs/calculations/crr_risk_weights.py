@@ -19,8 +19,7 @@ from workbooks.crr_expected_outputs.data.crr_params import (
     CRR_COMMERCIAL_RW_LOW_LTV,
     CRR_COMMERCIAL_RW_STANDARD,
     CRR_CORPORATE_RW,
-    CRR_INSTITUTION_RW_STANDARD,
-    CRR_INSTITUTION_RW_UK,
+    CRR_INSTITUTION_RW,
     CRR_RESIDENTIAL_LTV_THRESHOLD,
     CRR_RESIDENTIAL_RW_HIGH_LTV,
     CRR_RESIDENTIAL_RW_LOW_LTV,
@@ -43,25 +42,17 @@ def get_cgcb_rw(cqs: int | None) -> Decimal:
     return CRR_CGCB_RW.get(cqs, CRR_CGCB_RW[None])
 
 
-def get_institution_rw(
-    cqs: int | None, country: str = "GB", use_uk_deviation: bool = True
-) -> Decimal:
+def get_institution_rw(cqs: int | None) -> Decimal:
     """
-    Get risk weight for institution (CRR Art. 120-121).
+    Get risk weight for institution (CRR Art. 120 Table 3).
 
     Args:
         cqs: Credit Quality Step (1-6) or None for unrated
-        country: Country code
-        use_uk_deviation: Whether to apply UK deviation (30% for CQS2)
 
     Returns:
         Risk weight as Decimal
-
-    Note: UK applies 30% RW for CQS 2 instead of standard Basel 50%
     """
-    if country == "GB" and use_uk_deviation:
-        return CRR_INSTITUTION_RW_UK.get(cqs, CRR_INSTITUTION_RW_UK[None])
-    return CRR_INSTITUTION_RW_STANDARD.get(cqs, CRR_INSTITUTION_RW_STANDARD[None])
+    return CRR_INSTITUTION_RW.get(cqs, CRR_INSTITUTION_RW[None])
 
 
 def get_corporate_rw(cqs: int | None) -> Decimal:

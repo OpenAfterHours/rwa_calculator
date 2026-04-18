@@ -449,9 +449,9 @@ def _(
     exposure_d4 = Decimal("1000000")
     rw_borrower_d4 = get_corporate_rw(None)  # 100% unrated
 
-    # Guarantee from UK bank (CQS 2 = 30% RW UK deviation)
+    # Guarantee from bank (CQS 2 = 50% RW per CRR Art. 120 Table 3)
     guarantee_amount_d4 = Decimal("600000")
-    rw_guarantor_d4 = get_institution_rw(cqs=2, country="GB", use_uk_deviation=True)  # 30%
+    rw_guarantor_d4 = get_institution_rw(cqs=2)  # 50%
 
     # Pre-CRM RWA
     rwa_pre_d4 = calculate_sa_rwa(exposure_d4, rw_borrower_d4)

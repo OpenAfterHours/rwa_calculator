@@ -52,6 +52,9 @@ An event where a counterparty fails to meet its credit obligations. Defined as 9
 ### DPD (Days Past Due)
 The number of days a payment is overdue.
 
+### Due Diligence Obligation (Art. 110A)
+Basel 3.1 framework-wide obligation (PRA PS1/26 Art. 110A) requiring SA firms to assess each obligor's operating and financial condition, review annually, and factor in corporate-group membership. Where internal analysis shows the class/ECAI-based risk weight understates risk, the firm must apply a higher RW (uplift is unbounded, unlike the one-CQS-step Art. 120(4) / 122(4) / 129(4A) overrides). Exempt obligor classes (Art. 110A(5)): central governments and central banks, RGLA, PSE, named 0%-RW MDBs (Art. 117(2)), international organisations (Art. 118(1)). No CRR equivalent. Implementation: `due_diligence_performed` / `due_diligence_override_rw` input fields; `SA004` warning under B31 when DD status absent; `due_diligence_override_applied` audit column. See [B31 SA spec](../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a).
+
 ## E
 
 ### EAD (Exposure at Default)
@@ -196,7 +199,15 @@ Basel 3.1 approach for unrated institutions based on capital adequacy ratios.
 A capital calculation method for specialised lending using supervisory categories (Strong/Good/Satisfactory/Weak).
 
 ### SME (Small and Medium Enterprise)
-Companies with turnover ≤ EUR 50m qualifying for preferential treatment.
+Companies with annual turnover below the framework-specific threshold qualifying for
+preferential treatment. **Under CRR** the threshold is **EUR 50m** (used by the
+Art. 501 SME Supporting Factor and by the Art. 153(4) IRB firm-size correlation
+adjustment). **Under Basel 3.1 (PS1/26)** the threshold is fixed at **GBP 44m**
+per the PS1/26 Glossary definition (p.9), calculated on the highest consolidated
+accounts of the group; this applies both in the SA (Art. 122(11) 85% SME corporate
+rate, Art. 123(1)(b) retail SME classification) and in the IRB (Art. 153(4) firm-size
+adjustment, which retains the EUR 50m cap in the reduction formula but gates
+SME eligibility via the GBP 44m SME definition).
 
 ### SME Supporting Factor
 CRR capital relief factor (0.7619/0.85) for SME exposures. Removed under Basel 3.1.
@@ -214,6 +225,14 @@ High-quality capital including common equity (CET1) and additional Tier 1 instru
 
 ### Tier 2 Capital
 Supplementary capital including subordinated debt and general provisions.
+
+### Transactor Exposure
+A qualifying revolving retail exposure (QRRE) that meets one of two behavioural tests over the **previous 12-month period**, as defined by the PRA Glossary (PS1/26 Appendix 1, p. 9):
+
+1. A revolving facility (credit cards, charge cards, and similar where the balance due at each scheduled repayment date is determined as the amount drawn at a pre-defined reference date) where the obligor has repaid the balance in full at **each** scheduled repayment date for the previous 12-month period; or
+2. An overdraft facility that the obligor has not drawn down over the previous 12-month period.
+
+Transactor exposures receive a preferential **45% SA risk weight** under PRA PS1/26 Art. 123(3)(a) (vs 75% for non-transactors under Art. 123(3)(b)) and a **0.05% IRB PD floor** under Art. 163(1)(c) (vs 0.10% for non-transactors). Art. 154(4) explicitly classifies revolving exposures with less than 12 months of repayment history as non-transactors. The 12-month behavioural assessment is the reporting institution's responsibility; the `is_qrre_transactor` input flag is accepted as-is by the calculator. CRR SA has no transactor sub-category — the concept is new to the SA risk-weight table in Basel 3.1. See [SA Risk Weights — Transactor Exposure Eligibility](../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary).
 
 ## U
 

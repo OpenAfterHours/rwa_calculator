@@ -90,7 +90,7 @@ def _(mo):
 
     **Key CRR References:**
     - Art. 114: Sovereign risk weights (0% to 150% based on CQS)
-    - Art. 120-121: Institution risk weights (UK deviation: 30% for CQS 2)
+    - Art. 120 Table 3: Institution risk weights (50% for CQS 2, 100% unrated)
     - Art. 122: Corporate risk weights (20% to 150% based on CQS)
     - Art. 123: Retail risk weight (75%)
     - Art. 125: Residential mortgage (35% for LTV ≤ 80%, 75% on excess)
@@ -323,18 +323,18 @@ def _(mo):
     """Scenario CRR-A4 Header."""
     mo.md("""
     ---
-    ## Scenario CRR-A4: UK Institution CQS 2 - 30% Risk Weight (UK Deviation)
+    ## Scenario CRR-A4: Institution CQS 2 - 50% Risk Weight
 
-    **Input:** £1m loan to UK bank with CQS 2 rating
-    **Expected:** 30% RW, £300k RWA (UK deviation from standard 50%)
-    **Reference:** CRR Art. 120-121 (UK deviation)
+    **Input:** £1m loan to bank with CQS 2 rating
+    **Expected:** 50% RW, £500k RWA
+    **Reference:** CRR Art. 120 Table 3
     """)
     return
 
 
 @app.cell
 def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_institution_rw):
-    """Calculate Scenario CRR-A4: UK Institution CQS 2."""
+    """Calculate Scenario CRR-A4: Institution CQS 2."""
     loan_a4 = fixtures.get_loan("LOAN_INST_UK_003")
     cpty_a4 = fixtures.get_counterparty("INST_UK_003")
     rating_a4 = fixtures.get_rating("INST_UK_003")
@@ -342,14 +342,13 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_institution_rw
     cqs_a4 = rating_a4["cqs"] if rating_a4 else 2
 
     ead_a4 = Decimal(str(loan_a4["drawn_amount"]))
-    # Use UK deviation for CQS 2 institutions
-    rw_a4 = get_institution_rw(cqs_a4, country="GB", use_uk_deviation=True)
+    rw_a4 = get_institution_rw(cqs_a4)
     rwa_a4 = calculate_sa_rwa(ead_a4, rw_a4)
 
     result_crr_a4 = CRRScenarioResult(
         scenario_id="CRR-A4",
         scenario_group="CRR-A",
-        description="UK Institution CQS 2 - 30% RW (UK deviation)",
+        description="Institution CQS 2 - 50% RW (CRR Art. 120 Table 3)",
         exposure_reference="LOAN_INST_UK_003",
         counterparty_reference="INST_UK_003",
         approach="SA",
@@ -362,13 +361,10 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_institution_rw
         calculation_details={
             "counterparty_name": cpty_a4["counterparty_name"],
             "cqs": cqs_a4,
-            "uk_deviation": True,
-            "standard_rw": 0.50,
-            "uk_rw": 0.30,
             "formula": "RWA = EAD × RW",
             "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
-        regulatory_reference="CRR Art. 120-121",
+        regulatory_reference="CRR Art. 120 Table 3",
     )
 
     print(f"CRR-A4: EAD=£{ead_a4:,.0f}, RW={rw_a4 * 100:.0f}%, RWA=£{rwa_a4:,.0f}")
@@ -957,7 +953,7 @@ def _(mo):
     Key CRR-specific observations:
     1. Residential mortgages use simpler 35%/75% split at 80% LTV (vs Basel 3.1 LTV bands)
     2. SME supporting factor (0.7619) reduces RWA by ~24% for eligible exposures
-    3. UK deviation: Institution CQS 2 gets 30% RW (not standard 50%)
+    3. Institution CQS 2: 50% RW (CRR Art. 120 Table 3); unrated institutions 100%
     """)
     return
 

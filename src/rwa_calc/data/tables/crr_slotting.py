@@ -90,9 +90,13 @@ SLOTTING_EL_RATES_SHORT: dict[SlottingCategory, Decimal] = {
 }
 
 # HVCRE EL rates — Table B (flat, no maturity split)
+# UK CRR has no HVCRE concept (Art. 158 was omitted by SI 2021/1078); these
+# values follow the PRA PS1/26 Art. 158(6) Table B HVCRE row which is the only
+# extant UK regulatory source — flat 0.4% across both Strong and Good
+# (subgrade columns A/B/C/D all 0.4% for HVCRE).
 SLOTTING_EL_RATES_HVCRE: dict[SlottingCategory, Decimal] = {
     SlottingCategory.STRONG: Decimal("0.004"),  # 0.4%
-    SlottingCategory.GOOD: Decimal("0.008"),  # 0.8%
+    SlottingCategory.GOOD: Decimal("0.004"),  # 0.4%
     SlottingCategory.SATISFACTORY: Decimal("0.028"),  # 2.8%
     SlottingCategory.WEAK: Decimal("0.08"),  # 8%
     SlottingCategory.DEFAULT: Decimal("0.50"),  # 50%

@@ -88,38 +88,33 @@ class HierarchyResolver:
         )
         errors.extend(exp_errors)
 
-        # Apply FX conversion so threshold calculations use consistent currency
+        # Apply FX conversion so threshold calculations use consistent currency.
+        # The converter methods also preserve ``original_currency`` when conversion
+        # is disabled or no FX rates are supplied, so downstream FX-mismatch checks
+        # (Art. 224 H_fx on collateral, guarantees) always have the pre-conversion
+        # currency pair available.
         fx_converter = FXConverter()
-        collateral = data.collateral
-        guarantees = data.guarantees
-        provisions = data.provisions
-        equity_exposures = data.equity_exposures
-
-        if config.apply_fx_conversion and data.fx_rates is not None:
-            exposures = fx_converter.convert_exposures(exposures, data.fx_rates, config)
-            if collateral is not None:
-                collateral = fx_converter.convert_collateral(collateral, data.fx_rates, config)
-            if guarantees is not None:
-                guarantees = fx_converter.convert_guarantees(guarantees, data.fx_rates, config)
-            if provisions is not None:
-                provisions = fx_converter.convert_provisions(provisions, data.fx_rates, config)
-            if equity_exposures is not None:
-                equity_exposures = fx_converter.convert_equity_exposures(
-                    equity_exposures, data.fx_rates, config
-                )
-        else:
-            # Add audit trail columns with null values when no conversion
-            exposures = exposures.with_columns(
-                [
-                    pl.col("currency").alias("original_currency"),
-                    (
-                        pl.col("drawn_amount")
-                        + pl.col("interest").fill_null(0.0)
-                        + pl.col("nominal_amount")
-                    ).alias("original_amount"),
-                    pl.lit(None).cast(pl.Float64).alias("fx_rate_applied"),
-                ]
-            )
+        exposures = fx_converter.convert_exposures(exposures, data.fx_rates, config)
+        collateral = (
+            fx_converter.convert_collateral(data.collateral, data.fx_rates, config)
+            if data.collateral is not None
+            else None
+        )
+        guarantees = (
+            fx_converter.convert_guarantees(data.guarantees, data.fx_rates, config)
+            if data.guarantees is not None
+            else None
+        )
+        provisions = (
+            fx_converter.convert_provisions(data.provisions, data.fx_rates, config)
+            if data.provisions is not None
+            else None
+        )
+        equity_exposures = (
+            fx_converter.convert_equity_exposures(data.equity_exposures, data.fx_rates, config)
+            if data.equity_exposures is not None
+            else None
+        )
 
         exposures = self._add_collateral_ltv(exposures, collateral)
 
@@ -603,6 +598,7 @@ class HierarchyResolver:
                     "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
                     "has_one_day_maturity_floor": pl.Boolean,
+                    "is_sft": pl.Boolean,
                     "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
                     "is_qrre_transactor": pl.Boolean,
@@ -844,6 +840,11 @@ class HierarchyResolver:
                 if "has_one_day_maturity_floor" in facility_cols
                 else pl.lit(False).alias("has_one_day_maturity_floor")
             ),
+            (
+                pl.col("is_sft").fill_null(False)
+                if "is_sft" in facility_cols
+                else pl.lit(False).alias("is_sft")
+            ),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
             (
@@ -955,6 +956,11 @@ class HierarchyResolver:
                 else pl.lit(False).alias("has_one_day_maturity_floor")
             ),
             (
+                pl.col("is_sft").fill_null(False)
+                if "is_sft" in loan_cols
+                else pl.lit(False).alias("is_sft")
+            ),
+            (
                 pl.col("has_netting_agreement").fill_null(False)
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
@@ -1050,6 +1056,11 @@ class HierarchyResolver:
                         pl.col("has_one_day_maturity_floor").fill_null(False)
                         if "has_one_day_maturity_floor" in cont_cols
                         else pl.lit(False).alias("has_one_day_maturity_floor")
+                    ),
+                    (
+                        pl.col("is_sft").fill_null(False)
+                        if "is_sft" in cont_cols
+                        else pl.lit(False).alias("is_sft")
                     ),
                     pl.lit(False).alias("has_netting_agreement"),
                     # facility_termination_date is facility-level; inherited via facility join later

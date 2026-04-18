@@ -7,8 +7,9 @@ Pipeline position:
 Key responsibilities:
 - Aggregate eligible financial collateral per exposure (raw market value, no haircuts)
 - Derive collateral risk weight from issuer type and CQS (Art. 114-134)
-- Apply Art. 222(4) 0% RW exceptions (same-currency cash, 0%-RW sovereign bonds)
-- Check maturity eligibility (Art. 222(7): collateral maturity >= exposure maturity)
+- Apply the 20% floor per item (Art. 222(1)/(3))
+- Apply the same-currency 0% RW carve-out per item — CRR Art. 222(4) / PRA PS1/26
+  Art. 222(6) — for cash and 0%-RW sovereign bonds
 - Set fcsm_* columns on exposure frame for SA calculator RW substitution
 - Do NOT reduce EAD (that is the Comprehensive Method's mechanism)
 
@@ -25,6 +26,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.data.tables.crr_simple_method import (
+    FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
 )
 from rwa_calc.domain.enums import ApproachType
@@ -128,13 +130,18 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
 
 
 def _is_zero_rw_exception_expr() -> pl.Expr:
-    """Art. 222(4): conditions for 0% RW instead of the 20% floor.
+    """Same-currency cash / 0%-RW sovereign 0% RW exception (not floored to 20%).
 
-    Returns True when the 0% floor exception applies:
-    (a) Cash deposit or deposit treated as cash, in the same currency
-    (b) 0%-RW sovereign bond in the same currency (with 20% market value discount)
+    CRR Art. 222(4) / PRA PS1/26 Art. 222(6): the 20% floor from Art. 222(1)/(3)
+    does not apply to the following same-currency carve-outs:
+    (a) Cash deposit or cash assimilated instrument
+    (b) 0%-RW sovereign debt securities (subject to 20% market-value discount)
 
-    The currency match is checked via _is_same_currency (set upstream).
+    The PRA renumbered this to paragraph 6 when drafting PS1/26; the underlying
+    substance is identical. SFT-specific 0%/10% (PRA Art. 222(4) / CRR Art. 222(5))
+    is a separate branch — see P1.93.
+
+    The currency match is checked via `_fcsm_same_currency` (set upstream).
     """
     ctype = pl.col("collateral_type").str.to_lowercase()
     is_same_currency = pl.col("_fcsm_same_currency").fill_null(False)
@@ -296,11 +303,13 @@ def compute_fcsm_columns(
         .alias("_fcsm_effective_value"),
     )
 
-    # 6. Determine effective RW (0% exception or item RW)
+    # 6. Apply the 20% floor per item here (not on the aggregate) so that
+    # Art. 222(4)/(6) carve-out items flow through at 0% — the floor must not
+    # be re-imposed after the weighted average.
     coll_with_exp = coll_with_exp.with_columns(
         pl.when(_is_zero_rw_exception_expr())
         .then(pl.lit(0.0))
-        .otherwise(pl.col("_fcsm_item_rw"))
+        .otherwise(pl.max_horizontal(pl.col("_fcsm_item_rw"), pl.lit(float(FCSM_RW_FLOOR))))
         .alias("_fcsm_effective_rw"),
     )
 
@@ -419,17 +428,12 @@ def compute_fcsm_columns(
         pl.coalesce("_fcsm_rw_d", "_fcsm_rw_f", "_fcsm_rw_c").fill_null(0.0).alias("_fcsm_raw_rw"),
     )
 
-    # 10. Cap at EAD, apply 20% floor (Art. 222(1))
+    # 10. Cap collateral value at EAD; RW floor was applied per-item in step 6.
     ead_expr = pl.col(ead_col).fill_null(0.0)
     result = result.with_columns(
-        # Capped at EAD
         pl.min_horizontal("_fcsm_raw_value", ead_expr)
         .clip(lower_bound=0.0)
         .alias("fcsm_collateral_value"),
-        # Apply 20% floor to the weighted-average RW (Art. 222(1))
-        # Note: 0% exceptions have already been factored into _fcsm_effective_rw
-        # per item, so the avg can be below 20% when 0% items dominate.
-        # The floor applies to the overall blended secured RW, not per-item.
         pl.col("_fcsm_raw_rw").alias("fcsm_collateral_rw"),
     )
 

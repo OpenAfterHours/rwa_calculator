@@ -300,12 +300,12 @@ class TestInstitutionRiskWeights:
         assert result["risk_weight"] == pytest.approx(0.20)
         assert result["rwa"] == pytest.approx(200000)
 
-    def test_cqs2_uk_deviation_thirty_percent(
+    def test_cqs2_fifty_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CQS 2 institution with UK deviation should get 30% RW."""
+        """CQS 2 institution under CRR gets 50% RW (Art. 120 Table 3)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -314,16 +314,15 @@ class TestInstitutionRiskWeights:
             config=crr_config,
         )
 
-        # UK deviation: 30% instead of Basel standard 50%
-        assert result["risk_weight"] == pytest.approx(0.30)
-        assert result["rwa"] == pytest.approx(300000)
+        assert result["risk_weight"] == pytest.approx(0.50)
+        assert result["rwa"] == pytest.approx(500000)
 
-    def test_unrated_forty_percent(
+    def test_unrated_hundred_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Unrated institution should get 40% RW."""
+        """Unrated institution under CRR gets 100% RW (Art. 120(2) Table 3)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -332,8 +331,8 @@ class TestInstitutionRiskWeights:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(0.40)
-        assert result["rwa"] == pytest.approx(400000)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(1_000_000)
 
 
 class TestCorporateRiskWeights:
@@ -1174,10 +1173,10 @@ class TestSACalculatorBundleProcessing:
         assert df.filter(pl.col("exposure_reference") == "EXP001")["risk_weight"][
             0
         ] == pytest.approx(0.0)
-        # Institution CQS2: 30% (UK deviation)
+        # Institution CQS2: 50% (CRR Art. 120 Table 3)
         assert df.filter(pl.col("exposure_reference") == "EXP002")["risk_weight"][
             0
-        ] == pytest.approx(0.30)
+        ] == pytest.approx(0.50)
         # Retail: 75%
         assert df.filter(pl.col("exposure_reference") == "EXP003")["risk_weight"][
             0

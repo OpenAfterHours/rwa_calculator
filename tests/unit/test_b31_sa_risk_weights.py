@@ -1619,12 +1619,12 @@ class TestCRRRegression:
 
         assert result["risk_weight"] == pytest.approx(0.75)
 
-    def test_crr_institution_uk_deviation_still_works(
+    def test_crr_institution_cqs2_fifty_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR institution CQS 2 UK deviation → 30% (unchanged)."""
+        """CRR Art. 120 Table 3: institution CQS 2 → 50%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -1633,7 +1633,7 @@ class TestCRRRegression:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(0.30)
+        assert result["risk_weight"] == pytest.approx(0.50)
 
 
 # =============================================================================
@@ -1972,12 +1972,12 @@ class TestB31SCRAInstitutionWeights:
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
-            cqs=2,  # CQS 2 → 30% (UK deviation)
+            cqs=2,  # B31 ECRA CQS 2 → 30%
             scra_grade="C",  # Would be 150% under SCRA
             config=b31_config,
         )
 
-        # ECRA takes precedence: CQS 2 → 30%
+        # B31 ECRA takes precedence: CQS 2 → 30%
         assert float(result["risk_weight"]) == pytest.approx(0.30)
 
     def test_scra_not_applied_under_crr(
@@ -1985,18 +1985,18 @@ class TestB31SCRAInstitutionWeights:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """SCRA should be ignored under CRR — unrated institutions get 40%."""
+        """SCRA is not part of CRR — unrated institutions get 100% (Art. 120(2))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
-            scra_grade="C",  # Would be 150% under Basel 3.1
+            scra_grade="C",  # SCRA is B31-only; ignored under CRR
             config=crr_config,
         )
 
-        # CRR: unrated institution → 40% (UK deviation)
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        # CRR Art. 120(2) Table 3: unrated institution → 100%
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
 
     def test_scra_none_unrated_institution_b31(
         self,
@@ -2330,12 +2330,17 @@ class TestB31SCRAShortTermMaturity:
 
         assert float(result["risk_weight"]) == pytest.approx(1.50)
 
-    def test_short_term_not_applied_under_crr(
+    def test_unrated_short_term_uses_crr_art_121_3(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no SCRA short-term treatment — unrated institution gets 40%."""
+        """CRR Art. 121(3): unrated institution with original <= 3m gets flat 20%.
+
+        SCRA grades are B31-only terminology; under CRR the unrated short-term
+        override is flat 20% regardless of any SCRA-style classification. Before
+        the P1.121 fix this fell through to the Table 5 fallback (100%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2346,7 +2351,7 @@ class TestB31SCRAShortTermMaturity:
             config=crr_config,
         )
 
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
 
 
 # =============================================================================
@@ -2572,12 +2577,16 @@ class TestB31ECRAShortTermInstitution:
         # 4 months > 3m threshold, not trade finance → long-term CQS 3 = 50%
         assert float(result["risk_weight"]) == pytest.approx(0.50)
 
-    def test_ecra_short_term_not_applied_under_crr(
+    def test_ecra_short_term_applied_under_crr_art_120_2(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no ECRA short-term Table 4 — rated institution uses standard CQS."""
+        """CRR Art. 120(2) Table 4: rated CQS 3 with residual <= 3m drops from 50% to 20%.
+
+        Before the P1.99 fix CRR fell through to Table 3 (50%) regardless of
+        maturity. Table 4 now correctly applies.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2587,8 +2596,7 @@ class TestB31ECRAShortTermInstitution:
             config=crr_config,
         )
 
-        # CRR CQS 3 institution = 50% regardless of maturity
-        assert float(result["risk_weight"]) == pytest.approx(0.50)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
 
     def test_unrated_short_term_still_uses_scra(
         self,
@@ -2608,6 +2616,80 @@ class TestB31ECRAShortTermInstitution:
 
         # SCRA short-term Grade B = 50%
         assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+
+class TestInstitutionShortTermOriginalMaturity:
+    """PRA PS1/26 Art. 120(2) and Art. 121(3): institution short-term tests key on
+    ORIGINAL maturity, not residual. A 5-year bond with 1 month residual must NOT
+    receive the short-term concession.
+
+    This is the ECRA/SCRA counterpart of PSE Art. 116(3) — the CRR-to-B3.1
+    transition rewrote these clauses to use "original" maturity consistently
+    across rated (Art. 120(2)) and unrated (Art. 121(3)) institutions.
+    """
+
+    def test_scra_seasoned_bond_not_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 121(3): 5y bond with 0.1y residual → Grade A LONG-term (40%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            original_maturity_years=5.0,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_scra_fresh_bond_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 121(3): 3m bond (orig=res=0.1y) → Grade A SHORT-term (20%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            original_maturity_years=0.10,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_ecra_seasoned_bond_not_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 120(2): CQS 3 5y bond with 0.1y residual → Table 3 LONG-term (50%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            original_maturity_years=5.0,
+            config=b31_config,
+        )
+        # Long-term CQS 3 = 50% (B31 ECRA Table 3). Must NOT be 20% short-term.
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_ecra_fresh_bond_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 120(2): CQS 3 3m bond → Table 4 SHORT-term (20%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            original_maturity_years=0.10,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
 
 
 # =============================================================================

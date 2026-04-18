@@ -86,8 +86,10 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     HIGH_RISK_RW,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    INSTITUTION_RISK_WEIGHTS_UK,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -103,6 +105,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
+    build_institution_guarantor_rw_expr,
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import (
@@ -130,6 +133,9 @@ _SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "currency": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
     "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "value_date": ColumnSpec(pl.Date, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
     "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
@@ -141,23 +147,21 @@ _SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
 }
 
 
-def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+def _crr_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
 
     Derives covered bond RW from the issuing institution's CQS via two-step lookup:
-      1. Institution CQS → institution RW (Art. 120, Table 3/4)
+      1. Institution CQS → institution RW (Art. 120 Table 3)
       2. Institution RW → covered bond RW (Art. 129(5) derivation table)
 
     When ``cp_institution_cqs`` is null (institution itself is unrated), uses
-    sovereign-derived institution RW: 40% (UK) → CB 20%, or 100% (standard) → CB 50%.
+    Art. 121 fallback institution RW (100%) → CB 50%.
 
     References:
-        CRR Art. 120: Institution risk weights (UK Table 4, standard Table 3)
+        CRR Art. 120 Table 3: Institution risk weights (CQS 2 = 50%)
         CRR Art. 129(5): Unrated covered bond derivation from institution RW
     """
-    inst_table = (
-        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
-    )
+    inst_table = INSTITUTION_RISK_WEIGHTS_CRR
 
     # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
     cqs_to_cb_rw: dict[int, float] = {}
@@ -180,7 +184,7 @@ def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
     return expr.otherwise(pl.lit(unrated_cb_rw))
 
 
-def _b31_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+def _b31_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for B31 Art. 129(5) unrated covered bond RW derivation.
 
     Derives covered bond RW from the issuing institution's senior unsecured RW,
@@ -193,13 +197,11 @@ def _b31_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
     null, falls back to the SCRA path.
 
     References:
-        PRA PS1/26 Art. 120: ECRA institution risk weights (Table 3)
+        PRA PS1/26 Art. 120 Table 3 ECRA: Institution risk weights (CQS 2 = 30%)
         PRA PS1/26 Art. 120A: SCRA institution risk weights
         PRA PS1/26 Art. 129(5): Unrated covered bond derivation from institution RW
     """
-    inst_table = (
-        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
-    )
+    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA
     cqs_to_cb_rw: dict[int, float] = {}
     for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
         inst_rw = inst_table[cqs_val]
@@ -502,16 +504,34 @@ class SACalculator:
             Exposures with risk_weight column added
         """
         # Get CQS-based risk weight table — Basel 3.1 uses revised corporate weights
-        use_uk_deviation = config.base_currency == "GBP"
         if config.is_basel_3_1:
-            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_b31_combined_cqs_risk_weights().lazy()
         else:
-            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_combined_cqs_risk_weights().lazy()
 
         # Fill any missing optional columns (counterparty attrs, CRM outputs,
         # classifier flags, defensive input-schema fallbacks) from the
         # declarative contract. See _SA_INPUT_CONTRACT at module level.
         exposures = ensure_columns(exposures, _SA_INPUT_CONTRACT)
+
+        # Derive original_maturity_years from (maturity_date - value_date) when
+        # not supplied directly. Required by Art. 116(3) PSE short-term,
+        # Art. 120(2)/(2A) B31 rated institution short-term, Art. 121(3) unrated
+        # institution short-term, and Art. 121(6) trade-goods sovereign floor
+        # exception — all of which key off "original" maturity, not residual.
+        # Days-to-years uses /365.0 consistent with exact_fractional_years_expr.
+        _derived_original = (
+            (pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)).cast(
+                pl.Float64
+            )
+            / 365.0
+        )
+        exposures = exposures.with_columns(
+            pl.when(pl.col("original_maturity_years").is_null())
+            .then(_derived_original)
+            .otherwise(pl.col("original_maturity_years"))
+            .alias("original_maturity_years")
+        )
         schema = exposures.collect_schema()
 
         # CRR Art. 114(3)/(4): Domestic CGCB exposures → 0% RW
@@ -669,12 +689,13 @@ class SACalculator:
                         | (pl.col("property_type").fill_null("") == "commercial")
                     )
                     .then(b31_commercial_rw_expr("_cqs_risk_weight"))
-                    # 4a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
-                    # No domestic currency condition. Overrides all CQS-based weights.
+                    # 4a. PSE short-term (Art. 116(3)): original maturity ≤3m → 20% flat
+                    # Art. 116(3) keys on ORIGINAL maturity — a seasoned long-dated PSE bond
+                    # with short residual does not qualify. No domestic currency condition.
                     .when(
                         (_uc == "PSE")
-                        & pl.col("residual_maturity_years").is_not_null()
-                        & (pl.col("residual_maturity_years") <= 0.25)
+                        & pl.col("original_maturity_years").is_not_null()
+                        & (pl.col("original_maturity_years") <= 0.25)
                     )
                     .then(pl.lit(float(PSE_SHORT_TERM_RW)))
                     # 4b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
@@ -722,18 +743,18 @@ class SACalculator:
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
-                    # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120)
-                    # Rated institutions with residual maturity ≤ 3m get preferential
-                    # weights: CQS 1-5 = 20%, CQS 6 = 150%. Also applies to trade
-                    # finance exposures with residual maturity ≤ 6m (Art. 121(5)).
+                    # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120(2))
+                    # PRA PS1/26 Art. 120(2) keys on ORIGINAL maturity ≤ 3m → CQS 1-5 = 20%,
+                    # CQS 6 = 150%. Art. 120(2A) extends Table 4 to exposures with ORIGINAL
+                    # maturity ≤ 6m arising from the movement of goods.
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
                         & (
-                            (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                            (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
                             | (
                                 pl.col("is_short_term_trade_lc").fill_null(False)
-                                & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.5)
+                                & (pl.col("original_maturity_years").fill_null(1.0) <= 0.5)
                             )
                         )
                     )
@@ -742,15 +763,16 @@ class SACalculator:
                         .then(pl.lit(ecra_st_low_rw))
                         .otherwise(pl.lit(ecra_st_high_rw))
                     )
-                    # 4c. SCRA-based unrated institutions (CRE20.16-21)
+                    # 4c. SCRA-based unrated institutions (CRE20.16-21, Art. 121(3))
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
                     # per PRA PS1/26 Art. 120A (missing data must not produce favourable RW)
-                    # Short-term (≤3m): Grade A/A_ENHANCED → 20%, Grade B → 50%, C → 150%
+                    # Short-term: PRA PS1/26 Art. 121(3) keys on ORIGINAL maturity ≤ 3m →
+                    # Grade A/A_ENHANCED → 20%, Grade B → 50%, C → 150%.
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                        & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                        & (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
                     )
                     .then(
                         pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
@@ -851,7 +873,7 @@ class SACalculator:
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(_b31_unrated_cb_rw_expr(use_uk_deviation))
+                    .then(_b31_unrated_cb_rw_expr())
                     # 11a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
@@ -905,6 +927,11 @@ class SACalculator:
             cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
             cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
             cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
+
+            crr_inst_st_low_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1])
+            crr_inst_st_mid_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4])
+            crr_inst_st_high_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6])
+            crr_inst_unrated_st_rw = float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
@@ -979,11 +1006,13 @@ class SACalculator:
                     # 5a. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 6a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
+                    # 6a. PSE short-term (Art. 116(3)): original maturity ≤3m → 20% flat
+                    # CRR Art. 116(3) keys on ORIGINAL maturity — seasoned long-dated PSE
+                    # bonds with short residual do not qualify.
                     .when(
                         (_uc == "PSE")
-                        & pl.col("residual_maturity_years").is_not_null()
-                        & (pl.col("residual_maturity_years") <= 0.25)
+                        & pl.col("original_maturity_years").is_not_null()
+                        & (pl.col("original_maturity_years") <= 0.25)
                     )
                     .then(pl.lit(float(PSE_SHORT_TERM_RW)))
                     # 6b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
@@ -1024,16 +1053,38 @@ class SACalculator:
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
+                    # 6i. Art. 120(2) Table 4: rated institution short-term
+                    # (residual maturity <= 3m).
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
+                        & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                    )
+                    .then(
+                        pl.when(pl.col("cqs") <= 3)
+                        .then(pl.lit(crr_inst_st_low_rw))
+                        .when(pl.col("cqs") <= 5)
+                        .then(pl.lit(crr_inst_st_mid_rw))
+                        .otherwise(pl.lit(crr_inst_st_high_rw))
+                    )
+                    # 6j. Art. 121(3): unrated institution with ORIGINAL effective
+                    # maturity <= 3m. Overrides the Table 5 sovereign-derived fallback;
+                    # Art. 121(6) sovereign floor (applied later) still raises this in FX.
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
+                    )
+                    .then(pl.lit(crr_inst_unrated_st_rw))
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
                     # via COVERED_BOND_UNRATED_DERIVATION table. When issuing
-                    # institution is also unrated, uses sovereign-derived RW:
-                    # UK (40%) → CB 20%, standard (100%) → CB 50%.
+                    # institution is also unrated, sovereign RW 100% → CB 50%.
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(_crr_unrated_cb_rw_expr(use_uk_deviation))
+                    .then(_crr_unrated_cb_rw_expr())
                     # 7a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
@@ -1167,8 +1218,9 @@ class SACalculator:
         )
 
         # Exception: self-liquidating trade items ≤ 1yr original maturity
+        # (Art. 121(6) CRR / CRE20.22 footnote 13 — both key on ORIGINAL maturity).
         _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
-            pl.col("residual_maturity_years").fill_null(5.0) <= 1.0
+            pl.col("original_maturity_years").fill_null(5.0) <= 1.0
         )
 
         # Floor applies to: unrated institution exposures in FX with
@@ -1304,10 +1356,16 @@ class SACalculator:
         """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
 
         When the Simple Method is elected, the secured portion of each SA exposure
-        gets the collateral's SA risk weight (with a 20% floor) instead of the
-        exposure's own risk weight. The unsecured portion retains the original RW.
+        gets the collateral's SA risk weight instead of the exposure's own risk
+        weight. The unsecured portion retains the original RW.
 
-        Blended RW = secured_pct × max(20%, collateral_rw) + unsecured_pct × exposure_rw
+        Blended RW = secured_pct × collateral_rw + unsecured_pct × exposure_rw
+
+        The 20% floor (Art. 222(1)/(3)) and same-currency 0% carve-outs (CRR
+        Art. 222(4) / PRA PS1/26 Art. 222(6)) are applied per item in
+        ``compute_fcsm_columns``. Applying the floor again on the aggregate would
+        re-impose it on carve-out items — contrary to "except as specified in
+        paragraphs 4 to 6".
 
         This method is a no-op when the Comprehensive Method is elected (default)
         or when fcsm_collateral_value is zero/absent.
@@ -1327,7 +1385,6 @@ class SACalculator:
             return exposures
 
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-        fcsm_rw_floor = 0.20  # Art. 222(1) minimum 20% floor
 
         ead = pl.col(ead_col).fill_null(0.0)
         fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
@@ -1337,15 +1394,8 @@ class SACalculator:
         secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
         unsecured_pct = pl.lit(1.0) - secured_pct
 
-        # Secured RW: apply 20% floor per Art. 222(1)
-        # Art. 222(4) 0% exceptions are already factored into fcsm_collateral_rw
-        # per-item by compute_fcsm_columns, so the weighted avg can be < 20% when
-        # 0%-RW items (same-currency cash) dominate. The floor applies to the
-        # aggregate secured portion RW.
-        secured_rw = pl.max_horizontal(fcsm_rw, pl.lit(fcsm_rw_floor))
-
-        # Blended risk weight
-        blended_rw = secured_pct * secured_rw + unsecured_pct * pl.col("risk_weight")
+        # Blended risk weight; secured RW already reflects per-item floor + carve-outs.
+        blended_rw = secured_pct * fcsm_rw + unsecured_pct * pl.col("risk_weight")
 
         # Only apply when there is actual collateral value
         has_fcsm = fcsm_value > 0
@@ -1473,8 +1523,6 @@ class SACalculator:
         # Calculate guarantor's risk weight based on exposure class and CQS.
         # Uses guarantor_exposure_class (derived from ENTITY_TYPE_TO_SA_CLASS dict)
         # instead of regex on entity_type, ensuring all valid entity types are covered.
-        # UK deviation for institutions (30% for CQS 2 instead of 50%).
-        use_uk_deviation = config.base_currency == "GBP"
 
         # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS.
         # Evaluate the domestic-currency test against the guarantee currency (the
@@ -1506,12 +1554,6 @@ class SACalculator:
         # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
         _gec = pl.col("guarantor_exposure_class").fill_null("")
 
-        # Guarantor risk weights by exposure class and CQS
-        # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
-        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated: UK 40%, standard 100%)
-        # MDB named/IO: 0% unconditional
-        # MDB rated (Table 2B): 20%, 30%, 50%, 100%, 100%, 150% (unrated 50%)
-        # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
         exposures = exposures.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion") <= 0)
@@ -1569,20 +1611,13 @@ class SACalculator:
                     .otherwise(pl.lit(0.50))  # Unrated MDB = 50% (Table 2B)
                 )
                 # Institution guarantors (institution, bank, etc.)
+                # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA so the
+                # dicts remain the single source of truth.
                 .when(_gec == "institution")
                 .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    # Unrated institution: UK sovereign-derived = 40%, standard = 100%
-                    .otherwise(pl.lit(0.40) if use_uk_deviation else pl.lit(1.00))
+                    build_institution_guarantor_rw_expr(
+                        "guarantor_cqs", config.is_basel_3_1
+                    )
                 )
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")

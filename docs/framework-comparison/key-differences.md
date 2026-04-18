@@ -1080,12 +1080,23 @@ satisfy all conditions in Art. 122B(5):
     - (ii) Sufficient reserve funds for contingency and working capital
     - (iii) Revenues subject to rate-of-return regulation, take-or-pay, or
       availability-based contract (defined in Art. 122B(6))
-    - (iv) Revenue depends on one main counterparty rated ≤ 80% RW (sovereign, RGLA,
-      PSE, MDB at 0%, international org at 0%, or corporate ≤ 80%)
+    - (iv) Revenue depends on one main counterparty in one of three eligible
+      sub-types: sovereign / RGLA / PSE / corporate **rated ≤ 80% RW** (Art. 122B(5)(b)(iv)(1));
+      **or** an MDB at 0% under Art. 117(2) (sub-type (2)); **or** an international
+      organisation at 0% under Art. 118(1) (sub-type (3))
     - (v) Contractual provisions provide high creditor protection on default
     - (vi) Main counterparty protects creditors from termination losses
     - (vii) All assets and contracts pledged to creditors (to extent permitted by law)
     - (viii) Creditors may assume control of the entity on default
+
+!!! info "80% Corporate Counterparty Cap is the Most Material Gating Condition"
+    The (iv)(1) corporate sub-type requires the off-taker itself to attract a SA risk
+    weight of 80% or lower. In practice this means investment-grade corporates (CQS 1–3 →
+    20%/50%/75%) or Art. 122(6) IG corporates (65%). A BB-rated or unrated corporate
+    off-taker (100% RW) **disqualifies** the 80% PF weight. This is the single most common
+    reason high-quality PF status is denied. See full canonical conditions and the Art.
+    122B(6) availability-based definition in the
+    [B31 SA risk-weights spec](../specifications/basel31/sa-risk-weights.md#high-quality-pf-criteria-art-122b5).
 
 ## Credit Risk Mitigation Changes
 

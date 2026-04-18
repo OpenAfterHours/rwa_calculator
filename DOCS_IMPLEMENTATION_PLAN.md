@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-18 (Phase 19 + D1.43 fix: SCRA sovereign floor Art. 121(6) documented across spec, key-differences, and user guides)
+Last updated: 2026-04-18 (Phase 19 + D1.43, D1.45 fix: SCRA sovereign floor Art. 121(6) and Art. 122B(5)/(6) high-quality PF criteria documented in spec + cross-references)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -16,7 +16,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 **Totals (Phase 18, 2026-04-18):** 320 items — 146 open, 174 done. By priority: P1 13 open / 58 done, P2 37 open / 55 done, P3 43 open / 10 done, P4 53 open / 51 done.
 
-**Totals (Phase 19, 2026-04-18):** 334 items — 157 open, 177 done (14 new items; D1.47 and D4.78 reclassified from open → done via Phase 19 re-verification; D1.43 SCRA sovereign floor closed 2026-04-18). By priority: P1 **12 open / 60 done**, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done. See Phase 19 section at end of file.
+**Totals (Phase 19, 2026-04-18):** 334 items — 156 open, 178 done (14 new items; D1.47 and D4.78 reclassified from open → done via Phase 19 re-verification; D1.43 SCRA sovereign floor closed 2026-04-18; D1.45 Art. 122B(5)/(6) high-quality PF criteria closed 2026-04-18). By priority: P1 **11 open / 61 done**, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done. See Phase 19 section at end of file.
 
 ---
 
@@ -99,7 +99,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 - [ ] **D1.44** — **Art. 123 "transactor" definition (12-month full repayment history) not documented.** PRA Glossary p.9 defines transactor as: revolving facility where obligor repaid balance in full at each scheduled repayment date for previous 12 months, OR overdraft not drawn for 12 months. The 45% weight is documented but the eligibility gate (12-month behavioural requirement) is nowhere in the specs. **Effort: S** | Ref: PRA PS1/26 Glossary, Art. 123(3)(a)
 
-- [ ] **D1.45** — **Art. 122B(5)-(6) high-quality PF conditions materially incomplete.** Spec lists only 3 of 8+ conditions. Missing: (i) no additional debt without creditor consent, (iii) revenue subject to rate-of-return/take-or-pay/availability contracts, (iv) single main counterparty rated ≤80% RW, (v)-(viii) protective covenants, termination protection, asset pledging, creditor control rights. The 80% RW counterparty condition in (iv) is particularly material. Art. 122B(6) "availability-based" revenue sub-conditions also absent. **Effort: M** | Ref: PRA PS1/26 Art. 122B(5)-(6)
+- [x] **D1.45** — ~~**Art. 122B(5)-(6) high-quality PF conditions materially incomplete.**~~ **FIXED:** B31 spec `docs/specifications/basel31/sa-risk-weights.md` SA SL section completely rewritten. Replaced the prior 3-condition simplification with: (1) Art. 122B(1) rated fall-through to Art. 122(2) (verbatim), (2) Art. 122B(2) full unrated risk-weight table with corrected article references (was incorrectly citing Art. 122A(1)(a)/(b)/(2)/(3) — now Art. 122B(2)(a)/(b)/(c) and Art. 122B(4)), (3) Art. 122B(3) two-limb operational phase definition (positive net cash-flow + declining long-term debt), (4) Art. 122B(4) 80% trigger conditional on Art. 122B(3) AND Art. 122B(5), (5) Art. 122B(5)(a) chapeau verbatim, (6) Art. 122B(5)(b)(i)–(viii) all eight structural conditions verbatim in tabular form, (7) Art. 122B(5)(b)(iv) three eligible main-counterparty sub-types (corporate ≤80% RW, MDB at 0% Art. 117(2), int'l org at 0% Art. 118(1)), (8) Art. 122B(6) availability-based revenues definition with all three sub-conditions (a)/(b)/(c) verbatim, (9) prominent warning admonition on the (iv)(1) 80% counterparty cap as the most material gating condition (BB-rated/unrated counterparty disqualifies), (10) demand-risk shadow-toll non-availability example, (11) CRR comparison block. `framework-comparison/key-differences.md` (line 1083) updated: condition (iv) bullet expanded to spell out the three sub-types from Art. 122B(5)(b)(iv) instead of conflating them; new info admonition on the 80% corporate counterparty cap with cross-link to spec slug `#high-quality-pf-criteria-art-122b5`. PDF verified verbatim against `docs/assets/ps126app1.pdf` Art. 122B pp.46-47 (Phase 19 extract: `tmp/art_122b_extract.md`). Note: Art. 122B(7)/(8) noted in original D1.45 do not exist — the article ends at (6). Docs build validated — no errors or warnings. (2026-04-18)
 
 - [ ] **D1.46** — **Art. 116(4) PSE guarantee-based equivalence mischaracterised as blanked in CRR.** Spec says "Art. 116(4) left blank." This is only true under PRA PS1/26. UK CRR Art. 116(4) **is present**: PSEs may be treated as sovereign/RGLA exposures "where in the opinion of the competent authorities… there is no difference in risk" due to an appropriate guarantee. The spec incorrectly attributes the B31 omission to the current CRR position. **Effort: S** | Ref: UK CRR Art. 116(4), PRA PS1/26 Art. 116(4) (blank)
 

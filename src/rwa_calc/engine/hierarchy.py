@@ -598,6 +598,7 @@ class HierarchyResolver:
                     "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
                     "has_one_day_maturity_floor": pl.Boolean,
+                    "is_sft": pl.Boolean,
                     "has_netting_agreement": pl.Boolean,
                     "is_revolving": pl.Boolean,
                     "is_qrre_transactor": pl.Boolean,
@@ -839,6 +840,11 @@ class HierarchyResolver:
                 if "has_one_day_maturity_floor" in facility_cols
                 else pl.lit(False).alias("has_one_day_maturity_floor")
             ),
+            (
+                pl.col("is_sft").fill_null(False)
+                if "is_sft" in facility_cols
+                else pl.lit(False).alias("is_sft")
+            ),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
             (
@@ -950,6 +956,11 @@ class HierarchyResolver:
                 else pl.lit(False).alias("has_one_day_maturity_floor")
             ),
             (
+                pl.col("is_sft").fill_null(False)
+                if "is_sft" in loan_cols
+                else pl.lit(False).alias("is_sft")
+            ),
+            (
                 pl.col("has_netting_agreement").fill_null(False)
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
@@ -1045,6 +1056,11 @@ class HierarchyResolver:
                         pl.col("has_one_day_maturity_floor").fill_null(False)
                         if "has_one_day_maturity_floor" in cont_cols
                         else pl.lit(False).alias("has_one_day_maturity_floor")
+                    ),
+                    (
+                        pl.col("is_sft").fill_null(False)
+                        if "is_sft" in cont_cols
+                        else pl.lit(False).alias("is_sft")
                     ),
                     pl.lit(False).alias("has_netting_agreement"),
                     # facility_termination_date is facility-level; inherited via facility join later

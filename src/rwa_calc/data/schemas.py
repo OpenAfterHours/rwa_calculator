@@ -82,6 +82,7 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "facility_termination_date": ColumnSpec(pl.Date, required=False),
 }
 
@@ -103,6 +104,7 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_netting_agreement": ColumnSpec(pl.Boolean, default=False, required=False),
     "netting_facility_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -132,6 +134,7 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "bs_type": ColumnSpec(pl.String, default="OFB", required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
@@ -770,6 +773,7 @@ RAW_EXPOSURE_SCHEMA = {
     "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
+    "is_sft": pl.Boolean,  # CRR Art. 162(1): repurchase / securities / commodities lending/borrowing — F-IRB M = 0.5y
     "facility_termination_date": pl.Date,  # Art. 162(2A)(k): max contractual termination date for revolving facilities (Basel 3.1 M)
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,  # Currency before FX conversion

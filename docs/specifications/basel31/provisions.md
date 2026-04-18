@@ -155,6 +155,15 @@ The Art. 159 comparison uses four labelled amounts (A, B, C, D):
 | **C** | EL amounts for **defaulted** exposures | BEEL for A-IRB (Art. 158(5)); PD x LGD for F-IRB |
 | **D** | Specific CRAs for **defaulted** exposures | Specific credit risk adjustments |
 
+!!! info "GCRA vs SCRA classification"
+    The general/specific CRA split that determines which amounts go into Pool B (general +
+    non-defaulted specific), Pool D (defaulted specific only), and the `SA_T2` / `GCRA`
+    terms of OF-ADJ is set by **Commission Delegated Regulation (EU) No 183/2014** and
+    Art. 110. See the
+    [Output Floor spec — GCRA Qualifying Criteria](output-floor.md#general-credit-risk-adjustments-gcra-qualifying-criteria)
+    for the verbatim definitions, IFRS 9 Stage 1/2/3 mapping, mixed-approach allocation
+    (Art. 110(3)), and double-count avoidance rules.
+
 !!! warning "Previous Spec Error Corrected (P4.38)"
     This table previously labelled Pool A as "non-defaulted EL" and Pool B as
     "defaulted provisions". The regulation uses A/B for non-defaulted (EL vs provisions)

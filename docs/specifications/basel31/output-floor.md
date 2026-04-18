@@ -15,6 +15,7 @@ Basel 3.1 output floor mechanism limiting the benefit of internal models relativ
 | FR-6.2 | PRA 4-year transitional schedule (60%–72.5%, 2027–2030) | P0 | Done |
 | FR-6.3 | OF-ADJ own funds adjustment | P1 | Done |
 | FR-6.4 | Entity-type carve-outs (Art. 92(2A)(b)–(d)) | P2 | Done |
+| FR-6.5 | GCRA qualifying criteria (Art. 110, Reg (EU) 183/2014) documented | P1 | Done (documentation — institution-supplied input) |
 
 ---
 
@@ -135,6 +136,127 @@ the own-funds base, making the TREA comparison inconsistent.
     [Floor Calculation](#floor-calculation) section above and the
     [output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj) for COREP
     template mapping.
+
+## General Credit Risk Adjustments (GCRA) — Qualifying Criteria
+
+**Art. 110(1)–(3A), Art. 62(c), Commission Delegated Regulation (EU) No 183/2014**
+
+The OF-ADJ `GCRA` term (capped at 1.25% of S-TREA) and the `SA_T2` term both aggregate
+**general credit risk adjustments only** — specific credit risk adjustments (SCRAs) follow a
+different capital path via exposure-value reduction (SA) or Pool D of Art. 159 (IRB defaulted).
+Incorrectly classifying an SCRA as GCRA (or vice versa) produces a mis-stated OF-ADJ, so the
+GCRA/SCRA boundary and its IFRS 9 mapping must be established upstream of the engine.
+
+### GCRA vs SCRA Definition
+
+The general/specific CRA split is fixed by **Commission Delegated Regulation (EU) No 183/2014**
+— the "RTS on credit risk adjustments", onshored under UK law and cross-referenced by
+Art. 110 and Art. 159(1). Reg (EU) 183/2014 superseded EBA GL 2013/04, which had set the
+same framework prior to CRR2.
+
+| Category | Scope (Reg (EU) 183/2014) | Typical IFRS 9 source |
+|----------|---------------------------|-----------------------|
+| **General CRA (GCRA)** | Loss allowances covering incurred-but-not-yet-identified losses on the **non-defaulted** portfolio, **not allocated to any specific exposure**, and "freely and fully available with regard to timing and amount" to absorb credit losses that have not yet materialised (Reg 183/2014 Art. 1(5)(b)). | Stage 1 (12-month ECL) pool allowances; Stage 2 ECL produced by a **collective** model and not attached to a named obligor. |
+| **Specific CRA (SCRA)** | Loss allowances that have been **allocated to a specific exposure or group of exposures** because credit deterioration has been identified (Reg 183/2014 Art. 1(5)(a)). Always tied to a named obligor, facility, or homogeneous sub-pool. | Stage 2 individually assessed (watch-list); Stage 3 (credit-impaired) allowances. |
+
+!!! note "IFRS 9 staging does not map mechanically"
+    Stage 1 is almost always GCRA because it is measured on a 12-month collective basis and
+    does not identify losses on specific exposures. Stage 3 is almost always SCRA because it
+    covers exposures that have already met the credit-impaired / default test under Art. 178.
+    **Stage 2 is the ambiguous bucket.** A Stage 2 allowance produced by a lifetime-ECL
+    collective model and held at portfolio level is GCRA; a Stage 2 allowance derived from
+    individual obligor review (for example, a watch-list SICR overlay) is SCRA. Institutions
+    must document the Stage 2 split methodology and apply it consistently across reporting
+    periods.
+
+!!! warning "Exclusion — funds for general banking risk"
+    Funds for general banking risk (contingency reserves held as free capital rather than
+    against specific credit exposures) are **not** GCRA and must be excluded. See
+    Art. 110(2) final sentence: "general and specific credit risk adjustments shall exclude
+    funds for general banking risk."
+
+### Framework Treatment by Approach
+
+Art. 110 routes each CRA category to a different capital path depending on whether the
+underlying exposure is measured under SA or IRB:
+
+| Category | SA exposures | IRB exposures |
+|----------|-------------|---------------|
+| **GCRA** | T2 credit per Art. 62(c) — populates `SA_T2` in OF-ADJ. (The separate `GCRA` term in OF-ADJ is the portion of GCRA that is carried as T2 gross of the 1.25% S-TREA cap.) | Enters Pool B of Art. 159 per Art. 110(2); if `A + C > B + D` → CET1 deduction (Art. 36(1)(d)); if `B + D > A + C` → T2 credit capped at 0.6% of IRB credit-risk RWA (Art. 62(d)). |
+| **SCRA — non-defaulted** | Reduces exposure value: `EAD_net = EAD_gross − SCRA` (Art. 111(1)(a)). Does **not** flow to `SA_T2`. | Enters Pool B of Art. 159 together with GCRA; does not reduce EAD. |
+| **SCRA — defaulted** | Reduces exposure value (Art. 111(1)(a)); may also drive the 20% provision-coverage split under Art. 127(1)(a). | Enters Pool D of Art. 159 — drives the defaulted-EL vs provisions comparison for defaulted exposures. |
+
+See the [Provisions Specification](provisions.md#el-shortfall--excess-comparison-art-159)
+for full Art. 159 Pool A / B / C / D mechanics.
+
+### Mixed-Approach Allocation (Art. 110(3), (3A))
+
+Institutions that apply IRB to some exposures and SA to others must split GCRA between
+the two capital paths **before** OF-ADJ is computed. The allocation is prescriptive:
+
+- **Art. 110(3)(a)** — GCRA of a subsidiary that exclusively applies IRB → IRB treatment (Art. 159 + Art. 62(d)).
+- **Art. 110(3)(b)** — GCRA of a subsidiary that exclusively applies SA → SA treatment (Art. 62(c)).
+- **Art. 110(3)(c)** — The remainder (unallocated parent-level GCRA) is pro-rated across IRB and SA by the share of risk-weighted exposure amounts subject to each approach.
+- **Art. 110(3A)** — Where the IRB firm uses the Risk-Weight Substitution Method (Art. 235), the covered portion of an exposure is treated **as if it were under SA** for the purposes of the GCRA allocation. The substituted RW drives the classification, not the original obligor's approach.
+
+### Double-Count Avoidance
+
+The GCRA / SCRA framework is designed to recognise each loss allowance exactly once.
+The key invariants are:
+
+1. **SCRAs reduce EAD at the exposure level under SA** (Art. 111(1)(a)). They do **not**
+   additionally flow into `SA_T2` or the `GCRA` term in OF-ADJ. The same amount cannot
+   be used twice.
+2. **GCRAs never reduce EAD** under either approach. They are a capital-side item only,
+   feeding `SA_T2` for SA exposures (Art. 62(c)) and Pool B of Art. 159 for IRB exposures.
+3. **Under IRB, neither GCRA nor SCRA reduces EAD.** Both feed Pool B (non-defaulted) or
+   Pool D (defaulted SCRA only) in the Art. 159 comparison — see Art. 159(1) Pool B items
+   (i) general CRAs, (ii) specific CRAs for non-defaulted exposures.
+4. **Securitisation exclusion** (Art. 159(2)(b)) — general and specific CRAs that relate
+   to securitised exposures are excluded from both B and D; the securitisation framework
+   handles those provisions separately.
+5. **Risk-Weight Substitution exclusion** (Art. 159(2)(c)) — CRAs on the portion of an
+   exposure covered by Art. 235 substitution are excluded from B and D because the
+   covered portion is already reflected via the guarantor's risk weight.
+
+### Input Source and Validation
+
+!!! warning "Engine inputs are institution-supplied"
+    The calculator does **not** derive GCRA from IFRS 9 balances. Classification under
+    Reg (EU) 183/2014 and Art. 110 must be performed upstream, and the resulting
+    GCRA-qualifying amounts supplied to the engine through two fields on
+    `OutputFloorConfig`:
+
+    - `OutputFloorConfig.gcra_amount` — the institution's total qualifying GCRA (gross of
+      tax effects). The engine applies the 1.25% S-TREA cap inside `compute_of_adj()`
+      (`src/rwa_calc/engine/aggregator/_floor.py`); callers should pass the **uncapped**
+      qualifying amount and let the engine cap it.
+    - `OutputFloorConfig.sa_t2_credit` — the SA-side GCRA recognised under Art. 62(c).
+      For firms with no IRB exposure (or whose IRB GCRA allocation per Art. 110(3)(a)
+      is zero) this equals the total qualifying GCRA; for mixed-approach firms it is
+      the portion attributable to SA under Art. 110(3)(a)–(c).
+
+    Both inputs must reconcile to the same Reg (EU) 183/2014 classification. COREP
+    CMS1/CMS2 column d and OF 02.01 row 0040 ("GCRA included in T2") are reported from
+    these two fields post-cap — see the
+    [output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj).
+
+!!! info "Config factories"
+    `CalculationConfig.basel_3_1()` defaults both `gcra_amount` and `sa_t2_credit` to
+    zero, producing a conservative OF-ADJ that omits the T2 benefit. Firms that hold
+    qualifying GCRA must pass explicit values — for example:
+
+    ```python
+    from rwa_calc.contracts.config import CalculationConfig
+
+    cfg = CalculationConfig.basel_3_1(
+        gcra_amount=50_000_000.0,   # £50m Reg 183/2014-qualifying GCRA
+        sa_t2_credit=50_000_000.0,  # same amount if fully SA-allocated
+    )
+    ```
+
+    The CRR factory (`CalculationConfig.crr()`) does not expose `gcra_amount` / `sa_t2_credit`
+    because CRR has no output floor (OF-ADJ = 0).
 
 ## Entity-Type Applicability
 

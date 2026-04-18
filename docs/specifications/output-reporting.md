@@ -45,6 +45,15 @@ Where:
 | GCRA | General credit risk adjustment included in T2, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
 | SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
 
+!!! info "GCRA qualifying criteria"
+    The `GCRA` and `SA_T2` inputs carry **only** amounts that qualify as general credit
+    risk adjustments under Commission Delegated Regulation (EU) No 183/2014 and
+    Art. 110. See
+    [Output Floor spec — GCRA Qualifying Criteria](basel31/output-floor.md#general-credit-risk-adjustments-gcra-qualifying-criteria)
+    for the GCRA vs SCRA boundary, IFRS 9 Stage mapping, mixed-approach allocation
+    (Art. 110(3)), and double-count avoidance. CMS1/CMS2 column d and OF 02.01 row 0040
+    derive from the post-cap values returned by `compute_of_adj()`.
+
 !!! note "Entity-Type Carve-Outs"
     The output floor does NOT apply universally. Art. 92 para 2A(b)-(d) exempts: non-ring-fenced institutions on sub-consolidated basis, ring-fenced bodies at individual level, and international subsidiaries. Exempt entities use U-TREA (no floor).
 

@@ -3,7 +3,7 @@
 Basel 3.1 equity treatment: new SA risk weight regime (250%/400%), removal of IRB equity
 approaches, transitional phase-in schedule, and CIU treatment.
 
-**Regulatory Reference:** PRA PS1/26 Art. 132–133, Art. 147A(1)(a), Rules 4.1–4.10
+**Regulatory Reference:** PRA PS1/26 Art. 132–133, Art. 147A(1)(h), Rules 4.1–4.10
 **Test Group:** B31-L
 
 ---
@@ -13,7 +13,7 @@ approaches, transitional phase-in schedule, and CIU treatment.
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-9.1 | SA equity risk weights by sub-category (Art. 133) | P0 | Done |
-| FR-9.2 | IRB equity approaches removed (Art. 147A(1)(a)) | P0 | Done |
+| FR-9.2 | IRB equity approaches removed (Art. 147A(1)(h)) | P0 | Done |
 | FR-9.3 | Transitional phase-in schedule (Rules 4.1–4.10, 2027–2030) | P0 | Done |
 | FR-9.4 | CIU fallback treatment (Art. 132(2)) | P0 | Done |
 | FR-9.5 | CIU mandate-based treatment (Art. 132(4)) | P0 | Done |
@@ -27,7 +27,7 @@ approaches, transitional phase-in schedule, and CIU treatment.
 
 Basel 3.1 fundamentally changes equity treatment by:
 
-1. **Removing IRB equity** — Art. 147A(1)(a) prohibits use of IRB approaches for equity
+1. **Removing IRB equity** — Art. 147A(1)(h) prohibits use of IRB approaches for equity
 2. **Introducing differentiated SA weights** — replacing CRR's flat 100% (Art. 133(2)) with
    sub-category-specific weights (250%/400%)
 3. **Adding a transitional schedule** — phasing in the higher weights over 2027–2030
@@ -40,8 +40,8 @@ Basel 3.1 fundamentally changes equity treatment by:
 | SA equity (higher risk) | 100% flat | **400%** | Art. 133(4) |
 | Subordinated debt / non-equity own funds | 100% | **150%** | Art. 133(5) |
 | Government-supported equity | 100% | **250%** (standard) | Art. 133(3) |
-| IRB Simple approach | Available (Art. 155) | **Removed** | Art. 147A(1)(a) |
-| IRB PD/LGD approach | Available | **Removed** | Art. 147A(1)(a) |
+| IRB Simple approach | Available (Art. 155) | **Removed** | Art. 147A(1)(h) |
+| IRB PD/LGD approach | Available | **Removed** | Art. 147A(1)(h) |
 | CIU fallback | 1,250% (Art. 132(2)) | **1,250%** (unchanged) | Art. 132(2) |
 
 ---
@@ -104,7 +104,7 @@ unlisted PE/VC where the business has existed for five years or more.
 
 ---
 
-## IRB Equity Removal (Art. 147A(1)(a))
+## IRB Equity Removal (Art. 147A(1)(h))
 
 Under Basel 3.1, **all equity exposures must use the Standardised Approach**. The following
 CRR approaches are no longer available:
@@ -206,6 +206,97 @@ Instead of Rules 4.5–4.6 and 4.8, a firm may elect to apply:
 This election is **irrevocable** and requires prior PRA notification (Rule 4.10).
 The opt-out covers both direct equity and CIU underlyings — a firm cannot opt out of
 one while retaining the other.
+
+---
+
+## Transitional provisions (Rules 4.2–4.8) — PDF citations
+
+This section anchors the transitional phase-in rules to verbatim text from
+PS1/26 Appendix 1 (`docs/assets/ps126app1.pdf`). The Rules sit in Chapter 4
+("TRANSITIONAL PROVISIONS") of the Credit Risk: Standardised Approach (CRR) Part.
+
+### Rule 4.1 — Scope gate for SA-only firms (PS1/26 App 1, p.20)
+
+> "4.2 and 4.3 only apply to an institution that did not have permission to use
+> the Internal Ratings Based Approach under Article 143 of CRR on 31 December 2026."
+
+### Rule 4.2 — Standard SA equity transitional (PS1/26 App 1, p.20)
+
+> "This rule modifies paragraph 3 of Credit Risk: Standardised Approach (CRR) Part
+> Article 133 for a transitional period beginning with 1 January 2027 and ending
+> with 31 December 2029, in which equity exposures that are not higher risk equity
+> exposures or within the scope of paragraph 6 of Credit Risk: Standardised
+> Approach (CRR) Part Article 133 shall be assigned the following risk weights:
+>
+> (1) 160% during the period beginning with 1 January 2027 and ending with 31 December 2027;
+> (2) 190% during the period beginning with 1 January 2028 and ending with 31 December 2028; and
+> (3) 220% during the period beginning with 1 January 2029 and ending with 31 December 2029."
+
+From 1 January 2030, the steady-state 250% under Art. 133(3) applies directly — there
+is no Rule 4.2(4).
+
+### Rule 4.3 — Higher-risk SA equity transitional (PS1/26 App 1, p.21)
+
+> "This rule modifies paragraph 4 of Credit Risk: Standardised Approach (CRR) Part
+> Article 133 for a transitional period between 1 January 2027 and 31 December
+> 2029, in which equity exposures that are higher risk equity exposures and are
+> not within scope of paragraph 6 of Credit Risk: Standardised Approach (CRR) Part
+> Article 133 shall be assigned the following risk weights:
+>
+> (1) 220% during the period beginning with 1 January 2027 and ending with 31 December 2027;
+> (2) 280% during the period beginning with 1 January 2028 and ending with 31 December 2028; and
+> (3) 340% during the period beginning with 1 January 2029 and ending with 31 December 2029."
+
+### Rules 4.4–4.6 — IRB transitional: max(legacy Art. 155, SA transitional) (PS1/26 App 1, p.21)
+
+Rule 4.4 scopes Rules 4.5 and 4.6 to firms that **had** IRB permission on
+31 December 2026. Rule 4.5 bifurcates their equity portfolio; Rule 4.6 is the
+"higher of" test:
+
+> "4.6 Subject to 4.9, an institution shall calculate the risk weight for each
+> equity exposure as the higher of:
+>
+> (1) the risk weight calculated using the relevant methodology used by the institution as specified in its permission to use the Internal Ratings Based Approach under Article 155 of CRR as that provision was in force on 31 December 2026; and
+> (2) the risk weight calculated under 4.2 or 4.3."
+
+This means IRB equity firms do not get a "pure legacy Art. 155" transition — their
+post-2026 weight can never fall below the Rule 4.2/4.3 schedule.
+
+### Rules 4.7–4.8 — CIU look-through / mandate-based equity underlyings (PS1/26 App 1, pp.21–22)
+
+> "4.8 Subject to 4.9, an institution which calculates risk weights of CIUs using:
+>
+> (1) the look-through approach in paragraph 1 of Credit Risk: Standardised Approach (CRR) Part Article 132A or paragraph 4 of Credit Risk: Internal Ratings Based Approach (CRR) Part Article 152; or
+> (2) the mandate-based approach in paragraph 2 of Credit Risk: Standardised Approach (CRR) Part Article 132A or paragraph 5 of Credit Risk: Internal Ratings Based Approach (CRR) Part Article 152,
+>
+> shall assign a risk weight to each underlying exposure in the CIUs to which the
+> institution would have applied the simple risk weight approach in accordance
+> with point (a) of paragraph 4 of Standardised Approach and Internal Ratings
+> Based Approach to Credit Risk (CRR) Part Article 152, as that provision was in
+> force before 1 January 2027, by using the higher of:
+>
+> (3) the risk weight that would have applied to the underlying exposure under the simple risk weight approach set out in Article 155(2) of CRR, as that provision was in force before 1 January 2027; and
+> (4) the risk weight calculated under 4.2 or 4.3."
+
+Only equity underlyings that would have qualified for Art. 155(2) legacy simple
+risk weight treatment are within scope of Rule 4.8; non-equity underlyings of CIUs
+flow through the usual Art. 132A/Art. 152 pathways without a transitional floor.
+
+!!! warning "Not yet implemented — SA transitional (Rules 4.2/4.3)"
+    The calculator currently applies the steady-state 250%/400% weights from day one
+    for all firms. Rules 4.2/4.3 phase-in (160%→190%→220% / 220%→280%→340%) is
+    not wired into the equity calculator. See **IMPLEMENTATION_PLAN.md P1.137**
+    (SA equity transitional phase-in).
+
+!!! warning "Not yet implemented — IRB legacy-Art. 155 max (Rules 4.6/4.8)"
+    The "higher of legacy Art. 155 weight and Rule 4.2/4.3 transitional" logic for
+    firms holding IRB equity permission on 31 Dec 2026 (Rule 4.6) and the same
+    logic for CIU look-through / mandate-based equity underlyings (Rule 4.8) are
+    not yet implemented. Implementing these requires (a) capturing the legacy
+    Art. 155 methodology weight per exposure, and (b) storing a firm-level flag
+    indicating whether IRB equity permission existed on 31 Dec 2026. See
+    **IMPLEMENTATION_PLAN.md P1.138** (IRB equity transitional max, Rule 4.6)
+    and **IMPLEMENTATION_PLAN.md P1.139** (CIU equity transitional max, Rule 4.8).
 
 ---
 

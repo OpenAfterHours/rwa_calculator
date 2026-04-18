@@ -70,15 +70,36 @@ following schedule applies:
 
 | Year | Floor Percentage | Rule Reference |
 |------|-----------------|----------------|
-| 2027 | 60% | Rule 3.1(a) |
-| 2028 | 65% | Rule 3.1(b) |
-| 2029 | 70% | Rule 3.1(c) |
-| 2030+ | 72.5% | Rule 3.1(d) — fully phased |
+| 2027 | 60% | Art. 92(5)(a) |
+| 2028 | 65% | Art. 92(5)(b) |
+| 2029 | 70% | Art. 92(5)(c) |
+| 2030+ | 72.5% | Art. 92(2A) — fully phased |
+
+!!! warning "Art. 92(5) has only three transitional steps"
+    PS1/26 App 1 Art. 92(5) (p.15) enumerates three periods only — (a) 60% from
+    1 Jan 2027 to 31 Dec 2027, (b) 65% from 1 Jan 2028 to 31 Dec 2028, and
+    (c) 70% from 1 Jan 2029 to 31 Dec 2029. There is **no Art. 92(5)(d)**. From
+    1 Jan 2030 onwards the transitional election falls away and the fully
+    phased 72.5% applies directly under Art. 92(2A). The `2030+ / 72.5%` row
+    above reflects the steady-state Art. 92(2A) formula, not a fourth
+    transitional step.
+
+    Verbatim PDF quote (PS1/26 App 1, p.15):
+
+    > "When calculating TREA for the purposes of paragraph 2A(a), an
+    > institution or CRR consolidation entity **may** apply the following
+    > factor x during the periods specified below:
+    > (a) 60% during the period from 1 January 2027 to 31 December 2027;
+    > (b) 65% during the period from 1 January 2028 to 31 December 2028;
+    > (c) 70% during the period from 1 January 2029 to 31 December 2029."
 
 !!! note "Configuration"
     The floor percentage is set via `CalculationConfig.basel_3_1(output_floor_percentage=0.725)`.
     Transitional percentages are selected by setting the appropriate year's value.
-    Source: `src/rwa_calc/contracts/config.py`
+    The `skip_transitional` config flag on `OutputFloorConfig` bypasses the
+    Art. 92(5) election and forces the steady-state 72.5% from day one. Source:
+    `src/rwa_calc/engine/aggregator/_floor.py` and
+    `src/rwa_calc/contracts/config.py:OutputFloorConfig`.
 
 ## OF-ADJ Capital Adjustment
 
@@ -154,6 +175,30 @@ The output floor has two structural invariants verified by acceptance tests:
    `floor_impact >= 0`
 
 These invariants hold regardless of portfolio composition or floor percentage.
+
+## Per-exposure vs portfolio-level reporting
+
+!!! warning "Per-exposure `floor_rwa` does NOT include OF-ADJ"
+    The output aggregator exposes a per-exposure `floor_rwa` column on IRB rows,
+    computed as the pro-rata SA-share of `floor_percentage × S-TREA`. This
+    column **does not** allocate the `OF-ADJ` capital adjustment across
+    exposures — OF-ADJ is an own-funds reconciliation defined at the
+    portfolio/entity level (Art. 92(2A)) and has no meaningful per-exposure
+    decomposition. Only the portfolio-level `shortfall` (the amount that the
+    floored TREA exceeds un-floored TREA) reflects the full
+    `x × S-TREA + OF-ADJ` formula.
+
+    Consumers that need a floor number inclusive of OF-ADJ must read
+    `OutputFloorSummary.of_adj` and `OutputFloorSummary.floored_trea` at the
+    portfolio level, not sum the per-exposure `floor_rwa` column. This is
+    particularly relevant for COREP C 02.00 row mapping where OF-ADJ is a
+    separate line item and must not be mingled with per-exposure floor
+    numerators.
+
+    See `OutputFloorSummary` in `src/rwa_calc/contracts/bundles.py` for the
+    portfolio-level fields, and the
+    [output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj)
+    for COREP mapping.
 
 ---
 

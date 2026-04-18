@@ -83,19 +83,119 @@ Otherwise (unlisted, business ≥ 5 years, including PE/VC not meeting higher-ri
     existed for less than five years qualifies as higher-risk (400%). The BCBS framework
     would differentiate via CQS speculative tiers, but PRA does not use that structure.
 
-## CRR IRB Simple Risk Weight Method (Art. 155)
+## CRR IRB Equity Approaches (Art. 155)
 
-Under CRR, firms with IRB approval may use the IRB Simple method for equity exposures:
+Art. 155(1) gives firms with IRB permission three approaches for equity, to be chosen
+consistently and not for regulatory arbitrage:
+
+1. **Simple Risk Weight Approach** (Art. 155(2))
+2. **PD/LGD Approach** (Art. 155(3))
+3. **Internal Models Approach** (Art. 155(4))
+
+Equity exposures deducted under Part Two or assigned 250% under Art. 48 are excluded from
+Art. 155 altogether.
+
+### Simple Risk Weight Approach — Art. 155(2)
 
 | Equity Category | Risk Weight | Reference |
 |----------------|-------------|-----------|
-| Exchange-traded / listed equity | 290% | Art. 155(2)(a) |
-| Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
-| All other equity (unlisted, speculative) | 370% | Art. 155(2)(c) |
+| Private equity in sufficiently diversified portfolios | **190%** | Art. 155(2), RW bullet 1 |
+| Exchange-traded equity | **290%** | Art. 155(2), RW bullet 2 |
+| All other equity exposures | **370%** | Art. 155(2), RW bullet 3 |
 
-### IRB Simple Removal Under Basel 3.1
+Short cash positions and derivatives held in the non-trading book may offset long positions
+in the same individual stock provided the hedge is explicit and covers at least one year.
+Other short positions are treated as long with the relevant RW applied to their absolute
+value.
 
-Under Basel 3.1 (PRA PS1/26 Art. 147A), the IRB equity approaches (Simple, PD/LGD, Internal Models) are **removed**. All equity exposures must use SA risk weights. This is a mandatory restriction — firms cannot opt to continue using IRB equity methods.
+### PD/LGD Approach — Art. 155(3)
+
+Under the PD/LGD approach, equity risk-weighted exposure amounts are calculated using the
+**Art. 153(1) corporate IRB formula** (same `K × 12.5 × 1.06 × EAD × MA` mechanics), with
+equity-specific PD floors (Art. 165(1)) and LGD values (Art. 165(2)):
+
+| Equity Category | PD Floor (Art. 165(1)) | LGD (Art. 155(3) / 165(2)) |
+|-----------------|------------------------|-----------------------------|
+| Exchange-traded, long-term customer relationship | 0.09% | 90% (65% if in sufficiently diversified PE portfolio, Art. 155(3)) |
+| Non-exchange-traded, returns from regular/periodic cash flows (not capital gains) | 0.09% | 90% (65% if diversified) |
+| Exchange-traded equity (other short positions in Art. 155(2)) | 0.40% | 90% (65% if diversified) |
+| All other equity exposures | 1.25% | 90% (65% if diversified) |
+
+**Key rules (Art. 155(3)):**
+
+- `M = 5 years` for all equity under PD/LGD (Art. 165(3)).
+- Where the firm does not have sufficient information to use the default definition in
+  Art. 178, a **scaling factor of 1.5** is applied to the risk weights.
+- The per-exposure capital is capped: `EL × 12.5 + RWEA ≤ EAD × 12.5` — i.e. the PD/LGD
+  output cannot require more capital than a 100% loss assumption.
+- Unfunded credit protection may be recognised per Chapter 4 but the **guarantor LGD is
+  90%** (65% only if the hedged exposure is PE in a sufficiently diversified portfolio).
+- EL = PD × LGD (using the Art. 165 PD floor and the relevant 65%/90% LGD); EL is not
+  deducted — for equity, EL enters the expected-loss cover test against provisions under
+  the general IRB machinery.
+
+### Internal Models Approach — Art. 155(4)
+
+The IMA risk-weighted exposure amount is **12.5 × potential loss** on the institution's
+equity exposures, where potential loss is derived from an internal VaR model at the
+**99th percentile, one-tailed confidence level** on the difference between quarterly
+returns and an appropriate risk-free rate, computed over a long-term sample period.
+
+**Floor (Art. 155(4)):** The portfolio-level RWEA under IMA must **not be lower than the sum of**:
+
+- the RWEA that would be produced under the PD/LGD approach (Art. 155(3)), and
+- the corresponding expected-loss amounts × 12.5,
+
+each computed using the Art. 165(1) PD values and Art. 165(2) LGD values.
+
+IMA requires **PRA permission** (embedded in the general Art. 143 IRB permission).
+Unfunded credit protection may be recognised on an equity position.
+
+### Art. 165 — Equity Minimum PD Values and LGDs
+
+Art. 165 sets the IRB equity-specific inputs referenced by Art. 155(3) and (4):
+
+| Paragraph | Parameter | Value(s) |
+|-----------|-----------|----------|
+| 165(1)(a) | PD floor — exchange-traded, long-term customer relationship | **0.09%** |
+| 165(1)(b) | PD floor — non-exchange-traded, returns from regular cash flows | **0.09%** |
+| 165(1)(c) | PD floor — exchange-traded equity incl. other short positions (155(2)) | **0.40%** |
+| 165(1)(d) | PD floor — all other equity incl. other short positions (155(2)) | **1.25%** |
+| 165(2) | LGD — private equity in sufficiently diversified portfolios | **65%** |
+| 165(2) | LGD — all other equity exposures | **90%** |
+| 165(3) | Maturity for all equity exposures | **M = 5 years** |
+
+The 0.09% / 0.40% / 1.25% values in Art. 165(1) are the PD floors used inside Art. 155(3)
+(PD/LGD) and as inputs to the Art. 155(4) IMA floor; they do not modify the flat risk
+weights of Art. 155(2), which are already calibrated.
+
+### Art. 153(3) — Double-Default Adjustment for Guaranteed Exposures
+
+Art. 153(3) provides a **double-default credit-protection adjustment** for IRB exposures
+(including equity under Art. 155(3)) meeting the Articles 202 and 217 requirements on the
+guarantor and the protection contract:
+
+```
+Risk-weighted exposure amount (double-default) = RW × exposure value × (0.15 + 160 × PD_pp)
+```
+
+where `PD_pp` is the PD of the protection provider and `RW` is the risk weight computed
+from the obligor's PD but the guarantor's LGD (comparable direct exposure). The maturity
+factor `b` uses the lower of the obligor and protection-provider PD.
+
+!!! note "Double-default — practical status"
+    The full Art. 153(3) formula is recorded here for completeness; the current calculator
+    does not apply the `(0.15 + 160 × PD_pp)` double-default adjustment and instead falls
+    back to Art. 236 parameter substitution or Art. 235 risk-weight substitution. Under
+    PRA PS1/26 (Basel 3.1), Art. 153(3) is "[Provision left blank]" and the double-default
+    treatment is removed entirely.
+
+### IRB Equity Removal Under Basel 3.1
+
+Under Basel 3.1 (PRA PS1/26 Art. 147A), **all three** IRB equity approaches (Simple,
+PD/LGD, Internal Models) are removed. All equity exposures must use SA risk weights
+(Art. 133). This is a mandatory restriction — firms cannot opt to continue using IRB
+equity methods.
 
 ## CIU Treatment (Art. 132 / 132A / 132B)
 

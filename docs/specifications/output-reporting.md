@@ -48,6 +48,24 @@ Where:
 !!! note "Entity-Type Carve-Outs"
     The output floor does NOT apply universally. Art. 92 para 2A(b)-(d) exempts: non-ring-fenced institutions on sub-consolidated basis, ring-fenced bodies at individual level, and international subsidiaries. Exempt entities use U-TREA (no floor).
 
+!!! info "S-TREA Scope"
+    **S-TREA** (standardised total risk exposure amount, Art. 92(3A)) is built by re-running the
+    Art. 92(3) components under standardised approaches only — i.e. no IRB, no SFT VaR, no
+    SEC-IRBA, no IAA, no IMM and no IMA. Specifically it comprises:
+
+    - Credit and dilution risk under the Standardised Approach (plus SA-CCR for counterparty risk)
+    - Securitisation under SEC-SA / SEC-ERBA (not SEC-IRBA or IAA)
+    - Settlement / delivery risk
+    - Market risk under ASA (not IMA)
+    - Operational risk (SMA)
+    - CVA risk
+
+    CVA and operational risk **are** included in S-TREA (they have no IRB counterpart so the
+    modelled and standardised figures are identical). The output floor multiplier `x` is
+    applied to S-TREA; see OF 02.01 col 0040 which reports S-TREA with the multiplier **not**
+    applied (the multiplier is applied in OF 02.00 col 0030). Source: PS1/26 Annex II §1.3.2
+    column 0040 instructions.
+
 !!! note "Transitional Rates Are Permissive"
     Art. 92 para 5 says institutions "may apply" the 60/65/70% transitional rates — firms can voluntarily use 72.5% from day one.
 
@@ -60,15 +78,24 @@ Where:
 ### Description
 Regulatory reporting templates for CRR / Basel 3.1 firms following the EBA/PRA COREP structure.
 CRR templates use the **C** prefix (Regulation (EU) 2021/451); Basel 3.1 templates use the **OF**
-prefix (PRA PS1/26).
+prefix for the output-floor-aware re-issues and retain **C** for templates that are unchanged by
+PS1/26 (PRA PS1/26 Annex I). Both `C` and `OF` prefixes are supervisory (COREP) submissions.
+
+!!! note "Prefix Cheat-Sheet"
+    - `C xx.xx` — COREP supervisory return, unchanged (or pre-PS1/26) template.
+    - `OF xx.xx` — COREP supervisory return, PS1/26 re-issue (output-floor-aware or B3.1-restructured).
+    - `UK xx` — CRR-era Pillar III public disclosure (UK onshored EBA Pillar III templates).
+    - `UKB xx` — PS1/26 Pillar III public disclosure (Basel 3.1). `UKB` is the disclosure
+      prefix, **not** a COREP prefix — do not confuse `UKB CR4` (Pillar III, Annex XIX/XX)
+      with the COREP `C/OF` series.
 
 Each template is submitted **once per exposure class** — the exposure class acts as a filter, not
 a row dimension. Within each submission, rows are organised into sections (totals, exposure type
 breakdown, risk weight breakdown, memorandum items).
 
 ### Templates
-- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Basel 3.1 adds col 0020 (SA-only RWEA for floor comparison) and col 0030 (output floor RWEA after applying floor multiplier and OF-ADJ). Rows restructured: FIRB/AIRB/Slotting separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA.
-- **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: modelled RWA (0010), SA portfolio RWA (0020), U-TREA (0030), S-TREA (0040). 8 rows by risk type (credit, CCR, CVA, securitisation, market, op risk, residual, total). Does not apply the floor multiplier — provides raw comparison data for OF 02.00.
+- **C 02.00 / OF 02.00** — Own Funds Requirements: master template aggregating RWEA across all risk types. 1 column (CRR) / 3 columns (Basel 3.1). Basel 3.1 adds col 0020 ("Standardised approaches only (output floor)" — SA-only RWEA per exposure class, pre-multiplier) and col 0030 ("Output floor" — the post-floor RWEA: SA totals after applying the output floor multiplier and OF-ADJ, i.e. the *floor-adjusted* number used in the TREA = max(U-TREA, x·S-TREA + OF-ADJ) comparison). Rows restructured: FIRB/AIRB/Slotting separated, corporate and retail subclass breakdowns added, slotting by 5 SL types, market risk expanded for ASA/IMA. Source: PS1/26 Annex II §1.3.
+- **OF 02.01** — Output Floor (**new**, no CRR equivalent): dedicated output floor comparison for IM firms. 4 columns: col 0010 "RWA for modelled approaches" (portfolios under permitted internal models), col 0020 "RWA for portfolios on standardised approaches", col 0030 "Total RWA (U-TREA)" = arithmetic sum of 0010 + 0020 (the un-floored TREA from Art. 92), col 0040 "Standardised total RWA (S-TREA)" (all portfolios on SA, **no** multiplier applied). 8 rows by risk type (credit, CCR, CVA, securitisation, market, op risk, residual, total). Produces the raw U-TREA / S-TREA inputs that feed OF 02.00 col 0030. Note: OF 02.01 col 0030 is **U-TREA** (un-floored) and is distinct from OF 02.00 col 0030 (floor-adjusted) — same column number, different meaning. Source: PS1/26 Annex II §1.3.2.
 - **C 07.00 / OF 07.00** — CR SA: one submission per SA exposure class. 24 columns (CRR) / ~29 columns (Basel 3.1) covering original exposure, provisions, CRM substitution effects, on-balance sheet netting adjustment, Financial Collateral Comprehensive Method, CCF breakdown (5 bands: 10%, 20%, 40%, 50%, 100%), exposure value, and RWEA. 5 row sections: totals, exposure types (on-BS/off-BS/CCR), risk weights (15 bands CRR / 29 bands Basel 3.1), CIU approach, memorandum items.
 - **C 08.01 / OF 08.01** — CR IRB totals: one submission per IRB exposure class × own-estimates filter. 33 columns (CRR) / 40+ columns (Basel 3.1) covering PD, original exposure, CRM substitution effects, CRM in LGD estimates (detailed collateral breakdown), exposure value, LGD, maturity, RWEA, expected loss, provisions, obligor count. Basel 3.1 adds post-model adjustment and output floor columns.
 - **C 08.02 / OF 08.02** — CR IRB by obligor grade: same columns as C 08.01 with dynamic rows (one per firm-specific internal rating grade/pool, ordered by PD).
@@ -174,27 +201,42 @@ breakdown, risk weight breakdown, memorandum items).
 
 ### Description
 Public disclosure templates under CRR Part 8 / Disclosure (CRR) Part for market transparency.
-CRR templates use the **UK** prefix; Basel 3.1 templates use the **UKB** prefix. These complement
+CRR-era templates use the **UK** prefix (e.g. `UK CR8`); PS1/26 re-issues use the **UKB**
+prefix (e.g. `UKB CR4`, `UKB CR9`, `UKB CMS1`). These are the Pillar III **disclosure** series —
+distinct from the COREP supervisory `C/OF` series in the previous section. These complement
 COREP supervisory returns with publicly available credit risk data.
 
 ### Templates
-- **OV1** — Overview of risk-weighted exposure amounts (Art. 438(d))
-- **CR4** — SA exposure and CRM effects (Art. 444(e), 453(g-i))
-- **CR5** — SA risk weight allocation (Art. 444(e))
-- **CR6** — IRB exposures by exposure class and PD range (Art. 452(g))
-- **CR6-A** — Scope of IRB and SA use (Art. 452(b))
-- **CR7** — Credit derivatives effect on RWEA (Art. 453(j))
-- **CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
-- **CR8** — RWEA flow statements for IRB (Art. 438(h))
-- **CR9** — IRB PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
-- **CR9.1** — IRB PD back-testing for ECAI mapping (Art. 452(h), Art. 180(1)(f)) — Basel 3.1 only (template defined, generation requires ECAI data)
-- **CR10** — Slotting approach exposures (Art. 438(e))
-- **CMS1** — Output floor comparison by risk type (Art. 456(1)(a), Art. 2a) — Basel 3.1 only
-- **CMS2** — Output floor comparison by asset class (Art. 456(1)(b), Art. 2a) — Basel 3.1 only
+- **UKB OV1** — Overview of risk-weighted exposure amounts (Art. 438(d))
+- **UKB CR4** — SA exposure and CRM effects (Art. 444(e), 453(g-i)). Fixed format, one submission per SA exposure class.
+- **UKB CR5** — SA risk weight allocation by exposure class (point (e) of Art. 444). Fixed format: columns a–ac are the risk-weight bands (0%, 2%, 4%, 10%, 20%, 35%, 40%, 45%, 50%, 60%, 65%, 70%, 75%, 80%, 85%, 90%, 100%, 105%, 130%, 150%, 250%, 300%, 370%, 400%, 1250%, "other", deducted, total, "of which unrated") — precise band list follows Annex XIX. Rows are the SA exposure classes. Regulatory real estate not materially dependent on cash-flows is split into two rows: portion up to 55% of property value, portion above 55%. Exposures subject to the Art. 123B currency-mismatch multiplier are reported against the base (pre-multiplier) risk weight, but the RWEA column reflects the multiplier.
+- **UKB CR6** — IRB exposures by exposure class and PD range (Art. 452(g))
+- **UKB CR6-A** — Scope of IRB and SA use (Art. 452(b))
+- **UKB CR7** — Credit derivatives effect on RWEA (Art. 453(j))
+- **UKB CR7-A** — Extent of CRM techniques for IRB (Art. 453(g))
+- **UK CR8** — RWEA flow statements for IRB (Art. 438(h)). Uses **signed** RWEA movements: increases are positive, decreases (asset size, quality, model updates, methodology, acquisitions/disposals, FX, other) are reported as negative values. See Annex XXII §11.
+- **UKB CR9** — IRB PD back-testing per exposure class (Art. 452(h)) — Basel 3.1 only
+- **UKB CR9.1** — IRB PD back-testing for ECAI mapping (Art. 452(h), Art. 180(1)(f)) — Basel 3.1 only. Adds one column per ECAI considered; PD ranges are firm-defined internal grade ranges (not the fixed external PD buckets used in CR9). Generation requires ECAI mapping data (template defined, runtime generation pending).
+- **UKB CR10** — Slotting approach exposures (Art. 438(e)). Sub-templates CR10.1 (project finance), CR10.2 (IPRE), CR10.3 (object finance), CR10.4 (commodities finance), CR10.5 (HVCRE — new under PS1/26). Fixed templates per Annex XXIII/XXIV.
+- **UKB CMS1** — Output floor comparison by risk type (Art. 456(1)(a), Art. 2a of the Disclosure (CRR) Part) — Basel 3.1 only
+- **UKB CMS2** — Output floor comparison by asset class (Art. 456(1)(b), Art. 2a of the Disclosure (CRR) Part) — Basel 3.1 only
+
+!!! note "Sign Conventions in Pillar III"
+    A subset of Pillar III templates use **signed** values where decreases are reported as
+    negative numbers:
+
+    - **UK CR8 / UKB CR8** — RWEA flow statement: decreases in RWEA (rows: asset size (+/-), asset quality (+/-), model updates (+/-), methodology and policy (+/-), acquisitions and disposals (+/-), foreign exchange movements (+/-), other (+/-)) are reported as negative. Source: PS1/26 Annex XXII §11.
+    - **UKB CR9 / UKB CR9.1** — back-testing: observed default rates are non-negative but external-rating-equivalent columns may reproduce signed PD mapping inputs.
+    - **UKB CR10** — slotting: signed deductions for collateral-driven exposure reductions (e.g. FCCM adjustment).
+
+    All other Pillar III credit risk templates (CR4, CR5, CR6, CR7, CMS1/CMS2, OV1) report
+    absolute non-negative figures unless an explicit "(-)" column header indicates a
+    deduction.
 
 ### Reference Documents
 - CRR: `docs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF`, `crr-pillar3-irb-credit-risk-instructions.pdf`, `crr-pillar3-risk-weighted-exposure-instructions-leverage-ratio.pdf`, `crr-pillar3-specialised-lending-instructions.pdf`
-- Basel 3.1: `docs/assets/ps1-26-annex-xx-credit-risk-sa-disclosure-instructions.pdf`, `ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf`, `ps1-26-annex-xxiv-credit-risk-irb-disclosure-instructions.pdf`, `ps1-26-annex-ii-output-floor-and-capital-summaries-disclosure-instructions.pdf`
+- Basel 3.1: `docs/assets/ps1-26-annex-xx-credit-risk-sa-disclosure-instructions.pdf` (CR4, CR5), `ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf` (CR6, CR6-A, CR7, CR7-A, CR8, CR9, CR9.1), `ps1-26-annex-xxiv-credit-risk-irb-disclosure-instructions.pdf` (CR10)
+- **CMS1 / CMS2**: instructions are in PS1/26 Annex II (output-floor and capital-summaries disclosure instructions). Source PDF is **not reproduced locally** in `docs/assets/` — the disclosure annex references the template via an inline hyperlink. Refer to PS1/26 Appendix 1 §6.2A / §6.2B (around p470) and Article 2a of the Disclosure (CRR) Part on p467. Official hyperlink: <https://www.bankofengland.co.uk/prudential-regulation/publication/2026/january/implementation-of-the-basel-3-1-final-rules-policy-statement>.
 
 ### Status
 - Documentation: Done — see [Pillar III Disclosures](../features/pillar3-disclosures.md)

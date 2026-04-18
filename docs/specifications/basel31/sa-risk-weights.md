@@ -731,8 +731,15 @@ purpose (Art. 124E(6)).
 
 | Portion | Risk Weight | Reference |
 |---------|-------------|-----------|
-| Secured (up to 60% LTV) | **60%** | Art. 124H(1) |
-| Unsecured (above 60% LTV) | Counterparty RW | Art. 124H(2) |
+| Secured (up to **55%** of property value) | **60%** | Art. 124H(1)(a) |
+| Unsecured (above 55%) | Counterparty RW per Art. 124L | Art. 124H(1)(b) |
+
+!!! warning "LTV threshold is 55%, not 60%"
+    The loan-splitting threshold under PRA PS1/26 Art. 124H(1)(a) is **55%** of the
+    value of the property (verified against ps126app1.pdf p.56, 17 Apr 2026). The 60%
+    figure is the **risk weight** applied to the secured portion, not the LTV band.
+    Junior charge adjustments in Art. 124H(2) also reduce the **55%** threshold by
+    the amount of the prior charge.
 
 ### CRE Income-Producing (Art. 124I)
 
@@ -751,16 +758,19 @@ repayment source:
     BCBS CRE20.86 uses a 3-band table (≤60%: 70%, >60–80%: 90%, >80%: 110%).
     The PRA simplifies to 2 bands with higher weights for the lower LTV tiers.
 
-### Junior Charge Multiplier for Income-Producing CRE (Art. 124I(3))
+### Junior Charge Treatment for Income-Producing CRE (Art. 124I(3))
 
-Where there are prior-ranking charges that the institution does not hold, the risk weight
-is multiplied by a band-dependent factor:
+Where there are prior-ranking charges not held by the institution, the whole-loan
+risk weight is replaced by a band-dependent **absolute** weight (not a multiplier
+on Art. 124I(1)/(2)):
 
-| LTV Band | Junior Charge Multiplier |
-|----------|------------------------|
-| ≤ 60% | 1.0x (no adjustment) |
-| 60–80% | 1.25x |
-| > 80% | 1.375x |
+| LTV Band | Risk Weight (Art. 124I(3)) |
+|----------|----------------------------|
+| ≤ 60% | **100%** (Art. 124I(3)(a)) |
+| > 60% and ≤ 80% | **125%** (Art. 124I(3)(b)) |
+| > 80% | **137.5%** (Art. 124I(3)(c)) |
+
+Verified against PRA PS1/26 Art. 124I(3), ps126app1.pdf p.57 (17 Apr 2026).
 
 ### Large Corporate CRE (Art. 124H(3))
 

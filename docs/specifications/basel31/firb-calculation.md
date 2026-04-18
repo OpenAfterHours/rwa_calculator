@@ -17,7 +17,7 @@ Basel 3.1 Foundation IRB changes: reduced senior LGD, higher PD floors, covered 
 | FR-3.3 | PD floor increase: 0.05% corporate (was 0.03%) | P0 | Done |
 | FR-3.4 | Retail PD floors: mortgage 0.10%, QRRE revolver 0.10%, other 0.05% | P0 | Done |
 | FR-3.5 | 1.06 scaling factor removed | P0 | Done |
-| FR-3.6 | Covered bond LGD: 11.25% — CRR Art. 161(1)(d) restructured to Art. 161(1B) | P0 | Done |
+| FR-3.6 | Covered bond LGD: 11.25% — Art. 161(1)(d), unchanged from CRR | P0 | Done |
 | FR-3.7 | Collateral-type LGDS reductions (receivables, RE, other physical) | P0 | Done |
 | FR-3.8 | GBP-native SME correlation thresholds (£4.4m–£44m) | P0 | Done |
 
@@ -35,7 +35,7 @@ internal models by tightening supervisory parameters and removing the scaling fa
 | Senior unsecured LGD (non-FSE) | 45% | **40%** | Art. 161(1)(aa) |
 | Senior unsecured LGD (FSE) | 45% | **45%** | Art. 161(1)(a) |
 | Subordinated LGD | 75% | 75% | Art. 161(1)(b) |
-| Covered bond LGD | 11.25% | **11.25%** | Art. 161(1)(d) → Art. 161(1B) |
+| Covered bond LGD | 11.25% | **11.25%** | Art. 161(1)(d) (unchanged from CRR) |
 | Senior purchased receivables LGD | 45% | **40%** | Art. 161(1)(e) |
 | Subordinated purchased receivables LGD | 100% | 100% | Art. 161(1)(f) |
 | Dilution risk LGD | 75% | **100%** | Art. 161(1)(g) |
@@ -55,15 +55,16 @@ internal models by tightening supervisory parameters and removing the scaling fa
 | Senior unsecured (non-FSE) | **40%** | Art. 161(1)(aa) |
 | Senior unsecured (FSE) | **45%** | Art. 161(1)(a) |
 | Subordinated | **75%** | Art. 161(1)(b) |
-| Covered bonds | **11.25%** | Art. 161(1B) |
+| Covered bonds | **11.25%** | Art. 161(1)(d) |
 | Senior purchased corporate receivables | **40%** | Art. 161(1)(e) |
 | Subordinated purchased corporate receivables | **100%** | Art. 161(1)(f) |
 | Dilution risk of purchased corporate receivables | **100%** | Art. 161(1)(g) |
 
-!!! info "Covered Bond LGD — Restructured from CRR Art. 161(1)(d)"
-    The 11.25% covered bond LGD is not new — CRR Art. 161(1)(d) already provides this value
-    for covered bonds eligible under Art. 129(4) or (5). Basel 3.1 restructures it into a
-    separate paragraph Art. 161(1B). The value is unchanged.
+!!! info "Covered Bond LGD — Art. 161(1)(d)"
+    The 11.25% covered bond LGD remains at PRA PS1/26 Art. 161(1)(d) (verified against
+    ps126app1.pdf p.110, 17 Apr 2026). Earlier drafts of this spec cited a standalone
+    "Art. 161(1B)" — that sub-paragraph does not exist in the onshored text; the rule
+    sits at point (d) of paragraph (1), unchanged from CRR Art. 161(1)(d).
 
 !!! note "FSE Distinction — New in Basel 3.1"
     Basel 3.1 introduces a new distinction for financial sector entities (FSEs). Non-FSE senior

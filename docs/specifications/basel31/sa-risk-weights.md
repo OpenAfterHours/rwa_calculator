@@ -33,6 +33,102 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
 | FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
+| FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 warning, `due_diligence_override_rw` floor) |
+
+---
+
+## Due Diligence Obligation (Art. 110A)
+
+Article 110A is a new **framework-wide obligation** applying to every exposure within the Standardised Approach (subject to five named exemptions). It has no CRR equivalent. The obligation sits above the exposure-class tables below: a firm cannot rely on the standard risk weight unless it has performed due diligence consistent with Art. 110A(2).
+
+### Regulatory text (PRA PS1/26 Art. 110A, ps126app1.pdf pp. 29–30)
+
+!!! quote "Art. 110A — Due Diligence"
+    1. This Article applies to an institution subject to the Standardised Approach to credit risk set out in this Part.
+    2. An institution shall perform due diligence to ensure that it has an adequate understanding of the risk profile, creditworthiness and characteristics of exposures to individual obligors and at a portfolio level.
+    3. The sophistication of the due diligence undertaken by the institution in accordance with paragraph 2 shall be appropriate to the nature, scale and complexity of the institution's activities.
+    4. As part of its obligations under paragraph 2, an institution shall:
+        - (a) take reasonable and adequate steps to assess the operating and financial condition of each obligor;
+        - (b) ensure that it has in place effective internal policies, processes, systems and controls to ensure that the appropriate risk-weighted exposure amounts are assigned to an obligor;
+        - (c) perform the due diligence prior to incurring an exposure to an obligor and at least annually thereafter;
+        - (d) to the extent reasonably practicable, perform the due diligence at the level of each individual exposure; and
+        - (e) if applicable, take into account the extent to which membership of a corporate group affects an obligor's risk profile and credit worthiness.
+    5. The obligations in paragraph 2 do not apply in respect of exposures in scope of:
+        - (a) points (a) to (c) of Article 112(1);
+        - (b) Article 117(2); and
+        - (c) Article 118(1).
+
+### Scope and exemptions
+
+| Art. 110A(5) reference | Exempt obligor class | Rationale |
+|------------------------|----------------------|-----------|
+| Art. 112(1)(a) | Central governments and central banks | Sovereign counterparties — DD would not change the 0% / sovereign-CQS risk weight |
+| Art. 112(1)(b) | Regional governments and local authorities (RGLA) | Sovereign-derived or treated-as-sovereign treatment |
+| Art. 112(1)(c) | Public sector entities (PSE) | Sovereign-derived or treated-as-sovereign treatment |
+| Art. 117(2) | Named 0% risk weight multilateral development banks (MDBs) | Named list; DD does not change the 0% treatment |
+| Art. 118(1) | International organisations (EU, IMF, BIS, EFSF, ESM) | 0% risk weight by enumeration |
+
+All other obligor classes — **institutions, corporates, retail, real estate, equity, CIUs, and Art. 117(1) non-named MDBs (Table 2B)** — are within the DD obligation.
+
+### Minimum DD standard (Art. 110A(4))
+
+- **Assess condition of every obligor** (Art. 110A(4)(a)). The requirement is "reasonable and adequate steps" — the sophistication scales with the institution's activities (Art. 110A(3)).
+- **Policy, process, system, and control framework** for assigning risk weights (Art. 110A(4)(b)). This is the hook for the **risk-weight uplift**: if internal assessment shows the ECAI/class-based RW understates risk, the firm must assign a higher RW.
+- **Timing**: initial DD before the exposure is incurred; re-performed at least annually thereafter (Art. 110A(4)(c)).
+- **Granularity**: per-exposure where reasonably practicable (Art. 110A(4)(d)); portfolio-level otherwise.
+- **Group structure**: membership of a corporate group must be factored into the assessment (Art. 110A(4)(e)) — relevant to connected-client and intra-group support analysis.
+
+### Distinction from class-specific CQS step-up overrides
+
+Art. 110A is the **umbrella obligation**. Three narrower, class-specific CQS step-up rules apply to *rated* exposures where ECAI assessment is the default RW source:
+
+| Provision | Obligor class | Trigger | Effect |
+|-----------|---------------|---------|--------|
+| Art. 120(4) | Rated institutions | DD reveals risk higher than ECAI implies | One CQS step higher (e.g. CQS 2 → CQS 3 weight) |
+| Art. 122(4) | Rated corporates | Same | One CQS step higher |
+| Art. 129(4A) | Covered bonds | Same | One CQS step higher than the derivation (Art. 129(4)/(5)) result |
+
+Art. 110A is broader: it applies to **every non-exempt SA exposure**, rated or unrated, and permits an arbitrary uplift (not limited to one CQS step) where the firm's internal assessment indicates the calculated RW understates risk.
+
+### Implementation
+
+Two optional input fields on the facility schema support Art. 110A:
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `due_diligence_performed` | Boolean | Yes (default `False`) | Firm attestation that DD per Art. 110A(2) has been performed for this exposure |
+| `due_diligence_override_rw` | Float64 | Yes | Firm-determined uplifted risk weight (decimal — e.g. `1.50` for 150%) where DD reveals higher risk than the calculated RW |
+
+**Override behaviour:**
+
+- Apply as the **final** risk-weight modification — after CQS lookup, CRM substitution (life-insurance / guarantee / FCSM), and currency-mismatch multiplier (Art. 123B).
+- **Directional floor:** `RW_final = max(RW_calculated, RW_override)`. The override can only increase the RW; a lower override has no effect.
+- Null override values are silently ignored.
+
+**Sequencing in the SA calculator:**
+
+1. Standard CQS/class-based risk weight determination (Art. 112–134).
+2. CRM substitution — FCSM, life insurance, guarantee (Art. 197–236).
+3. Currency-mismatch multiplier — 1.5×, 150% cap (Art. 123B).
+4. **Due diligence override (Art. 110A)** — `max(calculated, override)` applied here.
+5. RWA calculation — `RWA = EAD × RW_final`.
+
+**Validation:**
+
+- Under Basel 3.1, when the `due_diligence_performed` column is absent from the facilities frame, the calculator emits a data-quality warning with code `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`, severity `WARNING`, `regulatory_reference="PRA PS1/26 Art. 110A"`). The calculation continues — the warning does not block execution.
+- Under CRR, no warning is emitted (no CRR equivalent to Art. 110A).
+
+**Audit:**
+
+- When the override column is present, an output column `due_diligence_override_applied` (Boolean) flags exposures whose RW was raised by the override. Use this to reconcile against internal DD records and to populate SA RW-uplift disclosures.
+
+!!! warning "Firm responsibility — not an engine determination"
+    The calculator does not attempt to determine whether DD is *adequate* under Art. 110A(2)–(4). It only:
+    (1) warns when DD status is not provided, and (2) applies any firm-supplied uplifted risk weight as a floor. The firm remains responsible for the policies, processes, and annual review obligations under Art. 110A(4)(b)/(c). Values supplied via `due_diligence_override_rw` should be traceable to the firm's DD process documentation.
+
+### CRR comparison
+
+CRR has no Art. 110A equivalent. SA firms under CRR rely on generic risk-management obligations in Art. 79 CRD IV (not a CRR provision) and the IRB-specific Art. 186 requirements. There is no SA-specific DD gate. The calculator therefore does not apply the SA004 warning under CRR, and the `due_diligence_override_rw` column is ignored on the CRR path.
 
 ---
 

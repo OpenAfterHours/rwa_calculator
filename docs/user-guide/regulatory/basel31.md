@@ -416,10 +416,55 @@ See [Technical Reference](../../framework-comparison/technical-reference.md#irb-
 
 ### 10. Due Diligence Requirements
 
-Enhanced requirements for unrated exposures:
-- Institutions must perform internal assessment
-- Risk weight based on assessment quality
-- Documentation requirements
+Basel 3.1 introduces a **framework-wide due diligence (DD) obligation** for Standardised Approach exposures under PRA PS1/26 Art. 110A. CRR has no equivalent SA-specific provision.
+
+**Core obligation (Art. 110A(2)).** Firms must "perform due diligence to ensure [they have] an adequate understanding of the risk profile, creditworthiness and characteristics of exposures to individual obligors and at a portfolio level". The sophistication of DD scales with the nature, scale, and complexity of the firm's activities (Art. 110A(3)).
+
+**Minimum practical standards (Art. 110A(4)).** Firms must:
+
+- Take reasonable and adequate steps to assess each obligor's operating and financial condition.
+- Maintain internal policies, processes, systems, and controls that assign the appropriate risk-weighted exposure amount to each obligor.
+- Perform DD before incurring an exposure and re-perform at least annually thereafter.
+- Perform DD at the level of each individual exposure where reasonably practicable.
+- Factor the obligor's corporate-group membership into the assessment.
+
+**Exempt obligor classes (Art. 110A(5)).** The obligation does *not* apply to exposures in scope of:
+
+- Central governments and central banks (Art. 112(1)(a))
+- Regional governments and local authorities (Art. 112(1)(b))
+- Public sector entities (Art. 112(1)(c))
+- Named 0%-RW multilateral development banks (Art. 117(2))
+- International organisations (Art. 118(1))
+
+All other obligor classes — institutions, corporates, retail, real estate, equity, CIUs, and non-named MDBs — are within scope.
+
+**Risk-weight uplift.** Where internal DD indicates the class/ECAI-based risk weight understates the risk, the firm must assign a higher RW. The uplift is **unbounded** — not limited to one CQS step. Three narrower class-specific CQS step-up rules apply alongside Art. 110A for rated exposures: Art. 120(4) (rated institutions), Art. 122(4) (rated corporates), and [Art. 129(4A)](#covered-bonds) (covered bonds). Each limits the uplift to *one* CQS step and applies only where ECAI assessment is the default RW source.
+
+**Using the calculator.** The facility schema exposes two optional fields to carry DD status and any uplifted RW:
+
+```python
+facility = {
+    "facility_ref": "LOAN-001",
+    # ... standard fields ...
+    "due_diligence_performed": True,       # firm attestation per Art. 110A(2)
+    "due_diligence_override_rw": 1.50,     # uplifted RW (decimal) — 150% here
+}
+```
+
+Override behaviour:
+
+- Applied as the **final** risk-weight modification — after CQS lookup, CRM substitution, and the Art. 123B currency-mismatch multiplier, before `RWA = EAD × RW`.
+- Directional floor: `RW_final = max(RW_calculated, RW_override)`. Lower override values have no effect.
+- Null override values are silently ignored.
+
+Validation:
+
+- When `due_diligence_performed` is absent from the input under Basel 3.1, the calculator emits a `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`) WARNING — the calculation continues.
+- Under CRR both fields are ignored and no warning is raised.
+
+Audit: the output column `due_diligence_override_applied` (Boolean) flags exposures whose RW was raised by the override — use this to reconcile against DD-process evidence and to populate internal disclosures.
+
+See the [Basel 3.1 SA Risk Weights specification](../../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a) for the verbatim regulatory text and the full SA-calculator sequencing diagram.
 
 ## Risk Weight Tables (Basel 3.1)
 

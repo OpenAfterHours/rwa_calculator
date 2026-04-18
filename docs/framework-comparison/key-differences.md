@@ -888,7 +888,44 @@ new institution RWs (ECRA 30%, SCRA 40%/75%):
 !!! info "Art. 129(4A) — New Due Diligence Requirement"
     Basel 3.1 adds Art. 129(4A): institutions must assess whether external ratings
     adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
-    must assign at least one CQS step higher.
+    must assign at least one CQS step higher. This is a *class-specific* application of the
+    umbrella [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below.
+
+## Due Diligence Obligation (Art. 110A)
+
+Basel 3.1 introduces a **framework-wide due diligence obligation** for the Standardised Approach. CRR has no equivalent provision.
+
+| Aspect | CRR | Basel 3.1 |
+|--------|-----|-----------|
+| Framework gate | No SA-specific DD obligation | Art. 110A — applies to every non-exempt SA exposure |
+| Uplift mechanism | N/A | Firm must apply a higher RW where internal assessment shows the calculated RW understates risk |
+| Uplift magnitude | N/A | Unbounded — not limited to one CQS step |
+| Timing | N/A | Initial DD before exposure; annual refresh thereafter (Art. 110A(4)(c)) |
+| Group-structure analysis | N/A | Required where applicable (Art. 110A(4)(e)) |
+
+**Exempt obligor classes (Art. 110A(5)):**
+
+- Central governments and central banks (Art. 112(1)(a))
+- Regional governments and local authorities (Art. 112(1)(b))
+- Public sector entities (Art. 112(1)(c))
+- Named 0% risk weight MDBs (Art. 117(2))
+- International organisations (Art. 118(1))
+
+All other obligor classes — institutions, corporates, retail, real estate, equity, CIUs, non-named MDBs (Art. 117(1) / Table 2B) — are in scope.
+
+**Distinction from class-specific CQS step-up overrides.** Art. 110A is the umbrella obligation. Three narrower rules apply to *rated* exposures where ECAI assessment is the default RW source and the DD finding is limited to a one-step CQS uplift:
+
+| Provision | Obligor class |
+|-----------|---------------|
+| Art. 120(4) | Rated institutions |
+| Art. 122(4) | Rated corporates |
+| Art. 129(4A) | Covered bonds |
+
+Art. 110A applies to every non-exempt SA exposure regardless of rating status and permits an arbitrary uplift above the class RW where the firm's internal assessment supports it.
+
+**Implementation.** The calculator exposes `due_diligence_performed` (Boolean, firm attestation) and `due_diligence_override_rw` (Float64, uplifted RW) on the facility schema. Under Basel 3.1, when `due_diligence_performed` is absent the calculator emits a `SA004` data-quality warning. Where `due_diligence_override_rw > risk_weight`, the override is applied as `RW_final = max(RW_calculated, RW_override)` *after* CRM, currency-mismatch multiplier, and before RWA = EAD × RW. A `due_diligence_override_applied` audit column flags uplifted exposures. Under CRR both columns are ignored and no warning is raised.
+
+See [Basel 3.1 SA Risk Weights § Due Diligence Obligation (Art. 110A)](../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a) for the verbatim regulatory text and full implementation sequencing.
 
 !!! success "P1.113 Fixed — B31 Rated Values"
     `B31_COVERED_BOND_RISK_WEIGHTS` now uses PRA Table 7 values (identical to CRR).

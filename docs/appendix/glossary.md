@@ -52,6 +52,9 @@ An event where a counterparty fails to meet its credit obligations. Defined as 9
 ### DPD (Days Past Due)
 The number of days a payment is overdue.
 
+### Due Diligence Obligation (Art. 110A)
+Basel 3.1 framework-wide obligation (PRA PS1/26 Art. 110A) requiring SA firms to assess each obligor's operating and financial condition, review annually, and factor in corporate-group membership. Where internal analysis shows the class/ECAI-based risk weight understates risk, the firm must apply a higher RW (uplift is unbounded, unlike the one-CQS-step Art. 120(4) / 122(4) / 129(4A) overrides). Exempt obligor classes (Art. 110A(5)): central governments and central banks, RGLA, PSE, named 0%-RW MDBs (Art. 117(2)), international organisations (Art. 118(1)). No CRR equivalent. Implementation: `due_diligence_performed` / `due_diligence_override_rw` input fields; `SA004` warning under B31 when DD status absent; `due_diligence_override_applied` audit column. See [B31 SA spec](../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a).
+
 ## E
 
 ### EAD (Exposure at Default)

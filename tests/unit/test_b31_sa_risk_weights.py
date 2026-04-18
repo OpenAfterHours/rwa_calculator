@@ -2610,6 +2610,80 @@ class TestB31ECRAShortTermInstitution:
         assert float(result["risk_weight"]) == pytest.approx(0.50)
 
 
+class TestInstitutionShortTermOriginalMaturity:
+    """PRA PS1/26 Art. 120(2) and Art. 121(3): institution short-term tests key on
+    ORIGINAL maturity, not residual. A 5-year bond with 1 month residual must NOT
+    receive the short-term concession.
+
+    This is the ECRA/SCRA counterpart of PSE Art. 116(3) — the CRR-to-B3.1
+    transition rewrote these clauses to use "original" maturity consistently
+    across rated (Art. 120(2)) and unrated (Art. 121(3)) institutions.
+    """
+
+    def test_scra_seasoned_bond_not_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 121(3): 5y bond with 0.1y residual → Grade A LONG-term (40%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            original_maturity_years=5.0,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.40)
+
+    def test_scra_fresh_bond_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 121(3): 3m bond (orig=res=0.1y) → Grade A SHORT-term (20%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=None,
+            scra_grade="A",
+            residual_maturity_years=0.10,
+            original_maturity_years=0.10,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+    def test_ecra_seasoned_bond_not_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 120(2): CQS 3 5y bond with 0.1y residual → Table 3 LONG-term (50%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            original_maturity_years=5.0,
+            config=b31_config,
+        )
+        # Long-term CQS 3 = 50% (B31 ECRA Table 3). Must NOT be 20% short-term.
+        assert float(result["risk_weight"]) == pytest.approx(0.50)
+
+    def test_ecra_fresh_bond_short_term(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Art. 120(2): CQS 3 3m bond → Table 4 SHORT-term (20%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("10000000"),
+            exposure_class="institution",
+            cqs=3,
+            residual_maturity_years=0.10,
+            original_maturity_years=0.10,
+            config=b31_config,
+        )
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
+
+
 # =============================================================================
 # INVESTMENT-GRADE CORPORATE (CRE20.47-49)
 # =============================================================================

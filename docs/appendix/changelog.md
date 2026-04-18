@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.201] — 2026-04-18
+
+### Fixed
+- **Short-term PSE/institution treatment now keys on original maturity [P1.133]**: `SACalculator._SA_INPUT_CONTRACT` extended with `original_maturity_years`, `value_date`, `maturity_date`; `calculate_branch` derives `original_maturity_years` inline from `(maturity_date - value_date)/365.0` when the column is null, so hierarchy-supplied facility data flows through without a new schema column. Five SA call-sites updated to use `original_maturity_years`: B31 PSE short-term (Art. 116(3)), B31 ECRA rated institution short-term (Art. 120(2)/(2A) incl. 6m trade-goods carve-out), B31 SCRA unrated institution short-term (Art. 121(3)), CRR PSE short-term (Art. 116(3)), and Art. 121(6) trade-goods sovereign-floor exception. Previously a 5-year bond with 1 month residual incorrectly attracted short-term 20% RW; it now correctly receives the long-term CQS/SCRA weight. 8 new regression tests cover seasoned-vs-fresh scenarios across both CRR and B31 branches in `tests/unit/test_pse_risk_weights.py` and `tests/unit/test_b31_sa_risk_weights.py`. Understates-capital bug; fix tightens RWs on seasoned short-residual exposures. Ref: CRR Art. 116(3), PRA PS1/26 Art. 120(2)/(2A), Art. 121(3)/(6).
+
 ## [0.1.200] — 2026-04-18
 
 ### Fixed

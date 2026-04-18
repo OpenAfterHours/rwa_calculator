@@ -131,6 +131,9 @@ _SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "currency": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
     "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "value_date": ColumnSpec(pl.Date, required=False),
+    "maturity_date": ColumnSpec(pl.Date, required=False),
     "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
@@ -508,6 +511,25 @@ class SACalculator:
         # classifier flags, defensive input-schema fallbacks) from the
         # declarative contract. See _SA_INPUT_CONTRACT at module level.
         exposures = ensure_columns(exposures, _SA_INPUT_CONTRACT)
+
+        # Derive original_maturity_years from (maturity_date - value_date) when
+        # not supplied directly. Required by Art. 116(3) PSE short-term,
+        # Art. 120(2)/(2A) B31 rated institution short-term, Art. 121(3) unrated
+        # institution short-term, and Art. 121(6) trade-goods sovereign floor
+        # exception — all of which key off "original" maturity, not residual.
+        # Days-to-years uses /365.0 consistent with exact_fractional_years_expr.
+        _derived_original = (
+            (pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)).cast(
+                pl.Float64
+            )
+            / 365.0
+        )
+        exposures = exposures.with_columns(
+            pl.when(pl.col("original_maturity_years").is_null())
+            .then(_derived_original)
+            .otherwise(pl.col("original_maturity_years"))
+            .alias("original_maturity_years")
+        )
         schema = exposures.collect_schema()
 
         # CRR Art. 114(3)/(4): Domestic CGCB exposures → 0% RW
@@ -665,12 +687,13 @@ class SACalculator:
                         | (pl.col("property_type").fill_null("") == "commercial")
                     )
                     .then(b31_commercial_rw_expr("_cqs_risk_weight"))
-                    # 4a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
-                    # No domestic currency condition. Overrides all CQS-based weights.
+                    # 4a. PSE short-term (Art. 116(3)): original maturity ≤3m → 20% flat
+                    # Art. 116(3) keys on ORIGINAL maturity — a seasoned long-dated PSE bond
+                    # with short residual does not qualify. No domestic currency condition.
                     .when(
                         (_uc == "PSE")
-                        & pl.col("residual_maturity_years").is_not_null()
-                        & (pl.col("residual_maturity_years") <= 0.25)
+                        & pl.col("original_maturity_years").is_not_null()
+                        & (pl.col("original_maturity_years") <= 0.25)
                     )
                     .then(pl.lit(float(PSE_SHORT_TERM_RW)))
                     # 4b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
@@ -718,18 +741,18 @@ class SACalculator:
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
-                    # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120)
-                    # Rated institutions with residual maturity ≤ 3m get preferential
-                    # weights: CQS 1-5 = 20%, CQS 6 = 150%. Also applies to trade
-                    # finance exposures with residual maturity ≤ 6m (Art. 121(5)).
+                    # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120(2))
+                    # PRA PS1/26 Art. 120(2) keys on ORIGINAL maturity ≤ 3m → CQS 1-5 = 20%,
+                    # CQS 6 = 150%. Art. 120(2A) extends Table 4 to exposures with ORIGINAL
+                    # maturity ≤ 6m arising from the movement of goods.
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
                         & (
-                            (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                            (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
                             | (
                                 pl.col("is_short_term_trade_lc").fill_null(False)
-                                & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.5)
+                                & (pl.col("original_maturity_years").fill_null(1.0) <= 0.5)
                             )
                         )
                     )
@@ -738,15 +761,16 @@ class SACalculator:
                         .then(pl.lit(ecra_st_low_rw))
                         .otherwise(pl.lit(ecra_st_high_rw))
                     )
-                    # 4c. SCRA-based unrated institutions (CRE20.16-21)
+                    # 4c. SCRA-based unrated institutions (CRE20.16-21, Art. 121(3))
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
                     # Null SCRA grade defaults to Grade C (150%) — conservative treatment
                     # per PRA PS1/26 Art. 120A (missing data must not produce favourable RW)
-                    # Short-term (≤3m): Grade A/A_ENHANCED → 20%, Grade B → 50%, C → 150%
+                    # Short-term: PRA PS1/26 Art. 121(3) keys on ORIGINAL maturity ≤ 3m →
+                    # Grade A/A_ENHANCED → 20%, Grade B → 50%, C → 150%.
                     .when(
                         _uc.str.contains("INSTITUTION", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
-                        & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                        & (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
                     )
                     .then(
                         pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
@@ -975,11 +999,13 @@ class SACalculator:
                     # 5a. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
                     .then(pl.lit(retail_rw))
-                    # 6a. PSE short-term (Art. 116(3)): ≤3m → 20% flat
+                    # 6a. PSE short-term (Art. 116(3)): original maturity ≤3m → 20% flat
+                    # CRR Art. 116(3) keys on ORIGINAL maturity — seasoned long-dated PSE
+                    # bonds with short residual do not qualify.
                     .when(
                         (_uc == "PSE")
-                        & pl.col("residual_maturity_years").is_not_null()
-                        & (pl.col("residual_maturity_years") <= 0.25)
+                        & pl.col("original_maturity_years").is_not_null()
+                        & (pl.col("original_maturity_years") <= 0.25)
                     )
                     .then(pl.lit(float(PSE_SHORT_TERM_RW)))
                     # 6b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
@@ -1162,8 +1188,9 @@ class SACalculator:
         )
 
         # Exception: self-liquidating trade items ≤ 1yr original maturity
+        # (Art. 121(6) CRR / CRE20.22 footnote 13 — both key on ORIGINAL maturity).
         _is_trade_exempt = pl.col("is_short_term_trade_lc").fill_null(False) & (
-            pl.col("residual_maturity_years").fill_null(5.0) <= 1.0
+            pl.col("original_maturity_years").fill_null(5.0) <= 1.0
         )
 
         # Floor applies to: unrated institution exposures in FX with

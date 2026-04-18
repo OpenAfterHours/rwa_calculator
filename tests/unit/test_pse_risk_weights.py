@@ -391,3 +391,78 @@ class TestB31PSERiskWeights:
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(1.00)
+
+
+# =============================================================================
+# SA CALCULATOR — PSE SHORT-TERM KEYS ON ORIGINAL MATURITY (Art. 116(3))
+# =============================================================================
+# CRR Art. 116(3) and PRA PS1/26 Art. 116(3) both specify "original maturity
+# of three months or less". A seasoned long-dated bond with short residual
+# must NOT receive the 20% short-term concession.
+
+
+class TestPSEShortTermOriginalMaturityCRR:
+    """CRR Art. 116(3): short-term test keys on ORIGINAL maturity, not residual."""
+
+    def test_seasoned_bond_short_residual_not_short_term(self, sa_calculator, crr_config):
+        """5y bond with 0.1y residual: original > 3m → NOT 20% short-term."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=4,
+            country_code="DE",
+            residual_maturity_years=0.1,
+            original_maturity_years=5.0,
+            config=crr_config,
+        )
+        # CQS 4 → sovereign-derived 100% (Table 2, non-UK)
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_fresh_bond_original_under_3m_gets_short_term(self, sa_calculator, crr_config):
+        """3-month bond (original = residual = 0.2y) gets 20%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=4,
+            country_code="DE",
+            residual_maturity_years=0.2,
+            original_maturity_years=0.2,
+            config=crr_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.20)
+
+
+class TestPSEShortTermOriginalMaturityB31:
+    """PRA PS1/26 Art. 116(3): short-term test keys on ORIGINAL maturity."""
+
+    def test_seasoned_bond_short_residual_not_short_term(self, sa_calculator, b31_config):
+        """CQS 5 seasoned bond with 0.1y residual: NOT 20% (original > 3m)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=5,
+            country_code="DE",
+            residual_maturity_years=0.1,
+            original_maturity_years=10.0,
+            config=b31_config,
+        )
+        # Non-UK PSE CQS 5 falls through to CQS-based weight (currently 100%);
+        # importantly must NOT be 20%.
+        assert result["risk_weight"] != pytest.approx(0.20)
+
+    def test_fresh_bond_original_under_3m_gets_short_term(self, sa_calculator, b31_config):
+        """3-month bond with CQS 5 gets 20% via Art. 116(3) short-term override."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="pse",
+            cqs=5,
+            country_code="DE",
+            residual_maturity_years=0.2,
+            original_maturity_years=0.2,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(0.20)

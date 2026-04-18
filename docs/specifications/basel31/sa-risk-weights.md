@@ -444,6 +444,80 @@ New in Basel 3.1 — corporates are divided into sub-categories with differentia
     (Art. 122(9)–(10)), not by external rating. SME 85% overrides IG/non-IG regardless
     (Art. 122(11)). IRB output floor firms may elect the IG/non-IG split via Art. 122(8).
 
+### Rated Corporate Due Diligence CQS Step-Up (Art. 122(4))
+
+Basel 3.1 introduces a class-specific CQS step-up rule for **rated** corporate exposures
+that sits alongside the [framework-wide Art. 110A due diligence obligation](#due-diligence-obligation-art-110a)
+discussed earlier in this specification.
+
+!!! quote "Art. 122(4) — verbatim (PRA PS1/26 p. 44)"
+    "Where a credit assessment by a nominated ECAI is available, an institution shall
+    conduct due diligence to ensure that the external credit assessment appropriately and
+    prudently reflects the risk of the exposure. If the due diligence analysis reflects
+    higher risk characteristics than that implied by the credit quality step of the
+    exposure, the institution shall assign a risk weight associated with a credit quality
+    step that is at least one step higher than the risk weight determined by the external
+    credit assessment."
+
+**Trigger.** Applies whenever a rated corporate exposure uses Art. 122(1) Table 6 (or the
+short-term Art. 122(3) Table 6A once implemented — see [D3.8](#short-term-corporate-ecai-art-1223-table-6a))
+for its risk weight and the firm's internal due diligence reveals risk characteristics
+higher than the ECAI-implied credit quality step.
+
+**Effect.** The firm must assign the risk weight of the **next CQS step higher**. Worked
+examples against Table 6:
+
+| ECAI CQS | ECAI RW | Step-up CQS | Step-up RW | Uplift |
+|----------|---------|-------------|------------|--------|
+| CQS 1 | 20% | CQS 2 | 50% | +30 pp |
+| CQS 2 | 50% | CQS 3 | 75% | +25 pp |
+| CQS 3 | 75% | CQS 4 | 100% | +25 pp |
+| CQS 4 | 100% | CQS 5 | 150% | +50 pp |
+| CQS 5 | 150% | CQS 6 | 150% | 0 (already at cap) |
+| CQS 6 | 150% | — | 150% | 0 (already at cap) |
+
+Art. 122(4) is **not** a discretionary floor — it is a mandatory override where the DD
+finding is triggered.
+
+**Distinction from Art. 110A.** Art. 122(4) is a narrower, rated-exposure-only rule with a
+fixed one-step uplift; Art. 110A applies to every non-exempt SA exposure (rated or unrated)
+and permits an unbounded uplift. The two rules can interact: a firm's DD finding may be
+satisfied either by a one-step CQS uplift under Art. 122(4) or by a larger uplift channelled
+through the Art. 110A `due_diligence_override_rw` path. Where both would apply, the final RW
+is `max(RW_Art_122_4, RW_Art_110A_override, RW_ECAI)`.
+
+**Distinction from the unrated corporate IG/non-IG split.** Art. 122(4) applies to **rated**
+corporates only. The Art. 122(6)(a)/(b) 65%/135% IG split applies only to **unrated**
+corporates and requires separate PRA permission. A rated corporate whose DD reveals
+higher-than-implied risk is stepped up one CQS band under Art. 122(4); it does not drop into
+the unrated sub-category table.
+
+**Parallel provisions.** Art. 122(4) is textually near-identical to two other class-specific
+step-up rules in PS1/26:
+
+| Provision | Obligor class | RW reference |
+|-----------|---------------|--------------|
+| Art. 120(4) | Rated institutions | Art. 120(1) Table 3 |
+| **Art. 122(4)** | **Rated corporates** | **Art. 122(1) Table 6** |
+| Art. 129(4A) | Covered bonds | Art. 129(4) Table 7 / Art. 129(5) unrated derivation |
+
+All three share the same trigger ("DD reveals higher risk than implied by the CQS") and the
+same consequence ("at least one CQS step higher"). CRR has no equivalent provision for any
+of the three classes — the rules are Basel 3.1-only.
+
+**Implementation status.** The calculator does not yet implement a dedicated Art. 122(4)
+branch. Firms currently carry Art. 122(4) findings through the Art. 110A pathway: set
+`due_diligence_override_rw` on the facility to the next-CQS-band weight, and the SA
+calculator will apply it as a directional floor (see [Implementation](#implementation)
+above). This is functionally equivalent and captured in the output via the
+`due_diligence_override_applied` audit column.
+
+!!! warning "Firm responsibility — not an engine determination"
+    The engine does not evaluate whether a DD finding is material enough to trigger
+    Art. 122(4). The firm determines when the step-up applies; the calculator only
+    applies the resulting RW as a floor. Evidence that the step-up has been considered
+    should be traceable to the firm's DD process documentation.
+
 ### Short-Term Corporate ECAI (Art. 122(3), Table 6A)
 
 New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:

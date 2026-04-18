@@ -399,6 +399,15 @@ additional detail and the [F-IRB specifications](../specifications/crr/firb-calc
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. However, PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**. The PRA did not adopt this reduction.
 
+!!! info "Art. 122(4) — New Due Diligence Requirement"
+    Basel 3.1 adds Art. 122(4): where an ECAI credit assessment is available, the institution
+    must conduct due diligence to ensure the external rating appropriately reflects the risk.
+    If due diligence reveals higher risk than implied by the CQS, the institution must assign
+    at least one CQS step higher. This is a *class-specific* application of the umbrella
+    [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below, and it
+    mirrors the parallel provisions for institutions (Art. 120(4)) and covered bonds (Art. 129(4A)).
+    See the [B31 SA spec](../specifications/basel31/sa-risk-weights.md#rated-corporate-due-diligence-cqs-step-up-art-1224) for the full trigger/effect table.
+
 #### New Basel 3.1 Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Basel 3.1 RW | Criteria |

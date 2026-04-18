@@ -179,6 +179,15 @@ Standardised Approach risk weights are recalibrated:
 !!! note "PRA vs BCBS Deviation for CQS 5"
     BCBS CRE20.42 reduced CQS 5 from 150% to 100%. PRA PS1/26 Art. 122(2) Table 6 **retains CQS 5 at 150%**.
 
+!!! info "Art. 122(4) — Due Diligence CQS Step-Up for Rated Corporates"
+    Where an ECAI rating drives the CQS lookup above, Art. 122(4) requires firms to
+    confirm the external rating appropriately reflects risk; if internal due diligence shows
+    higher risk, the firm must assign **at least one CQS step higher** than the ECAI-implied
+    weight. This is a class-specific instance of the framework-wide Art. 110A obligation
+    discussed in [section 10](#10-due-diligence-requirements), with parallels for
+    institutions (Art. 120(4)) and covered bonds (Art. 129(4A)). See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#rated-corporate-due-diligence-cqs-step-up-art-1224) for the full trigger/effect table.
+
 #### New Corporate Sub-Categories (Art. 122(6)–(11))
 
 | Sub-Category | Risk Weight | Criteria |

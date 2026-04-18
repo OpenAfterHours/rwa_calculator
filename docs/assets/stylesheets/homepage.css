@@ -72,7 +72,8 @@ body:has(.landing-hero) {
 /* ---------- Hero stage -------------------------------------- */
 .landing-hero {
   position: relative;
-  height: 100vh;
+  min-height: 100svh;
+  max-height: 1100px;
   width: 100%;
   overflow: hidden;
   color: var(--hero-fg);
@@ -130,7 +131,8 @@ body:has(.landing-hero) {
 .hero {
   position: relative;
   z-index: 2;
-  height: 100vh;
+  min-height: 100svh;
+  max-height: 1100px;
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: 28px 56px;
@@ -412,6 +414,13 @@ body:has(.landing-hero) {
   .meta-row { flex-wrap: wrap; gap: 16px 20px; }
   .meta-divider { display: none; }
   .hero-footer .footer-meta { display: none; }
+}
+
+@media (min-width: 1600px) {
+  body:has(.landing-hero) {
+    --hero-bg-gradient: radial-gradient(ellipse 65% 75% at 50% 30%, #1a1f2e 0%, var(--oah-slate-900) 75%);
+    --constellation-label-opacity: 0.78;
+  }
 }
 
 /* ---------- Reduced motion ---------------------------------- */

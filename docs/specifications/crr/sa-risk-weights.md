@@ -100,7 +100,15 @@ Where RGLA exposures have their own ECAI rating, use Table 1B:
 
 **UK local authorities**: All UK local authorities receive **20%** risk weight per PRA designation.
 
-**Sterling-funded short-term**: RGLA exposures of the UK denominated and funded in **sterling** receive **20%** regardless of CQS (Art. 115(5)).
+**Sterling-funded UK RGLAs (Art. 115(5))**: Exposures to regional governments or local authorities of the United Kingdom that are not treated as central government under Art. 115(2)–(4) and are **denominated and funded in pounds sterling** shall be assigned a risk weight of **20%**. This treatment is **maturity-independent** — it applies regardless of the original or residual maturity of the exposure and regardless of the counterparty's CQS.
+
+!!! warning "Previous Spec Error Corrected"
+    An earlier version of this section described Art. 115(5) as applying only to short-term
+    sterling RGLA exposures. Art. 115(5) has **no maturity condition** — the 20% weight
+    applies to all sterling-denominated, sterling-funded UK RGLA exposures. The short-term
+    preferential treatments in Art. 119(2) and Art. 120(2) are separately excluded from
+    RGLAs by Art. 115(1) (for non-central-government-treated RGLAs routed through the
+    institution table), which is distinct from the Art. 115(5) sterling carve-out.
 
 ## PSE Exposures (CRR Art. 116)
 
@@ -626,13 +634,13 @@ Materially dependent on cash flows:
 | ≤ 80% | 100% |
 | > 80% | 110% |
 
-**Junior charge multiplier** (Art. 124I(3)):
+**Junior charge absolute override** (Art. 124I(3)) — replaces Art. 124I(1)/(2) base, not a multiplier:
 
-| LTV Band | Multiplier |
-|----------|------------|
-| ≤ 60% | 1.0× (100%) |
-| 60-80% | 1.25× (125%) |
-| > 80% | 1.375× (137.5%) |
+| LTV Band | Absolute RW |
+|----------|-------------|
+| ≤ 60% | 100% |
+| 60-80% | 125% |
+| > 80% | **137.5%** |
 
 ### Other Real Estate (Art. 124J)
 
@@ -832,7 +840,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Commercial RE loan-splitting** (Art. 124H): 60% on ≤55% LTV, counterparty RW on residual — Done
 - **Commercial RE other counterparties** (Art. 124H(3)): max/min formula — Done
 - **Commercial RE income-producing** (Art. 124I): 100%/110% at ≤80%/>80% — Done
-- **Junior charge multipliers** (Art. 124F/G/I): 1.25x / 1.375x for subordinate liens — Done
+- **Junior charge treatment** (Art. 124F/G/I): RRE/RRE-income multipliers (125%/1.25×); CRE-income **absolute 100%/125%/137.5%** override (Art. 124I(3)) — Done
 - **Other Real Estate** (Art. 124J): 150% income-dependent, counterparty RW otherwise — Done
 - **Revised corporate CQS mapping** (Art. 122(2) Table 6): CQS 3 from 100% to 75% — Done. **Note:** PRA retains CQS 5 = 150% (BCBS CRE20.42 reduced to 100%, but PRA did not adopt this reduction)
 - **SCRA for unrated institutions** (CRE20.18): Grade A/B/C risk weights replace flat 40% — Done

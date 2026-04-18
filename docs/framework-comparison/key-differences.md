@@ -596,13 +596,15 @@ persons and SMEs, with a higher secured RW (60% vs 50%) and a higher threshold (
     BCBS CRE20.86 uses a 3-band table for CRE income-producing (≤60%: 70%, 60–80%: 90%, >80%: 110%).
     The PRA simplified this to a **2-band table** (≤80%: 100%, >80%: 110%) in Art. 124I.
 
-**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the risk weight is multiplied:
+**Junior Charge Treatment (Art. 124I(3)):** Where prior-ranking charges exist that are not held by the institution, the whole-loan weight is **replaced by an absolute risk weight** (not multiplied on Art. 124I(1)/(2)):
 
-| LTV | Multiplier | Effective RW |
-|-----|-----------|--------------|
-| ≤ 60% | 1.0× | 100% |
-| 60–80% | 1.25× | 125% |
-| > 80% | 1.375× | 137.5% |
+| LTV | Absolute RW | Reference |
+|-----|-------------|-----------|
+| ≤ 60% | 100% | Art. 124I(3)(a) |
+| 60–80% | 125% | Art. 124I(3)(b) |
+| > 80% | **137.5%** | Art. 124I(3)(c) |
+
+Note: applying 1.375× to the 110% >80% base would produce 151.25% — an over-capital error.
 
 ### Other Real Estate (Art. 124J)
 

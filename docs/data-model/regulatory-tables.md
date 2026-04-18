@@ -242,13 +242,13 @@ The multiplied weight is **not capped** at the Table 6B ceiling — it may excee
     BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
     The PRA simplified this to a **2-band table** in Art. 124I.
 
-**Junior Charge Multiplier (Art. 124I(3)):**
+**Junior Charge Treatment (Art. 124I(3)):** Absolute RW override on Art. 124I(1)/(2) base:
 
-| LTV | Multiplier | Effective RW |
-|-----|-----------|--------------|
-| ≤ 60% | 1.0× | 100% |
-| 60–80% | 1.25× | 125% |
-| > 80% | 1.375× | 137.5% |
+| LTV | Absolute RW | Reference |
+|-----|-------------|-----------|
+| ≤ 60% | 100% | Art. 124I(3)(a) |
+| 60–80% | 125% | Art. 124I(3)(b) |
+| > 80% | **137.5%** | Art. 124I(3)(c) |
 
 #### ADC Exposures
 

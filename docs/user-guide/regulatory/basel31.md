@@ -297,7 +297,7 @@ path applies by default.
     BCBS CRE20.86 uses a 3-band table (≤60%: 70%, 60–80%: 90%, >80%: 110%).
     The PRA simplified this to a **2-band table** in Art. 124I.
 
-**Junior Charge Multiplier (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, multiply the base RW: ≤60% LTV = 1.0×, 60–80% = 1.25×, >80% = 1.375×.
+**Junior Charge Treatment (Art. 124I(3)):** Where prior-ranking charges not held by the institution exist, the whole-loan RW is replaced by a band-dependent **absolute** weight (NOT a multiplier on Art. 124I(1)/(2)): ≤60% LTV → 100%, 60–80% → 125%, >80% → 137.5%.
 
 **Other Real Estate (Art. 124J):** Exposures failing the Art. 124A qualifying criteria receive
 punitive treatment: 150% if income-dependent (Art. 124J(1)); counterparty RW if residential

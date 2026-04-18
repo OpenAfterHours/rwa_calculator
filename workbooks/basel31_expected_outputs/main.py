@@ -164,7 +164,7 @@ def _(ScenarioResult):
         ScenarioResult(
             "A4",
             "A",
-            "UK Institution CQS 2 - 30% RW",
+            "Institution CQS 2 - 30% RW (PRA PS1/26 ECRA)",
             "LOAN_INST_UK_003",
             "INST_UK_003",
             "SA",
@@ -172,8 +172,8 @@ def _(ScenarioResult):
             1000000,
             0.30,
             300000,
-            {"cqs": 2, "uk_deviation": True},
-            "CRE20.16",
+            {"cqs": 2, "ecra": True},
+            "PRA PS1/26 Art. 120 ECRA Table 3",
         ),
         ScenarioResult(
             "A5",

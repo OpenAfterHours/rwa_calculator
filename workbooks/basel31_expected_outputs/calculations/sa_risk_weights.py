@@ -14,15 +14,14 @@ project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from workbooks.rwa_expected_outputs.data.regulatory_params import (
+from workbooks.basel31_expected_outputs.data.regulatory_params import (
     ADC_PRESOLD_RISK_WEIGHT,
     ADC_RISK_WEIGHT,
     CGCB_RISK_WEIGHTS,
     COMMERCIAL_RE_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
     HVCRE_MULTIPLIER,
-    INSTITUTION_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_UK,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     RESIDENTIAL_MORTGAGE_RISK_WEIGHTS,
     RETAIL_RISK_WEIGHT,
     SLOTTING_RISK_WEIGHTS,
@@ -46,23 +45,19 @@ def get_cgcb_risk_weight(cqs: int | None) -> float:
     return CGCB_RISK_WEIGHTS.get(cqs, CGCB_RISK_WEIGHTS[0])
 
 
-def get_institution_risk_weight(
-    cqs: int | None,
-    use_uk_deviation: bool = True,
-) -> float:
+def get_institution_risk_weight(cqs: int | None) -> float:
     """
-    Get SA risk weight for institution exposure.
+    Get SA risk weight for institution exposure under PRA PS1/26 ECRA.
 
     Args:
         cqs: Credit Quality Step (1-6), or None/0 for unrated
-        use_uk_deviation: If True, use UK-specific weights (30% for CQS2)
 
     Returns:
         Risk weight as decimal
 
-    Reference: CRE20.16, PRA PS1/26 (UK deviation for CQS2)
+    Reference: PRA PS1/26 Art. 120 ECRA Table 3
     """
-    lookup = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS
+    lookup = INSTITUTION_RISK_WEIGHTS_B31_ECRA
     if cqs is None or cqs == 0:
         return lookup[0]
     return lookup.get(cqs, lookup[0])

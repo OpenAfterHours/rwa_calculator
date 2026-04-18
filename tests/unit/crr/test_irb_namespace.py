@@ -982,12 +982,13 @@ class TestApplyGuaranteeSubstitution:
         assert result["guarantor_rw"][0] == pytest.approx(0.20)
         assert result["is_guarantee_beneficial"][0] is True
 
-    def test_uk_deviation_institution_cqs2_gives_30_percent(
+    def test_crr_institution_cqs2_gives_50_percent(
         self, crr_config: CalculationConfig
     ) -> None:
-        """Under UK deviation, institution CQS 2 should get 30% RW (not 50%).
+        """Under CRR Art. 120 Table 3, institution CQS 2 gets 50% RW.
 
         Guarantee is only applied if beneficial (guarantor RW < borrower RW).
+        Borrower IRB RW must therefore exceed 50% for the guarantee to bind.
         """
         lf = pl.LazyFrame(
             {
@@ -997,21 +998,20 @@ class TestApplyGuaranteeSubstitution:
                 "ead_final": [1_000_000.0],
                 "maturity": [2.5],
                 "exposure_class": ["CORPORATE"],
-                "rwa": [500_000.0],  # IRB RWA = 50% RW (higher than guarantor's 30%)
-                "risk_weight": [0.50],  # Borrower IRB RW = 50%
+                "rwa": [800_000.0],  # IRB RWA = 80% RW (higher than guarantor's 50%)
+                "risk_weight": [0.80],  # Borrower IRB RW = 80%
                 "guaranteed_portion": [1_000_000.0],
                 "unguaranteed_portion": [0.0],
                 "guarantor_entity_type": ["institution"],
-                "guarantor_cqs": [2],  # Institution CQS 2 = 30% under UK deviation
+                "guarantor_cqs": [2],  # Institution CQS 2 = 50% under CRR Art. 120 Table 3
             }
         )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
-        # CRR config has GBP base currency, so UK deviation applies: 30% for institution CQS 2
-        # Guarantee is beneficial (30% < 50%), so it IS applied
-        assert result["rwa"][0] == pytest.approx(300_000.0)
-        assert result["guarantor_rw"][0] == pytest.approx(0.30)
+        # CRR: 50% for institution CQS 2; guarantee is beneficial (50% < 80%)
+        assert result["rwa"][0] == pytest.approx(500_000.0)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
         assert result["is_guarantee_beneficial"][0] is True
 
     def test_missing_guarantee_columns_returns_unchanged(

@@ -101,16 +101,16 @@ class TestCRRGroupA_StandardisedApproach:
             result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="CRR-A3"
         )
 
-    def test_crr_a4_uk_institution_cqs2_deviation(
+    def test_crr_a4_institution_cqs2(
         self,
         sa_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        CRR-A4: UK Institution CQS 2 gets 30% RW (UK deviation from 50%).
+        CRR-A4: Institution CQS 2 gets 50% RW (CRR Art. 120 Table 3).
 
-        Input: £1,000,000 loan to UK bank with A rating (CQS 2)
-        Expected: RWA = £300,000 (30% RW per UK deviation)
+        Input: £1,000,000 loan to bank with A rating (CQS 2)
+        Expected: RWA = £500,000 (50% RW per CRR Art. 120 Table 3)
         """
         expected = expected_outputs_dict["CRR-A4"]
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_INST_UK_003")

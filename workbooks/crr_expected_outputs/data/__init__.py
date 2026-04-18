@@ -21,8 +21,7 @@ from .crr_params import (
     # CRM haircuts
     CRR_HAIRCUTS,
     CRR_INFRASTRUCTURE_SUPPORTING_FACTOR,
-    CRR_INSTITUTION_RW_STANDARD,
-    CRR_INSTITUTION_RW_UK,
+    CRR_INSTITUTION_RW,
     CRR_MATURITY_CAP,
     # Maturity
     CRR_MATURITY_FLOOR,
@@ -48,8 +47,7 @@ __all__ = [
     "FixtureData",
     # SA risk weights
     "CRR_CGCB_RW",
-    "CRR_INSTITUTION_RW_UK",
-    "CRR_INSTITUTION_RW_STANDARD",
+    "CRR_INSTITUTION_RW",
     "CRR_CORPORATE_RW",
     "CRR_RETAIL_RW",
     "CRR_RESIDENTIAL_RW_LOW_LTV",

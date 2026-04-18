@@ -11,8 +11,8 @@ The authoritative dict for each DataFrame:
 | DataFrame builder                         | Authoritative dict(s)                                 |
 |-------------------------------------------|-------------------------------------------------------|
 | crr._create_cgcb_df                       | CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS                |
-| crr._create_institution_df(True)          | INSTITUTION_RISK_WEIGHTS_UK                           |
-| crr._create_institution_df(False)         | INSTITUTION_RISK_WEIGHTS_STANDARD                     |
+| crr._create_institution_df(True)          | INSTITUTION_RISK_WEIGHTS_B31_ECRA                     |
+| crr._create_institution_df(False)         | INSTITUTION_RISK_WEIGHTS_CRR                          |
 | crr._create_pse_df                        | PSE_RISK_WEIGHTS_OWN_RATING                           |
 | crr._create_rgla_df                       | RGLA_RISK_WEIGHTS_OWN_RATING                          |
 | crr._create_mdb_df                        | MDB_RISK_WEIGHTS_TABLE_2B                             |
@@ -51,11 +51,16 @@ _CQS_CASES: list[tuple[str, object, dict[CQS, Decimal], str]] = [
         crr.CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
         "CENTRAL_GOVT_CENTRAL_BANK",
     ),
-    ("inst_uk", crr._create_institution_df(True), crr.INSTITUTION_RISK_WEIGHTS_UK, "INSTITUTION"),
     (
-        "inst_std",
+        "inst_b31_ecra",
+        crr._create_institution_df(True),
+        crr.INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+        "INSTITUTION",
+    ),
+    (
+        "inst_crr",
         crr._create_institution_df(False),
-        crr.INSTITUTION_RISK_WEIGHTS_STANDARD,
+        crr.INSTITUTION_RISK_WEIGHTS_CRR,
         "INSTITUTION",
     ),
     ("pse", crr._create_pse_df(), crr.PSE_RISK_WEIGHTS_OWN_RATING, "PSE"),

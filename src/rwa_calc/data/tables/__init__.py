@@ -55,10 +55,11 @@ from .crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
     CORPORATE_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    INSTITUTION_RISK_WEIGHTS_UK,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
+    build_institution_guarantor_rw_expr,
     get_all_risk_weight_tables,
 )
 from .crr_slotting import (
@@ -116,12 +117,13 @@ __all__ = [
     "lookup_b31_commercial_rw",
     # CRR risk weights
     "CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS",
-    "INSTITUTION_RISK_WEIGHTS_UK",
-    "INSTITUTION_RISK_WEIGHTS_STANDARD",
+    "INSTITUTION_RISK_WEIGHTS_B31_ECRA",
+    "INSTITUTION_RISK_WEIGHTS_CRR",
     "CORPORATE_RISK_WEIGHTS",
     "RESIDENTIAL_MORTGAGE_PARAMS",
     "COMMERCIAL_RE_PARAMS",
     "RETAIL_RISK_WEIGHT",
+    "build_institution_guarantor_rw_expr",
     "get_all_risk_weight_tables",
     # Haircuts
     "COLLATERAL_HAIRCUTS",

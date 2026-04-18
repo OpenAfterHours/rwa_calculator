@@ -231,14 +231,14 @@ class TestCoveredBondSACRR:
         )
         assert result["risk_weight"] == pytest.approx(expected_rw)
 
-    def test_unrated_covered_bond_crr_uk_default(
+    def test_unrated_covered_bond_crr_default(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ):
-        """Unrated CB with unrated institution under UK deviation → 20%.
+        """Unrated CB with unrated institution under CRR → 50%.
 
-        Art. 129(5): unrated institution (UK sovereign-derived 40%) → CB 20%.
+        Art. 129(5): unrated institution (Art. 121 fallback 100%) → CB 50%.
         Backward-compatible: no cp_institution_cqs provided → null → unrated institution.
         """
         result = calculate_single_sa_exposure(
@@ -248,29 +248,29 @@ class TestCoveredBondSACRR:
             cqs=None,
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["risk_weight"] == pytest.approx(0.50)
 
     @pytest.mark.parametrize(
         ("institution_cqs", "expected_cb_rw"),
         [
-            # CRR Art. 129(5) derivation chain — UK deviation (base_currency=GBP):
-            # Institution CQS → institution RW (Table 4) → CB RW (derivation table)
+            # CRR Art. 129(5) derivation chain:
+            # Institution CQS → institution RW (Table 3) → CB RW (derivation table)
             (1, 0.10),  # inst 20% → CB 10%
-            (2, 0.15),  # inst 30% (UK deviation) → CB 15%
+            (2, 0.25),  # inst 50% (CRR Table 3) → CB 25%
             (3, 0.25),  # inst 50% → CB 25%
             (4, 0.50),  # inst 100% → CB 50%
             (5, 0.50),  # inst 100% → CB 50%
             (6, 1.00),  # inst 150% → CB 100%
         ],
     )
-    def test_unrated_covered_bond_crr_uk_by_institution_cqs(
+    def test_unrated_covered_bond_crr_by_institution_cqs(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
         institution_cqs: int,
         expected_cb_rw: float,
     ):
-        """Art. 129(5): CRR unrated CB derives RW from issuing institution CQS (UK)."""
+        """Art. 129(5): CRR unrated CB derives RW from issuing institution CQS."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -281,49 +281,11 @@ class TestCoveredBondSACRR:
         )
         assert result["risk_weight"] == pytest.approx(expected_cb_rw)
 
-    @pytest.mark.parametrize(
-        ("institution_cqs", "expected_cb_rw"),
-        [
-            # CRR Art. 129(5) derivation chain — standard (non-UK, base_currency≠GBP):
-            # Institution CQS → institution RW (Table 3) → CB RW (derivation table)
-            (1, 0.10),  # inst 20% → CB 10%
-            (2, 0.25),  # inst 50% (standard) → CB 25%
-            (3, 0.25),  # inst 50% → CB 25%
-            (4, 0.50),  # inst 100% → CB 50%
-            (5, 0.50),  # inst 100% → CB 50%
-            (6, 1.00),  # inst 150% → CB 100%
-        ],
-    )
-    def test_unrated_covered_bond_crr_standard_by_institution_cqs(
-        self,
-        sa_calculator: SACalculator,
-        institution_cqs: int,
-        expected_cb_rw: float,
-    ):
-        """Art. 129(5): CRR unrated CB derives RW from institution CQS (standard)."""
-        config = CalculationConfig(
-            framework=RegulatoryFramework.CRR,
-            reporting_date=date(2025, 12, 31),
-            base_currency="EUR",
-        )
-        result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
-            cqs=None,
-            config=config,
-            institution_cqs=institution_cqs,
-        )
-        assert result["risk_weight"] == pytest.approx(expected_cb_rw)
-
-    def test_unrated_covered_bond_crr_standard_unrated_institution(
+    def test_unrated_covered_bond_crr_eur_base_matches_gbp(
         self,
         sa_calculator: SACalculator,
     ):
-        """Unrated CB with unrated institution under standard treatment → 50%.
-
-        Art. 129(5): unrated institution (standard 100%) → CB 50%.
-        """
+        """CRR CQS → CB derivation is framework-keyed, not currency-keyed (Art. 120 Table 3)."""
         config = CalculationConfig(
             framework=RegulatoryFramework.CRR,
             reporting_date=date(2025, 12, 31),
@@ -358,39 +320,36 @@ class TestCoveredBondSACRR:
         )
         assert result["risk_weight"] == pytest.approx(0.10)
 
-    def test_unrated_cb_rwa_standard_vs_uk(
+    def test_unrated_cb_rwa_crr_vs_b31_scra_a(
         self,
         sa_calculator: SACalculator,
     ):
-        """Unrated CB RWA is higher under standard than UK for same unrated institution.
+        """Unrated CB RWA: CRR uses institution 100% → CB 50% vs B31 SCRA A → CB 20%.
 
-        UK: unrated institution 40% → CB 20% → RWA = 200k
-        Standard: unrated institution 100% → CB 50% → RWA = 500k
+        CRR Art. 129(5): unrated institution 100% → CB 50% → RWA = 500k
+        B31 Art. 129(5) via SCRA grade A: → CB 20% → RWA = 200k
         """
         ead = Decimal("1000000")
-        uk_config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
-        std_config = CalculationConfig(
-            framework=RegulatoryFramework.CRR,
-            reporting_date=date(2025, 12, 31),
-            base_currency="EUR",
-        )
-        uk_result = calculate_single_sa_exposure(
+        crr_config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2025, 12, 31))
+        crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
             exposure_class="COVERED_BOND",
             cqs=None,
-            config=uk_config,
+            config=crr_config,
         )
-        std_result = calculate_single_sa_exposure(
+        b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
             exposure_class="COVERED_BOND",
             cqs=None,
-            config=std_config,
+            config=b31_config,
+            scra_grade="A",
         )
-        assert uk_result["risk_weight"] == pytest.approx(0.20)
-        assert std_result["risk_weight"] == pytest.approx(0.50)
-        assert std_result["rwa_post_factor"] > uk_result["rwa_post_factor"]
+        assert crr_result["risk_weight"] == pytest.approx(0.50)
+        assert b31_result["risk_weight"] == pytest.approx(0.20)
+        assert crr_result["rwa_post_factor"] > b31_result["rwa_post_factor"]
 
 
 # =============================================================================
@@ -401,48 +360,48 @@ class TestCoveredBondSACRR:
 class TestCRRCoveredBondDerivationConsistency:
     """Cross-validate calculator expression against source data tables."""
 
-    def test_uk_derivation_matches_tables(self):
-        """Calculator's UK CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_UK × DERIVATION."""
+    def test_b31_ecra_derivation_matches_tables(self):
+        """B31 ECRA CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_B31_ECRA × DERIVATION."""
         from rwa_calc.data.tables.crr_risk_weights import (
             COVERED_BOND_UNRATED_DERIVATION,
-            INSTITUTION_RISK_WEIGHTS_UK,
+            INSTITUTION_RISK_WEIGHTS_B31_ECRA,
         )
 
         for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-            inst_rw = INSTITUTION_RISK_WEIGHTS_UK[cqs_val]
+            inst_rw = INSTITUTION_RISK_WEIGHTS_B31_ECRA[cqs_val]
             expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
             assert inst_rw in COVERED_BOND_UNRATED_DERIVATION, (
-                f"UK institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
+                f"B31-ECRA institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
             )
             assert expected_cb_rw is not None
 
-    def test_standard_derivation_matches_tables(self):
-        """Calculator's standard CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_STANDARD × DERIVATION."""
+    def test_crr_derivation_matches_tables(self):
+        """CRR CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_CRR × DERIVATION."""
         from rwa_calc.data.tables.crr_risk_weights import (
             COVERED_BOND_UNRATED_DERIVATION,
-            INSTITUTION_RISK_WEIGHTS_STANDARD,
+            INSTITUTION_RISK_WEIGHTS_CRR,
         )
 
         for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-            inst_rw = INSTITUTION_RISK_WEIGHTS_STANDARD[cqs_val]
+            inst_rw = INSTITUTION_RISK_WEIGHTS_CRR[cqs_val]
             expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
             assert inst_rw in COVERED_BOND_UNRATED_DERIVATION, (
-                f"Standard institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
+                f"CRR institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
             )
             assert expected_cb_rw is not None
 
     def test_unrated_institution_rw_in_derivation_table(self):
-        """Unrated institution RW (both UK and standard) must be in derivation table."""
+        """Unrated institution RW (both CRR and B31 ECRA) must be in derivation table."""
         from rwa_calc.data.tables.crr_risk_weights import (
             COVERED_BOND_UNRATED_DERIVATION,
-            INSTITUTION_RISK_WEIGHTS_STANDARD,
-            INSTITUTION_RISK_WEIGHTS_UK,
+            INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+            INSTITUTION_RISK_WEIGHTS_CRR,
         )
 
-        uk_unrated = INSTITUTION_RISK_WEIGHTS_UK[CQS.UNRATED]
-        std_unrated = INSTITUTION_RISK_WEIGHTS_STANDARD[CQS.UNRATED]
-        assert uk_unrated in COVERED_BOND_UNRATED_DERIVATION
-        assert std_unrated in COVERED_BOND_UNRATED_DERIVATION
+        b31_unrated = INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.UNRATED]
+        crr_unrated = INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]
+        assert b31_unrated in COVERED_BOND_UNRATED_DERIVATION
+        assert crr_unrated in COVERED_BOND_UNRATED_DERIVATION
 
 
 # =============================================================================

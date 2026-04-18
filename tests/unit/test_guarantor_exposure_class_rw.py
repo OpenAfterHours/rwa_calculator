@@ -155,10 +155,10 @@ class TestSAGuarantorExposureClassMapping:
         result = _sa_guarantee_result("bank", 1, crr_config)
         assert result["guarantor_rw"][0] == pytest.approx(0.20)
 
-    def test_bank_cqs2_uk_deviation(self, crr_config: CalculationConfig) -> None:
-        """bank entity type → INSTITUTION class → 30% RW for CQS 2 (UK deviation)."""
+    def test_bank_cqs2_crr(self, crr_config: CalculationConfig) -> None:
+        """bank entity type → INSTITUTION class → 50% RW for CQS 2 (CRR Art. 120 Table 3)."""
         result = _sa_guarantee_result("bank", 2, crr_config)
-        assert result["guarantor_rw"][0] == pytest.approx(0.30)
+        assert result["guarantor_rw"][0] == pytest.approx(0.50)
 
     def test_corporate_cqs1(self, crr_config: CalculationConfig) -> None:
         """corporate entity type → CORPORATE class → 20% RW for CQS 1."""

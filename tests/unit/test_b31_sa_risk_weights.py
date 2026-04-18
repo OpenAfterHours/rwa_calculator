@@ -1619,12 +1619,12 @@ class TestCRRRegression:
 
         assert result["risk_weight"] == pytest.approx(0.75)
 
-    def test_crr_institution_uk_deviation_still_works(
+    def test_crr_institution_cqs2_fifty_percent(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR institution CQS 2 UK deviation → 30% (unchanged)."""
+        """CRR Art. 120 Table 3: institution CQS 2 → 50%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -1633,7 +1633,7 @@ class TestCRRRegression:
             config=crr_config,
         )
 
-        assert result["risk_weight"] == pytest.approx(0.30)
+        assert result["risk_weight"] == pytest.approx(0.50)
 
 
 # =============================================================================
@@ -1972,12 +1972,12 @@ class TestB31SCRAInstitutionWeights:
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
-            cqs=2,  # CQS 2 → 30% (UK deviation)
+            cqs=2,  # B31 ECRA CQS 2 → 30%
             scra_grade="C",  # Would be 150% under SCRA
             config=b31_config,
         )
 
-        # ECRA takes precedence: CQS 2 → 30%
+        # B31 ECRA takes precedence: CQS 2 → 30%
         assert float(result["risk_weight"]) == pytest.approx(0.30)
 
     def test_scra_not_applied_under_crr(
@@ -1985,18 +1985,18 @@ class TestB31SCRAInstitutionWeights:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """SCRA should be ignored under CRR — unrated institutions get 40%."""
+        """SCRA is not part of CRR — unrated institutions get 100% (Art. 120(2))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("5000000"),
             exposure_class="institution",
             cqs=None,
-            scra_grade="C",  # Would be 150% under Basel 3.1
+            scra_grade="C",  # SCRA is B31-only; ignored under CRR
             config=crr_config,
         )
 
-        # CRR: unrated institution → 40% (UK deviation)
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        # CRR Art. 120(2) Table 3: unrated institution → 100%
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
 
     def test_scra_none_unrated_institution_b31(
         self,
@@ -2335,7 +2335,7 @@ class TestB31SCRAShortTermMaturity:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no SCRA short-term treatment — unrated institution gets 40%."""
+        """CRR has no SCRA short-term treatment — unrated institution gets 100% (Art. 120(2))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2346,7 +2346,7 @@ class TestB31SCRAShortTermMaturity:
             config=crr_config,
         )
 
-        assert float(result["risk_weight"]) == pytest.approx(0.40)
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
 
 
 # =============================================================================

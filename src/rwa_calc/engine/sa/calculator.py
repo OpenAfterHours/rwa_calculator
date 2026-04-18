@@ -86,8 +86,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     HIGH_RISK_RW,
-    INSTITUTION_RISK_WEIGHTS_STANDARD,
-    INSTITUTION_RISK_WEIGHTS_UK,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -103,6 +103,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
+    build_institution_guarantor_rw_expr,
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import (
@@ -141,23 +142,21 @@ _SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
 }
 
 
-def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+def _crr_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
 
     Derives covered bond RW from the issuing institution's CQS via two-step lookup:
-      1. Institution CQS → institution RW (Art. 120, Table 3/4)
+      1. Institution CQS → institution RW (Art. 120 Table 3)
       2. Institution RW → covered bond RW (Art. 129(5) derivation table)
 
     When ``cp_institution_cqs`` is null (institution itself is unrated), uses
-    sovereign-derived institution RW: 40% (UK) → CB 20%, or 100% (standard) → CB 50%.
+    Art. 121 fallback institution RW (100%) → CB 50%.
 
     References:
-        CRR Art. 120: Institution risk weights (UK Table 4, standard Table 3)
+        CRR Art. 120 Table 3: Institution risk weights (CQS 2 = 50%)
         CRR Art. 129(5): Unrated covered bond derivation from institution RW
     """
-    inst_table = (
-        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
-    )
+    inst_table = INSTITUTION_RISK_WEIGHTS_CRR
 
     # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
     cqs_to_cb_rw: dict[int, float] = {}
@@ -180,7 +179,7 @@ def _crr_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
     return expr.otherwise(pl.lit(unrated_cb_rw))
 
 
-def _b31_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
+def _b31_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for B31 Art. 129(5) unrated covered bond RW derivation.
 
     Derives covered bond RW from the issuing institution's senior unsecured RW,
@@ -193,13 +192,11 @@ def _b31_unrated_cb_rw_expr(use_uk_deviation: bool) -> pl.Expr:
     null, falls back to the SCRA path.
 
     References:
-        PRA PS1/26 Art. 120: ECRA institution risk weights (Table 3)
+        PRA PS1/26 Art. 120 Table 3 ECRA: Institution risk weights (CQS 2 = 30%)
         PRA PS1/26 Art. 120A: SCRA institution risk weights
         PRA PS1/26 Art. 129(5): Unrated covered bond derivation from institution RW
     """
-    inst_table = (
-        INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
-    )
+    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA
     cqs_to_cb_rw: dict[int, float] = {}
     for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
         inst_rw = inst_table[cqs_val]
@@ -502,11 +499,10 @@ class SACalculator:
             Exposures with risk_weight column added
         """
         # Get CQS-based risk weight table — Basel 3.1 uses revised corporate weights
-        use_uk_deviation = config.base_currency == "GBP"
         if config.is_basel_3_1:
-            rw_table = get_b31_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_b31_combined_cqs_risk_weights().lazy()
         else:
-            rw_table = get_combined_cqs_risk_weights(use_uk_deviation).lazy()
+            rw_table = get_combined_cqs_risk_weights().lazy()
 
         # Fill any missing optional columns (counterparty attrs, CRM outputs,
         # classifier flags, defensive input-schema fallbacks) from the
@@ -851,7 +847,7 @@ class SACalculator:
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(_b31_unrated_cb_rw_expr(use_uk_deviation))
+                    .then(_b31_unrated_cb_rw_expr())
                     # 11a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
@@ -1027,13 +1023,12 @@ class SACalculator:
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
                     # via COVERED_BOND_UNRATED_DERIVATION table. When issuing
-                    # institution is also unrated, uses sovereign-derived RW:
-                    # UK (40%) → CB 20%, standard (100%) → CB 50%.
+                    # institution is also unrated, sovereign RW 100% → CB 50%.
                     .when(
                         _uc.str.contains("COVERED_BOND", literal=True)
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                     )
-                    .then(_crr_unrated_cb_rw_expr(use_uk_deviation))
+                    .then(_crr_unrated_cb_rw_expr())
                     # 7a. High-risk items → 150% (Art. 128)
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
@@ -1471,8 +1466,6 @@ class SACalculator:
         # Calculate guarantor's risk weight based on exposure class and CQS.
         # Uses guarantor_exposure_class (derived from ENTITY_TYPE_TO_SA_CLASS dict)
         # instead of regex on entity_type, ensuring all valid entity types are covered.
-        # UK deviation for institutions (30% for CQS 2 instead of 50%).
-        use_uk_deviation = config.base_currency == "GBP"
 
         # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS.
         # Evaluate the domestic-currency test against the guarantee currency (the
@@ -1504,12 +1497,6 @@ class SACalculator:
         # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
         _gec = pl.col("guarantor_exposure_class").fill_null("")
 
-        # Guarantor risk weights by exposure class and CQS
-        # CGCB: 0%, 20%, 50%, 100%, 100%, 150% (unrated 100%)
-        # Institution: 20%, 30%/50%, 50%, 100%, 100%, 150% (unrated: UK 40%, standard 100%)
-        # MDB named/IO: 0% unconditional
-        # MDB rated (Table 2B): 20%, 30%, 50%, 100%, 100%, 150% (unrated 50%)
-        # Corporate: 20%, 50%, 100%, 100%, 150%, 150% (unrated 100%)
         exposures = exposures.with_columns(
             [
                 pl.when(pl.col("guaranteed_portion") <= 0)
@@ -1567,20 +1554,13 @@ class SACalculator:
                     .otherwise(pl.lit(0.50))  # Unrated MDB = 50% (Table 2B)
                 )
                 # Institution guarantors (institution, bank, etc.)
+                # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA so the
+                # dicts remain the single source of truth.
                 .when(_gec == "institution")
                 .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.30) if use_uk_deviation else pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    # Unrated institution: UK sovereign-derived = 40%, standard = 100%
-                    .otherwise(pl.lit(0.40) if use_uk_deviation else pl.lit(1.00))
+                    build_institution_guarantor_rw_expr(
+                        "guarantor_cqs", config.is_basel_3_1
+                    )
                 )
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")

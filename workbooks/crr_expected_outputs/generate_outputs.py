@@ -215,19 +215,19 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
         )
     )
 
-    # CRR-A4: UK Institution CQS 2 - 30% RW (UK Deviation)
+    # CRR-A4: Institution CQS 2 - 50% RW (CRR Art. 120 Table 3)
     loan_a4 = fixtures.get_loan("LOAN_INST_UK_003")
     rating_a4 = fixtures.get_rating("INST_UK_003")
     cqs_a4 = rating_a4["cqs"] if rating_a4 else 2
     ead_a4 = Decimal(str(loan_a4["drawn_amount"]))
-    rw_a4 = get_institution_rw(cqs_a4, country="GB", use_uk_deviation=True)
+    rw_a4 = get_institution_rw(cqs_a4)
     rwa_a4 = calculate_sa_rwa(ead_a4, rw_a4)
 
     scenarios.append(
         CRRScenarioOutput(
             scenario_id="CRR-A4",
             scenario_group="CRR-A",
-            description="UK Institution CQS 2 - 30% RW (UK deviation)",
+            description="Institution CQS 2 - 50% RW (CRR Art. 120 Table 3)",
             regulatory_framework="CRR",
             approach="SA",
             exposure_class="INSTITUTION",
@@ -245,8 +245,8 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa_a4),
             expected_loss=None,
-            regulatory_reference="CRR Art. 120-121 (UK deviation)",
-            calculation_notes="UK deviation: CQS 2 -> 30% RW (standard Basel is 50%)",
+            regulatory_reference="CRR Art. 120 Table 3",
+            calculation_notes="Institution CQS 2 -> 50% RW per CRR Art. 120 Table 3",
         )
     )
 
@@ -1132,7 +1132,7 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
     # CRR-D4: Guarantee Substitution
     exposure_d4 = Decimal("1000000")
     guarantee_d4 = Decimal("600000")
-    rw_guarantor_d4 = get_institution_rw(cqs=2, country="GB", use_uk_deviation=True)  # 30%
+    rw_guarantor_d4 = get_institution_rw(cqs=2)  # 50% (CRR Art. 120 Table 3)
     rw_borrower_d4 = get_corporate_rw(None)  # 100%
     non_guaranteed_d4 = exposure_d4 - guarantee_d4
     rwa_post_d4 = calculate_sa_rwa(guarantee_d4, rw_guarantor_d4) + calculate_sa_rwa(

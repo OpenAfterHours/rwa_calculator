@@ -28,18 +28,12 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | CQS | CRR (Art. 120) | Basel 3.1 ECRA |
 |-----|----------------|----------------|
 | 1 | 20% | 20% |
-| 2 | 50% | **30%** |
+| 2 | 50% | 30% |
 | 3 | 50% | 50% |
 | 4 | 100% | 100% |
 | 5 | 100% | 100% |
 | 6 | 150% | 150% |
-| Unrated | 40% (sovereign-derived) | SCRA (see below) |
-
-!!! warning "Code Divergence"
-    The code (`INSTITUTION_RISK_WEIGHTS_UK`) currently uses 30% for CRR CQS 2, labelled as
-    a "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 confirms CQS 2 = **50%**.
-    The 30% value matches Basel 3.1 ECRA (PRA PS1/26 Art. 120 Table 3), not CRR. This is a known
-    code bug — see D1.30 in the docs implementation plan.
+| Unrated | 100% (Art. 120(2)) | SCRA (see below) |
 
 **Basel 3.1 SCRA** (for unrated institutions, CRE20.16-21):
 
@@ -49,7 +43,7 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | B | 75% |
 | C | 150% |
 
-**Source**: `INSTITUTION_RISK_WEIGHTS_UK`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
+**Source**: `INSTITUTION_RISK_WEIGHTS_CRR`, `INSTITUTION_RISK_WEIGHTS_B31_ECRA`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
 
 ### Short-Term Institution ECAI (Basel 3.1 Art. 120(2)/(2B))
 
@@ -618,7 +612,7 @@ from rwa_calc.data.tables.crr_risk_weights import lookup_risk_weight
 rw = lookup_risk_weight(
     exposure_class="corporate",
     cqs=2,
-    use_uk_deviation=True
+    is_basel_3_1=False,
 )
 # Returns: Decimal("0.50") (50%)
 ```

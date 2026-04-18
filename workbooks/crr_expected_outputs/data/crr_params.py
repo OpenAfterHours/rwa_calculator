@@ -46,27 +46,15 @@ CRR_CGCB_RW: dict[int | None, Decimal] = {
     None: Decimal("1.00"),  # Unrated
 }
 
-# Institution risk weights - UK deviation (CRR Art. 120-121)
-# CQS 2 gets 30% instead of standard Basel 50%
-CRR_INSTITUTION_RW_UK: dict[int | None, Decimal] = {
+# Institution risk weights (CRR Art. 120 Table 3)
+CRR_INSTITUTION_RW: dict[int | None, Decimal] = {
     1: Decimal("0.20"),  # AAA to AA-
-    2: Decimal("0.30"),  # A+ to A- (UK deviation - 30% instead of 50%)
+    2: Decimal("0.50"),  # A+ to A-
     3: Decimal("0.50"),  # BBB+ to BBB-
     4: Decimal("1.00"),  # BB+ to BB-
     5: Decimal("1.00"),  # B+ to B-
     6: Decimal("1.50"),  # CCC+ and below
-    None: Decimal("0.40"),  # Unrated - derived from sovereign CQS2
-}
-
-# Institution risk weights - standard Basel (for comparison)
-CRR_INSTITUTION_RW_STANDARD: dict[int | None, Decimal] = {
-    1: Decimal("0.20"),
-    2: Decimal("0.50"),  # Standard Basel
-    3: Decimal("0.50"),
-    4: Decimal("1.00"),
-    5: Decimal("1.00"),
-    6: Decimal("1.50"),
-    None: Decimal("0.40"),
+    None: Decimal("1.00"),  # Unrated (Art. 120(2))
 }
 
 # Corporate risk weights by CQS (CRR Art. 122)

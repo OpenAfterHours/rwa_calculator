@@ -160,14 +160,14 @@ def crr_risk_weights() -> dict[str, Any]:
             6: Decimal("1.50"),
             None: Decimal("1.00"),
         },
-        "institution_uk": {
+        "institution": {
             1: Decimal("0.20"),
-            2: Decimal("0.30"),  # UK deviation
+            2: Decimal("0.50"),  # CRR Art. 120 Table 3
             3: Decimal("0.50"),
             4: Decimal("1.00"),
             5: Decimal("1.00"),
             6: Decimal("1.50"),
-            None: Decimal("0.40"),
+            None: Decimal("1.00"),  # CRR Art. 120(2) unrated
         },
         "corporate": {
             1: Decimal("0.20"),

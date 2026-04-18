@@ -135,7 +135,7 @@
     {
       "scenario_id": "B31-A4",
       "scenario_group": "B31-A",
-      "description": "UK Institution CQS 2 — 30% RW (UK deviation, ECRA)",
+      "description": "Institution CQS 2 — 30% RW (PRA PS1/26 ECRA)",
       "regulatory_framework": "Basel 3.1",
       "approach": "SA",
       "exposure_class": "INSTITUTION",
@@ -153,8 +153,8 @@
       "supporting_factor": 1.0,
       "rwa_after_sf": 300000.0,
       "expected_loss": null,
-      "regulatory_reference": "CRE20.16 ECRA (UK deviation)",
-      "calculation_notes": "Rated institution uses ECRA. UK deviation: CQS 2 → 30% (standard is 50%). Same RW as CRR."
+      "regulatory_reference": "PRA PS1/26 Art. 120 ECRA Table 3",
+      "calculation_notes": "Rated institution uses PRA PS1/26 ECRA Table 3: CQS 2 → 30%. Under CRR Art. 120 Table 3, CQS 2 would be 50%."
     },
     {
       "scenario_id": "B31-A5",
@@ -802,7 +802,7 @@
       "rwa_after_sf": 580000.0,
       "expected_loss": null,
       "regulatory_reference": "CRE22.70-71",
-      "calculation_notes": "60% guaranteed by CQS 2 UK bank (30% RW). Blended RW = 0.6×30% + 0.4×100% = 58%. Unchanged from CRR."
+      "calculation_notes": "60% guaranteed by CQS 2 bank (30% RW under PRA PS1/26 ECRA). Blended RW = 0.6×30% + 0.4×100% = 58%. Under CRR this is 70% (50% + 100%)."
     },
     {
       "scenario_id": "B31-D5",

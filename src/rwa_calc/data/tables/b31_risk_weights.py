@@ -342,15 +342,12 @@ def _create_b31_corporate_df() -> pl.DataFrame:
     )
 
 
-def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame:
+def get_b31_combined_cqs_risk_weights() -> pl.DataFrame:
     """
     Get combined CQS-based risk weight table for Basel 3.1 joins.
 
-    Uses Basel 3.1 corporate weights (CQS3=75%, CQS5=100%) while
-    sovereign and institution ECRA weights remain the same as CRR.
-
-    Args:
-        use_uk_deviation: Whether to use UK-specific institution weights
+    Uses Basel 3.1 corporate weights (CQS3=75%, CQS5=100%) and PRA PS1/26
+    Art. 120 ECRA institution weights (CQS 2 = 30%).
 
     Returns:
         Combined DataFrame with columns: exposure_class, cqs, risk_weight
@@ -369,7 +366,7 @@ def get_b31_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataF
             _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
-            _create_institution_df(use_uk_deviation).select(
+            _create_institution_df(is_basel_3_1=True).select(
                 ["exposure_class", "cqs", "risk_weight"]
             ),
             _create_b31_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),

@@ -451,8 +451,8 @@ class TestCRRSovereignFloor:
             currency="GBP",
             country_code="GB",
         )
-        # CRR unrated = 40% — domestic, no floor
-        assert result["risk_weight"] == pytest.approx(0.40)
+        # CRR unrated = 100% (Art. 120(2) Table 3) — domestic, no floor
+        assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_crr_null_sovereign_cqs_no_floor(
         self, sa_calculator: SACalculator, crr_config: CalculationConfig
@@ -467,8 +467,8 @@ class TestCRRSovereignFloor:
             currency="USD",
             country_code="TR",
         )
-        # CRR unrated = 40% — no sovereign data
-        assert result["risk_weight"] == pytest.approx(0.40)
+        # CRR unrated = 100% (Art. 120(2) Table 3) — no sovereign data
+        assert result["risk_weight"] == pytest.approx(1.00)
 
 
 # =========================================================================

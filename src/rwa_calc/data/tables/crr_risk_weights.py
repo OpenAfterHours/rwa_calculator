@@ -112,39 +112,76 @@ def _create_cgcb_df() -> pl.DataFrame:
 
 
 # =============================================================================
-# INSTITUTION RISK WEIGHTS (CRR Art. 120-121)
+# INSTITUTION RISK WEIGHTS (CRR Art. 120 Table 3 / PRA PS1/26 Art. 120 ECRA)
 # =============================================================================
 
-# UK deviation: CQS 2 gets 30% instead of standard Basel 50%
-INSTITUTION_RISK_WEIGHTS_UK: dict[CQS, Decimal] = {
+INSTITUTION_RISK_WEIGHTS_CRR: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.20"),  # AAA to AA-
-    CQS.CQS2: Decimal("0.30"),  # A+ to A- (UK deviation)
+    CQS.CQS2: Decimal("0.50"),  # A+ to A- (CRR Art. 120 Table 3)
     CQS.CQS3: Decimal("0.50"),  # BBB+ to BBB-
     CQS.CQS4: Decimal("1.00"),  # BB+ to BB-
     CQS.CQS5: Decimal("1.00"),  # B+ to B-
     CQS.CQS6: Decimal("1.50"),  # CCC+ and below
-    CQS.UNRATED: Decimal("0.40"),  # Unrated (derived from sovereign CQS2)
+    CQS.UNRATED: Decimal("1.00"),  # Art. 121 fallback when sovereign-derived lookup unavailable
 }
 
-INSTITUTION_RISK_WEIGHTS_STANDARD: dict[CQS, Decimal] = {
+INSTITUTION_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),  # Standard Basel
+    CQS.CQS2: Decimal("0.30"),  # PRA PS1/26 Art. 120 Table 3 ECRA
     CQS.CQS3: Decimal("0.50"),
     CQS.CQS4: Decimal("1.00"),
     CQS.CQS5: Decimal("1.00"),
     CQS.CQS6: Decimal("1.50"),
-    CQS.UNRATED: Decimal("1.00"),  # Art. 120(2) Table 3: unrated sovereign → 100%
+    CQS.UNRATED: Decimal("0.40"),  # SCRA Grade A fallback when ECRA rating absent
 }
 
 
-def _create_institution_df(use_uk_deviation: bool = True) -> pl.DataFrame:
-    """Create institution risk weight lookup DataFrame."""
-    weights = INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
-    n = len(_CQS_ORDER_WITH_UNRATED)
-    return _build_cqs_rw_df(
-        weights,
-        "INSTITUTION",
-        extra_cols={"uk_deviation": [use_uk_deviation] * n},
+def _create_institution_df(is_basel_3_1: bool = False) -> pl.DataFrame:
+    """Create institution risk weight lookup DataFrame.
+
+    Args:
+        is_basel_3_1: True for PRA PS1/26 ECRA values (CQS 2 = 30%),
+            False for CRR Art. 120 Table 3 (CQS 2 = 50%).
+    """
+    weights = (
+        INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
+    )
+    return _build_cqs_rw_df(weights, "INSTITUTION")
+
+
+def build_institution_guarantor_rw_expr(
+    cqs_col: str,
+    is_basel_3_1: bool,
+) -> pl.Expr:
+    """Build a CQS → institution risk weight expression from the canonical dicts.
+
+    Used by SA and IRB guarantee substitution to look up the RW to apply to the
+    guaranteed portion when the guarantor is an institution. Drives values from
+    ``INSTITUTION_RISK_WEIGHTS_CRR`` / ``INSTITUTION_RISK_WEIGHTS_B31_ECRA`` so
+    there is a single source of truth.
+
+    Args:
+        cqs_col: Name of the integer CQS column on the frame.
+        is_basel_3_1: Select PS1/26 ECRA table when True, CRR Art. 120 Table 3
+            when False.
+
+    Returns:
+        Float64 Polars expression evaluating to the institution RW.
+    """
+    table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
+    col = pl.col(cqs_col)
+    return (
+        pl.when(col == 1)
+        .then(pl.lit(float(table[CQS.CQS1])))
+        .when(col == 2)
+        .then(pl.lit(float(table[CQS.CQS2])))
+        .when(col == 3)
+        .then(pl.lit(float(table[CQS.CQS3])))
+        .when(col.is_in([4, 5]))
+        .then(pl.lit(float(table[CQS.CQS4])))
+        .when(col == 6)
+        .then(pl.lit(float(table[CQS.CQS6])))
+        .otherwise(pl.lit(float(table[CQS.UNRATED])))
     )
 
 
@@ -504,12 +541,12 @@ def _create_covered_bond_df() -> pl.DataFrame:
 # =============================================================================
 
 
-def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.DataFrame]:
+def get_all_risk_weight_tables() -> dict[str, pl.DataFrame]:
     """
     Get all CRR SA risk weight tables.
 
-    Args:
-        use_uk_deviation: Whether to use UK-specific institution weights (30% for CQS2)
+    Institution table is the CRR Art. 120 Table 3 (CQS 2 = 50%); the Basel 3.1
+    ECRA variant is selected via ``get_b31_combined_cqs_risk_weights``.
 
     Returns:
         Dictionary of DataFrames keyed by exposure class type
@@ -519,7 +556,7 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
         "rgla": _create_rgla_df(),
         "pse": _create_pse_df(),
         "mdb": _create_mdb_df(),
-        "institution": _create_institution_df(use_uk_deviation),
+        "institution": _create_institution_df(is_basel_3_1=False),
         "corporate": _create_corporate_df(),
         "retail": _create_retail_df(),
         "residential_mortgage": _create_residential_mortgage_df(),
@@ -528,15 +565,12 @@ def get_all_risk_weight_tables(use_uk_deviation: bool = True) -> dict[str, pl.Da
     }
 
 
-def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame:
+def get_combined_cqs_risk_weights() -> pl.DataFrame:
     """
-    Get combined CQS-based risk weight table for joins.
+    Get combined CQS-based CRR risk weight table for joins.
 
-    Returns a single DataFrame with all CQS-based risk weights for
-    sovereign, institution, and corporate exposure classes.
-
-    Args:
-        use_uk_deviation: Whether to use UK-specific institution weights
+    Uses CRR Art. 120 Table 3 institution weights (CQS 2 = 50%). For Basel 3.1
+    ECRA values use ``get_b31_combined_cqs_risk_weights`` instead.
 
     Returns:
         Combined DataFrame with columns: exposure_class, cqs, risk_weight
@@ -547,7 +581,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
             _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
             _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
-            _create_institution_df(use_uk_deviation).select(
+            _create_institution_df(is_basel_3_1=False).select(
                 ["exposure_class", "cqs", "risk_weight"]
             ),
             _create_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
@@ -559,7 +593,7 @@ def get_combined_cqs_risk_weights(use_uk_deviation: bool = True) -> pl.DataFrame
 def lookup_risk_weight(
     exposure_class: str,
     cqs: int | None,
-    use_uk_deviation: bool = True,
+    is_basel_3_1: bool = False,
 ) -> Decimal:
     """
     Look up risk weight for exposure class and CQS.
@@ -570,7 +604,8 @@ def lookup_risk_weight(
     Args:
         exposure_class: Exposure class (CENTRAL_GOVT_CENTRAL_BANK, INSTITUTION, CORPORATE, RETAIL)
         cqs: Credit quality step (1-6 or None/0 for unrated)
-        use_uk_deviation: Whether to use UK-specific institution weights
+        is_basel_3_1: True selects PRA PS1/26 ECRA institution weights
+            (CQS 2 = 30%); False selects CRR Art. 120 Table 3 (CQS 2 = 50%).
 
     Returns:
         Risk weight as Decimal
@@ -611,7 +646,7 @@ def lookup_risk_weight(
 
     if exposure_upper == "INSTITUTION":
         table = (
-            INSTITUTION_RISK_WEIGHTS_UK if use_uk_deviation else INSTITUTION_RISK_WEIGHTS_STANDARD
+            INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
         )
         cqs_enum = _get_cqs_enum(cqs)
         return table.get(cqs_enum, table[CQS.UNRATED])

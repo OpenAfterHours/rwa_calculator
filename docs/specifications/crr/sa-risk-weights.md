@@ -219,15 +219,7 @@ The following international organisations receive a **0%** risk weight:
 | 4 | 100% |
 | 5 | 100% |
 | 6 | 150% |
-| Unrated | 40% (Art. 121, sovereign-derived from CQS 2) |
-
-!!! warning "Code Divergence — CQS 2"
-    The code (`INSTITUTION_RISK_WEIGHTS_UK`) uses **30%** for CRR CQS 2, labelled as a
-    "UK deviation". PDF verification of UK onshored CRR Art. 120 Table 3 (legislation.gov.uk,
-    current version) confirms CQS 2 = **50%**. The 30% value matches the **Basel 3.1 ECRA**
-    table (PRA PS1/26 Art. 120 Table 3), not CRR. No PRA Rulebook instrument or supervisory
-    statement has been identified that reduces CRR CQS 2 to 30%. See D1.30 in the docs
-    implementation plan.
+| Unrated | 100% (Art. 120(2)) |
 
 ### Short-Term Institution Exposures (CRR Art. 120(2), Art. 121(3))
 

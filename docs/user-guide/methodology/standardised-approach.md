@@ -207,14 +207,14 @@ print(f"RWA: {result['rwa']}")
 
 Risk weights are defined in:
 
-- **CRR**: `data/tables/crr_risk_weights.py` — `get_combined_cqs_risk_weights(use_uk_deviation=True)`
+- **CRR**: `data/tables/crr_risk_weights.py` — `get_combined_cqs_risk_weights()`
 - **Basel 3.1**: `data/tables/b31_risk_weights.py` — `get_b31_combined_cqs_risk_weights()`
 
 ```python
 from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
 
-# Get CRR risk weight lookup table
-rw_table = get_combined_cqs_risk_weights(use_uk_deviation=True)
+# Get CRR risk weight lookup table (Art. 120 Table 3 for institutions)
+rw_table = get_combined_cqs_risk_weights()
 
 # Table includes: exposure_class, cqs, risk_weight
 # Example: CORPORATE, CQS 2 -> 50%

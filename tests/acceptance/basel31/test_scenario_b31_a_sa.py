@@ -113,18 +113,18 @@ class TestB31GroupA_StandardisedApproach:
             result["rwa_post_factor"], expected["rwa_after_sf"], scenario_id="B31-A3"
         )
 
-    def test_b31_a4_uk_institution_cqs2_30pct_rw(
+    def test_b31_a4_institution_cqs2_30pct_rw(
         self,
         sa_results_df: pl.DataFrame,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-A4: UK Institution CQS 2 gets 30% RW (UK deviation preserved).
+        B31-A4: Institution CQS 2 gets 30% RW (PRA PS1/26 ECRA Table 3).
 
-        Input: £1,000,000 loan to UK bank with A rating (CQS 2)
-        Expected: RWA = £300,000 (30% RW, UK deviation from standard 50%)
-        Rationale: ECRA for rated institutions preserved under Basel 3.1.
-            UK deviation applies to both CRR and Basel 3.1.
+        Input: £1,000,000 loan to bank with A rating (CQS 2)
+        Expected: RWA = £300,000 (30% RW per PRA PS1/26 ECRA Table 3)
+        Rationale: Rated institution uses PRA PS1/26 ECRA (Art. 120).
+            Under CRR Art. 120 Table 3 the same exposure is 50%.
         """
         expected = expected_outputs_dict["B31-A4"]
         result = get_sa_result_for_exposure(sa_results_df, "LOAN_INST_UK_003")

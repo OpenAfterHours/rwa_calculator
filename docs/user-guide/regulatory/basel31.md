@@ -534,6 +534,24 @@ Standardised Credit Risk Assessment Approach (SCRA):
     for institutions meeting minimum requirements (excluding buffers) but not qualifying for
     Grade A. If minimum requirements are not publicly disclosed, the institution is Grade C.
 
+!!! info "Short-Term Trade Finance Exception (Art. 121(4))"
+    Unrated institution exposures with an **original maturity ≤ 6 months** that **arose from
+    the movement of goods** receive the Table 5A short-term SCRA weights (Grade A / A enhanced
+    20%, Grade B 50%, Grade C 150%) — even though the general short-term preferential window
+    under Art. 121(3) is limited to ≤ 3 months. This preserves the historical BCBS
+    self-liquidating trade-finance carve-out.
+
+    Why it matters: documentary credits and similar short-dated trade instruments would
+    otherwise fall into the > 3-month Table 5 weights (Grade A 40%, Grade B 75%). Banks
+    financing cross-border goods movements must flag maturity **and** the trade-related nature
+    of the exposure to qualify.
+
+    Art. 121(4) sits alongside the Art. 121(6) foreign-currency sovereign floor below — they
+    operate independently. A 9-month foreign-currency trade exposure is *carved out of* the
+    floor (Art. 121(6)(b)) but is *above* the 6-month threshold for Table 5A, so it receives
+    the standard > 3m SCRA grade weight (e.g. Grade A 40%). See
+    [B31 SA Risk Weights — Art. 121(4)](../../specifications/basel31/sa-risk-weights.md#scra-short-term-trade-finance-exception-art-1214).
+
 !!! warning "Sovereign Floor for Foreign-Currency SCRA Exposures (Art. 121(6))"
     Where an unrated institution exposure is denominated in a currency other than the
     local currency of the institution's jurisdiction of incorporation (or, for branch

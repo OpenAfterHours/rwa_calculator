@@ -492,6 +492,28 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
+!!! info "SCRA Short-Term Trade Finance Exception (Art. 121(4)) — New in Basel 3.1"
+    Basel 3.1 introduces a dedicated preferential window for self-liquidating trade-finance
+    exposures to unrated institutions. An exposure with **original maturity ≤ 6 months** that
+    **arose from the movement of goods** receives Table 5A weights (Grade A / A enhanced 20%,
+    Grade B 50%, Grade C 150%), overriding the normal 3-month threshold in Art. 121(3).
+
+    **No direct CRR analogue.** Under CRR Art. 120, unrated institution exposures are assigned
+    a risk weight derived from the institution's central-government rating (Art. 121 Table 3)
+    and the general short-term preferential treatment is gated on original maturity ≤ 3 months
+    (Art. 119(2)) — there is no separate 6-month self-liquidating trade carve-out. The new
+    Art. 121(4) aligns the PRA framework with BCBS CRE20.20, preserving the capital treatment
+    historically given to cross-border documentary credits and similar short-dated trade
+    instruments.
+
+    **Interaction with Art. 121(6).** The two articles operate independently. A 9-month
+    foreign-currency self-liquidating trade exposure falls *outside* the Art. 121(4) window
+    (> 6 months) but is *carved out of* the Art. 121(6) floor (< 1 year trade carve-out in
+    (b)), so it receives the standard > 3m SCRA grade weight (e.g. Grade A 40%) — neither
+    preferential nor floored. See
+    [B31 SA Risk Weights — Art. 121(4)](../specifications/basel31/sa-risk-weights.md#scra-short-term-trade-finance-exception-art-1214)
+    for the full eligibility conditions and worked interaction with Art. 121(6).
+
 !!! warning "SCRA Sovereign Floor for Foreign-Currency Exposures (Art. 121(6))"
     Unrated institution risk weights derived under SCRA may not fall below the risk
     weight of the institution's home sovereign (Art. 114(1)/(2)) when **both** of these

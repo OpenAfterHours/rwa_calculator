@@ -2,7 +2,7 @@
 
 ## Ultimate Goal
 
-Ensure `docs/` is a **complete, accurate regulatory reference** for developers and auditors — covering both CRR and Basel 3.1 rules the calculator implements, with clear documentation of the differences between them.
+Ensure `docs/` is a **complete, accurate regulatory reference** for developers and auditors — covering both CRR and Basel 3.1 rules the calculator implements, with clear documentation of the differences between them. The docs should allow any user to be able to easily understand what and how the calculator is doing. 
 
 ## Important Constraints
 
@@ -56,7 +56,7 @@ Use up to 3 Sonnet subagents per topic area (run multiple rounds if needed). Eac
 3. **Missing regulatory formulas** — IRB K formula, maturity adjustment, correlation parameters, PD/LGD floor values
 4. **Undocumented CRR→B31 parameter changes** — PD floors, LGD floors, CCF changes, output floor mechanics, removal of 1.06 scaling, removal of supporting factors
 5. **Missing exposure class treatments** — Basel 3.1 adds real estate as standalone class, corporate sub-categories (investment grade, project finance), retail qualifying criteria changes
-6. **Completeness of `docs/specifications/`** — CRR has 8 spec files; Basel 3.1 has **zero** dedicated spec files (only a link to framework-comparison). Every CRR spec should have a B31 equivalent or explicit "unchanged" note.
+6. **Completeness of `docs/specifications/`** — Every CRR spec should have a B31 equivalent or explicit "unchanged" note.
 
 ### Analysis
 
@@ -118,8 +118,8 @@ Last updated: YYYY-MM-DD
 
 ## Success Criteria
 
-- Every CRR article referenced in code has a corresponding docs entry
-- Every Basel 3.1 PS1/26 section implemented has a specification with scenario IDs
+- Every CRR/Basel 3.1 article referenced in code has a corresponding docs entry - linking back to the code so user can see implementation
+- Every CRR/Basel 3.1 PS1/26 section implemented has a specification with scenario IDs
 - Every CRR↔B31 difference is documented in `framework-comparison/`
 - Risk weight tables in docs are complete and match the regulatory PDFs
 - `docs/specifications/` has equivalent depth for both CRR and Basel 3.1

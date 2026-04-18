@@ -16,6 +16,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.1 | Sovereign risk weights (unchanged from CRR, flat 100% unrated) | P0 | Done |
 | FR-1.2 | Institution ECRA risk weights (Art. 120, Table 3) | P0 | Done |
 | FR-1.3 | Institution SCRA risk weights (Art. 121, grades A–C) | P0 | Done |
+| FR-1.3a | SCRA sovereign floor for foreign-currency exposures (Art. 121(6)) with self-liquidating trade < 1yr carve-out | P1 | Done |
 | FR-1.4 | Corporate CQS-based risk weights with PRA CQS 5 = 150% | P0 | Done |
 | FR-1.5 | Corporate sub-categories: IG 65%, non-IG unrated 135%, SME 85% | P0 | Done |
 | FR-1.6 | Retail 75%, salary/pension 35% (Art. 123(4), carried from CRR2) | P0 | Done |
@@ -225,6 +226,75 @@ original maturity ≤ 6 months may receive the short-term risk weight applicable
 Table 5A (Grade A/A enhanced: 20%, Grade B: 50%, Grade C: 150%) even if the exposure
 is not otherwise eligible for short-term preferential treatment. This exception ensures
 trade finance exposures are not penalised by the full-term SCRA weights.
+
+### SCRA Sovereign Floor for Foreign-Currency Exposures (Art. 121(6))
+
+Notwithstanding Art. 121 paragraphs (2) to (5), the risk weight assigned to an unrated
+institution exposure **may not be lower** than the risk weight applicable to the central
+government of the jurisdiction where the institution is incorporated (per Art. 114(1)
+and (2)) when **both** of the following conditions are met:
+
+- **(a) Foreign currency.** The exposure is denominated in a currency other than the
+    local currency of the institution's jurisdiction of incorporation. For exposures
+    booked through a branch of the institution in a foreign jurisdiction, the test
+    is against the local currency of the jurisdiction in which the branch operates.
+- **(b) Not short-term self-liquidating trade.** The exposure is **not** a self-liquidating,
+    trade-related contingent item arising from the movement of goods with an original
+    maturity of less than one year.
+
+When both conditions hold, the SCRA grade weight (Grade A: 40%, Grade A enhanced: 30%,
+Grade B: 75%, Grade C: 150%) is overridden by `max(SCRA_grade_RW, sovereign_RW)`. The
+floor binds whenever the institution's home sovereign carries a higher risk weight than
+the SCRA grade derives — for example, an unrated Grade A institution (40%) of a
+sovereign at CQS 4 (100%) is floored at 100%.
+
+**Worked example.** A USD-denominated 2-year loan to an unrated Brazilian bank
+(Brazil sovereign CQS 4 → 100%) classified as SCRA Grade A (40%):
+
+- Condition (a): exposure currency USD ≠ Brazil's local currency BRL → **met**.
+- Condition (b): not a trade-related contingent item, original maturity > 1 year → **met**.
+- Floor applies: `RW = max(40%, 100%) = 100%`.
+
+A 6-month USD-denominated documentary credit financing the movement of goods to the
+same bank would fail condition (b) and retain the SCRA Grade A 40% weight (or the
+Art. 121(4) Table 5A 20% weight if it qualifies for the trade-finance preferential
+treatment).
+
+!!! info "Distinct from Art. 121(4) Trade Finance Exception"
+    Art. 121(4) and Art. 121(6) both reference trade finance, but they operate
+    independently:
+
+    - **Art. 121(4)** is a *preferential* RW for self-liquidating trade ≤ **6 months**
+        (Table 5A weights, e.g. Grade A: 20%).
+    - **Art. 121(6)** is a *floor* for foreign-currency exposures, with a *carve-out*
+        for self-liquidating trade < **1 year**. The carve-out disapplies the floor;
+        it does not assign a preferential weight.
+
+    A 9-month foreign-currency self-liquidating trade exposure is below the (6) floor
+    (carved out) but above the (4) trade-finance threshold (>6 months) — it receives
+    the standard SCRA grade weight (e.g. Grade A: 40%), neither floored to sovereign
+    nor reduced to Table 5A.
+
+!!! note "Cross-Reference: Art. 121(6) vs Currency Mismatch Multiplier (Art. 123B)"
+    The Art. 121(6) sovereign floor applies to unrated **institution** exposures.
+    The Art. 123B currency mismatch multiplier (1.5×, 150% cap) is a distinct
+    mechanism applying to **retail and residential mortgage** exposures where the
+    obligor's income currency differs from the loan currency. Both mechanisms
+    address foreign-currency risk but at different points in the framework.
+
+**Implementation.** The floor is applied in `_apply_sovereign_floor_for_institutions()`
+within `engine/sa/calculator.py`. Required input fields:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `currency` | String | Loan currency (ISO code) |
+| `cp_local_currency` | String | Counterparty's home jurisdiction currency |
+| `cp_sovereign_cqs` | Int | Sovereign CQS for floor RW lookup (Art. 114(1)/(2)) |
+| `is_short_term_trade_lc` | Bool | Marks self-liquidating trade ≤ 1 year for (b) carve-out |
+| `original_maturity_years` | Float | Maturity check for the (b) carve-out (< 1 year) |
+
+When `cp_local_currency` is unavailable, the calculator falls back to a domestic-currency
+heuristic; upstream enrichment is recommended for accurate floor application.
 
 ---
 

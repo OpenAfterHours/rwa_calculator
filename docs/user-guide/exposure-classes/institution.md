@@ -20,6 +20,15 @@ Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 
 
 Under CRR, unrated institutions receive **100%** (Art. 120(2)). Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
 
+!!! warning "SCRA Sovereign Floor (Art. 121(6))"
+    Where an unrated institution exposure is denominated in a foreign currency (other
+    than the local currency of the institution's jurisdiction of incorporation), its
+    risk weight cannot fall below the home sovereign's RW: `RW = max(SCRA_grade_RW,
+    sovereign_RW)`. Self-liquidating trade-related contingent items arising from the
+    movement of goods with original maturity < 1 year are carved out and retain the
+    underlying SCRA grade weight. See
+    [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216).
+
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 
 ## IRB Treatment

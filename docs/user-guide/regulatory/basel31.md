@@ -469,6 +469,18 @@ Standardised Credit Risk Assessment Approach (SCRA):
     for institutions meeting minimum requirements (excluding buffers) but not qualifying for
     Grade A. If minimum requirements are not publicly disclosed, the institution is Grade C.
 
+!!! warning "Sovereign Floor for Foreign-Currency SCRA Exposures (Art. 121(6))"
+    Where an unrated institution exposure is denominated in a currency other than the
+    local currency of the institution's jurisdiction of incorporation (or, for branch
+    bookings, other than the branch jurisdiction's local currency), the assigned risk
+    weight may not be less than the home sovereign's RW (Art. 114(1)/(2)):
+    `RW = max(SCRA_grade_RW, sovereign_RW)`. Self-liquidating trade-related contingent
+    items arising from the movement of goods with original maturity < 1 year are carved
+    out and retain the SCRA grade weight (or the Art. 121(4) Table 5A 20%/50%/150% trade
+    weights, where eligible). See
+    [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
+    for the full conditions and worked examples.
+
 ### Subordinated Debt
 
 | Instrument Type | Risk Weight |

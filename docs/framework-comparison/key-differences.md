@@ -483,8 +483,28 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
-**Sovereign floor (Art. 121(6)):** Unrated institution risk weights cannot be lower than their sovereign's
-risk weight for foreign-currency exposures. Self-liquidating trade finance ≤1yr excluded.
+!!! warning "SCRA Sovereign Floor for Foreign-Currency Exposures (Art. 121(6))"
+    Unrated institution risk weights derived under SCRA may not fall below the risk
+    weight of the institution's home sovereign (Art. 114(1)/(2)) when **both** of these
+    apply:
+
+    - **(a)** the exposure is denominated in a currency other than the local currency
+        of the institution's jurisdiction of incorporation (or, for branch borrowings,
+        other than the local currency of the branch jurisdiction); **and**
+    - **(b)** the exposure is **not** a self-liquidating trade-related contingent item
+        from the movement of goods with original maturity less than one year.
+
+    Effective rule: `RW = max(SCRA_grade_RW, sovereign_RW)`. Example: an unrated
+    Brazilian bank (sovereign CQS 4 → 100%) classified as SCRA Grade A (40%) on a
+    USD 2-year loan is floored at **100%**. The same bank's 6-month USD documentary
+    credit financing the movement of goods would fall within the (b) carve-out and
+    keep its SCRA Grade A weight (or Art. 121(4) Table 5A 20%, if eligible).
+
+    No CRR equivalent — under CRR Art. 121, unrated institution exposures use the
+    sovereign-derived approach (Art. 121 Table 5) directly, so no separate floor is
+    required. See
+    [B31 SA Risk Weights — Art. 121(6)](../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
+    for full conditions and worked examples.
 
 ### Residential Real Estate
 

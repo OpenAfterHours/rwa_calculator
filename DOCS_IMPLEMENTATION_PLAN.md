@@ -1,6 +1,6 @@
 # Documentation Implementation Plan
 
-Last updated: 2026-04-18 (Phase 19: post-Phase-18 targeted sweep — thin-coverage gaps, Phase 18 re-verification, code-docs alignment)
+Last updated: 2026-04-18 (Phase 19 + D1.43 fix: SCRA sovereign floor Art. 121(6) documented across spec, key-differences, and user guides)
 
 Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, PRA comparison document) and source code (`src/rwa_calc/`). Findings verified against PDF text extraction where critical.
 
@@ -16,7 +16,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 **Totals (Phase 18, 2026-04-18):** 320 items — 146 open, 174 done. By priority: P1 13 open / 58 done, P2 37 open / 55 done, P3 43 open / 10 done, P4 53 open / 51 done.
 
-**Totals (Phase 19, 2026-04-18):** 334 items — 158 open, 176 done (14 new items; D1.47 and D4.78 reclassified from open → done via Phase 19 re-verification). By priority: P1 13 open / 59 done, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done. See Phase 19 section at end of file.
+**Totals (Phase 19, 2026-04-18):** 334 items — 157 open, 177 done (14 new items; D1.47 and D4.78 reclassified from open → done via Phase 19 re-verification; D1.43 SCRA sovereign floor closed 2026-04-18). By priority: P1 **12 open / 60 done**, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done. See Phase 19 section at end of file.
 
 ---
 
@@ -95,7 +95,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 - [x] **D1.42** — ~~**Art. 124C(3) LTV prior charges stacking not documented.**~~ **FIXED:** Added comprehensive "Real Estate — LTV Definition (Art. 124C)" section to `docs/specifications/basel31/sa-risk-weights.md` covering all four paragraphs: Art. 124C(1) LTV formula, Art. 124C(2) loan amount numerator (outstanding + undrawn committed, CRM exclusions, pledged deposit exception), Art. 124C(3) prior charges stacking (all prior/pari passu charges must be included; insufficient ranking info → treat as pari passu), Art. 124C(4) property value per Art. 124D. Includes worked example showing stacked vs unstacked LTV. Implementation section documents `property_ltv` and `prior_charge_ltv` field mapping and their relationship. Cross-references added to: (1) `crr/sa-risk-weights.md` — new "LTV Definition for Basel 3.1 Real Estate (Art. 124C)" section with CRR comparison (no equivalent formal LTV definition in CRR); (2) `data-model/input-schemas.md` — `property_ltv` and `prior_charge_ltv` descriptions updated with Art. 124C references, `prior_charge_ltv` added to collateral schema table and sample data; (3) `user-guide/regulatory/basel31.md` — Art. 124C info admonition added before residential RE section. Requirements status table updated with FR-1.17. Docs build validated — no errors. (2026-04-11)
 
-- [ ] **D1.43** — **Art. 121(6) SCRA sovereign floor for foreign-currency exposures not documented.** When an unrated institution (SCRA Grade A = 40%) is exposed in a foreign currency, the risk weight cannot go below the sovereign's RW (e.g., sovereign CQS 3 = 50% floors the institution's 40%). Self-liquidating trade <1yr excluded. Neither spec document mentions this floor. **Effort: S** | Ref: PRA PS1/26 Art. 121(6)
+- [x] **D1.43** — ~~**Art. 121(6) SCRA sovereign floor for foreign-currency exposures not documented.**~~ **FIXED:** Added comprehensive "SCRA Sovereign Floor for Foreign-Currency Exposures (Art. 121(6))" subsection to `docs/specifications/basel31/sa-risk-weights.md` covering the verbatim two-condition test (foreign currency per (a)(i)/(ii) AND not self-liquidating trade < 1yr per (b)), the floor formula `max(SCRA_grade_RW, sovereign_RW)`, a worked example (USD 2-year loan to unrated Brazilian bank, sovereign CQS 4 → floor at 100%), the contrast with the Art. 121(4) trade-finance preferential treatment (different maturity threshold, different mechanism), the relationship to Art. 123B retail/RE currency mismatch multiplier, and the implementation field mapping (`currency`, `cp_local_currency`, `cp_sovereign_cqs`, `is_short_term_trade_lc`, `original_maturity_years`). Added FR-1.3a row to requirements status table. Cross-references added to: (1) `framework-comparison/key-differences.md` — replaced single-line bullet with full warning admonition listing both conditions, worked example, and cross-link to spec; (2) `user-guide/exposure-classes/institution.md` — new warning admonition with formula and carve-out summary plus cross-link; (3) `user-guide/regulatory/basel31.md` — new warning admonition after SCRA grade-A info admonition with conditions, formula, carve-out, and cross-link. Code path `_apply_sovereign_floor_for_institutions()` (`engine/sa/calculator.py` lines 1165–1246) confirmed already implemented with all required schema fields. PDF verified: PRA PS1/26 Art. 121(6) page 43 — both (a)(i) jurisdiction-of-incorporation and (a)(ii) branch-jurisdiction sub-conditions captured; (b) carve-out maturity threshold confirmed as < 1 year (distinct from Art. 121(4) ≤ 6 months). Docs build validated. (2026-04-18)
 
 - [ ] **D1.44** — **Art. 123 "transactor" definition (12-month full repayment history) not documented.** PRA Glossary p.9 defines transactor as: revolving facility where obligor repaid balance in full at each scheduled repayment date for previous 12 months, OR overdraft not drawn for 12 months. The 45% weight is documented but the eligibility gate (12-month behavioural requirement) is nowhere in the specs. **Effort: S** | Ref: PRA PS1/26 Glossary, Art. 123(3)(a)
 
@@ -593,7 +593,7 @@ Comprehensive audit of `docs/` against regulatory PDFs (PS1/26 Appendix 1, CRR, 
 
 **Audit scope:** Three parallel Sonnet subagents ran after the Phase 18 baseline (320 items): (A) thin-coverage gaps identified during Phase 0 orientation, re-verified against current specs; (B) Phase 18 individual item re-verification; (C) code-docs alignment sweep against `src/rwa_calc/contracts/config.py`, `contracts/errors.py`, `engine/crm/`, `engine/irb/guarantee.py`, `aggregator/_schemas.py`. Phase 19 adds 14 new items (D1.48 P1 / D2.69 P2 / D3.50–D3.56 P3 / D4.85–D4.90 P4) and records 2 corrections to Phase 18 items (D1.47 INACCURATE, D4.78 ALREADY-FIXED). See corrections inline at the original item entries above.
 
-**Totals (Phase 19, 2026-04-18):** 334 items — 158 open, 176 done (two Phase 18 items reclassified from open to done). By priority: P1 13 open / 59 done, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done.
+**Totals (Phase 19, 2026-04-18):** 334 items — 157 open, 177 done (two Phase 18 items reclassified from open to done; plus D1.43 closed 2026-04-18 with full Art. 121(6) sovereign-floor documentation). By priority: P1 **12 open / 60 done**, P2 38 open / 55 done, P3 50 open / 10 done, P4 57 open / 52 done.
 
 ### New Phase 19 Findings (2026-04-18) — Regulatory / Coverage Gaps
 

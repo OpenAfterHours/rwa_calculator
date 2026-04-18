@@ -29,6 +29,17 @@ Under CRR, unrated institutions receive **100%** (Art. 120(2)). Under Basel 3.1,
     underlying SCRA grade weight. See
     [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216).
 
+!!! info "ECRA Due Diligence CQS Step-Up (Art. 120(4)) — Basel 3.1 only"
+    Where a rated institution exposure is risk-weighted from Table 3 (or Table 4 / Table 4A
+    for short-term exposures), Basel 3.1 Art. 120(4) requires firms to conduct due diligence
+    on the ECAI rating. If DD reveals higher risk than the assigned CQS implies, the firm
+    must assign **at least one CQS step higher**. Currently routed through the Art. 110A
+    `due_diligence_override_rw` input (no dedicated Art. 120(4) branch in the calculator).
+    Parallels Art. 122(4) for rated corporates and Art. 129(4A) for covered bonds; no CRR
+    equivalent. See
+    [B31 SA Risk Weights — Art. 120(4)](../../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
+    for the full trigger/effect table.
+
 > **Details:** See [Key Differences — Institution Exposures](../../framework-comparison/key-differences.md#institution-exposures) for the complete ECRA/SCRA comparison tables.
 
 ## IRB Treatment

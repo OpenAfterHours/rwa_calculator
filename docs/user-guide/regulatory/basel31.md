@@ -526,6 +526,17 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
     `has_short_term_ecai` schema field is not yet implemented — all short-term exposures
     currently fall back to Table 4. See [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
+!!! info "Art. 120(4) — Due Diligence CQS Step-Up for Rated Institutions"
+    Where an ECAI rating drives the CQS lookup above, Art. 120(4) requires firms to
+    confirm the external rating appropriately reflects risk; if internal due diligence
+    shows higher risk, the firm must assign **at least one CQS step higher** than the
+    ECAI-implied weight. This is a class-specific instance of the framework-wide
+    Art. 110A obligation discussed in [section 10](#10-due-diligence-requirements),
+    with parallels for corporates (Art. 122(4)) and covered bonds (Art. 129(4A)).
+    CRR has no equivalent institution-specific step-up rule. See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
+    for the full trigger/effect table and short-term Table 4 / Table 4A applicability.
+
 Standardised Credit Risk Assessment Approach (SCRA):
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |

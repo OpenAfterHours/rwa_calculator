@@ -481,6 +481,24 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
     short-term institution exposures currently fall back to Table 4 weights. See
     [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
+!!! info "Art. 120(4) — Rated Institution Due Diligence CQS Step-Up"
+    Basel 3.1 adds Art. 120(4): where an ECAI credit assessment drives the ECRA lookup
+    above, the firm must conduct due diligence to ensure the external rating appropriately
+    reflects risk. If due diligence reveals higher risk than implied by the CQS, the firm
+    must assign **at least one CQS step higher** than the ECAI-implied weight. Sample
+    uplifts against Table 3: CQS 1 → CQS 2 (20% → 30%), CQS 2 → CQS 3 (30% → 50%),
+    CQS 3 → CQS 4 (50% → 100%), CQS 5 → CQS 6 (100% → 150%). CQS 4 → CQS 5 yields no
+    numerical change (both 100%). CQS 6 is already at the cap.
+
+    Art. 120(4) is a class-specific instance of the framework-wide
+    [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below, and it
+    mirrors the parallel provisions for corporates (Art. 122(4)) and covered bonds
+    (Art. 129(4A)). CRR has no equivalent provision — under CRR Art. 120 the ECAI weights
+    are applied without any article-level DD step-up mechanism. See the
+    [B31 SA spec](../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
+    for the full trigger/effect table, short-term applicability notes, and implementation
+    status (routed through the Art. 110A `due_diligence_override_rw` pathway).
+
 **Unrated institutions — SCRA (Standardised Credit Risk Assessment Approach):**
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |

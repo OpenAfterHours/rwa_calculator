@@ -309,6 +309,101 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
     currently falls back to Table 4 (general short-term preferential) for all short-term
     institution exposures. See D3.8.
 
+### Rated Institution Due Diligence CQS Step-Up (Art. 120(4))
+
+Basel 3.1 introduces a class-specific CQS step-up rule for **rated** institution exposures
+that sits alongside the [framework-wide Art. 110A due diligence obligation](#due-diligence-obligation-art-110a)
+discussed earlier in this specification. The rule is textually parallel to
+[Art. 122(4) for rated corporates](#rated-corporate-due-diligence-cqs-step-up-art-1224)
+and [Art. 129(4A) for covered bonds](#new-due-diligence-requirement-art-1294a).
+
+!!! quote "Art. 120(4) — verbatim (PRA PS1/26 p. 41)"
+    "An institution shall conduct due diligence to ensure that the external credit
+    assessments appropriately and prudently reflect the risk of the exposure to which
+    the institution is exposed. If the due diligence analysis reflects higher risk
+    characteristics than that implied by the credit quality step of the exposure, the
+    institution shall assign a risk weight associated with a credit quality step that
+    is at least one step higher than the risk weight determined by the external credit
+    assessment."
+
+**Trigger.** Applies whenever a rated institution exposure uses Art. 120(1) Table 3 (or
+the short-term Art. 120(2B) Table 4A once implemented — see
+[ECRA Short-Term ECAI (Art. 120(2B), Table 4A)](#ecra-short-term-ecai-art-1202b-table-4a))
+for its risk weight and the firm's internal due diligence reveals risk characteristics
+higher than the ECAI-implied credit quality step.
+
+**Effect.** The firm must assign the risk weight of the **next CQS step higher**. Worked
+examples against Table 3:
+
+| ECAI CQS | ECAI RW | Step-up CQS | Step-up RW | Uplift |
+|----------|---------|-------------|------------|--------|
+| CQS 1 | 20% | CQS 2 | 30% | +10 pp |
+| CQS 2 | 30% | CQS 3 | 50% | +20 pp |
+| CQS 3 | 50% | CQS 4 | 100% | +50 pp |
+| CQS 4 | 100% | CQS 5 | 100% | 0 (already at CQS-4/5 plateau) |
+| CQS 5 | 100% | CQS 6 | 150% | +50 pp |
+| CQS 6 | 150% | — | 150% | 0 (already at cap) |
+
+Art. 120(4) is **not** a discretionary floor — it is a mandatory override where the DD
+finding is triggered. The CQS 4 → CQS 5 row yields no uplift because Table 3 assigns
+both bands the same 100% weight; the mandatory step-up still applies in name but the
+resulting RW is unchanged until CQS 6 (150%) is reached.
+
+!!! note "Short-term applicability"
+    When the starting weight is drawn from Art. 120(2) Table 4 (general short-term
+    preferential) or Art. 120(2B) Table 4A (short-term ECAI assessment), the one-step
+    uplift is applied within the same table rather than reverting to long-term Table 3
+    weights. For example, a Table 4 CQS 2 exposure (20%) stepped up under Art. 120(4)
+    moves to the Table 4 CQS 3 band (still 20%) and then, if DD points further, to the
+    CQS 4 band (50%). The step-up operates on the credit quality step itself, not on
+    the maturity overlay.
+
+**Distinction from Art. 110A.** Art. 120(4) is a narrower, rated-exposure-only rule with
+a fixed one-step uplift; [Art. 110A](#due-diligence-obligation-art-110a) applies to every
+non-exempt SA exposure (rated or unrated) and permits an unbounded uplift. The two rules
+can interact: a firm's DD finding may be satisfied either by a one-step CQS uplift under
+Art. 120(4) or by a larger uplift channelled through the Art. 110A
+`due_diligence_override_rw` path. Where both would apply, the final RW is
+`max(RW_Art_120_4, RW_Art_110A_override, RW_ECAI)`.
+
+**Distinction from SCRA (Art. 121).** Art. 120(4) applies to **rated** institutions only.
+Unrated institution exposures are routed to the SCRA grade table at
+[Institution Risk Weights — SCRA (Art. 121)](#institution-risk-weights-scra-art-121)
+and do not use the ECAI-based step-up at all. A rated institution whose DD reveals
+higher-than-implied risk is stepped up one CQS band under Art. 120(4); it is **not**
+reclassified into SCRA.
+
+**Parallel provisions.** Art. 120(4) is textually near-identical to two other
+class-specific step-up rules in PS1/26:
+
+| Provision | Obligor class | RW reference |
+|-----------|---------------|--------------|
+| **Art. 120(4)** | **Rated institutions** | **Art. 120(1) Table 3** |
+| Art. 122(4) | Rated corporates | Art. 122(1) Table 6 |
+| Art. 129(4A) | Covered bonds | Art. 129(4) Table 7 / Art. 129(5) unrated derivation |
+
+All three share the same trigger ("DD reveals higher risk than implied by the CQS") and
+the same consequence ("at least one CQS step higher"). CRR has no equivalent provision
+for any of the three classes — the rules are Basel 3.1-only. For rated institutions
+specifically, the CRR ECAI-based approach in Art. 120 Table 3 is applied without any
+direct DD step-up mechanism; firms relied solely on Art. 79 CRD (sound credit-granting)
+and ICAAP-level overlays.
+
+**Implementation status.** The calculator does not yet implement a dedicated Art. 120(4)
+branch. Firms currently carry Art. 120(4) findings through the Art. 110A pathway: set
+`due_diligence_override_rw` on the facility to the next-CQS-band weight drawn from
+Table 3 (or Table 4 / Table 4A for short-term exposures), and the SA calculator will
+apply it as a directional floor (see
+[Implementation](#implementation) earlier in this specification). This is functionally
+equivalent and captured in the output via the `due_diligence_override_applied` audit
+column.
+
+!!! warning "Firm responsibility — not an engine determination"
+    The engine does not evaluate whether a DD finding is material enough to trigger
+    Art. 120(4). The firm determines when the step-up applies; the calculator only
+    applies the resulting RW as a floor. Evidence that the step-up has been considered
+    should be traceable to the firm's DD process documentation.
+
 ---
 
 ## Institution Risk Weights — SCRA (Art. 121)

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.202] — 2026-04-18
+
+### Fixed
+- **CRR Art. 120(2) Table 4 short-term rated institution risk weights now applied [P1.99]**: The CRR SA branch fell through to Art. 120 Table 3 (long-term) for every rated institution regardless of maturity, so a CQS 2 institution with 1-month residual maturity received the 50% long-term weight instead of the 20% Table 4 short-term weight. Added `INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR` in `data/tables/crr_risk_weights.py` (CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150%) and a new `.when()` branch in `engine/sa/calculator.py` keyed on `residual_maturity_years <= 0.25` with `INSTITUTION` exposure class and non-null CQS. CRR Art. 120(2) keys on *residual* maturity and imposes no domestic-currency restriction (distinct from Art. 119(2)). Diverges from B31 Table 4 which applies 20% uniformly across CQS 1-5.
+- **CRR Art. 121(3) unrated institution short-term 20% RW now applied [P1.121]**: The CRR SA branch provided no short-term override for unrated institutions, so a 1-month-original-maturity unrated institution fell through to the Table 5 sovereign-derived fallback (typically 100%). Added `INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = 0.20` and a `.when()` branch in `engine/sa/calculator.py` keyed on `original_maturity_years <= 0.25` with `INSTITUTION` exposure class and null-or-zero CQS. Art. 121(3) uses *original* effective maturity (consistent with the P1.133 B31 PSE/SCRA fix), so a seasoned 5-year bond with 1 month remaining does NOT qualify. Art. 121(6) sovereign floor (applied later via `_apply_sovereign_floor_for_institutions`) still lifts this to the sovereign weight for FX exposures. Capital previously overstated by up to 80 percentage points for short-term unrated interbank exposures.
+- Both fixes: 13 new regression tests in `tests/unit/crr/test_crr_institution_standard.py` (`TestCRRShortTermInstitutionTables`, `TestCRRShortTermInstitutionSACalculator`) cover parametrized CQS 1-6 short-term rated, >3m fall-through, unrated short-term, original vs residual maturity keying, sovereign-floor interaction, and B31 isolation. 2 existing tests in `tests/unit/test_b31_sa_risk_weights.py` that previously asserted CRR does NOT apply short-term treatment renamed to assert the new correct behaviour. Full suite: 5,329 passed, 21 skipped. Ref: CRR Art. 120(1)-(2), Art. 121(3)/(6).
+
 ## [0.1.201] — 2026-04-18
 
 ### Fixed

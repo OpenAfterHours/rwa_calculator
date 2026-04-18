@@ -88,6 +88,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     HIGH_RISK_RW,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -926,6 +928,11 @@ class SACalculator:
             cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
             cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
 
+            crr_inst_st_low_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1])
+            crr_inst_st_mid_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4])
+            crr_inst_st_high_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6])
+            crr_inst_unrated_st_rw = float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR)
+
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
             _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
@@ -1046,6 +1053,29 @@ class SACalculator:
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(pl.lit(float(MDB_UNRATED_RW)))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
+                    # 6i. Art. 120(2) Table 4: rated institution short-term
+                    # (residual maturity <= 3m).
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
+                        & (pl.col("residual_maturity_years").fill_null(1.0) <= 0.25)
+                    )
+                    .then(
+                        pl.when(pl.col("cqs") <= 3)
+                        .then(pl.lit(crr_inst_st_low_rw))
+                        .when(pl.col("cqs") <= 5)
+                        .then(pl.lit(crr_inst_st_mid_rw))
+                        .otherwise(pl.lit(crr_inst_st_high_rw))
+                    )
+                    # 6j. Art. 121(3): unrated institution with ORIGINAL effective
+                    # maturity <= 3m. Overrides the Table 5 sovereign-derived fallback;
+                    # Art. 121(6) sovereign floor (applied later) still raises this in FX.
+                    .when(
+                        _uc.str.contains("INSTITUTION", literal=True)
+                        & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+                        & (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
+                    )
+                    .then(pl.lit(crr_inst_unrated_st_rw))
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
                     # via COVERED_BOND_UNRATED_DERIVATION table. When issuing

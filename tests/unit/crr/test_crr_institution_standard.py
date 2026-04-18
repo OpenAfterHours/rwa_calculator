@@ -24,6 +24,8 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_risk_weights import (
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
+    INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     _create_institution_df,
     lookup_risk_weight,
 )
@@ -322,3 +324,170 @@ class TestGuarantorInstitutionFramework:
         row = result.to_dicts()[0]
 
         assert row["guarantor_rw"] == pytest.approx(0.40)
+
+
+# =============================================================================
+# CRR short-term institution tests (P1.99 / P1.121)
+# =============================================================================
+
+
+class TestCRRShortTermInstitutionTables:
+    """CRR Art. 120(2) Table 4 + Art. 121(3) regulatory values."""
+
+    def test_crr_table_4_differs_from_long_term(self) -> None:
+        """CQS 2/3 short-term diverges from Table 3 long-term (P1.99)."""
+        assert (
+            INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS2]
+            < INSTITUTION_RISK_WEIGHTS_CRR[CQS.CQS2]
+        )
+        assert (
+            INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS3]
+            < INSTITUTION_RISK_WEIGHTS_CRR[CQS.CQS3]
+        )
+
+    def test_crr_unrated_short_term_is_twenty_percent(self) -> None:
+        """CRR Art. 121(3): unrated institution short-term = 20%."""
+        assert INSTITUTION_SHORT_TERM_UNRATED_RW_CRR == Decimal("0.20")
+
+
+class TestCRRShortTermInstitutionSACalculator:
+    """End-to-end SA calculator checks for CRR short-term institution RWs."""
+
+    @pytest.mark.parametrize(
+        ("cqs", "expected_rw"),
+        [
+            (1, 0.20),
+            (2, 0.20),  # P1.99: was 0.50 long-term
+            (3, 0.20),  # P1.99: was 0.50 long-term
+            (4, 0.50),
+            (5, 0.50),
+            (6, 1.50),
+        ],
+    )
+    def test_rated_institution_short_term(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+        cqs: int,
+        expected_rw: float,
+    ) -> None:
+        """Rated institution with residual maturity <= 3m uses Art. 120(2) Table 4."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=cqs,
+            residual_maturity_years=0.25,
+            original_maturity_years=0.25,
+            config=crr_config_eur,
+        )
+        assert result["risk_weight"] == pytest.approx(expected_rw)
+
+    def test_rated_institution_just_over_three_months_uses_long_term(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+    ) -> None:
+        """Rated institution CQS 2 with residual maturity > 3m falls back to Table 3 (50%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=2,
+            residual_maturity_years=0.26,
+            original_maturity_years=0.26,
+            config=crr_config_eur,
+        )
+        assert result["risk_weight"] == pytest.approx(0.50)
+
+    def test_unrated_institution_short_term_twenty_percent(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+    ) -> None:
+        """Unrated institution with original maturity <= 3m gets 20% per Art. 121(3)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=None,
+            residual_maturity_years=0.25,
+            original_maturity_years=0.25,
+            config=crr_config_eur,
+        )
+        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["rwa"] == pytest.approx(200_000)
+
+    def test_unrated_institution_keys_on_original_maturity(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+    ) -> None:
+        """Seasoned long-dated bond (original > 3m, residual <= 3m) does NOT qualify for Art. 121(3)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=None,
+            residual_maturity_years=0.20,
+            original_maturity_years=5.0,
+            config=crr_config_eur,
+        )
+        # Falls through to Table 5 fallback (100%)
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_rated_institution_keys_on_residual_maturity(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+    ) -> None:
+        """Rated CQS 2 seasoned short-dated residual uses Art. 120(2) Table 4 (20%)."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=2,
+            residual_maturity_years=0.20,
+            original_maturity_years=5.0,
+            config=crr_config_eur,
+        )
+        assert result["risk_weight"] == pytest.approx(0.20)
+
+    def test_unrated_short_term_sovereign_floor_still_applies_in_fx(
+        self,
+        sa_calculator: SACalculator,
+        crr_config_eur: CalculationConfig,
+    ) -> None:
+        """Art. 121(6) sovereign floor lifts 20% to 150% when sovereign is CQS 6 in FX."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=None,
+            residual_maturity_years=0.25,
+            original_maturity_years=0.25,
+            currency="USD",
+            country_code="TR",
+            local_currency="TRY",
+            sovereign_cqs=6,
+            config=crr_config_eur,
+        )
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_b31_rated_short_term_unaffected_by_crr_change(
+        self,
+        sa_calculator: SACalculator,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """B31 uses Table 4 with CQS 1-5 all 20% — unaffected by CRR-specific fix."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("1000000"),
+            exposure_class="INSTITUTION",
+            cqs=4,
+            residual_maturity_years=0.25,
+            original_maturity_years=0.25,
+            config=b31_config,
+        )
+        # B31 Table 4: CQS 4 short-term = 20% (vs CRR 50%)
+        assert result["risk_weight"] == pytest.approx(0.20)

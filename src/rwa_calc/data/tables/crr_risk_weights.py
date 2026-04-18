@@ -135,6 +135,21 @@ INSTITUTION_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = {
     CQS.UNRATED: Decimal("0.40"),  # SCRA Grade A fallback when ECRA rating absent
 }
 
+# CRR Art. 120(2) Table 4: rated institution, residual maturity <= 3 months.
+# Differs from B31 Table 4, which applies 20% uniformly across CQS 1-5.
+INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.20"),
+    CQS.CQS3: Decimal("0.20"),
+    CQS.CQS4: Decimal("0.50"),
+    CQS.CQS5: Decimal("0.50"),
+    CQS.CQS6: Decimal("1.50"),
+}
+
+# CRR Art. 121(3): unrated institution, original effective maturity <= 3 months.
+# Overrides the Table 5 sovereign-derived fallback.
+INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = Decimal("0.20")
+
 
 def _create_institution_df(is_basel_3_1: bool = False) -> pl.DataFrame:
     """Create institution risk weight lookup DataFrame.

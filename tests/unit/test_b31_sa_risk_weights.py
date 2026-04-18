@@ -2330,12 +2330,17 @@ class TestB31SCRAShortTermMaturity:
 
         assert float(result["risk_weight"]) == pytest.approx(1.50)
 
-    def test_short_term_not_applied_under_crr(
+    def test_unrated_short_term_uses_crr_art_121_3(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no SCRA short-term treatment — unrated institution gets 100% (Art. 120(2))."""
+        """CRR Art. 121(3): unrated institution with original <= 3m gets flat 20%.
+
+        SCRA grades are B31-only terminology; under CRR the unrated short-term
+        override is flat 20% regardless of any SCRA-style classification. Before
+        the P1.121 fix this fell through to the Table 5 fallback (100%).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2346,7 +2351,7 @@ class TestB31SCRAShortTermMaturity:
             config=crr_config,
         )
 
-        assert float(result["risk_weight"]) == pytest.approx(1.00)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
 
 
 # =============================================================================
@@ -2572,12 +2577,16 @@ class TestB31ECRAShortTermInstitution:
         # 4 months > 3m threshold, not trade finance → long-term CQS 3 = 50%
         assert float(result["risk_weight"]) == pytest.approx(0.50)
 
-    def test_ecra_short_term_not_applied_under_crr(
+    def test_ecra_short_term_applied_under_crr_art_120_2(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no ECRA short-term Table 4 — rated institution uses standard CQS."""
+        """CRR Art. 120(2) Table 4: rated CQS 3 with residual <= 3m drops from 50% to 20%.
+
+        Before the P1.99 fix CRR fell through to Table 3 (50%) regardless of
+        maturity. Table 4 now correctly applies.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2587,8 +2596,7 @@ class TestB31ECRAShortTermInstitution:
             config=crr_config,
         )
 
-        # CRR CQS 3 institution = 50% regardless of maturity
-        assert float(result["risk_weight"]) == pytest.approx(0.50)
+        assert float(result["risk_weight"]) == pytest.approx(0.20)
 
     def test_unrated_short_term_still_uses_scra(
         self,

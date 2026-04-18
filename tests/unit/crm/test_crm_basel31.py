@@ -1,11 +1,12 @@
 """Unit tests for Basel 3.1 CRM (Credit Risk Mitigation) changes.
 
 Tests cover the key differences between CRR and Basel 3.1 for CRM:
-1. Revised supervisory haircut tables (CRE22.52-53):
+1. Revised supervisory haircut tables (PRA PS1/26 Art. 224 Table 1):
    - 5 maturity bands instead of CRR's 3
-   - Higher haircuts for long-dated corporate bonds
+   - Higher haircuts for long-dated corporate bonds (CQS 2-3 10y+ = 20%)
    - Higher equity haircuts (20%/30% vs 15%/25%)
-   - Sovereign CQS 2-3 10y+ increased to 12%
+   - Sovereign CQS 2-3 unchanged from CRR 6% cap — the 5-band split is not
+     a penal re-scale for well-rated sovereigns.
 2. Revised F-IRB supervisory LGD (CRE32.9-12):
    - Senior unsecured: 40% (CRR: 45%)
    - Receivables/RE: 20% (CRR: 35%)
@@ -276,70 +277,46 @@ class TestBasel31BondHaircuts:
         assert crr == Decimal("0.005")
         assert b31 == Decimal("0.005")
 
-    def test_sovereign_cqs2_3_10y_plus_increases(self) -> None:
-        """Sovereign CQS 2-3, 10y+: CRR 6% → Basel 3.1 12%."""
-        crr = lookup_collateral_haircut(
-            "govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=False
+    @pytest.mark.parametrize(
+        ("collateral_type", "cqs", "maturity_years", "expected"),
+        [
+            # Sovereign CQS 2-3: 5-band split does not re-scale; cap stays at 6%
+            # even at 10y+. An earlier B31 draft had 12% (misread of BCBS CRE22.52)
+            # and 4% at 3-5y; Table 1 is 3% and 6%.
+            ("govt_bond", 2, 4.0, "0.03"),
+            ("govt_bond", 2, 15.0, "0.06"),
+            ("govt_bond", 3, 15.0, "0.06"),
+            # Corporate/institution CQS 1: 1/3/4/6/12% across the 5 bands.
+            ("corp_bond", 1, 0.5, "0.01"),
+            ("corp_bond", 1, 2.0, "0.03"),
+            ("corp_bond", 1, 4.0, "0.04"),
+            ("corp_bond", 1, 7.0, "0.06"),
+            ("corp_bond", 1, 12.0, "0.12"),
+            # Corporate/institution CQS 2-3: 2/4/6/12/20% across the 5 bands.
+            # 10y+ = 20% is a capital *increase* vs the prior stale 15%; the
+            # other bands were previously over-haircut.
+            ("corp_bond", 2, 0.5, "0.02"),
+            ("corp_bond", 2, 2.0, "0.04"),
+            ("corp_bond", 3, 4.0, "0.06"),
+            ("corp_bond", 2, 7.0, "0.12"),
+            ("corp_bond", 3, 12.0, "0.20"),
+        ],
+    )
+    def test_b31_bond_haircuts_match_pra_table_1(
+        self,
+        collateral_type: str,
+        cqs: int,
+        maturity_years: float,
+        expected: str,
+    ) -> None:
+        """PRA PS1/26 Art. 224 Table 1 10-day haircuts (verified against ps126app1.pdf p.203)."""
+        result = lookup_collateral_haircut(
+            collateral_type,
+            cqs=cqs,
+            residual_maturity_years=maturity_years,
+            is_basel_3_1=True,
         )
-        b31 = lookup_collateral_haircut(
-            "govt_bond", cqs=2, residual_maturity_years=15.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.06")
-        assert b31 == Decimal("0.12")
-
-    def test_corp_bond_cqs1_long_dated_increases(self) -> None:
-        """Corporate CQS 1 long-dated: CRR 8% >5yr, B31 3-5y 6%, 5-10y 10%, 10y+ 12%."""
-        # 3-5y: CRR uses 1-5y band (4%), B31 uses 3-5y band (6%)
-        crr = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=False
-        )
-        b31 = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=4.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.04")
-        assert b31 == Decimal("0.06")
-
-        # 5-10y: CRR uses 5y+ band (8%), B31 uses 5-10y band (10%)
-        crr = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=False
-        )
-        b31 = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=7.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.08")
-        assert b31 == Decimal("0.10")
-
-        # 10y+: CRR uses 5y+ band (8%), B31 uses 10y+ band (12%)
-        crr = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=False
-        )
-        b31 = lookup_collateral_haircut(
-            "corp_bond", cqs=1, residual_maturity_years=12.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.08")
-        assert b31 == Decimal("0.12")
-
-    def test_corp_bond_cqs2_3_long_dated_increases(self) -> None:
-        """Corporate CQS 2-3 long-dated: CRR 12% >5yr, B31 5-10y/10y+ both 15%."""
-        # CQS 2, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
-        crr = lookup_collateral_haircut(
-            "corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=False
-        )
-        b31 = lookup_collateral_haircut(
-            "corp_bond", cqs=2, residual_maturity_years=7.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.12")
-        assert b31 == Decimal("0.15")
-
-        # CQS 3, 5-10y: CRR uses 5y+ band (12%), B31 uses 5-10y band (15%)
-        crr = lookup_collateral_haircut(
-            "corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=False
-        )
-        b31 = lookup_collateral_haircut(
-            "corp_bond", cqs=3, residual_maturity_years=7.0, is_basel_3_1=True
-        )
-        assert crr == Decimal("0.12")
-        assert b31 == Decimal("0.15")
+        assert result == Decimal(expected)
 
     def test_cash_and_gold_b31(self) -> None:
         """Cash 0% unchanged; gold is 20% under Basel 3.1 (PRA PS1/26 Art. 224 Table 3)."""
@@ -434,7 +411,13 @@ class TestHaircutCalculatorFrameworkBranching:
         assert result.adjusted_value == Decimal("800000")
 
     def test_b31_corp_bond_long_dated_higher_haircut(self) -> None:
-        """Basel 3.1 produces higher haircut for 7y corporate bond CQS 2."""
+        """Basel 3.1 produces same haircut as CRR for 7y corporate bond CQS 2.
+
+        PRA PS1/26 Art. 224 Table 1 (entity types (c)/(d)): CQS 2-3 corporate
+        5-10y = 12%. Matches CRR 5y+ CQS 2-3 (12%). The B31 step-up for CQS 2-3
+        appears only at 10y+ (20%). An earlier draft of the B31 table had 15%
+        here (stale value, now corrected).
+        """
         calc = HaircutCalculator(is_basel_3_1=True)
         result = calc.calculate_single_haircut(
             collateral_type="corp_bond",
@@ -444,8 +427,8 @@ class TestHaircutCalculatorFrameworkBranching:
             cqs=2,
             residual_maturity_years=7.0,
         )
-        # CQS 2 is in CQS 2-3 group: 5-10y band = 15% under Basel 3.1
-        assert result.collateral_haircut == Decimal("0.15")
+        # PRA PS1/26 Art. 224 Table 1: CQS 2-3 corporate 5-10y = 12%
+        assert result.collateral_haircut == Decimal("0.12")
 
     def test_apply_haircuts_uses_config_framework(
         self, crr_config: CalculationConfig, b31_config: CalculationConfig

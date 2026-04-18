@@ -170,18 +170,18 @@ features = [
 repo = "fontawesome/brands/github"
 
 [[project.theme.palette]]
-scheme = "default"
-primary = "orange"
-accent = "orange"
-toggle.icon = "material/brightness-7"
-toggle.name = "Switch to dark mode"
-
-[[project.theme.palette]]
 scheme = "slate"
 primary = "orange"
 accent = "orange"
 toggle.icon = "material/brightness-4"
 toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "orange"
+accent = "orange"
+toggle.icon = "material/brightness-7"
+toggle.name = "Switch to dark mode"
 
 # -- Plugins ----------------------------------------------------------------
 

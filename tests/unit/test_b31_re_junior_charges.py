@@ -494,8 +494,9 @@ class TestArt124F2JuniorChargeCRE:
 class TestArt124G2ResiIncomeJunior:
     """Art. 124G(2): 1.25x multiplier for income-producing RESI with junior lien.
 
-    The multiplier applies when LTV > 50% and prior charges exist.
-    The resulting RW is capped at 105% (the maximum table value).
+    The multiplier applies when LTV > 50% and prior charges exist. The resulting
+    RW is NOT capped at the 105% table maximum — at LTV > 100% the base 105%
+    band becomes 131.25%. Contrast Art. 124I(3) CRE, which uses absolute RWs.
     """
 
     def test_junior_multiplier_at_ltv_70(
@@ -549,12 +550,12 @@ class TestArt124G2ResiIncomeJunior:
         )
         assert float(result["risk_weight"]) == pytest.approx(0.30, abs=1e-4)
 
-    def test_multiplier_capped_at_105(
+    def test_multiplier_not_capped_at_105(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """LTV > 100% income-producing: base 105% × 1.25 = 131.25% → cap 105%."""
+        """LTV > 100% income-producing: base 105% × 1.25 = 131.25% (uncapped, Art. 124G(2))."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
@@ -564,7 +565,7 @@ class TestArt124G2ResiIncomeJunior:
             config=b31_config,
             prior_charge_ltv=Decimal("0.10"),
         )
-        assert float(result["risk_weight"]) == pytest.approx(1.05, abs=1e-4)
+        assert float(result["risk_weight"]) == pytest.approx(1.3125, abs=1e-4)
 
     def test_no_multiplier_without_junior_charge(
         self,
@@ -790,6 +791,16 @@ class TestScalarLookupJunior:
             is_income_producing=True,
         )
         assert float(rw) == pytest.approx(0.40, abs=1e-4)
+
+    def test_rre_scalar_income_junior_uncapped_high_ltv(self) -> None:
+        """Art. 124G(2): LTV > 100% base 105% × 1.25 = 131.25% (uncapped)."""
+        rw, desc = lookup_b31_residential_rw(
+            ltv=Decimal("1.10"),
+            is_income_producing=True,
+            prior_charge_ltv=Decimal("0.10"),
+        )
+        assert float(rw) == pytest.approx(1.3125, abs=1e-4)
+        assert "junior" in desc.lower()
 
     def test_cre_scalar_income_junior_high_ltv(self) -> None:
         """lookup_b31_commercial_rw income + junior at LTV > 80% → Art. 124I(3)(c) 137.5%."""

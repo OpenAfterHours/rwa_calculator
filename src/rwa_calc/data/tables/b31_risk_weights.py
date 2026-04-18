@@ -458,9 +458,12 @@ def b31_residential_rw_expr(
         .then(pl.lit(0.75))
         .otherwise(pl.lit(1.05))
     )
-    # Art. 124G(2): 1.25x multiplier for junior positions when LTV > 50%
+    # Art. 124G(2): 1.25x multiplier for junior positions when LTV > 50%.
+    # The multiplied RW is NOT capped at the 105% table maximum — e.g.
+    # LTV > 100% gives 105% × 1.25 = 131.25%. (Contrast with Art. 124I(3)
+    # CRE, which uses absolute RWs rather than multipliers.)
     junior_multiplier = pl.when(is_junior & (ltv > 0.50)).then(pl.lit(1.25)).otherwise(pl.lit(1.0))
-    income = pl.min_horizontal(base_income * junior_multiplier, pl.lit(1.05))
+    income = base_income * junior_multiplier
 
     return pl.when(is_income).then(income).otherwise(general)
 
@@ -666,9 +669,10 @@ def lookup_b31_residential_rw(
         else:
             base_rw = B31_RESIDENTIAL_INCOME_LTV_BANDS[-1]["risk_weight"]
 
-        # Art. 124G(2): 1.25x multiplier for junior when LTV > 50%
+        # Art. 124G(2): 1.25x multiplier for junior when LTV > 50%.
+        # Uncapped: 105% × 1.25 = 131.25% at LTV > 100%.
         if _is_junior and ltv > Decimal("0.50"):
-            rw = min(base_rw * B31_RESI_INCOME_JUNIOR_MULTIPLIER, Decimal("1.05"))
+            rw = base_rw * B31_RESI_INCOME_JUNIOR_MULTIPLIER
             return rw, (
                 f"B31 RRE (income-producing, junior 1.25x): {float(rw):.0%} (LTV {float(ltv):.0%})"
             )

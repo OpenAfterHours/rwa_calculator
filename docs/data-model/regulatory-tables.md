@@ -208,10 +208,10 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 The multiplied weight is **not capped** at the Table 6B ceiling — it may exceed 105%
 (e.g. 105% × 1.25 = **131.25%** at LTV > 100% with a junior charge).
 
-!!! warning "Code Divergence (P1.111)"
-    The current implementation incorrectly caps the multiplied risk weight at 105%.
-    Art. 124G(2) has no express cap — the correct result for LTV > 100% with a junior
-    charge is 131.25%, not 105%. See IMPLEMENTATION_PLAN.md P1.111.
+!!! success "Resolved (P1.111)"
+    Previously the multiplied RW was incorrectly capped at the 105% table maximum.
+    Art. 124G(2) has no express cap — LTV > 100% with a junior charge now correctly
+    resolves to 131.25%. Regression guard: `test_multiplier_not_capped_at_105`.
 
 **Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
 

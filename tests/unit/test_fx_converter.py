@@ -307,6 +307,45 @@ class TestConvertCollateral:
         assert df["market_value"][0] == 500000.0
         assert df["currency"][0] == "USD"
 
+    def test_collateral_preserves_original_currency_when_converting(
+        self,
+        fx_converter: FXConverter,
+        collateral: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> None:
+        """P1.135 regression: convert_collateral must preserve the pre-conversion
+        currency so the downstream Art. 224 H_fx haircut can detect FX mismatch
+        after amounts have been rebased to the reporting currency."""
+        result = fx_converter.convert_collateral(collateral, fx_rates, config)
+        df = result.collect()
+
+        assert "original_currency" in df.columns
+        usd_row = df.filter(pl.col("collateral_reference") == "COLL_001")
+        assert usd_row["original_currency"][0] == "USD"
+        assert usd_row["currency"][0] == "GBP"
+        eur_row = df.filter(pl.col("collateral_reference") == "COLL_002")
+        assert eur_row["original_currency"][0] == "EUR"
+        assert eur_row["currency"][0] == "GBP"
+
+    def test_collateral_preserves_original_currency_when_disabled(
+        self,
+        fx_converter: FXConverter,
+        collateral: pl.LazyFrame,
+        fx_rates: pl.LazyFrame,
+        config_fx_disabled: CalculationConfig,
+    ) -> None:
+        """P1.135 regression: original_currency must be populated even when FX
+        conversion is disabled so downstream CRM code has a single column to
+        consult for FX-mismatch checks."""
+        result = fx_converter.convert_collateral(collateral, fx_rates, config_fx_disabled)
+        df = result.collect()
+
+        assert "original_currency" in df.columns
+        usd_row = df.filter(pl.col("collateral_reference") == "COLL_001")
+        assert usd_row["original_currency"][0] == "USD"
+        assert usd_row["currency"][0] == "USD"
+
 
 # =============================================================================
 # GUARANTEE CONVERSION TESTS

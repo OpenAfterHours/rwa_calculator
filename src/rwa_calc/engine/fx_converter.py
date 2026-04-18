@@ -170,16 +170,22 @@ class FXConverter:
         """
         Convert collateral values to reporting currency.
 
+        Preserves the pre-conversion currency in ``original_currency`` so that
+        downstream FX-mismatch haircut checks (CRR Art. 224 H_fx) can see the
+        true currency pair even after amounts have been rebased to the reporting
+        currency.
+
         Args:
             collateral: Collateral with currency, market_value, nominal_value
             fx_rates: FX rates with currency_from, currency_to, rate columns
             config: Calculation configuration with base_currency
 
         Returns:
-            Collateral with values converted to base currency
+            Collateral with values converted to base currency and
+            ``original_currency`` audit column added.
         """
         if fx_rates is None or not config.apply_fx_conversion:
-            return collateral
+            return collateral.with_columns(pl.col("currency").alias("original_currency"))
 
         target_currency = config.base_currency
 
@@ -199,9 +205,11 @@ class FXConverter:
             how="left",
         )
 
-        # Convert amounts where rate is available
+        # Convert amounts where rate is available, preserving original currency
+        # for Art. 224 FX mismatch haircut (H_fx = 8%).
         converted = converted.with_columns(
             [
+                pl.col("currency").alias("original_currency"),
                 pl.when(pl.col("currency") == target_currency)
                 .then(pl.col("market_value"))
                 .when(pl.col("rate").is_not_null())
@@ -244,10 +252,11 @@ class FXConverter:
             config: Calculation configuration with base_currency
 
         Returns:
-            Guarantees with amount_covered converted to base currency
+            Guarantees with amount_covered converted to base currency and
+            ``original_currency`` audit column added.
         """
         if fx_rates is None or not config.apply_fx_conversion:
-            return guarantees
+            return guarantees.with_columns(pl.col("currency").alias("original_currency"))
 
         target_currency = config.base_currency
 
@@ -308,10 +317,11 @@ class FXConverter:
             config: Calculation configuration with base_currency
 
         Returns:
-            Provisions with amount converted to base currency
+            Provisions with amount converted to base currency and
+            ``original_currency`` audit column added.
         """
         if fx_rates is None or not config.apply_fx_conversion:
-            return provisions
+            return provisions.with_columns(pl.col("currency").alias("original_currency"))
 
         target_currency = config.base_currency
 
@@ -334,6 +344,7 @@ class FXConverter:
         # Convert amounts where rate is available
         converted = converted.with_columns(
             [
+                pl.col("currency").alias("original_currency"),
                 pl.when(pl.col("currency") == target_currency)
                 .then(pl.col("amount"))
                 .when(pl.col("rate").is_not_null())
@@ -370,10 +381,11 @@ class FXConverter:
             config: Calculation configuration with base_currency
 
         Returns:
-            Equity exposures with values converted to base currency
+            Equity exposures with values converted to base currency and
+            ``original_currency`` audit column added.
         """
         if fx_rates is None or not config.apply_fx_conversion:
-            return equity_exposures
+            return equity_exposures.with_columns(pl.col("currency").alias("original_currency"))
 
         target_currency = config.base_currency
 
@@ -396,6 +408,7 @@ class FXConverter:
         # Convert amounts where rate is available
         converted = converted.with_columns(
             [
+                pl.col("currency").alias("original_currency"),
                 pl.when(pl.col("currency") == target_currency)
                 .then(pl.col("carrying_value"))
                 .when(pl.col("rate").is_not_null())

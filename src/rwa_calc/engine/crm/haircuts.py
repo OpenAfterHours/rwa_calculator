@@ -144,12 +144,20 @@ class HaircutCalculator:
                 (pl.col("collateral_haircut") * scaling_factor).alias("collateral_haircut")
             )
 
-        # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4)
-        # Art. 227: zero-haircut repos waive ALL volatility adjustments including H_fx
+        # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4).
+        # Compare pre-FX-conversion currencies: after `FXConverter.convert_*` has
+        # rebased values to the reporting currency, the `currency` column is the
+        # reporting currency on both sides and a raw comparison would always be
+        # false (P1.135). `original_currency` on collateral and `exposure_currency`
+        # (sourced from the exposure's `original_currency` in the processor) both
+        # carry the true pre-conversion currency pair.
+        # Art. 227: zero-haircut repos waive ALL volatility adjustments including H_fx.
         fx_base = float(FX_HAIRCUT)
-        has_zero_flag = "_is_zero_haircut" in collateral.collect_schema().names()
+        schema_names = collateral.collect_schema().names()
+        has_zero_flag = "_is_zero_haircut" in schema_names
+        coll_ccy_col = "original_currency" if "original_currency" in schema_names else "currency"
         fx_expr = (
-            pl.when(pl.col("currency") != pl.col("exposure_currency"))
+            pl.when(pl.col(coll_ccy_col) != pl.col("exposure_currency"))
             .then(pl.lit(fx_base) * scaling_factor)
             .otherwise(pl.lit(0.0))
         )

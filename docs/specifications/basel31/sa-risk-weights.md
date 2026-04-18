@@ -432,7 +432,7 @@ New in Basel 3.1 — corporates are divided into sub-categories with differentia
 
 | Sub-Category | Risk Weight | Conditions | Reference |
 |-------------|-------------|------------|-----------|
-| SME corporate | **85%** | Turnover ≤ GBP 44m (previously EUR 50m threshold for SF) | Art. 122(4) |
+| SME corporate | **85%** | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition, p.9; diverges from BCBS/CRR EUR 50m SF threshold) | Art. 122(11) |
 | Investment grade (IG) | **65%** | PRA permission + internal IG assessment (Art. 122(9)–(10)) | Art. 122(6)(a) |
 | Non-IG unrated | **135%** | PRA permission + internal assessment determines non-IG | Art. 122(6)(b) |
 | General unrated | **100%** | Default without PRA permission (Art. 122(5)) | Art. 122(5) |

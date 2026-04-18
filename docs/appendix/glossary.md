@@ -199,7 +199,15 @@ Basel 3.1 approach for unrated institutions based on capital adequacy ratios.
 A capital calculation method for specialised lending using supervisory categories (Strong/Good/Satisfactory/Weak).
 
 ### SME (Small and Medium Enterprise)
-Companies with turnover ≤ EUR 50m qualifying for preferential treatment.
+Companies with annual turnover below the framework-specific threshold qualifying for
+preferential treatment. **Under CRR** the threshold is **EUR 50m** (used by the
+Art. 501 SME Supporting Factor and by the Art. 153(4) IRB firm-size correlation
+adjustment). **Under Basel 3.1 (PS1/26)** the threshold is fixed at **GBP 44m**
+per the PS1/26 Glossary definition (p.9), calculated on the highest consolidated
+accounts of the group; this applies both in the SA (Art. 122(11) 85% SME corporate
+rate, Art. 123(1)(b) retail SME classification) and in the IRB (Art. 153(4) firm-size
+adjustment, which retains the EUR 50m cap in the reduction formula but gates
+SME eligibility via the GBP 44m SME definition).
 
 ### SME Supporting Factor
 CRR capital relief factor (0.7619/0.85) for SME exposures. Removed under Basel 3.1.

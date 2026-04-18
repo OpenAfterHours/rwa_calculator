@@ -98,7 +98,7 @@ Table 4A applies when a short-term assessment yields a more favourable or equal 
 |----------|------------|-----------|------------|
 | Investment grade | 65% | Art. 122(6)(a) | PRA permission required; internal IG assessment (Art. 122(9)–(10)) |
 | Non-investment grade | **135%** | Art. 122(6)(b) | PRA permission required; internal non-IG assessment |
-| SME corporate | 85% | Art. 122(4) | Turnover ≤ EUR 50m, unrated |
+| SME corporate | 85% | Art. 122(11) | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition), unrated |
 | General unrated | 100% | Art. 122(5) | Default without PRA IG/non-IG permission |
 
 !!! info "Subordinated debt"

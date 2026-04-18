@@ -405,13 +405,22 @@ additional detail and the [F-IRB specifications](../specifications/crr/firb-calc
 |-------------|-------------|----------|
 | Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
 | Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
-| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition), unrated |
 
 !!! note "PRA Permission Required"
     The 65%/135% investment grade split requires **prior PRA permission** (Art. 122(6)).
     Without permission, all unrated non-SME corporates receive 100% (Art. 122(5)).
     Investment grade is assessed by the institution's own internal credit assessment
     (Art. 122(9)–(10)), not by external ratings. SME corporates receive 85% regardless.
+
+!!! warning "PRA SME Threshold: GBP 44m (not BCBS EUR 50m)"
+    The 85% SME corporate rate under Art. 122(11) relies on the **PS1/26 Glossary
+    definition of SME** (p.9): an enterprise with annual turnover ≤ **GBP 44 million**,
+    calculated on the highest consolidated accounts of the group. This is a PRA-specific
+    fixed threshold that diverges from the BCBS CRE20.45 / CRR Art. 501 SME Supporting
+    Factor threshold of **EUR 50m**. The same GBP 44m definition is used for the
+    retail SME classification (Art. 123(1)(b)) and the IRB SME firm-size correlation
+    adjustment (Art. 153(4)). See the [B31 SA spec](../specifications/basel31/sa-risk-weights.md#corporate-sub-categories-art-122411) for the full sub-category table.
 
 #### Short-Term Corporate ECAI (Art. 122(3), Table 6A) — New in Basel 3.1
 

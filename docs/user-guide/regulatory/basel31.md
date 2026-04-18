@@ -185,13 +185,22 @@ Standardised Approach risk weights are recalibrated:
 |-------------|-------------|----------|
 | Investment Grade (Art. 122(6)(a)) | **65%** | Unrated, institution IG assessment, PRA permission required |
 | Non-Investment Grade (Art. 122(6)(b)) | **135%** | Unrated, assessed as non-IG, PRA permission required |
-| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ EUR 50m, unrated |
+| SME Corporate (Art. 122(11)) | **85%** | Turnover ≤ GBP 44m (PS1/26 Glossary SME definition), unrated |
 
 !!! note "PRA Permission Required"
     The 65%/135% split requires **prior PRA permission** (Art. 122(6)). Without it, all
     unrated non-SME corporates receive 100% (Art. 122(5)). "Investment grade" is determined
     by the institution's own internal assessment (Art. 122(9)–(10)), not external ratings.
     For IRB output floor S-TREA (Art. 122(8)), firms may elect the 65%/135% split or flat 100%.
+
+!!! note "PRA SME Threshold: GBP 44m (not BCBS EUR 50m)"
+    The 85% SME corporate rate under Art. 122(11) relies on the **PS1/26 Glossary definition
+    of SME** (p.9): "a micro, small or medium enterprise with an annual turnover of not
+    more than GBP 44 million", calculated on the highest consolidated accounts of the
+    group. This is a PRA-specific fixed threshold that replaces the BCBS CRE20.45 /
+    CRR Art. 501 SME Supporting Factor threshold of **EUR 50m**. The SME definition
+    applies both in the SA (Credit Risk: Standardised Approach (CRR) Part) and IRB
+    (Credit Risk: Internal Ratings Based Approach (CRR) Part).
 
 #### Short-Term Corporate ECAI (Art. 122(3), Table 6A)
 

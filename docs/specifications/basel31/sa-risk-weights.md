@@ -20,6 +20,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.4 | Corporate CQS-based risk weights with PRA CQS 5 = 150% | P0 | Done |
 | FR-1.5 | Corporate sub-categories: IG 65%, non-IG unrated 135%, SME 85% | P0 | Done |
 | FR-1.6 | Retail 75%, salary/pension 35% (Art. 123(4), carried from CRR2) | P0 | Done |
+| FR-1.6a | QRRE transactor 45% gated by 12-month full-repayment history (Art. 123(3)(a), PRA Glossary) | P0 | Done (input-driven — upstream assessment) |
 | FR-1.7 | Residential RE loan-splitting (Art. 124F–124G) | P0 | Done |
 | FR-1.8 | Commercial RE loan-splitting and income-producing (Art. 124H–124I) | P0 | Done |
 | FR-1.9 | SA Specialised Lending (Art. 122A–122B) | P0 | Done |
@@ -375,6 +376,56 @@ progression.
     deduction, insurance, payments ≤ 20% of net income, maturity ≤ 10 years) are identical.
 
 The retail threshold is changed from EUR 1m to **GBP 880,000** under PRA PS1/26 Art. 123(1)(b)(ii).
+
+### Transactor Exposure Eligibility (Art. 123(3)(a), PRA Glossary)
+
+The 45% preferential risk weight for regulatory retail exposures under Art. 123(3)(a) is gated
+by the **"transactor exposure"** definition in the PRA Glossary (p. 9 of PRA PS1/26 Appendix 1).
+An exposure qualifies as a transactor only if it meets one of two behavioural tests over the
+**previous 12-month period**:
+
+| Limb | Facility Type | Eligibility Test |
+|------|---------------|------------------|
+| (1) | Revolving facility (credit cards, charge cards, similar) where the balance due at each scheduled repayment date is determined as the amount drawn at a pre-defined reference date | Obligor has **repaid the balance in full at each scheduled repayment date for the previous 12-month period** (both conditions cumulative) |
+| (2) | Overdraft facility | Obligor **has not drawn down over the previous 12-month period** |
+
+Qualifying revolving retail exposures that do not satisfy either limb are classified as
+**non-transactor** exposures and receive the 75% weight under Art. 123(3)(b). There is no
+partial or pro-rata treatment — the test is binary on the full 12-month window.
+
+!!! warning "12-Month History Requirement — Upstream Assessment Responsibility"
+    The 12-month full-repayment (or zero-drawdown) assessment is the **reporting institution's
+    responsibility**. The calculator accepts `is_qrre_transactor` as a binary input flag and
+    applies the 45% weight when the flag is True — it does **not** validate the underlying
+    12-month history. Mis-population of the flag (e.g., marking an account as transactor
+    without the 12-month repayment history) will silently over-favour the exposure by 30
+    percentage points (45% vs 75%).
+
+    Institutions must have documented procedures to evidence that each flagged transactor
+    account meets either limb (1) or limb (2) at the reporting reference date.
+
+!!! info "IRB Consistency — Art. 154(4) Default Rule for New Accounts"
+    The same "transactor exposure" definition feeds the IRB QRRE PD-floor split (0.05%
+    transactor vs 0.10% non-transactor per Art. 163(1)(c)). Art. 154(4) adds an explicit
+    default rule for the IRB path: *"qualifying revolving retail exposures with less than
+    12 months of repayment history shall be identified as exposures that are non-transactor
+    exposures"*. The same principle applies to the SA 45% weight by virtue of the PRA
+    Glossary's "previous 12-month period" requirement — newly originated revolving accounts
+    cannot qualify as transactors until a full 12-month history has accrued.
+
+!!! info "CRR Comparison — No SA Transactor Concept"
+    CRR SA (Art. 123 as it applied before UK revocation) assigns a flat 75% to regulatory
+    retail. The 45% transactor sub-category is **new in Basel 3.1**. The transactor concept
+    under CRR is only used for the IRB QRRE PD-floor distinction via Art. 154(4) — not for
+    any SA risk weight. See the
+    [CRR SA Risk Weights spec](../crr/sa-risk-weights.md#retail-exposures-crr-art-123)
+    for the CRR retail treatment.
+
+**Implementation fields:** The transactor flag maps to `is_qrre_transactor` in the
+[counterparty schema](../../data-model/input-schemas.md#counterparty-schema). The flag is
+evaluated in `engine/sa/calculator.py` (B31 branch) for the 45% weight and in
+`engine/irb/formulas.py` for the PD-floor split. No 12-month history field exists in the
+schema — the input flag is accepted as-is and the upstream assessment is assumed.
 
 ### Currency Mismatch Multiplier (Art. 123B)
 

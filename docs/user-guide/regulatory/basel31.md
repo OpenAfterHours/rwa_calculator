@@ -337,7 +337,18 @@ FX volatility from retail classification boundaries.
 | Payroll / Pension Loans | 35% | 35% | Unchanged from CRR2 |
 | Retail Other | 75% | 75% | — |
 
-Transactor status requires full repayment of outstanding balance each billing cycle.
+!!! warning "Transactor Eligibility — 12-Month Behavioural Test"
+    The 45% transactor weight under Art. 123(3)(a) is gated by the PRA Glossary (p. 9) definition:
+    an exposure qualifies only if, over the **previous 12-month period**, either (1) the
+    revolving balance has been repaid **in full at each scheduled repayment date** (credit cards,
+    charge cards, and similar), or (2) the overdraft facility has **not been drawn down**. Per
+    Art. 154(4), revolving accounts with less than 12 months of repayment history must be
+    classified as non-transactor (75% SA weight, 0.10% IRB PD floor). The 12-month assessment is
+    the institution's responsibility — the calculator accepts `is_qrre_transactor` as-is and does
+    not validate the underlying history. See the
+    [Transactor Exposure Eligibility](../../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary)
+    spec section for full detail.
+
 Payroll/pension loans (35%) were introduced by CRR2 (Regulation (EU) 2019/876) — not new in
 Basel 3.1. The four qualifying conditions (unconditional salary/pension deduction, insurance,
 payments ≤ 20% of net income, maturity ≤ 10 years) are carried forward unchanged from CRR

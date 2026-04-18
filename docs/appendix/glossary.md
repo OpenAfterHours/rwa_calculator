@@ -215,6 +215,14 @@ High-quality capital including common equity (CET1) and additional Tier 1 instru
 ### Tier 2 Capital
 Supplementary capital including subordinated debt and general provisions.
 
+### Transactor Exposure
+A qualifying revolving retail exposure (QRRE) that meets one of two behavioural tests over the **previous 12-month period**, as defined by the PRA Glossary (PS1/26 Appendix 1, p. 9):
+
+1. A revolving facility (credit cards, charge cards, and similar where the balance due at each scheduled repayment date is determined as the amount drawn at a pre-defined reference date) where the obligor has repaid the balance in full at **each** scheduled repayment date for the previous 12-month period; or
+2. An overdraft facility that the obligor has not drawn down over the previous 12-month period.
+
+Transactor exposures receive a preferential **45% SA risk weight** under PRA PS1/26 Art. 123(3)(a) (vs 75% for non-transactors under Art. 123(3)(b)) and a **0.05% IRB PD floor** under Art. 163(1)(c) (vs 0.10% for non-transactors). Art. 154(4) explicitly classifies revolving exposures with less than 12 months of repayment history as non-transactors. The 12-month behavioural assessment is the reporting institution's responsibility; the `is_qrre_transactor` input flag is accepted as-is by the calculator. CRR SA has no transactor sub-category — the concept is new to the SA risk-weight table in Basel 3.1. See [SA Risk Weights — Transactor Exposure Eligibility](../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary).
+
 ## U
 
 ### Unexpected Loss (UL)

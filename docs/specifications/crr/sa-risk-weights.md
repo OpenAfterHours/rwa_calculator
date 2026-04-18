@@ -351,7 +351,7 @@ The payroll/pension 35% treatment is **carried forward unchanged** from CRR2 int
 | Sub-Treatment | Risk Weight | Condition | Reference |
 |---------------|-------------|-----------|-----------|
 | Regulatory retail (non-transactor) | 75% | Meets Art. 123A qualifying criteria, non-transactor | Art. 123(3)(b) |
-| QRRE transactors | 45% | Qualifying revolving (Art. 123(2)), balance repaid monthly | Art. 123(3)(a) |
+| QRRE transactors | 45% | Qualifying revolving where balance repaid in full at each scheduled repayment date for the previous 12 months, or overdraft undrawn for the previous 12 months (PRA Glossary) | Art. 123(3)(a) |
 | QRRE non-transactors | 75% | Qualifying revolving (Art. 123(2)), non-transactor | Art. 123(3)(b) |
 | Payroll / pension loans | 35% | Carried forward from CRR2 — same 4 conditions (a)–(d) | Art. 123(4) |
 | Non-regulatory retail | 100% | Retail exposure that fails Art. 123A qualifying criteria | Art. 123(3)(c) |

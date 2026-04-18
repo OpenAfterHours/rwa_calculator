@@ -81,14 +81,23 @@ Examples:
 
 ### SA Risk Weight
 
-| Framework | Risk Weight |
-|-----------|-------------|
-| CRR | **75%** |
-| Basel 3.1 | **75%** |
+| Framework | Non-Transactor | Transactor |
+|-----------|----------------|------------|
+| CRR | **75%** | 75% (no split) |
+| Basel 3.1 | **75%** (Art. 123(3)(b)) | **45%** (Art. 123(3)(a)) |
+
+### Transactor vs Non-Transactor (Basel 3.1)
+
+Basel 3.1 introduces a 45% preferential SA risk weight (and a 0.05% IRB PD floor) for **transactor** QRRE exposures. The PRA Glossary (PS1/26 Appendix 1, p. 9) defines a transactor via one of two behavioural tests over the **previous 12-month period**:
+
+1. A revolving facility (credit cards, charge cards, and similar) where the obligor has **repaid the balance in full at each scheduled repayment date for the previous 12-month period**; or
+2. An **overdraft facility** that the obligor **has not drawn down over the previous 12-month period**.
+
+Accounts that fail either test — including newly originated accounts with less than 12 months of repayment history (Art. 154(4)) — are **non-transactor** exposures. Set `is_qrre_transactor = True` in the input only when the 12-month history has been verified by the institution; the calculator does not validate the underlying behaviour. See the [Basel 3.1 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary) for full details.
 
 ### IRB Treatment
 
-QRRE correlation is fixed at 4%. PD floors: 0.03% (CRR all), 0.05% (Basel 3.1 transactors, Art. 163(1)(c)), 0.10% (Basel 3.1 revolvers). Bank-estimated LGD subject to 50% floor (Basel 3.1 unsecured).
+QRRE correlation is fixed at 4%. PD floors: 0.03% (CRR all), 0.05% (Basel 3.1 transactors, Art. 163(1)(c)), 0.10% (Basel 3.1 revolvers). Bank-estimated LGD subject to 50% floor (Basel 3.1 unsecured). The same transactor definition (PRA Glossary) governs the IRB PD-floor split; Art. 154(4) requires any account with less than 12 months of repayment history to be classified as non-transactor for IRB purposes.
 
 ## Retail Other
 

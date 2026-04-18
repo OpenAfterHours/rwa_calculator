@@ -700,10 +700,22 @@ Art. 123(1)(b)(ii) Basel 3.1).
 | Payroll / Pension Loans | 35% | 35% | Unchanged from CRR2 |
 | Retail Other | 75% | 75% | — |
 
-Transactor status requires full repayment each billing cycle. Payroll/pension loans (35%)
-were introduced by CRR2 (Regulation (EU) 2019/876) and carried forward unchanged to Basel 3.1.
-CRR Art. 123 second subparagraph → PRA PS1/26 Art. 123(4). Four conditions apply: unconditional
-salary/pension deduction, insurance coverage, payments ≤ 20% of net income, maturity ≤ 10 years.
+!!! info "Transactor Eligibility — Behavioural Gate (Art. 123(3)(a), PRA Glossary)"
+    The 45% transactor weight is not a self-declared category. Per the PRA Glossary
+    (PS1/26 Appendix 1, p. 9), a transactor exposure is one where, over the **previous 12-month
+    period**, the obligor has either (1) repaid the revolving balance in full at each scheduled
+    repayment date (credit cards, charge cards, and similar), or (2) not drawn down the
+    overdraft at all. Art. 154(4) adds that revolving accounts with less than 12 months of
+    repayment history must be flagged non-transactor. The 12-month assessment is an upstream
+    responsibility of the reporting institution; the `is_qrre_transactor` flag is accepted
+    without revalidation. See the
+    [Basel 3.1 SA spec](../specifications/basel31/sa-risk-weights.md#transactor-exposure-eligibility-art-1233a-pra-glossary)
+    for the verbatim Glossary text and both behavioural limbs.
+
+Payroll/pension loans (35%) were introduced by CRR2 (Regulation (EU) 2019/876) and carried
+forward unchanged to Basel 3.1. CRR Art. 123 second subparagraph → PRA PS1/26 Art. 123(4).
+Four conditions apply: unconditional salary/pension deduction, insurance coverage, payments
+≤ 20% of net income, maturity ≤ 10 years.
 
 !!! warning "Code Divergence — CRR Path"
     The CRR code path does not implement the 35% payroll/pension treatment — all CRR retail

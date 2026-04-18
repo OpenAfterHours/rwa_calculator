@@ -158,9 +158,7 @@ def _create_institution_df(is_basel_3_1: bool = False) -> pl.DataFrame:
         is_basel_3_1: True for PRA PS1/26 ECRA values (CQS 2 = 30%),
             False for CRR Art. 120 Table 3 (CQS 2 = 50%).
     """
-    weights = (
-        INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
-    )
+    weights = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
     return _build_cqs_rw_df(weights, "INSTITUTION")
 
 
@@ -660,9 +658,7 @@ def lookup_risk_weight(
         return MDB_RISK_WEIGHTS_TABLE_2B.get(cqs_enum, MDB_RISK_WEIGHTS_TABLE_2B[CQS.UNRATED])
 
     if exposure_upper == "INSTITUTION":
-        table = (
-            INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
-        )
+        table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
         cqs_enum = _get_cqs_enum(cqs)
         return table.get(cqs_enum, table[CQS.UNRATED])
 

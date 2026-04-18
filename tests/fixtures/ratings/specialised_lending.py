@@ -16,6 +16,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import SPECIALISED_LENDING_SCHEMA
 
 

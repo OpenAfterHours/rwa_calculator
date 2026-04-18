@@ -729,9 +729,7 @@ class TestFCSMMixedBatch:
         assert result["fcsm_collateral_value"][0] == pytest.approx(800_000.0, rel=0.001)
         assert result["fcsm_collateral_rw"][0] == pytest.approx(0.0, abs=1e-10)
 
-    def test_fully_secured_same_currency_cash_floor_bypassed_end_to_end(
-        self, crr_simple_config
-    ):
+    def test_fully_secured_same_currency_cash_floor_bypassed_end_to_end(self, crr_simple_config):
         """End-to-end regression: fully secured by same-currency cash produces
         0% blended RW after SA substitution (Art. 222(4)/(6) carve-out).
         """

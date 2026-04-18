@@ -521,11 +521,8 @@ class SACalculator:
         # exception — all of which key off "original" maturity, not residual.
         # Days-to-years uses /365.0 consistent with exact_fractional_years_expr.
         _derived_original = (
-            (pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)).cast(
-                pl.Float64
-            )
-            / 365.0
-        )
+            pl.col("maturity_date").cast(pl.Int32) - pl.col("value_date").cast(pl.Int32)
+        ).cast(pl.Float64) / 365.0
         exposures = exposures.with_columns(
             pl.when(pl.col("original_maturity_years").is_null())
             .then(_derived_original)
@@ -1614,11 +1611,7 @@ class SACalculator:
                 # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA so the
                 # dicts remain the single source of truth.
                 .when(_gec == "institution")
-                .then(
-                    build_institution_guarantor_rw_expr(
-                        "guarantor_cqs", config.is_basel_3_1
-                    )
-                )
+                .then(build_institution_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1))
                 # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
                 .when(_gec == "pse")
                 .then(

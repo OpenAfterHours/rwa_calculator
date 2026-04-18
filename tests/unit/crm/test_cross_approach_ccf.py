@@ -633,7 +633,6 @@ class TestGuaranteeRatio:
             ],
         )
 
-        row = _get_guar_row(result)
         # on_bal should use floored drawn (0, not -100)
         assert _get_rows(result)["ead_final"].sum() == pytest.approx(190.0)
 

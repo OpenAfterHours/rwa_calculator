@@ -982,9 +982,7 @@ class TestApplyGuaranteeSubstitution:
         assert result["guarantor_rw"][0] == pytest.approx(0.20)
         assert result["is_guarantee_beneficial"][0] is True
 
-    def test_crr_institution_cqs2_gives_50_percent(
-        self, crr_config: CalculationConfig
-    ) -> None:
+    def test_crr_institution_cqs2_gives_50_percent(self, crr_config: CalculationConfig) -> None:
         """Under CRR Art. 120 Table 3, institution CQS 2 gets 50% RW.
 
         Guarantee is only applied if beneficial (guarantor RW < borrower RW).

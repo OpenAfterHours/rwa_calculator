@@ -96,9 +96,9 @@ class TestInstitutionRiskWeightsCRR:
     def test_other_rated_values_unchanged(self) -> None:
         """Rated institution weights unchanged between CRR and B31 except CQS 2."""
         for cqs in [CQS.CQS1, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
-            assert (
-                INSTITUTION_RISK_WEIGHTS_CRR[cqs] == INSTITUTION_RISK_WEIGHTS_B31_ECRA[cqs]
-            ), f"CQS {cqs.value} should be the same in both tables"
+            assert INSTITUTION_RISK_WEIGHTS_CRR[cqs] == INSTITUTION_RISK_WEIGHTS_B31_ECRA[cqs], (
+                f"CQS {cqs.value} should be the same in both tables"
+            )
 
 
 # =============================================================================
@@ -347,7 +347,7 @@ class TestCRRShortTermInstitutionTables:
 
     def test_crr_unrated_short_term_is_twenty_percent(self) -> None:
         """CRR Art. 121(3): unrated institution short-term = 20%."""
-        assert INSTITUTION_SHORT_TERM_UNRATED_RW_CRR == Decimal("0.20")
+        assert Decimal("0.20") == INSTITUTION_SHORT_TERM_UNRATED_RW_CRR
 
 
 class TestCRRShortTermInstitutionSACalculator:

@@ -260,9 +260,7 @@ def _compute_guarantor_rw_sa(
             # Institution/MDB guarantors (institution, bank, mdb, etc.)
             # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA.
             .when(_gec.is_in(["institution", "mdb"]))
-            .then(
-                build_institution_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1)
-            )
+            .then(build_institution_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1))
             # Corporate guarantors (corporate, company)
             .when(_gec.is_in(["corporate", "corporate_sme"]))
             .then(

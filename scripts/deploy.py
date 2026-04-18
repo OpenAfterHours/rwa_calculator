@@ -33,6 +33,7 @@ VERSION_FILES = {
     "pyproject.toml": r'version = "(\d+\.\d+\.\d+)"',
     "src/rwa_calc/__init__.py": r'__version__ = "(\d+\.\d+\.\d+)"',
     "docs/overview.md": r"\| Calculator \| (\d+\.\d+\.\d+) \|",
+    "docs/overrides/main.html": r">v(\d+\.\d+\.\d+) &middot;",
 }
 
 CHANGELOG_PATH = PROJECT_ROOT / "docs" / "appendix" / "changelog.md"

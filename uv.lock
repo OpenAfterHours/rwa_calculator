@@ -938,7 +938,7 @@ wheels = [
 
 [[package]]
 name = "rwa-calc"
-version = "0.1.202"
+version = "0.1.63"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

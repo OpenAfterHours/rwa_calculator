@@ -615,6 +615,171 @@ class TestDualRatingResolution:
         assert cp["pd"][0] is None
 
 
+class TestArt138ExternalRatingResolution:
+    """CRR Art. 138 multi-rating resolution across nominated ECAIs.
+
+    - 1 rating  -> use it
+    - 2 ratings -> higher RW (worse CQS)
+    - >=3       -> higher of the two lowest RWs (second-best CQS)
+
+    Same-agency repeats first reduce to the most recent before Art. 138 runs.
+    """
+
+    @staticmethod
+    def _run(resolver: HierarchyResolver, ratings: pl.LazyFrame) -> pl.DataFrame:
+        counterparties = pl.DataFrame({"counterparty_reference": ["CP"]}).lazy()
+        ultimate_parents = pl.LazyFrame(
+            schema={
+                "counterparty_reference": pl.String,
+                "ultimate_parent_reference": pl.String,
+                "hierarchy_depth": pl.Int32,
+            }
+        )
+        return resolver._build_rating_inheritance_lazy(
+            counterparties, ratings, ultimate_parents
+        ).collect()
+
+    @staticmethod
+    def _ratings(cqs_by_agency: list[tuple[str, int, date]]) -> pl.LazyFrame:
+        return pl.DataFrame(
+            {
+                "rating_reference": [f"R{i}" for i in range(len(cqs_by_agency))],
+                "counterparty_reference": ["CP"] * len(cqs_by_agency),
+                "rating_type": ["external"] * len(cqs_by_agency),
+                "rating_agency": [a for a, _, _ in cqs_by_agency],
+                "rating_value": ["x"] * len(cqs_by_agency),
+                "cqs": [c for _, c, _ in cqs_by_agency],
+                "pd": [None] * len(cqs_by_agency),
+                "rating_date": [d for _, _, d in cqs_by_agency],
+            }
+        ).lazy()
+
+    def test_single_rating_used_as_is(self, resolver: HierarchyResolver) -> None:
+        ratings = self._ratings([("MOODYS", 3, date(2024, 6, 1))])
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_two_ratings_picks_worse(self, resolver: HierarchyResolver) -> None:
+        # CQS 2 (better, lower RW) vs CQS 4 (worse) -> worse wins
+        ratings = self._ratings(
+            [
+                ("MOODYS", 2, date(2024, 6, 1)),
+                ("SP", 4, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 4
+
+    def test_two_ratings_same_cqs(self, resolver: HierarchyResolver) -> None:
+        ratings = self._ratings(
+            [
+                ("MOODYS", 3, date(2024, 6, 1)),
+                ("SP", 3, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_three_ratings_picks_second_best(self, resolver: HierarchyResolver) -> None:
+        # CQS 1, 3, 5 -> two lowest are 1 and 3 -> higher = 3
+        ratings = self._ratings(
+            [
+                ("MOODYS", 1, date(2024, 6, 1)),
+                ("SP", 3, date(2024, 6, 1)),
+                ("FITCH", 5, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_four_ratings_second_best(self, resolver: HierarchyResolver) -> None:
+        # CQS 1, 3, 4, 6 -> second-best = 3
+        ratings = self._ratings(
+            [
+                ("MOODYS", 1, date(2024, 6, 1)),
+                ("SP", 3, date(2024, 6, 1)),
+                ("FITCH", 4, date(2024, 6, 1)),
+                ("DBRS", 6, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_ties_at_best_cqs(self, resolver: HierarchyResolver) -> None:
+        # CQS 2, 2, 3, 5 -> two lowest are 2 and 2 -> second-best = 2
+        ratings = self._ratings(
+            [
+                ("MOODYS", 2, date(2024, 6, 1)),
+                ("SP", 2, date(2024, 6, 1)),
+                ("FITCH", 3, date(2024, 6, 1)),
+                ("DBRS", 5, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 2
+
+    def test_ties_at_second_and_third(self, resolver: HierarchyResolver) -> None:
+        # CQS 1, 3, 3, 5 -> second-best = 3
+        ratings = self._ratings(
+            [
+                ("MOODYS", 1, date(2024, 6, 1)),
+                ("SP", 3, date(2024, 6, 1)),
+                ("FITCH", 3, date(2024, 6, 1)),
+                ("DBRS", 5, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_same_agency_repeated_reduces_to_most_recent(self, resolver: HierarchyResolver) -> None:
+        # Two agencies, each with two assessments. Moody's newest is CQS 2,
+        # S&P newest is CQS 4. Art. 138 on [2, 4] -> worse = 4.
+        ratings = self._ratings(
+            [
+                ("MOODYS", 5, date(2022, 1, 1)),
+                ("MOODYS", 2, date(2024, 6, 1)),
+                ("SP", 6, date(2022, 1, 1)),
+                ("SP", 4, date(2024, 6, 1)),
+            ]
+        )
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 4
+
+    def test_null_cqs_ignored(self, resolver: HierarchyResolver) -> None:
+        # One valid rating (CQS 3) and one null-CQS row; null is dropped
+        # so n==1 -> use the valid one.
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["R0", "R1"],
+                "counterparty_reference": ["CP", "CP"],
+                "rating_type": ["external", "external"],
+                "rating_agency": ["MOODYS", "SP"],
+                "rating_value": ["Baa1", "NR"],
+                "cqs": [3, None],
+                "pd": [None, None],
+                "rating_date": [date(2024, 6, 1), date(2024, 6, 1)],
+            }
+        ).lazy()
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] == 3
+
+    def test_no_external_ratings(self, resolver: HierarchyResolver) -> None:
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["R0"],
+                "counterparty_reference": ["CP"],
+                "rating_type": ["internal"],
+                "rating_agency": ["INT"],
+                "rating_value": ["INT_A"],
+                "cqs": [None],
+                "pd": [0.01],
+                "rating_date": [date(2024, 6, 1)],
+            }
+        ).lazy()
+        result = self._run(resolver, ratings)
+        assert result["external_cqs"][0] is None
+
+
 # =============================================================================
 # Exposure Unification Tests
 # =============================================================================

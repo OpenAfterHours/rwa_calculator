@@ -13,6 +13,26 @@ The calculator resolves parent-child relationships between counterparties using 
 - Child counterparties inherit ratings from their parent when they lack their own
 - The hierarchy is traversed upward until a rated entity is found
 
+### Multi-Rating Resolution (CRR Art. 138)
+
+When a counterparty has more than one external rating from nominated ECAIs, the
+resolver applies CRR Art. 138 rather than picking the most recent:
+
+1. **Per-agency dedup** — multiple assessments from the same agency are first
+   reduced to the most recent (one assessment per agency).
+2. **Art. 138 selection** across the remaining distinct-agency assessments:
+    - 1 assessment → use it.
+    - 2 assessments → use the **higher risk weight** (worse of the two).
+    - ≥ 3 assessments → take the two assessments generating the two lowest
+      risk weights, then use the **higher** of those two (i.e. the
+      "second-best" rating).
+
+Resolution is performed on CQS rather than RW because the CQS → RW mapping is
+monotone non-decreasing within every SA exposure class, so ranking by CQS
+ascending gives the same outcome as ranking by RW. External ratings are **not**
+inherited from the parent — only the counterparty's own assessments participate
+in Art. 138 resolution.
+
 ### Lending Group Aggregation
 
 Lending groups aggregate exposure across related counterparties for threshold calculations (e.g., SME turnover, retail exposure limits).
@@ -404,6 +424,7 @@ All monetary values are converted to the base currency (GBP) using provided FX r
 | HIER-4 | Facility hierarchy — sub-facility undrawn amount aggregated to root facility |
 | HIER-5 | Duplicate membership — counterparty in multiple lending groups keeps first assignment |
 | HIER-6 | Negative drawn amount clamping — negative balances do not increase undrawn headroom |
+| HIER-7 | Multi-rating resolution — CRR Art. 138 applied when ≥ 2 external ratings present |
 
 ### Exposure Classification (CLASS)
 

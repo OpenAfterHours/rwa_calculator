@@ -38,6 +38,10 @@ If retail thresholds are breached, exposure reclassified as CORPORATE.
 - Child counterparties inherit ratings from parent when they lack their own
 - Traversed upward until a rated entity is found
 - Internal and external ratings resolved independently
+- External ratings are **not** inherited — each counterparty's own ECAI
+  assessments are resolved in place per **CRR Art. 138**: per-agency dedup to
+  most recent, then 1 → use it, 2 → higher RW (worse), ≥ 3 → higher of the
+  two lowest RWs (second-best)
 
 ## Lending Group Aggregation
 

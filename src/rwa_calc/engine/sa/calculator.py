@@ -113,7 +113,6 @@ from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 # Importing the namespace module registers the ``lf.sa`` fluent API with Polars
 # and makes ``SA_INPUT_CONTRACT`` available here without duplicating the schema.
 from rwa_calc.engine.sa.namespace import SA_INPUT_CONTRACT as _SA_INPUT_CONTRACT  # noqa: F401
-from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -434,6 +433,207 @@ def _crr_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
     )
 
 
+# ---------------------------------------------------------------------------
+# Guarantee-substitution helpers (CRR Art. 213-217)
+#
+# The SA calculator's guarantee-substitution stage relies on a few columns
+# that may be missing when the calculator is invoked directly from tests
+# (i.e. bypassing the CRM processor). These helpers own the defensive
+# preparation and the guarantor-RW when/then chain in one place.
+# ---------------------------------------------------------------------------
+
+
+def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Ensure optional guarantor columns exist before guarantee substitution.
+
+    In production ``guarantor_exposure_class`` is set by the CRM processor
+    (``engine/crm/guarantees.py``) from ``ENTITY_TYPE_TO_SA_CLASS``. This
+    fallback covers unit tests that construct LazyFrames directly and skip
+    the CRM stage.
+
+    Adds (if absent):
+        guarantor_exposure_class        — derived from guarantor_entity_type
+        guarantor_country_code          — null String
+        guarantor_is_ccp_client_cleared — null Boolean
+    """
+    schema_names = exposures.collect_schema().names()
+    to_add: list[pl.Expr] = []
+
+    if "guarantor_exposure_class" not in schema_names:
+        from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+
+        to_add.append(
+            pl.col("guarantor_entity_type")
+            .fill_null("")
+            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
+            .alias("guarantor_exposure_class")
+        )
+    if "guarantor_country_code" not in schema_names:
+        to_add.append(pl.lit(None).cast(pl.String).alias("guarantor_country_code"))
+    if "guarantor_is_ccp_client_cleared" not in schema_names:
+        to_add.append(pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"))
+
+    return exposures.with_columns(to_add) if to_add else exposures
+
+
+def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
+    """Build the Art. 114(3)/(4) domestic CGCB-guarantor currency check.
+
+    Evaluates the domestic-currency test against the guarantee currency (the
+    currency of the substituted exposure to the sovereign); the Art. 233(3)
+    8% FX haircut separately handles any mismatch between the guarantee and
+    the underlying exposure. Falls back to the exposure's pre-FX denomination
+    when ``guarantee_currency`` is missing (legacy / no-guarantee rows).
+    """
+    has_country = "guarantor_country_code" in schema_names
+    has_exposure_ccy = "currency" in schema_names or "original_currency" in schema_names
+    has_guarantee_ccy = "guarantee_currency" in schema_names
+
+    if has_guarantee_ccy and has_exposure_ccy:
+        ccy_expr = pl.col("guarantee_currency").fill_null(denomination_currency_expr(schema_names))
+    elif has_guarantee_ccy:
+        ccy_expr = pl.col("guarantee_currency")
+    elif has_exposure_ccy:
+        ccy_expr = denomination_currency_expr(schema_names)
+    else:
+        ccy_expr = None
+
+    if not has_country or ccy_expr is None:
+        return pl.lit(False)
+    return build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
+
+
+def _build_guarantor_rw_expr(is_domestic_guarantor: pl.Expr, is_basel_3_1: bool) -> pl.Expr:
+    """Build the full when/then chain that maps a guarantor to its RW.
+
+    Uses ``guarantor_exposure_class`` (derived from ENTITY_TYPE_TO_SA_CLASS by
+    the CRM processor) rather than regex on entity_type, ensuring all valid
+    entity types are covered.
+
+    Branch order (first match wins):
+        no guarantee -> null
+        domestic CGCB sovereign (Art. 114(3)/(4)) -> 0%
+        CGCB CQS table
+        CCP (CRR Art. 306, CRE54.14-15)
+        Named MDB (Art. 117(2)) / International Organisation (Art. 118)
+        MDB Table 2B (Art. 117(1))
+        Institution (ECRA / SCRA via build_institution_guarantor_rw_expr)
+        PSE (Art. 116(2) Table 2A, sovereign-derived for unrated)
+        RGLA (Art. 115(1)(b) Table 1B, sovereign-derived for unrated)
+        Corporate (Art. 122 corporate CQS table)
+        else -> null (no substitution)
+    """
+    gec = pl.col("guarantor_exposure_class").fill_null("")
+    cqs = pl.col("guarantor_cqs")
+    guarantor_country_is_gb = pl.col("guarantor_country_code").fill_null("") == "GB"
+    sovereign_derived_unrated = (
+        pl.when(guarantor_country_is_gb).then(pl.lit(0.20)).otherwise(pl.lit(1.0))
+    )
+
+    return (
+        pl.when(pl.col("guaranteed_portion") <= 0)
+        .then(pl.lit(None).cast(pl.Float64))
+        # Art. 114(3)/(4): Domestic sovereign -> 0% regardless of CQS.
+        .when((gec == "central_govt_central_bank") & is_domestic_guarantor)
+        .then(pl.lit(0.0))
+        # CGCB guarantors via CQS (Table 1 — sovereign weights).
+        .when(gec == "central_govt_central_bank")
+        .then(
+            pl.when(cqs == 1)
+            .then(pl.lit(0.0))
+            .when(cqs == 2)
+            .then(pl.lit(0.20))
+            .when(cqs == 3)
+            .then(pl.lit(0.50))
+            .when(cqs.is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(cqs == 6)
+            .then(pl.lit(1.50))
+            .otherwise(pl.lit(1.0))  # Unrated
+        )
+        # CCP guarantors: 2% proprietary / 4% client-cleared
+        # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights.
+        .when(pl.col("guarantor_entity_type") == "ccp")
+        .then(
+            pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
+            .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
+            .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
+        )
+        # Named MDB (Art. 117(2)): 0% unconditional.
+        .when((gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named"))
+        .then(pl.lit(0.0))
+        # International Organisation (Art. 118): 0% unconditional.
+        .when(
+            (gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "international_org")
+        )
+        .then(pl.lit(0.0))
+        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
+        .when(gec == "mdb")
+        .then(
+            pl.when(cqs == 1)
+            .then(pl.lit(0.20))
+            .when(cqs == 2)
+            .then(pl.lit(0.30))
+            .when(cqs == 3)
+            .then(pl.lit(0.50))
+            .when(cqs.is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(cqs == 6)
+            .then(pl.lit(1.50))
+            .otherwise(pl.lit(0.50))  # Unrated MDB = 50% (Table 2B)
+        )
+        # Institution guarantors — RW driven from INSTITUTION_RISK_WEIGHTS_CRR /
+        # INSTITUTION_RISK_WEIGHTS_B31_ECRA so the dicts remain the single source
+        # of truth.
+        .when(gec == "institution")
+        .then(build_institution_guarantor_rw_expr("guarantor_cqs", is_basel_3_1))
+        # PSE guarantors — Art. 116(2) Table 2A for rated, sovereign-derived for unrated.
+        .when(gec == "pse")
+        .then(
+            pl.when(cqs == 1)
+            .then(pl.lit(0.20))
+            .when(cqs == 2)
+            .then(pl.lit(0.50))
+            .when(cqs == 3)
+            .then(pl.lit(0.50))
+            .when(cqs.is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(cqs == 6)
+            .then(pl.lit(1.50))
+            .otherwise(sovereign_derived_unrated)
+        )
+        # RGLA guarantors — Art. 115(1)(b) Table 1B for rated, sovereign-derived for unrated.
+        .when(gec == "rgla")
+        .then(
+            pl.when(cqs == 1)
+            .then(pl.lit(0.20))
+            .when(cqs == 2)
+            .then(pl.lit(0.50))
+            .when(cqs == 3)
+            .then(pl.lit(0.50))
+            .when(cqs.is_in([4, 5]))
+            .then(pl.lit(1.0))
+            .when(cqs == 6)
+            .then(pl.lit(1.50))
+            .otherwise(sovereign_derived_unrated)
+        )
+        # Corporate guarantors — Art. 122 corporate CQS table.
+        .when(gec.is_in(["corporate", "corporate_sme"]))
+        .then(
+            pl.when(cqs == 1)
+            .then(pl.lit(0.20))
+            .when(cqs == 2)
+            .then(pl.lit(0.50))
+            .when(cqs.is_in([3, 4]))
+            .then(pl.lit(1.0))
+            .when(cqs.is_in([5, 6]))
+            .then(pl.lit(1.50))
+            .otherwise(pl.lit(1.0))
+        )
+        .otherwise(pl.lit(None).cast(pl.Float64))
+    )
+
+
 @dataclass
 class SACalculationError:
     """Error during SA calculation."""
@@ -457,11 +657,6 @@ class SACalculator:
         calculator = SACalculator()
         result = calculator.calculate(crm_bundle, config)
     """
-
-    def __init__(self) -> None:
-        """Initialize SA calculator with sub-components."""
-        self._supporting_factor_calc = SupportingFactorCalculator()
-        self._risk_weight_tables: dict[str, pl.DataFrame] | None = None
 
     def calculate(
         self,
@@ -547,15 +742,15 @@ class SACalculator:
         errors.extend(dd_errors)
 
         # Step 3: Calculate pre-factor RWA
-        exposures = self._calculate_rwa(exposures)
+        exposures = exposures.sa.calculate_rwa()
 
         # Step 4: Apply supporting factors (CRR only)
         sf_errors: list[CalculationError] = []
-        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        exposures = exposures.sa.apply_supporting_factors(config, errors=sf_errors)
         errors.extend(sf_errors)
 
         # Step 5: Build audit trail
-        audit = self._build_audit(exposures)
+        audit = exposures.sa.build_audit()
 
         return SAResultBundle(
             results=exposures,
@@ -633,7 +828,7 @@ class SACalculator:
         )
 
         # Step 5: Apply supporting factors (SA rows only)
-        exposures = self._apply_supporting_factors(exposures, config)
+        exposures = exposures.sa.apply_supporting_factors(config)
 
         return exposures
 
@@ -682,7 +877,7 @@ class SACalculator:
         )
 
         # Step 5: Apply supporting factors
-        exposures = self._apply_supporting_factors(exposures, config)
+        exposures = exposures.sa.apply_supporting_factors(config)
 
         # Step 6: Standardize output for aggregator
         schema = exposures.collect_schema()
@@ -1484,196 +1679,32 @@ class SACalculator:
         Returns:
             Exposures with guarantee substitution applied
         """
-        schema = exposures.collect_schema()
-        cols = schema.names()
+        cols = exposures.collect_schema().names()
 
-        # Check if guarantee columns exist
+        # Return early when no guarantee data is present.
         if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
-            # No guarantee data, return as-is
             return exposures
 
-        # Ensure guarantor_exposure_class is available (set by CRM processor;
-        # fallback for unit tests that construct LazyFrames directly)
-        if "guarantor_exposure_class" not in cols:
-            from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+        # Ensure defensive column fallbacks (guarantor_exposure_class,
+        # guarantor_country_code, guarantor_is_ccp_client_cleared). In
+        # production these are set by the CRM processor; this fallback covers
+        # tests that construct LazyFrames directly and skip the CRM stage.
+        exposures = _ensure_guarantee_substitution_columns(exposures)
 
-            exposures = exposures.with_columns(
-                pl.col("guarantor_entity_type")
-                .fill_null("")
-                .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
-                .alias("guarantor_exposure_class"),
-            )
-
-        # Ensure optional guarantor columns exist
-        if "guarantor_country_code" not in cols:
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
-            )
-        if "guarantor_is_ccp_client_cleared" not in cols:
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
-            )
-
-        # Preserve pre-CRM risk weight before any guarantee substitution
-        # This is needed for regulatory reporting (pre-CRM vs post-CRM views)
+        # Preserve pre-CRM risk weight for regulatory reporting (pre-CRM vs
+        # post-CRM views).
         exposures = exposures.with_columns(
-            [
-                pl.col("risk_weight").alias("pre_crm_risk_weight"),
-            ]
+            pl.col("risk_weight").alias("pre_crm_risk_weight"),
         )
 
-        # Calculate guarantor's risk weight based on exposure class and CQS.
-        # Uses guarantor_exposure_class (derived from ENTITY_TYPE_TO_SA_CLASS dict)
-        # instead of regex on entity_type, ensuring all valid entity types are covered.
+        # Art. 114(3)/(4) domestic CGCB-guarantor currency check.
+        is_domestic_guarantor = _build_domestic_guarantor_expr(exposures.collect_schema().names())
 
-        # Art. 114(3)/(4): Domestic CGCB guarantors → 0% RW regardless of CQS.
-        # Evaluate the domestic-currency test against the guarantee currency (the
-        # currency of the substituted exposure to the sovereign); the Art. 233(3)
-        # 8% FX haircut separately handles any mismatch between the guarantee and
-        # the underlying exposure. Fall back to the exposure's pre-FX denomination
-        # when `guarantee_currency` is missing (legacy / no-guarantee rows).
-        schema_now = exposures.collect_schema()
-        _schema_names = schema_now.names()
-        _has_country = "guarantor_country_code" in _schema_names
-        _has_exposure_ccy = "currency" in _schema_names or "original_currency" in _schema_names
-        _has_guarantee_ccy = "guarantee_currency" in _schema_names
-        if _has_guarantee_ccy and _has_exposure_ccy:
-            _ccy_expr_guar = pl.col("guarantee_currency").fill_null(
-                denomination_currency_expr(_schema_names)
-            )
-        elif _has_guarantee_ccy:
-            _ccy_expr_guar = pl.col("guarantee_currency")
-        elif _has_exposure_ccy:
-            _ccy_expr_guar = denomination_currency_expr(_schema_names)
-        else:
-            _ccy_expr_guar = None
-        _is_domestic_guarantor = (
-            build_domestic_cgcb_guarantor_expr("guarantor_country_code", _ccy_expr_guar)
-            if (_has_country and _ccy_expr_guar is not None)
-            else pl.lit(False)
-        )
-
-        # Guarantor exposure class (set by CRM processor from ENTITY_TYPE_TO_SA_CLASS)
-        _gec = pl.col("guarantor_exposure_class").fill_null("")
-
+        # Look up guarantor's RW based on exposure class + CQS.
         exposures = exposures.with_columns(
-            [
-                pl.when(pl.col("guaranteed_portion") <= 0)
-                .then(pl.lit(None).cast(pl.Float64))
-                # Art. 114(3)/(4): Domestic sovereign → 0% regardless of CQS
-                .when((_gec == "central_govt_central_bank") & _is_domestic_guarantor)
-                .then(pl.lit(0.0))
-                # CGCB guarantors (sovereign, central_bank)
-                .when(_gec == "central_govt_central_bank")
-                .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.0))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    .otherwise(pl.lit(1.0))  # Unrated
-                )
-                # CCP guarantors: 2% proprietary / 4% client-cleared
-                # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights
-                .when(pl.col("guarantor_entity_type") == "ccp")
-                .then(
-                    pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
-                    .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
-                    .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
-                )
-                # Named MDB guarantors (Art. 117(2)): 0% unconditional
-                .when(
-                    (_gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named")
-                )
-                .then(pl.lit(0.0))
-                # International Organisation guarantors (Art. 118): 0% unconditional
-                .when(
-                    (_gec == "mdb")
-                    & (pl.col("guarantor_entity_type").fill_null("") == "international_org")
-                )
-                .then(pl.lit(0.0))
-                # MDB guarantors — Table 2B (Art. 117(1))
-                .when(_gec == "mdb")
-                .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.30))  # Table 2B: CQS 2 = 30%
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    .otherwise(pl.lit(0.50))  # Unrated MDB = 50% (Table 2B)
-                )
-                # Institution guarantors (institution, bank, etc.)
-                # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA so the
-                # dicts remain the single source of truth.
-                .when(_gec == "institution")
-                .then(build_institution_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1))
-                # PSE guarantors (Art. 116(2) Table 2A for rated; sovereign-derived for unrated)
-                .when(_gec == "pse")
-                .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))  # Table 2A: CQS 3 = 50% (differs from institutions)
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    # Unrated: sovereign-derived; UK → 20%, otherwise 100%
-                    .otherwise(
-                        pl.when(pl.col("guarantor_country_code").fill_null("") == "GB")
-                        .then(pl.lit(0.20))
-                        .otherwise(pl.lit(1.0))
-                    )
-                )
-                # RGLA guarantors (Art. 115(1)(b) Table 1B for rated; sovereign-derived for unrated)
-                .when(_gec == "rgla")
-                .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs") == 3)
-                    .then(pl.lit(0.50))  # Table 1B: CQS 3 = 50%
-                    .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs") == 6)
-                    .then(pl.lit(1.50))
-                    # Unrated: sovereign-derived; UK → 20%, otherwise 100%
-                    .otherwise(
-                        pl.when(pl.col("guarantor_country_code").fill_null("") == "GB")
-                        .then(pl.lit(0.20))
-                        .otherwise(pl.lit(1.0))
-                    )
-                )
-                # Corporate guarantors (corporate, company)
-                .when(_gec.is_in(["corporate", "corporate_sme"]))
-                .then(
-                    pl.when(pl.col("guarantor_cqs") == 1)
-                    .then(pl.lit(0.20))
-                    .when(pl.col("guarantor_cqs") == 2)
-                    .then(pl.lit(0.50))
-                    .when(pl.col("guarantor_cqs").is_in([3, 4]))
-                    .then(pl.lit(1.0))
-                    .when(pl.col("guarantor_cqs").is_in([5, 6]))
-                    .then(pl.lit(1.50))
-                    .otherwise(pl.lit(1.0))  # Unrated
-                )
-                # Unknown exposure class - no substitution
-                .otherwise(pl.lit(None).cast(pl.Float64))
-                .alias("guarantor_rw"),
-            ]
+            _build_guarantor_rw_expr(is_domestic_guarantor, config.is_basel_3_1).alias(
+                "guarantor_rw"
+            ),
         )
 
         # Check if guarantee is beneficial (guarantor RW < borrower RW)
@@ -1932,30 +1963,6 @@ class SACalculator:
                     field_name="exposure_class",
                 )
             )
-
-    def _calculate_rwa(
-        self,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """Calculate pre-factor RWA = EAD x Risk Weight (delegates to ``lf.sa``)."""
-        return exposures.sa.calculate_rwa()
-
-    def _apply_supporting_factors(
-        self,
-        exposures: pl.LazyFrame,
-        config: CalculationConfig,
-        *,
-        errors: list[CalculationError] | None = None,
-    ) -> pl.LazyFrame:
-        """Apply SME / infrastructure supporting factors (delegates to ``lf.sa``)."""
-        return exposures.sa.apply_supporting_factors(config, errors=errors)
-
-    def _build_audit(
-        self,
-        exposures: pl.LazyFrame,
-    ) -> pl.LazyFrame:
-        """Build SA audit trail (delegates to ``lf.sa``)."""
-        return exposures.sa.build_audit()
 
 
 def create_sa_calculator() -> SACalculator:

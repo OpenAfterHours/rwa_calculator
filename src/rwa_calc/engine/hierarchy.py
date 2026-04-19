@@ -273,17 +273,28 @@ class HierarchyResolver:
         """
         Build rating lookup with dual per-type resolution and inheritance.
 
-        Resolves the best internal and best external rating separately per
-        counterparty, then inherits internal ratings from the ultimate parent
-        when the entity has no own internal rating. External ratings are NOT
-        inherited — they apply only to the counterparty explicitly rated by
-        the agency.
+        Internal ratings: most recent per counterparty, with inheritance from
+        the ultimate parent when the entity has no own internal rating.
+
+        External ratings: resolved per CRR Art. 138 across nominated ECAIs.
+        Repeated assessments from the same agency are first reduced to the
+        most recent (one assessment per agency), then:
+
+          - 1 assessment  -> use it
+          - 2 assessments -> use the higher risk weight (worse CQS)
+          - >= 3          -> use the higher of the two lowest risk weights
+                             (i.e. the second-best rating)
+
+        Resolution is performed on CQS rather than RW because within every
+        SA exposure class the CQS -> RW mapping is monotone non-decreasing,
+        so ranking by CQS ascending yields the same outcome as ranking by RW.
+        External ratings are NOT inherited from the parent.
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
-        - internal_pd: Best internal PD (own or inherited from parent)
+        - internal_pd: Most recent internal PD (own or inherited from parent)
         - internal_model_id: Model ID for the internal rating
-        - external_cqs: Best external CQS (own only — not inherited)
+        - external_cqs: Art. 138-resolved external CQS (own only — not inherited)
         - cqs: Alias of external_cqs
         - pd: Alias of internal_pd
         """
@@ -295,7 +306,7 @@ class HierarchyResolver:
             {"model_id": ColumnSpec(pl.String, required=False)},
         )
 
-        # Best internal rating per counterparty (no CQS — that's external only)
+        # Most recent internal rating per counterparty (no CQS — that's external only)
         best_internal = (
             ratings.filter(pl.col("rating_type") == "internal")
             .sort(sort_cols, descending=[True, True])
@@ -310,18 +321,34 @@ class HierarchyResolver:
             )
         )
 
-        # Best external rating per counterparty
-        best_external = (
-            ratings.filter(pl.col("rating_type") == "external")
+        # Art. 138: per-agency dedup to most recent, then resolve across agencies.
+        # Rows without a CQS are ignored (only rated assessments count).
+        per_agency_latest = (
+            ratings.filter((pl.col("rating_type") == "external") & pl.col("cqs").is_not_null())
             .sort(sort_cols, descending=[True, True])
-            .group_by("counterparty_reference")
+            .group_by(["counterparty_reference", "rating_agency"])
             .first()
-            .select(
-                [
-                    pl.col("counterparty_reference").alias("_ext_cp"),
-                    pl.col("cqs").alias("external_cqs"),
-                ]
-            )
+            .select(["counterparty_reference", "cqs"])
+        )
+
+        # Rank CQS ascending per counterparty (lowest CQS == best rating == lowest RW).
+        # For 1 assessment: pick rank 1. For >= 2: pick rank 2 -- this yields the
+        # higher-RW side of the two lowest RWs, i.e. "worse of two" / "second-best".
+        ranked_external = per_agency_latest.with_columns(
+            [
+                pl.col("cqs").rank(method="ordinal").over("counterparty_reference").alias("_rank"),
+                pl.len().over("counterparty_reference").alias("_n"),
+            ]
+        )
+
+        best_external = ranked_external.filter(
+            ((pl.col("_n") == 1) & (pl.col("_rank") == 1))
+            | ((pl.col("_n") >= 2) & (pl.col("_rank") == 2))
+        ).select(
+            [
+                pl.col("counterparty_reference").alias("_ext_cp"),
+                pl.col("cqs").alias("external_cqs"),
+            ]
         )
 
         # Materialise the per-counterparty best-rating aggregates before joining.

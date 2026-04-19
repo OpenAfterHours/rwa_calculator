@@ -76,6 +76,8 @@ class CreditRiskCalc:
         base_currency: str = "GBP",
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         cache_dir: Path | None = None,
+        log_level: str = "INFO",
+        log_format: Literal["text", "json"] = "text",
     ) -> None:
         self.data_path = Path(data_path)
         self.framework = framework
@@ -84,6 +86,8 @@ class CreditRiskCalc:
         self.data_format = data_format
         self.base_currency = base_currency
         self.eur_gbp_rate = eur_gbp_rate
+        self.log_level = log_level
+        self.log_format = log_format
 
         if cache_dir is None:
             import tempfile
@@ -123,6 +127,9 @@ class CreditRiskCalc:
 
         try:
             config = self._create_config()
+            from rwa_calc.observability import configure_logging
+
+            configure_logging(config.log_level, config.log_format)
             loader = self._create_loader()
             pipeline = self._create_pipeline(loader)
 
@@ -174,11 +181,15 @@ class CreditRiskCalc:
                 reporting_date=self.reporting_date,
                 permission_mode=mode,
                 eur_gbp_rate=self.eur_gbp_rate,
+                log_level=self.log_level,
+                log_format=self.log_format,
             )
         else:
             return CalculationConfig.basel_3_1(
                 reporting_date=self.reporting_date,
                 permission_mode=mode,
+                log_level=self.log_level,
+                log_format=self.log_format,
             )
 
     def _create_loader(self) -> LoaderProtocol:

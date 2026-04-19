@@ -10,10 +10,13 @@ Checks machine-verifiable invariants from CLAUDE.md:
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
 7. No inline `"col" not in schema.names()` defaulting in engine/** (use
    ensure_columns against a ColumnSpec schema in data/schemas.py instead)
+8. Every stage module in engine/** declares `logger = logging.getLogger(__name__)`
+   and does not call `print()` or `logging.basicConfig()`.
 
-Checks 5, 6, 7 enforce the data/engine separation. Rare intentional exceptions
-are listed in the ALLOWLIST dicts below; adding a new entry there should be a
-deliberate, reviewed decision.
+Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
+observability contract (see docs/specifications/observability.md). Rare
+intentional exceptions are listed in the ALLOWLIST dicts below; adding a new
+entry there should be a deliberate, reviewed decision.
 
 Usage:
     python scripts/arch_check.py [path]  # defaults to src/rwa_calc/
@@ -70,6 +73,38 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     },
     # Art. 231 allocation column mapping (PR #249 — retained as engine config)
     "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS"},
+}
+
+# Engine modules exempt from the check-8 "must declare a module logger" rule.
+# These are utility / helper modules (not stage implementations) — they do not
+# need their own logger. New stage implementations (loader, classifier,
+# calculators, aggregator, etc.) MUST declare `logger = logging.getLogger(__name__)`.
+LOGGER_REQUIRED_EXEMPT: set[str] = {
+    # Supporting / helper modules that do not correspond to a pipeline stage.
+    "engine/ccf.py",
+    "engine/utils.py",
+    "engine/crm/collateral.py",
+    "engine/crm/expressions.py",
+    "engine/crm/guarantees.py",
+    "engine/crm/haircuts.py",
+    "engine/crm/life_insurance.py",
+    "engine/crm/provisions.py",
+    "engine/crm/simple_method.py",
+    "engine/sa/supporting_factors.py",
+    "engine/irb/adjustments.py",
+    "engine/irb/formulas.py",
+    "engine/irb/guarantee.py",
+    "engine/irb/namespace.py",
+    "engine/irb/stats_backend.py",
+    "engine/slotting/namespace.py",
+    "engine/aggregator/_crm_reporting.py",
+    "engine/aggregator/_el_summary.py",
+    "engine/aggregator/_equity_prep.py",
+    "engine/aggregator/_floor.py",
+    "engine/aggregator/_schemas.py",
+    "engine/aggregator/_summaries.py",
+    "engine/aggregator/_supporting_factors.py",
+    "engine/aggregator/_utils.py",
 }
 
 # Files where an inline `"col" not in schema.names()` check is a legitimate
@@ -377,6 +412,50 @@ def check_no_validation_enums_in_engine(path: Path) -> list[str]:
     return violations
 
 
+def check_engine_logger_contract(path: Path) -> list[str]:
+    """Every non-exempt engine module declares a module logger and avoids
+    `print()` / `logging.basicConfig()`.
+
+    Stage modules are expected to emit their operational telemetry through a
+    logger — see docs/specifications/observability.md. Helper modules under
+    engine/ that do not correspond to a pipeline stage are listed in
+    ``LOGGER_REQUIRED_EXEMPT``.
+    """
+    violations: list[str] = []
+    logger_pattern = re.compile(
+        r"^\s*logger\s*=\s*logging\.getLogger\(__name__\)\s*$", re.MULTILINE
+    )
+    print_pattern = re.compile(r"(?<![\w.])print\s*\(")
+    basic_config_pattern = re.compile(r"logging\.basicConfig\s*\(")
+
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        if rel not in LOGGER_REQUIRED_EXEMPT and not logger_pattern.search(text):
+            violations.append(
+                f"  {py_file}: stage module must declare "
+                "`logger = logging.getLogger(__name__)` "
+                "(or be added to LOGGER_REQUIRED_EXEMPT if it is a helper module)"
+            )
+
+        for i, line in enumerate(text.split("\n"), 1):
+            stripped = line.strip()
+            if stripped.startswith(("#", '"""', "'''")):
+                continue
+            if print_pattern.search(line):
+                violations.append(f"  {py_file}:{i}: `print(` in engine/ — use a module logger")
+            if basic_config_pattern.search(line):
+                violations.append(
+                    f"  {py_file}:{i}: `logging.basicConfig(` in engine/ — "
+                    "use rwa_calc.observability.configure_logging at the entry point"
+                )
+    return violations
+
+
 def main() -> int:
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("src/rwa_calc")
     if not target.exists():
@@ -399,6 +478,10 @@ def main() -> int:
         (
             "No inline `not in schema.names()` in engine/ (use ensure_columns)",
             check_no_inline_schema_defaults,
+        ),
+        (
+            "Engine modules declare a logger + no print()/basicConfig()",
+            check_engine_logger_contract,
         ),
     ]
 

@@ -31,6 +31,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -53,6 +54,8 @@ from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+logger = logging.getLogger(__name__)
 
 # Float-converted risk weight tables for Polars expressions.
 # Authoritative Decimal values live in data/tables/*_equity_rw.py;

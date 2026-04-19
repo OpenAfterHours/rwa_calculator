@@ -149,6 +149,23 @@ tests/
 - **Validation**: Input validation is non-blocking — errors collected via `_validate_input_data()`, pipeline continues with valid data.
 - **Error codes**: Prefixed by domain — `DQ` (data quality), `CL` (classification), `SA` (standardised approach), `IRB`, etc.
 
+## Logging
+
+Operational telemetry flows through stdlib `logging`, configured by `rwa_calc.observability`. Regulatory/data-quality issues remain in `CalculationError` — logging is strictly for observability and must never duplicate the error channel.
+
+Rules for new code:
+- **Module logger**: every stage module under `engine/` declares `logger = logging.getLogger(__name__)` at the top of file (after imports). Enforced by `scripts/arch_check.py` check 8 and `tests/contracts/test_logging_contract.py`.
+- **Stage timing**: pipeline stages are wrapped with `stage_timer(logger, "<stage>")` in the orchestrator. New stages added to the pipeline must be wrapped the same way.
+- **Levels**: INFO for stage entry/exit and pipeline summary; DEBUG for branch decisions; WARNING for missing optional inputs or fallbacks; ERROR reserved for truly unexpected exceptions.
+- **No `print()`**: banned project-wide by ruff `T20`. Route user-visible output (e.g., marimo startup banner) through `logger.info`.
+- **No `logging.basicConfig()`**: handler setup is the job of `rwa_calc.observability.configure_logging`, called at the entry point (`CreditRiskCalc.calculate`). It is idempotent and attaches only to the `rwa_calc` namespace logger.
+- **Lazy formatting**: use `logger.info("loaded %d exposures", n)`, not f-strings. Enforced by ruff `G`.
+- **Never `.collect()` just to log**: a log line is not worth materialising a LazyFrame. Prefer `len(lf.collect_schema().names())` for cheap width, or defer the log to a stage that already materialises.
+- **Correlation IDs**: `PipelineOrchestrator.run_with_data` binds a fresh `run_id` via `new_run_id()` and clears it in `finally`. Every LogRecord emitted during a run carries that id via `RunIdFilter`.
+- **Configuration**: `log_level` and `log_format` (`"text"` | `"json"`) are fields on `CalculationConfig` and may be passed through `CreditRiskCalc(log_format="json")`.
+
+Reference stage skeleton and format details — see `docs/specifications/observability.md`.
+
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`

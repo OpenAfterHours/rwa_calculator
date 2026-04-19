@@ -24,6 +24,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -40,6 +41,8 @@ from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+logger = logging.getLogger(__name__)
 
 
 class HierarchyResolver:

@@ -4,7 +4,7 @@
 
 The calculator uses a six-stage immutable pipeline: Load → Hierarchy → Classify → CRM → Calculate → Aggregate.
 
-> **Details:** See [Pipeline Architecture](../architecture/pipeline.md) for the full stage-by-stage walkthrough with Mermaid diagrams and orchestration details. See [Design Principles](../architecture/design-principles.md) for the rationale behind key design decisions.
+> **Details:** See [Pipeline Architecture](../architecture/pipeline.md) for the full stage-by-stage walkthrough with Mermaid diagrams and orchestration details. See [Design Principles](../architecture/design-principles.md) for the rationale behind key design decisions. See [Observability](observability.md) for the logging contract, per-run correlation ids, and the stage-timing instrumentation wrapped around every pipeline stage.
 
 ## Pipeline & Data Flow Requirements
 

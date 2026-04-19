@@ -72,6 +72,29 @@ def _make_internal_rating(
     return defaults
 
 
+def _make_external_rating(
+    counterparty_reference: str = "CP001",
+    cqs: int = 2,
+    agency: str = "SP",
+    **overrides: Any,
+) -> dict[str, Any]:
+    """Build an external (ECAI) rating row for SA risk-weight lookup."""
+    defaults: dict[str, Any] = {
+        "rating_reference": f"RAT_EXT_{counterparty_reference}_{agency}",
+        "counterparty_reference": counterparty_reference,
+        "rating_type": "external",
+        "rating_agency": agency,
+        "rating_value": "A",
+        "cqs": cqs,
+        "pd": None,
+        "rating_date": _RATING_DATE,
+        "is_solicited": True,
+        "model_id": None,
+    }
+    defaults.update(overrides)
+    return defaults
+
+
 def _bundle_with_ratings(
     bundle: RawDataBundle,
     ratings: list[dict[str, Any]],
@@ -1069,3 +1092,230 @@ class TestPipelineIRBWithoutModelPermissions:
 
         # Pipeline emits an error explaining that model_permissions is missing.
         assert any("model_permissions" in str(e) for e in result.errors)
+
+
+# =============================================================================
+# IRB-denied exposures must still use counterparty's external ECAI rating on SA
+# =============================================================================
+
+
+class TestIRBDeniedUsesExternalRatingOnSA:
+    """When model_permissions deny IRB for an exposure whose counterparty also
+    carries an external ECAI rating, the classifier correctly routes the
+    exposure to Standardised Approach — and the SA calculator MUST use the
+    external CQS for its risk-weight lookup. Defaulting to "unrated" here
+    materially over-states RWA (CRR Art. 112–134; PRA PS1/26 Art. 120–122).
+
+    Covered: (a) filter_rejected cause (exposure_class mismatch on model perm),
+    (b) unmatched_model_id cause (stale model reference).
+    """
+
+    def test_filter_rejected_irb_uses_external_cqs_for_sa_rw(
+        self,
+        hierarchy_resolver,
+        classifier,
+        crm_processor,
+        sa_calculator,
+        irb_calculator,
+        slotting_calculator,
+        equity_calculator,
+        crr_firb_config,
+    ):
+        """IRB denied by permission scope → SA uses counterparty's CQS 2 = 50% RW."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                        country_code="GB",
+                    )
+                ],
+                loans=[make_loan(lgd=0.30)],
+                facilities=[make_facility(lgd=0.30)],
+                # Permission row matches model_id but NOT exposure_class →
+                # filter_rejected. Internal rating is unusable; the counterparty's
+                # external ECAI rating is the only usable signal for SA.
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_CORP",
+                        exposure_class="residential_mortgage",
+                        approach="foundation_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_CORP",
+                ),
+                _make_external_rating(
+                    counterparty_reference="CP001",
+                    cqs=2,
+                    agency="SP",
+                ),
+            ],
+        )
+
+        pipeline = PipelineOrchestrator(
+            hierarchy_resolver=hierarchy_resolver,
+            classifier=classifier,
+            crm_processor=crm_processor,
+            sa_calculator=sa_calculator,
+            irb_calculator=irb_calculator,
+            slotting_calculator=slotting_calculator,
+            equity_calculator=equity_calculator,
+        )
+        result = pipeline.run_with_data(bundle, crr_firb_config)
+
+        all_results = result.results.collect()
+        loan_row = all_results.filter(pl.col("exposure_reference") == "LN001")
+        assert loan_row.height >= 1
+
+        # IRB is correctly denied → SA.
+        assert loan_row["approach"][0] == ApproachType.SA.value
+        # The external ECAI rating must reach the SA calculator.
+        assert loan_row["cqs"][0] == 2
+        # And must drive the risk-weight lookup (CRR Art. 122 corporate CQS2 = 50%),
+        # NOT the 100% unrated fallback.
+        assert loan_row["risk_weight"][0] == pytest.approx(0.50)
+
+    def test_basel31_sovereign_forced_sa_uses_external_cqs_for_sa_rw(
+        self,
+        hierarchy_resolver,
+        classifier,
+        crm_processor,
+        sa_calculator,
+        irb_calculator,
+        slotting_calculator,
+        equity_calculator,
+        basel31_full_irb_config,
+    ):
+        """Basel 3.1 Art. 147A(1)(a) forces sovereign SA despite IRB permission.
+
+        The counterparty also has an external ECAI rating. SA risk weight must
+        come from the external CQS, not the unrated fallback.
+        """
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP_SOV",
+                        entity_type="sovereign",
+                        country_code="US",  # non-domestic → not forced to 0%
+                        annual_revenue=None,
+                        is_financial_sector_entity=None,
+                    )
+                ],
+                loans=[make_loan(counterparty_reference="CP_SOV", lgd=0.35)],
+                facilities=[
+                    make_facility(
+                        counterparty_reference="CP_SOV",
+                        risk_type="sovereign",
+                        lgd=0.35,
+                    )
+                ],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_SOV",
+                        exposure_class="central_govt_central_bank",
+                        approach="foundation_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP_SOV",
+                    pd=0.001,
+                    model_id="MODEL_SOV",
+                ),
+                _make_external_rating(
+                    counterparty_reference="CP_SOV",
+                    cqs=2,  # A+ to A- sovereign under B31 Art. 114 = 20%
+                    agency="SP",
+                ),
+            ],
+        )
+
+        pipeline = PipelineOrchestrator(
+            hierarchy_resolver=hierarchy_resolver,
+            classifier=classifier,
+            crm_processor=crm_processor,
+            sa_calculator=sa_calculator,
+            irb_calculator=irb_calculator,
+            slotting_calculator=slotting_calculator,
+            equity_calculator=equity_calculator,
+        )
+        result = pipeline.run_with_data(bundle, basel31_full_irb_config)
+
+        all_results = result.results.collect()
+        loan_row = all_results.filter(pl.col("exposure_reference") == "LN001")
+        assert loan_row.height >= 1
+        assert loan_row["approach"][0] == ApproachType.SA.value
+        assert loan_row["cqs"][0] == 2
+        # Sovereign CQS 2 under B31 Art. 114 / Table 1 = 20%.
+        assert loan_row["risk_weight"][0] == pytest.approx(0.20)
+
+    def test_unmatched_model_id_uses_external_cqs_for_sa_rw(
+        self,
+        hierarchy_resolver,
+        classifier,
+        crm_processor,
+        sa_calculator,
+        irb_calculator,
+        slotting_calculator,
+        equity_calculator,
+        crr_firb_config,
+    ):
+        """Stale internal model_id → SA + external CQS 1 corporate = 20%."""
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[
+                    make_counterparty(
+                        counterparty_reference="CP001",
+                        entity_type="corporate",
+                        country_code="GB",
+                    )
+                ],
+                loans=[make_loan(lgd=0.30)],
+                facilities=[make_facility(lgd=0.30)],
+                model_permissions=[
+                    make_model_permission(
+                        model_id="MODEL_LIVE",
+                        exposure_class="corporate",
+                        approach="foundation_irb",
+                    ),
+                ],
+            ),
+            ratings=[
+                _make_internal_rating(
+                    counterparty_reference="CP001",
+                    pd=0.02,
+                    model_id="MODEL_STALE",  # not in model_permissions → SA
+                ),
+                _make_external_rating(
+                    counterparty_reference="CP001",
+                    cqs=1,
+                    agency="SP",
+                ),
+            ],
+        )
+
+        pipeline = PipelineOrchestrator(
+            hierarchy_resolver=hierarchy_resolver,
+            classifier=classifier,
+            crm_processor=crm_processor,
+            sa_calculator=sa_calculator,
+            irb_calculator=irb_calculator,
+            slotting_calculator=slotting_calculator,
+            equity_calculator=equity_calculator,
+        )
+        result = pipeline.run_with_data(bundle, crr_firb_config)
+
+        all_results = result.results.collect()
+        loan_row = all_results.filter(pl.col("exposure_reference") == "LN001")
+        assert loan_row.height >= 1
+        assert loan_row["approach"][0] == ApproachType.SA.value
+        assert loan_row["cqs"][0] == 1
+        assert loan_row["risk_weight"][0] == pytest.approx(0.20)

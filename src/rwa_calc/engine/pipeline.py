@@ -59,6 +59,7 @@ from rwa_calc.engine.materialise import (
     materialise_barrier,
     materialise_branches,
 )
+from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -191,7 +192,8 @@ class PipelineOrchestrator:
 
         # Stage 1: Load data
         try:
-            raw_data = self._loader.load()
+            with stage_timer(logger, "loader"):
+                raw_data = self._loader.load()
         except Exception as e:
             self._errors.append(
                 PipelineError(
@@ -226,7 +228,17 @@ class PipelineOrchestrator:
         # Reset errors for new run
         self._errors = []
 
+        run_id, run_id_token = new_run_id()
         try:
+            logger.info(
+                "pipeline run starting",
+                extra={
+                    "stage": "pipeline",
+                    "framework": config.framework.value,
+                    "permission_mode": config.permission_mode.value,
+                    "run_id": run_id,
+                },
+            )
             # Ensure components are initialized (config needed for framework-specific CRM)
             self._ensure_components_initialized(config)
 
@@ -287,10 +299,15 @@ class PipelineOrchestrator:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
 
+            logger.info(
+                "pipeline run finished",
+                extra={"stage": "pipeline", "error_count": len(result.errors)},
+            )
             return result
         finally:
             # Clean up any temp parquet files created during materialization
             cleanup_spill_files()
+            clear_run_id(run_id_token)
 
     # =========================================================================
     # Private Methods - Component Initialization
@@ -344,7 +361,8 @@ class PipelineOrchestrator:
     ) -> ResolvedHierarchyBundle | None:
         """Run hierarchy resolution stage."""
         try:
-            result = self._hierarchy_resolver.resolve(data, config)
+            with stage_timer(logger, "hierarchy_resolver"):
+                result = self._hierarchy_resolver.resolve(data, config)
             # Accumulate hierarchy errors
             if result.hierarchy_errors:
                 for error in result.hierarchy_errors:
@@ -374,7 +392,8 @@ class PipelineOrchestrator:
     ) -> ClassifiedExposuresBundle | None:
         """Run classification stage."""
         try:
-            result = self._classifier.classify(data, config)
+            with stage_timer(logger, "classifier"):
+                result = self._classifier.classify(data, config)
             # Accumulate classification errors
             if result.classification_errors:
                 for error in result.classification_errors:
@@ -404,7 +423,8 @@ class PipelineOrchestrator:
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
         try:
-            result = self._equity_calculator.get_equity_result_bundle(data, config)
+            with stage_timer(logger, "equity_calculator"):
+                result = self._equity_calculator.get_equity_result_bundle(data, config)
             # Accumulate Equity errors
             if result.errors:
                 for error in result.errors:
@@ -437,7 +457,8 @@ class PipelineOrchestrator:
     ) -> CRMAdjustedBundle | None:
         """Run CRM processing on the unified exposure frame."""
         try:
-            result = self._crm_processor.get_crm_unified_bundle(data, config)
+            with stage_timer(logger, "crm_processor"):
+                result = self._crm_processor.get_crm_unified_bundle(data, config)
             if result.crm_errors:
                 for error in result.crm_errors:
                     self._errors.append(
@@ -465,7 +486,8 @@ class PipelineOrchestrator:
     ) -> CRMAdjustedBundle | None:
         """Run the real estate loan-splitter stage."""
         try:
-            result = self._re_splitter.split(crm_adjusted, config)
+            with stage_timer(logger, "re_splitter"):
+                result = self._re_splitter.split(crm_adjusted, config)
             if result.crm_errors:
                 # Splitter accumulates errors into the CRM bucket so existing
                 # error reporting continues to capture them.
@@ -507,57 +529,60 @@ class PipelineOrchestrator:
         from rwa_calc.domain.enums import ApproachType
 
         try:
-            exposures = crm_adjusted.exposures  # Lazy (shallow plan on materialised data)
+            with stage_timer(logger, "calculators"):
+                exposures = crm_adjusted.exposures  # Lazy (shallow plan on materialised data)
 
-            # Materialise CRM output before calculator split.
-            # Even though CRM now materialises inputs before guarantee joins,
-            # the guarantee plan (joins + finalize + audit) is still deep enough
-            # that collect_all would re-evaluate it per branch without this.
-            # In streaming mode, spills to disk instead of loading into memory.
-            exposures = materialise_barrier(exposures, config, "pipeline_pre_branch")
+                # Materialise CRM output before calculator split.
+                # Even though CRM now materialises inputs before guarantee joins,
+                # the guarantee plan (joins + finalize + audit) is still deep enough
+                # that collect_all would re-evaluate it per branch without this.
+                # In streaming mode, spills to disk instead of loading into memory.
+                exposures = materialise_barrier(exposures, config, "pipeline_pre_branch")
 
-            # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
-            if config.output_floor.enabled:
-                exposures = self._sa_calculator.calculate_unified(exposures, config)
+                # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
+                if config.output_floor.enabled:
+                    exposures = self._sa_calculator.calculate_unified(exposures, config)
 
-            # Split once by approach
-            is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
-                pl.col("approach") == ApproachType.AIRB.value
-            )
-            is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
-
-            sa_branch = exposures.filter(~is_irb & ~is_slotting)
-            irb_branch = exposures.filter(is_irb)
-            slotting_branch = exposures.filter(is_slotting)
-
-            # Process each branch (all still lazy)
-            if config.output_floor.enabled:
-                # SA already calculated by calculate_unified above —
-                # add aggregator columns that calculate_branch normally provides
-                sa_result = sa_branch.with_columns(
-                    pl.col("approach").alias("approach_applied"),
-                    pl.col("rwa_post_factor").alias("rwa_final"),
+                # Split once by approach
+                is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
+                    pl.col("approach") == ApproachType.AIRB.value
                 )
-            else:
-                sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
+                is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
 
-            irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
-            slotting_result = self._slotting_calculator.calculate_branch(slotting_branch, config)
+                sa_branch = exposures.filter(~is_irb & ~is_slotting)
+                irb_branch = exposures.filter(is_irb)
+                slotting_branch = exposures.filter(is_slotting)
 
-            # Collect all branches. In cpu mode, uses collect_all with CSE so
-            # shared upstream computes once. In streaming mode, sinks each
-            # branch to disk sequentially (peak memory = 1 branch at a time).
-            sa_df, irb_df, slotting_df = materialise_branches(
-                [sa_result, irb_result, slotting_result],
-                config,
-                ["sa_branch", "irb_branch", "slotting_branch"],
-            )
+                # Process each branch (all still lazy)
+                if config.output_floor.enabled:
+                    # SA already calculated by calculate_unified above —
+                    # add aggregator columns that calculate_branch normally provides
+                    sa_result = sa_branch.with_columns(
+                        pl.col("approach").alias("approach_applied"),
+                        pl.col("rwa_post_factor").alias("rwa_final"),
+                    )
+                else:
+                    sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
 
-            # Equity — separate path (not in unified frame)
-            equity_bundle = self._run_equity_calculator(crm_adjusted, config)
+                irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
+                slotting_result = self._slotting_calculator.calculate_branch(
+                    slotting_branch, config
+                )
 
-            # Aggregate from already-collected DataFrames
-            return self._aggregate_results(sa_df, irb_df, slotting_df, equity_bundle, config)
+                # Collect all branches. In cpu mode, uses collect_all with CSE so
+                # shared upstream computes once. In streaming mode, sinks each
+                # branch to disk sequentially (peak memory = 1 branch at a time).
+                sa_df, irb_df, slotting_df = materialise_branches(
+                    [sa_result, irb_result, slotting_result],
+                    config,
+                    ["sa_branch", "irb_branch", "slotting_branch"],
+                )
+
+                # Equity — separate path (not in unified frame)
+                equity_bundle = self._run_equity_calculator(crm_adjusted, config)
+
+                # Aggregate from already-collected DataFrames
+                return self._aggregate_results(sa_df, irb_df, slotting_df, equity_bundle, config)
         except Exception as e:
             self._errors.append(
                 PipelineError(
@@ -578,13 +603,14 @@ class PipelineOrchestrator:
     ) -> AggregatedResultBundle:
         """Aggregate results from collect_all DataFrames."""
         try:
-            return self._output_aggregator.aggregate(
-                sa_results=sa_df.lazy(),
-                irb_results=irb_df.lazy(),
-                slotting_results=slotting_df.lazy(),
-                equity_bundle=equity_bundle,
-                config=config,
-            )
+            with stage_timer(logger, "aggregator"):
+                return self._output_aggregator.aggregate(
+                    sa_results=sa_df.lazy(),
+                    irb_results=irb_df.lazy(),
+                    slotting_results=slotting_df.lazy(),
+                    equity_bundle=equity_bundle,
+                    config=config,
+                )
         except Exception as e:
             self._errors.append(
                 PipelineError(

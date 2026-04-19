@@ -38,6 +38,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -118,6 +119,9 @@ from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 # SA input contract — defensive defaults for columns the SA calculator reads.

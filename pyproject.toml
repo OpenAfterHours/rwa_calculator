@@ -93,10 +93,18 @@ select = [
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "SIM",    # flake8-simplify
+    "G",      # flake8-logging-format — forbid f-strings / % inside log calls
+    "LOG",    # flake8-logging — catches deprecated/misused logging APIs
+    "T20",    # flake8-print — ban print() outside allowed files
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["T20", "G"]                  # test debugging prints / f-string logs are OK
+"src/rwa_calc/ui/marimo/apps/**" = ["T20"] # marimo workbooks use print for cell output
+"scripts/**" = ["T20", "G"]                # CLI scripts print user-facing output
 
 [tool.ruff.lint.isort]
 known-first-party = ["rwa_calc"]

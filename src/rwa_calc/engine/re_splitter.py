@@ -50,6 +50,7 @@ Classes:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -69,6 +70,8 @@ from rwa_calc.data.tables.re_split_parameters import (
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+logger = logging.getLogger(__name__)
 
 
 class RealEstateSplitter:

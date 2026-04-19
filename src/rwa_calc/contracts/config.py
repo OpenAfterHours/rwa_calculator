@@ -844,6 +844,8 @@ class CalculationConfig:
     # None: not applicable under CRR (A-IRB is free-form).
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
+    log_level: str = "INFO"  # stdlib logging level for the rwa_calc namespace
+    log_format: Literal["text", "json"] = "text"  # "text" for humans, "json" for audit ingestion
 
     def __post_init__(self) -> None:
         """Derive internal irb_permissions from permission_mode and framework."""
@@ -879,6 +881,8 @@ class CalculationConfig:
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
+        log_level: str = "INFO",
+        log_format: Literal["text", "json"] = "text",
     ) -> CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
@@ -921,6 +925,8 @@ class CalculationConfig:
             crm_collateral_method=crm_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
+            log_level=log_level,
+            log_format=log_format,
         )
 
     @classmethod
@@ -940,6 +946,8 @@ class CalculationConfig:
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
+        log_level: str = "INFO",
+        log_format: Literal["text", "json"] = "text",
     ) -> CalculationConfig:
         """
         Create Basel 3.1 (PRA PS1/26) configuration.
@@ -1008,4 +1016,6 @@ class CalculationConfig:
             airb_collateral_method=airb_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
+            log_level=log_level,
+            log_format=log_format,
         )

@@ -22,6 +22,7 @@ Or with uvicorn directly (templates only, no workbench):
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,8 @@ from starlette.responses import Response
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -381,9 +384,11 @@ _edit_process: subprocess.Popen[bytes] | None = None
 def main() -> None:
     """Start the RWA Calculator UI server and marimo edit workbench."""
     global _edit_process  # noqa: PLW0603
+    from rwa_calc.observability import configure_logging
 
-    print("Starting RWA Calculator server...")
-    print()
+    configure_logging("INFO", "text")
+
+    logger.info("Starting RWA Calculator server...")
 
     # Launch marimo edit server for workbench (separate process/port)
     # Points at workspaces/ parent so both local/ and team/ are accessible
@@ -404,33 +409,36 @@ def main() -> None:
         cwd=str(apps_dir / "workspaces"),
     )
 
-    print("Templates (read-only):")
-    print("  http://localhost:8000/            (Landing Page)")
-    print("  http://localhost:8000/calculator  (Calculator)")
-    print("  http://localhost:8000/results     (Results Explorer)")
-    print("  http://localhost:8000/comparison  (Impact Analysis)")
-    print("  http://localhost:8000/workbench  (Workbench Hub)")
-    print()
-    print("Run workbooks as apps (read-only):")
-    print("  http://localhost:8000/run/local/<name>  (Local workbooks)")
-    print("  http://localhost:8000/run/team/<name>   (Team workbooks)")
-    print()
-    print(f"Workbench editor:      http://localhost:{EDIT_SERVER_PORT}/")
-    print()
-    print("API:")
-    print("  GET    /api/templates             List available templates")
-    print("  GET    /api/workbooks             List your workbooks")
-    print("  POST   /api/workbooks/duplicate   Duplicate a template")
-    print("  DELETE /api/workbooks/{{name}}      Delete a workbook")
-    print("  POST   /api/folders               Create a folder")
-    print("  POST   /api/workbooks/move        Move a workbook")
-    print()
-    print("  GET    /api/team/workbooks        List team workbooks")
-    print("  GET    /api/team/status           Git status for team")
-    print("  POST   /api/team/publish          Publish to team")
-    print("  POST   /api/team/commit           Commit & push team changes")
-    print("  POST   /api/team/pull             Pull latest team changes")
-    print()
+    banner = [
+        "Templates (read-only):",
+        "  http://localhost:8000/            (Landing Page)",
+        "  http://localhost:8000/calculator  (Calculator)",
+        "  http://localhost:8000/results     (Results Explorer)",
+        "  http://localhost:8000/comparison  (Impact Analysis)",
+        "  http://localhost:8000/workbench  (Workbench Hub)",
+        "",
+        "Run workbooks as apps (read-only):",
+        "  http://localhost:8000/run/local/<name>  (Local workbooks)",
+        "  http://localhost:8000/run/team/<name>   (Team workbooks)",
+        "",
+        f"Workbench editor:      http://localhost:{EDIT_SERVER_PORT}/",
+        "",
+        "API:",
+        "  GET    /api/templates             List available templates",
+        "  GET    /api/workbooks             List your workbooks",
+        "  POST   /api/workbooks/duplicate   Duplicate a template",
+        "  DELETE /api/workbooks/{name}      Delete a workbook",
+        "  POST   /api/folders               Create a folder",
+        "  POST   /api/workbooks/move        Move a workbook",
+        "",
+        "  GET    /api/team/workbooks        List team workbooks",
+        "  GET    /api/team/status           Git status for team",
+        "  POST   /api/team/publish          Publish to team",
+        "  POST   /api/team/commit           Commit & push team changes",
+        "  POST   /api/team/pull             Pull latest team changes",
+    ]
+    for line in banner:
+        logger.info("%s", line)
 
     try:
         uvicorn.run(gateway, host="127.0.0.1", port=8000)

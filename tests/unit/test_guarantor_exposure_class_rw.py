@@ -21,19 +21,14 @@ import polars as pl
 import pytest
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
+import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.sa.calculator import SACalculator
 
 
 @pytest.fixture
 def crr_config() -> CalculationConfig:
     """CRR configuration (GBP base currency)."""
     return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-
-
-def _make_sa_calculator() -> SACalculator:
-    """Create a minimal SA calculator for testing guarantee substitution."""
-    return SACalculator()
 
 
 def _sa_guarantee_result(
@@ -74,9 +69,8 @@ def _sa_guarantee_result(
         data["guarantee_currency"] = [guarantee_currency]
 
     lf = pl.LazyFrame(data)
-    calc = _make_sa_calculator()
-    # Call the private method directly for isolated testing
-    result_lf = calc._apply_guarantee_substitution(lf, config)
+    # Call the namespace API directly for isolated testing
+    result_lf = lf.sa.apply_guarantee_substitution(config)
     result: pl.DataFrame = result_lf.collect()
     return result
 

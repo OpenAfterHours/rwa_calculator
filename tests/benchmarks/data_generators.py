@@ -1114,6 +1114,7 @@ def generate_collateral(
             "insurer_risk_weight": np.full(n_collateral, None),
             "credit_event_reduction": np.full(n_collateral, None),
             "is_main_index": np.full(n_collateral, None),  # Equity index membership (Art. 224)
+            "rental_to_interest_ratio": np.full(n_collateral, None),
         }
     )
 

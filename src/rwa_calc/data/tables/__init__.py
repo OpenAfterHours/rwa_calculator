@@ -99,6 +99,14 @@ from .haircuts import (
     FX_HAIRCUT,
     get_haircut_table,
 )
+from .re_split_parameters import (
+    RE_SPLIT_PARAMS_B31_COMMERCIAL,
+    RE_SPLIT_PARAMS_B31_RESIDENTIAL,
+    RE_SPLIT_PARAMS_CRR_COMMERCIAL,
+    RE_SPLIT_PARAMS_CRR_RESIDENTIAL,
+    SplitParameters,
+    re_split_parameters,
+)
 
 __all__ = [
     # Basel 3.1 risk weights
@@ -176,4 +184,11 @@ __all__ = [
     "get_b31_equity_risk_weights",
     "lookup_b31_equity_rw",
     "get_b31_equity_rw_table",
+    # Real estate loan-splitting (CRR Art. 125/126, B3.1 Art. 124F/H)
+    "SplitParameters",
+    "re_split_parameters",
+    "RE_SPLIT_PARAMS_CRR_RESIDENTIAL",
+    "RE_SPLIT_PARAMS_CRR_COMMERCIAL",
+    "RE_SPLIT_PARAMS_B31_RESIDENTIAL",
+    "RE_SPLIT_PARAMS_B31_COMMERCIAL",
 ]

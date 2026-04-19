@@ -202,6 +202,12 @@ ERROR_EQUITY_IN_MAIN_TABLE = "SA005"
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
 
+# Real estate loan-splitter error codes (CRR Art. 125/126, B3.1 Art. 124F/H)
+ERROR_RE_NON_ELIGIBLE_COLLATERAL = "RE001"
+ERROR_RE_ZERO_EFFECTIVE_CAP = "RE002"
+ERROR_RE_MIXED_PROPERTY_TYPES = "RE003"
+ERROR_RE_CRR_RENTAL_COVERAGE_FAILED = "RE004"
+
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
 ERROR_MISSING_PERMISSION = "CFG002"
@@ -313,5 +319,29 @@ def classification_warning(
         message=message,
         severity=ErrorSeverity.WARNING,
         category=ErrorCategory.CLASSIFICATION,
+        regulatory_reference=regulatory_reference,
+    )
+
+
+def re_split_warning(
+    code: str,
+    message: str,
+    exposure_reference: str | None = None,
+    regulatory_reference: str | None = None,
+) -> CalculationError:
+    """Create a real estate loan-splitter informational warning.
+
+    Used by the RealEstateSplitter stage to surface decisions that
+    diverge from the default split path: ineligible RE collateral,
+    zero effective cap after prior-charge reduction, mixed
+    residential / commercial allocation, and CRR CRE rental coverage
+    failure (Art. 126(2)(d)).
+    """
+    return CalculationError(
+        code=code,
+        message=message,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.CLASSIFICATION,
+        exposure_reference=exposure_reference,
         regulatory_reference=regulatory_reference,
     )

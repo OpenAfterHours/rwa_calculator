@@ -49,6 +49,7 @@ from rwa_calc.contracts.protocols import (
     IRBCalculatorProtocol,
     LoaderProtocol,
     OutputAggregatorProtocol,
+    RealEstateSplitterProtocol,
     SACalculatorProtocol,
     SlottingCalculatorProtocol,
 )
@@ -124,6 +125,7 @@ class PipelineOrchestrator:
         hierarchy_resolver: HierarchyResolverProtocol | None = None,
         classifier: ClassifierProtocol | None = None,
         crm_processor: CRMProcessorProtocol | None = None,
+        re_splitter: RealEstateSplitterProtocol | None = None,
         sa_calculator: SACalculatorProtocol | None = None,
         irb_calculator: IRBCalculatorProtocol | None = None,
         slotting_calculator: SlottingCalculatorProtocol | None = None,
@@ -146,11 +148,15 @@ class PipelineOrchestrator:
             slotting_calculator: Slotting calculator
             equity_calculator: Equity calculator
             output_aggregator: Output aggregator
+            re_splitter: Real estate loan-splitter (CRR Art. 125/126,
+                B3.1 Art. 124F/H). When None, a default
+                ``RealEstateSplitter`` is created.
         """
         self._loader = loader
         self._hierarchy_resolver = hierarchy_resolver
         self._classifier = classifier
         self._crm_processor = crm_processor
+        self._re_splitter = re_splitter
         self._sa_calculator = sa_calculator
         self._irb_calculator = irb_calculator
         self._slotting_calculator = slotting_calculator
@@ -262,6 +268,14 @@ class PipelineOrchestrator:
             if crm_adjusted is None:
                 return self._create_error_result()
 
+            # Stage 4b: Real estate loan-splitter (CRR Art. 125/126,
+            # B3.1 Art. 124F/H). Materialises the secured RE row and the
+            # uncollateralised residual row for property-collateralised SA
+            # exposures. No-op when no rows carry re_split_mode.
+            crm_adjusted = self._run_re_splitter(crm_adjusted, config)
+            if crm_adjusted is None:
+                return self._create_error_result()
+
             # Stages 5-8: Calculation and aggregation
             result = self._run_calculators(crm_adjusted, config)
 
@@ -293,6 +307,7 @@ class PipelineOrchestrator:
         from rwa_calc.engine.equity.calculator import EquityCalculator
         from rwa_calc.engine.hierarchy import HierarchyResolver
         from rwa_calc.engine.irb.calculator import IRBCalculator
+        from rwa_calc.engine.re_splitter import RealEstateSplitter
         from rwa_calc.engine.sa.calculator import SACalculator
         from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
@@ -303,6 +318,8 @@ class PipelineOrchestrator:
         if self._crm_processor is None:
             is_b31 = config.is_basel_3_1 if config else False
             self._crm_processor = CRMProcessor(is_basel_3_1=is_b31)
+        if self._re_splitter is None:
+            self._re_splitter = RealEstateSplitter()
         if self._sa_calculator is None:
             self._sa_calculator = SACalculator()
         if self._irb_calculator is None:
@@ -436,6 +453,39 @@ class PipelineOrchestrator:
                 PipelineError(
                     stage="crm_processor",
                     error_type="crm_error",
+                    message=str(e),
+                )
+            )
+            return None
+
+    def _run_re_splitter(
+        self,
+        crm_adjusted: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle | None:
+        """Run the real estate loan-splitter stage."""
+        try:
+            result = self._re_splitter.split(crm_adjusted, config)
+            if result.crm_errors:
+                # Splitter accumulates errors into the CRM bucket so existing
+                # error reporting continues to capture them.
+                for error in result.crm_errors:
+                    if error in crm_adjusted.crm_errors:
+                        # Already accounted for upstream — skip duplicates.
+                        continue
+                    self._errors.append(
+                        PipelineError(
+                            stage="re_splitter",
+                            error_type=error.code,
+                            message=error.message,
+                        )
+                    )
+            return result
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="re_splitter",
+                    error_type="re_split_error",
                     message=str(e),
                 )
             )

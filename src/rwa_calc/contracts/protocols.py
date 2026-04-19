@@ -213,6 +213,52 @@ class CRMProcessorProtocol(Protocol):
 
 
 @runtime_checkable
+class RealEstateSplitterProtocol(Protocol):
+    """
+    Protocol for the post-CRM real estate loan-splitter.
+
+    Implements the CRR Art. 125/126 and PRA PS1/26 Art. 124F/H loan-
+    splitting mechanics by physically partitioning property-collateralised
+    SA-bound exposures into:
+
+    - a secured row in ``RESIDENTIAL_MORTGAGE`` / ``COMMERCIAL_MORTGAGE``
+      capped at the regulatory secured-LTV cap, and
+    - a residual row that retains the original counterparty exposure
+      class so the standard corporate / retail risk weight applies.
+
+    Both rows share a ``split_parent_id`` lineage key so downstream
+    aggregations can reconcile back to the original exposure.
+
+    Input: CRMAdjustedBundle (post-CRM, pre-calculator)
+    Output: CRMAdjustedBundle with split rows materialised
+    """
+
+    def split(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        """Apply RE loan-splitting to candidate rows.
+
+        Args:
+            data: CRM-adjusted bundle from CRMProcessor. Candidate rows
+                must already carry the classifier-emitted columns
+                ``re_split_target_class``, ``re_split_mode``,
+                ``re_split_property_value``.
+            config: Calculation configuration. The regime (CRR vs B3.1)
+                is selected via ``config.is_basel_3_1``.
+
+        Returns:
+            New ``CRMAdjustedBundle`` with the unified frame (and any
+            approach-split frames, when set) replaced by the row-split
+            equivalent. Rows that are not candidates are passed through
+            unchanged. The optional ``re_split_audit`` LazyFrame
+            captures one row per original exposure that was split.
+        """
+        ...
+
+
+@runtime_checkable
 class SACalculatorProtocol(Protocol):
     """
     Protocol for Standardised Approach calculations.

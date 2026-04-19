@@ -871,3 +871,40 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 |-------|-----------|-------|-----------|
 | CRR-A: Standardised Approach | A1–A12 | 14 | 100% (14/14) |
 | B31-A: Basel 3.1 SA | A1–A10 | 14 | 100% (14/14) |
+
+## Real Estate Loan-Splitter (CRR Art. 125/126, PRA PS1/26 Art. 124F/H)
+
+A new pipeline stage (`engine/re_splitter.py`, between `CRMProcessor` and the
+SA calculator) physically partitions property-collateralised SA-bound
+exposures whose `exposure_class` is **not** already RE-typed. The secured row
+is reclassified to `RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE` and capped
+at the regulatory secured-LTV cap; the residual row keeps the original
+counterparty class so the standard corporate / retail risk weight applies on
+the remainder.
+
+| Regime / class | Secured LTV cap | Secured RW | Residual RW |
+|----------------|-----------------|------------|-------------|
+| CRR Art. 125 (RRE) | 80% LTV | 35% | counterparty CQS RW |
+| CRR Art. 126 (CRE, rental ≥ 1.5×) | 50% LTV | 50% | counterparty CQS RW |
+| B3.1 Art. 124F (RRE) | 55% × property value (less prior charges) | 20% | Art. 124L counterparty type |
+| B3.1 Art. 124H(1)-(2) (CRE NP/SME) | 55% × property value | 60% | counterparty CQS RW |
+| B3.1 Art. 124H(3) (CRE other) | whole-loan, no split | n/a | `max(60%, min(cp_rw, Art. 124I RW))` |
+
+**Eligibility & exclusions:** Income-producing RE continues to use the
+existing whole-loan path (Art. 124G / Art. 124I bands). Defaulted, securitised,
+covered-bond, equity, CIU, subordinated and high-risk exposures are excluded
+from the split, as are exposures already classified as `RESIDENTIAL_MORTGAGE`
+/ `RETAIL_MORTGAGE` / `COMMERCIAL_MORTGAGE` via the existing retail-mortgage
+branch.
+
+**CRR rental coverage (Art. 126(2)(d)):** Optional collateral input
+`rental_to_interest_ratio`. When ≥ 1.5× the CRE split applies; when below
+(or absent) the exposure stays in its original class and an `RE004`
+informational warning is emitted.
+
+**Audit & lineage:** Both child rows share a `split_parent_id` equal to the
+parent `exposure_reference`; the child references are suffixed with `_sec`
+and `_res` (or kept unchanged for the Art. 124H(3) whole-loan path).
+`CRMAdjustedBundle.re_split_audit` captures one row per parent (parent EAD,
+secured / residual EAD, effective cap, target class, regime). The sum of
+child EADs reconciles exactly to the parent EAD.

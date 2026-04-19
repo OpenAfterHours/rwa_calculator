@@ -222,6 +222,12 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
     "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # CRR Art. 126(2)(d): rental income / interest payments ratio (>= 1.5
+    # required to qualify CRE for the 50% preferential RW). Optional; if
+    # absent, CRE collateral is conservatively treated as failing the test
+    # under CRR and the loan-splitter leaves the exposure in its original
+    # corporate / retail class. Not used under Basel 3.1.
+    "rental_to_interest_ratio": ColumnSpec(pl.Float64, required=False),
     "liquidation_period_days": ColumnSpec(pl.Int32, required=False),
     "qualifies_for_zero_haircut": ColumnSpec(pl.Boolean, default=False, required=False),
     "insurer_risk_weight": ColumnSpec(pl.Float64, required=False),
@@ -739,6 +745,23 @@ CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
     "ltv": ColumnSpec(pl.Float64, required=False),
     "sl_project_phase": ColumnSpec(pl.String, required=False),
+    # Real estate loan-split candidate flags (CRR Art. 125/126, B3.1 Art. 124F/H).
+    # Populated by Classifier._flag_property_reclassification_candidates.
+    # Consumed by the downstream RealEstateSplitter stage.
+    "re_split_target_class": ColumnSpec(pl.String, required=False),
+    "re_split_mode": ColumnSpec(pl.String, required=False),
+    "re_split_property_type": ColumnSpec(pl.String, required=False),
+    "re_split_property_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "re_split_cre_rental_coverage_met": ColumnSpec(pl.Boolean, default=False, required=False),
+}
+
+
+# Columns produced by the RealEstateSplitter stage. Both rows of a split share
+# `split_parent_id`; `re_split_role` is one of "secured" / "residual" / "whole"
+# (or null for unaffected rows).
+RE_SPLITTER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
+    "split_parent_id": ColumnSpec(pl.String, required=False),
+    "re_split_role": ColumnSpec(pl.String, required=False),
 }
 
 

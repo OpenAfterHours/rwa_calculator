@@ -586,6 +586,16 @@ class ExposureClassifier:
             & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
             & (pl.col("cp_annual_revenue") > 0)
         )
+        # Specialised lending is a corporate sub-type (Art. 112(1)(g)) and
+        # qualifies for the SME supporting factor (Art. 501) when the
+        # counterparty meets the SME turnover threshold. The exposure_class
+        # must remain SPECIALISED_LENDING so Phase 5 routes it to the slotting
+        # calculator; only the is_sme flag is set.
+        is_sl_sme = (
+            (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
+            & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
+            & (pl.col("cp_annual_revenue") > 0)
+        )
 
         # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5))
         has_revolving = "is_revolving" in schema_names
@@ -638,8 +648,9 @@ class ExposureClassifier:
                 .otherwise(pl.col("exposure_class"))
                 .alias("exposure_class"),
                 # --- is_sme flag ---
-                # True for: corporate SME OR retail reclassified to CORPORATE_SME
-                (is_corporate_sme | is_retail_sme).alias("is_sme"),
+                # True for: corporate SME, retail reclassified to CORPORATE_SME,
+                # or specialised lending with SME counterparty (keeps SPECIALISED_LENDING class).
+                (is_corporate_sme | is_retail_sme | is_sl_sme).alias("is_sme"),
                 # --- FI scalar: user flag is authoritative (CRR Art. 153(2)) ---
                 (pl.col("cp_apply_fi_scalar") == True)  # noqa: E712
                 .fill_null(False)

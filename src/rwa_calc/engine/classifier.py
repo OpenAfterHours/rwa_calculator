@@ -147,6 +147,14 @@ _B31_SLOTTING_ONLY_SL_TYPES = {
     SpecialisedLendingType.HVCRE.value,
 }
 
+# Target exposure-class labels used by the RE loan-splitter.
+# These are not in the ExposureClass enum (only RETAIL_MORTGAGE is); the SA
+# calculator's RE branch keys on substring matches against these literals,
+# matching the existing RW table labels in data/tables/crr_risk_weights.py
+# and data/tables/b31_risk_weights.py.
+_SECURED_TARGET_RESIDENTIAL = "RESIDENTIAL_MORTGAGE"
+_SECURED_TARGET_COMMERCIAL = "COMMERCIAL_MORTGAGE"
+
 
 class ExposureClassifier:
     """
@@ -258,6 +266,16 @@ class ExposureClassifier:
 
         # Step 4: Corporate → retail reclassification (1 .with_columns)
         classified = self._reclassify_corporate_to_retail(
+            classified,
+            config,
+            schema_names,
+        )
+
+        # Step 4b: Flag RE loan-split candidates (CRR Art. 125/126,
+        # B3.1 Art. 124F/H). Adds re_split_* columns consumed by the
+        # downstream RealEstateSplitter stage. Runs for both regimes;
+        # the splitter itself is a no-op when no rows are flagged.
+        classified = self._flag_property_reclassification_candidates(
             classified,
             config,
             schema_names,
@@ -719,6 +737,178 @@ class ExposureClassifier:
                 .then(pl.lit(ExposureClass.RETAIL_OTHER.value))
                 .otherwise(pl.col("exposure_class"))
                 .alias("exposure_class"),
+            ]
+        )
+
+    # =========================================================================
+    # Phase 4c: Real estate loan-split candidate flagging
+    # =========================================================================
+
+    def _flag_property_reclassification_candidates(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        schema_names: set[str],
+    ) -> pl.LazyFrame:
+        """
+        Flag SA-bound exposures eligible for the RE loan-split.
+
+        Adds the candidate columns consumed by the downstream
+        ``RealEstateSplitter`` stage (re_split_target_class,
+        re_split_mode, re_split_property_value, re_split_property_type,
+        re_split_cre_rental_coverage_met). Does NOT duplicate rows —
+        physical splitting happens in the splitter, after CRM has run.
+
+        Decision logic per regime:
+
+        - **CRR Art. 125 (RRE):** any non-mortgage SA exposure with
+          residential property collateral becomes a split candidate.
+          Secured cap = 80% LTV, secured RW = 35%.
+        - **CRR Art. 126 (CRE):** commercial property collateral is a
+          candidate only when the rental-income coverage test
+          (>= 1.5x interest costs) is met. The flag
+          re_split_cre_rental_coverage_met carries the test outcome;
+          the splitter emits ``RE004`` when False.
+        - **B3.1 Art. 124F (RRE):** loan-split with cap = 55% × property
+          value (less prior charges per Art. 124F(2)), secured RW = 20%.
+        - **B3.1 Art. 124H(1)-(2) (CRE NP/SME):** loan-split with cap
+          55%, secured RW = 60%.
+        - **B3.1 Art. 124H(3) (CRE other):** ``re_split_mode = "whole"``
+          — single ``COMMERCIAL_MORTGAGE`` row so the existing
+          ``b31_commercial_rw_expr`` Art. 124H(3) branch
+          (max(60%, min(cp_rw, Art. 124I RW))) handles it.
+
+        Exclusions (higher-priority Art. 112 classes must not be
+        downgraded): defaulted, securitisation, covered bond, equity,
+        CIU, subordinated, high-risk, and exposures already classified
+        as RESIDENTIAL_MORTGAGE / RETAIL_MORTGAGE / COMMERCIAL_MORTGAGE.
+        """
+        # Determine the property value source (set by the hierarchy
+        # resolver). Without these columns there is nothing to split.
+        if "property_collateral_value" not in schema_names:
+            return exposures.with_columns(
+                [
+                    pl.lit(None).cast(pl.String).alias("re_split_target_class"),
+                    pl.lit(None).cast(pl.String).alias("re_split_mode"),
+                    pl.lit(None).cast(pl.String).alias("re_split_property_type"),
+                    pl.lit(0.0).cast(pl.Float64).alias("re_split_property_value"),
+                    pl.lit(False).alias("re_split_cre_rental_coverage_met"),
+                ]
+            )
+
+        residential_value = (
+            pl.col("residential_collateral_value").fill_null(0.0)
+            if "residential_collateral_value" in schema_names
+            else pl.lit(0.0)
+        )
+        property_value = pl.col("property_collateral_value").fill_null(0.0)
+        commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
+        has_property = property_value > 0.0
+        is_residential_dominant = residential_value >= commercial_value
+
+        # CRR CRE rental coverage: optional input column propagated through
+        # hierarchy. Conservative default — absent value treated as failed.
+        if "rental_to_interest_ratio" in schema_names:
+            cre_rental_coverage_met = pl.col("rental_to_interest_ratio").fill_null(0.0) >= 1.5
+        else:
+            cre_rental_coverage_met = pl.lit(False)
+
+        # Already-classified RE rows are handled by the existing whole-loan
+        # path (CRR _apply_residential_mortgage_rw / B3.1 b31_residential_rw_expr).
+        # The mortgage class strings are not in the ExposureClass enum (only
+        # RETAIL_MORTGAGE is), but the SA calculator's RE branch keys on
+        # substring matches so we use the literal strings directly.
+        existing_re_classes = [
+            _SECURED_TARGET_RESIDENTIAL,
+            _SECURED_TARGET_COMMERCIAL,
+            ExposureClass.RETAIL_MORTGAGE.value,
+        ]
+
+        # Higher-priority classes per Art. 112 waterfall — never downgraded.
+        excluded_classes = existing_re_classes + [
+            ExposureClass.DEFAULTED.value,
+            ExposureClass.EQUITY.value,
+            ExposureClass.COVERED_BOND.value,
+            ExposureClass.HIGH_RISK.value,
+        ]
+
+        is_eligible_class = ~pl.col("exposure_class").is_in(excluded_classes) & ~pl.col(
+            "is_defaulted"
+        )
+
+        # Income-producing RE goes through the existing whole-loan path
+        # (Art. 124G / Art. 124I bands), not the split mechanism.
+        is_income_producing = (
+            pl.col("has_income_cover").fill_null(False)
+            if "has_income_cover" in schema_names
+            else pl.lit(False)
+        )
+
+        is_candidate = is_eligible_class & has_property & ~is_income_producing
+
+        # B3.1 CRE Art. 124H(3): non-natural-person, non-SME corporates use
+        # the whole-loan path — emit a single COMMERCIAL_MORTGAGE row so the
+        # existing b31_commercial_rw_expr Art. 124H(3) branch handles it.
+        is_natural_person = (
+            pl.col("cp_is_natural_person").fill_null(False)
+            if "cp_is_natural_person" in schema_names
+            else pl.lit(False)
+        )
+        is_sme_flag = pl.col("is_sme").fill_null(False)
+        is_npsme = is_natural_person | is_sme_flag
+
+        cre_split_blocked_under_crr = ~cre_rental_coverage_met
+        is_basel_3_1 = config.is_basel_3_1
+
+        # Resolve per-row split mode and target class.
+        if is_basel_3_1:
+            re_split_mode_expr = (
+                pl.when(~is_candidate)
+                .then(pl.lit(None, dtype=pl.String))
+                .when(is_residential_dominant)
+                .then(pl.lit("split"))  # B3.1 RRE Art. 124F
+                .when(is_npsme)
+                .then(pl.lit("split"))  # B3.1 CRE Art. 124H(1)-(2)
+                .otherwise(pl.lit("whole"))  # B3.1 CRE Art. 124H(3)
+            )
+        else:
+            re_split_mode_expr = (
+                pl.when(~is_candidate)
+                .then(pl.lit(None, dtype=pl.String))
+                .when(is_residential_dominant)
+                .then(pl.lit("split"))  # CRR RRE Art. 125
+                .when(cre_split_blocked_under_crr)
+                .then(pl.lit(None, dtype=pl.String))  # CRR CRE rental cov failed
+                .otherwise(pl.lit("split"))  # CRR CRE Art. 126 with rental cover
+            )
+
+        re_split_target_class_expr = (
+            pl.when(~is_candidate)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(is_residential_dominant)
+            .then(pl.lit(_SECURED_TARGET_RESIDENTIAL))
+            .otherwise(pl.lit(_SECURED_TARGET_COMMERCIAL))
+        )
+
+        re_split_property_type_expr = (
+            pl.when(~is_candidate)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(is_residential_dominant)
+            .then(pl.lit("residential"))
+            .otherwise(pl.lit("commercial"))
+        )
+
+        re_split_property_value_expr = (
+            pl.when(is_residential_dominant).then(residential_value).otherwise(commercial_value)
+        )
+
+        return exposures.with_columns(
+            [
+                re_split_target_class_expr.alias("re_split_target_class"),
+                re_split_mode_expr.alias("re_split_mode"),
+                re_split_property_type_expr.alias("re_split_property_type"),
+                re_split_property_value_expr.alias("re_split_property_value"),
+                cre_rental_coverage_met.alias("re_split_cre_rental_coverage_met"),
             ]
         )
 

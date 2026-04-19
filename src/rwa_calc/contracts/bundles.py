@@ -203,6 +203,10 @@ class CRMAdjustedBundle:
     ciu_holdings: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
+    # Audit trail emitted by the RealEstateSplitter stage. One row per
+    # original exposure that was split, with parent EAD, secured/residual
+    # split, effective threshold, target class, and triggering regime.
+    re_split_audit: pl.LazyFrame | None = None
     crm_errors: list[CalculationError] = field(default_factory=list)
 
 

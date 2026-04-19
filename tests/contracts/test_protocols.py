@@ -28,6 +28,7 @@ from rwa_calc.contracts.protocols import (
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
     LoaderProtocol,
+    RealEstateSplitterProtocol,
     ResultExporterProtocol,
     SACalculatorProtocol,
 )
@@ -135,6 +136,17 @@ class StubIRBCalculator:
         config: CalculationConfig,
     ) -> LazyFrameResult:
         return LazyFrameResult(frame=pl.LazyFrame())
+
+
+class StubRealEstateSplitter:
+    """Stub implementation of RealEstateSplitterProtocol."""
+
+    def split(
+        self,
+        data: CRMAdjustedBundle,
+        config: CalculationConfig,
+    ) -> CRMAdjustedBundle:
+        return data
 
 
 class StubResultExporter:
@@ -305,6 +317,19 @@ class TestProtocolRuntimeCheckable:
         calculator = StubIRBCalculator()
 
         assert isinstance(calculator, IRBCalculatorProtocol)
+
+    def test_re_splitter_isinstance_check(self):
+        """isinstance should work with RealEstateSplitterProtocol."""
+        splitter = StubRealEstateSplitter()
+
+        assert isinstance(splitter, RealEstateSplitterProtocol)
+        assert not isinstance(object(), RealEstateSplitterProtocol)
+
+    def test_concrete_re_splitter_satisfies_protocol(self):
+        """The real RealEstateSplitter should satisfy the protocol."""
+        from rwa_calc.engine.re_splitter import RealEstateSplitter
+
+        assert isinstance(RealEstateSplitter(), RealEstateSplitterProtocol)
 
     def test_result_exporter_isinstance_check(self):
         """isinstance should work with ResultExporterProtocol."""

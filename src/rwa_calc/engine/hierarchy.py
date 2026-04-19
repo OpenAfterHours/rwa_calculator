@@ -273,26 +273,27 @@ class HierarchyResolver:
         """
         Build rating lookup with dual per-type resolution and inheritance.
 
-        Internal ratings: most recent per counterparty, with inheritance from
-        the ultimate parent when the entity has no own internal rating.
-
-        External ratings: resolved per CRR Art. 138 across nominated ECAIs.
-        Repeated assessments from the same agency are first reduced to the
-        most recent (one assessment per agency), then:
+        Resolves the best internal and best external rating separately per
+        counterparty, then inherits internal ratings from the ultimate parent
+        when the entity has no own internal rating. External ratings are NOT
+        inherited — they apply only to the counterparty explicitly rated by
+        the agency, and when more than one ECAI has rated the counterparty
+        they are combined per CRR Art. 138:
 
           - 1 assessment  -> use it
           - 2 assessments -> use the higher risk weight (worse CQS)
           - >= 3          -> use the higher of the two lowest risk weights
                              (i.e. the second-best rating)
 
+        Repeated assessments from the same agency are first reduced to the
+        most recent (one assessment per agency) before Art. 138 is applied.
         Resolution is performed on CQS rather than RW because within every
         SA exposure class the CQS -> RW mapping is monotone non-decreasing,
         so ranking by CQS ascending yields the same outcome as ranking by RW.
-        External ratings are NOT inherited from the parent.
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
-        - internal_pd: Most recent internal PD (own or inherited from parent)
+        - internal_pd: Best internal PD (own or inherited from parent)
         - internal_model_id: Model ID for the internal rating
         - external_cqs: Art. 138-resolved external CQS (own only — not inherited)
         - cqs: Alias of external_cqs
@@ -306,7 +307,7 @@ class HierarchyResolver:
             {"model_id": ColumnSpec(pl.String, required=False)},
         )
 
-        # Most recent internal rating per counterparty (no CQS — that's external only)
+        # Best internal rating per counterparty (no CQS — that's external only)
         best_internal = (
             ratings.filter(pl.col("rating_type") == "internal")
             .sort(sort_cols, descending=[True, True])

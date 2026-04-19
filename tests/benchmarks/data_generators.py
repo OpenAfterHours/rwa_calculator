@@ -406,6 +406,7 @@ def generate_facilities(
                 "is_payroll_loan": np.full(n_facilities, None),  # Payroll loan flag
                 "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
                 "has_one_day_maturity_floor": np.full(n_facilities, None),  # Repo/SFT 1-day floor
+                "is_sft": np.full(n_facilities, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
                 "facility_termination_date": pl.Series([None] * n_facilities, dtype=pl.Date),
                 "underlying_risk_type": pl.Series([None] * n_facilities, dtype=pl.String),
                 "lgd_unsecured": np.full(n_facilities, None),  # A-IRB unsecured LGD
@@ -603,6 +604,7 @@ def generate_loans(
             "is_payroll_loan": np.full(n_loans, None),  # Payroll loan flag
             "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
             "has_one_day_maturity_floor": np.full(n_loans, None),  # Repo/SFT 1-day floor
+            "is_sft": np.full(n_loans, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
             "has_netting_agreement": np.full(n_loans, None),  # Netting flag (CRR Art. 195)
             "netting_facility_reference": np.full(n_loans, None),  # Facility for netting agreement
             "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
@@ -948,6 +950,7 @@ def generate_contingents(
                 "ead_modelled": np.full(n_contingents, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
                 "has_one_day_maturity_floor": np.full(n_contingents, None),  # Repo/SFT 1-day floor
+                "is_sft": np.full(n_contingents, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
                 "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default
                 "due_diligence_performed": np.full(n_contingents, None),  # Art. 110A (B31 only)
                 "due_diligence_override_rw": np.full(

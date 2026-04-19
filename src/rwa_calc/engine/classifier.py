@@ -263,6 +263,31 @@ class ExposureClassifier:
             schema_names,
         )
 
+        # Step 4a: Sync exposure_class_irb with the final exposure_class.
+        # Phases 3 and 4 may have updated exposure_class (SME, QRRE, retail
+        # reclassification) without touching exposure_class_irb, which was
+        # set once in _add_counterparty_attributes. Re-align them so that
+        # downstream IRB permission lookups and approach filters see the
+        # reclassified class. rgla_* / pse_* entity types are excluded
+        # because their SA and IRB classes are definitionally different
+        # (CRR Art. 147(3)/147(4)(b)) — exposure_class_irb already carries
+        # the correct CGCB / INSTITUTION value from ENTITY_TYPE_TO_IRB_CLASS.
+        classified = classified.with_columns(
+            pl.when(
+                pl.col("cp_entity_type").is_in(
+                    [
+                        "rgla_sovereign",
+                        "rgla_institution",
+                        "pse_sovereign",
+                        "pse_institution",
+                    ]
+                )
+            )
+            .then(pl.col("exposure_class_irb"))
+            .otherwise(pl.col("exposure_class"))
+            .alias("exposure_class_irb")
+        )
+
         # Step 4b: Model-level permission resolution (optional, 1 join + filter)
         # When model_permissions data is present, resolve per-row AIRB/FIRB permissions.
         # Otherwise, falls back to org-wide IRBPermissions in _assign_approach.
@@ -765,10 +790,12 @@ class ExposureClassifier:
 
         # Apply filters: exposure_class match, geography, book code exclusion
         # A permission row is valid when:
-        # 1. exposure_class matches
+        # 1. exposure_class_irb matches (use IRB class so rgla/pse entities typed
+        #    as institution / sovereign match model permissions keyed on
+        #    INSTITUTION / CGCB per CRR Art. 147(3)-(4))
         # 2. geography passes (country_codes is null OR cp_country_code in list)
         # 3. book code not excluded (excluded_book_codes is null OR book_code NOT in list)
-        exposure_class_match = pl.col("exposure_class") == pl.col("mp_exposure_class")
+        exposure_class_match = pl.col("exposure_class_irb") == pl.col("mp_exposure_class")
 
         geo_passes = pl.col("mp_country_codes").is_null() | (
             pl.col("mp_country_codes").str.contains(pl.col("cp_country_code"))
@@ -971,22 +998,32 @@ class ExposureClassifier:
                 > float(config.thresholds.large_corporate_revenue_threshold)
             ).fill_null(False)
 
-            # Art. 147A(1)(b): Institution → F-IRB only (no A-IRB)
-            # Supplements full_irb_b31() org-wide restriction; needed when
-            # model_permissions grant AIRB for institutions.
-            _b31_institution_no_airb = pl.col("exposure_class") == ExposureClass.INSTITUTION.value
+            # Art. 147A(1)(b): Institution (including RGLAs/PSEs treated as
+            # institutions per Art. 147(4)(b)) → F-IRB only (no A-IRB).
+            # Key on exposure_class_irb so rgla_institution / pse_institution
+            # (whose SA class is RGLA / PSE but IRB class is INSTITUTION)
+            # inherit the restriction.
+            _b31_institution_no_airb = (
+                pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
+            )
 
             _b31_airb_blocked = _is_fse | _is_large_corp | _b31_institution_no_airb
 
-            # Art. 147A(1)(a): CGCB, PSE, MDB, RGLA → SA only (no IRB at all)
-            # Supplements full_irb_b31() org-wide restriction; ensures these
-            # classes use SA even when model_permissions attempt to grant IRB.
-            _b31_sa_only = pl.col("exposure_class").is_in(
+            # Art. 147A(1)(a) read with Art. 147(3): sovereigns and
+            # quasi-sovereigns with 0% SA RW → SA only. Identify by entity
+            # type because the 0%-RW qualifier is a property of how the
+            # counterparty is treated (sovereign-derived), not of the SA
+            # exposure class label. rgla_institution / pse_institution are
+            # NOT in scope — they route to institution IRB per Art. 147A(1)(b).
+            _b31_sa_only = pl.col("cp_entity_type").is_in(
                 [
-                    ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-                    ExposureClass.PSE.value,
-                    ExposureClass.MDB.value,
-                    ExposureClass.RGLA.value,
+                    "sovereign",
+                    "central_bank",
+                    "rgla_sovereign",
+                    "pse_sovereign",
+                    "mdb",
+                    "mdb_named",
+                    "international_org",
                 ]
             )
 
@@ -1052,12 +1089,37 @@ class ExposureClassifier:
             .alias("lgd")
         )
 
+        # For IRB-routed rgla_* / pse_* rows, align exposure_class with the
+        # IRB class so the IRB calculator (which reads exposure_class for
+        # correlation/LGD selection) sees CGCB / INSTITUTION rather than
+        # RGLA / PSE. Scoped to these entity types because later phases
+        # (retail reclassification, SME/QRRE) mutate exposure_class in place
+        # without updating exposure_class_irb — a blanket rewrite would
+        # revert those legitimate adjustments.
+        _needs_irb_class_alignment = pl.col("cp_entity_type").is_in(
+            [
+                "rgla_sovereign",
+                "rgla_institution",
+                "pse_sovereign",
+                "pse_institution",
+            ]
+        )
+        exposure_class_expr = (
+            pl.when(
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+                & _needs_irb_class_alignment
+            )
+            .then(pl.col("exposure_class_irb"))
+            .otherwise(pl.col("exposure_class"))
+            .alias("exposure_class")
+        )
+
         return exposures.with_columns(
             [
                 approach_expr,
                 lgd_expr,
             ]
-        )
+        ).with_columns(exposure_class_expr)
 
     @staticmethod
     def _build_orgwide_permission_exprs(
@@ -1081,9 +1143,14 @@ class ExposureClassifier:
             if ApproachType.FIRB in approaches and ApproachType.AIRB not in approaches
         ]
 
-        airb_expr = pl.col("exposure_class").is_in(airb_classes) & has_internal_rating
-        firb_expr = pl.col("exposure_class").is_in(firb_classes) & has_internal_rating
-        firb_clear = pl.col("exposure_class").is_in(firb_only_classes) & has_internal_rating
+        # Key IRB permission lookup on exposure_class_irb (not exposure_class) so
+        # rgla_institution / pse_institution route via the INSTITUTION IRB class
+        # (CRR Art. 147(4)(b)) and rgla_sovereign / pse_sovereign via CGCB
+        # (CRR Art. 147(3)). exposure_class is the SA class and would otherwise
+        # exclude these rows from IRB permission entries keyed on INSTITUTION / CGCB.
+        airb_expr = pl.col("exposure_class_irb").is_in(airb_classes) & has_internal_rating
+        firb_expr = pl.col("exposure_class_irb").is_in(firb_classes) & has_internal_rating
+        firb_clear = pl.col("exposure_class_irb").is_in(firb_only_classes) & has_internal_rating
 
         return airb_expr, firb_expr, firb_clear
 

@@ -400,11 +400,17 @@ class TestB31SovereignSAOnly:
 
 
 class TestB31QuasiSovereignSAOnly:
-    """Art. 147A(1)(a)/Art. 147(3): Quasi-sovereigns forced to SA."""
+    """Art. 147A(1)(a)/Art. 147(3): Sovereign-treated RGLAs/PSEs/MDBs forced to SA.
 
-    def test_pse_gets_sa_under_b31(self) -> None:
-        """PSE with internal PD still forced to SA under B31."""
-        df = _classify(entity_type="pse_institution")
+    The quasi-sovereign SA-only restriction tracks the 0% SA RW qualifier
+    in Art. 147(3), so it only captures entities whose counterparty type is
+    sovereign-derived. RGLAs/PSEs treated as institutions (Art. 147(4)(b))
+    are covered by TestB31InstitutionFIRBOnly below.
+    """
+
+    def test_pse_sovereign_gets_sa_under_b31(self) -> None:
+        """pse_sovereign with internal PD forced to SA under B31 (quasi-sovereign)."""
+        df = _classify(entity_type="pse_sovereign")
         assert df["approach"][0] == ApproachType.SA.value
 
     def test_mdb_gets_sa_under_b31(self) -> None:
@@ -412,10 +418,45 @@ class TestB31QuasiSovereignSAOnly:
         df = _classify(entity_type="mdb")
         assert df["approach"][0] == ApproachType.SA.value
 
-    def test_rgla_gets_sa_under_b31(self) -> None:
-        """RGLA with internal PD still forced to SA under B31."""
-        df = _classify(entity_type="rgla_institution")
+    def test_international_org_gets_sa_under_b31(self) -> None:
+        """international_org with internal PD forced to SA under B31 (0% SA RW)."""
+        df = _classify(entity_type="international_org")
         assert df["approach"][0] == ApproachType.SA.value
+
+    def test_rgla_sovereign_gets_sa_under_b31(self) -> None:
+        """rgla_sovereign with internal PD forced to SA under B31 (quasi-sovereign)."""
+        df = _classify(entity_type="rgla_sovereign")
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_rgla_institution_gets_firb_under_b31(self) -> None:
+        """Art. 147A(1)(b): rgla_institution with internal PD lands on FIRB under B31.
+
+        RGLA treated as institution is NOT quasi-sovereign (no 0% SA RW
+        qualifier per Art. 147(3)); it follows the INSTITUTION IRB class
+        per Art. 147(4)(b) with the Art. 147A(1)(b) F-IRB-only restriction.
+        """
+        df = _classify(entity_type="rgla_institution")
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_rgla_institution_airb_blocked_under_b31(self) -> None:
+        """Art. 147A(1)(b): rgla_institution with PD + LGD still FIRB (no A-IRB)."""
+        df = _classify(entity_type="rgla_institution", lgd=0.35, internal_pd=0.01)
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_rgla_institution_lgd_cleared_under_b31(self) -> None:
+        """FIRB rgla_institution has LGD cleared (uses supervisory LGD)."""
+        df = _classify(entity_type="rgla_institution")
+        assert df["lgd"][0] is None
+
+    def test_pse_institution_gets_firb_under_b31(self) -> None:
+        """Art. 147A(1)(b): pse_institution with internal PD lands on FIRB under B31."""
+        df = _classify(entity_type="pse_institution")
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_pse_institution_airb_blocked_under_b31(self) -> None:
+        """Art. 147A(1)(b): pse_institution with PD + LGD still FIRB (no A-IRB)."""
+        df = _classify(entity_type="pse_institution", lgd=0.35, internal_pd=0.01)
+        assert df["approach"][0] == ApproachType.FIRB.value
 
 
 class TestB31InstitutionFIRBOnly:
@@ -440,6 +481,64 @@ class TestB31InstitutionFIRBOnly:
         """Institution FIRB should have LGD cleared (uses supervisory LGD)."""
         df = _classify(entity_type="institution")
         assert df["lgd"][0] is None
+
+
+class TestCRRRGLAPSEIRBRouting:
+    """CRR Art. 147(3) / 147(4)(b): RGLA / PSE IRB eligibility.
+
+    Under CRR there is no Art. 147A restriction, so RGLAs and PSEs are fully
+    IRB-eligible via their IRB exposure class:
+    - rgla_sovereign / pse_sovereign → CENTRAL_GOVT_CENTRAL_BANK (Art. 147(3))
+    - rgla_institution / pse_institution → INSTITUTION (Art. 147(4)(b))
+    """
+
+    def test_rgla_institution_gets_airb_under_crr(self) -> None:
+        """rgla_institution with PD + LGD gets AIRB under CRR (via INSTITUTION)."""
+        df = _classify(entity_type="rgla_institution", framework="crr")
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_rgla_institution_gets_firb_under_crr_no_lgd(self) -> None:
+        """rgla_institution with PD only (no modelled LGD) gets FIRB under CRR."""
+        df = _classify(entity_type="rgla_institution", framework="crr", lgd=None)
+        assert df["approach"][0] == ApproachType.FIRB.value
+
+    def test_rgla_institution_uses_institution_irb_class_under_crr(self) -> None:
+        """After IRB routing, exposure_class becomes INSTITUTION for IRB formulas."""
+        df = _classify(entity_type="rgla_institution", framework="crr")
+        assert df["exposure_class"][0] == ExposureClass.INSTITUTION.value
+        assert df["exposure_class_sa"][0] == ExposureClass.RGLA.value
+        assert df["exposure_class_irb"][0] == ExposureClass.INSTITUTION.value
+
+    def test_rgla_sovereign_gets_airb_under_crr(self) -> None:
+        """rgla_sovereign with PD + LGD gets AIRB under CRR (via CGCB)."""
+        df = _classify(entity_type="rgla_sovereign", framework="crr")
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_rgla_sovereign_uses_cgcb_irb_class_under_crr(self) -> None:
+        """After IRB routing, exposure_class becomes CGCB for sovereign-treated RGLA."""
+        df = _classify(entity_type="rgla_sovereign", framework="crr")
+        assert df["exposure_class"][0] == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+
+    def test_pse_institution_gets_airb_under_crr(self) -> None:
+        """pse_institution with PD + LGD gets AIRB under CRR (via INSTITUTION)."""
+        df = _classify(entity_type="pse_institution", framework="crr")
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_pse_sovereign_gets_airb_under_crr(self) -> None:
+        """pse_sovereign with PD + LGD gets AIRB under CRR (via CGCB)."""
+        df = _classify(entity_type="pse_sovereign", framework="crr")
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_rgla_institution_no_pd_falls_to_sa_under_crr(self) -> None:
+        """Without an internal rating, rgla_institution falls to SA even under CRR."""
+        df = _classify(entity_type="rgla_institution", framework="crr", internal_pd=None)
+        assert df["approach"][0] == ApproachType.SA.value
+
+    def test_sa_routed_rgla_institution_keeps_rgla_sa_class(self) -> None:
+        """SA-routed rgla_institution keeps exposure_class = RGLA (Art. 115 table)."""
+        df = _classify(entity_type="rgla_institution", framework="crr", internal_pd=None)
+        assert df["approach"][0] == ApproachType.SA.value
+        assert df["exposure_class"][0] == ExposureClass.RGLA.value
 
 
 class TestB31IPREHVCRESlottingOnly:

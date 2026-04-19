@@ -52,12 +52,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.schemas import (
-    CLASSIFIER_OUTPUT_SCHEMA,
-    CRM_OUTPUT_SCHEMA,
-    HIERARCHY_OUTPUT_SCHEMA,
-)
+from rwa_calc.data.column_spec import ensure_columns
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
@@ -114,36 +109,98 @@ from rwa_calc.data.tables.eu_sovereign import (
     denomination_currency_expr,
 )
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
+
+# Importing the namespace module registers the ``lf.sa`` fluent API with Polars
+# and makes ``SA_INPUT_CONTRACT`` available here without duplicating the schema.
+from rwa_calc.engine.sa.namespace import SA_INPUT_CONTRACT as _SA_INPUT_CONTRACT  # noqa: F401
 from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 
-# SA input contract — defensive defaults for columns the SA calculator reads.
-# Composed of stage-output schemas (hierarchy / CRM / classifier) plus a small
-# set of input-schema columns that may be absent when calculators are invoked
-# directly from tests or ad-hoc pipelines.
-_SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
-    **HIERARCHY_OUTPUT_SCHEMA,
-    **CRM_OUTPUT_SCHEMA,
-    **CLASSIFIER_OUTPUT_SCHEMA,
-    "book_code": ColumnSpec(pl.String, default="", required=False),
-    "seniority": ColumnSpec(pl.String, default="senior", required=False),
-    "currency": ColumnSpec(pl.String, required=False),
-    "property_type": ColumnSpec(pl.String, required=False),
-    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
-    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
-    "value_date": ColumnSpec(pl.Date, required=False),
-    "maturity_date": ColumnSpec(pl.Date, required=False),
-    "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
-    "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False),
-    "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
-    "sl_type": ColumnSpec(pl.String, required=False),
+# =============================================================================
+# FLOAT-CONVERTED RISK WEIGHT CONSTANTS
+# Authoritative Decimal values live in data/tables/*.py. Derived once at
+# module load for use with pl.lit() in Polars expressions, avoiding repeated
+# Decimal->float conversions inside when/then chains.
+#
+# Grouped into three framework-scoped dicts (shared / CRR / B31) — mirrors the
+# dict-comprehension pattern used by engine/equity/calculator.py so the arch
+# check (scripts/arch_check.py) does not flag individual ``float(X)`` aliases.
+# =============================================================================
+
+# Framework-shared scalars — used under both CRR and Basel 3.1.
+_SA_SHARED_RW: dict[str, float] = {
+    # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
+    "qccp_client_cleared": float(QCCP_CLIENT_CLEARED_RW),
+    "qccp_proprietary": float(QCCP_PROPRIETARY_RW),
+    # PSE short-term & unrated (Art. 116)
+    "pse_short_term": float(PSE_SHORT_TERM_RW),
+    "pse_unrated": float(PSE_UNRATED_DEFAULT_RW),
+    # RGLA (Art. 115)
+    "rgla_uk_devolved": float(RGLA_UK_DEVOLVED_RW),
+    "rgla_domestic": float(RGLA_DOMESTIC_CURRENCY_RW),
+    "rgla_unrated": float(RGLA_UNRATED_DEFAULT_RW),
+    # MDB / International Organisations (Art. 117-118)
+    "mdb_named": float(MDB_NAMED_ZERO_RW),
+    "mdb_unrated": float(MDB_UNRATED_RW),
+    "io": float(IO_ZERO_RW),
+    # Other Items (Art. 134)
+    "other_cash": float(OTHER_ITEMS_CASH_RW),
+    "other_collection": float(OTHER_ITEMS_COLLECTION_RW),
+    "other_default": float(OTHER_ITEMS_DEFAULT_RW),
+    # Regulatory retail — 75% flat (Art. 123 / CRE20.65)
+    "retail": float(RETAIL_RISK_WEIGHT),
+}
+
+# CRR-specific scalars (Art. 112-134).
+_SA_CRR_RW: dict[str, float] = {
+    "high_risk": float(HIGH_RISK_RW),
+    # Residential mortgage loan-splitting (Art. 125)
+    "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
+    "resi_rw_low": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"]),
+    "resi_rw_high": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"]),
+    # Commercial RE (Art. 126)
+    "cre_ltv_threshold": float(COMMERCIAL_RE_PARAMS["ltv_threshold"]),
+    "cre_rw_low": float(COMMERCIAL_RE_PARAMS["rw_low_ltv"]),
+    "cre_rw_standard": float(COMMERCIAL_RE_PARAMS["rw_standard"]),
+    # Institution short-term (Art. 121, original maturity <=3m)
+    "inst_st_low": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1]),
+    "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
+    "inst_st_high": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6]),
+    "inst_unrated_st": float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR),
+    # Defaulted exposure treatment (Art. 127)
+    "defaulted_threshold": float(CRR_DEFAULTED_PROVISION_THRESHOLD),
+    "defaulted_high": float(CRR_DEFAULTED_RW_HIGH_PROVISION),
+    "defaulted_low": float(CRR_DEFAULTED_RW_LOW_PROVISION),
+}
+
+# Basel 3.1 specific scalars (PRA PS1/26, CRE20).
+_SA_B31_RW: dict[str, float] = {
+    "high_risk": float(B31_HIGH_RISK_RW),
+    # ECRA short-term institution weights (Table 4) — CQS 1-5 vs CQS 6
+    "ecra_st_low": float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[1]),
+    "ecra_st_high": float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6]),
+    # SCRA unrated institution weights (CRE20.16-21) — long-term
+    "scra_a": float(B31_SCRA_RISK_WEIGHTS["A"]),
+    "scra_ae": float(B31_SCRA_RISK_WEIGHTS["A_ENHANCED"]),
+    "scra_b": float(B31_SCRA_RISK_WEIGHTS["B"]),
+    "scra_c": float(B31_SCRA_RISK_WEIGHTS["C"]),
+    # SCRA unrated institution weights — short-term (<=3m)
+    "scra_st_a": float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"]),
+    "scra_st_b": float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"]),
+    "scra_st_c": float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"]),
+    # Corporate CQS-mapped weights (CRE20.22-26, 47-49)
+    "corporate_ig": float(B31_CORPORATE_INVESTMENT_GRADE_RW),
+    "corporate_nig": float(B31_CORPORATE_NON_INVESTMENT_GRADE_RW),
+    "corporate_sme": float(B31_CORPORATE_SME_RW),
+    "sub_debt": float(B31_SUBORDINATED_DEBT_RW),
+    # Defaulted exposure treatment (CRE20.88-90)
+    "defaulted_threshold": float(B31_DEFAULTED_PROVISION_THRESHOLD),
+    "defaulted_high": float(B31_DEFAULTED_RW_HIGH_PROVISION),
+    "defaulted_low": float(B31_DEFAULTED_RW_LOW_PROVISION),
+    "defaulted_resi_re_non_income": float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW),
 }
 
 
@@ -592,7 +649,6 @@ class SACalculator:
         )
 
         # Apply class-specific risk weights (framework-dependent)
-        retail_rw = float(RETAIL_RISK_WEIGHT)
         _uc = pl.col("_upper_class")
 
         if config.is_basel_3_1:
@@ -601,24 +657,6 @@ class SACalculator:
             exposures = exposures.with_columns(
                 pl.col("risk_weight").fill_null(1.0).alias("_cqs_risk_weight")
             )
-
-            # Basel 3.1 ECRA short-term risk weights for rated institutions (Table 4)
-            ecra_st_low_rw = float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[1])  # CQS 1-5: 20%
-            ecra_st_high_rw = float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6])  # CQS 6: 150%
-            # Basel 3.1 SCRA risk weights for unrated institutions (CRE20.16-21)
-            # Long-term (>3m)
-            scra_a_rw = float(B31_SCRA_RISK_WEIGHTS["A"])
-            scra_ae_rw = float(B31_SCRA_RISK_WEIGHTS["A_ENHANCED"])
-            scra_b_rw = float(B31_SCRA_RISK_WEIGHTS["B"])
-            scra_c_rw = float(B31_SCRA_RISK_WEIGHTS["C"])
-            # Short-term (≤3m)
-            scra_st_a_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["A"])
-            scra_st_b_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["B"])
-            scra_st_c_rw = float(B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"])
-            inv_grade_rw = float(B31_CORPORATE_INVESTMENT_GRADE_RW)
-            non_inv_grade_rw = float(B31_CORPORATE_NON_INVESTMENT_GRADE_RW)
-            sme_corp_rw = float(B31_CORPORATE_SME_RW)
-            sub_debt_rw = float(B31_SUBORDINATED_DEBT_RW)
 
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
@@ -637,8 +675,8 @@ class SACalculator:
                     .when(pl.col("cp_entity_type") == "ccp")
                     .then(
                         pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
-                        .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
-                        .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                        .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
+                        .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
                     )
                     # 3. Subordinated debt: flat 150% (CRE20.47)
                     # Overrides all CQS-based weights for institution + corporate
@@ -649,7 +687,7 @@ class SACalculator:
                             | _uc.str.contains("CORPORATE", literal=True)
                         )
                     )
-                    .then(pl.lit(sub_debt_rw))
+                    .then(pl.lit(_SA_B31_RW["sub_debt"]))
                     # 4. ADC: 150% or 100% pre-sold (CRE20.87-88)
                     .when(pl.col("is_adc").fill_null(False))
                     .then(b31_adc_rw_expr())
@@ -694,7 +732,7 @@ class SACalculator:
                         & pl.col("original_maturity_years").is_not_null()
                         & (pl.col("original_maturity_years") <= 0.25)
                     )
-                    .then(pl.lit(float(PSE_SHORT_TERM_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
                     # 4b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
                     # Rated PSEs use Table 2A from CQS join; unrated need sovereign CQS.
                     # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
@@ -702,7 +740,7 @@ class SACalculator:
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
-                        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
+                        .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
                     )
                     # 4c-rgla. RGLA UK devolved govt → 0% (PRA designation)
                     # Overrides all other RGLA treatments for devolved administrations.
@@ -711,34 +749,34 @@ class SACalculator:
                         & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
                         & (pl.col("cp_country_code") == "GB")
                     )
-                    .then(pl.lit(float(RGLA_UK_DEVOLVED_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["rgla_uk_devolved"]))
                     # 4d-rgla. RGLA domestic currency → 20% (Art. 115(5))
                     # UK+GBP or EU+domestic currency → 20% regardless of CQS.
                     .when((_uc == "RGLA") & _is_domestic_currency)
-                    .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
                     # 4e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
                     # UK sovereign CQS=1 → 20%. Non-UK: conservative 100%.
                     .when((_uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
-                        .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
+                        .otherwise(pl.lit(_SA_SHARED_RW["rgla_unrated"]))
                     )
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 4f-mdb. Named MDB → 0% (Art. 117(2))
                     # 16 named MDBs get 0% unconditionally, identified by mdb_named entity_type.
                     .when((_uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
-                    .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
                     # 4g-io. International Organisation → 0% (Art. 118)
                     # EU, IMF, BIS, EFSF, ESM — always 0%.
                     .when(
                         (_uc == "MDB")
                         & (pl.col("cp_entity_type").fill_null("") == "international_org")
                     )
-                    .then(pl.lit(float(IO_ZERO_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["io"]))
                     # 4h-mdb. Unrated non-named MDB → 50% (Art. 117(1), Table 2B)
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
-                    .then(pl.lit(float(MDB_UNRATED_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["mdb_unrated"]))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 4b-ecra. ECRA short-term rated institutions (Table 4, Art. 120(2))
                     # PRA PS1/26 Art. 120(2) keys on ORIGINAL maturity ≤ 3m → CQS 1-5 = 20%,
@@ -757,8 +795,8 @@ class SACalculator:
                     )
                     .then(
                         pl.when(pl.col("cqs") <= 5)
-                        .then(pl.lit(ecra_st_low_rw))
-                        .otherwise(pl.lit(ecra_st_high_rw))
+                        .then(pl.lit(_SA_B31_RW["ecra_st_low"]))
+                        .otherwise(pl.lit(_SA_B31_RW["ecra_st_high"]))
                     )
                     # 4c. SCRA-based unrated institutions (CRE20.16-21, Art. 121(3))
                     # Only for unrated (CQS is null/-1) — rated use ECRA from CQS join
@@ -773,10 +811,10 @@ class SACalculator:
                     )
                     .then(
                         pl.when(pl.col("cp_scra_grade").is_in(["A", "A_ENHANCED"]))
-                        .then(pl.lit(scra_st_a_rw))
+                        .then(pl.lit(_SA_B31_RW["scra_st_a"]))
                         .when(pl.col("cp_scra_grade") == "B")
-                        .then(pl.lit(scra_st_b_rw))
-                        .otherwise(pl.lit(scra_st_c_rw))
+                        .then(pl.lit(_SA_B31_RW["scra_st_b"]))
+                        .otherwise(pl.lit(_SA_B31_RW["scra_st_c"]))
                     )
                     # 4d. SCRA long-term unrated institutions (>3m) (CRE20.16-21)
                     .when(
@@ -785,12 +823,12 @@ class SACalculator:
                     )
                     .then(
                         pl.when(pl.col("cp_scra_grade") == "A_ENHANCED")
-                        .then(pl.lit(scra_ae_rw))
+                        .then(pl.lit(_SA_B31_RW["scra_ae"]))
                         .when(pl.col("cp_scra_grade") == "A")
-                        .then(pl.lit(scra_a_rw))
+                        .then(pl.lit(_SA_B31_RW["scra_a"]))
                         .when(pl.col("cp_scra_grade") == "B")
-                        .then(pl.lit(scra_b_rw))
-                        .otherwise(pl.lit(scra_c_rw))
+                        .then(pl.lit(_SA_B31_RW["scra_b"]))
+                        .otherwise(pl.lit(_SA_B31_RW["scra_c"]))
                     )
                     # 5. Investment-grade assessment (Art. 122(6)/(8))
                     # Only active when use_investment_grade_assessment=True.
@@ -805,7 +843,7 @@ class SACalculator:
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                         & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
                     )
-                    .then(pl.lit(inv_grade_rw))
+                    .then(pl.lit(_SA_B31_RW["corporate_ig"]))
                     # 5b. Non-investment-grade unrated corporate: 135% (Art. 122(6)(b))
                     .when(
                         pl.lit(config.use_investment_grade_assessment)
@@ -814,7 +852,7 @@ class SACalculator:
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                         & (pl.col("cp_is_investment_grade").fill_null(False) != True)  # noqa: E712
                     )
-                    .then(pl.lit(non_inv_grade_rw))
+                    .then(pl.lit(_SA_B31_RW["corporate_nig"]))
                     # 6. SME managed as retail: 75% (same both frameworks)
                     # Art. 123 requires aggregated exposure ≤ EUR 1m threshold.
                     .when(
@@ -822,7 +860,7 @@ class SACalculator:
                         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
                         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
-                    .then(pl.lit(retail_rw))
+                    .then(pl.lit(_SA_SHARED_RW["retail"]))
                     # 7. SA Specialised Lending (unrated only): Art. 122A-122B
                     # Rated SL exposures use the corporate CQS table (Art. 122A(3))
                     .when(
@@ -838,7 +876,7 @@ class SACalculator:
                         _uc.str.contains("CORPORATE", literal=True)
                         & _uc.str.contains("SME", literal=True)
                     )
-                    .then(pl.lit(sme_corp_rw))
+                    .then(pl.lit(_SA_B31_RW["corporate_sme"]))
                     # 9. QRRE transactor: 45% (Art. 123(2))
                     .when(
                         _uc.str.contains("RETAIL", literal=True)
@@ -861,7 +899,7 @@ class SACalculator:
                     .then(pl.lit(1.0))
                     # 10. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
-                    .then(pl.lit(retail_rw))
+                    .then(pl.lit(_SA_SHARED_RW["retail"]))
                     # 11. Unrated covered bonds: derive from issuer institution RW
                     # (Art. 129(5)) — institution RW → CB RW via derivation table.
                     # ECRA (rated issuer, cp_institution_cqs) checked first, then
@@ -875,7 +913,7 @@ class SACalculator:
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
                     .when(_uc == "HIGH_RISK")
-                    .then(pl.lit(float(B31_HIGH_RISK_RW)))
+                    .then(pl.lit(_SA_B31_RW["high_risk"]))
                     # 12. Other Items (Art. 134): sub-type-specific risk weights
                     # 12a. Cash/gold → 0% (Art. 134(1)/(4))
                     .when(
@@ -886,13 +924,13 @@ class SACalculator:
                             .is_in(["other_cash", "other_gold"])
                         )
                     )
-                    .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_cash"]))
                     # 12b. Items in course of collection → 20% (Art. 134(3))
                     .when(
                         (_uc == "OTHER")
                         & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")
                     )
-                    .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_collection"]))
                     # 12c. Residual lease value → 1/t × 100% (Art. 134(6))
                     .when(
                         (_uc == "OTHER")
@@ -904,7 +942,7 @@ class SACalculator:
                     )
                     # 12d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
-                    .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_default"]))
                     # 13. Equity (Art. 133(3)): 250% standard equity
                     # Equity-class rows from main exposure tables get SA equity RW.
                     # For full equity treatment (CIU approaches, transitional floor,
@@ -918,18 +956,6 @@ class SACalculator:
             )
         else:
             # CRR risk weight overrides (Art. 112-134)
-            resi_threshold = float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"])
-            resi_rw_low = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"])
-            resi_rw_high = float(RESIDENTIAL_MORTGAGE_PARAMS["rw_high_ltv"])
-            cre_threshold = float(COMMERCIAL_RE_PARAMS["ltv_threshold"])
-            cre_rw_low = float(COMMERCIAL_RE_PARAMS["rw_low_ltv"])
-            cre_rw_standard = float(COMMERCIAL_RE_PARAMS["rw_standard"])
-
-            crr_inst_st_low_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1])
-            crr_inst_st_mid_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4])
-            crr_inst_st_high_rw = float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6])
-            crr_inst_unrated_st_rw = float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR)
-
             # EAD column for provision ratio denominator
             schema_for_ead = exposures.collect_schema()
             _ead_col = "ead_final" if "ead_final" in schema_for_ead.names() else "ead"
@@ -947,8 +973,8 @@ class SACalculator:
                     .when(pl.col("cp_entity_type") == "ccp")
                     .then(
                         pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
-                        .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
-                        .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                        .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
+                        .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
                     )
                     # 3. Residential mortgage: LTV split (CRR Art. 125)
                     .when(
@@ -956,12 +982,14 @@ class SACalculator:
                         | _uc.str.contains("RESIDENTIAL", literal=True)
                     )
                     .then(
-                        pl.when(pl.col("ltv").fill_null(0.0) <= resi_threshold)
-                        .then(pl.lit(resi_rw_low))
+                        pl.when(pl.col("ltv").fill_null(0.0) <= _SA_CRR_RW["resi_ltv_threshold"])
+                        .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
                         .otherwise(
-                            resi_rw_low * resi_threshold / pl.col("ltv").fill_null(1.0)
-                            + resi_rw_high
-                            * (pl.col("ltv").fill_null(1.0) - resi_threshold)
+                            _SA_CRR_RW["resi_rw_low"]
+                            * _SA_CRR_RW["resi_ltv_threshold"]
+                            / pl.col("ltv").fill_null(1.0)
+                            + _SA_CRR_RW["resi_rw_high"]
+                            * (pl.col("ltv").fill_null(1.0) - _SA_CRR_RW["resi_ltv_threshold"])
                             / pl.col("ltv").fill_null(1.0)
                         )
                     )
@@ -973,11 +1001,11 @@ class SACalculator:
                     )
                     .then(
                         pl.when(
-                            (pl.col("ltv").fill_null(1.0) <= cre_threshold)
+                            (pl.col("ltv").fill_null(1.0) <= _SA_CRR_RW["cre_ltv_threshold"])
                             & pl.col("has_income_cover").fill_null(False)
                         )
-                        .then(pl.lit(cre_rw_low))
-                        .otherwise(pl.lit(cre_rw_standard))
+                        .then(pl.lit(_SA_CRR_RW["cre_rw_low"]))
+                        .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
                     )
                     # 3. SME managed as retail: 75% (CRR Art. 123)
                     # Art. 123 requires aggregated exposure ≤ EUR 1m threshold.
@@ -986,7 +1014,7 @@ class SACalculator:
                         & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
                         & (pl.col("qualifies_as_retail") == True)  # noqa: E712
                     )
-                    .then(pl.lit(retail_rw))
+                    .then(pl.lit(_SA_SHARED_RW["retail"]))
                     # 4. Corporate SME: 100%
                     .when(
                         _uc.str.contains("CORPORATE", literal=True)
@@ -1002,7 +1030,7 @@ class SACalculator:
                     .then(pl.lit(1.0))
                     # 5a. Regulatory retail (non-mortgage): 75% flat
                     .when(_uc.str.contains("RETAIL", literal=True))
-                    .then(pl.lit(retail_rw))
+                    .then(pl.lit(_SA_SHARED_RW["retail"]))
                     # 6a. PSE short-term (Art. 116(3)): original maturity ≤3m → 20% flat
                     # CRR Art. 116(3) keys on ORIGINAL maturity — seasoned long-dated PSE
                     # bonds with short residual do not qualify.
@@ -1011,13 +1039,13 @@ class SACalculator:
                         & pl.col("original_maturity_years").is_not_null()
                         & (pl.col("original_maturity_years") <= 0.25)
                     )
-                    .then(pl.lit(float(PSE_SHORT_TERM_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
                     # 6b. PSE unrated: sovereign-derived (Art. 116(1), Table 2)
                     .when((_uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 2 row 1
-                        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
+                        .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
                     )
                     # 6c-rgla. RGLA UK devolved govt → 0% (PRA designation)
                     .when(
@@ -1025,30 +1053,30 @@ class SACalculator:
                         & (pl.col("cp_entity_type").fill_null("") == "rgla_sovereign")
                         & (pl.col("cp_country_code") == "GB")
                     )
-                    .then(pl.lit(float(RGLA_UK_DEVOLVED_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["rgla_uk_devolved"]))
                     # 6d-rgla. RGLA domestic currency → 20% (Art. 115(5))
                     .when((_uc == "RGLA") & _is_domestic_currency)
-                    .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
                     # 6e-rgla. RGLA unrated non-domestic: sovereign-derived (Table 1A)
                     .when((_uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
                     .then(
                         pl.when(pl.col("cp_country_code") == "GB")
                         .then(pl.lit(0.20))  # UK sovereign CQS 1 → Table 1A row 1
-                        .otherwise(pl.lit(float(RGLA_UNRATED_DEFAULT_RW)))
+                        .otherwise(pl.lit(_SA_SHARED_RW["rgla_unrated"]))
                     )
                     # Rated RGLA: falls through to CQS join (Table 1B) via default
                     # 6f-mdb. Named MDB → 0% (Art. 117(2))
                     .when((_uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
-                    .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
                     # 6g-io. International Organisation → 0% (Art. 118)
                     .when(
                         (_uc == "MDB")
                         & (pl.col("cp_entity_type").fill_null("") == "international_org")
                     )
-                    .then(pl.lit(float(IO_ZERO_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["io"]))
                     # 6h-mdb. Unrated non-named MDB �� 50% (Art. 117(1), Table 2B)
                     .when((_uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
-                    .then(pl.lit(float(MDB_UNRATED_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["mdb_unrated"]))
                     # Rated non-named MDB: falls through to CQS join (Table 2B) via default
                     # 6i. Art. 120(2) Table 4: rated institution short-term
                     # (residual maturity <= 3m).
@@ -1059,10 +1087,10 @@ class SACalculator:
                     )
                     .then(
                         pl.when(pl.col("cqs") <= 3)
-                        .then(pl.lit(crr_inst_st_low_rw))
+                        .then(pl.lit(_SA_CRR_RW["inst_st_low"]))
                         .when(pl.col("cqs") <= 5)
-                        .then(pl.lit(crr_inst_st_mid_rw))
-                        .otherwise(pl.lit(crr_inst_st_high_rw))
+                        .then(pl.lit(_SA_CRR_RW["inst_st_mid"]))
+                        .otherwise(pl.lit(_SA_CRR_RW["inst_st_high"]))
                     )
                     # 6j. Art. 121(3): unrated institution with ORIGINAL effective
                     # maturity <= 3m. Overrides the Table 5 sovereign-derived fallback;
@@ -1072,7 +1100,7 @@ class SACalculator:
                         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
                         & (pl.col("original_maturity_years").fill_null(1.0) <= 0.25)
                     )
-                    .then(pl.lit(crr_inst_unrated_st_rw))
+                    .then(pl.lit(_SA_CRR_RW["inst_unrated_st"]))
                     # 7. Unrated covered bonds: derive from issuer institution RW
                     # (CRR Art. 129(5)) — institution CQS → institution RW → CB RW
                     # via COVERED_BOND_UNRATED_DERIVATION table. When issuing
@@ -1086,7 +1114,7 @@ class SACalculator:
                     # Venture capital, private equity, speculative RE financing,
                     # and other PRA-designated high-risk items.
                     .when(_uc == "HIGH_RISK")
-                    .then(pl.lit(float(HIGH_RISK_RW)))
+                    .then(pl.lit(_SA_CRR_RW["high_risk"]))
                     # 8. Other Items (Art. 134): sub-type-specific risk weights
                     # 8a. Cash/gold → 0% (Art. 134(1)/(4))
                     .when(
@@ -1097,13 +1125,13 @@ class SACalculator:
                             .is_in(["other_cash", "other_gold"])
                         )
                     )
-                    .then(pl.lit(float(OTHER_ITEMS_CASH_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_cash"]))
                     # 8b. Items in course of collection → 20% (Art. 134(3))
                     .when(
                         (_uc == "OTHER")
                         & (pl.col("cp_entity_type").fill_null("") == "other_items_in_collection")
                     )
-                    .then(pl.lit(float(OTHER_ITEMS_COLLECTION_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_collection"]))
                     # 8c. Residual lease value → 1/t × 100% (Art. 134(6))
                     .when(
                         (_uc == "OTHER")
@@ -1115,7 +1143,7 @@ class SACalculator:
                     )
                     # 8d. Tangible assets and all other → 100% (Art. 134(2))
                     .when(_uc == "OTHER")
-                    .then(pl.lit(float(OTHER_ITEMS_DEFAULT_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["other_default"]))
                     # 9. Equity (Art. 133(2)): flat 100%
                     # Equity-class rows from main exposure tables get CRR SA equity RW.
                     # For full equity treatment (CIU, IRB Simple), use equity_exposures.
@@ -1293,10 +1321,6 @@ class SACalculator:
 
         # Compute provision-based defaulted risk weight for the unsecured portion
         if config.is_basel_3_1:
-            b31_threshold = float(B31_DEFAULTED_PROVISION_THRESHOLD)
-            b31_high = float(B31_DEFAULTED_RW_HIGH_PROVISION)
-            b31_low = float(B31_DEFAULTED_RW_LOW_PROVISION)
-
             # B31 RESI RE non-income-dependent: 100% flat for whole exposure (CRE20.88)
             is_resi_re_non_income = (
                 _uc.str.contains("MORTGAGE", literal=True)
@@ -1306,30 +1330,32 @@ class SACalculator:
             # B31 provision ratio: provision / unsecured_ead
             unsecured_ead = ead * unsecured_pct
             provision_rw = (
-                pl.when(pl.col("provision_allocated") >= b31_threshold * unsecured_ead)
-                .then(pl.lit(b31_high))
-                .otherwise(pl.lit(b31_low))
+                pl.when(
+                    pl.col("provision_allocated")
+                    >= _SA_B31_RW["defaulted_threshold"] * unsecured_ead
+                )
+                .then(pl.lit(_SA_B31_RW["defaulted_high"]))
+                .otherwise(pl.lit(_SA_B31_RW["defaulted_low"]))
             )
 
             # RESI RE non-income: 100% flat for the whole exposure (no split)
             # All other defaulted: blend base RW (secured) + provision RW (unsecured)
             blended_rw = (
                 pl.when(is_resi_re_non_income)
-                .then(pl.lit(float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW)))
+                .then(pl.lit(_SA_B31_RW["defaulted_resi_re_non_income"]))
                 .otherwise(unsecured_pct * provision_rw + secured_pct * pl.col("risk_weight"))
             )
         else:
-            crr_threshold = float(CRR_DEFAULTED_PROVISION_THRESHOLD)
-            crr_high = float(CRR_DEFAULTED_RW_HIGH_PROVISION)
-            crr_low = float(CRR_DEFAULTED_RW_LOW_PROVISION)
-
             # CRR provision ratio: provision / (unsecured_ead + provision_deducted)
             # Denominator reconstructs pre-provision unsecured value per Art. 127(1)
             unsecured_pre_prov = (ead + pl.col("provision_deducted")) * unsecured_pct
             provision_rw = (
-                pl.when(pl.col("provision_allocated") >= crr_threshold * unsecured_pre_prov)
-                .then(pl.lit(crr_high))
-                .otherwise(pl.lit(crr_low))
+                pl.when(
+                    pl.col("provision_allocated")
+                    >= _SA_CRR_RW["defaulted_threshold"] * unsecured_pre_prov
+                )
+                .then(pl.lit(_SA_CRR_RW["defaulted_high"]))
+                .otherwise(pl.lit(_SA_CRR_RW["defaulted_low"]))
             )
 
             # Blend base RW (secured) + provision RW (unsecured)
@@ -1578,8 +1604,8 @@ class SACalculator:
                 .when(pl.col("guarantor_entity_type") == "ccp")
                 .then(
                     pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
-                    .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
-                    .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+                    .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
+                    .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
                 )
                 # Named MDB guarantors (Art. 117(2)): 0% unconditional
                 .when(
@@ -1932,24 +1958,8 @@ class SACalculator:
         self,
         exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
-        """
-        Calculate RWA = EAD × Risk Weight.
-
-        Args:
-            exposures: Exposures with ead_final and risk_weight
-
-        Returns:
-            Exposures with rwa_pre_factor column
-        """
-        # Determine EAD column (ead_final preferred, fallback to ead)
-        schema = exposures.collect_schema()
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-
-        return exposures.with_columns(
-            [
-                (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
-            ]
-        )
+        """Calculate pre-factor RWA = EAD x Risk Weight (delegates to ``lf.sa``)."""
+        return exposures.sa.calculate_rwa()
 
     def _apply_supporting_factors(
         self,
@@ -1958,88 +1968,15 @@ class SACalculator:
         *,
         errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
-        """
-        Apply SME and infrastructure supporting factors.
-
-        Args:
-            exposures: Exposures with rwa_pre_factor
-            config: Calculation configuration
-            errors: Optional error accumulator for data quality warnings
-
-        Returns:
-            Exposures with supporting factors applied
-        """
-        # Ensure required columns exist for supporting factor calculation.
-        exposures = ensure_columns(
-            exposures,
-            {
-                "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
-                "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
-            },
-        )
-        # ead_final is a multi-source derivation (fallback to ead), not a
-        # simple default — cannot use ensure_columns.
-        if "ead_final" not in exposures.collect_schema().names():  # arch-exempt: derivation
-            exposures = exposures.with_columns(pl.col("ead").alias("ead_final"))
-
-        return self._supporting_factor_calc.apply_factors(exposures, config, errors=errors)
+        """Apply SME / infrastructure supporting factors (delegates to ``lf.sa``)."""
+        return exposures.sa.apply_supporting_factors(config, errors=errors)
 
     def _build_audit(
         self,
         exposures: pl.LazyFrame,
     ) -> pl.LazyFrame:
-        """
-        Build SA calculation audit trail.
-
-        Args:
-            exposures: Calculated exposures
-
-        Returns:
-            Audit trail LazyFrame
-        """
-        schema = exposures.collect_schema()
-        available_cols = schema.names()
-
-        # Select available audit columns
-        select_cols = ["exposure_reference"]
-        optional_cols = [
-            "counterparty_reference",
-            "exposure_class",
-            "cqs",
-            "ltv",
-            "ead_final",
-            "risk_weight",
-            "rwa_pre_factor",
-            "supporting_factor",
-            "rwa_post_factor",
-            "supporting_factor_applied",
-        ]
-
-        for col in optional_cols:
-            if col in available_cols:
-                select_cols.append(col)
-
-        audit = exposures.select(select_cols)
-
-        # Add calculation string
-        audit = audit.with_columns(
-            [
-                pl.concat_str(
-                    [
-                        pl.lit("SA: EAD="),
-                        pl.col("ead_final").round(0).cast(pl.String),
-                        pl.lit(" × RW="),
-                        (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                        pl.lit("% × SF="),
-                        (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
-                        pl.lit("% → RWA="),
-                        pl.col("rwa_post_factor").round(0).cast(pl.String),
-                    ]
-                ).alias("sa_calculation"),
-            ]
-        )
-
-        return audit
+        """Build SA audit trail (delegates to ``lf.sa``)."""
+        return exposures.sa.build_audit()
 
 
 def create_sa_calculator() -> SACalculator:

@@ -1246,142 +1246,183 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
 
 
 def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
-    """Generate CRR Group E (Slotting) scenario outputs."""
+    """Generate CRR Group E (Slotting) scenario outputs.
+
+    CRR Art. 153(5) defines two risk-weight tables with a maturity split at
+    2.5 years:
+
+    Non-HVCRE (Table 1):
+        >=2.5yr: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+        <2.5yr:  Strong=50%, Good=70%, Satisfactory=115%, Weak=250%, Default=0%
+
+    HVCRE (Table 2):
+        >=2.5yr: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+        <2.5yr:  Strong=70%, Good=95%,  Satisfactory=140%, Weak=250%, Default=0%
+    """
     scenarios = []
 
-    slotting_rw = {
+    non_hvcre_long = {
         "strong": Decimal("0.70"),
+        "good": Decimal("0.90"),
+        "satisfactory": Decimal("1.15"),
+        "weak": Decimal("2.50"),
+        "default": Decimal("0.00"),
+    }
+    non_hvcre_short = {
+        "strong": Decimal("0.50"),
         "good": Decimal("0.70"),
         "satisfactory": Decimal("1.15"),
         "weak": Decimal("2.50"),
         "default": Decimal("0.00"),
     }
+    hvcre_long = {
+        "strong": Decimal("0.95"),
+        "good": Decimal("1.20"),
+        "satisfactory": Decimal("1.40"),
+        "weak": Decimal("2.50"),
+        "default": Decimal("0.00"),
+    }
+    hvcre_short = {
+        "strong": Decimal("0.70"),
+        "good": Decimal("0.95"),
+        "satisfactory": Decimal("1.40"),
+        "weak": Decimal("2.50"),
+        "default": Decimal("0.00"),
+    }
 
-    # CRR-E1: Project Finance - Strong
-    ead_e1 = Decimal("10000000")
-    rw_e1 = slotting_rw["strong"]
-    rwa_e1 = ead_e1 * rw_e1
-
-    scenarios.append(
-        CRRScenarioOutput(
-            scenario_id="CRR-E1",
+    def _slotting_scenario(
+        scenario_id: str,
+        description: str,
+        exposure_class: str,
+        exposure_reference: str,
+        counterparty_reference: str,
+        ead: Decimal,
+        rw: Decimal,
+        calculation_notes: str,
+    ) -> CRRScenarioOutput:
+        rwa = ead * rw
+        return CRRScenarioOutput(
+            scenario_id=scenario_id,
             scenario_group="CRR-E",
-            description="Project finance - Strong (70% RW)",
+            description=description,
             regulatory_framework="CRR",
             approach="Slotting",
-            exposure_class="SPECIALISED_LENDING",
-            exposure_reference="LOAN_SL_PF_001",
-            counterparty_reference="SL_PF_STRONG",
-            ead=float(ead_e1),
+            exposure_class=exposure_class,
+            exposure_reference=exposure_reference,
+            counterparty_reference=counterparty_reference,
+            ead=float(ead),
             pd=None,
             lgd=None,
             maturity=None,
             cqs=None,
             ltv=None,
             turnover=None,
-            risk_weight=float(rw_e1),
-            rwa_before_sf=float(rwa_e1),
+            risk_weight=float(rw),
+            rwa_before_sf=float(rwa),
             supporting_factor=1.0,
-            rwa_after_sf=float(rwa_e1),
+            rwa_after_sf=float(rwa),
             expected_loss=None,
             regulatory_reference="CRR Art. 153(5)",
-            calculation_notes="CRR Strong=Good=70% (Basel 3.1 Strong=50%)",
+            calculation_notes=calculation_notes,
+        )
+
+    # CRR-E1..E4: non-HVCRE / HVCRE with >=2.5yr remaining maturity
+    scenarios.append(
+        _slotting_scenario(
+            "CRR-E1",
+            "Project finance - Strong (70% RW)",
+            "SPECIALISED_LENDING",
+            "LOAN_SL_PF_001",
+            "SL_PF_STRONG",
+            Decimal("10000000"),
+            non_hvcre_long["strong"],
+            "Non-HVCRE Strong, >=2.5yr: 70% RW (Table 1)",
+        )
+    )
+    scenarios.append(
+        _slotting_scenario(
+            "CRR-E2",
+            "Project finance - Good (90% RW)",
+            "SPECIALISED_LENDING",
+            "LOAN_SL_PF_002",
+            "SL_PF_GOOD",
+            Decimal("10000000"),
+            non_hvcre_long["good"],
+            "Non-HVCRE Good, >=2.5yr: 90% RW (Table 1)",
+        )
+    )
+    scenarios.append(
+        _slotting_scenario(
+            "CRR-E3",
+            "IPRE - Weak (250% RW)",
+            "SPECIALISED_LENDING",
+            "LOAN_SL_IPRE_001",
+            "SL_IPRE_WEAK",
+            Decimal("5000000"),
+            non_hvcre_long["weak"],
+            "Weak category = 250% RW (punitive)",
+        )
+    )
+    scenarios.append(
+        _slotting_scenario(
+            "CRR-E4",
+            "HVCRE - Strong (95% RW)",
+            "SPECIALISED_LENDING_HVCRE",
+            "LOAN_SL_HVCRE_001",
+            "SL_HVCRE_STRONG",
+            Decimal("5000000"),
+            hvcre_long["strong"],
+            "HVCRE Strong, >=2.5yr: 95% RW (Table 2)",
         )
     )
 
-    # CRR-E2: Project Finance - Good
-    ead_e2 = Decimal("10000000")
-    rw_e2 = slotting_rw["good"]
-    rwa_e2 = ead_e2 * rw_e2
-
+    # CRR-E5..E8: short-maturity (<2.5yr) variants
     scenarios.append(
-        CRRScenarioOutput(
-            scenario_id="CRR-E2",
-            scenario_group="CRR-E",
-            description="Project finance - Good (70% RW)",
-            regulatory_framework="CRR",
-            approach="Slotting",
-            exposure_class="SPECIALISED_LENDING",
-            exposure_reference="LOAN_SL_PF_002",
-            counterparty_reference="SL_PF_GOOD",
-            ead=float(ead_e2),
-            pd=None,
-            lgd=None,
-            maturity=None,
-            cqs=None,
-            ltv=None,
-            turnover=None,
-            risk_weight=float(rw_e2),
-            rwa_before_sf=float(rwa_e2),
-            supporting_factor=1.0,
-            rwa_after_sf=float(rwa_e2),
-            expected_loss=None,
-            regulatory_reference="CRR Art. 153(5)",
-            calculation_notes="Good category = 70% RW",
+        _slotting_scenario(
+            "CRR-E5",
+            "Project finance - Strong, <2.5yr (50% RW)",
+            "SPECIALISED_LENDING",
+            "LOAN_SL_PF_003",
+            "SL_PF_STRONG_SHORT",
+            Decimal("10000000"),
+            non_hvcre_short["strong"],
+            "Non-HVCRE Strong, <2.5yr: 50% RW (Table 1)",
         )
     )
-
-    # CRR-E3: IPRE - Weak
-    ead_e3 = Decimal("5000000")
-    rw_e3 = slotting_rw["weak"]
-    rwa_e3 = ead_e3 * rw_e3
-
     scenarios.append(
-        CRRScenarioOutput(
-            scenario_id="CRR-E3",
-            scenario_group="CRR-E",
-            description="IPRE - Weak (250% RW)",
-            regulatory_framework="CRR",
-            approach="Slotting",
-            exposure_class="SPECIALISED_LENDING",
-            exposure_reference="LOAN_SL_IPRE_001",
-            counterparty_reference="SL_IPRE_WEAK",
-            ead=float(ead_e3),
-            pd=None,
-            lgd=None,
-            maturity=None,
-            cqs=None,
-            ltv=None,
-            turnover=None,
-            risk_weight=float(rw_e3),
-            rwa_before_sf=float(rwa_e3),
-            supporting_factor=1.0,
-            rwa_after_sf=float(rwa_e3),
-            expected_loss=None,
-            regulatory_reference="CRR Art. 153(5)",
-            calculation_notes="Weak category = 250% RW (punitive)",
+        _slotting_scenario(
+            "CRR-E6",
+            "Project finance - Good, <2.5yr (70% RW)",
+            "SPECIALISED_LENDING",
+            "LOAN_SL_PF_004",
+            "SL_PF_GOOD_SHORT",
+            Decimal("10000000"),
+            non_hvcre_short["good"],
+            "Non-HVCRE Good, <2.5yr: 70% RW (Table 1)",
         )
     )
-
-    # CRR-E4: HVCRE - Strong
-    ead_e4 = Decimal("5000000")
-    rw_e4 = slotting_rw["strong"]  # Same as non-HVCRE under CRR
-    rwa_e4 = ead_e4 * rw_e4
-
     scenarios.append(
-        CRRScenarioOutput(
-            scenario_id="CRR-E4",
-            scenario_group="CRR-E",
-            description="HVCRE - Strong (70% RW)",
-            regulatory_framework="CRR",
-            approach="Slotting",
-            exposure_class="SPECIALISED_LENDING_HVCRE",
-            exposure_reference="LOAN_SL_HVCRE_001",
-            counterparty_reference="SL_HVCRE_STRONG",
-            ead=float(ead_e4),
-            pd=None,
-            lgd=None,
-            maturity=None,
-            cqs=None,
-            ltv=None,
-            turnover=None,
-            risk_weight=float(rw_e4),
-            rwa_before_sf=float(rwa_e4),
-            supporting_factor=1.0,
-            rwa_after_sf=float(rwa_e4),
-            expected_loss=None,
-            regulatory_reference="CRR Art. 153(5)",
-            calculation_notes="CRR HVCRE = non-HVCRE weights (Basel 3.1 higher for HVCRE)",
+        _slotting_scenario(
+            "CRR-E7",
+            "HVCRE - Strong, <2.5yr (70% RW)",
+            "SPECIALISED_LENDING_HVCRE",
+            "LOAN_SL_HVCRE_002",
+            "SL_HVCRE_STRONG_SHORT",
+            Decimal("5000000"),
+            hvcre_short["strong"],
+            "HVCRE Strong, <2.5yr: 70% RW (Table 2)",
+        )
+    )
+    scenarios.append(
+        _slotting_scenario(
+            "CRR-E8",
+            "HVCRE - Good, <2.5yr (95% RW)",
+            "SPECIALISED_LENDING_HVCRE",
+            "LOAN_SL_HVCRE_003",
+            "SL_HVCRE_GOOD_SHORT",
+            Decimal("5000000"),
+            hvcre_short["good"],
+            "HVCRE Good, <2.5yr: 95% RW (Table 2)",
         )
     )
 

@@ -716,8 +716,13 @@ class IRBPermissions:
         """Full IRB permissions with Basel 3.1 Art. 147A approach restrictions.
 
         Art. 147A mandates:
-        - Sovereign/quasi-sovereign (RGLA, PSE, MDB): SA only
-        - Institution: F-IRB only (no A-IRB)
+        - Sovereign / quasi-sovereign with 0% SA risk weight (Art. 147(3):
+          CGCB, sovereign-treated RGLAs/PSEs, MDBs, international orgs):
+          SA only. Enforced at classifier level by entity-type check so that
+          RGLAs/PSEs treated as institutions (Art. 147(4)(b)) are NOT
+          captured here; they route to the INSTITUTION IRB class below.
+        - Institution (including RGLAs/PSEs treated as institutions):
+          F-IRB only (no A-IRB).
         - IPRE/HVCRE: Slotting only (enforced at classifier level)
         - FSE corporate: F-IRB only (enforced at classifier level)
         - Large corporate (>GBP 440m): F-IRB only (enforced at classifier level)
@@ -729,6 +734,10 @@ class IRBPermissions:
         Note: FSE and large corporate AIRB restrictions are enforced at
         classifier level using counterparty attributes, not here, because
         they depend on per-exposure data (revenue, entity flags).
+
+        The RGLA / PSE / MDB entries below are defensive defaults. Since
+        permission lookup keys on exposure_class_irb, institution-typed
+        RGLAs/PSEs will not hit these entries — they key on INSTITUTION.
         """
         return cls(
             permissions={

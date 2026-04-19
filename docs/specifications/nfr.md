@@ -25,6 +25,7 @@
 | NFR-3.1 | Total test coverage | > 5,000 tests | Met (5,034 total: 4,232 unit, 501 acceptance, 145 contracts, 122 integration, 34 benchmarks) |
 | NFR-3.2 | Zero data loss (immutable pipeline) | Guaranteed | Met |
 | NFR-3.3 | Graceful invalid data handling | All data quality issues | Met |
+| NFR-3.4 | Observable pipeline runs — per-run correlation id, stage timings, text/JSON output | [Observability spec](observability.md) | Met |
 
 ## NFR-4: Maintainability
 
@@ -32,8 +33,9 @@
 |----|-------------|--------|--------|
 | NFR-4.1 | Full type annotations | 100% | Met |
 | NFR-4.2 | Protocol-based interfaces | All 6 stages | Met |
-| NFR-4.3 | Ruff linting zero violations | CI-enforced | Met |
+| NFR-4.3 | Ruff linting zero violations (incl. `G`/`LOG`/`T20` for logging hygiene) | CI-enforced | Met |
 | NFR-4.4 | Module-level docstrings | All modules | Met |
+| NFR-4.5 | Stage modules declare a module logger (enforced by arch_check + contract test) | All engine stages | Met |
 
 ## NFR-5: Extensibility
 

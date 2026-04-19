@@ -10,6 +10,7 @@
 | FR-5.4 | Configurable PD floors, LGD floors, output floor percentage | P1 | Done |
 | FR-5.5 | Configurable scaling factor (1.06 CRR, 1.0 Basel 3.1) | P0 | Done |
 | FR-5.6 | Target currency for FX conversion | P1 | Done |
+| FR-5.7 | Configurable logging (`log_level`, `log_format`) — see [Observability](observability.md) | P1 | Done |
 
 ## Factory Methods
 
@@ -29,6 +30,7 @@
 | CONFIG-4 | PD/LGD floor configuration — floor values propagated to IRB calculators per framework |
 | CONFIG-5 | IRB permissions — per-exposure-class approach assignment (F-IRB, A-IRB, or SA fallback) |
 | CONFIG-6 | Target currency — FX conversion rate applied to all monetary thresholds and outputs |
+| CONFIG-7 | Logging fields — `log_level` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) and `log_format` (`"text"`/`"json"`) configure the `rwa_calc` namespace logger; defaults `"INFO"` and `"text"` |
 
 ## Outstanding Work
 

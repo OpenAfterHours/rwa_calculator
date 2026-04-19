@@ -38,6 +38,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -116,6 +117,9 @@ from rwa_calc.engine.sa.namespace import SA_INPUT_CONTRACT as _SA_INPUT_CONTRACT
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================

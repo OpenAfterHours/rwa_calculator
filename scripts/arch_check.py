@@ -96,6 +96,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/irb/guarantee.py",
     "engine/irb/namespace.py",
     "engine/irb/stats_backend.py",
+    "engine/sa/namespace.py",
     "engine/slotting/namespace.py",
     "engine/aggregator/_crm_reporting.py",
     "engine/aggregator/_el_summary.py",

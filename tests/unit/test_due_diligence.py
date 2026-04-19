@@ -102,7 +102,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[0.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -114,7 +114,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[1.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(1.50)
 
@@ -126,7 +126,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[0.75],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -138,7 +138,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[0.50],
             override_rws=[None],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.50)
 
@@ -148,7 +148,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[0.50, 1.50, 0.75, 1.00],
             override_rws=[0.75, 0.50, None, 2.50],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.75)  # override applied
         assert df["risk_weight"][1] == pytest.approx(1.50)  # override lower, ignored
@@ -160,7 +160,7 @@ class TestDueDiligenceOverrideApplication:
     ) -> None:
         """No-op when due_diligence_override_rw column is not in the data."""
         exposures = _exposures_without_dd(risk_weights=[0.50, 1.00])
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.50)
         assert df["risk_weight"][1] == pytest.approx(1.00)
@@ -171,7 +171,7 @@ class TestDueDiligenceOverrideApplication:
             risk_weights=[0.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, crr_config)
+        result = exposures.sa.apply_due_diligence_override(crr_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.50)
         assert "due_diligence_override_applied" not in df.columns
@@ -193,7 +193,7 @@ class TestDueDiligenceAuditColumn:
             risk_weights=[0.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["due_diligence_override_applied"][0] is True
 
@@ -205,7 +205,7 @@ class TestDueDiligenceAuditColumn:
             risk_weights=[1.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["due_diligence_override_applied"][0] is False
 
@@ -217,7 +217,7 @@ class TestDueDiligenceAuditColumn:
             risk_weights=[0.50],
             override_rws=[None],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["due_diligence_override_applied"][0] is False
 
@@ -229,7 +229,7 @@ class TestDueDiligenceAuditColumn:
             risk_weights=[0.50],
             override_rws=[0.75],
         )
-        result = calculator._apply_due_diligence_override(exposures, crr_config)
+        result = exposures.sa.apply_due_diligence_override(crr_config)
         df = result.collect()
         assert "due_diligence_override_applied" not in df.columns
 
@@ -238,7 +238,7 @@ class TestDueDiligenceAuditColumn:
     ) -> None:
         """Audit column is not added when override column is absent."""
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert "due_diligence_override_applied" not in df.columns
 
@@ -257,7 +257,7 @@ class TestDueDiligenceWarnings:
         """Warning emitted when due_diligence_performed column is absent under B31."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert len(errors) == 1
         assert errors[0].code == ERROR_DUE_DILIGENCE_NOT_PERFORMED
 
@@ -267,7 +267,7 @@ class TestDueDiligenceWarnings:
         """Warning has WARNING severity (not ERROR)."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert errors[0].severity == ErrorSeverity.WARNING
 
     def test_warning_category_is_data_quality(
@@ -276,7 +276,7 @@ class TestDueDiligenceWarnings:
         """Warning category is DATA_QUALITY."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert errors[0].category == ErrorCategory.DATA_QUALITY
 
     def test_warning_has_regulatory_reference(
@@ -285,7 +285,7 @@ class TestDueDiligenceWarnings:
         """Warning includes Art. 110A regulatory reference."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert "110A" in (errors[0].regulatory_reference or "")
 
     def test_warning_has_field_name(
@@ -294,7 +294,7 @@ class TestDueDiligenceWarnings:
         """Warning includes the expected field name."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert errors[0].field_name == "due_diligence_performed"
 
     def test_no_warning_under_crr(
@@ -303,7 +303,7 @@ class TestDueDiligenceWarnings:
         """No warning under CRR even if DD column is absent."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50])
-        calculator._apply_due_diligence_override(exposures, crr_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(crr_config, errors=errors)
         assert len(errors) == 0
 
     def test_no_warning_when_dd_performed_present(
@@ -316,7 +316,7 @@ class TestDueDiligenceWarnings:
             override_rws=[None],
             dd_performed=[True],
         )
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert len(errors) == 0
 
     def test_no_warning_when_errors_none(
@@ -325,7 +325,7 @@ class TestDueDiligenceWarnings:
         """No crash when errors parameter is None (unified/branch paths)."""
         exposures = _exposures_without_dd(risk_weights=[0.50])
         # Should not raise — warnings are silently skipped
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.50)
 
@@ -335,7 +335,7 @@ class TestDueDiligenceWarnings:
         """Warning is emitted once per calculation, not per row."""
         errors: list[CalculationError] = []
         exposures = _exposures_without_dd(risk_weights=[0.50, 0.75, 1.00])
-        calculator._apply_due_diligence_override(exposures, b31_config, errors=errors)
+        exposures.sa.apply_due_diligence_override(b31_config, errors=errors)
         assert len(errors) == 1
 
 
@@ -355,7 +355,7 @@ class TestDueDiligenceEdgeCases:
             risk_weights=[0.20],
             override_rws=[0.0],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.20)
 
@@ -367,7 +367,7 @@ class TestDueDiligenceEdgeCases:
             risk_weights=[1.00],
             override_rws=[12.5],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(12.5)
 
@@ -384,7 +384,7 @@ class TestDueDiligenceEdgeCases:
             override_rws=[0.75],
             dd_performed=[False],
         )
-        result = calculator._apply_due_diligence_override(exposures, b31_config)
+        result = exposures.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -401,7 +401,7 @@ class TestDueDiligenceEdgeCases:
                 "ead_final": [100_000.0],
             }
         ).lazy()
-        result = calculator._apply_due_diligence_override(lf, b31_config)
+        result = lf.sa.apply_due_diligence_override(b31_config)
         df = result.collect()
         assert df["exposure_class"][0] == "corporate"
         assert df["ead_final"][0] == pytest.approx(100_000.0)

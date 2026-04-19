@@ -644,6 +644,144 @@ class TestSMEClassification:
 
 
 # =============================================================================
+# Specialised Lending SME Tests (CRR Art. 501 + Art. 112(1)(g))
+# =============================================================================
+
+
+class TestSpecialisedLendingSMEClassification:
+    """Specialised lending exposures to SME counterparties must set is_sme=True
+    while keeping exposure_class=SPECIALISED_LENDING so approach routing still
+    dispatches to the slotting calculator (Art. 501 applies to SL as a
+    corporate sub-type under Art. 112(1)(g))."""
+
+    def _build_sl_bundle(
+        self,
+        *,
+        annual_revenue: float,
+    ) -> ResolvedHierarchyBundle:
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SL_SME_CP"],
+                "counterparty_name": ["SL SME Borrower"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [annual_revenue],
+                "total_assets": [10000000.0],
+                "default_status": [False],
+                "sector_code": ["SL"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP_SL_SME"],
+                "exposure_type": ["loan"],
+                "product_type": ["PROJECT_FINANCE"],
+                "book_code": ["SL"],
+                "counterparty_reference": ["SL_SME_CP"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [1000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "interest": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+            }
+        ).lazy()
+        sl_data = pl.DataFrame(
+            {
+                "counterparty_reference": ["SL_SME_CP"],
+                "sl_type": ["project_finance"],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+            }
+        ).lazy()
+        return create_resolved_bundle(exposures, counterparties, specialised_lending=sl_data)
+
+    def test_sl_with_sme_revenue_flags_is_sme_true(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SL exposure whose counterparty is an SME must have is_sme=True
+        while exposure_class remains SPECIALISED_LENDING (regression for P1.44:
+        slotting cases were silently missing the SME supporting factor)."""
+        bundle = self._build_sl_bundle(annual_revenue=30_000_000.0)  # well under 44m GBP
+
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["is_sme"][0] is True
+        assert df["exposure_class"][0] == ExposureClass.SPECIALISED_LENDING.value
+
+    def test_sl_with_large_corporate_revenue_not_sme(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """SL exposure whose counterparty is not an SME must have is_sme=False."""
+        bundle = self._build_sl_bundle(annual_revenue=100_000_000.0)  # above threshold
+
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["is_sme"][0] is False
+        assert df["exposure_class"][0] == ExposureClass.SPECIALISED_LENDING.value
+
+    def test_sl_with_zero_revenue_not_sme(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Revenue of 0 (missing data) should not produce a false-positive SME flag."""
+        bundle = self._build_sl_bundle(annual_revenue=0.0)
+
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["is_sme"][0] is False
+        assert df["exposure_class"][0] == ExposureClass.SPECIALISED_LENDING.value
+
+    def test_sl_sme_receives_sme_supporting_factor_end_to_end(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Full classifier → slotting pipeline: SL SME must receive the 0.7619
+        tier-1 SME supporting factor. Regression test for P1.44 — the existing
+        unit tests in tests/unit/test_slotting_supporting_factors.py inject
+        is_sme=True directly and so cannot detect a classifier-side bug."""
+        from rwa_calc.engine.slotting import SlottingCalculator
+
+        bundle = self._build_sl_bundle(annual_revenue=30_000_000.0)
+        classified = classifier.classify(bundle, crr_config)
+
+        # The default crr_config uses SA permission_mode (no SL slotting permission),
+        # so slotting_exposures would be empty. Filter directly on sl_type to verify
+        # that classifier-emitted is_sme flag produces the right factor when piped
+        # into the slotting calculator.
+        sl_rows = classified.all_exposures.filter(pl.col("sl_type").is_not_null())
+
+        slotting_result = SlottingCalculator().calculate_branch(sl_rows, crr_config).collect()
+
+        assert slotting_result.height == 1
+        assert slotting_result["is_sme"][0] is True
+        assert slotting_result["supporting_factor"][0] == pytest.approx(0.7619, rel=1e-3)
+
+
+# =============================================================================
 # Retail Classification Tests
 # =============================================================================
 

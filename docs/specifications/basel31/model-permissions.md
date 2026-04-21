@@ -50,7 +50,7 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 | SL — OF / PF / CF | SA, F-IRB, A-IRB or Slotting | Subject to granted permission | Art. 147A(1)(d) → Art. 147(2)(c)(i) |
 | **Financial corporate (all FSEs) AND Large corporate (revenue > £440m)** | **F-IRB only** (SA with permission) | A-IRB not permitted — both sub-classes share one rule under Art. 147(2)(c)(ii) | **Art. 147A(1)(e)** → Art. 147(2)(c)(ii) |
 | Other general corporate (non-FSE, revenue ≤ £440m) | F-IRB (default); A-IRB with Art. 143(2A)/(2B) permission | A-IRB available only with explicit permission | Art. 147A(1)(f) → Art. 147(2)(c)(iii) |
-| Retail (mortgage, QRRE, other) | A-IRB (SA with permission) | A-IRB is the mandatory default | Art. 147A(1)(g) → Art. 147(2)(d) |
+| Retail (mortgage, QRRE, other) | A-IRB (SA with permission) | **Carry-forward from CRR** — retail has always been A-IRB-only (CRR Art. 151(7) mandated own-LGD/own-CCF for retail; F-IRB was only available for sovereign/institution/corporate under CRR Art. 151(8)). Not a new B31 restriction. | Art. 147A(1)(g) → Art. 147(2)(d); cf. CRR Art. 151(7) |
 | Equity | SA only | IRB equity approaches removed (Art. 155 left blank) | Art. 147A(1)(h) → Art. 147(2)(e) |
 
 !!! note "Art. 147A(1)(e) — FSEs and Large Corporates Share One Restriction"
@@ -69,6 +69,30 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
     F-IRB restriction. That letter actually covers object/project/commodities finance
     under Art. 147(2)(c)(i). The authoritative rule for both large corporates and FSEs
     is Art. 147A(1)(**e**), verified against ps126app1.pdf p.92.
+
+!!! info "Retail A-IRB-Only Is a CRR Carry-Forward, Not a New B31 Restriction"
+    Art. 147A(1)(g) formalises — in the new structured Basel 3.1 wording — a rule that
+    has been in force since the original CRR. Under **CRR Art. 151(7)**, firms applying
+    IRB to retail (Art. 147(2)(d)) were **required** to provide own estimates of LGDs
+    and conversion factors, i.e. A-IRB. **CRR Art. 151(8)** restricted F-IRB (supervisory
+    LGDs under Art. 161(1) and supervisory CCFs under Art. 166(8)(a)–(d)) to exposure
+    classes (a)–(c) — sovereigns, institutions, and corporates — with retail explicitly
+    excluded from that list.
+
+    The Basel 3.1 changes for retail are **not** about removing F-IRB (it was never
+    available) — they are:
+
+    - **New input floors**: PD floor 0.05% QRRE transactor / 0.10% non-transactor / 0.05% mortgage /
+      0.10% other retail (Art. 160(1a)/(2)); LGD floors per Art. 164(4); EAD floors per
+      Art. 166 — see [`airb-calculation.md`](airb-calculation.md).
+    - **Subclass redefinition**: QRRE transactor/non-transactor split (PRA Glossary p.9);
+      £90k single-obligor threshold in Art. 147(5A)(c).
+    - **Maturity parameter unchanged**: `M = 1` continues to apply to retail under
+      Art. 154(1)(c), as it did under CRR. This is a property of the retail IRB formula,
+      not an Art. 147A restriction.
+
+    See [`../../framework-comparison/key-differences.md#irb-approach-restrictions`](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full CRR-vs-B31 approach matrix, where the retail row correctly shows "A-IRB | A-IRB".
 
 ### Large Corporate Definition
 

@@ -247,32 +247,47 @@ class TestConfigureLogging:
 class TestStageTimer:
     def test_emits_entry_and_exit_records(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("rwa_calc.test.stage")
-        caplog.set_level(logging.INFO, logger=logger.name)
+        caplog.set_level(logging.DEBUG, logger=logger.name)
 
         with stage_timer(logger, "loader", framework="CRR"):
             pass
 
-        messages = [(r.levelname, r.message, getattr(r, "stage", None)) for r in caplog.records]
-        assert ("INFO", "stage entered", "loader") in messages
-        assert any(
-            level == "INFO" and msg == "stage completed" and stage == "loader"
-            for level, msg, stage in messages
-        )
-        exit_record = next(r for r in caplog.records if r.message == "stage completed")
+        entry_records = [
+            r
+            for r in caplog.records
+            if r.levelname == "DEBUG" and getattr(r, "stage", None) == "loader"
+        ]
+        exit_records = [
+            r
+            for r in caplog.records
+            if r.levelname == "INFO" and getattr(r, "stage", None) == "loader"
+        ]
+        assert len(entry_records) == 1, "expected a single DEBUG entry record"
+        assert entry_records[0].message == "loader started"
+        assert len(exit_records) == 1, "expected a single INFO exit record"
+        exit_record = exit_records[0]
+        assert exit_record.message.startswith("loader completed in ")
+        assert exit_record.message.endswith(" ms")
         assert getattr(exit_record, "elapsed_ms", None) is not None
         assert getattr(exit_record, "framework", None) == "CRR"
 
     def test_emits_warning_on_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         logger = logging.getLogger("rwa_calc.test.stage")
-        caplog.set_level(logging.INFO, logger=logger.name)
+        caplog.set_level(logging.DEBUG, logger=logger.name)
 
         with pytest.raises(RuntimeError), stage_timer(logger, "classifier"):
             raise RuntimeError("boom")
 
-        failures = [r for r in caplog.records if r.message == "stage failed"]
+        failures = [
+            r
+            for r in caplog.records
+            if r.levelname == "WARNING" and getattr(r, "stage", None) == "classifier"
+        ]
         assert len(failures) == 1
-        assert failures[0].levelname == "WARNING"
-        assert getattr(failures[0], "elapsed_ms", None) is not None
+        failure = failures[0]
+        assert failure.message.startswith("classifier failed after ")
+        assert failure.message.endswith(" ms")
+        assert getattr(failure, "elapsed_ms", None) is not None
 
 
 class TestCalculationConfigLogFields:

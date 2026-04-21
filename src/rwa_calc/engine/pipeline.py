@@ -27,6 +27,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -229,9 +230,12 @@ class PipelineOrchestrator:
         self._errors = []
 
         run_id, run_id_token = new_run_id()
+        run_start = time.perf_counter()
         try:
             logger.info(
-                "pipeline run starting",
+                "pipeline run starting (framework=%s, permission_mode=%s)",
+                config.framework.value,
+                config.permission_mode.value,
                 extra={
                     "stage": "pipeline",
                     "framework": config.framework.value,
@@ -299,9 +303,16 @@ class PipelineOrchestrator:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
 
+            total_ms = round((time.perf_counter() - run_start) * 1000.0, 2)
             logger.info(
-                "pipeline run finished",
-                extra={"stage": "pipeline", "error_count": len(result.errors)},
+                "pipeline run finished in %.1f ms (%d errors)",
+                total_ms,
+                len(result.errors),
+                extra={
+                    "stage": "pipeline",
+                    "elapsed_ms": total_ms,
+                    "error_count": len(result.errors),
+                },
             )
             return result
         finally:
@@ -576,6 +587,20 @@ class PipelineOrchestrator:
                     [sa_result, irb_result, slotting_result],
                     config,
                     ["sa_branch", "irb_branch", "slotting_branch"],
+                )
+                sa_rows = sa_df.height
+                irb_rows = irb_df.height
+                slotting_rows = slotting_df.height
+                logger.info(
+                    "calculators materialised %d rows (sa=%d, irb=%d, slotting=%d)",
+                    sa_rows + irb_rows + slotting_rows,
+                    sa_rows,
+                    irb_rows,
+                    slotting_rows,
+                    extra={
+                        "stage": "calculators",
+                        "row_count": sa_rows + irb_rows + slotting_rows,
+                    },
                 )
 
                 # Equity — separate path (not in unified frame)

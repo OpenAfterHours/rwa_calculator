@@ -96,10 +96,16 @@ class TestPipelineLoggingInstrumentation:
         _, records = _run_pipeline_capturing_records(minimal_bundle, crr_config, caplog)
 
         stages_with_entries = {
-            r.stage for r in records if r.message == "stage entered" and hasattr(r, "stage")
+            r.stage
+            for r in records
+            if r.levelname == "DEBUG" and hasattr(r, "stage") and r.message == f"{r.stage} started"
         }
         stages_with_exits = {
-            r.stage for r in records if r.message == "stage completed" and hasattr(r, "stage")
+            r.stage
+            for r in records
+            if r.levelname == "INFO"
+            and hasattr(r, "stage")
+            and r.message.startswith(f"{r.stage} completed in ")
         }
 
         expected_stages = {
@@ -123,7 +129,13 @@ class TestPipelineLoggingInstrumentation:
     ) -> None:
         _, records = _run_pipeline_capturing_records(minimal_bundle, crr_config, caplog)
 
-        exit_records = [r for r in records if r.message == "stage completed"]
+        exit_records = [
+            r
+            for r in records
+            if r.levelname == "INFO"
+            and hasattr(r, "stage")
+            and r.message.startswith(f"{r.stage} completed in ")
+        ]
         assert exit_records, "no stage exit records captured"
         for record in exit_records:
             elapsed = getattr(record, "elapsed_ms", None)

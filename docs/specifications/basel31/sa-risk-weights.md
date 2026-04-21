@@ -35,6 +35,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
 | FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 warning, `due_diligence_override_rw` floor) |
 | FR-1.20 | ECRA trade-finance ≤ 6m extension of Table 4 (Art. 120(2A)) | P1 | Done (input-driven via `is_short_term_trade_lc`) |
+| FR-1.21 | Real estate framework routing (Art. 124(1)–(3)) and mixed RE proportional split (Art. 124(4)) | P1 | Partial — single-property routing done; mixed-property split requires per-component property values (input-schema gap, see D3.59) |
 
 ---
 
@@ -844,6 +845,93 @@ further increased by this multiplier.
 
 Triggered by setting `cp_borrower_income_currency` in the input data to a currency different
 from the exposure currency. Output column: `currency_mismatch_multiplier_applied`.
+
+---
+
+## Real Estate — Framework Scope (Art. 124)
+
+Article 124 is the **top-level scoping article** for the real-estate risk-weight framework. It sits above Art. 124A–124L and determines which sub-article each RE exposure is routed through. Per the Note at the end of Art. 124, this provision consolidates Art. 124(1), 125, and 126 of CRR as it applied immediately before revocation by the Treasury — i.e., the CRR residential and commercial RE risk-weight articles are collapsed into a single scoping rule that delegates to the new Art. 124F–124L tables.
+
+**Regulatory Reference:** PRA PS1/26 Art. 124 (ps126app1.pdf pp. 50–51)
+
+!!! quote "Art. 124 — Real Estate Exposures"
+    1. An institution shall apply the risk weights set out in Articles 124F to 124I to regulatory real estate exposures.
+    2. An institution shall apply the risk weights set out in Article 124J to other real estate exposures.
+    3. An institution shall apply the risk weights set out in Article 124K to ADC exposures.
+    4. An institution shall split a mixed real estate exposure into a residential real estate exposure and a commercial real estate exposure according to the ratio of the values of the residential real estate and the commercial real estate that the exposure is secured by. An institution shall assign the relevant risk weights set out in Article 124J to each part of the exposure, unless both the residential real estate exposure and the commercial real estate exposure parts of the exposure are regulatory real estate exposures, in which case an institution shall assign the relevant risk weights in Articles 124F to 124I to each part of the exposure.
+
+    *[Note: This Article corresponds to Articles 124(1), 125 and 126 of CRR as it applied immediately before revocation by the Treasury]*
+
+### Routing Decision Tree (Art. 124(1)–(3))
+
+For a **single-property** RE exposure, Art. 124 paragraphs (1)–(3) route to exactly one risk-weight table:
+
+| Exposure type | Routing | Risk-weight articles |
+|---------------|---------|----------------------|
+| ADC exposure (acquisition / development / construction, Art. 124K definition) | Art. 124(3) | [Art. 124K](#real-estate--adc-exposures-art-124k) — 150% standard, 100% qualifying residential |
+| Regulatory RE (passes [Art. 124A six-criterion gate](#real-estate--qualifying-criteria-art-124a)) | Art. 124(1) | Art. 124F–124I (class-specific loan-splitting or income-producing tables) |
+| Other RE (fails Art. 124A gate but not ADC) | Art. 124(2) | [Art. 124J](#consequence-of-failing--other-real-estate-art-124j) — 150% income-dependent, counterparty RW otherwise |
+
+The ADC check in Art. 124(3) is evaluated **before** the Art. 124A qualifying-criteria gate — Art. 124A(1) opens "A real estate exposure is a regulatory real estate exposure if it is **not an ADC exposure** and all the following requirements are met". An ADC exposure therefore never enters the Art. 124F–124J channel regardless of the six criteria.
+
+### Mixed Real Estate Split (Art. 124(4))
+
+A **mixed real estate exposure** is a single exposure secured by both residential immovable property and commercial immovable property (e.g., a mixed-use building with shops on the ground floor and flats above, or a cross-collateralised facility backed by a mix of RESI and CRE). Art. 124(4) requires the exposure to be split into two notional components:
+
+```
+V_RESI = value of residential property securing the exposure
+V_CRE  = value of commercial  property securing the exposure
+V_total = V_RESI + V_CRE
+
+RESI_share = V_RESI / V_total
+CRE_share  = V_CRE  / V_total
+
+EAD_RESI = EAD × RESI_share
+EAD_CRE  = EAD × CRE_share
+```
+
+Each component is then risk-weighted independently using the **regulatory RE qualifying gate applied to that component's property**:
+
+| Qualifying status of each part | Risk-weight article applied to RESI part | Risk-weight article applied to CRE part |
+|--------------------------------|------------------------------------------|-----------------------------------------|
+| **Both** parts regulatory RE (each meets Art. 124A against its own property) | Art. 124F or 124G (residential) | Art. 124H or 124I (commercial) |
+| Either part fails Art. 124A | Art. 124J (residential) | Art. 124J (commercial) |
+
+!!! warning "Default is the punitive branch"
+    Art. 124(4) makes **Art. 124J the default** for mixed RE exposures — the preferential Art. 124F–124I tables apply **only if both the residential and the commercial part separately qualify** under Art. 124A. If either part fails any of the six Art. 124A(1) criteria (e.g., commercial part materially depends on borrower performance, or residential part's charge is unenforceable), **both parts** drop to Art. 124J. There is no partial preference where one qualifying part uses 124F–124I while the non-qualifying part uses 124J — the regulation is written as an all-or-nothing gate for the aggregate exposure.
+
+### Worked Example — Mixed-Use Building
+
+A GBP 2,000,000 loan is secured by a mixed-use property valued at GBP 2,500,000, comprising:
+
+- Ground-floor retail unit: GBP 1,000,000 (commercial, owner-occupied by the obligor's business)
+- Two residential flats above: GBP 1,500,000 (residential, let to third-party tenants, not materially dependent on rental cash flows — the obligor services the debt from its retail business income)
+
+Property-value shares: RESI 60%, CRE 40%. Both parts separately qualify under Art. 124A (legal certainty met, valuation to Art. 124D, independent value, insurance). The RESI part is not materially dependent on the property's own cash flows (Art. 124E(1) default) → Art. 124F loan-splitting. The CRE part is not materially dependent (own-use test, Art. 124E(6)) → Art. 124H(1) loan-splitting.
+
+LTV on the combined exposure: 2,000,000 / 2,500,000 = 80%. The LTV is computed at the **aggregate** level per Art. 124C, then the secured-portion split is applied separately on each notional component against its own property value.
+
+| Component | Notional EAD | Property value | LTV on component | Risk-weight path |
+|-----------|--------------|----------------|------------------|------------------|
+| RESI 60% | 1,200,000 | 1,500,000 | 80% | Art. 124F: 20% on first 55% of 1,500,000 = 825,000; residual 375,000 at counterparty RW |
+| CRE 40% | 800,000 | 1,000,000 | 80% | Art. 124H(1): 60% on first 55% of 1,000,000 = 550,000; residual 250,000 at counterparty RW |
+
+If either component instead failed Art. 124A (e.g., the retail unit's income became the primary repayment source, breaching Art. 124A(1)(e) independence), **both** components would drop to Art. 124J and receive 150% (if income-dependent) or the non-income-dependent fallback weights.
+
+### Implementation Status
+
+!!! warning "Mixed RE split not yet implemented — input-schema gap"
+    The current input schema exposes a single `property_value` and `property_type` per exposure row, with no mechanism to declare that a single exposure is secured by both residential and commercial property. The B31 SA calculator branch therefore routes each row exclusively through either the residential (Art. 124F–124G) or commercial (Art. 124H–124I) chain based on the single `property_type` flag, and the Art. 124(4) proportional split is **not applied**.
+
+    Firms with genuinely mixed-use collateral must pre-split the exposure into two separate input rows at the loader boundary — one with `property_type = "residential"` and its `property_value` = V_RESI, one with `property_type = "commercial"` and its `property_value` = V_CRE — each with `EAD = total_EAD × (V_part / V_total)` and `is_qualifying_re` reflecting that part's own Art. 124A status. This matches the regulation's outcome but places the split-logic obligation on the firm.
+
+    Code-side gap logged as **D3.59** in `DOCS_IMPLEMENTATION_PLAN.md`: input schema needs `residential_property_value` / `commercial_property_value` fields (or a repeated-collateral structure) and a dedicated `is_mixed_re` path in `engine/sa/namespace.py` to apply Art. 124(4) automatically.
+
+### CRR Comparison
+
+CRR Art. 124 (pre-revocation) was a five-paragraph scoping article delegating to Art. 125 (residential) and Art. 126 (commercial). Neither article had an explicit "mixed RE" paragraph — mixed-use collateral was handled under general SA principles via the residential-vs-commercial classification of the predominant security interest. The Basel 3.1 Art. 124(4) mandatory proportional split is **new regulatory drafting**, although the underlying principle (apportion risk by collateral value) was implicit in prior supervisory practice.
+
+See the [CRR Residential Mortgage spec](../crr/sa-risk-weights.md#residential-mortgage-exposures-crr-art-125) and [CRR Commercial RE spec](../crr/sa-risk-weights.md#commercial-real-estate-crr-art-126) for the legacy treatment.
 
 ---
 

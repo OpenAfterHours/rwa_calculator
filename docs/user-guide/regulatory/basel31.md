@@ -245,6 +245,16 @@ counterparty / floor RW otherwise). See the
 [Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
 for full details.
 
+!!! info "Mixed Residential/Commercial Property (Art. 124(4))"
+    A single exposure secured by **both** residential and commercial property (e.g., a
+    mixed-use building with flats above retail units) must be split in proportion to the
+    value of each property, and each part risk-weighted separately. The preferential
+    Art. 124F–124I treatment applies **only if both parts separately qualify** under
+    Art. 124A — if either part fails the six-criterion gate, **both** parts fall to
+    Art. 124J. Pre-split mixed-use exposures into two input rows (one residential, one
+    commercial) at the loader boundary with `EAD` apportioned by property value. See
+    [Art. 124 specification](../../specifications/basel31/sa-risk-weights.md#real-estate--framework-scope-art-124).
+
 !!! info "LTV Definition (Art. 124C)"
     Basel 3.1 defines a formal regulatory LTV: outstanding balance + undrawn committed
     amounts + **all prior/pari passu charges** (Art. 124C(3)), divided by property value.

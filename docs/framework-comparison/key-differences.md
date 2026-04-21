@@ -612,6 +612,21 @@ a fundamentally different methodology based on the institution's own capital ade
 
 ### Residential Real Estate
 
+!!! info "Framework Scope and Mixed RE Split (Art. 124) — New in Basel 3.1"
+    Basel 3.1 Art. 124 is the top-level scoping article for the RE framework — paragraphs
+    (1)–(3) route each exposure to Art. 124F–124I (regulatory RE), Art. 124J (other RE), or
+    Art. 124K (ADC). **Paragraph (4) is new**: a single exposure secured by both residential
+    and commercial property must be split in proportion to the value of each property, with
+    each part routed to its own risk-weight article. The default for mixed exposures is
+    **Art. 124J on both parts** — the preferential Art. 124F–124I treatment applies only if
+    **both** parts separately qualify under the Art. 124A six-criterion gate (all-or-nothing,
+    no partial preference).
+
+    CRR had no explicit mixed-RE paragraph; mixed-use collateral was handled via the
+    residential-vs-commercial classification of the predominant security interest. See
+    [B31 SA Risk Weights — Art. 124](../specifications/basel31/sa-risk-weights.md#real-estate--framework-scope-art-124)
+    for the routing decision tree, worked example, and current input-schema gap (D3.59).
+
 !!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
     Basel 3.1 introduces Art. 124E, a formal test for routing RE exposures between
     loan-splitting (non-dependent) and whole-loan (income-producing) treatment. CRR

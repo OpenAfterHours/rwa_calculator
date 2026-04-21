@@ -4,12 +4,16 @@ Shared sidebar for all RWA Calculator marimo apps.
 Provides a single definition of the navigation sidebar so that changes
 (new links, styling, workbook listing logic) only need to be made once.
 
-Theme is applied project-wide via [tool.marimo.display.custom_css] in
-pyproject.toml, which marimo injects into <head> at render time.
+Theme (``theme.css``) is inlined into the sidebar output so that every
+page calling ``create_sidebar()`` is themed — including user workbooks
+created from the starter template. This avoids depending on marimo's
+file-relative ``css_file`` lookup, which fails for workbooks nested in
+subfolders or when the package is pip-installed.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 _MARIMO_DIR = Path(__file__).parent.parent
@@ -18,19 +22,24 @@ _TEAM_DIR = _MARIMO_DIR / "workspaces" / "team"
 _SKIP_DIRS = frozenset({"shared", "__marimo__", "__pycache__"})
 
 
-# Read logo at import time from project docs/assets
 def _load_logo_base64() -> str:
     import base64
 
-    logo_path = (
-        _MARIMO_DIR.parent.parent.parent.parent / "docs" / "assets" / "openafterhours_icon_512.png"
-    )
+    logo_path = Path(__file__).parent / "openafterhours_icon_512.png"
     if logo_path.exists():
         return "data:image/png;base64," + base64.b64encode(logo_path.read_bytes()).decode()
     return ""
 
 
+def _load_theme_css() -> str:
+    css_path = Path(__file__).parent / "theme.css"
+    if css_path.exists():
+        return css_path.read_text(encoding="utf-8")
+    return ""
+
+
 _LOGO_URI = _load_logo_base64()
+_THEME_CSS = _load_theme_css()
 
 
 def _get_version() -> str:
@@ -109,7 +118,27 @@ def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> obje
         else mo.md("# RWA Calculator")
     )
 
-    items = [
+    items = []
+    if _THEME_CSS:
+        # Theme CSS defines vars on :root/.marimo; those must be set on
+        # the document root so marimo's own button/component styles can
+        # read them. A <style> block inside a cell output only themes
+        # descendants of the cell (links/text), not global components
+        # like buttons. Script copies the <style> into <head> so the
+        # vars cascade everywhere. The inline <style> is kept as a
+        # fallback in case the runtime sanitises <script>.
+        _css_id = "rwa-calc-theme"
+        _script = (
+            f"(function(){{"
+            f"if(document.getElementById({json.dumps(_css_id)}))return;"
+            f"var s=document.createElement('style');"
+            f"s.id={json.dumps(_css_id)};"
+            f"s.textContent={json.dumps(_THEME_CSS)};"
+            f"document.head.appendChild(s);"
+            f"}})();"
+        )
+        items.append(mo.Html(f"<style>{_THEME_CSS}</style><script>{_script}</script>"))
+    items += [
         _header,
         mo.nav_menu(
             {

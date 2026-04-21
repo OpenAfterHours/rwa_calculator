@@ -50,7 +50,7 @@ apps_dir = Path(__file__).parent
 # ---------------------------------------------------------------------------
 # Favicon — load custom icon at import time (replaces default marimo favicon)
 # ---------------------------------------------------------------------------
-_FAVICON_PATH = apps_dir.parents[3] / "docs" / "assets" / "openafterhours_icon_512.png"
+_FAVICON_PATH = apps_dir / "shared" / "openafterhours_icon_512.png"
 _FAVICON_BYTES = _FAVICON_PATH.read_bytes() if _FAVICON_PATH.exists() else b""
 workspaces_dir = apps_dir / "workspaces" / "local"
 workspaces_dir.mkdir(parents=True, exist_ok=True)

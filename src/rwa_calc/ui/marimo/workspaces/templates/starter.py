@@ -22,7 +22,6 @@ app = marimo.App(width="medium")
 
 @app.cell(hide_code=True)
 def _():
-    import sys
     from datetime import date
     from decimal import Decimal
     from pathlib import Path
@@ -30,26 +29,11 @@ def _():
     import marimo as mo
     import polars as pl
 
-    # Locate project root by walking up parents to find pyproject.toml.
-    # Robust to any workbook nesting depth under workspaces/.
-    _here = Path(__file__).resolve()
-    project_root = next(
-        (p for p in _here.parents if (p / "pyproject.toml").exists()),
-        _here.parents[-1],
-    )
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-
-    cache_dir = project_root / "src" / "rwa_calc" / "ui" / "marimo" / ".cache"
-
-    _shared = str(project_root / "src" / "rwa_calc" / "ui" / "marimo" / "shared")
-    if _shared not in sys.path:
-        sys.path.insert(0, _shared)
-    from sidebar import create_sidebar as _create_sidebar
+    from rwa_calc.ui.marimo.shared.sidebar import create_sidebar as _create_sidebar
 
     _create_sidebar(mo, base_url="http://localhost:8000")
 
-    return Decimal, Path, cache_dir, date, mo, pl, project_root
+    return Decimal, Path, date, mo, pl
 
 
 @app.cell(hide_code=True)
@@ -65,10 +49,7 @@ def _(mo, run_btn):
         not run_btn.value, mo.md("")
     )  # leave this code to prevent full re-run of workbook on re-open
 
-    # Load cached results (run a calculation in the Calculator first)
-    # cached = pl.scan_parquet(cache_dir / "last_results.parquet")
-
-    # Or run a fresh calculation
+    # Example — run a fresh calculation:
     # from rwa_calc import CreditRiskCalc
     # calc = CreditRiskCalc.from_path("path/to/data")
     # result = calc.run()

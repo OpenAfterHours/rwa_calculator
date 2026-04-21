@@ -638,7 +638,7 @@ def _(mo):
 def _(ScenarioResult, calculate_sa_rwa, fixtures, get_retail_risk_weight):
     """Calculate Scenario A10: SME Retail."""
     loan_a10 = fixtures.get_loan("LOAN_RTL_SME_001")
-    cpty_a10 = fixtures.get_counterparty("RTL_SME_001")
+    cpty_a10 = fixtures.get_counterparty("RTL_SME_SCN_001")
 
     ead_a10 = loan_a10["drawn_amount"]
     rw_a10 = get_retail_risk_weight()  # 75% for retail SME
@@ -649,7 +649,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_retail_risk_weight):
         scenario_group="A",
         description="SME retail - 75% RW",
         exposure_reference="LOAN_RTL_SME_001",
-        counterparty_reference="RTL_SME_001",
+        counterparty_reference="RTL_SME_SCN_001",
         approach="SA",
         exposure_class="RETAIL_SME",
         ead=ead_a10,

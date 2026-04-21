@@ -1020,11 +1020,13 @@ class TestRetailClassification:
                 "ultimate_parent_reference": [None],
                 "counterparty_hierarchy_depth": [1],
                 "lending_group_reference": [None],
-                "lending_group_total_exposure": [0.0],
+                # No lending group → hierarchy resolver now aggregates over the
+                # counterparty's own exposures (here, a single row).
+                "lending_group_total_exposure": [1320000.0],
                 # No residential property exclusion
                 "residential_collateral_value": [0.0],
                 "exposure_for_retail_threshold": [1320000.0],  # Above 880k threshold
-                "lending_group_adjusted_exposure": [0.0],
+                "lending_group_adjusted_exposure": [1320000.0],
             }
         ).lazy()
 

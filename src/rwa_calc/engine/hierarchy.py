@@ -1615,7 +1615,10 @@ class HierarchyResolver:
         group_by + join-back, avoiding plan tree branching.
 
         Per CRR Art. 123(c), the adjusted_exposure (excluding residential property)
-        is used for retail threshold testing.
+        is used for retail threshold testing. When a counterparty is not part of
+        an explicit lending group, it is treated as a group-of-one per CRR Art.
+        4(1)(39) ("group of connected clients") — totals are aggregated across
+        the counterparty's own exposures rather than leaving the per-row value.
 
         Args:
             exposures: Exposures with property coverage columns already added
@@ -1654,6 +1657,8 @@ class HierarchyResolver:
         )
 
         # .over() window functions for group totals (no self-join!)
+        # When no lending group, aggregate over counterparty_reference so the
+        # retail threshold test sees the obligor's full exposure, not a single line.
         exposures = exposures.with_columns(
             [
                 pl.when(pl.col("lending_group_reference").is_not_null())
@@ -1664,11 +1669,19 @@ class HierarchyResolver:
                     .over("lending_group_reference")
                     + pl.col("nominal_amount").sum().over("lending_group_reference")
                 )
-                .otherwise(0.0)
+                .otherwise(
+                    pl.col("drawn_amount")
+                    .clip(lower_bound=0.0)
+                    .sum()
+                    .over("counterparty_reference")
+                    + pl.col("nominal_amount").sum().over("counterparty_reference")
+                )
                 .alias("lending_group_total_exposure"),
                 pl.when(pl.col("lending_group_reference").is_not_null())
                 .then(pl.col("exposure_for_retail_threshold").sum().over("lending_group_reference"))
-                .otherwise(0.0)
+                .otherwise(
+                    pl.col("exposure_for_retail_threshold").sum().over("counterparty_reference")
+                )
                 .alias("lending_group_adjusted_exposure"),
             ]
         )

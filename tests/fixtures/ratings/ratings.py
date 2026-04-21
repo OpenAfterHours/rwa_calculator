@@ -923,6 +923,18 @@ def _retail_internal_ratings() -> list[Rating]:
             RATING_DATE,
             False,
         ),
+        # Dedicated SME retail CP for the A9/A11 scenario loan.
+        Rating(
+            "RTG_INT_RTL_SME_SCN_001",
+            "RTL_SME_SCN_001",
+            "internal",
+            "internal",
+            "S2A",
+            2,
+            0.0100,
+            RATING_DATE,
+            False,
+        ),
         Rating(
             "RTG_INT_RTL_SME_002",
             "RTL_SME_002",

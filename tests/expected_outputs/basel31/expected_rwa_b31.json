@@ -260,7 +260,7 @@
       "approach": "SA",
       "exposure_class": "RETAIL_SME",
       "exposure_reference": "LOAN_RTL_SME_001",
-      "counterparty_reference": "RTL_SME_001",
+      "counterparty_reference": "RTL_SME_SCN_001",
       "ead": 500000.0,
       "pd": null,
       "lgd": null,

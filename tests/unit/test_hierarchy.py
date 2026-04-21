@@ -964,7 +964,7 @@ class TestLendingGroupAggregation:
         lending_group_loans: pl.LazyFrame,
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
-        """Standalone counterparty should not be in any lending group."""
+        """Standalone counterparty with one exposure aggregates to its own drawn."""
         bundle = RawDataBundle(
             facilities=pl.LazyFrame(),
             loans=lending_group_loans,
@@ -1006,9 +1006,96 @@ class TestLendingGroupAggregation:
         result = resolver.resolve(bundle, config)
         df = result.exposures.collect()
 
-        # Standalone loan should have 0 lending group total
+        # Standalone loan has no lending group, so aggregation falls back to the
+        # counterparty's own exposures — a single 50,000 drawn loan in this case
+        # (CRR Art. 4(1)(39): a standalone obligor is a group-of-one).
         standalone = df.filter(pl.col("exposure_reference") == "STANDALONE_LOAN")
-        assert standalone["lending_group_total_exposure"][0] == pytest.approx(0.0, abs=1e-10)
+        assert standalone["lending_group_reference"][0] is None
+        assert standalone["lending_group_total_exposure"][0] == pytest.approx(50000.0, abs=1e-10)
+        assert standalone["lending_group_adjusted_exposure"][0] == pytest.approx(50000.0, abs=1e-10)
+
+    def test_standalone_counterparty_aggregates_own_exposures(
+        self,
+        resolver: HierarchyResolver,
+        lending_group_counterparties: pl.LazyFrame,
+        lending_group_mappings: pl.LazyFrame,
+    ) -> None:
+        """A counterparty with multiple loans and no lending group aggregates across them.
+
+        Regression for retail threshold bug: previously the threshold test used the
+        per-row `exposure_for_retail_threshold`, incorrectly treating each line as
+        an independent obligor.  CRR Art. 123(c) / Art. 4(1)(39) require aggregation
+        across every exposure to the counterparty even when no explicit lending
+        group exists.
+        """
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["SOLO_1", "SOLO_2", "SOLO_3"],
+                "product_type": ["PERSONAL", "PERSONAL", "PERSONAL"],
+                "book_code": ["RETAIL", "RETAIL", "RETAIL"],
+                "counterparty_reference": ["STANDALONE"] * 3,
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "drawn_amount": [400000.0, 400000.0, 400000.0],
+                "lgd": [0.45] * 3,
+                "beel": [0.01] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["FR"] * 3,
+                "ccf_modelled": [None, None, None],
+                "is_short_term_trade_lc": [None, None, None],
+            }
+        ).lazy()
+
+        bundle = RawDataBundle(
+            facilities=pl.LazyFrame(),
+            loans=loans,
+            contingents=pl.LazyFrame(
+                schema={
+                    "contingent_reference": pl.String,
+                    "product_type": pl.String,
+                    "book_code": pl.String,
+                    "counterparty_reference": pl.String,
+                    "value_date": pl.Date,
+                    "maturity_date": pl.Date,
+                    "currency": pl.String,
+                    "nominal_amount": pl.Float64,
+                    "lgd": pl.Float64,
+                    "beel": pl.Float64,
+                    "seniority": pl.String,
+                    "risk_type": pl.String,
+                    "ccf_modelled": pl.Float64,
+                    "is_short_term_trade_lc": pl.Boolean,
+                }
+            ),
+            counterparties=lending_group_counterparties,
+            collateral=pl.LazyFrame(),
+            guarantees=pl.LazyFrame(),
+            provisions=pl.LazyFrame(),
+            ratings=None,
+            facility_mappings=pl.LazyFrame(
+                schema={
+                    "parent_facility_reference": pl.String,
+                    "child_reference": pl.String,
+                    "child_type": pl.String,
+                }
+            ),
+            org_mappings=None,
+            lending_mappings=lending_group_mappings,
+        )
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+
+        result = resolver.resolve(bundle, config)
+        df = result.exposures.collect()
+
+        standalone_rows = df.filter(pl.col("counterparty_reference") == "STANDALONE")
+        assert len(standalone_rows) == 3
+        # Every row should see the full 1.2m counterparty aggregate, not its own 400k.
+        assert standalone_rows["lending_group_reference"].to_list() == [None, None, None]
+        for total in standalone_rows["lending_group_total_exposure"].to_list():
+            assert total == pytest.approx(1_200_000.0, abs=1e-6)
+        for adjusted in standalone_rows["lending_group_adjusted_exposure"].to_list():
+            assert adjusted == pytest.approx(1_200_000.0, abs=1e-6)
 
 
 # =============================================================================

@@ -532,12 +532,14 @@ def _retail_loans() -> list[Loan]:
             beel=0.0,
             seniority="senior",
         ),
-        # SME retail loan (Scenario A10)
+        # SME retail loan (Scenario A10 / CRR-A11 / B31-A9).  Pinned to a
+        # dedicated counterparty so the £500k scenario exposure is not pooled
+        # with the CRM test loans on RTL_SME_001 under Art. 123(c) aggregation.
         Loan(
             loan_reference="LOAN_RTL_SME_001",
             product_type="SME_LOAN",
             book_code="SME_RETAIL",
-            counterparty_reference="RTL_SME_001",
+            counterparty_reference="RTL_SME_SCN_001",
             value_date=VALUE_DATE,
             maturity_date=date(2028, 12, 31),
             currency="GBP",

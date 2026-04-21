@@ -524,3 +524,107 @@ class TestRiskWeightImpact:
         result = classifier.classify(bundle, b31_config)
         df = result.all_exposures.collect()
         assert df["exposure_class"][0] == ExposureClass.CORPORATE.value
+
+
+# =============================================================================
+# Counterparty-level aggregation when no lending group exists
+# =============================================================================
+
+
+def _exposures_multi(
+    *,
+    drawn_amounts: list[float],
+    lending_group_adjusted: float,
+) -> pl.LazyFrame:
+    """Create multiple retail exposures on the same counterparty (no lending group).
+
+    `lending_group_adjusted` simulates the hierarchy resolver output where, for a
+    counterparty not in a lending group, the aggregate is computed over the
+    counterparty's own exposures rather than zeroed-out.
+    """
+    n = len(drawn_amounts)
+    return pl.DataFrame(
+        {
+            "exposure_reference": [f"EXP_{i:03d}" for i in range(n)],
+            "exposure_type": ["loan"] * n,
+            "product_type": ["PERSONAL"] * n,
+            "book_code": ["RETAIL"] * n,
+            "counterparty_reference": ["CP_001"] * n,
+            "value_date": [date(2023, 1, 1)] * n,
+            "maturity_date": [date(2028, 1, 1)] * n,
+            "currency": ["GBP"] * n,
+            "drawn_amount": drawn_amounts,
+            "undrawn_amount": [0.0] * n,
+            "nominal_amount": [0.0] * n,
+            "lgd": [0.45] * n,
+            "seniority": ["senior"] * n,
+            "exposure_has_parent": [False] * n,
+            "root_facility_reference": [None] * n,
+            "facility_hierarchy_depth": [1] * n,
+            "counterparty_has_parent": [False] * n,
+            "parent_counterparty_reference": [None] * n,
+            "ultimate_parent_reference": [None] * n,
+            "counterparty_hierarchy_depth": [1] * n,
+            "lending_group_reference": [None] * n,
+            "lending_group_total_exposure": [lending_group_adjusted] * n,
+            "lending_group_adjusted_exposure": [lending_group_adjusted] * n,
+            "residential_collateral_value": [0.0] * n,
+            "exposure_for_retail_threshold": drawn_amounts,
+        }
+    ).lazy()
+
+
+class TestCounterpartyAggregationWithoutLendingGroup:
+    """Retail threshold aggregates across all exposures to a single obligor.
+
+    CRR Art. 123(c) / Art. 4(1)(39): "group of connected clients" — a standalone
+    counterparty is a group-of-one.  Every exposure to that obligor counts
+    toward the EUR 1m / GBP 880k limit, not just the exposure on the current
+    row.  Regression for a bug where the classifier fell back to the per-row
+    `exposure_for_retail_threshold` when no lending group was present.
+    """
+
+    def test_b31_three_sub_threshold_lines_summing_above_threshold_fail(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """Three GBP 400k exposures (sum 1.2m) on one CP with no lending group → not retail."""
+        bundle = _make_bundle(
+            _exposures_multi(
+                drawn_amounts=[400_000.0, 400_000.0, 400_000.0],
+                lending_group_adjusted=1_200_000.0,
+            ),
+            _counterparties(is_managed_as_retail=True),
+        )
+        result = classifier.classify(bundle, b31_config)
+        df = result.all_exposures.collect()
+        assert df["qualifies_as_retail"].to_list() == [False, False, False]
+
+    def test_b31_three_lines_summing_below_threshold_qualify(
+        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+    ) -> None:
+        """Three GBP 200k exposures (sum 600k) on one CP with no lending group → retail."""
+        bundle = _make_bundle(
+            _exposures_multi(
+                drawn_amounts=[200_000.0, 200_000.0, 200_000.0],
+                lending_group_adjusted=600_000.0,
+            ),
+            _counterparties(is_managed_as_retail=True),
+        )
+        result = classifier.classify(bundle, b31_config)
+        df = result.all_exposures.collect()
+        assert df["qualifies_as_retail"].to_list() == [True, True, True]
+
+    def test_crr_three_sub_threshold_lines_summing_above_threshold_fail(
+        self, classifier: ExposureClassifier, crr_config: CalculationConfig
+    ) -> None:
+        """CRR: aggregation across counterparty also applies (EUR 1m, ~GBP 873k)."""
+        bundle = _make_bundle(
+            _exposures_multi(
+                drawn_amounts=[400_000.0, 400_000.0, 400_000.0],
+                lending_group_adjusted=1_200_000.0,
+            ),
+            _counterparties(is_managed_as_retail=True),
+        )
+        result = classifier.classify(bundle, crr_config)
+        df = result.all_exposures.collect()
+        assert df["qualifies_as_retail"].to_list() == [False, False, False]

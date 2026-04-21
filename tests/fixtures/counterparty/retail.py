@@ -114,6 +114,22 @@ def create_retail_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": True,  # Managed on pooled retail basis
         },
+        # Dedicated SME Retail counterparty for the A9/A11 scenario loan
+        # (LOAN_RTL_SME_001). Kept separate from RTL_SME_001 so the scenario's
+        # £500k loan is not pooled with the CRM test loans under the connected-
+        # client aggregation (CRR Art. 123(c) / Art. 4(1)(39)).
+        {
+            "counterparty_reference": "RTL_SME_SCN_001",
+            "counterparty_name": "Scenario Retail SME Ltd",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 500_000.0,
+            "total_assets": 300_000.0,
+            "default_status": False,
+            "sector_code": "47.19",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": True,
+        },
         {
             "counterparty_reference": "RTL_SME_002",
             "counterparty_name": "Corner Shop Trading",

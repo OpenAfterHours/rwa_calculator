@@ -250,7 +250,7 @@ def _(ScenarioResult):
             "A",
             "SME retail - 75% RW",
             "LOAN_RTL_SME_001",
-            "RTL_SME_001",
+            "RTL_SME_SCN_001",
             "SA",
             "RETAIL_SME",
             500000,

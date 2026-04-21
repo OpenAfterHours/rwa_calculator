@@ -281,3 +281,58 @@ class TestCalculationConfig:
         )
 
         assert config.eur_gbp_rate == Decimal("0.85")
+
+    def test_sync_eur_gbp_rate_flag_defaults_true(self):
+        """Auto-sync of eur_gbp_rate from fx_rates should be enabled by default."""
+        crr_config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+
+        assert crr_config.sync_eur_gbp_rate_from_fx_table is True
+        assert b31_config.sync_eur_gbp_rate_from_fx_table is True
+
+    def test_with_fx_rate_rebuilds_thresholds(self):
+        """with_fx_rate should update eur_gbp_rate AND re-derive GBP thresholds."""
+        config = CalculationConfig.crr(
+            reporting_date=date(2025, 12, 31),
+            eur_gbp_rate=Decimal("0.8732"),
+        )
+
+        new_config = config.with_fx_rate(Decimal("0.90"))
+
+        assert new_config.eur_gbp_rate == Decimal("0.90")
+        # EUR 50m * 0.90 = GBP 45m
+        assert new_config.thresholds.sme_turnover_threshold == Decimal("50000000") * Decimal("0.90")
+        # Original config is untouched (frozen + replace returns a new instance)
+        assert config.eur_gbp_rate == Decimal("0.8732")
+        assert config.thresholds.sme_turnover_threshold == Decimal("50000000") * Decimal("0.8732")
+
+    def test_with_fx_rate_noop_when_rate_unchanged(self):
+        """with_fx_rate should return the same instance when rate matches."""
+        config = CalculationConfig.crr(
+            reporting_date=date(2025, 12, 31),
+            eur_gbp_rate=Decimal("0.8732"),
+        )
+
+        assert config.with_fx_rate(Decimal("0.8732")) is config
+
+    def test_with_fx_rate_noop_for_basel_3_1(self):
+        """with_fx_rate should be a no-op for Basel 3.1 (GBP-native thresholds)."""
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+
+        result = config.with_fx_rate(Decimal("0.90"))
+
+        assert result is config
+        assert result.eur_gbp_rate == config.eur_gbp_rate
+
+    def test_with_fx_rate_preserves_post_init_derivations(self):
+        """Replacing via with_fx_rate should re-run __post_init__ for irb_permissions."""
+        config = CalculationConfig.crr(
+            reporting_date=date(2025, 12, 31),
+            permission_mode=PermissionMode.IRB,
+            eur_gbp_rate=Decimal("0.8732"),
+        )
+
+        new_config = config.with_fx_rate(Decimal("0.90"))
+
+        assert new_config.permission_mode == PermissionMode.IRB
+        assert new_config.irb_permissions == config.irb_permissions

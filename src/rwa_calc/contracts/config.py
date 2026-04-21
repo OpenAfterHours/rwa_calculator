@@ -15,7 +15,7 @@ configuration that automatically sets correct values for each framework.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -825,6 +825,10 @@ class CalculationConfig:
     equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
+    # When True, the pipeline replaces eur_gbp_rate (and rebuilds thresholds)
+    # with the (EUR, GBP) row from the loaded fx_rates table, if present.
+    # Set False to force the passed-in / default rate regardless of input data.
+    sync_eur_gbp_rate_from_fx_table: bool = True
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
     use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
     # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
@@ -870,6 +874,22 @@ class CalculationConfig:
     def get_output_floor_percentage(self) -> Decimal:
         """Get the applicable output floor percentage."""
         return self.output_floor.get_floor_percentage(self.reporting_date)
+
+    def with_fx_rate(self, eur_gbp_rate: Decimal) -> CalculationConfig:
+        """Return a new CRR config with eur_gbp_rate and thresholds rebuilt.
+
+        No-op for Basel 3.1 (GBP-native thresholds; eur_gbp_rate is unused by
+        the B3.1 SME correlation branch per PRA PS1/26 Art. 153(4)).
+        """
+        if self.framework != RegulatoryFramework.CRR:
+            return self
+        if eur_gbp_rate == self.eur_gbp_rate:
+            return self
+        return replace(
+            self,
+            eur_gbp_rate=eur_gbp_rate,
+            thresholds=RegulatoryThresholds.crr(eur_gbp_rate=eur_gbp_rate),
+        )
 
     @classmethod
     def crr(

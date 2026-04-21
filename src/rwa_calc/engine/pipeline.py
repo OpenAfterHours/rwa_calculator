@@ -55,6 +55,7 @@ from rwa_calc.contracts.protocols import (
     SlottingCalculatorProtocol,
 )
 from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
     cleanup_spill_files,
     materialise_barrier,
@@ -243,6 +244,19 @@ class PipelineOrchestrator:
                     "run_id": run_id,
                 },
             )
+            # Keep eur_gbp_rate in step with the loaded fx_rates table so
+            # IRB SME correlation and RegulatoryThresholds use the same rate
+            # as FX amount conversion. CRR-only: B3.1 thresholds are GBP-native.
+            if config.is_crr and config.sync_eur_gbp_rate_from_fx_table:
+                derived_rate = extract_eur_gbp_rate(data.fx_rates)
+                if derived_rate is not None and derived_rate != config.eur_gbp_rate:
+                    logger.warning(
+                        "eur_gbp_rate auto-sync: replacing %s with %s from fx_rates table",
+                        config.eur_gbp_rate,
+                        derived_rate,
+                    )
+                    config = config.with_fx_rate(derived_rate)
+
             # Ensure components are initialized (config needed for framework-specific CRM)
             self._ensure_components_initialized(config)
 

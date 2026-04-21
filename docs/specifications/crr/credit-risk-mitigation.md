@@ -546,47 +546,111 @@ Method:
 
 ## Financial Collateral Simple Method — FCSM (Art. 222)
 
-SA-only method. The risk weight of the collateral substitutes for the exposure risk weight
-on the secured portion.
+Paragraph references below verified verbatim against `docs/assets/crr.pdf` pp. 216–217
+(UK-onshored CRR Art. 222, as amended to 1 Jan 2022).
 
-### Art. 222(1) — 20% RW Floor
+**Scope (Art. 222(1)).** SA-only method. Institutions may not use both the FCSM and the
+Financial Collateral Comprehensive Method simultaneously, except for the purposes of
+Art. 148(1) and Art. 150(1) (permanent partial use / phased IRB roll-out), and that
+exception may not be used selectively for own-funds arbitrage.
 
-All collateral-secured portions receive a minimum **20%** risk weight under the FCSM,
-regardless of the collateral's own risk weight.
+Under the FCSM the risk weight of the collateral substitutes for the obligor risk weight
+on the secured portion of the exposure. The unsecured remainder keeps the counterparty's
+unsecured risk weight.
 
-### Art. 222(4) — 0% Floor Exceptions
+### Art. 222(3) — 20% RW Floor
 
-The 20% floor is reduced to **0%** for the following repo-style / SFT transactions where
-the collateral is denominated in the **same currency** as the exposure:
+The collateralised portion takes the risk weight that would apply to a direct exposure
+to the collateral instrument (Art. 222(3), first sub-paragraph), subject to a minimum
+**20%** floor (Art. 222(3), second sub-paragraph), **except as specified in paragraphs
+4 to 6**.
 
-- **(a)** Cash deposits or cash-assimilated instruments as collateral
-- **(d)** Core market participant repos/SFTs where the collateral is sovereign/CB debt,
-  PSE debt, or institution debt rated CQS 1-2
+### Art. 222(4) — 0% / 10% Floor for SFTs (Art. 227 Criteria)
 
-The "core market participant" definition includes central governments, central banks,
-institutions, recognised investment firms, qualifying CCPs, and regulated CIUs.
+For **repurchase transactions and securities lending or borrowing transactions** that
+meet the criteria in Art. 227, the collateralised portion receives:
 
-### Art. 222(7) — No Maturity Mismatch
+- **0%** RW where the counterparty is a **core market participant** (as defined in
+  Art. 227);
+- **10%** RW where the counterparty is not a core market participant.
 
-Under the FCSM, the **residual maturity of the collateral must be at least equal to the
-residual maturity of the exposure**. Where the collateral has a shorter residual maturity
-than the exposure, the FCSM may not be used (the maturity mismatch adjustment in Art. 238
-does not apply to the FCSM).
+Art. 222(4) governs SFTs only — it does not extend to non-SFT transactions or to OTC
+derivative collateralisation (those fall under paragraphs 5 and 6 respectively).
+
+### Art. 222(6) — 0% Floor for Same-Currency Cash or 0%-RW Sovereign Debt (non-SFT, non-derivative)
+
+For **transactions other than those referred to in paragraphs 4 and 5**, institutions
+may assign a **0%** risk weight where the exposure and the collateral are denominated
+in the **same currency** and either:
+
+- **(a)** the collateral is cash on deposit or a cash-assimilated instrument; or
+- **(b)** the collateral is debt securities issued by central governments or central
+  banks eligible for a 0% RW under Art. 114, with the collateral's market value
+  discounted by **20%**.
+
+Art. 222(7) extends the "central government / central bank debt securities" definition
+used in paragraphs 5 and 6 to include:
+
+- debt securities of regional governments or local authorities treated as
+  central-government exposures under Art. 115;
+- debt securities of multilateral development banks attracting a 0% RW under
+  Art. 117(2);
+- debt securities of international organisations attracting a 0% RW under Art. 118;
+- debt securities of public sector entities treated as central-government exposures
+  under Art. 116(4).
+
+!!! note "Art. 222(5) — OTC Derivatives (not documented here)"
+    Art. 222(5) assigns 0% to OTC derivatives (Annex II) subject to daily MTM and
+    collateralised by cash with no currency mismatch, and 10% to such transactions
+    collateralised by central-government/CB debt with 0% RW under Chapter 2. It is
+    noted here for completeness; the calculator's FCSM path does not cover derivative
+    collateralisation (Art. 299(2)(b) prohibits FCSM for trading-book counterparty-risk
+    items in any case).
+
+### No Maturity Mismatch Adjustment for FCSM (Art. 239(1))
+
+Where the credit protection's residual maturity is shorter than the exposure's residual
+maturity, **the FCSM may not be used** (Art. 239(1)). The
+[maturity-mismatch adjustment formulas in Art. 239(2)/(3)](#maturity-mismatch-adjustment-crr-art-239)
+do not apply to FCSM-collateralised exposures — the protection is simply not recognised.
 
 ### FCSM Formula
 
 ```
-RW_secured = max(20%, RW_collateral)   [or 0% if Art. 222(4) exception applies]
+RW_secured   = max(floor, RW_collateral)
 RW_unsecured = RW_obligor
+
+where floor ∈ {0%, 10%, 20%} selected per Art. 222(3)–(6):
+    0%  → Art. 222(4) core-market SFT, or Art. 222(6) same-currency (a)/(b)
+    10% → Art. 222(4) non-core-market SFT
+    20% → Art. 222(3) default floor (no carve-out applies)
 ```
 
 Eligibility: Collateral must be eligible financial collateral per Art. 197.
 
-The calculator uses the Financial Collateral Comprehensive Method by default.
+The calculator uses the Financial Collateral Comprehensive Method by default; the FCSM
+path is reserved for firms that elect it under Art. 148(1) / Art. 150(1).
+
+!!! note "Change log — Art. 222 carve-outs clarified (21 April 2026, D2.63)"
+    Earlier drafts of this section conflated the Art. 222(4) SFT rule (0% core-market
+    participant / 10% otherwise, subject to Art. 227 criteria) with the Art. 222(6)
+    same-currency carve-out for non-SFT transactions. Sub-points **(a)** cash and
+    **(b)** 0%-RW central-government/CB debt sit under Art. 222(**6**); there is no
+    sub-point (d) in Art. 222(4). The previous "Art. 222(7) — No Maturity Mismatch"
+    heading was also relabelled — Art. 222(7) is the definition-extension paragraph
+    for "central government / central bank debt securities" referenced in paragraphs
+    5 and 6; the FCSM maturity-mismatch exclusion lives in Art. 239(1). The "Art.
+    222(1) — 20% RW Floor" heading was corrected to Art. 222(**3**) (Art. 222(1) is
+    the FCSM-scope paragraph). This aligns the CRR CRM spec with the 17 April 2026
+    correction already applied to the
+    [Basel 3.1 CRM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222).
 
 !!! note "Basel 3.1 FCSM Retention"
     Under Basel 3.1 (PRA PS1/26), the FCSM remains available for SA exposures only.
     IRB exposures must use the Comprehensive Method or LGD Modelling Collateral Method.
+    See [B31 FCSM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222)
+    for the corresponding paragraph structure (the Art. 222(3)/(4)/(6) three-tier
+    split carries forward unchanged).
 
 ## Financial Collateral Comprehensive Method — FCCM (Art. 223)
 

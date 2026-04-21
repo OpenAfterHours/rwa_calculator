@@ -410,17 +410,19 @@ is a PRA PS1/26 introduction (UK CRR has no HVCRE table). See [Key Differences](
     HVCRE uses col B/D values instead of A/C (P1.117 — Strong 95% instead of 70%, Good
     120% instead of 95%). CRR short-maturity differentiation is fully implemented.
 
-## Financial Institution Correlation Multiplier (CRE31.5)
+## Financial Institution Correlation Multiplier (Art. 153(2))
 
 The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):
-- Regulated financial institutions with total assets above the applicable threshold:
-  - **CRR**: EUR 70bn (Art. 153(2))
-  - **BCBS/Basel 3.1**: USD 100bn (CRE31.5)
-- Unregulated financial institutions regardless of size
+
+- **Large financial sector entities** — regulated FSEs with total assets ≥ **EUR 70bn** (≈ GBP 79bn per PRA PS1/26 Glossary conversion, Art. 4(1)(146)).
+- **Unregulated financial sector entities** — regardless of size.
+
+!!! info "Threshold unchanged between CRR and Basel 3.1"
+    PRA PS1/26 retains the CRR LFSE threshold. The BCBS standard (CRE31.5) sets the international baseline at **USD 100 billion**, but the PRA's UK implementation keeps the CRR-originated **EUR 70 billion** figure (imported into PS1/26 via Art. 4(1)(146) and the Glossary's GBP 79 billion conversion). All project files cite EUR 70bn for both frameworks — treat USD 100bn as the BCBS-only number, not the applicable UK threshold.
 
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
 
-Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26.
+Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26. See [key-differences.md § Financial Sector Correlation Multiplier](key-differences.md#financial-sector-correlation-multiplier) for the parallel CRR/B31 comparison and the distinction from the Art. 147A(1)(d) GBP 440m revenue approach restriction.
 
 ## Credit Conversion Factors (Art. 111 Table A1)
 

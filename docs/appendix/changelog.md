@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CRR Art. 138 multi-rating resolution now applied**: `HierarchyResolver._build_rating_inheritance_lazy` in `engine/hierarchy.py` previously collapsed multiple external ratings per counterparty to the single most recent one, silently ignoring assessments from additional nominated ECAIs. Replaced the "most recent wins" logic for external ratings with Art. 138: per-agency dedup (most recent per agency) followed by the 1-rating / 2-rating (higher RW) / ≥ 3-rating (second-best) selection rule. Resolution is performed on CQS rather than RW because within every SA exposure class the CQS → RW mapping is monotone non-decreasing. Internal-rating resolution, inheritance, and the external-rating non-inheritance rule are unchanged. New `TestArt138ExternalRatingResolution` class in `tests/unit/test_hierarchy.py` covers single/two/three/four-rating cases, ties at the two lowest CQS, same-agency repeats, and null-CQS rows. Existing fixture counterparties have ≤ 1 external agency each, so no acceptance-golden changes. Ref: CRR Art. 138.
 
 
+
+## [0.1.65] - 2026-04-21
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.64] - 2026-04-19
 
 ### Changed

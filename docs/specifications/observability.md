@@ -23,7 +23,7 @@ do to stay inside it.
 | `bind_run_id(run_id)` | Bind an existing id (returns reset token). |
 | `clear_run_id(token)` | Release the binding using the token from `new_run_id` / `bind_run_id`. |
 | `current_run_id()` | Read the active id (or `None`). |
-| `stage_timer(logger, stage, **extra)` | Context manager emitting INFO entry/exit records with `elapsed_ms`. Emits WARNING on exception so timing is always recorded. |
+| `stage_timer(logger, stage, **extra)` | Context manager emitting a DEBUG entry record and an INFO exit record carrying `elapsed_ms`. Emits WARNING on exception so timing is always recorded. |
 | `RunIdFilter` | `logging.Filter` that injects `record.run_id` on every record. |
 | `TextFormatter` / `JsonFormatter` | The two supported output formats. |
 
@@ -32,8 +32,13 @@ do to stay inside it.
 **Text format** (default):
 
 ```
-2026-04-19T18:42:01 INFO    [a3f0c1b24e1c] rwa_calc.engine.classifier: stage completed
+2026-04-19T18:42:01 INFO    [a3f0c1b24e1c] rwa_calc.engine.pipeline: classifier completed in 12.3 ms
 ```
+
+The stage name and elapsed time are embedded in the message string so the
+default `%(message)s` formatter surfaces them without per-stage configuration.
+A companion DEBUG record (`"classifier started"`) bookends each stage and is
+suppressed at default `INFO` level.
 
 **JSON format** (audit ingestion), single line per record:
 
@@ -41,9 +46,9 @@ do to stay inside it.
 {
   "timestamp": "2026-04-19T18:42:01.123456+00:00",
   "level": "INFO",
-  "logger": "rwa_calc.engine.classifier",
+  "logger": "rwa_calc.engine.pipeline",
   "run_id": "a3f0c1b24e1c",
-  "message": "stage completed",
+  "message": "classifier completed in 12.3 ms",
   "module": "pipeline",
   "line": 399,
   "stage": "classifier",
@@ -60,8 +65,8 @@ Only a whitelisted set of `extra` keys is propagated to JSON: `stage`,
 
 | Level | When |
 |---|---|
-| DEBUG | Branch decisions (IRB-vs-SA routing, CRM method selection, RE-splitter no-op skip). Guard expensive formatting with `logger.isEnabledFor(logging.DEBUG)`. |
-| INFO | Stage entry/exit (via `stage_timer`); pipeline start/finish; config echo (framework, permission_mode — never regulatory scalars); a single `"collected N calculation errors"` line when errors are appended. |
+| DEBUG | Stage entry records (via `stage_timer`); branch decisions (IRB-vs-SA routing, CRM method selection, RE-splitter no-op skip). Guard expensive formatting with `logger.isEnabledFor(logging.DEBUG)`. |
+| INFO | Stage exit lines with embedded `elapsed_ms` (via `stage_timer`); pipeline start/finish (with total elapsed + error count); stage-level row/row-count summaries (e.g. `"calculators materialised N rows"`); config echo (framework, permission_mode — never regulatory scalars); a single `"collected N calculation errors"` line when errors are appended. |
 | WARNING | Missing optional inputs (e.g., IRB selected without `model_permissions`); fallback risk weights; stage failures (emitted by `stage_timer` on exception). |
 | ERROR | Reserved for truly unexpected exceptions. Regulatory issues remain `CalculationError`. |
 

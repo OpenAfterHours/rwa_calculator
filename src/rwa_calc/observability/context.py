@@ -71,16 +71,21 @@ def stage_timer(
     stage: str,
     **extra: Any,
 ) -> Iterator[None]:
-    """Emit INFO entry/exit records bracketing a pipeline stage.
+    """Emit DEBUG entry / INFO exit records bracketing a pipeline stage.
 
-    Entry record: "stage entered" with `extra={"stage": stage, **extra}`.
-    Exit record:  "stage completed" with `extra={..., "elapsed_ms": <float>}`.
+    Entry record (DEBUG): ``"<stage> started"``.
+    Exit record (INFO):   ``"<stage> completed in <elapsed> ms"``.
+    Failure record (WARNING): ``"<stage> failed after <elapsed> ms"``.
+
+    The stage name and elapsed time are embedded in the message so the text
+    formatter surfaces them without additional configuration. The same values
+    remain on ``extra={"stage": ..., "elapsed_ms": ...}`` for JSON consumers.
 
     Exceptions propagate unchanged; the exit record is still emitted so
-    timing is visible even for failed stages, at WARNING level.
+    timing is visible even for failed stages.
     """
     base_extra = {"stage": stage, **extra}
-    logger.info("stage entered", extra=base_extra)
+    logger.debug("%s started", stage, extra=base_extra)
     start = time.perf_counter()
     failed = False
     try:
@@ -92,6 +97,6 @@ def stage_timer(
         elapsed_ms = round((time.perf_counter() - start) * 1000.0, 2)
         exit_extra = {**base_extra, "elapsed_ms": elapsed_ms}
         if failed:
-            logger.warning("stage failed", extra=exit_extra)
+            logger.warning("%s failed after %.1f ms", stage, elapsed_ms, extra=exit_extra)
         else:
-            logger.info("stage completed", extra=exit_extra)
+            logger.info("%s completed in %.1f ms", stage, elapsed_ms, extra=exit_extra)

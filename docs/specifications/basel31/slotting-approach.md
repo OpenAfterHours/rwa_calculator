@@ -96,6 +96,19 @@ Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short m
 | Weak | 250% | 250% | 8.0% |
 | Default | 0% | 0% | 50.0% |
 
+!!! warning "Not Yet Implemented — HVCRE Short-Maturity Subgrades (Art. 153(5)(d))"
+    HVCRE Table A has distinct short-maturity values in columns A and C (Strong A = 70%,
+    Good C = 95%) — see the same rows above. The calculator does **not** implement these:
+    `data/tables/b31_slotting.py` has `B31_SLOTTING_RISK_WEIGHTS_HVCRE` only (no
+    `_HVCRE_SHORT` variant) and `engine/slotting/namespace.py` ignores `is_short` for
+    B31 HVCRE. Short-maturity HVCRE Strong exposures therefore receive 95% (col B)
+    instead of 70% (col A) and Good exposures receive 120% (col D) instead of 95%
+    (col C) — capital overstatement of 36% and 26% respectively for well-rated,
+    short-dated HVCRE. Tracked as IMPLEMENTATION_PLAN.md P1.117 (separate from P1.97
+    which covers non-HVCRE subgrades). See
+    [Subgrade Treatment](#subgrade-treatment-table-a-columns-abcd) below for the
+    consolidated column A/C implementation gap covering both HVCRE and non-HVCRE.
+
 !!! note "HVCRE EL — No Maturity Split AND No Strong/Good Differentiation"
     Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat
     (no < 2.5yr / >= 2.5yr distinction) **and** Strong and Good both carry the same
@@ -145,10 +158,25 @@ Table A structure:
     (CRR "≥ 2.5yr" = column B/D; CRR "< 2.5yr" = column A/C). Column A/C assignment is
     explicitly optional ("may") under Art. 153(5)(d)–(f).
 
-!!! warning "Not Yet Implemented — Column A/C Concession"
-    The calculator assigns all Basel 3.1 slotting exposures to columns B/D (the default
-    per Art. 153(5)(c)). The optional column A/C short-maturity concession and
-    enhanced-underwriting concessions are not yet implemented.
+!!! warning "Not Yet Implemented — Column A/C Concession (Non-HVCRE and HVCRE)"
+    The calculator assigns **all** Basel 3.1 slotting exposures to columns B/D (the
+    default per Art. 153(5)(c)), regardless of HVCRE status or remaining maturity:
+
+    - **Non-HVCRE short maturity (P1.97):** `data/tables/b31_slotting.py` has no
+      `B31_SLOTTING_RISK_WEIGHTS_SHORT` variant. Short-dated Strong receives 70%
+      (col B) instead of 50% (col A); Good receives 90% (col D) instead of 70% (col C).
+    - **HVCRE short maturity (P1.117):** `data/tables/b31_slotting.py` has no
+      `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` variant. Short-dated Strong receives
+      95% (col B) instead of 70% (col A); Good receives 120% (col D) instead of 95%
+      (col C).
+    - **Enhanced-underwriting concessions** (Art. 153(5)(e) IPRE, Art. 153(5)(f) PF)
+      are not implemented — no input field exists to mark an exposure as meeting the
+      enhanced-criteria threshold.
+
+    `engine/slotting/namespace.py` (`lookup_rw()`) ignores `is_short` for B31 across
+    both HVCRE and non-HVCRE branches. CRR maturity-based differentiation **is**
+    implemented via separate short/long maturity tables
+    (`SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT`).
 
 ## Default Category (0% RW, EL Treatment)
 

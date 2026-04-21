@@ -395,6 +395,13 @@ For non-HVCRE types, the values are identical to CRR — PRA restructured the fo
 maturity-split tables to A/B/C/D columns but preserved all risk weight values. The HVCRE row
 is a PRA PS1/26 introduction (UK CRR has no HVCRE table). See [Key Differences](key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full comparison and [Slotting Approach spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for implementation details.
 
+!!! warning "Not Yet Implemented — Column A/C Concession (Non-HVCRE and HVCRE)"
+    The Basel 3.1 calculator assigns every slotting exposure to columns B/D, regardless
+    of HVCRE status or remaining maturity. Short-maturity concessions in both sub-tables
+    are absent: non-HVCRE uses col B/D values instead of A/C (IMPLEMENTATION_PLAN P1.97);
+    HVCRE uses col B/D values instead of A/C (P1.117 — Strong 95% instead of 70%, Good
+    120% instead of 95%). CRR short-maturity differentiation is fully implemented.
+
 ## Financial Institution Correlation Multiplier (CRE31.5)
 
 The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):

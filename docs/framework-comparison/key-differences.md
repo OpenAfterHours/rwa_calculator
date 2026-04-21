@@ -1122,8 +1122,13 @@ includes optional lower-weight columns (A/C):
 !!! info "CRR vs PRA PS1/26 — Format Change, Non-HVCRE Values Preserved"
     Under CRR, the short-maturity concession was expressed as separate maturity bands in Table 1 (≥ 2.5yr vs < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. For non-HVCRE types, the **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks. The HVCRE row in Table A is a **PRA PS1/26 introduction** — UK CRR has no HVCRE table.
 
-!!! warning "Not Yet Implemented — Column A/C Concession"
-    The calculator currently assigns all Basel 3.1 slotting exposures to columns B/D (the default per Art. 153(5)(c)). The optional column A/C short-maturity concession (Art. 153(5)(d)) and enhanced-underwriting concessions (Art. 153(5)(e)/(f)) are not yet implemented. CRR maturity-based differentiation IS implemented via separate short/long maturity tables.
+!!! warning "Not Yet Implemented — Column A/C Concession (Non-HVCRE and HVCRE)"
+    The calculator currently assigns **all** Basel 3.1 slotting exposures to columns B/D (the default per Art. 153(5)(c)), regardless of HVCRE status or remaining maturity. The optional column A/C short-maturity concession (Art. 153(5)(d)) and enhanced-underwriting concessions (Art. 153(5)(e)/(f)) are not implemented. Gap applies symmetrically to both sub-tables:
+
+    - **Non-HVCRE short maturity** (IMPLEMENTATION_PLAN P1.97): Strong 70% (col B) instead of 50% (col A); Good 90% (col D) instead of 70% (col C).
+    - **HVCRE short maturity** (IMPLEMENTATION_PLAN P1.117): Strong 95% (col B) instead of 70% (col A); Good 120% (col D) instead of 95% (col C).
+
+    CRR maturity-based differentiation IS implemented via separate short/long maturity tables (`SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT`). See [B31 Slotting spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for full detail.
 
 ## SA Specialised Lending (Art. 122A-122B)
 

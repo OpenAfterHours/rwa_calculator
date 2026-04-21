@@ -38,6 +38,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.21 | Real estate framework routing (Art. 124(1)–(3)) and mixed RE proportional split (Art. 124(4)) | P1 | Partial — single-property routing done; mixed-property split requires per-component property values (input-schema gap, see D3.59) |
 | FR-1.22 | RE valuation requirements — qualifying valuation, >10% market decline and GBP 2.6m / 5% own funds revaluation triggers, self-build floor, pre-2027 transitional (Art. 124D(1)–(11)) | P1 | Input-driven — calculator consumes `property_value` as already Art. 124D-compliant; valuation governance is firm-side (no Art. 124D-specific input fields for valuation source, revaluation date, or self-build flag) |
 | FR-1.23 | Output-floor S-TREA election for unrated corporates by IRB firms — 100% vs IG/non-IG split with PRA notification obligation (Art. 122(7)–(8)) | P2 | Input-driven — the S-TREA leg of the output floor reuses the firm's Art. 122(5)/(6) branch selection from its regular SA application; notification to PRA on adoption or cessation is a firm governance step upstream of the calculator |
+| FR-1.24 | Implicit government support higher-of rule for rated institution exposures (Art. 138(1)(g), Art. 139(6)) | P2 | Not implemented — input-schema gap (no distinction between issue-specific and general issuer ratings; no flag for implicit-support assumption). Firms must pre-adjust `external_cqs` offline or use the Art. 110A `due_diligence_override_rw` pathway. See D3.60. |
 
 ---
 
@@ -628,6 +629,184 @@ within `engine/sa/calculator.py`. Required input fields:
 
 When `cp_local_currency` is unavailable, the calculator falls back to a domestic-currency
 heuristic; upstream enrichment is recommended for accurate floor application.
+
+---
+
+## ECAI Assessment — Implicit Government Support (Art. 138(1)(g), Art. 139(6))
+
+Basel 3.1 introduces two new anti-arbitrage provisions governing how institution ECAI
+ratings that incorporate assumptions of implicit government support may be used to
+determine risk weights for institution exposures. Art. 138(1)(g) is a general
+prohibition on the nominated-ECAI side; Art. 139(6) is the residual "higher-of" rule
+that applies where the prohibition binds and an issue-specific rating is nonetheless
+available.
+
+Both provisions apply **only to exposures where the obligor is an institution** (Art.
+139(6)(a)). They do not alter the risk weighting of exposures to sovereigns,
+corporates, retail obligors, or other SA classes, and they do not change the single-
+or multi-rating resolution mechanics in
+[hierarchy-classification — Multi-Rating Resolution](../common/hierarchy-classification.md#multi-rating-resolution-crr-art-138)
+beyond the institution-obligor carve-out documented here.
+
+### Regulatory text (PRA PS1/26, ps126app1.pdf pp. 70–72)
+
+!!! quote "Art. 138(1)(g) — Implicit government support prohibition"
+    An institution shall not use a credit assessment that incorporates assumptions of
+    implicit government support for the purposes of assigning a risk weight to an
+    exposure to an institution, unless the respective credit assessment applies to an
+    institution owned by or set up and sponsored by central governments, regional
+    governments or local authorities.
+
+!!! quote "Art. 139(6) — Higher-of rule for institution exposures"
+    An institution, when determining the risk weight of an exposure to an issue where:
+
+    (a) the obligor is an institution; and
+
+    (b) there is no issue-specific credit assessment available from a nominated ECAI
+    that does not incorporate assumptions of implicit government support in accordance
+    with the requirements of point (g) of Article 138(1),
+
+    shall use the higher of the following risk weights:
+
+    (i) the risk weight that would be assigned to the exposure in accordance with
+    paragraphs 2 to 2B and 4, and Article 138;
+
+    (ii) if an issue-specific credit assessment is available from a nominated ECAI,
+    the risk weight that would be assigned to the exposure if the institution used an
+    issue-specific credit assessment, disregarding point (g) of Article 138(1).
+
+### Trigger
+
+Art. 139(6) fires only when **all three** of the following conditions hold
+simultaneously:
+
+| Condition | Requirement |
+|-----------|-------------|
+| Obligor class | Obligor is an institution (Art. 139(6)(a)). Sovereign, corporate, retail, and RE exposures are out of scope. |
+| No "clean" issue-specific rating | The portfolio lacks an issue-specific ECAI assessment that explicitly excludes implicit government support (Art. 139(6)(b)). |
+| Art. 138(1)(g) exemption does not apply | The institution is **not** owned by, or set up and sponsored by, central governments, regional governments, or local authorities. If it is, the implicit-support-based assessment may be used directly without the higher-of comparison. |
+
+### Effect
+
+When the trigger is met, the firm computes **two** candidate risk weights and applies
+the **higher**:
+
+| Candidate | Source | Art. 138(1)(g) treatment |
+|-----------|--------|--------------------------|
+| (i) Baseline | Art. 139(2)–(2B), 139(4), and Art. 138 — i.e. the general ECAI rules applied to the issuer-level or reference-issue assessment that complies with Art. 138(1)(g) (implicit support excluded). | Implicit-support assessments suppressed; only "clean" ratings enter the selection. |
+| (ii) Issue-specific override | Art. 138 applied to the issue-specific rating **disregarding Art. 138(1)(g)** — i.e. the implicit-support assessment is allowed back in. Only computable if an issue-specific rating exists for this specific exposure. | Implicit support permitted, producing the unadjusted rated weight. |
+
+Effective rule: `RW = max(RW_baseline, RW_issue_specific_with_support)`. If no
+issue-specific rating exists, (ii) is undefined and the baseline (i) applies without
+comparison.
+
+### Worked example
+
+Consider a 5-year senior-unsecured bond issued by "Bank X" — an institution **not**
+owned or sponsored by a government (so the Art. 138(1)(g) exemption does not apply):
+
+- **Bank X's general issuer rating** (from its nominated ECAI) is BBB+ (CQS 3), which
+    includes implicit sovereign support in the agency's methodology. Without that
+    support, the agency would rate Bank X at BB+ (CQS 5).
+- **The specific bond** carries an issue-specific rating of BBB+ (CQS 3), also
+    incorporating implicit support.
+
+Application of Art. 139(6):
+
+1. **Candidate (i) — baseline with Art. 138(1)(g) applied.** The BBB+ general rating
+     is disallowed because it incorporates implicit support. The firm must step back to
+     any remaining "clean" assessment. If none exists, the exposure is treated as
+     unrated under Art. 139(2) final sentence ("in all other cases, the exposure shall
+     be treated as unrated") — 100% under Art. 121 SCRA defaulting to Grade A/B, or the
+     relevant CQS derived from the BB+ clean rating if one is published (→ CQS 5,
+     100%).
+2. **Candidate (ii) — issue-specific disregarding Art. 138(1)(g).** The BBB+
+     issue-specific rating is used as-is → CQS 3 → 50% under Art. 120 Table 3.
+3. **Apply the higher:** `RW = max(100%, 50%) = 100%`.
+
+The firm cannot simply lean on the cleaner-looking issue-specific 50% weight — the
+higher-of rule forces recognition of the unsupported creditworthiness whenever the
+issue-specific rating relies on implicit support.
+
+### Art. 138(1)(g) exemption — government-owned or government-sponsored institutions
+
+Where the rated institution is **owned by or set up and sponsored by central
+governments, regional governments, or local authorities**, Art. 138(1)(g) does not
+apply and implicit-support ratings may be used directly. Art. 139(6) never engages for
+these institutions (there is no "clean" rating requirement to fail). Typical examples:
+
+- State-owned development banks, policy banks, and export-credit agencies
+- RGLA-owned local banks
+- Municipally-sponsored clearing or settlement institutions
+
+The exemption is a narrow one: **private institutions whose ratings benefit from
+market-anticipated sovereign bailout expectations** (the classic "too big to fail"
+uplift) are **not** exempt — the government must have an actual ownership or
+sponsorship relationship with the institution.
+
+### Distinction from Art. 121(6) SCRA Sovereign Floor
+
+Both provisions impose institution-level floors that reference sovereign or support-
+adjusted risk, but they sit in different parts of the framework and address different
+facts:
+
+| Aspect | Art. 139(6) — Higher-of | Art. 121(6) — SCRA sovereign floor |
+|--------|-------------------------|-------------------------------------|
+| Obligor scope | Institutions only | Unrated institutions only (SCRA path) |
+| Rated/unrated | **Rated** institutions (ECRA path) | **Unrated** institutions (SCRA path) |
+| Mechanic | `max(baseline_clean_RW, issue_specific_with_support_RW)` | `max(SCRA_grade_RW, home_sovereign_RW)` |
+| Trigger | Implicit support in ECAI rating + no "clean" issue-specific rating | Foreign-currency exposure + not short-dated self-liquidating trade |
+| Anti-arbitrage target | Prevents firms selecting the cleaner issue-specific rating to escape the Art. 138(1)(g) prohibition | Prevents unrated-institution weights falling below the home sovereign's own weight |
+
+The two rules are complementary rather than alternatives: Art. 139(6) governs the
+ECRA path when implicit support is embedded in the rating; Art. 121(6) governs the
+SCRA path when there is no rating at all.
+
+### Comparison to CRR
+
+| Element | CRR Art. 138 / Art. 139 | Basel 3.1 Art. 138 / Art. 139 |
+|---------|--------------------------|--------------------------------|
+| Art. 138(1) sub-points | (a)–(f) only | (a)–(g) — new (g) implicit-support prohibition |
+| Art. 139 paragraphs | (1), (2), (3), (4) | (1), (2), (2A), (2B), (2C), (3), (4), (5), (6) — new paragraphs (2A)–(2C), (5), (6) |
+| Higher-of rule | Not present | New Art. 139(6) |
+| Exemption for government-owned/sponsored institutions | Not applicable (no prohibition) | Art. 138(1)(g) tail clause |
+
+The Art. 139(6) higher-of rule is a **new Basel 3.1 provision** with no CRR analogue.
+CRR firms do not suppress implicit-support assessments at all; the rating that
+comes out of the Art. 138 multi-rating selection is used directly. The corresponding
+CRR spec does **not** document an equivalent mechanism because none exists — see
+[CRR SA Risk Weights](../crr/sa-risk-weights.md) for CRR-era Art. 120 institution
+treatment, which relies on sovereign-derived weights (CRR Art. 121 Table 5) rather
+than the ECAI rating directly for many institution exposures.
+
+### Implementation Status
+
+!!! warning "Not Yet Implemented — Input-Schema Gap"
+    The calculator does not currently implement Art. 138(1)(g) or Art. 139(6). Two
+    schema-level gaps preclude implementation:
+
+    - The facility schema exposes a single `external_cqs` (post Art. 138 resolution)
+        with no indicator of whether the rating is **issue-specific** versus
+        **general issuer** — a prerequisite for Art. 139(6)(b).
+    - No input field flags whether an ECAI assessment **incorporates implicit
+        government support** — a prerequisite for the Art. 138(1)(g) suppression step
+        and the Art. 139(6) "clean" vs "with-support" comparison.
+
+    As a result, the calculator treats every rated institution exposure as if the
+    rating complies with Art. 138(1)(g) — i.e. no higher-of uplift is applied.
+    Firms with material rated-institution portfolios whose ratings embed implicit
+    support must either (a) pre-adjust the `external_cqs` input offline to reflect
+    the Art. 139(6) higher of the two candidate weights, or (b) use the Art. 110A
+    `due_diligence_override_rw` pathway to floor the risk weight at the higher-of
+    value. See code-side finding **D3.60** in the docs implementation plan.
+
+### Firm responsibility
+
+Determining whether a specific ECAI assessment incorporates implicit government
+support is a **firm governance responsibility** (ECAI methodology review under the
+institution's use-test framework) and cannot be automated by the calculator. The
+Art. 138(1)(g) exemption (government-owned or government-sponsored) likewise requires
+firm-level determination of the ownership / sponsorship relationship.
 
 ---
 

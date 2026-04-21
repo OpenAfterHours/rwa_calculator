@@ -593,6 +593,25 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
     [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
     for the full trigger/effect table and short-term Table 4 / Table 4A applicability.
 
+!!! info "Art. 138(1)(g) & Art. 139(6) — Implicit Government Support Higher-of Rule"
+    Basel 3.1 adds two new provisions restricting the use of ECAI ratings that
+    incorporate **implicit government support** when risk-weighting rated institution
+    exposures. Art. 138(1)(g) prohibits such ratings unless the institution is owned
+    by or set up and sponsored by central / regional / local government; Art. 139(6)
+    is a residual **higher-of** floor where no "clean" issue-specific rating exists.
+
+    Typical target: private banks whose BBB+ / A− ratings rely on market-anticipated
+    sovereign bailout uplift ("too big to fail"). The higher-of comparison forces
+    recognition of the unsupported creditworthiness (often one or two CQS bands
+    lower, e.g. BB+ / 100% instead of BBB+ / 50%).
+
+    **Not yet implemented** — the schema lacks both an issue-specific vs general-
+    issuer distinction and an implicit-support flag. Firms must pre-adjust
+    `external_cqs` offline or use `due_diligence_override_rw` (Art. 110A pathway)
+    as a workaround. CRR has no equivalent provision. See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full trigger, worked example, and exemption scope.
+
 Standardised Credit Risk Assessment Approach (SCRA):
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |

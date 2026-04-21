@@ -114,6 +114,9 @@ Speculative commercial real estate development with elevated slotting risk weigh
 ### IFRS 9
 International accounting standard for financial instruments, including impairment (ECL) requirements.
 
+### Implicit Government Support
+A component of an ECAI credit assessment that relies on expected extraordinary support from central, regional, or local government (typically the "too big to fail" uplift for systemic private banks). **Basel 3.1 Art. 138(1)(g)** prohibits using such assessments to risk-weight exposures to institutions, *unless* the rated institution is owned by or set up and sponsored by a government body. **Art. 139(6)** then imposes a residual "higher-of" floor where no "clean" issue-specific rating exists. No CRR equivalent — CRR Art. 138 has only sub-points (a)–(f) and CRR Art. 139 has only paragraphs (1)–(4); CRR firms apply implicit-support ratings directly. See [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396).
+
 ### Infrastructure Factor
 CRR capital relief factor (0.75) for qualifying infrastructure project finance. Removed under Basel 3.1.
 

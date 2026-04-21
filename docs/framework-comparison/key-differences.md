@@ -631,6 +631,42 @@ a fundamentally different methodology based on the institution's own capital ade
     [B31 SA Risk Weights — Art. 121(6)](../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
     for full conditions and worked examples.
 
+!!! info "Art. 138(1)(g) & Art. 139(6) — Implicit Government Support Higher-of Rule (New in Basel 3.1)"
+    Two new anti-arbitrage provisions govern the use of ECAI assessments that
+    incorporate **implicit government support** when risk-weighting exposures to
+    rated institutions:
+
+    - **Art. 138(1)(g)** prohibits using a credit assessment that incorporates
+        assumptions of implicit government support, *unless* the rated institution is
+        **owned by or set up and sponsored by** central governments, regional
+        governments, or local authorities (the government-owned / government-
+        sponsored exemption).
+    - **Art. 139(6)** is a residual "higher-of" floor: where no "clean" issue-
+        specific rating exists but an implicit-support issue-specific rating does,
+        the firm must assign the higher of (i) the baseline RW derived from
+        Art. 138 with the implicit-support assessments suppressed and (ii) the RW
+        from the issue-specific rating disregarding Art. 138(1)(g).
+
+    Both rules apply **only where the obligor is an institution** (Art. 139(6)(a))
+    and only affect the ECRA (rated) path. They do not change the
+    [Art. 138 multi-rating resolution](../specifications/common/hierarchy-classification.md#multi-rating-resolution-crr-art-138)
+    beyond the institution-obligor carve-out. Typical target: private banks whose
+    BBB+/A− ratings rely on anticipated sovereign bailout uplift ("too big to fail");
+    the higher-of comparison forces recognition of the unsupported creditworthiness.
+
+    **No CRR equivalent.** Neither the Art. 138(1)(g) prohibition nor the Art. 139(6)
+    higher-of rule exists in CRR — CRR Art. 138 has only sub-points (a)–(f), and CRR
+    Art. 139 has only paragraphs (1)–(4). CRR firms apply implicit-support ratings
+    directly with no suppression.
+
+    **Implementation status.** Not yet implemented — the schema lacks both an
+    issue-specific vs general-issuer distinction and an implicit-support flag.
+    Firms must pre-adjust `external_cqs` offline or use the Art. 110A
+    `due_diligence_override_rw` pathway as a workaround. See
+    [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full trigger, worked example, exemption scope, and distinction from
+    Art. 121(6).
+
 ### Residential Real Estate
 
 !!! info "Framework Scope and Mixed RE Split (Art. 124) — New in Basel 3.1"

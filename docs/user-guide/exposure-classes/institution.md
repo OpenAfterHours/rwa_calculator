@@ -110,6 +110,43 @@ The interaction between Table 4 and Table 4A is governed by Art. 120(3):
 - **(b)** Short-term assessment yields more favourable or equal RW → Table 4A for that exposure only; other short-term exposures still use Table 4
 - **(c)** Short-term assessment yields less favourable RW → Table 4 preferential treatment withdrawn; all unrated short-term claims against that obligor receive the Table 4A weight
 
+### Implicit Government Support Higher-of Rule (Art. 138(1)(g), Art. 139(6))
+
+Basel 3.1 introduces two new provisions governing how ECAI ratings that incorporate
+**implicit government support** may be used to risk-weight institution exposures.
+Both apply only where the obligor is an institution and only on the ECRA (rated) path:
+
+- **Art. 138(1)(g)** prohibits using a credit assessment that incorporates assumptions
+    of implicit government support, *unless* the rated institution is owned by or set
+    up and sponsored by central, regional, or local government (the government-owned /
+    government-sponsored exemption).
+- **Art. 139(6)** is a residual "higher-of" floor: where no "clean" issue-specific
+    rating exists but an implicit-support issue-specific rating does, the firm must
+    assign the **higher of** (i) the baseline RW derived from Art. 138 with implicit-
+    support assessments suppressed, and (ii) the RW from the issue-specific rating
+    disregarding Art. 138(1)(g).
+
+!!! warning "Not Yet Implemented — Use Art. 110A Override as Workaround"
+    The calculator does not distinguish issue-specific from general-issuer ratings
+    and has no flag for implicit-support assumption — so the Art. 139(6) higher-of
+    comparison cannot be computed automatically. Firms with material rated-institution
+    exposures whose ratings embed implicit support should either:
+
+    - **Pre-adjust** `external_cqs` offline to reflect the Art. 139(6) higher-of
+        result before loading, or
+    - Set `due_diligence_override_rw` to the required floor via the framework-wide
+        Art. 110A pathway ([see Art. 110A discussion](../../user-guide/regulatory/basel31.md#10-due-diligence-requirements)).
+
+    Firms must also independently determine whether the rated institution falls
+    within the Art. 138(1)(g) exemption (government-owned / government-sponsored) —
+    this is a firm governance question, not a calculator input. See
+    [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full trigger, worked example, exemption scope, and distinction from the
+    Art. 121(6) SCRA sovereign floor.
+
+    No CRR equivalent — CRR Art. 138 has only sub-points (a)–(f), and CRR Art. 139
+    has only paragraphs (1)–(4). CRR firms apply implicit-support ratings directly.
+
 ## Interbank Exposures
 
 ### Due From Banks

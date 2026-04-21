@@ -33,6 +33,18 @@ ascending gives the same outcome as ranking by RW. External ratings are **not**
 inherited from the parent — only the counterparty's own assessments participate
 in Art. 138 resolution.
 
+!!! info "Basel 3.1 additions — Art. 138(1)(g) and Art. 139(6)"
+    Basel 3.1 extends Art. 138 with a new sub-point **(g)** and adds a new
+    Art. 139(6) "higher-of" rule for institution exposures whose ECAI ratings
+    incorporate **implicit government support**. Neither exists in CRR (CRR Art. 138
+    has only (a)–(f); CRR Art. 139 has only paragraphs (1)–(4)). The new provisions
+    apply **only where the obligor is an institution** and only on the ECRA (rated)
+    path — they do not change the per-agency dedup or second-best selection mechanics
+    above for corporate, sovereign, or retail obligors. See
+    [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full treatment, including the government-owned / government-sponsored
+    exemption and the distinction from Art. 121(6).
+
 ### Lending Group Aggregation
 
 Lending groups aggregate exposure across related counterparties for threshold calculations (e.g., SME turnover, retail exposure limits).

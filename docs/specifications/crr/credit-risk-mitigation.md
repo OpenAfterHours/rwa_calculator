@@ -239,29 +239,95 @@ Art. 230 specifies conditions for collateral eligibility:
 - The collateral value must be sufficient to justify the LGDS applied
 - Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
 
+## Maturity Mismatch (CRR Art. 237-239)
+
+CRR Section 5 of Chapter 4 covers maturity mismatches across **both funded
+and unfunded** credit protection. Art. 238(1A) (carried into PRA Rulebook
+unchanged) enumerates the in-scope CRM methods; Art. 237 sets the
+eligibility gates; Art. 239 sets the per-method valuation formula.
+
+!!! info "B31 alignment"
+    PRA PS1/26 (effective 1 January 2027) carries Art. 237/238/239 forward
+    unchanged in substance — each PS1/26 article carries the note "This
+    rule corresponds to Article 237/238/239 of CRR as it applied
+    immediately before revocation by the Treasury". The B31 spec
+    [b31/credit-risk-mitigation.md#maturity-mismatch-art-237-239](../basel31/credit-risk-mitigation.md#maturity-mismatch-art-237-239)
+    holds the authoritative restatement.
+
+### Methods in Scope (CRR Art. 238(1A))
+
+The CRR maturity-mismatch framework applies to credit protection recognised
+under any of the following methods:
+
+| Letter | Method | Type |
+|--------|--------|------|
+| (a) | On-balance sheet netting (Art. 219) | Funded |
+| (b) | FCCM (excluding SFTs covered by a master netting agreement) | Funded |
+| (c) | Foundation Collateral Method (Art. 230) | Funded |
+| (d) | Other Funded Credit Protection Method (Art. 232) | Funded |
+| (e) | Risk-Weight Substitution Method — SA / Slotting guarantees and CDS (Art. 235) | **Unfunded** |
+| (f) | Parameter Substitution Method — F-IRB / A-IRB guarantees and CDS (Art. 236) | **Unfunded** |
+
+The same eligibility gates and adjustment formulas therefore apply to
+collateral *and* to guarantees/CDS — there is no separate maturity-mismatch
+treatment for unfunded protection in CRR. **FCSM** (Art. 222) and the A-IRB
+**own-LGD** treatment (Art. 183) are the only CRM methods that sit outside
+this perimeter (FCSM is excluded by Art. 239(1); own-LGD captures maturity
+mismatches inside the LGD model).
+
 ## Maturity Mismatch Eligibility (CRR Art. 237)
 
-When a maturity mismatch exists (collateral maturity < exposure maturity), credit protection
-is only eligible if **all** of the following conditions are met (Art. 237(2)):
+When a maturity mismatch exists (protection residual maturity < exposure
+residual maturity), credit protection is only eligible if **all** of the
+following conditions are met:
 
-1. **Residual maturity ≥ 3 months** — protection with < 3 months residual maturity is disallowed
-2. **Original maturity ≥ 1 year** — protection instruments originally issued with a term < 1 year are ineligible when a mismatch exists
-3. **Not a 1-day M floor exposure** — exposures subject to Art. 162(3) 1-day maturity floor (repos, SFTs with daily margining) cannot use maturity-mismatched protection at all
+1. **Art. 237(1) — combined test:** if the protection has residual maturity
+   < 3 months *and* protection maturity < underlying exposure maturity, the
+   protection shall not be used as eligible credit protection.
+2. **Art. 237(2)(a) — original maturity ≥ 1 year:** protection instruments
+   originally issued with a term < 1 year are ineligible when a mismatch
+   exists.
+3. **Art. 237(2)(b) — not a 1-day M-floor exposure:** exposures subject to
+   the Art. 162(3) 1-day maturity floor (repos, SFTs with daily margining,
+   short-term trade-finance IRB exposures) cannot use maturity-mismatched
+   protection at all.
 
-If any condition fails, the protection value is zeroed (collateral value = 0 for the mismatched portion).
+If any condition fails, the protection value is zeroed (collateral value =
+0 for the mismatched portion). These gates apply uniformly to funded **and**
+unfunded protection — a guarantee or CDS with original maturity < 1 year is
+ineligible for an exposure with residual maturity > 1 year, just as a
+financial-collateral instrument with the same characteristics is.
 
-## Maturity Mismatch Adjustment (CRR Art. 238)
+## Maturity Mismatch Adjustment (CRR Art. 239)
 
-When collateral maturity is shorter than exposure maturity and the Art. 237 eligibility
-conditions are met:
+Two parallel formulas — Art. 239(2) for funded methods (a)–(d) and
+Art. 239(3) for unfunded methods (e)–(f). The multiplier
+`(t − 0.25) / (T − 0.25)` is identical between the two; only the
+protection input differs.
+
+**Art. 239(2) — funded protection (methods (a)–(d)):**
 
 ```
-adjustment_factor = (t - 0.25) / (T - 0.25)
+CVAM = CVA × (t - 0.25) / (T - 0.25)
 ```
 
-Where `t` = residual collateral maturity (years), `T` = min(residual exposure maturity, 5) years.
+`CVAM` substitutes for `CVA` in the FCCM E* formula at Art. 223(5), or
+flows through Art. 219(3) for on-balance sheet netting.
 
-**No adjustment** when collateral residual maturity ≥ exposure residual maturity (no mismatch).
+**Art. 239(3) — unfunded protection (methods (e)–(f)):**
+
+```
+GA = G* × (t - 0.25) / (T - 0.25)
+```
+
+`GA` is used as the credit-protection amount input to the **RWSM** (Art.
+235, SA / slotting) or the **PSM** (Art. 236, IRB) — the same formula
+governs guarantee and credit-derivative maturity mismatches under both
+SA and IRB.
+
+In both formulas: `t` = residual protection maturity (years, capped at T);
+`T` = min(residual exposure maturity, 5) years. **No adjustment** when
+`t ≥ T` (the multiplier collapses to 1).
 
 ## Multi-Level Collateral Allocation
 

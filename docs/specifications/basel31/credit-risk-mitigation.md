@@ -422,35 +422,144 @@ E* = max(0, E(1 + HE) - CVA(1 - HC - HFX))
 
 ---
 
-## Maturity Mismatch (Art. 237-238)
+## Maturity Mismatch (Art. 237-239)
 
-### Art. 237(2) — Eligibility
+PS1/26 Section 5 (ps126app1.pdf pp.217–219) covers maturity mismatches across
+**both funded and unfunded** credit protection. Article 238(1A) enumerates the
+six CRM methods within scope; Article 237 sets the eligibility gates that
+apply to all six; Article 239 sets the per-method valuation formula.
 
-When a maturity mismatch exists (protection maturity < exposure maturity), credit protection
-is only eligible if **all** conditions are met:
+### Methods in Scope (Art. 238(1A))
 
-1. **Residual maturity >= 3 months** — protection with < 3 months residual maturity is
-   ineligible
-2. **Original maturity >= 1 year** — protection originally issued with a term < 1 year
-   is ineligible when a mismatch exists
+The maturity-mismatch framework applies to credit protection recognised under
+**any** of the following methods:
 
-### Art. 238 — Adjustment Formula
+| Letter | Method | Type |
+|--------|--------|------|
+| (a) | On-balance sheet netting (Art. 219) | Funded |
+| (b) | FCCM (excluding SFTs covered by a master netting agreement) | Funded |
+| (c) | Foundation Collateral Method (Art. 230) | Funded |
+| (d) | Other Funded Credit Protection Method (Art. 232) | Funded |
+| (e) | Risk-Weight Substitution Method — SA / Slotting guarantees and CDS (Art. 235) | **Unfunded** |
+| (f) | Parameter Substitution Method — F-IRB / A-IRB guarantees and CDS (Art. 236) | **Unfunded** |
 
-When eligible, the maturity-adjusted protection value is:
+!!! warning "FCSM and LGD-AM are out of scope"
+    - **Financial Collateral Simple Method (FCSM)** — Art. 239(1) excludes
+      FCSM entirely: where a maturity mismatch exists, the collateral
+      ceases to be eligible funded credit protection (no GA / CVAM
+      adjustment is permitted). Cross-reference: [Art. 222 — No Maturity
+      Mismatch](#art-222-no-maturity-mismatch).
+    - **LGD Adjustment Method (LGD-AM, Art. 183)** — A-IRB own-estimate of
+      LGD is not listed in Art. 238(1A). Maturity mismatches on unfunded
+      protection recognised through own-LGD estimates are captured within
+      the institution's own LGD model rather than via the Art. 239 GA
+      formula. This is the only treatment of unfunded protection that
+      sits *outside* the Art. 237–239 perimeter.
+
+### Art. 237 — Eligibility Gates
+
+Two cumulative tests determine whether the protection is eligible at all when
+a mismatch exists. Failing either makes the protection ineligible — no
+adjustment formula is applied; the protection is simply ignored.
+
+**Art. 237(1) — Combined residual-maturity and shorter-than-exposure test.**
+A maturity mismatch arises when the residual maturity of the credit protection
+is less than that of the protected exposure. Where the protection has
+**residual maturity < 3 months *and*** the protection maturity is less than
+the underlying exposure maturity, the institution shall not use that
+protection as eligible credit protection.
+
+**Art. 237(2) — Disqualifying conditions (either limb).** Where there is a
+maturity mismatch, the credit protection is also ineligible if either:
+
+- **(a)** the original maturity of the protection is less than one year; or
+- **(b)** the exposure is a short-term exposure subject to a one-day floor on
+  the maturity value M under Credit Risk: Internal Ratings Based Approach
+  (CRR) Part Article 162(3) (e.g. certain repo / SFT / short-term
+  trade-finance IRB exposures with M floored at one day).
+
+These eligibility gates apply uniformly to funded **and** unfunded protection
+under the six in-scope methods — a guarantee or CDS with original maturity
+< 1 year is ineligible for an exposure with residual maturity > 1 year, just
+as a financial-collateral instrument with the same characteristics is.
+
+### Art. 238 — Measuring Protection Maturity
+
+Effective protection maturity is the **time to the earliest date at which the
+protection may terminate** (or be terminated). Specific rules:
+
+- **On-balance sheet netting** — earlier of the netting agreement termination
+  date and the date the deposit can be withdrawn / loan called (Art. 238(1)).
+- **Protection-seller termination option** — maturity is the earliest exercise
+  date of that option (Art. 238(2), first sentence).
+- **Protection-buyer termination option** — maturity is the earliest exercise
+  date **only if** the contract contained a positive incentive at origination
+  for the institution to call before contractual maturity; otherwise the
+  buyer option is ignored for maturity measurement (Art. 238(2)(a)–(b)).
+- **Credit-derivative grace period** — protection maturity is reduced by the
+  length of any grace period before failure-to-pay default, where the credit
+  derivative is not prevented from terminating before the grace period
+  expires (Art. 238(3)).
+
+The effective maturity of the **underlying exposure** is the longest possible
+remaining time before the obligor is scheduled to perform, capped at **5
+years** (Art. 238(1)).
+
+### Art. 239 — Adjustment Formulas (Funded vs Unfunded)
+
+Two parallel formulas — Art. 239(2) for funded methods (a)–(d) and
+Art. 239(3) for unfunded methods (e)–(f). The multiplier
+`(t − 0.25) / (T − 0.25)` is identical between the two; only the protection
+input differs.
+
+**Art. 239(2) — Funded credit protection (methods (a)–(d)):**
+
+```
+CVAM = CVA x (t - 0.25) / (T - 0.25)
+```
+
+| Variable | Definition |
+|----------|-----------|
+| CVA | Volatility-adjusted collateral value per Art. 223(2), or the exposure amount if lower |
+| t | Years to credit-protection maturity per Art. 238, capped at T |
+| T | Years to exposure maturity per Art. 238, capped at 5 |
+
+For **FCCM**, `CVAM` substitutes for `CVA` in the E* formula at Art. 223(5).
+For **on-balance sheet netting**, `CVAM` flows through Art. 219(3), where
+"collateral" is read as the netted loans/deposits.
+
+**Art. 239(3) — Unfunded credit protection (methods (e)–(f)):**
 
 ```
 GA = G* x (t - 0.25) / (T - 0.25)
 ```
 
-Where:
-
 | Variable | Definition |
 |----------|-----------|
-| G* | Protection value after any haircut adjustments |
-| t | Residual maturity of the protection (years) |
-| T | Residual maturity of the exposure (years), capped at 5 |
+| G* | Protection amount adjusted for any currency mismatch (Art. 233) |
+| t | Years to credit-protection maturity per Art. 238, capped at T |
+| T | Years to exposure maturity per Art. 238, capped at 5 |
 
-When t >= T, no maturity mismatch adjustment is needed.
+`GA` is then used as the credit-protection amount input to the **RWSM**
+(Art. 235, SA / slotting guarantees and CDS) or the **PSM** (Art. 236,
+F-IRB / A-IRB guarantees and CDS). The same GA formula governs guarantee
+and credit-derivative maturity mismatches under both SA and IRB — the
+distinction between RWSM and PSM is only in *how* the resulting `GA` is
+consumed (RW substitution vs PD/LGD parameter substitution), not in the
+maturity-mismatch adjustment itself.
+
+When **t ≥ T**, no maturity-mismatch adjustment is needed — the multiplier
+collapses to 1 and `GA = G*` / `CVAM = CVA`.
+
+!!! info "Heading scope correction (21 April 2026)"
+    Earlier drafts of this spec presented the maturity-mismatch formula
+    under the heading "Art. 237–238" with only the unfunded `GA` formula
+    visible, which left ambiguity about whether the framework applied to
+    guarantee / CDS mismatches at all. The formulas themselves sit in
+    **Art. 239**: paragraph 2 (`CVAM`, funded methods (a)–(d)) and
+    paragraph 3 (`GA`, unfunded methods (e)–(f)). Art. 237 sets the
+    eligibility gates that govern *all* six methods listed in
+    Art. 238(1A). Resolves D2.39.
 
 ---
 

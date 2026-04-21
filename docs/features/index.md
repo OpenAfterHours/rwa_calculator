@@ -20,7 +20,7 @@ This section provides an overview of all implemented features in the RWA calcula
 | **Overcollateralisation** | CRR Art. 230 overcollateralisation ratios and minimum thresholds | [Methodology](../user-guide/methodology/crm.md#overcollateralisation-crr-art-230), [Specification](../specifications/crr/credit-risk-mitigation.md#overcollateralisation-crr-art-230) |
 | **Guarantee Substitution** | Risk weight substitution for beneficial guarantees with pre/post CRM tracking | [Methodology](../user-guide/methodology/crm.md#guarantees), [Specification](../specifications/crr/credit-risk-mitigation.md#guarantee-substitution-crr-art-213-217) |
 | **Provisions** | SA provision deduction and IRB expected loss comparison | [Methodology](../user-guide/methodology/crm.md#provisions), [Specification](../specifications/crr/provisions.md) |
-| **Maturity Mismatch** | CRR Art. 238 adjustment for collateral/guarantee maturity shorter than exposure | [Methodology](../user-guide/methodology/crm.md#maturity-mismatch), [Specification](../specifications/crr/credit-risk-mitigation.md#maturity-mismatch-adjustment-crr-art-238) |
+| **Maturity Mismatch** | CRR Art. 237–239 adjustment for funded (CVAM) and unfunded (GA) protection where credit-protection maturity is shorter than the exposure | [Methodology](../user-guide/methodology/crm.md#maturity-mismatch), [Specification](../specifications/crr/credit-risk-mitigation.md#maturity-mismatch-adjustment-crr-art-239) |
 
 ## Pipeline & Infrastructure Features
 

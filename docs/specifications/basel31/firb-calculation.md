@@ -134,6 +134,22 @@ See [CRM Specification](credit-risk-mitigation.md) for haircut application detai
 | Sovereign | 0.03% | **0.05%** | Art. 160(1) |
 | Institution | 0.03% | **0.05%** | Art. 160(1) |
 
+!!! warning "Sovereign PD Floor is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Under Basel 3.1, central-government, central-bank and quasi-sovereign exposures
+    (Art. 147(2)(a)) are **restricted to the Standardised Approach** by Art. 147A(1)(a).
+    F-IRB and A-IRB are both unavailable, and PS1/26 provides **no grandfathering or
+    transitional carve-out** for pre-existing sovereign IRB models. The 0.05% sovereign
+    PD floor row above is retained for completeness and CRR cross-reference only — under
+    Basel 3.1 it cannot bind on any live exposure.
+
+    Institution exposures (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b)
+    (A-IRB unavailable; SA applies only where permission has been granted under
+    Art. 148 or Art. 150). The 0.05% institution PD floor therefore applies normally
+    to F-IRB institution exposures and is **not** dead letter.
+
+    See [framework-comparison — IRB approach restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class-by-class mapping.
+
 ### Retail
 
 | Retail Sub-Class | CRR Floor | Basel 3.1 Floor | Reference |

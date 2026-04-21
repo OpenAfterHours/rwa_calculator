@@ -88,10 +88,17 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 | Retail QRRE (revolver) | 0.03% | **0.10%** |
 | Retail Other | 0.03% | **0.05%** |
 
-!!! note "Sovereign and Institution PD Floors"
-    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
-    exposures to F-IRB only. PD floors for these classes (Art. 160(1)) remain relevant for any
-    grandfathered or transitional IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Art. 147A(1)(a); PS1/26 provides no grandfathering or transitional carve-out for pre-existing
+    sovereign IRB models. The 0.05% sovereign row is retained for completeness and CRR
+    cross-reference only.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) — A-IRB is unavailable,
+    but F-IRB remains the default path. The 0.05% institution PD floor therefore applies normally
+    to F-IRB institution exposures. See
+    [IRB Approach Restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
 
 ### 5. A-IRB LGD Floors
 

@@ -37,10 +37,18 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 | QRRE (Transactors) | 0.05% | Art. 163(1)(c) |
 | QRRE (Revolvers) | 0.10% | Art. 163(1)(a) |
 
-!!! note "Sovereign and Institution PD Floors"
-    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
-    exposures to F-IRB only. PD floors remain relevant for any grandfathered or transitional
-    IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Art. 147A(1)(a); F-IRB and A-IRB are both unavailable and PS1/26 provides no grandfathering
+    or transitional carve-out. The sovereign PD floor row above is retained for completeness
+    and CRR cross-reference only and cannot bind on any live Basel 3.1 exposure.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See the [IRB Approach Restrictions](key-differences.md#irb-approach-restrictions) section
+    for the full Art. 147A(1) class mapping.
 
 ## A-IRB LGD Floors (Basel 3.1)
 

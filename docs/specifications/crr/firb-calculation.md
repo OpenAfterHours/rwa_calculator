@@ -142,10 +142,19 @@ Under Basel 3.1, PD floors are differentiated by exposure class:
 | Retail — QRRE (revolver) | 0.03% | **0.10%** | Art. 163(1)(a) |
 | Retail — other | 0.03% | **0.05%** | Art. 163(1)(c) |
 
-!!! note "Sovereign/Institution PD Floors"
-    Under Basel 3.1, sovereign and institution exposures retain a PD floor but are restricted under Art. 147A (sovereign = SA only, institution = FIRB only). PD floors are still relevant for any grandfathered or transitional IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter under Basel 3.1 (Art. 147A(1)(a))"
+    Under Basel 3.1, sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised
+    Approach** by Art. 147A(1)(a); PS1/26 provides no grandfathering or transitional carve-out
+    for pre-existing sovereign IRB models. The 0.05% sovereign row in the Basel 3.1 column is
+    retained for completeness only — under Basel 3.1 it cannot bind on any live exposure.
 
-See [Framework Differences](../../framework-comparison/technical-reference.md) for Basel 3.1 differentiated PD floors.
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See [Framework Differences](../../framework-comparison/technical-reference.md#differentiated-pd-floors-basel-31)
+    and [IRB Approach Restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
 
 ## Asset Correlation Formula (CRR Art. 153)
 

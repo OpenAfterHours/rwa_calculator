@@ -522,6 +522,19 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Retail QRRE (revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
 
+!!! warning "Sovereign Row is Regulatory Dead Letter under Basel 3.1 (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Basel 3.1 Art. 147A(1)(a) — F-IRB and A-IRB are both unavailable and PS1/26 provides no
+    grandfathering or transitional carve-out. The 0.05% sovereign row in the Basel 3.1 column
+    is retained for completeness and CRR cross-reference only.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See [IRB Approach Restrictions](../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
+
 **Source**: `CRR_PD_FLOOR` in `data/tables/firb_lgd.py`, `PDFloors` in `contracts/config.py`
 
 ---

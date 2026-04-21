@@ -1419,6 +1419,33 @@ changeable** by the protection provider (Art. 213(1)(c)(i)). The "or change" con
 new in Basel 3.1. Transitional relief for contracts entered before 1 January 2027 until
 June 2028 waives the "or change" requirement for legacy contracts.
 
+### Life Insurance Credit Protection (Art. 232(3))
+
+PS1/26 Art. 232(3) widens the paragraph 3 derivation table that maps the insurer's
+senior-unsecured SA risk weight onto the secured-portion RW. CRR Art. 232(3) had four
+inputs (20% / 50% / 100% / 150%). PS1/26 adds three new inputs to accommodate the revised
+institution and corporate SA weights introduced by the Basel 3.1 reforms:
+
+| PS1/26 para | Insurer Senior-Unsecured RW       | Secured Portion RW | Change vs CRR |
+|-------------|-----------------------------------|--------------------|---------------|
+| (a) | 20%                                      | 20%  | — |
+| (b) | **30%** (SCRA A enhanced, Art. 121(5)) or 50% | 35% | **New 30% input** |
+| (c) | **65%** (IG corporate, Art. 122(2)(a)), 100%, or **135%** (non-IG corporate, Art. 122(6)(b)) | 70% | **New 65% and 135% inputs** |
+| (d) | 150%                                     | 150% | — |
+
+!!! info "Structural changes beyond the table"
+    PS1/26 Art. 232 also: (i) adds paragraph **A1** gating the article to firms that
+    have elected the Other Funded Credit Protection Method under Art. 191A(1);
+    (ii) narrows paragraph 2(b) from "IRB Approach but not subject to own estimates
+    of LGD" to "Foundation IRB Approach" (A-IRB firms now model life insurance
+    through their own LGD per Art. 169A/169B); (iii) extends the currency-mismatch
+    cross-reference to Art. 233(3) **and (4)**; and (iv) adds an explicit paragraph 5
+    requiring maturity-mismatch adjustment under Art. 237-239 (the obligation was
+    implicit in CRR). Output RWs (20% / 35% / 70% / 150%) are unchanged.
+
+    Full treatment in the B31 CRM spec
+    [Life Insurance Method (Art. 232)](../specifications/basel31/credit-risk-mitigation.md#life-insurance-method-art-232).
+
 ## Impact Analysis
 
 ### Low-Risk Portfolios (Strong IRB Models)

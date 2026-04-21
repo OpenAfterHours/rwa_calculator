@@ -697,18 +697,28 @@ Note: Art. 218 does not introduce a separate issuer risk weight check — the CL
 Life insurance policies assigned to the lending institution as collateral:
 
 - **Eligible**: Only life insurance policies with a current surrender value assigned/pledged to the institution (Art. 200(b) + Art. 212(2) operational requirements)
-- **Haircut**: The collateral value is the current surrender value, subject to a haircut based on the difference between surrender value and the claim at maturity
-- **SA risk weight**: The secured portion uses a **mapped risk weight** (not direct substitution):
+- **Collateral value**: The current surrender value, reduced for currency mismatch per Art. 233(3)
+- **SA risk weight** (Art. 232(3)): The secured portion uses a **mapped risk weight** (not direct substitution) keyed off the senior-unsecured RW assigned to the insurer under the SA:
 
-| Insurer Risk Weight | Secured Portion RW |
-|--------------------|-------------------|
-| 20% | 20% |
-| 30% or 50% | 35% |
-| 65%, 100%, or 135% | 70% |
+| Insurer Senior-Unsecured RW | Secured Portion RW |
+|-----------------------------|--------------------|
+| 20%  | 20%  |
+| 50%  | 35%  |
+| 100% | 70%  |
 | 150% | 150% |
 
 - **F-IRB treatment** (Art. 232(2)(b)): The secured portion uses LGD = **40%** (not the standard LGDU)
 - **A-IRB treatment**: Own LGD estimate for the secured portion
+
+!!! info "Basel 3.1 expands the input tiers"
+    PRA PS1/26 Art. 232(3) widens the paragraph 3 groupings so that the new SA
+    corporate / institution risk weights are first-class inputs: 30% (SCRA
+    Grade A enhanced) joins row (b), and 65% / 135% (investment-grade and
+    non-investment-grade corporate) join row (c). The output columns are
+    unchanged (20% / 35% / 70% / 150%). See the Basel 3.1 CRM spec
+    [Life Insurance Method (Art. 232)](../basel31/credit-risk-mitigation.md#life-insurance-method-art-232)
+    for the expanded table and the new paragraph A1 / paragraph 5 structural
+    changes.
 
 Note: Eligibility is per Art. 200(b) (eligible funded collateral) + Art. 212(2) (operational requirements), not Art. 201 (unfunded protection providers).
 

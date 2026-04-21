@@ -20,6 +20,7 @@ and IRB parameter substitution replacing double default.
 | FR-8.6 | Art. 191A method taxonomy (FCM, PSM, LGD-AM) | P1 | Done |
 | FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Not Implemented |
 | FR-8.8 | Art. 123B currency mismatch 1.5x multiplier (retail/RRE) | P1 | Partial (flag only; auto-detection and 90% hedge test not implemented) |
+| FR-8.9 | Art. 232(3) life insurance derivation table with B31 input tiers (30% / 65% / 135%) | P1 | Done |
 
 ---
 
@@ -40,6 +41,7 @@ with parameter substitution for IRB-rated guarantors.
 | Double default | Available (Art. 202–203) | **Removed** | — |
 | IRB guarantor treatment | Double default / SA-RW substitution | **PD parameter substitution** | New |
 | Method names | Unnamed | **FCM / PSM / LGD-AM** (Art. 191A) | Art. 191A |
+| Life insurance derivation (Art. 232(3)) | 4 input tiers (20/50/100/150) | **7 input tiers** — adds 30%, 65%, 135% | Art. 232(3) |
 
 ---
 
@@ -510,6 +512,132 @@ E* = max(0, E(1 + HE) - CVA(1 - HC - HFX))
 | CVA | Current value of collateral received |
 | HC | Collateral volatility haircut (Art. 224 5-band tables) |
 | HFX | FX mismatch haircut (8% at 10-day; 0% if same currency) |
+
+---
+
+## Life Insurance Method (Art. 232)
+
+Life insurance policies assigned to the institution are the principal
+non-cash item recognised through the **Other Funded Credit Protection
+Method** (`OFCP`) introduced by PS1/26 Art. 191A. Paragraph references below
+verified against `ps126app1.pdf` pp.211–212.
+
+### Scope Gate (Art. 232(A1))
+
+Art. 232 applies only to an institution that has elected the Other Funded
+Credit Protection Method under the Art. 191A(1) taxonomy. Under Basel 3.1
+life insurance is **not** available through FCSM or FCCM — those methods
+are restricted to financial collateral (Art. 222, 223). This is a structural
+change from CRR, where Art. 232 stood alone without the Art. 191A method
+taxonomy.
+
+### Paragraph 1 — Cash / Cash-Assimilated Deposits Held by a Third Party
+
+Where the Art. 212(1) conditions are met (pledge / assignment, notification,
+payment-control), cash on deposit with — or cash-assimilated instruments
+issued by the institution and held by — a **third-party institution** in a
+**non-custodial arrangement** may be treated as a **guarantee by the third
+party institution**. The exposure is then routed through the unfunded CRM
+path (Art. 235 Risk-Weight Substitution for SA, or Art. 236 Parameter
+Substitution for IRB) per the Part 3 decision tree of Appendix 1.
+
+### Paragraph 2 — Life Insurance Treatment
+
+Where the Art. 212(2) conditions are met (policy pledged / assigned,
+insurer notified, right to cancel on default, surrender value declared and
+non-reducible, maturity-match), the portion of the exposure collateralised
+by the **current surrender value** is subjected to:
+
+- **(a) Standardised Approach**: risk-weighted per paragraph 3 (derivation
+  table below).
+- **(b) Foundation IRB**: assigned **LGD = 40%**. CRR's broader "IRB but not
+  own estimates of LGD" phrasing is narrowed to F-IRB in PS1/26 — A-IRB
+  firms now handle life insurance through their own LGD models (subject to
+  Art. 169A/169B).
+
+The credit protection value equals the current surrender value, reduced for
+currency mismatch in accordance with Art. 233(3) **and (4)** (PS1/26 adds
+the (4) cross-reference to capture the full Art. 233 currency-mismatch
+machinery, not just the 8% haircut).
+
+### Paragraph 3 — SA Derivation Table (Life Insurance)
+
+The risk weight applied to the secured portion is derived from the risk
+weight that **would** be assigned to a **senior unsecured exposure to the
+insurer** under the SA (Credit Risk: Standardised Approach (CRR) Part and
+Chapter 2 of Title II of Part Three of CRR):
+
+| PS1/26 para | Insurer Senior-Unsecured RW        | Secured Portion RW |
+|-------------|------------------------------------|--------------------|
+| (a)         | 20%                                | 20%  |
+| (b)         | **30%** or 50%                     | 35%  |
+| (c)         | **65%**, 100% or **135%**          | 70%  |
+| (d)         | 150%                               | 150% |
+
+!!! info "New Basel 3.1 input tiers — 30%, 65%, 135%"
+    PS1/26 Art. 232(3) expands the paragraph 3 groupings to accommodate the
+    new SA institution / corporate risk weights introduced by the Basel 3.1
+    reforms. The output columns are unchanged; only the inputs widen:
+
+    | New input | Origin | Article |
+    |-----------|--------|---------|
+    | **30%** → 35% | SCRA Grade A enhanced (well-capitalised bank) | Art. 121(5) |
+    | **65%** → 70% | Investment-grade corporate | Art. 122(2)(a) |
+    | **135%** → 70% | Non-investment-grade corporate (institution permission) | Art. 122(6)(b) |
+
+    Under CRR the derivation table had only **four** input tiers
+    (20% / 50% / 100% / 150%). A CRR firm holding life insurance issued by a
+    well-capitalised but unrated bank could not map the B31 30% SCRA Grade A
+    enhanced weight onto the derivation table at all — the gap is closed by
+    Art. 232(3)(b). The 135% non-IG corporate tier is gated on PRA permission
+    per Art. 122(6); firms without that permission fall back to the 100%
+    tier (Art. 122(5)).
+
+### Paragraph 4 — Repurchase-on-Request Instruments (Art. 200(1)(c))
+
+Instruments repurchased on request by the issuing institution and eligible
+under Art. 200(1)(c) may be treated as a **guarantee by the issuing
+institution** (again routed via Art. 235 / 236 per the Part 3 decision
+tree). Protection value = face value if face-repurchase, or the Art. 197(4)
+valuation if market-price-repurchase.
+
+### Paragraph 5 — Mandatory Maturity-Mismatch Adjustment (new)
+
+Unlike FCSM, which is exempt from the Art. 237-239 maturity-mismatch
+framework (see [Art. 239(1)](#art-237-eligibility-gates)), the Other
+Funded Credit Protection Method **is** in scope. Paragraph 5 makes this
+explicit: an institution using OFCP "shall take into account any maturity
+mismatch in accordance with the provisions of Articles 237 to 239". CRR
+had no equivalent standalone sub-paragraph — the obligation was implicit
+through the general Art. 238 scope — so PS1/26 tightens the wording
+without changing the substantive outcome.
+
+### Structural Changes vs CRR Art. 232
+
+| Change | CRR Art. 232 | PS1/26 Art. 232 |
+|--------|--------------|-----------------|
+| Scope gate | Standalone article | New paragraph A1: only for firms using OFCP under Art. 191A |
+| Para 1 routing | "Guarantee by the third party institution" | Same, but explicitly routed via Art. 235 / 236 decision tree (Part 3 Appendix 1); cash instruments must be in a **non-custodial arrangement** |
+| Para 2 IRB scope | "IRB Approach but not subject to own estimates of LGD" | Narrowed to "Foundation IRB Approach" |
+| Para 3 input tiers | 4 tiers: 20% / 50% / 100% / 150% | 7 tiers: 20% / **30%** / 50% / **65%** / 100% / **135%** / 150% |
+| Para 2 currency mismatch | Cross-ref Art. 233(3) only | Cross-ref Art. 233(3) **and (4)** |
+| Para 5 maturity mismatch | Not stated (implicit via Art. 238) | Explicit sub-paragraph requiring Art. 237-239 adjustment |
+
+### Implementation
+
+Life insurance collateral flows through the Art. 232 derivation table in
+`engine/crm/life_insurance.py`. Inputs: the insurer identifier on the
+facility / loan row, the pledged surrender value, and the policy currency.
+The insurer's senior-unsecured SA RW is re-computed against the framework
+in play (CRR: CRR Table 3 / 4; B31: ECRA Table 3 / 4 or SCRA Table 5 per
+Art. 121). The mapping is then applied to produce the secured-portion RW
+emitted as the `life_ins_secured_rw` column (see
+[Output Schemas](../../data-model/output-schemas.md)).
+
+!!! warning "Output-column naming documented separately"
+    The `life_ins_collateral_value` / `life_ins_secured_rw` output columns
+    are tracked for schema documentation under DOCS_IMPLEMENTATION_PLAN
+    D3.53 — not part of the current D2.48 closure.
 
 ---
 

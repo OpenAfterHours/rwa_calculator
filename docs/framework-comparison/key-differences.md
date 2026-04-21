@@ -655,6 +655,21 @@ a fundamentally different methodology based on the institution's own capital ade
     See [SA Risk Weights — Art. 124A](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
     for the full criteria.
 
+!!! info "Valuation Requirements (Art. 124D) — New in Basel 3.1"
+    Art. 124D consolidates the valuation rules that were previously spread across CRR
+    Art. 125, 126, 208(3), and 229. New elements with no direct CRR analogue: (a) explicit
+    **>10% market-decline** revaluation trigger with a clock-reset option (Art. 124D(7));
+    (b) **GBP 2.6m or 5% of own funds** large-exposure threshold triggering a 3-year
+    revaluation cycle regardless of property type (Art. 124D(5)(c)); (c) 5-year floor for
+    all regulatory RE (Art. 124D(5)(d)); (d) self-build property value = higher of
+    pre-construction land value and 0.8 × latest qualifying valuation (Art. 124D(9)); and
+    (e) grandfathering for pre-2027 exposures (Art. 124D(11)) where the most recent legacy
+    valuation counts as a qualifying valuation subject to the three-circumstance test.
+    The Art. 124D(5) cadence applies **equally** to residential and commercial — a change
+    from CRR Art. 208(3)'s 1-year CRE / 3-year RRE split.
+    See [Art. 124D specification](../specifications/basel31/sa-risk-weights.md#real-estate--valuation-requirements-art-124d)
+    for the paragraph-by-paragraph breakdown.
+
 **General (not cash-flow dependent) — PRA Art. 124F: Loan-Splitting**
 
 The PRA adopted loan-splitting (not the BCBS whole-loan LTV-band table):

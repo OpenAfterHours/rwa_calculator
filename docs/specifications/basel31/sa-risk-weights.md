@@ -36,6 +36,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 warning, `due_diligence_override_rw` floor) |
 | FR-1.20 | ECRA trade-finance ≤ 6m extension of Table 4 (Art. 120(2A)) | P1 | Done (input-driven via `is_short_term_trade_lc`) |
 | FR-1.21 | Real estate framework routing (Art. 124(1)–(3)) and mixed RE proportional split (Art. 124(4)) | P1 | Partial — single-property routing done; mixed-property split requires per-component property values (input-schema gap, see D3.59) |
+| FR-1.22 | RE valuation requirements — qualifying valuation, >10% market decline and GBP 2.6m / 5% own funds revaluation triggers, self-build floor, pre-2027 transitional (Art. 124D(1)–(11)) | P1 | Input-driven — calculator consumes `property_value` as already Art. 124D-compliant; valuation governance is firm-side (no Art. 124D-specific input fields for valuation source, revaluation date, or self-build flag) |
 
 ---
 
@@ -967,13 +968,9 @@ Criterion (c) is satisfied if **any** of the following apply:
 
 ### Valuation Requirements (Art. 124D)
 
-The valuation standard required by criterion (d):
+Criterion (d) is satisfied only if the property value has been obtained via an Art. 124D "qualifying valuation". The full valuation standard — monitoring obligation, re-valuation triggers (including the GBP 2.6m / 5% own funds threshold), qualified-valuer and statistical-method conditions, the self-build formula, and the transitional rule for pre-2027 exposures — is documented in its own section below:
 
-- Valuation at origination by an independent qualified valuer or robust statistical method
-- Must not exceed market value; for purchase financing, the lower of market value and purchase price
-- Must not reflect expectations of speculative price increases
-- Re-valuation triggers: material value reduction events, market decrease >10%, exposures >GBP 2.6m after 3 years, or all exposures every 5 years
-- Self-build: value = higher of (underlying land value, 0.8 × latest qualifying valuation)
+→ [Real Estate — Valuation Requirements (Art. 124D)](#real-estate--valuation-requirements-art-124d)
 
 ### Consequence of Failing — Other Real Estate (Art. 124J)
 
@@ -991,6 +988,173 @@ Exposures that fail any Art. 124A criterion are "other real estate":
     RE branches. The six Art. 124A(1) criteria must be pre-evaluated by the reporting
     institution — the calculator does not validate individual criteria. If the field is
     omitted, the exposure defaults to qualifying (`True`) for backward compatibility.
+
+## Real Estate — Valuation Requirements (Art. 124D)
+
+Article 124D defines the valuation standard that every regulatory real estate exposure must meet to satisfy Art. 124A(1)(d). It is the sole article governing **(i)** what counts as a "qualifying valuation", **(ii)** when a fresh valuation must be obtained, **(iii)** the self-build value floor, and **(iv)** the transitional rule for exposures incurred before 1 January 2027. Art. 124D applies **only** to regulatory RE exposures under the Standardised Approach — other RE (Art. 124J) and ADC (Art. 124K) are not subject to these specific mechanics, although firms typically apply equivalent internal governance.
+
+**Regulatory Reference:** PRA PS1/26 Art. 124D (ps126app1.pdf pp. 52–53). Effective 1 January 2027.
+
+!!! quote "Art. 124D(1) — Scope"
+    This Article applies for the purpose of applying the Standardised Approach to regulatory real estate exposures only.
+
+### Valuation Standard (Art. 124D(8))
+
+Every valuation relied on under Art. 124D — initial, revaluation, or self-build land value — must meet all four of the following conditions simultaneously. Failing any one disqualifies the valuation from being a "qualifying valuation":
+
+| Art. 124D(8) condition | Requirement |
+|------------------------|-------------|
+| **(a)** Source | Produced either by a **suitably robust statistical method**, or by an **independent valuer** who possesses the necessary qualifications, ability, and experience. |
+| **(b)** No speculative uplift | **Excludes expectations on price increases.** The valuer cannot embed assumed appreciation into the present value. |
+| **(c)** Market-value cap | Where a market value can be determined, the valuation **shall not exceed market value**. |
+| **(d)** Purchase-price cap | Where the mortgage loan is financing the **purchase** of the property, the valuation **shall not exceed the effective purchase price**. |
+
+Paragraphs (a)–(d) apply jointly to paragraph 3 (qualifying valuation), paragraphs 5–7 (revaluation), and paragraphs 9–11 (self-build and transitional). Conditions (c) and (d) together prevent a valuer from substituting a higher market estimate for a recent arm's-length purchase price, or from using a distressed purchase price to uplift an otherwise weaker market value — in each case the **lower** number governs.
+
+!!! info "Statistical method as alternative to an independent valuer (Art. 124D(8)(a))"
+    Art. 124D(8) expresses the statistical-method route as a peer of the independent-valuer route — both are valid sources. PRA expectations for what makes a statistical method "suitably robust" (coverage, backtesting, transparency, challenge process) are not enumerated inside Art. 124D itself and are typically sourced from supervisory guidance and SS / firm model-governance policies. A statistical valuation still must meet conditions (b)–(d) of Art. 124D(8).
+
+### Monitoring Obligation (Art. 124D(2))
+
+!!! quote "Art. 124D(2)"
+    An institution shall monitor the market value of the property on a frequent basis. It shall carry out more frequent monitoring where the market is subject to significant changes in conditions.
+
+Paragraph (2) imposes a **continuous, framework-wide** monitoring obligation distinct from the event-driven revaluation triggers in paragraph (5). The obligation sits upstream of the calculator: firms are expected to have a market-monitoring process (e.g., index-based tracking, portfolio-level price-series review) that can detect the >10% decline referred to in Art. 124D(5)(b) *without waiting for a revaluation event*. Frequency is not fixed in the text — "more frequent" during turbulent markets is a supervisory expectation.
+
+### What Counts as the Value of the Property (Art. 124D(3))
+
+!!! quote "Art. 124D(3)"
+    Subject to paragraph 9, the value of the property is equal to the most recent valuation that has been obtained in accordance with paragraphs 4 to 7 and 11 (a **qualifying valuation**).
+
+The "qualifying valuation" is the anchor used by:
+
+- [Art. 124C](#real-estate--ltv-definition-art-124c) LTV denominator for the 55% secured-portion split
+- [Art. 124F–124I](#real-estate--residential-art-124f124g) loan-splitting tables
+- [Art. 124J](#consequence-of-failing--other-real-estate-art-124j) 60% floor on commercial non-income-dependent other RE
+
+The "subject to paragraph 9" carve-out defers to the self-build formula ([see below](#self-build-valuation-art-124d9-and-124d10)) for exposures financing land-plus-construction before completion.
+
+### Revaluation Triggers (Art. 124D(4)–(7))
+
+#### When a new valuation is **required** (Art. 124D(4)–(5))
+
+An institution **shall** obtain a fresh qualifying valuation in any of the following situations:
+
+| Trigger | Article | Condition |
+|---------|---------|-----------|
+| **Origination** | Art. 124D(4) | Institution issues a new loan for the purchase of the property, OR otherwise issues a new loan secured on the property (including replacing an existing loan of an existing or new obligor). |
+| **Event-driven impairment** | Art. 124D(5)(a) | An event occurs that results in a **likely permanent reduction** in the property's value → obtain an updated valuation confirming the decrease. |
+| **Market-driven decline >10%** | Art. 124D(5)(b) | Institution estimates that the property value has decreased by more than **10%** relative to the last qualifying valuation as a result of a broader decrease in market prices → obtain an updated valuation confirming the decrease. |
+| **Staleness — large exposures** | Art. 124D(5)(c) | Loan amount exceeds **GBP 2,600,000 or 5% of the institution's own funds**, whichever is higher, AND **three years** have passed since the last qualifying valuation. |
+| **Staleness — all exposures** | Art. 124D(5)(d) | **Five years** have passed since the last qualifying valuation, regardless of loan size. |
+
+!!! warning "Large-exposure threshold applies to regulatory RE in general, not only CRE"
+    Art. 124D(5)(c) uses the wording "where the amount of the loan is more than GBP 2,600,000 or 5% of the own funds of the institution" without restricting the rule to commercial RE. The 3-year revaluation cycle therefore applies to **any** regulatory RE exposure exceeding the threshold — residential, commercial, owner-occupied, income-producing, and self-build alike. The smaller-exposure population (loans ≤ GBP 2.6m and ≤ 5% of own funds) is subject only to the 5-year staleness trigger in paragraph (5)(d).
+
+!!! info "CRR comparison — no explicit revaluation cadence"
+    Legacy CRR Art. 208(3) required firms to monitor property values "frequently and at least once every year for commercial immovable property and once every three years for residential immovable property", with statistical methods permitted for surveillance. Art. 124D inverts the cadence: residential and commercial are treated the same under Art. 124D(5), and the **origination** + **event** + **market-decline** legs did not appear with this specificity in the CRR text. Firms migrating from CRR governance should not rely on the 1-year / 3-year split carrying forward.
+
+#### When a new valuation is **permitted but not required** (Art. 124D(6))
+
+!!! quote "Art. 124D(6)"
+    If modifications are made to the property that unequivocally increase its value, the institution may obtain an updated valuation to confirm the increase in value.
+
+Paragraph (6) is an optional uplift channel — firms **may** (not shall) revalue upwards when physical property modifications (extension, refurbishment, change of use with planning consent) unequivocally raise market value. The conservative default is to retain the pre-modification qualifying valuation until the next trigger in (5) fires. If the firm exercises the (6) option, the new valuation must still meet Art. 124D(8)(a)–(d).
+
+#### Clock-reset rule after a (5)(b) market-decline revaluation (Art. 124D(7))
+
+!!! quote "Art. 124D(7)"
+    If an institution has revalued the property in accordance with point (b) of paragraph 5, it may use the date of that valuation, or the date of the previous qualifying valuation that was not obtained in accordance with point (b) of paragraph 5, to calculate whether it has to obtain an updated valuation in accordance with points (c) or (d) of paragraph 5.
+
+Paragraph (7) gives institutions optionality when the 3-year (c) or 5-year (d) clock would be reset by a market-decline revaluation under (5)(b). Without this relief, a firm that revalues a property downwards in response to a market shock would be forced to re-value *again* three or five years after the reactive date, potentially during another stressed period. Paragraph (7) allows the clock to continue running from the last **routine** (non-5(b)) qualifying valuation — a firm can elect whichever date yields the more prudent schedule. The choice is **per-exposure**, not portfolio-wide, and once the (c) or (d) trigger fires the new valuation becomes the anchor for all subsequent paragraph-5 calculations.
+
+### Self-Build Valuation (Art. 124D(9) and 124D(10))
+
+A **self-build exposure** (PRA Glossary p. 79) is a real-estate exposure where the property is being built or developed for the obligor's own use as their primary residence, with no more than four residential units. The valuation anchor departs from the pure qualifying-valuation rule because there may be no finished building to value at origination.
+
+!!! quote "Art. 124D(9) — Self-build at origination (or between revaluations)"
+    Where an exposure is a self-build exposure, the value of the property shall, subject to paragraph 10, be the higher of:
+
+    (a) the underlying land value obtained by the institution when the institution issued a new mortgage loan for the purchase of the property **before construction began**; and
+
+    (b) the most recent qualifying valuation of the property multiplied by **0.8**.
+
+!!! quote "Art. 124D(10) — Self-build after an Art. 124D(5)(a)/(b) revaluation"
+    Where an institution is required to obtain an updated valuation for a self-build exposure in accordance with points (a) or (b) of paragraph 5, the value of the property shall be:
+
+    (a) where an updated estimate of the underlying land value is **not available**, the updated property valuation multiplied by **0.8**; or
+
+    (b) where an updated estimate of the underlying land value **is available**, the higher of:
+
+    &nbsp;&nbsp;&nbsp;&nbsp;(i) the updated property valuation multiplied by **0.8**; and
+
+    &nbsp;&nbsp;&nbsp;&nbsp;(ii) the updated estimate of the underlying land value.
+
+| Lifecycle stage | Property value = | Floor mechanism |
+|-----------------|------------------|-----------------|
+| Origination (Art. 124D(9)) | max( land_value_at_origination , 0.8 × latest_qualifying_valuation ) | Pre-construction land anchor prevents over-reliance on projected build value |
+| After (5)(a)/(b) revaluation, no new land estimate (Art. 124D(10)(a)) | 0.8 × updated_property_valuation | Haircut-only — institution has no fresh land comparable |
+| After (5)(a)/(b) revaluation, with updated land estimate (Art. 124D(10)(b)) | max( 0.8 × updated_property_valuation , updated_land_value ) | Both anchors refreshed; floor remains the higher of the two |
+
+The **0.8 multiplier** is the key prudential brake: it guarantees that at least a 20% value buffer is held over the current "completed" valuation until the loan matures or the property is sold, reflecting the residual construction / permitting / market-absorption risk that remains even after the build is complete.
+
+!!! warning "No analogous CRR provision"
+    CRR Art. 125/126 did not contain a self-build valuation formula. Self-build exposures under CRR were valued using the general "prudently conservative mortgage lending value" standard inherited from Art. 229. Art. 124D(9)–(10) is new regulatory drafting and effective from 1 January 2027.
+
+### Transitional Rule — Pre-2027 Exposures (Art. 124D(11))
+
+!!! quote "Art. 124D(11)"
+    For the purposes of paragraph 3 in relation to exposures incurred before 1 January 2027:
+
+    (a) paragraph 4 shall be read as if it was in force from the time the exposure was incurred;
+
+    (b) where one or more of the following circumstances applies:
+
+    &nbsp;&nbsp;&nbsp;&nbsp;(i) it is not reasonably practicable for the institution to identify a valuation obtained in accordance with paragraph 4;
+
+    &nbsp;&nbsp;&nbsp;&nbsp;(ii) the amount of the loan is more than GBP 2,600,000 or 5% of the own funds of the institution, and three years have passed since a valuation was obtained in accordance with paragraph 4; or
+
+    &nbsp;&nbsp;&nbsp;&nbsp;(iii) five years have passed since a valuation was obtained in accordance with paragraph 4,
+
+    the most recent valuation obtained by the institution before 1 January 2027 shall be a qualifying valuation.
+
+| Circumstance for pre-2027 exposures | Qualifying valuation = |
+|-------------------------------------|------------------------|
+| Art. 124D(11)(b)(i) — Paragraph-4 valuation is **not reasonably practicable to identify** | Most recent pre-2027 valuation held by the institution. |
+| Art. 124D(11)(b)(ii) — Loan > GBP 2.6m (or 5% own funds) **and** 3 years since any paragraph-4 valuation | Most recent pre-2027 valuation held by the institution. |
+| Art. 124D(11)(b)(iii) — 5 years since any paragraph-4 valuation | Most recent pre-2027 valuation held by the institution. |
+| Otherwise | Paragraph-4 valuation deemed to apply from the date the exposure was incurred (Art. 124D(11)(a)). |
+
+Paragraph (11) is the **grandfathering bridge** for legacy portfolios. Without it, every pre-2027 real-estate exposure would lack a "paragraph-4 valuation" on day one of the new regime and would be forced to Art. 124J (other RE) until the institution obtained a fresh valuation. Instead, Art. 124D(11)(a) deems the old valuation to have been obtained under paragraph 4 retrospectively, and (11)(b) provides three escape hatches where the institution can substitute the most recent pre-2027 valuation outright. Once the 3-year (c) / 5-year (d) clocks in paragraph (5) tick over *after* 1 January 2027, the transitional relief lapses and the firm must revalue to the forward-looking Art. 124D standard.
+
+!!! info "Interaction with the Art. 124D(8) quality conditions"
+    Art. 124D(11) deems a pre-2027 valuation to be a *qualifying* valuation, but the quality conditions in Art. 124D(8)(a)–(d) apply to any valuation that the firm relies on. Where a pre-2027 valuation was obviously substandard (e.g., a drive-by indexation with no valuer sign-off, or a purchase price exceeded by an origination valuation), firms should expect supervisory challenge under Art. 124D(8) even though paragraph (11) ostensibly accepts the valuation on date-basis grounds.
+
+### Implementation Status
+
+!!! warning "Revaluation triggers and self-build formula are firm-side governance, not calculator logic"
+    The RWA calculator consumes a single property value per RE exposure (input field `re_split_property_value`, or legacy `property_value`) and applies it as the Art. 124C LTV denominator. **No field in the current input schema distinguishes** between:
+
+    - Origination valuation vs. most recent revaluation
+    - Independent-valuer vs. statistical-method source
+    - Self-build vs. finished-property valuation
+    - Pre-2027 (transitional) vs. post-2027 (paragraph-4) valuations
+
+    The firm's valuation-governance process is expected to ensure that the `property_value` supplied to the calculator **is** the Art. 124D-compliant qualifying valuation (including: the 0.8 self-build haircut applied upstream, the revaluation cadence respected, and the pre-2027 grandfathering applied where relevant). The calculator does not validate Art. 124D compliance — it treats the supplied value as already qualifying.
+
+    Firms failing any Art. 124D paragraph should either (a) set `is_qualifying_re = False` to route the exposure to Art. 124J, or (b) use the most recent defensible valuation floored by the Art. 124D(9)/(10) self-build formula where applicable. No dedicated input flag captures "Art. 124D non-compliance" directly.
+
+### CRR Comparison
+
+Legacy CRR had no single "Art. 124D". Valuation obligations were spread across:
+
+- **Art. 208(3) CRR** — annual (CRE) / 3-year (RRE) monitoring cadence and statistical-method permission
+- **Art. 229 CRR** — "prudently conservative mortgage lending value" definition (commercial valuers)
+- **Art. 125(2)(a) CRR / Art. 126(2)(a) CRR** — origination valuation requirement embedded inside the residential / commercial RE criteria
+
+The Basel 3.1 consolidation under Art. 124D: (a) aligns residential and commercial revaluation cadence, (b) introduces the explicit **GBP 2.6m / 5% own funds** large-exposure trigger (no CRR analogue), (c) introduces the explicit **>10% market-decline** trigger with a clock-reset option (Art. 124D(7)), (d) codifies the self-build valuation floor, and (e) provides express grandfathering via Art. 124D(11). The 5-year ceiling (Art. 124D(5)(d)) is **tighter** than legacy CRR's 3-year residential cadence for the subset of exposures below the large-exposure threshold — but **looser** for commercial exposures below that threshold, which under CRR required annual monitoring.
+
+See the [CRR Residential Mortgage spec](../crr/sa-risk-weights.md#residential-mortgage-exposures-crr-art-125) and [CRR Commercial RE spec](../crr/sa-risk-weights.md#commercial-real-estate-crr-art-126) for the pre-revocation treatment.
 
 ## Real Estate — ADC Exposures (Art. 124K)
 

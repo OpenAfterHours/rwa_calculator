@@ -1404,18 +1404,15 @@ class ExposureClassifier:
         References:
             PRA PS1/26 Art. 123A(1)(a)-(b), CRR Art. 123
         """
-        # Base conditions: lending group threshold check (CRR + B31)
+        # Hierarchy resolver now populates lending_group_adjusted_exposure with the
+        # counterparty aggregate when no lending group exists, so the threshold
+        # check is a single comparison across both cases.
         threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
-        zero_lending_group_fail = (
-            pl.col("lending_group_adjusted_exposure").cast(pl.Float64, strict=False).abs() < 1e-10
-        ) & (pl.col("exposure_for_retail_threshold") > max_retail_exposure)
 
         if not config.is_basel_3_1:
             # CRR: threshold check only
             return (
                 pl.when(threshold_fail)
-                .then(pl.lit(False))
-                .when(zero_lending_group_fail)
                 .then(pl.lit(False))
                 .otherwise(pl.lit(True))
                 .alias("qualifies_as_retail")
@@ -1431,8 +1428,6 @@ class ExposureClassifier:
 
         expr = (
             pl.when(threshold_fail)
-            .then(pl.lit(False))
-            .when(zero_lending_group_fail)
             .then(pl.lit(False))
             # Art. 123A(1)(a): SMEs auto-qualify — no condition 3 needed
             .when(is_sme_for_art_123a)

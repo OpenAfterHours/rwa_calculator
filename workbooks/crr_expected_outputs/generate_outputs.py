@@ -444,7 +444,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
             approach="SA",
             exposure_class="RETAIL_SME",
             exposure_reference="LOAN_RTL_SME_001",
-            counterparty_reference="RTL_SME_001",
+            counterparty_reference="RTL_SME_SCN_001",
             ead=float(ead_a11),
             pd=None,
             lgd=None,

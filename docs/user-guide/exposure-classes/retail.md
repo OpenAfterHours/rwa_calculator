@@ -268,11 +268,20 @@ def calculate_adjusted_exposure(exposures, residential_collateral):
 
 **Lending Group Threshold Check:**
 
+The adjusted exposure is aggregated across the connected-client group. When a
+counterparty is not part of an explicit lending group, the counterparty itself
+acts as a group-of-one (CRR Art. 4(1)(39)) — every exposure booked against that
+obligor counts toward the limit, not just the current line.
+
 ```python
-# Total adjusted exposure to lending group (from hierarchy resolver)
+# Total adjusted exposure to the connected-client group (from hierarchy resolver).
+# If a lending_group_reference exists, sum across every member; otherwise sum
+# across the counterparty's own exposures.
+group_key = exposure.lending_group_reference or exposure.counterparty_reference
 adjusted_group_exposure = sum(
-    exp.exposure_for_retail_threshold for entity in lending_group
-    for exp in entity.exposures
+    exp.exposure_for_retail_threshold
+    for exp in all_exposures
+    if (exp.lending_group_reference or exp.counterparty_reference) == group_key
 )
 
 # Must be ≤ threshold for retail treatment

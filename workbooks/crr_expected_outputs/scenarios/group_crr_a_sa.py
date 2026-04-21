@@ -812,7 +812,7 @@ def _(
 ):
     """Calculate Scenario CRR-A11: SME Retail with Supporting Factor."""
     loan_a11 = fixtures.get_loan("LOAN_RTL_SME_001")
-    cpty_a11 = fixtures.get_counterparty("RTL_SME_001")
+    cpty_a11 = fixtures.get_counterparty("RTL_SME_SCN_001")
 
     # SME retail with turnover < £880k
     turnover_a11 = Decimal("750000")  # £750k
@@ -836,7 +836,7 @@ def _(
         scenario_group="CRR-A",
         description="SME retail with supporting factor",
         exposure_reference="LOAN_RTL_SME_001",
-        counterparty_reference="RTL_SME_001",
+        counterparty_reference="RTL_SME_SCN_001",
         approach="SA",
         exposure_class="RETAIL_SME",
         ead=float(ead_a11),

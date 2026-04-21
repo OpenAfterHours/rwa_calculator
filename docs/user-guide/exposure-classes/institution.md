@@ -121,6 +121,20 @@ Covered bonds issued by institutions receive preferential treatment under Art. 1
 
 > **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129) for the full CQS table and CRR vs Basel 3.1 comparison.
 
+!!! info "Art. 129(4A) Due Diligence CQS Step-Up — Basel 3.1 only"
+    Where a rated covered bond is risk-weighted from Table 7, Basel 3.1 Art. 129(4A) requires
+    firms to conduct due diligence on the ECAI assessment. If DD reveals higher risk than the
+    assigned CQS implies, the firm must assign **at least one CQS step higher** than the
+    ECAI-implied weight (e.g. CQS 1 → CQS 2 = 10% → 20%, CQS 3 → CQS 4 = 20% → 50%,
+    CQS 5 → CQS 6 = 50% → 100%). Note that CQS 2 → CQS 3 and CQS 4 → CQS 5 transitions
+    produce no numerical change (Table 7 assigns identical weights to those adjacent steps);
+    the reassignment is still mandatory for any downstream CQS-keyed process. Currently
+    routed through the Art. 110A `due_diligence_override_rw` input (no dedicated Art. 129(4A)
+    branch in the calculator). Parallels Art. 120(4) for rated institutions and Art. 122(4)
+    for rated corporates; no CRR equivalent. See
+    [B31 SA Risk Weights — Art. 129(4A)](../../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a)
+    for the full trigger/effect table.
+
 ## Central Counterparties (CCPs)
 
 ### Qualifying CCPs (QCCPs)

@@ -584,6 +584,37 @@ Standardised Credit Risk Assessment Approach (SCRA):
     [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
     for the full conditions and worked examples.
 
+### Covered Bond Exposures
+
+Eligible covered bonds issued by institutions receive preferential treatment under Art. 129.
+Rated bonds map into Table 7 (CQS 1 → 10%, CQS 2/3 → 20%, CQS 4/5 → 50%, CQS 6 → 100%) —
+PRA PS1/26 retained the CRR values and did **not** adopt the BCBS CRE20.28–29 reductions.
+Unrated bonds derive their RW from the issuing institution's senior unsecured RW via the
+Art. 129(5) expanded 7-entry table (new rows at 15%/20%/25%/35% to accommodate ECRA 30% /
+SCRA 40%/50%/75% institution weights). See
+[Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129)
+for the full CQS table and CRR comparison, and the [institution exposure-class page](../exposure-classes/institution.md#covered-bonds)
+for the practitioner walk-through.
+
+!!! info "Art. 129(4A) — Due Diligence CQS Step-Up for Covered Bonds"
+    Where an ECAI rating drives the Table 7 lookup above, Art. 129(4A) requires firms to
+    conduct due diligence on the external assessment; if internal DD reveals higher risk
+    characteristics than implied by the CQS, the firm must assign **at least one CQS step
+    higher** than the ECAI-implied weight. Sample uplifts against Table 7: CQS 1 → CQS 2
+    (10% → 20%), CQS 3 → CQS 4 (20% → 50%), CQS 5 → CQS 6 (50% → 100%). The CQS 2 → CQS 3
+    and CQS 4 → CQS 5 transitions yield no numerical change because Table 7 assigns
+    identical weights to those adjacent steps — the reassignment is still mandatory for
+    any downstream CQS-keyed process (e.g. disclosure).
+
+    This is a class-specific instance of the framework-wide Art. 110A obligation discussed
+    in [section 10](#10-due-diligence-requirements), with parallels for corporates
+    (Art. 122(4)) and institutions (Art. 120(4)). CRR has no equivalent covered-bond
+    step-up rule. Currently routed through the Art. 110A `due_diligence_override_rw` input
+    (no dedicated Art. 129(4A) branch in the calculator) — set the override to the
+    next-CQS-band weight and the engine will apply it as a directional floor. See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a)
+    for the full trigger/effect table and worked uplifts.
+
 ### Subordinated Debt
 
 | Instrument Type | Risk Weight |

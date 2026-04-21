@@ -945,9 +945,20 @@ new institution RWs (ECRA 30%, SCRA 40%/75%):
 
 !!! info "Art. 129(4A) — New Due Diligence Requirement"
     Basel 3.1 adds Art. 129(4A): institutions must assess whether external ratings
-    adequately reflect creditworthiness. If due diligence reveals higher risk, the institution
-    must assign at least one CQS step higher. This is a *class-specific* application of the
-    umbrella [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below.
+    adequately reflect creditworthiness of eligible covered bonds. If due diligence reveals
+    higher risk characteristics than implied by the CQS, the institution must assign **at
+    least one CQS step higher** than the ECAI-implied weight. Sample uplifts against
+    Table 7: CQS 1 → CQS 2 (10% → 20%), CQS 3 → CQS 4 (20% → 50%), CQS 5 → CQS 6
+    (50% → 100%). CQS 2 → CQS 3 and CQS 4 → CQS 5 yield no numerical change (Table 7
+    assigns identical weights to those adjacent steps) but the reassignment remains
+    mandatory.
+
+    Art. 129(4A) is a *class-specific* application of the umbrella
+    [Art. 110A due diligence obligation](#due-diligence-obligation-art-110a) below, and
+    it mirrors the parallel provisions for institutions (Art. 120(4)) and corporates
+    (Art. 122(4)). CRR has no equivalent provision. See the
+    [B31 SA spec](../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a)
+    for the full trigger/effect table, plateau explanation, and implementation status.
 
 ## Due Diligence Obligation (Art. 110A)
 

@@ -315,7 +315,7 @@ Basel 3.1 introduces a class-specific CQS step-up rule for **rated** institution
 that sits alongside the [framework-wide Art. 110A due diligence obligation](#due-diligence-obligation-art-110a)
 discussed earlier in this specification. The rule is textually parallel to
 [Art. 122(4) for rated corporates](#rated-corporate-due-diligence-cqs-step-up-art-1224)
-and [Art. 129(4A) for covered bonds](#new-due-diligence-requirement-art-1294a).
+and [Art. 129(4A) for covered bonds](#covered-bond-due-diligence-cqs-step-up-art-1294a).
 
 !!! quote "Art. 120(4) — verbatim (PRA PS1/26 p. 41)"
     "An institution shall conduct due diligence to ensure that the external credit
@@ -1357,11 +1357,74 @@ risk weights from ECRA and SCRA:
 | 100% | 50% | (c) | Unchanged |
 | 150% | 100% | (d) | Unchanged |
 
-### New Due Diligence Requirement (Art. 129(4A))
+### Covered Bond Due Diligence CQS Step-Up (Art. 129(4A))
 
-Institutions must conduct due diligence on external credit assessments. If analysis
-reflects higher risk than the CQS implies, the institution must assign at least one
-CQS step higher than the external assessment.
+**Regulatory text.** PRA PS1/26 Art. 129(4A) (p. 61) reads:
+
+> An institution shall conduct due diligence to ensure that the external credit assessments
+> appropriately and prudently reflect the creditworthiness of the eligible covered bonds to
+> which the institution is exposed. If the due diligence analysis reflects higher risk
+> characteristics than that implied by the credit quality step of the exposure, the
+> institution shall assign a risk weight associated with a credit quality step that is at
+> least one step higher than the risk weight determined by the external credit assessment.
+
+**Trigger.** The step-up is driven by the *credit quality step* of the ECAI assessment used
+under Art. 129(4) Table 7 (rated eligible covered bonds). The trigger is the firm's own DD
+finding that the CQS mapping understates the bond's credit risk. For unrated covered bonds
+risk-weighted via the Art. 129(5) institution-RW derivation chain, the step-up still applies
+indirectly where the underlying institution exposure is itself stepped up under
+Art. 120(4) — the derivation table at [Covered Bonds — Unrated](#covered-bonds-unrated-art-1295)
+then yields the correspondingly higher covered-bond RW.
+
+**Effect.** Worked one-step uplifts against Art. 129(4) Table 7 (rated covered bonds):
+
+| Source CQS | Table 7 RW | Stepped-Up CQS | Stepped-Up RW | Change |
+|------------|-----------|----------------|---------------|--------|
+| CQS 1 | 10% | CQS 2 | 20% | +10pp |
+| CQS 2 | 20% | CQS 3 | 20% | 0pp (plateau — CQS 2/3 both 20%) |
+| CQS 3 | 20% | CQS 4 | 50% | +30pp |
+| CQS 4 | 50% | CQS 5 | 50% | 0pp (plateau — CQS 4/5 both 50%) |
+| CQS 5 | 50% | CQS 6 | 100% | +50pp |
+| CQS 6 | 100% | — | 100% | Capped (already bottom of Table 7) |
+
+Like Art. 120(4) for institutions, two CQS→CQS transitions (2→3 and 4→5) yield no numerical
+change because Table 7 assigns identical RWs to those adjacent steps. The uplift is required
+regardless — Art. 129(4A) mandates the CQS reassignment, even if the RW happens to coincide.
+This matters for any downstream process that keys off CQS rather than RW (e.g. disclosure).
+
+**Distinction from Art. 110A.** Art. 129(4A) is a narrower, rated-covered-bond-only rule with
+a fixed one-step CQS uplift; [Art. 110A](#due-diligence-obligation-art-110a) applies to every
+non-exempt SA exposure (including unrated covered bonds) and permits an unbounded uplift.
+Where both would apply, the final RW is
+`max(RW_Art_129_4A, RW_Art_110A_override, RW_Table_7)`.
+
+**Parallel provisions.** Art. 129(4A) is textually near-identical to two other class-specific
+step-up rules in PS1/26:
+
+| Provision | Obligor class | RW reference |
+|-----------|---------------|--------------|
+| Art. 120(4) | Rated institutions | Art. 120(1) Table 3 |
+| Art. 122(4) | Rated corporates | Art. 122(1) Table 6 |
+| **Art. 129(4A)** | **Covered bonds** | **Art. 129(4) Table 7 / Art. 129(5) unrated derivation** |
+
+All three share the same trigger ("DD reveals higher risk than implied by the CQS") and the
+same consequence ("at least one CQS step higher"). CRR has no equivalent provision for any
+of the three classes — the rules are Basel 3.1-only.
+
+**Implementation status.** The calculator does not yet implement a dedicated Art. 129(4A)
+branch. Firms currently carry Art. 129(4A) findings through the Art. 110A pathway: set
+`due_diligence_override_rw` on the covered-bond facility to the next-CQS-band weight (e.g.
+CQS 3 → 50% to reflect a stepped-up CQS 4 treatment), and the SA calculator will apply it as
+a directional floor (see [Implementation](#implementation) above). This is functionally
+equivalent and captured in the output via the `due_diligence_override_applied` audit column.
+
+!!! warning "Firm responsibility — not an engine determination"
+    The engine does not evaluate whether a DD finding is material enough to trigger
+    Art. 129(4A). The firm determines when the step-up applies; the calculator only
+    applies the resulting RW as a floor. Evidence that the step-up has been considered
+    should be traceable to the firm's DD process documentation — particularly relevant
+    for covered bonds, where Art. 129(7) already requires the firm to receive semi-annual
+    portfolio information on the cover pool.
 
 ---
 

@@ -455,6 +455,27 @@ additional detail and the [F-IRB specifications](../specifications/crr/firb-calc
     retail SME classification (Art. 123(1)(b)) and the IRB SME firm-size correlation
     adjustment (Art. 153(4)). See the [B31 SA spec](../specifications/basel31/sa-risk-weights.md#corporate-sub-categories-art-122411) for the full sub-category table.
 
+!!! info "Art. 122(7)–(8) — Output-Floor Election and PRA Notification (IRB firms)"
+    Art. 122(8) is a **separate election** for IRB firms computing the S-TREA leg of
+    the output floor (Art. 92(2A)). For unrated non-SME corporates in Art. 112(1)(g),
+    the firm chooses between:
+
+    - **(a)** flat **100%** (mirrors Art. 122(5)) — no notification; or
+    - **(b)** the Art. 122(6)(a)/(b) **65%/135% IG/non-IG split** — requires the
+      underlying Art. 122(6) PRA permission *and* **notification to the PRA on both
+      adoption and cessation** (Art. 122(8)(b) final sentence).
+
+    Art. 122(7) retains the permission-holder's obligation to maintain "sound,
+    effective and comprehensive strategies, processes, systems and risk management
+    practices". The notification obligation is symmetric — dropping back to (a) is
+    equally a notifiable event. The election is portfolio-wide within the
+    output-floor corporate population: cherry-picking branch (b) for IG obligors
+    while using branch (a) for non-IG obligors is not permitted. CRR has no
+    equivalent because CRR has no output floor. See the
+    [B31 SA spec](../specifications/basel31/sa-risk-weights.md#output-floor-election-for-unrated-corporates-art-12278)
+    and the [output floor spec](../specifications/basel31/output-floor.md#unrated-corporate-election-art-1228)
+    for full treatment.
+
 #### Short-Term Corporate ECAI (Art. 122(3), Table 6A) — New in Basel 3.1
 
 CRR has no short-term corporate ECAI table. Basel 3.1 introduces Table 6A for corporate

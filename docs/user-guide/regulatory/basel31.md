@@ -269,8 +269,12 @@ for full details.
     (b) revaluing after a **likely permanent** impairment event, after an estimated
     **>10% market-price decline**, at least every **3 years for loans > GBP 2.6m** (or
     5% of own funds), and at least every **5 years** for all other regulatory RE
-    (Art. 124D(5)); and (c) for **self-build** exposures, using the higher of the
-    pre-construction land value and 0.8 × the latest qualifying valuation (Art. 124D(9)).
+    (Art. 124D(5)); and (c) for **self-build exposures** (defined in Art. 1.2,
+    PS1/26 Appendix 1 p. 27 — residential exposure ≤ 4 units, borrower's primary residence),
+    using the higher of the pre-construction land value and 0.8 × the latest qualifying
+    valuation (Art. 124D(9)). Self-build is the only route under Art. 124A(1)(a)(iii) that
+    lets a development-phase mortgage qualify as regulatory RE before construction is
+    complete (see the [Glossary entry](../../appendix/glossary.md#self-build-exposure)).
     Pre-2027 exposures benefit from an explicit grandfathering rule (Art. 124D(11))
     allowing the most recent legacy valuation to count as a qualifying valuation, subject
     to the three-circumstance test. The calculator does **not** validate Art. 124D

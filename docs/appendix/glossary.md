@@ -202,6 +202,23 @@ Provisions allocated to specific exposures. Reduces EAD for SA, compares to EL f
 ### SCRA (Standardised Credit Risk Assessment Approach)
 Basel 3.1 approach for unrated institutions based on capital adequacy ratios.
 
+### Self-Build Exposure
+A residential real estate exposure secured by property or land that has been acquired
+or held for development and construction purposes, as defined in PS1/26 Appendix 1
+Art. 1.2 (p. 27). To qualify the property must (1) not have more than **four residential
+housing units** and (2) be (or be intended to be) the **borrower's primary residence**.
+Self-build exposures are the only category under **Art. 124A(1)(a)(iii)** that lets an
+exposure secured by land held for development qualify as **regulatory RE** before the
+build is complete — the other two gates in Art. 124A(1)(a)(i)/(ii) both require finished
+property. In exchange, Art. 124D(9) requires the property value used in the Art. 124C LTV
+denominator to be the **higher of** the pre-construction underlying land value and **0.8
+× the latest qualifying valuation**, with Art. 124D(10) applying the same 0.8 haircut (or
+max(0.8 × updated valuation, updated land estimate)) after any Art. 124D(5)(a)/(b)
+revaluation. The 0.8 multiplier enforces a 20% buffer against residual construction /
+permitting / market-absorption risk. CRR had no equivalent concept — Art. 124D(9)/(10) is
+new Basel 3.1 drafting effective 1 January 2027. See
+[SA Risk Weights — Self-Build Valuation](../specifications/basel31/sa-risk-weights.md#self-build-valuation-art-124d9-and-124d10).
+
 ### Slotting Approach
 A capital calculation method for specialised lending using supervisory categories (Strong/Good/Satisfactory/Weak).
 

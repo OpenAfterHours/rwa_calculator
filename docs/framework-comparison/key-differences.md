@@ -682,8 +682,11 @@ a fundamentally different methodology based on the institution's own capital ade
     **>10% market-decline** revaluation trigger with a clock-reset option (Art. 124D(7));
     (b) **GBP 2.6m or 5% of own funds** large-exposure threshold triggering a 3-year
     revaluation cycle regardless of property type (Art. 124D(5)(c)); (c) 5-year floor for
-    all regulatory RE (Art. 124D(5)(d)); (d) self-build property value = higher of
-    pre-construction land value and 0.8 × latest qualifying valuation (Art. 124D(9)); and
+    all regulatory RE (Art. 124D(5)(d)); (d) a formally defined **self-build exposure**
+    concept (Art. 1.2, PS1/26 Appendix 1 p. 27 — residential ≤ 4 units, borrower's
+    primary residence) that qualifies as regulatory RE **before construction completes**
+    via Art. 124A(1)(a)(iii), with property value floored at the higher of pre-construction
+    land value and 0.8 × latest qualifying valuation (Art. 124D(9)–(10)); and
     (e) grandfathering for pre-2027 exposures (Art. 124D(11)) where the most recent legacy
     valuation counts as a qualifying valuation subject to the three-circumstance test.
     The Art. 124D(5) cadence applies **equally** to residential and commercial — a change

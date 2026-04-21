@@ -1048,6 +1048,9 @@ are "other real estate" under Art. 124J with less favourable treatment.
 | **(e)** Borrower independence | Property value does NOT materially depend on borrower performance | Art. 124A(1)(e) |
 | **(f)** Insurance monitoring | Institution has procedures to monitor adequate property insurance against damage | Art. 124A(1)(f) |
 
+!!! info "Self-build as the development-phase gate (Art. 124A(1)(a)(iii))"
+    Sub-point (iii) is the **only** route by which an exposure secured by land that is held for development and construction can qualify as regulatory RE before the build is complete. Without it, every pre-completion mortgage would fail criterion (a) (because (i) requires property *not* held for development and (ii) requires development *complete*) and would fall to Art. 124J (other RE) — residential at counterparty RW, CRE at max(60%, counterparty RW) — until construction finishes. The self-build carve-out preserves the preferential RE risk weight over the life of the loan in return for the stricter valuation floor in Art. 124D(9)/(10). "Self-build exposure" is a defined term in Art. 1.2 (PS1/26 Appendix 1 p. 27) and is limited to residential exposures of ≤ 4 units for the borrower's primary residence — see the [Self-Build Valuation subsection](#self-build-valuation-art-124d9-and-124d10) below for the definition quote and the Art. 124D(9)/(10) valuation formulas.
+
 ### Charge Conditions (Art. 124A(2))
 
 Criterion (c) is satisfied if **any** of the following apply:
@@ -1162,7 +1165,14 @@ Paragraph (7) gives institutions optionality when the 3-year (c) or 5-year (d) c
 
 ### Self-Build Valuation (Art. 124D(9) and 124D(10))
 
-A **self-build exposure** (PRA Glossary p. 79) is a real-estate exposure where the property is being built or developed for the obligor's own use as their primary residence, with no more than four residential units. The valuation anchor departs from the pure qualifying-valuation rule because there may be no finished building to value at origination.
+!!! quote "Art. 1.2 — Self-build exposure (PS1/26 Appendix 1 p. 27)"
+    **self-build exposure** means a residential real estate exposure secured by property or land that has been acquired or held for development and construction purposes and that meets the following criteria:
+
+    (1) the property does not, or will not, have more than four residential housing units; and
+
+    (2) the property will be the borrower's primary residence.
+
+Three elements of the definition matter for scope: (a) **residential only** — a mixed-use or purely commercial development cannot be a self-build exposure, so the Art. 124D(9)/(10) land-value floor is unavailable to CRE; (b) **≤ 4 housing units** — larger residential schemes fall back to the general Art. 124D(3) qualifying-valuation rule without the 0.8 self-build discount; and (c) **primary residence** — buy-to-let self-builds, second-homes, and developer-for-sale exposures are excluded. A self-build exposure is the sole category under Art. 124A(1)(a)(iii) that lets an exposure secured by land *held for development and construction* qualify as regulatory RE **before** construction is complete — the other two gates in Art. 124A(1)(a)(i)/(ii) both require finished property. The valuation anchor under Art. 124D(9)/(10) departs from the pure qualifying-valuation rule because there may be no finished building to value at origination.
 
 !!! quote "Art. 124D(9) — Self-build at origination (or between revaluations)"
     Where an exposure is a self-build exposure, the value of the property shall, subject to paragraph 10, be the higher of:

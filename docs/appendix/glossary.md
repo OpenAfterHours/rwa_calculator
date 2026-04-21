@@ -47,7 +47,14 @@ EU regulation 575/2013 as onshored into UK law. The primary regulatory framework
 ## D
 
 ### Default
-An event where a counterparty fails to meet its credit obligations. Defined as 90+ days past due or unlikely to pay.
+An event where a counterparty fails to meet its credit obligations. Formally defined by Art. 178 (CRR and PRA PS1/26) as satisfying **either** limb:
+
+- **(a) Unlikeliness to pay (UTP)** — the institution considers the obligor unlikely to pay in full without recourse to actions such as realising security. Indicators include non-accrued status, specific credit risk adjustment for credit-quality decline, sale at material credit-related loss, distressed restructuring, institution-filed bankruptcy, or obligor-sought bankruptcy protection (Art. 178(3)(a)–(f)).
+- **(b) 90 days past due (DPD)** on any **material** credit obligation. Materiality under PS1/26: retail > GBP 0 / > 0%; non-retail > GBP 440 / > 1% (Art. 178(2)(d)/(da)). CRR delegates materiality to the competent authority.
+
+Retail exposures may apply the definition at the **facility level**; non-retail default at the **obligor level**. Return to non-defaulted status requires a 3-month cure (Art. 178(5)) or a 1-year probation with material payments after a distressed restructuring (Art. 178(5A)–(5C)).
+
+The calculator consumes default status via the `is_defaulted` input flag — **no DPD counter, UTP inference, or cure-period timer runs in-engine**. See the [Default Definition specification](../specifications/common/default-definition.md) for the full Art. 178 treatment.
 
 ### DPD (Days Past Due)
 The number of days a payment is overdue.

@@ -112,6 +112,7 @@ nav = [
     ]},
     { "Common" = [
       { "Hierarchy & Classification" = "specifications/common/hierarchy-classification.md" },
+      { "Default Definition (Art. 178)" = "specifications/common/default-definition.md" },
       { "Stress Testing" = "specifications/common/stress-testing.md" },
     ]},
     { "Project" = [

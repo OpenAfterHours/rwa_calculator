@@ -29,6 +29,15 @@ Under CRR, defaulted exposures generally received a flat 100% or 150% risk weigh
 distinction. Basel 3.1 introduces a **provision-coverage mechanism** that rewards firms for
 adequate provisioning.
 
+!!! info "Default Trigger — Art. 178"
+    This specification covers the **consequence** of default (risk weight treatment). The
+    **definition** of default — the Art. 178 two-limb trigger (unlikeliness-to-pay and
+    90 DPD), UTP indicators, materiality thresholds, suspension rules, and cure/probation
+    requirements — is documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
+    The calculator consumes default status via the upstream `is_defaulted` flag and
+    routes accordingly.
+
 ### Key Changes from CRR
 
 | Feature | CRR | Basel 3.1 | Reference |

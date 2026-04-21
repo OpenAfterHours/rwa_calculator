@@ -3,8 +3,15 @@
 Basel 3.1 Foundation IRB changes: reduced senior LGD, higher PD floors, covered bond LGD,
 1.06 scaling removal, and GBP-native SME correlation thresholds.
 
-**Regulatory Reference:** PRA PS1/26 Art. 153–163, CRE31–32
+**Regulatory Reference:** PRA PS1/26 Art. 153–163, 178, CRE31–32
 **Test Group:** B31-B
+
+!!! info "Default Definition — Art. 178"
+    Defaulted-exposure routing (K = 0) is triggered by the Art. 178 default definition.
+    PS1/26 Art. 178 introduces hardcoded materiality thresholds (retail GBP 0 / 0%;
+    non-retail GBP 440 / 1%), explicit DPD-counter suspensions (Art. 178(1A)–(1D)), and
+    a 1-year distressed-restructuring probation (Art. 178(5A)–(5C)). See the
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 

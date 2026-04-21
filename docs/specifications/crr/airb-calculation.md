@@ -2,7 +2,7 @@
 
 Advanced IRB calculation with internal LGD and CCF estimates.
 
-**Regulatory Reference:** CRR Articles 153-154
+**Regulatory Reference:** CRR Articles 153-154, 158(5), 178
 
 **Test Group:** CRR-C
 
@@ -16,6 +16,13 @@ Advanced IRB calculation with internal LGD and CCF estimates.
 | FR-1.5 | A-IRB LGD floors per Basel 3.1 (CRE32) | P1 | Done |
 | FR-1.8 | Defaulted exposure A-IRB: K=max(0, LGD−BEEL) | P0 | Done |
 | FR-1.9 | Differentiated PD floors per Basel 3.1 | P1 | Done |
+
+!!! info "Default Definition — Art. 178"
+    A-IRB defaulted-exposure routing requires a companion `beel` (best estimate of
+    expected loss under Art. 158(5)). The Art. 178 two-limb default trigger
+    (unlikeliness-to-pay and 90 DPD), UTP indicators, materiality threshold, and
+    cure/probation rules are documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 

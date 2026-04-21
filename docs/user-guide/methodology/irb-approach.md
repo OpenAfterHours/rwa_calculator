@@ -503,7 +503,8 @@ el = calculate_expected_loss(
 |-------|-------------|----------|
 | IRB approach overview | Art. 142-150 | CRE30 |
 | K formula | Art. 153 | CRE31 |
-| PD estimation | Art. 178-180 | CRE32 |
+| Default definition | Art. 178 ([specification](../../specifications/common/default-definition.md)) | CRE36.67–82 |
+| PD estimation | Art. 179-180 | CRE32 |
 | LGD estimation | Art. 181 | CRE32 |
 | Correlation | Art. 153 | CRE31 |
 | Maturity adjustment | Art. 162 | CRE31 |

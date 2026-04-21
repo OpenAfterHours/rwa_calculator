@@ -90,6 +90,14 @@ The `finalize_ead()` step does **not** subtract provisions again — they are al
     version was omitted by SI 2021/1078 (see header admonition). Art. 159 remains in
     UK CRR.
 
+!!! info "Default Definition — Art. 178"
+    The Art. 159 EL-vs-provisions comparison partitions exposures into non-defaulted
+    (Pool A) and defaulted (Pool C) sides based on the Art. 178 default trigger. The
+    formal two-limb trigger, UTP indicators, materiality threshold, and return-to-
+    non-defaulted conditions are documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
+    Default status enters the pipeline via the upstream `is_defaulted` flag.
+
 Under IRB, provisions are tracked (`provision_allocated`) but **not deducted** from EAD. The provision columns are set to zero:
 
 ```

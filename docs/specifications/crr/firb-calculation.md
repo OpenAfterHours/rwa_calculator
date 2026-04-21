@@ -2,7 +2,7 @@
 
 Foundation IRB calculation with supervisory LGD, PD floors, and correlation formulas.
 
-**Regulatory Reference:** CRR Articles 153-154, 161-163
+**Regulatory Reference:** CRR Articles 153-154, 161-163, 178
 
 **Test Group:** CRR-B
 
@@ -14,6 +14,13 @@ Foundation IRB calculation with supervisory LGD, PD floors, and correlation form
 |----|-------------|----------|--------|
 | FR-1.3 | F-IRB capital requirement (K): PD, supervisory LGD, maturity adjustment | P0 | Done |
 | FR-1.8 | Defaulted exposure treatment: F-IRB (K=0) | P0 | Done |
+
+!!! info "Default Definition — Art. 178"
+    F-IRB defaulted exposures (PD = 100%, K = 0) are driven by the Art. 178 default
+    trigger. The two-limb trigger (unlikeliness-to-pay and 90 DPD), UTP indicators,
+    materiality threshold, suspension rules, and 3-month cure / 1-year distressed-
+    restructuring probation are documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 

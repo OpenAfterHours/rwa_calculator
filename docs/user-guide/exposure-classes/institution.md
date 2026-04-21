@@ -56,8 +56,7 @@ F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03
 ### Table 4 — General Short-Term Preferential (Art. 120(2))
 
 Rated institution exposures with original maturity ≤ 3 months receive preferential
-treatment under Table 4. Trade finance exposures (movement of goods) with original
-maturity ≤ 6 months also qualify (Art. 120(2A)).
+treatment under Table 4.
 
 | CQS | Standard RW (>3m) | Table 4 RW (≤3m) |
 |-----|-------------------|-------------------|
@@ -66,6 +65,21 @@ maturity ≤ 6 months also qualify (Art. 120(2A)).
 | CQS 3 | 50% | 20% |
 | CQS 4-5 | 100% | 50% |
 | CQS 6 | 150% | 150% |
+
+!!! info "Art. 120(2A) Trade Finance ≤ 6m Extension — Basel 3.1 only"
+    Trade-finance exposures arising from the **movement of goods** qualify for Table 4
+    weights when original maturity ≤ **6 months** (not the general 3-month window).
+    Both limbs must hold: `is_short_term_trade_lc = True` **and** `original_maturity_years ≤ 0.5`.
+    A 5-month documentary credit to a CQS 3 rated bank therefore receives Table 4's 20%
+    rather than Table 3's 50%.
+
+    This is the **rated** counterpart of the SCRA Art. 121(4) carve-out below; both were
+    introduced in Basel 3.1 to align with BCBS CRE20.20. **No CRR analogue** — CRR
+    Art. 120(2) has no trade-goods extension, so a 5-month trade-finance exposure to a
+    rated CRR bank reverts to Table 3's long-term weight. See
+    [B31 SA Risk Weights — Art. 120(2A)](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
+    for worked examples, interaction with Art. 120(2B) Table 4A, and the side-by-side
+    comparison with Art. 121(4).
 
 ### Table 4A — Short-Term ECAI Assessment (Art. 120(2B))
 

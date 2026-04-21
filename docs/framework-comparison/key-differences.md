@@ -478,6 +478,28 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 | CQS 5 | 100% | 100% | 50% | — |
 | CQS 6 | 150% | 150% | 150% | — |
 
+!!! info "Art. 120(2A) — ECRA Trade Finance ≤ 6m Exception (New in Basel 3.1)"
+    Basel 3.1 extends the Table 4 short-term window from 3 months to **6 months** for
+    rated institution exposures that **arose from the movement of goods**. A 5-month
+    documentary credit against a CQS 3 counterparty therefore picks up Table 4's 20%
+    rather than Table 3's 50% — a 30pp saving versus the standard long-term weight.
+    Both limbs must hold: original maturity ≤ 6 months **and** genuine trade-goods
+    purpose. The carve-out mirrors the SCRA equivalent at Art. 121(4) for unrated
+    institutions; together they close a CRR gap where cross-border trade finance missed
+    the ≤ 3m preferential window.
+
+    **No direct CRR analogue.** CRR Art. 120(2) provides only a single short-term
+    preferential window keyed to residual maturity ≤ 3 months — no original-maturity
+    variant and no 6-month trade-goods extension. The new Art. 120(2A) aligns the PRA
+    framework with BCBS CRE20.20.
+
+    **Interaction with Art. 120(2B) Table 4A.** The "Subject to paragraph 3" opener in
+    Art. 120(2A) means the Table 4A interaction rules below apply; Art. 120(2A) can also
+    interact with the [Art. 120(4) due-diligence step-up](#institution-exposures). See
+    [B31 SA Risk Weights — Art. 120(2A)](../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
+    for worked examples, full implementation fields, and the side-by-side comparison with
+    SCRA Art. 121(4).
+
 !!! warning "Table 4A — Short-Term ECAI Assessment (Art. 120(2B))"
     The "Basel 3.1 (≤3m)" column above shows **Table 4** weights — a long-term ECAI
     rating applied to a short-term exposure. Basel 3.1 also introduces **Table 4A** for

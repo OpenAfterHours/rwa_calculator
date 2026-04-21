@@ -34,6 +34,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
 | FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
 | FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 warning, `due_diligence_override_rw` floor) |
+| FR-1.20 | ECRA trade-finance ≤ 6m extension of Table 4 (Art. 120(2A)) | P1 | Done (input-driven via `is_short_term_trade_lc`) |
 
 ---
 
@@ -291,6 +292,130 @@ For exposures with an original maturity ≤ 3 months:
 | CQS 4 | 50% |
 | CQS 5 | 50% |
 | CQS 6 | 150% |
+
+Art. 120(2) keys on **original** maturity (not residual), mirroring CRR Art. 119(2).
+The opening clause "Subject to paragraph 3" cross-refers to the Art. 120(3) interaction
+rules below — when a specific short-term ECAI assessment exists, Table 4A (Art. 120(2B))
+may override Table 4 for that exposure.
+
+### ECRA Short-Term Trade Finance Exception (Art. 120(2A), Table 4)
+
+Basel 3.1 extends the Table 4 short-term preferential window from 3 months to **6 months**
+for rated institution exposures whose tenor is driven by the underlying flow of goods,
+mirroring the SCRA carve-out at [Art. 121(4)](#scra-short-term-trade-finance-exception-art-1214).
+The exception preserves the BCBS CRE20.20 capital treatment of cross-border documentary
+credits and similar short-dated trade instruments that would otherwise miss the 3-month
+window and fall back to the Table 3 long-term weights.
+
+!!! quote "Art. 120(2A) — verbatim (PRA PS1/26 p. 40)"
+    "Subject to paragraph 3, exposures to institutions for which a credit assessment by a
+    nominated ECAI is available where the **original maturity of the exposure was six
+    months or less and the exposure arose from the movement of goods** shall be assigned
+    a risk weight in accordance with the credit quality step in Table 4 which corresponds
+    to the relevant credit assessment of the ECAI as mapped in Commission Implementing
+    Regulation (EU) 2016/1799 of 7 October 2016."
+
+**Trigger.** Both limbs must be satisfied:
+
+- **(a)** The exposure is to an institution with a long-term ECAI credit assessment
+    (the ECRA path — unrated institutions use SCRA under Art. 121 and pick up the
+    analogous Art. 121(4) exception).
+- **(b)** The exposure has **original maturity ≤ 6 months** *and* **arose from the
+    movement of goods**. Both sub-conditions must hold — a 6-month working-capital
+    facility unrelated to goods movement does not qualify; it reverts to Table 3.
+
+**Effect.** Table 4 weights apply (CQS 1–3 = 20%, CQS 4–5 = 50%, CQS 6 = 150%), even
+though the exposure's tenor exceeds the general Art. 120(2) ≤ 3 months threshold. For a
+rated CQS 4 trade-goods exposure with 5-month original maturity, Table 4 gives 50% vs
+Table 3's 100% — a 50pp (halving) capital saving for genuine trade finance.
+
+**Worked example.** A 5-month USD-denominated documentary credit financing cross-border
+shipment of goods from a CQS 3-rated foreign bank to a UK buyer:
+
+- Rated institution on the ECRA path → Art. 120 applies.
+- Original maturity 5 months > 3 months → Art. 120(2) (Table 4) would not apply directly.
+- Original maturity ≤ 6 months **and** arose from the movement of goods → Art. 120(2A)
+    extends Table 4 eligibility.
+- CQS 3 Table 4 weight = **20%** (vs Table 3 CQS 3 = 50%).
+- 30pp RW reduction preserved relative to a non-trade-finance 5-month exposure.
+
+!!! info "Distinction from Art. 121(4) SCRA trade-finance exception"
+    Art. 120(2A) (ECRA) and [Art. 121(4)](#scra-short-term-trade-finance-exception-art-1214)
+    (SCRA) are the **rated** and **unrated** counterparts of the same 6-month trade-goods
+    carve-out. Both use a 6-month original-maturity threshold and the same "arose from
+    the movement of goods" scope test; they differ only in the underlying risk-weight
+    table (Table 4 CQS bands for Art. 120(2A) versus Table 5A SCRA grades for Art. 121(4)).
+
+    | Feature | Art. 120(2A) — ECRA | Art. 121(4) — SCRA |
+    |---------|---------------------|--------------------|
+    | Counterparty | Rated institution | Unrated institution |
+    | Source table | Table 4 (short-term ECRA) | Table 5A (short-term SCRA) |
+    | Max tenor | Original maturity ≤ 6m | Original maturity ≤ 6m |
+    | Scope test | Arose from movement of goods | Arose from movement of goods |
+    | Replaces | Art. 120(2) ≤ 3m window | Art. 121(3) ≤ 3m window |
+
+!!! note "Interaction with Art. 120(2B) Table 4A"
+    The opening "Subject to paragraph 3" in Art. 120(2A) means the Art. 120(3) interaction
+    rules between Table 4 and Table 4A apply just as they do for the Art. 120(2) 3-month
+    window. Where the institution also has a specific short-term ECAI assessment:
+
+    - **(a)** No short-term ECAI → Art. 120(2A) applies as described above.
+    - **(b)** Short-term ECAI yields a more favourable or identical RW → Table 4A (short-term
+        ECAI) applies for that specific exposure; other trade-goods short-term exposures
+        to the same obligor keep Table 4 under Art. 120(2A).
+    - **(c)** Short-term ECAI yields a less favourable RW → the general preferential
+        treatment of (2)/(2A) is withdrawn; all unrated short-term claims against that
+        obligor take the specific short-term assessment's RW.
+
+    Art. 120(2A) does **not** short-circuit the due-diligence step-up at
+    [Art. 120(4)](#rated-institution-due-diligence-cqs-step-up-art-1204). A firm whose DD
+    reveals higher risk than the CQS implies must still step up within the same short-term
+    table — a Table 4 CQS 3 (20%) trade-finance exposure stepped up one CQS moves to the
+    CQS 4 band (50%) within Table 4.
+
+!!! warning "CRR has no direct analogue"
+    CRR Art. 120(2) provides only a single short-term preferential window keyed to
+    **residual** maturity ≤ 3 months (no original-maturity variant, no 6-month trade-goods
+    extension). A 5-month trade-goods exposure to a rated CRR institution reverts to the
+    Table 3 long-term weight regardless of its trade-finance character. Basel 3.1
+    Art. 120(2A) closes this gap by aligning the UK framework with BCBS CRE20.20.
+
+**Implementation.** The SA calculator routes Art. 120(2A) through the same ECRA
+short-term branch as Art. 120(2), gated on the `is_short_term_trade_lc` input field
+(already used by the Art. 121(4)/121(6) SCRA branches). When
+`is_short_term_trade_lc = True` *and* `original_maturity_years ≤ 0.5`, a rated
+institution exposure receives Table 4 weights even if the standard ≤ 0.25 window has
+been missed. The logic sits in the B31 ECRA maturity branch in
+`src/rwa_calc/engine/sa/namespace.py`:
+
+```python
+# ECRA short-term rated institutions — Art. 120(2) Table 4 extended by Art. 120(2A).
+chain.when(
+    is_institution
+    & is_rated
+    & (
+        (original_mty <= 0.25)                                        # Art. 120(2) — ≤ 3m
+        | (pl.col("is_short_term_trade_lc").fill_null(False)          # Art. 120(2A) — ≤ 6m
+           & (original_mty <= 0.5))                                   #   trade-goods gate
+    )
+)
+```
+
+Required input fields:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `is_short_term_trade_lc` | Bool | Flags self-liquidating trade arising from movement of goods |
+| `original_maturity_years` | Float | Original (not residual) maturity in years |
+| `cqs` | Int | ECAI credit quality step for Table 3/4 lookup |
+
+!!! warning "Firm responsibility — upstream classification"
+    The calculator relies on the firm's upstream classification of
+    `is_short_term_trade_lc = True` for genuine self-liquidating trade finance arising
+    from goods movement. The engine does not re-verify trade-finance eligibility; mis-flagged
+    non-trade short-term exposures will incorrectly pick up Table 4 weights. Evidence of
+    eligibility (underlying invoice, shipping documents, trade-finance classification) should
+    be retained by the firm in line with Art. 110A(4)(d) per-exposure documentation.
 
 ### ECRA Short-Term ECAI (Art. 120(2B), Table 4A)
 

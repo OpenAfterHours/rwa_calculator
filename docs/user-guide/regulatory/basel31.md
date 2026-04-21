@@ -526,6 +526,25 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
 | CQS 5 | 100% | — |
 | CQS 6 | 150% | — |
 
+!!! info "Trade Finance Exception (Art. 120(2A))"
+    Rated institution exposures with an **original maturity ≤ 6 months** that **arose from
+    the movement of goods** receive Table 4 short-term weights (CQS 1-3 = 20%, CQS 4-5 = 50%)
+    — even though the general short-term window under Art. 120(2) is limited to ≤ 3 months.
+    This mirrors the SCRA Art. 121(4) exception for unrated counterparties: together they
+    preserve the BCBS CRE20.20 capital treatment for cross-border documentary credits and
+    similar short-dated trade instruments.
+
+    **Input flag:** set `is_short_term_trade_lc = True` on the facility and provide
+    `original_maturity_years ≤ 0.5`. The SA calculator already routes these through the
+    ECRA short-term branch; no extra configuration is needed.
+
+    **No CRR equivalent.** Under CRR Art. 120(2), short-term preferential treatment is
+    gated solely on residual maturity ≤ 3 months with no trade-goods carve-out. A 5-month
+    trade-finance exposure to a rated CRR bank picks up Table 3's long-term weight. The
+    Basel 3.1 Art. 120(2A) extension closes this gap. See
+    [B31 SA Risk Weights — Art. 120(2A)](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
+    for worked examples and the side-by-side comparison with Art. 121(4).
+
 !!! warning "Table 4A — Short-Term ECAI (Art. 120(2B))"
     Institutions with a specific **short-term credit assessment** use Table 4A
     (CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%) instead of the general

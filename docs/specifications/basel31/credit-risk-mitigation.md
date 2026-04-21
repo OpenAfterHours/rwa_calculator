@@ -318,7 +318,7 @@ CRM method selection with explicit method names.
 | Financial Collateral Comprehensive Method | FCCM | SA + IRB: financial collateral (Art. 223) |
 | Foundation Collateral Method | FCM | F-IRB: financial and physical collateral (Art. 230) |
 | Parameter Substitution Method | PSM | F-IRB / A-IRB: unfunded credit protection (Art. 236) |
-| LGD Adjustment Method | LGD-AM | A-IRB: unfunded credit protection (Art. 183) |
+| LGD Adjustment Method | LGD-AM | A-IRB **with own-LGD estimate permission** for the exposure class: unfunded credit protection (Art. 183) |
 | Risk-Weight Substitution Method | RWSM | SA / Slotting: unfunded credit protection (Art. 235) |
 
 ### Art. 191A Decision Tree
@@ -336,8 +336,11 @@ CCR exposures use IMM / SFT VaR / FCCM / FCSM (SA only).
 **Part 3 — Unfunded CRM:**
 
 - SA / Slotting → Risk-Weight Substitution Method (Art. 235)
-- F-IRB / A-IRB → Parameter Substitution Method (Art. 236)
-- A-IRB (own estimates) → LGD Adjustment Method (Art. 183)
+- F-IRB → Parameter Substitution Method (Art. 236) only
+- A-IRB without own-LGD permission for the class → Parameter Substitution Method (Art. 236) only
+- A-IRB **with own-LGD permission** for the class → LGD Adjustment Method (Art. 183) **or** Parameter
+  Substitution Method (Art. 236). Selection is a firm-level methodology choice subject to the Art.
+  191A(3) consistency rule (same method across the same type of unfunded protection).
 
 **Part 4 — Unfunded CP covered by funded CP:**
 Where unfunded protection is itself collateralised, funded CRM is applied to the unfunded
@@ -356,7 +359,95 @@ protection first, then the adjusted unfunded protection is applied to the origin
 |----------|-------------------|---------------------|
 | SA | FCSM (Art. 222) or FCCM (Art. 223) | RWSM — SA-RW substitution (Art. 235) |
 | F-IRB | FCM (Art. 230) or FCCM (Art. 223) | PSM — PD substitution for IRB guarantors, SA-RW for SA guarantors (Art. 236) |
-| A-IRB | LGD modelling (Art. 169A/169B) or FCM/FCCM | LGD-AM (Art. 183) or PSM (Art. 236) |
+| A-IRB (own-LGD permission **not** held for class) | LGD modelling unavailable — use FCM / FCCM | PSM (Art. 236) — LGD-AM not available |
+| A-IRB (own-LGD permission held for class) | LGD modelling (Art. 169A/169B) or FCM / FCCM | LGD-AM (Art. 183) **or** PSM (Art. 236) — firm methodology choice under Art. 191A(3) |
+
+!!! warning "LGD-AM is not universally available to A-IRB firms"
+    "A-IRB" is not a single blanket permission. Under PS1/26 Art. 143(2A)(c) / Art.
+    143(2B)(b)(iii), a firm specifies in its IRB permission which exposure classes,
+    exposure subclasses or types of exposure it proposes to run under A-IRB — and
+    A-IRB permission for one class does not extend to another. A firm holding A-IRB
+    permission for one class (e.g. retail mortgages) but only F-IRB for another
+    (e.g. general corporates) must use **PSM (Art. 236)** for the F-IRB class and
+    may not reach for LGD-AM there. See [LGD-AM Availability Gate](#lgd-am-availability-gate-art-143-art-1791aa-art-147a)
+    below.
+
+### LGD-AM Availability Gate (Art. 143, Art. 179(1)(aa), Art. 147A)
+
+LGD-AM sits inside the A-IRB own-LGD model rather than as a stand-alone CRM
+overlay. Four PS1/26 provisions, read together, gate whether a firm may apply
+LGD-AM to a given exposure at all.
+
+#### 1. A-IRB permission for the exposure class (Art. 143(2A)(c))
+
+Art. 143(2A) requires a firm, when applying for IRB permission, to state "in
+relation to **each exposure class, exposure subclass or type of exposures**"
+which IRB approach it proposes — (a) Slotting, (b) F-IRB, or (c) A-IRB. The
+permission therefore attaches to the class/subclass, not to the institution as
+a whole. Art. 143(2B) confirms that a firm with IRB permission for one approach
+(e.g. F-IRB) that wishes to move a class to a more sophisticated approach
+(e.g. A-IRB) needs **further** prior PRA permission.
+
+Consequence: LGD-AM is available **only** for exposures that fall inside an
+exposure class / subclass / type of exposures for which the firm currently
+holds A-IRB permission. F-IRB classes are restricted to PSM under Art. 236.
+
+#### 2. Art. 179(1)(aa) — own-LGD ban on guarantee recoveries except via LGD-AM
+
+Art. 179(1)(aa) (ps126app1.pdf p.131) states verbatim: "an institution shall
+**not** take account of recoveries from guarantees, credit derivatives and
+other support arrangements when quantifying LGD estimates, **except where
+recoveries are recognised under the LGD Adjustment Method in accordance with
+Article 183**."
+
+Consequence: the LGD Adjustment Method is the *only* channel through which an
+A-IRB firm may reflect unfunded credit protection inside its own-LGD model.
+Firms without A-IRB permission for the class cannot take the Art. 179(1)(aa)
+exception — they fall back to PSM (Art. 236) applied outside the LGD model.
+
+#### 3. Art. 147A — approach restrictions that pre-empt LGD-AM
+
+Even where a firm holds A-IRB permission historically, PS1/26 Art. 147A
+removes A-IRB from the menu for certain classes. The restrictions most
+material for LGD-AM scope are:
+
+| Art. 147A limb | Exposure class | Permitted approaches | LGD-AM available? |
+|----------------|----------------|----------------------|-------------------|
+| (1)(a) | Sovereigns and quasi-sovereigns (incl. RGLAs, PSEs, MDBs, International Organisations) | SA only | **No** — A-IRB not available |
+| (1)(b) | Institutions | F-IRB or SA | **No** — A-IRB not available |
+| (1)(e) | Large corporates (consolidated revenue > £440m) and financial sector entities | F-IRB or SA | **No** — A-IRB not available |
+| (1)(d) | Equity exposures | SA only | **No** — IRB approach not available |
+
+For these classes, PSM under Art. 236 is the only unfunded-CRM channel,
+regardless of any historical A-IRB permission. See
+[Model Permissions spec](model-permissions.md) for the full Art. 147A
+restriction table.
+
+#### 4. Art. 191A(3) — portfolio-wide consistency
+
+Art. 191A(3) requires a firm to use the **same CRM method for the same type of
+unfunded credit protection** across its portfolio. A firm that elects LGD-AM
+for guarantees in one A-IRB class must not also run PSM on the same type of
+guarantee in another A-IRB class — the consistency rule is per protection
+type, not per exposure class. (The rule does not force LGD-AM onto F-IRB
+classes: PSM remains mandatory there under limb 1 above.)
+
+!!! info "Decision summary — where LGD-AM is available"
+    For a given (exposure class, protection type) pair, LGD-AM is on the menu
+    **only** when **all** of the following hold:
+
+    1. The firm holds an A-IRB permission for the exposure class under Art.
+       143(2A)(c) or Art. 143(2B)(b)(iii).
+    2. Art. 147A does not remove A-IRB from the permitted-approach list for
+       that class.
+    3. The firm has chosen LGD-AM (rather than PSM) as its portfolio-wide
+       method for this protection type under Art. 191A(3).
+    4. The unfunded credit protection meets the Art. 183(1A) eligibility
+       conditions (written contract, no unilateral cancellation, not a
+       second-to-default derivative).
+
+    If any condition fails, the firm applies PSM (Art. 236) instead, with SA
+    risk-weight substitution for SA-approach guarantors.
 
 ---
 

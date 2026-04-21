@@ -731,7 +731,19 @@ Basel 3.1 restructures CRM methods with clearer names and applicability:
 | Financial Collateral Comprehensive Method | SA + IRB | CRR Art. 223 |
 | Foundation Collateral Method | F-IRB | Scattered CRR IRB collateral provisions |
 | Parameter Substitution Method | F-IRB (unfunded) | CRR Art. 236 |
-| LGD Adjustment Method | A-IRB (unfunded) | CRR Art. 183 |
+| LGD Adjustment Method | A-IRB (unfunded) **— own-LGD permission required for the class** | CRR Art. 183 |
+
+!!! info "LGD-AM is not available to every A-IRB firm"
+    Under PS1/26 Art. 143(2A)(c), A-IRB permission is granted per exposure
+    class / subclass, not bank-wide. LGD-AM (Art. 183) is the Art. 179(1)(aa)
+    exception that lets an A-IRB firm take guarantee recoveries into its own
+    LGD estimates — it is only available for classes where the firm holds
+    A-IRB own-LGD permission. F-IRB classes, Art. 147A SA-only classes
+    (sovereigns, institutions, large corporates, FSEs, equity) and slotting
+    classes must use **PSM (Art. 236)** for unfunded credit protection
+    instead. See the [B31 CRM specification § LGD-AM Availability
+    Gate](../../specifications/basel31/credit-risk-mitigation.md#lgd-am-availability-gate-art-143-art-1791aa-art-147a)
+    for the full decision logic.
 
 **Foundation Collateral Method overcollateralisation thresholds (Art. 230):**
 

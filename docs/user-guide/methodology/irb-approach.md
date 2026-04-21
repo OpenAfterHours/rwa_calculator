@@ -73,9 +73,14 @@ Under Basel 3.1, A-IRB firms have two methods for incorporating collateral into 
 - **Foundation Collateral Method** (FCM, Art. 230) — uses supervisory LGDS values by collateral
   type, blended with LGDU for partially secured exposures.
 
-For unfunded credit protection (guarantees), A-IRB firms use the **LGD Adjustment Method**
-(LGD-AM) or Parameter Substitution Method (PSM). See [Credit Risk Mitigation](crm.md) and the
-[CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
+For unfunded credit protection (guarantees), A-IRB firms may use the **LGD Adjustment
+Method** (LGD-AM, Art. 183) **or** the Parameter Substitution Method (PSM, Art. 236).
+LGD-AM is available only for exposure classes where the firm holds A-IRB own-LGD
+permission under Art. 143(2A)(c); F-IRB classes and Art. 147A SA-only classes
+(sovereigns, institutions, large corporates, FSEs) must use PSM instead. See
+[Credit Risk Mitigation](crm.md), the [B31 CRM § LGD-AM Availability
+Gate](../../specifications/basel31/credit-risk-mitigation.md#lgd-am-availability-gate-art-143-art-1791aa-art-147a),
+and the [CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
 for details.
 
 ### Exposure at Default (EAD)

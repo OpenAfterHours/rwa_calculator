@@ -17,7 +17,7 @@ and routing exposures to F-IRB, slotting, or SA based on regulatory constraints.
 | FR-11.3 | Large corporate restriction: revenue >£440m → F-IRB only (Art. 147A(1)(e)) | P0 | Done |
 | FR-11.4 | Institution exposure → F-IRB only, Art. 147A(1)(b) (no A-IRB) | P0 | Done |
 | FR-11.5 | Equity exposure → SA only (Art. 147A(1)(h) per Art. 147(2)(e)) | P0 | Done |
-| FR-11.6 | Sovereign/PSE (quasi-sovereigns) → SA only (Art. 147A(1)(a)) | P0 | Done |
+| FR-11.6 | Sovereign + all quasi-sovereigns (RGLA, PSE, MDB per Art. 117, Int'l Org per Art. 118) → SA only (Art. 147A(1)(a)) | P0 | Done |
 | FR-11.7 | IPRE/HVCRE → Slotting only, Art. 147A(1)(c) (if no A-IRB permission) | P0 | Done |
 | FR-11.8 | Model permissions config and fallback logic | P0 | Done |
 
@@ -43,8 +43,7 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 
 | Exposure Class | Permitted Approaches | Restriction | Reference |
 |---------------|---------------------|-------------|-----------|
-| Sovereign (incl. central banks, quasi-sovereigns) | SA only | No IRB permission | Art. 147A(1)(a) → Art. 147(2)(a) |
-| PSE (treated as sovereign) | SA only | Follows sovereign treatment | Art. 147A(1)(a) |
+| Sovereign (incl. central banks and quasi-sovereigns: RGLA, PSE, MDB, Int'l Org with 0% RW) | SA only | No IRB permission | Art. 147A(1)(a) → Art. 147(2)(a) |
 | Institution | F-IRB only (SA with permission) | A-IRB not permitted | Art. 147A(1)(b) → Art. 147(2)(b) |
 | SL IPRE / HVCRE | SA or Slotting only | No F-IRB or A-IRB | Art. 147A(1)(c) → Art. 147(2)(c)(i) |
 | SL — OF / PF / CF | SA, F-IRB, A-IRB or Slotting | Subject to granted permission | Art. 147A(1)(d) → Art. 147(2)(c)(i) |
@@ -52,6 +51,28 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 | Other general corporate (non-FSE, revenue ≤ £440m) | F-IRB (default); A-IRB with Art. 143(2A)/(2B) permission | A-IRB available only with explicit permission | Art. 147A(1)(f) → Art. 147(2)(c)(iii) |
 | Retail (mortgage, QRRE, other) | A-IRB (SA with permission) | **Carry-forward from CRR** — retail has always been A-IRB-only (CRR Art. 151(7) mandated own-LGD/own-CCF for retail; F-IRB was only available for sovereign/institution/corporate under CRR Art. 151(8)). Not a new B31 restriction. | Art. 147A(1)(g) → Art. 147(2)(d); cf. CRR Art. 151(7) |
 | Equity | SA only | IRB equity approaches removed (Art. 155 left blank) | Art. 147A(1)(h) → Art. 147(2)(e) |
+
+!!! info "Art. 147A(1)(a) Scope — All 0% RW Quasi-Sovereigns Are SA-Only"
+    Art. 147A(1)(a) restricts the whole of Art. 147(2)(a) — "central governments, central
+    banks **or quasi-sovereigns**" — to the Standardised Approach. The "quasi-sovereign"
+    scope captures every SA exposure that the Part routes to a 0% sovereign-equivalent
+    risk weight, including:
+
+    - **UK / third-country RGLAs** treated as central government (Art. 115(1)-(2), Art. 115(3A));
+    - **Public sector entities (PSEs)** treated as central government (Art. 116(1)-(2),
+      Art. 116(3A)) or assigned 0% by the competent authority (Art. 116(4), not retained
+      under PS1/26);
+    - **Multilateral development banks (MDBs)** listed in Art. 117(2) — IBRD, IFC, IADB,
+      ADB, AfDB, CoE Development Bank, Nordic Investment Bank, Caribbean Development Bank,
+      EBRD, EIB, EIF, MIGA, IFFIm, IsDB, IDA, AIIB. Other (rated) MDBs under Art. 117(1)
+      also fall within Art. 147(2)(a) for approach-routing purposes even when their SA
+      weight is not 0%;
+    - **International organisations** listed in Art. 118(1) — European Union, IMF, BIS,
+      and the other named bodies.
+
+    All of the above are therefore **excluded from any IRB approach** regardless of the
+    firm's model permissions. This mirrors the classifier rule in
+    [`../common/hierarchy-classification.md#basel-31-approach-restrictions-art-147a`](../common/hierarchy-classification.md#basel-31-approach-restrictions-art-147a).
 
 !!! note "Art. 147A(1)(e) — FSEs and Large Corporates Share One Restriction"
     Under PRA PS1/26, **Art. 147A(1)(e)** covers both financial sector entities (FSEs,
@@ -154,8 +175,9 @@ config = CalculationConfig.basel_3_1(
 
 The classifier applies restrictions in the following order:
 
-1. **Art. 147A hard constraints** — exposure class-level restrictions (equity→SA, sovereign→SA,
-   institution→F-IRB, all FSEs→F-IRB, IPRE/HVCRE→slotting, retail→A-IRB) override any permission
+1. **Art. 147A hard constraints** — exposure class-level restrictions (equity→SA,
+   sovereign/RGLA/PSE/MDB/international organisation→SA, institution→F-IRB, all FSEs→F-IRB,
+   IPRE/HVCRE→slotting, retail→A-IRB) override any permission
 2. **Threshold-based restrictions** — large corporate (>£440m revenue) overrides A-IRB permission
    to F-IRB
 3. **Model permissions** — firm-specific approach permissions from the `model_permissions` table
@@ -206,8 +228,8 @@ When no model permission matches an exposure:
 | B31-M3a | Small FSE with total assets < GBP 79bn | F-IRB (Art. 147A(1)(e) — all FSEs, not just large) |
 | B31-M4 | Institution with AIRB permission | F-IRB (Art. 147A(1)(b)) |
 | B31-M5 | Equity exposure | SA (Art. 147A(1)(h)) |
-| B31-M6 | Sovereign exposure | SA (Art. 147A(1)(a)) |
-| B31-M7 | PSE treated as sovereign | SA (Art. 147A(1)(a)) |
+| B31-M6 | Sovereign exposure (central government or central bank) | SA (Art. 147A(1)(a)) |
+| B31-M7 | Quasi-sovereign exposure — PSE / RGLA / MDB (Art. 117) / Int'l Org (Art. 118) | SA (Art. 147A(1)(a)) |
 | B31-M8 | IPRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
 | B31-M9 | HVCRE with no A-IRB permission | Slotting (Art. 147A(1)(c)) |
 | B31-M10 | PF with A-IRB permission | A-IRB (no restriction) |

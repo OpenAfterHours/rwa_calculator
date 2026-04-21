@@ -414,15 +414,34 @@ is a PRA PS1/26 introduction (UK CRR has no HVCRE table). See [Key Differences](
 
 The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):
 
-- **Large financial sector entities** — regulated FSEs with total assets ≥ **EUR 70bn** (≈ GBP 79bn per PRA PS1/26 Glossary conversion, Art. 4(1)(146)).
+- **Large financial sector entities (LFSEs)** — regulated FSEs meeting a total-assets threshold
+  that is framework-specific (see table below).
 - **Unregulated financial sector entities** — regardless of size.
 
-!!! info "Threshold unchanged between CRR and Basel 3.1"
-    PRA PS1/26 retains the CRR LFSE threshold. The BCBS standard (CRE31.5) sets the international baseline at **USD 100 billion**, but the PRA's UK implementation keeps the CRR-originated **EUR 70 billion** figure (imported into PS1/26 via Art. 4(1)(146) and the Glossary's GBP 79 billion conversion). All project files cite EUR 70bn for both frameworks — treat USD 100bn as the BCBS-only number, not the applicable UK threshold.
+| Framework | LFSE threshold | Citation |
+| --- | --- | --- |
+| CRR | Total assets ≥ **EUR 70 billion** | CRR Art. 142(1)(4) |
+| Basel 3.1 | Total assets ≥ **GBP 79 billion** | PRA PS1/26 Glossary p. 78 (Note: "corresponds to Article 142(1)(4) of CRR") |
+
+!!! info "Threshold precision differs between frameworks"
+    PS1/26 fixes the LFSE threshold as a **GBP 79 billion** absolute value in its Glossary;
+    this is not an FX conversion of the CRR EUR 70 billion figure and will not fluctuate with
+    exchange rates. The BCBS standard (CRE31.5) sets the international baseline at
+    **USD 100 billion**, but the PRA's UK implementation uses GBP 79bn — treat USD 100bn as
+    the BCBS-only number, not the applicable UK threshold. Under CRR the threshold remains
+    EUR 70 billion per Art. 142(1)(4), converted to GBP via the configured EUR/GBP rate.
 
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
 
-Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26. See [key-differences.md § Financial Sector Correlation Multiplier](key-differences.md#financial-sector-correlation-multiplier) for the parallel CRR/B31 comparison and the distinction from the Art. 147A(1)(d) GBP 440m revenue approach restriction.
+!!! warning "Code divergence: Basel 3.1 threshold not enforced in engine"
+    `src/rwa_calc/contracts/config.py` defines `RegulatoryThresholds.basel_3_1()` with
+    `lfse_total_assets_threshold = Decimal("0")` — the GBP 79 billion value is **not**
+    currently held in code. The Basel 3.1 calculator relies exclusively on the upstream
+    `apply_fi_scalar` flag on the counterparty record; firms are responsible for determining
+    LFSE status against the GBP 79 billion threshold prior to ingest. Tracked as code-side
+    finding (D3.58 / IMPLEMENTATION_PLAN.md).
+
+Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26. See [key-differences.md § Financial Sector Correlation Multiplier](key-differences.md#financial-sector-correlation-multiplier) for the parallel CRR/B31 comparison and the distinction from the Art. 147A(1)(e) GBP 440m revenue approach restriction.
 
 ## Credit Conversion Factors (Art. 111 Table A1)
 

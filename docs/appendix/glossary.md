@@ -78,7 +78,7 @@ A regulatory classification of exposures (Central Govt / Central Bank, Instituti
 An IRB approach where the bank estimates PD but uses supervisory values for LGD and CCF.
 
 ### FI Scalar
-A 1.25x multiplier applied to the **asset correlation coefficient** (R) for large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) or unregulated financial sector entities (CRR Art. 153(2)). This has a non-linear effect on the capital requirement K. Not to be confused with the Art. 147A large corporate approach restriction (revenue > GBP 440m), which restricts A-IRB eligibility but does not affect correlation.
+A 1.25x multiplier applied to the **asset correlation coefficient** (R) for large financial sector entities (LFSEs) or unregulated financial sector entities (Art. 153(2), unchanged between CRR and Basel 3.1). This has a non-linear effect on the capital requirement K. LFSE threshold is **EUR 70 billion** total assets under CRR (Art. 142(1)(4)) and **GBP 79 billion** under Basel 3.1 (PRA PS1/26 Glossary p. 78, with Note "corresponds to Article 142(1)(4) of CRR"). Not to be confused with the Art. 147A large corporate approach restriction (revenue > GBP 440m), which restricts A-IRB eligibility but does not affect correlation.
 
 ### Financial Collateral
 Liquid assets (cash, bonds, equity) used as security for credit exposures.

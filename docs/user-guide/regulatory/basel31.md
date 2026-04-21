@@ -434,7 +434,7 @@ See [Technical Reference](../../framework-comparison/technical-reference.md#irb-
 
 ### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 
-**Large financial sector entities** (regulated FSEs with total assets > EUR 70bn per CRR Art. 4(1)(146)) and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier is unchanged between CRR and Basel 3.1.
+**Large financial sector entities (LFSEs)** — regulated FSEs with total assets **≥ GBP 79 billion** under PS1/26 Glossary p. 78 (CRR equivalent: ≥ EUR 70 billion per CRR Art. 142(1)(4)) — and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier mechanism is unchanged between CRR and Basel 3.1; only the LFSE definition switches from the CRR EUR 70bn threshold to the PS1/26 GBP 79bn threshold.
 
 !!! note "Not the same as the large corporate threshold"
     The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets**, not to large non-financial corporates. The Art. 147A large corporate threshold (revenue > £440m) is an **approach restriction** (F-IRB only) — it does not trigger the correlation uplift. See the [IRB restrictions table](#irb-restrictions) below.

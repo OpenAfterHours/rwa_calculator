@@ -263,16 +263,31 @@ regardless of model output (applied as post-model adjustment).
 
 ### Financial Sector Correlation Multiplier
 
-Under both CRR and Basel 3.1, **large financial sector entities** (total assets ≥ EUR 70bn per
-Art. 4(1)(146)) and **unregulated financial sector entities** receive a **1.25x** correlation
-multiplier on their asset correlation (Art. 153(2) / CRE31.5). This is unchanged between
-frameworks.
+Under both CRR and Basel 3.1, **large financial sector entities (LFSEs)** and **unregulated
+financial sector entities** receive a **1.25x** correlation multiplier on their asset
+correlation (Art. 153(2) / CRE31.5). The multiplier mechanism is unchanged between
+frameworks; only the LFSE definition differs.
+
+| Framework | LFSE threshold | Regulatory citation |
+| --- | --- | --- |
+| **CRR** | Total assets ≥ **EUR 70 billion** | CRR Art. 142(1)(4) |
+| **Basel 3.1** | Total assets ≥ **GBP 79 billion** | PRA PS1/26 Glossary p. 78 (corresponds to CRR Art. 142(1)(4)) |
+
+!!! info "Threshold precision: GBP 79 billion is exact under PS1/26"
+    The PS1/26 Glossary fixes the LFSE threshold at **GBP 79 billion** of total assets, not
+    as a conversion from EUR 70 billion. EUR 70 billion survives only as the CRR-era equivalent
+    cited in the Glossary's Note ("corresponds to Article 142(1)(4) of CRR"). Lead with GBP 79bn
+    for Basel 3.1 paths and EUR 70bn for CRR paths; do not treat either as an FX-derived
+    approximation of the other.
 
 !!! warning "Two distinct thresholds — do not conflate"
-    - **EUR 70bn total assets** → 1.25x correlation uplift (Art. 153(2)). Applies to the asset correlation coefficient R for large/unregulated FSEs.
-    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+    - **LFSE total-assets threshold** (EUR 70bn CRR / GBP 79bn B31) → 1.25x correlation uplift
+      (Art. 153(2)). Applies to the asset correlation coefficient R for large/unregulated FSEs.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(e), Basel 3.1
+      only). Does not affect correlation.
 
-    These are entirely separate mechanisms applying to different entity populations and parameters.
+    These are entirely separate mechanisms applying to different entity populations and
+    parameters.
 
 ### A-IRB CCF Floor
 

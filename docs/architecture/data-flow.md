@@ -71,7 +71,7 @@ COUNTERPARTY_SCHEMA = {
     "entity_type": pl.String,             # Single source of truth: sovereign, institution, corporate, etc.
     "country_code": pl.String,            # ISO country code
     "annual_revenue": pl.Float64,         # For SME classification (EUR 50m threshold)
-    "total_assets": pl.Float64,           # For large FSE threshold (EUR 70bn)
+    "total_assets": pl.Float64,           # For LFSE threshold (EUR 70bn CRR / GBP 79bn B31)
     "default_status": pl.Boolean,         # Default indicator
     "sector_code": pl.String,             # Based on SIC
     "apply_fi_scalar": pl.Boolean,        # User flag: True = apply 1.25x FI correlation scalar

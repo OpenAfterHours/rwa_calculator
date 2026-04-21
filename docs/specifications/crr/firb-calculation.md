@@ -107,9 +107,11 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 
 !!! note "FSE Definition"
     Financial sector entity includes banks, building societies, investment firms, insurance
-    companies, and any entity primarily engaged in financial intermediation. Under CRR this is
-    Art. 4(1)(27); under Basel 3.1 Art. 4(1)(146) uses a total assets > EUR 70bn threshold for
-    the "large FSE" correlation multiplier.
+    companies, and any entity primarily engaged in financial intermediation (general FSE
+    definition: CRR Art. 4(1)(27)). The "large FSE" total-assets threshold driving the
+    1.25x correlation multiplier (Art. 153(2)) is **EUR 70 billion** under CRR Art. 142(1)(4)
+    and **GBP 79 billion** under Basel 3.1 (PS1/26 Glossary p. 78, with Note
+    "corresponds to Article 142(1)(4) of CRR").
 
 !!! info "Key B31 Changes to Purchased Receivables / Dilution"
     Basel 3.1 aligns the senior purchased receivables LGD with the new non-FSE rate (45% → 40%,
@@ -213,11 +215,14 @@ R = 0.03 x f(PD) + 0.16 x (1 - f(PD))
 
 ## FI Scalar (CRR Art. 153(2))
 
-A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for **large financial sector entities** (total assets ≥ EUR 70bn per CRR Art. 4(1)(146)) **and unregulated financial sector entities** (per CRR Art. 153(2)).
+A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for **large financial sector entities (LFSEs)** (total assets ≥ **EUR 70 billion** per CRR Art. 142(1)(4)) **and unregulated financial sector entities** (per CRR Art. 153(2)).
 
 !!! warning "Two distinct thresholds — do not conflate"
-    - **EUR 70bn total assets** (≈ GBP 79bn) → 1.25x correlation multiplier (Art. 153(2)). Applies to large FSEs and all unregulated FSEs under both CRR and Basel 3.1.
-    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+    - **LFSE total-assets threshold** — **EUR 70 billion** under CRR Art. 142(1)(4);
+      **GBP 79 billion** under Basel 3.1 (PS1/26 Glossary p. 78, which cites CRR Art. 142(1)(4)
+      as the corresponding pre-revocation provision). Triggers the 1.25x correlation multiplier
+      (Art. 153(2)) for large FSEs and all unregulated FSEs under both frameworks.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(e), Basel 3.1 only). Does not affect correlation.
     - The Art. 147A(1)(e) F-IRB restriction applies to **all** FSEs regardless of size — it is separate from the correlation uplift which only applies to *large* or *unregulated* FSEs.
 
 ## Capital Requirement Formula

@@ -3,7 +3,7 @@
 Basel 3.1 approach restrictions under Art. 147A limiting which exposure classes may use A-IRB,
 and routing exposures to F-IRB, slotting, or SA based on regulatory constraints.
 
-**Regulatory Reference:** PRA PS1/26 Art. 147A, Art. 4(1)(146)
+**Regulatory Reference:** PRA PS1/26 Art. 147A; PS1/26 Glossary p. 78 (LFSE definition, corresponds to CRR Art. 142(1)(4))
 **Test Group:** B31-M
 
 ---
@@ -58,10 +58,11 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
     defined in Art. 4(1)(27)) and large corporates (revenue > £440m) because Art. 147(2)(c)(ii)
     groups them into the single sub-class "financial corporates and large corporates".
     Both are restricted to **F-IRB** (or SA with permission) — A-IRB is not available.
-    The EUR 70bn / GBP 79bn **total-assets** threshold (Art. 4(1)(146)) is a **separate**
-    provision that drives the 1.25× correlation multiplier (Art. 153(2)); it does NOT
-    determine the approach restriction in Art. 147A(1)(e). Small FSEs below the
-    Art. 4(1)(146) threshold are still restricted to F-IRB under Art. 147A(1)(e).
+    The LFSE **total-assets** threshold — **GBP 79 billion** under PS1/26 Glossary p. 78
+    (corresponds to CRR Art. 142(1)(4), which sets **EUR 70 billion** under CRR) — is a
+    **separate** provision that drives the 1.25× correlation multiplier (Art. 153(2));
+    it does NOT determine the approach restriction in Art. 147A(1)(e). Small FSEs below
+    the LFSE threshold are still restricted to F-IRB under Art. 147A(1)(e).
 
 !!! note "Earlier drafts incorrectly cited Art. 147A(1)(d) for large corporates"
     Previous versions of this spec cited "Art. 147A(1)(d)" for the large-corporate
@@ -78,12 +79,15 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 
 !!! warning "Distinct Thresholds — Approach Restriction vs Correlation Multiplier"
     The **£440m revenue** threshold (Art. 147A(1)(e), via Art. 147(2)(c)(ii)) for the
-    large-corporate approach restriction is entirely distinct from the
-    **EUR 70bn total-assets** threshold (Art. 4(1)(146)) for the FSE correlation
-    multiplier. They target different populations and use different metrics:
+    large-corporate approach restriction is entirely distinct from the LFSE
+    **total-assets** threshold (**GBP 79 billion** under PS1/26 Glossary p. 78;
+    EUR 70 billion under CRR Art. 142(1)(4)) for the FSE correlation multiplier.
+    They target different populations and use different metrics:
 
-    - Art. 147A(1)(e): revenue-based (large corporates) and entity-type based (all FSEs), restricts A-IRB → F-IRB
-    - Art. 4(1)(146): asset-based, applies 1.25× correlation uplift under Art. 153(2)
+    - **Art. 147A(1)(e)**: revenue-based (large corporates) and entity-type based (all FSEs),
+      restricts A-IRB → F-IRB.
+    - **LFSE threshold** (PS1/26 Glossary / CRR Art. 142(1)(4)): asset-based, applies 1.25×
+      correlation uplift under Art. 153(2).
 
 ### Financial Sector Entity (FSE) Definition
 
@@ -94,10 +98,10 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 **All FSEs** (regardless of size) are restricted to F-IRB under Art. 147A(1)(e). This includes
 both regulated and unregulated financial entities.
 
-Separately, a **large FSE** (total assets > EUR 70 billion, ≈ GBP 79bn, per Art. 4(1)(146))
-receives the 1.25x correlation multiplier under Art. 153(2). This correlation uplift is distinct
-from the approach restriction — even small FSEs that do not trigger the correlation multiplier
-are still restricted to F-IRB.
+Separately, a **large FSE (LFSE)** — total assets ≥ **GBP 79 billion** under PS1/26 Glossary
+p. 78 (CRR equivalent: ≥ EUR 70 billion per Art. 142(1)(4)) — receives the 1.25x correlation
+multiplier under Art. 153(2). This correlation uplift is distinct from the approach restriction —
+even small FSEs that do not trigger the correlation multiplier are still restricted to F-IRB.
 
 ### IPRE/HVCRE Routing
 
@@ -174,8 +178,8 @@ When no model permission matches an exposure:
 |-------------|-------------|------------------|
 | B31-M1 | Corporate with AIRB permission, revenue < £440m | A-IRB |
 | B31-M2 | Corporate with AIRB permission, revenue > £440m (large corporate) | F-IRB (Art. 147A(1)(e)) |
-| B31-M3 | Large FSE with total assets > EUR 70bn | F-IRB (Art. 147A(1)(e)) |
-| B31-M3a | Small FSE with total assets < EUR 70bn | F-IRB (Art. 147A(1)(e) — all FSEs, not just large) |
+| B31-M3 | Large FSE with total assets ≥ GBP 79bn (PS1/26 Glossary) | F-IRB (Art. 147A(1)(e)) |
+| B31-M3a | Small FSE with total assets < GBP 79bn | F-IRB (Art. 147A(1)(e) — all FSEs, not just large) |
 | B31-M4 | Institution with AIRB permission | F-IRB (Art. 147A(1)(b)) |
 | B31-M5 | Equity exposure | SA (Art. 147A(1)(h)) |
 | B31-M6 | Sovereign exposure | SA (Art. 147A(1)(a)) |

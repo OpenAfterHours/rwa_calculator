@@ -235,8 +235,9 @@ Step 5a: _apply_infrastructure_classification()
 
 Step 5b: _apply_fi_scalar_classification()
         Derive requires_fi_scalar from user-supplied apply_fi_scalar flag.
-        (User sets apply_fi_scalar=True for LFSE total assets ≥ EUR 70bn
-        or unregulated FSEs — no automatic threshold check in code.)
+        (User sets apply_fi_scalar=True for LFSE — total assets ≥ EUR 70bn
+        under CRR Art. 142(1)(4), or ≥ GBP 79bn under PS1/26 Glossary p. 78 —
+        or for any unregulated FSE. No automatic threshold check in code.)
 
 Step 6: _determine_approach()
         Assign SA/FIRB/AIRB/SLOTTING based on IRB permissions

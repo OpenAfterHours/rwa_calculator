@@ -123,11 +123,25 @@ defined separately:
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10%* | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10%* | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15%* | Art. 164(4)(c)(iv)(4) |
+
+!!! info "Secured-retail blended floor (Art. 164(4)(c))"
+    For retail exposures outside the flat-5% RRE-mortgage path, the LGD floor is the
+    variable LGD\* produced by the Foundation Collateral Method (Art. 230 single-collateral
+    or Art. 231 multi-collateral), substituting **LGDU = 30%** and the LGDS values above.
+    Art. 164(4A) additionally requires Art. 193(7) multi-facility collateral allocation
+    when the same collateral backs multiple facilities. See the
+    [B31 A-IRB spec](../../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644)
+    for the full formula and implementation detail.
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 

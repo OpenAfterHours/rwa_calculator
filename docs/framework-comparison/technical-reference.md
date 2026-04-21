@@ -68,11 +68,37 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10%* | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10%* | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15%* | Art. 164(4)(c)(iv)(4) |
+
+!!! info "Secured-retail blended floor (Art. 164(4)(c))"
+    For retail exposures outside the flat-5% RRE mortgage path, the LGD floor is the
+    variable LGD\* produced by the Foundation Collateral Method (Art. 230 single-collateral
+    or Art. 231 multi-collateral), with LGDU = 30% and the LGDS values above substituted
+    into the blended formula:
+
+    ```
+    LGD_floor = (E_u / E) x 30% + sum_i (E_s_i / E) x LGDS_i
+    ```
+
+    The canonical 8-row table and formula derivation live in the
+    [B31 A-IRB spec](../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644).
+    Art. 164(4A) additionally requires Art. 193(7) multi-facility collateral allocation
+    when the same collateral backs multiple facilities.
+
+!!! note "CRR comparison (Art. 164(4), pre-revocation)"
+    CRR used **portfolio exposure-weighted-average** floors: ≥ 10% for retail RRE-secured,
+    ≥ 15% for retail CRE-secured, excluding central-government-guaranteed exposures.
+    Basel 3.1 replaces these aggregate tests with the per-exposure input floors above
+    applied individually before the capital formula.
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 

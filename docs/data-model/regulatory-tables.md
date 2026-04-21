@@ -502,11 +502,22 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10% | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10% | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15% | Art. 164(4)(c)(iv)(4) |
+
+Art. 164(4)(a) applies the flat 5% floor to retail RRE mortgages irrespective of
+the level of collateral provided. For all other secured or partially-secured retail
+exposures, the blended LGD floor is LGD* from the Foundation Collateral Method
+(Art. 230 / Art. 231) with LGDU substituted at 30% and LGDS values from the table
+above. Canonical source: [B31 A-IRB spec](../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644).
 
 ---
 

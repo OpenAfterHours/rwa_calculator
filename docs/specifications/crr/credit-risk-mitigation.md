@@ -42,15 +42,15 @@ CRR uses 3 maturity bands for bond haircuts; Basel 3.1 expands to 5 bands with i
 | 2-3 | 1% | 3% | 6% |
 | 4 | 15% | 15% | 15% |
 
-**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224 Table 1, 10-day liquidation period):**
 
 | CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
 |-----|-------|-------|-------|--------|-------|
 | 1 | 0.5% | 2% | 2% | 4% | 4% |
-| 2-3 | 1% | 3% | 4% | 6% | 12% |
+| 2-3 | 1% | 3% | 3% | 6% | 6% |
 | 4 | 15% | 15% | 15% | 15% | 15% |
 
-Key B31 change: CQS 2-3 govt bond >10yr raised from 6% to 12%.
+Key B31 change: the 5-band split re-groups the CRR 1–5yr and 5yr+ bands but **does not raise sovereign haircuts** for well-rated issuers. CQS 2–3 sovereigns remain at 6% even at the longest tenor; the CRR-era "5yr+ = 6%" simply splits into 5–10yr = 6% and >10yr = 6%. The cross-reference to the authoritative B31 spec is [Government Bond Haircuts (5-Band)](../basel31/credit-risk-mitigation.md#government-bond-haircuts-5-band).
 
 **CQS eligibility (Art. 197):**
 
@@ -67,14 +67,17 @@ Key B31 change: CQS 2-3 govt bond >10yr raised from 6% to 12%.
 | 1 | 1% | 4% | 8% |
 | 2-3 | 2% | 6% | 12% |
 
-**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224 Table 1, 10-day liquidation period):**
 
 | CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
 |-----|-------|-------|-------|--------|-------|
-| 1 | 1% | 4% | 6% | 10% | 12% |
-| 2-3 | 2% | 6% | 8% | 15% | 15% |
+| 1 | 1% | 3% | 4% | 6% | 12% |
+| 2-3 | 2% | 4% | 6% | 12% | 20% |
 
-Key B31 changes: CQS 1 longer tenors increased (5yr+ was flat 8%, now granular 6%/10%/12%). CQS 2-3 longer tenors increased (5yr+ was 12%, now 8%/15%/15%).
+Key B31 changes: the 5-band split **raises the longest-tenor haircuts** materially while easing short-to-mid tenors. CQS 1 >10yr moves from the CRR 5yr+ flat 8% to **12%**; CQS 2–3 >10yr moves from 12% to **20%** (a +8pp uplift). By contrast, CQS 1 / 1–3yr eases from 4% to 3% and CQS 2–3 / 1–3yr eases from 6% to 4%. The cross-reference to the authoritative B31 spec is [Corporate and Institution Bond Haircuts (5-Band)](../basel31/credit-risk-mitigation.md#corporate-and-institution-bond-haircuts-5-band).
+
+!!! note "Change log — B31 comparison table corrections (2026-04-21)"
+    Prior versions of this CRR spec showed pre-correction B31 haircuts (CQS 2–3 / 10yr+ govt at 12%; corporate/institution CQS 2–3 / 5–10yr and 10yr+ both at 15%; CQS 1 / 1–3yr at 4%). These were drafted before the 17 Apr 2026 re-audit of PS1/26 Art. 224 Table 1. Values above now match the authoritative Basel 3.1 CRM spec and `ps126app1.pdf` page 203.
 
 ### Equity (Art. 224 Table 3)
 

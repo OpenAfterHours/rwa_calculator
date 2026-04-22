@@ -133,12 +133,25 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
     summary.
 
 !!! info "Purchased Receivables and Dilution Risk (Art. 161(1)(e)–(g))"
-    Art. 161(1)(e)/(f) apply where the institution cannot estimate PD for the purchased
-    receivables pool (per Art. 160(2)). Senior purchased receivables align with the standard
-    senior rate; subordinated purchased receivables are penalised at 100%. Basel 3.1 increases
-    the dilution risk LGD from 75% to 100% (Art. 161(1)(g)). See
-    [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values) for full
-    Art. 161(1)(a)–(g) breakdown.
+    Basel 3.1 recasts the triggering condition of each sub-paragraph. CRR Art. 161(1)(e)/(f)
+    apply where "the institution is not able to estimate PDs or the institution's PD estimates
+    do not meet the requirements set out in Section 6", and Art. 161(1)(g) applies
+    unconditionally. PS1/26 re-anchors each trigger to the specific Art. 160 PD-determination
+    method:
+
+    | Sub-paragraph | CRR trigger | PS1/26 trigger | LGD (CRR → PS1/26) |
+    |---------------|-------------|----------------|--------------------|
+    | 161(1)(e) senior | unable to estimate PDs / Section 6 fail | PD per **Art. 160(2)(a)** (EL ÷ LGD) | 45% → 40% |
+    | 161(1)(f) subordinated | unable to estimate PDs / Section 6 fail | PD per **Art. 160(2)(b)** (PD = EL) | 100% → 100% |
+    | 161(1)(g) dilution | unconditional | PD per **first sentence of Art. 160(6)** | 75% → 100% |
+
+    Art. 160(2)'s chapeau preserves the CRR "not able to estimate PDs / Section 6 fail" trigger
+    as the precondition for using 160(2)(a)/(b), so the substance of when (e)/(f) apply is
+    unchanged; only the drafting is cascaded through Art. 160. PS1/26 Art. 161(2)(a) also adds
+    a new explicit A-IRB → F-IRB LGD mapping absent in CRR. See
+    [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values) and
+    [B31 F-IRB spec](../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
+    for the full Art. 161(1)(a)–(g) breakdown.
 
 !!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
     CRR Art. 230 Table 5 has separate "senior" and "subordinated" LGDS columns (e.g.,

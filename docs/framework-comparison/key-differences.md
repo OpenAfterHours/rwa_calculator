@@ -221,11 +221,26 @@ Note: The retail unsecured LGDU used in the LGD* formula for secured exposures i
     as mandatory. See [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values)
     for the full Art. 161(1)(a)–(g) breakdown.
 
-!!! info "Purchased Receivables and Dilution Risk Changes"
-    Art. 161(1)(e)/(f) apply where PD cannot be estimated for the purchased receivables pool
-    (Art. 160(2)). Basel 3.1 aligns senior purchased receivables with the new non-FSE rate
-    (45% → 40%). The dilution risk LGD increases significantly from 75% to **100%**
-    (Art. 161(1)(g)). Subordinated purchased receivables remain at 100%.
+!!! info "Purchased Receivables — Trigger Recast + Value Changes (Art. 161(1)(e)/(f)/(g))"
+    Alongside the value changes (senior 45% → 40%, dilution 75% → 100%, subordinated 100%
+    unchanged), PS1/26 **re-keys the triggering condition** of each sub-paragraph. Under CRR
+    the condition is phrased as the institution's inability to estimate PDs; under PS1/26 it
+    is re-anchored to the specific PD-determination method in Art. 160(2) / 160(6):
+
+    | Sub-paragraph | CRR condition | PS1/26 condition |
+    |---------------|---------------|------------------|
+    | 161(1)(e) — senior | "institution is not able to estimate PDs **or** the institution's PD estimates do not meet the requirements set out in Section 6" | "PD is determined in accordance with **point (a) of Article 160(2)**" (EL ÷ LGD method) |
+    | 161(1)(f) — subordinated | same text as (e) | "PD is determined in accordance with **point (b) of Article 160(2)**" (PD = EL) |
+    | 161(1)(g) — dilution risk | unconditional (no trigger) | "where PD is determined in accordance with the **first sentence of Article 160(6)**" (PD = EL estimate for dilution) |
+
+    Regulatory substance is preserved because Art. 160(2)'s chapeau carries forward the
+    original CRR "not able to estimate PDs or PD estimates do not meet Section 6" text as
+    the gate for using 160(2)(a)/(b). The drafting is now cascaded through Art. 160 rather
+    than repeated in Art. 161. PS1/26 Art. 161(2)(a) also adds a new explicit **A-IRB → F-IRB
+    LGD mapping** (160(2)(a) → 161(1)(e), 160(2)(b) → 161(1)(f), 160(6) first sentence →
+    161(1)(g)) that was absent in CRR. See the
+    [B31 F-IRB spec](../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
+    for the verbatim PS1/26 text.
 
 !!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
     CRR Art. 230 Table 5 has separate senior/subordinated LGDS columns (receivables 35%/65%,

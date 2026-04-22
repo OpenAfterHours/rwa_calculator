@@ -285,6 +285,27 @@ The External Credit Risk Assessment (ECRA) approach uses the institution's own E
     This 20pp reduction for well-rated (A-range) institutions is a deliberate Basel 3.1 change,
     not a pre-existing UK CRR deviation. See D3.17 for the code bug where CRR uses 30%.
 
+!!! warning "Art. 119(2)/(3) National-Currency Short-Term Preferential — Removed under Basel 3.1"
+    PS1/26 Appendix 1 p. 40 marks Art. 119(2), (3), and (4) as
+    `[Note: Provision left blank]`. The CRR national-currency short-term preferential path
+    — under which an institution exposure of residual maturity ≤ 3 months denominated and
+    funded in the borrower's national currency was assigned a risk weight "one category
+    less favourable than the preferential risk weight" from Art. 114(4)–(7), floored at
+    20% by Art. 119(3) — is **not retained** in Basel 3.1.
+
+    **Consequence.** All short-term institution exposures under Basel 3.1 route through
+    **Art. 120(2) Table 4** (rated ECRA: CQS 1–3 = 20%, CQS 4–5 = 50%, CQS 6 = 150%) or
+    **Art. 121(3)** (unrated SCRA: 20% for original maturity ≤ 3 months). There is no
+    parallel sovereign-derived national-currency channel for institution exposures. See
+    [CRR SA Risk Weights — National-Currency Short-Term Preferential (Art. 119(2), 119(3))](../crr/sa-risk-weights.md#national-currency-short-term-preferential-treatment-crr-art-1192-1193)
+    for the removed mechanics.
+
+    **Impact.** Neutral for UK-domestic sterling-funded cases (Art. 120(2) Table 4 20%
+    and Art. 121(3) 20% already match the Art. 119(3) 20% floor). Tighter for
+    cross-border short-term exposures to institutions incorporated in jurisdictions
+    with preferential sovereign treatment under Art. 114(6)/(7), which can no longer
+    use the national-currency override and must instead take the Art. 120/121 grade.
+
 ### ECRA Short-Term (Art. 120(2), Table 4)
 
 For exposures with an original maturity ≤ 3 months:

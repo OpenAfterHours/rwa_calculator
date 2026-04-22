@@ -265,7 +265,8 @@ Set `entity_type = "mdb"` in the counterparty data for these institutions.
     institutions"** — they use the institution risk weight tables (Art. 120 Table 3 for ECAI-rated,
     Art. 121 Table 5 for sovereign-derived). No separate MDB table exists in the CRR.
 
-    Short-term preferential treatment (Art. 119(2), 120(2), 121(3)) is excluded for MDB exposures.
+    Short-term preferential treatment — Art. 120(2) Table 4 (rated), Art. 121(3) (unrated 20%),
+    and the national-currency channel of Art. 119(2)/(3) — is excluded for MDB exposures.
 
     See [Institution](institution.md) for the CRR institution risk weight tables.
 

@@ -160,6 +160,24 @@ Both apply only where the obligor is an institution and only on the ECRA (rated)
     No CRR equivalent — CRR Art. 138 has only sub-points (a)–(f), and CRR Art. 139
     has only paragraphs (1)–(4). CRR firms apply implicit-support ratings directly.
 
+!!! warning "CRR Art. 119(2)/(3) National-Currency Preferential — Removed under Basel 3.1"
+    Under CRR, an institution exposure of residual maturity ≤ 3 months denominated and
+    funded in the borrower's **national currency** received a risk weight "one category
+    less favourable than the preferential risk weight, as described in Article 114(4) to
+    (7), assigned to exposures to the central government in which the institution is
+    incorporated" (Art. 119(2)), floored at 20% by Art. 119(3). PS1/26 Appendix 1 p. 40
+    marks Art. 119(2), (3), and (4) all as `[Note: Provision left blank]` — the
+    national-currency short-term preferential path is **not retained** in Basel 3.1.
+
+    **Under Basel 3.1**, all short-term institution exposures flow through Table 4
+    (Art. 120(2), rated — 20% at CQS 1–3) or Art. 121(3) (unrated, 20% at ≤ 3 months).
+    UK-domestic sterling-funded exposures are neutral; cross-border exposures to
+    institutions incorporated in jurisdictions benefiting from Art. 114(6)/(7)
+    preferential sovereign treatment lose the national-currency override and take
+    the full Art. 120/121 grade. See
+    [CRR SA spec — Art. 119(2), 119(3)](../../specifications/crr/sa-risk-weights.md#national-currency-short-term-preferential-treatment-crr-art-1192-1193)
+    for the removed mechanism and worked examples.
+
 ## Interbank Exposures
 
 ### Due From Banks
@@ -290,7 +308,9 @@ Exposures to subordinated debt of institutions:
 |-------|-------------|----------|
 | Institution definition | Art. 119 | CRE20.15-20 |
 | Risk weights | Art. 119-121 | CRE20.21-25 |
-| Short-term treatment | Art. 119(2) | CRE20.26 |
+| Short-term (general, rated) | Art. 120(2) Table 4 | CRE20.22 |
+| Short-term (unrated) | Art. 121(3) | CRE20.23 |
+| Short-term (national-currency; CRR only) | Art. 119(2), 119(3) — blanked in PS1/26 | — |
 | Covered bonds | Art. 129 | CRE20.27-30 |
 | CCPs | Art. 300-311 | CRE54 |
 

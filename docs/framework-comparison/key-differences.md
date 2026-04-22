@@ -639,19 +639,47 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.
 
+!!! warning "Removal of Art. 119(2)/(3) National-Currency Preferential (Basel 3.1)"
+    CRR Art. 119(2) (CRR p. 118) assigned exposures to institutions with residual
+    maturity ≤ 3 months denominated and funded in the borrower's **national currency**
+    a risk weight "one category less favourable than the preferential risk weight, as
+    described in Article 114(4) to (7), assigned to exposures to the central government
+    in which the institution is incorporated"; Art. 119(3) floored that path at 20%.
+    PS1/26 Appendix 1 p. 40 marks Art. 119(2), (3), and (4) all as
+    `[Note: Provision left blank]` — **the national-currency short-term preferential
+    treatment is removed under Basel 3.1**.
+
+    **Consequence.** All short-term institution exposures under Basel 3.1 must route
+    through Art. 120(2) Table 4 (rated: CQS 1–3 = 20%, CQS 4–5 = 50%, CQS 6 = 150%) or
+    Art. 121(3) (unrated 20% at original maturity ≤ 3 months). There is no parallel
+    sovereign-derived national-currency channel.
+
+    **Who is affected.** Cross-border short-term institution exposures denominated and
+    funded in a currency whose sovereign benefits from Art. 114(6) (equivalent
+    third-country competent authority) or Art. 114(7) (CRR transitional national-currency
+    preferential) treatment. Under CRR the national-currency override could produce the
+    20% Art. 119(3) floor regardless of the institution's own rating; under Basel 3.1
+    those exposures now take the Art. 120 Table 4 or Art. 121 SCRA grade directly.
+
+    **UK-domestic exposures are neutral** because Art. 120(2) Table 4 (20% at CQS 1–3)
+    and Art. 121(3) (20% unrated ≤ 3m) already match the Art. 119(3) 20% floor for
+    sterling-funded short-term institution exposures. See
+    [CRR SA spec — National-Currency Short-Term Preferential (Art. 119(2), 119(3))](../specifications/crr/sa-risk-weights.md#national-currency-short-term-preferential-treatment-crr-art-1192-1193)
+    for the removed mechanism and worked examples.
+
 !!! info "SCRA Short-Term Trade Finance Exception (Art. 121(4)) — New in Basel 3.1"
     Basel 3.1 introduces a dedicated preferential window for self-liquidating trade-finance
     exposures to unrated institutions. An exposure with **original maturity ≤ 6 months** that
     **arose from the movement of goods** receives Table 5A weights (Grade A / A enhanced 20%,
     Grade B 50%, Grade C 150%), overriding the normal 3-month threshold in Art. 121(3).
 
-    **No direct CRR analogue.** Under CRR Art. 120, unrated institution exposures are assigned
-    a risk weight derived from the institution's central-government rating (Art. 121 Table 3)
-    and the general short-term preferential treatment is gated on original maturity ≤ 3 months
-    (Art. 119(2)) — there is no separate 6-month self-liquidating trade carve-out. The new
-    Art. 121(4) aligns the PRA framework with BCBS CRE20.20, preserving the capital treatment
-    historically given to cross-border documentary credits and similar short-dated trade
-    instruments.
+    **No direct CRR analogue.** Under CRR Art. 121, unrated institution exposures are assigned
+    a risk weight derived from the institution's central-government rating (Art. 121 Table 5)
+    and the general short-term preferential treatment is gated on residual maturity ≤ 3 months
+    (Art. 120(2) Table 4 for rated, Art. 121(3) 20% for unrated) — there is no separate
+    6-month self-liquidating trade carve-out. The new Art. 121(4) aligns the PRA framework
+    with BCBS CRE20.20, preserving the capital treatment historically given to cross-border
+    documentary credits and similar short-dated trade instruments.
 
     **Interaction with Art. 121(6).** The two articles operate independently. A 9-month
     foreign-currency self-liquidating trade exposure falls *outside* the Art. 121(4) window

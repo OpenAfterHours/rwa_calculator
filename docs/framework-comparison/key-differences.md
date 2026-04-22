@@ -364,6 +364,23 @@ of F-IRB fixed supervisory maturities** — all IRB firms must now calculate M.
     these exposures must be calculated from cash flows or contractual terms, subject to the
     1-year general floor — roughly doubling the effective M for short-dated repos.
 
+!!! warning "Revolving Facility Precedence — Art. 162(2A)(k) over (a)"
+    PS1/26 Art. 162(2)(c) **mandates** that "where an exposure falls within both points (a)
+    and (k) of paragraph 2A, it shall calculate M in accordance with point (k) of paragraph
+    2A." Art. 162(2A)(k) in turn requires that "for revolving exposures, M shall be
+    determined using the maximum contractual termination date of the facility. An
+    institution shall not use the repayment date of the current drawing."
+
+    The practical effect: a revolving exposure with a documented cash-flow schedule cannot
+    use the weighted-average cash-flow formula in (a); it must always use the facility
+    termination date, even where the current drawing is short-dated. This preserves maturity
+    risk across the undrawn commitment and is the single largest mechanical driver of higher
+    M on committed revolving lines under Basel 3.1.
+
+    See the [Basel 3.1 F-IRB specification — Art. 162(2A) Calculation Methods](../specifications/basel31/firb-calculation.md#art-1622a-calculation-methods)
+    for the full (g)/(h) → (c)/(da) → (c)>(b) → (k)>(a) precedence chain and the
+    `facility_termination_date` input-field mapping.
+
 See the [Technical Reference](technical-reference.md#irb-effective-maturity-art-162) for
 additional detail and the [F-IRB specifications](../specifications/crr/firb-calculation.md#effective-maturity-crr-art-162) for the full regulatory text.
 

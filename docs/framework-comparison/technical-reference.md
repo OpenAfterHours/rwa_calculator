@@ -558,6 +558,23 @@ facilities, leading to higher maturity adjustments and therefore higher capital.
 of the F-IRB 0.5-year repo maturity means repo exposures will use the full cash-flow or
 contractual calculation, generally increasing M from 0.5 to ≥ 1 year.
 
+!!! warning "Revolving Facility Precedence — (k) over (a)"
+    Art. 162(2)(c) mandates that "where an exposure falls within both points (a) and (k)
+    of paragraph 2A, it shall calculate M in accordance with point (k) of paragraph 2A."
+    Art. 162(2A)(k) further states that "for revolving exposures, M shall be determined
+    using the maximum contractual termination date of the facility. An institution shall
+    not use the repayment date of the current drawing."
+
+    This precedence rule means a revolving facility **cannot** fall back to the cash-flow
+    schedule formula in (a), even when an explicit CF schedule exists — M is anchored to
+    the facility termination date. The calculator reads this via the
+    `facility_termination_date` input field; when non-null and the exposure is flagged
+    revolving, (k) is applied in preference to any cash-flow path.
+
+    Full precedence chain under Art. 162(2): (g)/(h) > (b), (c), (d), (da); (c) > (b);
+    (k) > (a). See the [Basel 3.1 F-IRB spec](../specifications/basel31/firb-calculation.md#art-1622a-calculation-methods)
+    for the method table and implementation notes.
+
 !!! info "One-Day Floor Exceptions (Art. 162(3))"
     Both CRR and Basel 3.1 allow a **one-day** maturity floor (overriding the general 1-year
     floor) for daily-margined repos, derivatives, and margin lending, plus qualifying

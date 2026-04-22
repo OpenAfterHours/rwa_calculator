@@ -384,6 +384,20 @@ qualifying properties is performed.
     external data source and is tracked as a v2.0 / Tier-7 item (see
     `IMPLEMENTATION_PLAN.md` §"Tier 7 — Future / v2.0").
 
+!!! info "Reassessment obligations (Art. 124E(5) and (7))"
+    Art. 124E(5) requires institutions to **reassess** material dependency of a
+    residential RE exposure whenever a new residential-RE-secured loan is issued to the
+    obligor (including replacement loans). Discretionary updates at other times are
+    permitted only if new information is applied consistently portfolio-wide —
+    Art. 124E(5) explicitly prohibits selective reassessment aimed at reducing own-funds
+    requirements. Art. 124E(7) requires **commercial RE** reassessment at least annually.
+
+    The mandatory residential trigger is **obligor-level**: a new RRE loan to the same
+    borrower at a different address re-opens the paragraph-2 three-property count for
+    every existing RRE exposure to that borrower. See the
+    [B31 SA spec reassessment subsection](../basel31/sa-risk-weights.md#reassessment-triggers-residential-re-art-124e5)
+    for verbatim PS1/26 wording.
+
 ### Art. 147A(1)(e)/(f) subclass reporting for corporates
 
 **Verbatim PDF quote (PS1/26 App 1, p.92, Art. 147A(1)(e)–(f)):**

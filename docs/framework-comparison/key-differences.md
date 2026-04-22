@@ -773,7 +773,24 @@ a fundamentally different methodology based on the institution's own capital ade
     **Commercial RE** is materially dependent unless the borrower uses each property
     predominantly for its own business purpose, excluding rental income (Art. 124E(6)).
 
-    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
+    **Reassessment obligations (Art. 124E(5) and (7))** — CRR had no analogue:
+
+    - **Residential RE (Art. 124E(5))** — institutions *shall reassess* material dependency
+      whenever a new residential-RE-secured loan is issued to the obligor, including
+      replacement loans. Reassessment at other times is permitted only if new information
+      is gathered and applied *consistently across the portfolio*; selective reassessment
+      to reduce own-funds requirements is prohibited.
+    - **Commercial RE (Art. 124E(7))** — institutions *shall reassess at least annually*
+      whether the exposure remains materially dependent.
+
+    The mandatory residential trigger is **obligor-level**, not property-level: a new RRE
+    loan to the same borrower at a different address re-opens the three-property count in
+    Art. 124E(2) for every existing RRE exposure to that borrower.
+
+    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e)
+    and specifically the [residential reassessment triggers](../specifications/basel31/sa-risk-weights.md#reassessment-triggers-residential-re-art-124e5)
+    and [commercial annual reassessment](../specifications/basel31/sa-risk-weights.md#reassessment-trigger-commercial-re-art-124e7)
+    subsections.
 
 !!! warning "Art. 124A Qualifying Gate"
     All preferential RE risk weights below (Art. 124F–124I) require the exposure to be a

@@ -548,8 +548,11 @@ the LTV numerator is a Basel 3.1 addition.
     CRR's informal income-dependency distinction. Under CRR, Art. 125 (general) vs
     Art. 126 (income-producing) had no formal classification gate. Art. 124E defines
     residential RE as materially dependent by default, with five exceptions (primary
-    residence, three-property limit, SPE guarantor, social housing, cooperative). CRR
-    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
+    residence, three-property limit, SPE guarantor, social housing, cooperative).
+    Art. 124E(5)/(7) additionally impose reassessment obligations (new-loan-to-obligor
+    trigger for residential, annual trigger for commercial) that have no CRR analogue —
+    CRR had no codified reassessment cadence for the Art. 125/126 income-dependency
+    distinction. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 ### General Residential — Loan-Splitting (Art. 124F)
 

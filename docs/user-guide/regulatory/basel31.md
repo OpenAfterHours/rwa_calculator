@@ -317,7 +317,21 @@ for full details.
     (d) social housing, or (e) cooperative/association for primary residence use.
     **Commercial** RE is materially dependent unless the borrower uses each property
     predominantly for its own business (not rental). Set `is_income_producing` accordingly
-    on the collateral record. See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
+    on the collateral record.
+
+    **Reassessment obligations (Art. 124E(5) and (7))** are firm-side — the calculator
+    consumes the `is_income_producing` flag as of the current reporting date and does not
+    track reassessment history:
+
+    - **Residential RE** — reassess whenever a new residential-RE-secured loan is issued
+      to the obligor (including replacement loans). Discretionary updates at other times
+      are allowed only if applied consistently portfolio-wide.
+    - **Commercial RE** — reassess at least annually.
+
+    See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e)
+    for the full reassessment rules and the
+    [residential reassessment triggers](../../specifications/basel31/sa-risk-weights.md#reassessment-triggers-residential-re-art-124e5)
+    subsection.
 
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 

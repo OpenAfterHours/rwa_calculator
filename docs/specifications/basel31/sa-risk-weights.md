@@ -39,6 +39,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.22 | RE valuation requirements — qualifying valuation, >10% market decline and GBP 2.6m / 5% own funds revaluation triggers, self-build floor, pre-2027 transitional (Art. 124D(1)–(11)) | P1 | Input-driven — calculator consumes `property_value` as already Art. 124D-compliant; valuation governance is firm-side (no Art. 124D-specific input fields for valuation source, revaluation date, or self-build flag) |
 | FR-1.23 | Output-floor S-TREA election for unrated corporates by IRB firms — 100% vs IG/non-IG split with PRA notification obligation (Art. 122(7)–(8)) | P2 | Input-driven — the S-TREA leg of the output floor reuses the firm's Art. 122(5)/(6) branch selection from its regular SA application; notification to PRA on adoption or cessation is a firm governance step upstream of the calculator |
 | FR-1.24 | Implicit government support higher-of rule for rated institution exposures (Art. 138(1)(g), Art. 139(6)) | P2 | Not implemented — input-schema gap (no distinction between issue-specific and general issuer ratings; no flag for implicit-support assumption). Firms must pre-adjust `external_cqs` offline or use the Art. 110A `due_diligence_override_rw` pathway. See D3.60. |
+| FR-1.25 | Real estate underwriting-standards policy obligation — affordability assessment at origination (Art. 124B) | P2 | Firm-governance only — no calculator input or validation; compliance evidenced through underwriting-policy documentation and supervisory review |
 
 ---
 
@@ -1201,8 +1202,8 @@ For a **single-property** RE exposure, Art. 124 paragraphs (1)–(3) route to ex
 
 | Exposure type | Routing | Risk-weight articles |
 |---------------|---------|----------------------|
-| ADC exposure (acquisition / development / construction, Art. 124K definition) | Art. 124(3) | [Art. 124K](#real-estate--adc-exposures-art-124k) — 150% standard, 100% qualifying residential |
-| Regulatory RE (passes [Art. 124A six-criterion gate](#real-estate--qualifying-criteria-art-124a)) | Art. 124(1) | Art. 124F–124I (class-specific loan-splitting or income-producing tables) |
+| ADC exposure (acquisition / development / construction, Art. 124K definition) | Art. 124(3) | [Art. 124K](#real-estate-adc-exposures-art-124k) — 150% standard, 100% qualifying residential |
+| Regulatory RE (passes [Art. 124A six-criterion gate](#real-estate-qualifying-criteria-art-124a)) | Art. 124(1) | Art. 124F–124I (class-specific loan-splitting or income-producing tables) |
 | Other RE (fails Art. 124A gate but not ADC) | Art. 124(2) | [Art. 124J](#consequence-of-failing--other-real-estate-art-124j) — 150% income-dependent, counterparty RW otherwise |
 
 The ADC check in Art. 124(3) is evaluated **before** the Art. 124A qualifying-criteria gate — Art. 124A(1) opens "A real estate exposure is a regulatory real estate exposure if it is **not an ADC exposure** and all the following requirements are met". An ADC exposure therefore never enters the Art. 124F–124J channel regardless of the six criteria.
@@ -1305,7 +1306,7 @@ Criterion (c) is satisfied if **any** of the following apply:
 
 Criterion (d) is satisfied only if the property value has been obtained via an Art. 124D "qualifying valuation". The full valuation standard — monitoring obligation, re-valuation triggers (including the GBP 2.6m / 5% own funds threshold), qualified-valuer and statistical-method conditions, the self-build formula, and the transitional rule for pre-2027 exposures — is documented in its own section below:
 
-→ [Real Estate — Valuation Requirements (Art. 124D)](#real-estate--valuation-requirements-art-124d)
+→ [Real Estate — Valuation Requirements (Art. 124D)](#real-estate-valuation-requirements-art-124d)
 
 ### Consequence of Failing — Other Real Estate (Art. 124J)
 
@@ -1323,6 +1324,66 @@ Exposures that fail any Art. 124A criterion are "other real estate":
     RE branches. The six Art. 124A(1) criteria must be pre-evaluated by the reporting
     institution — the calculator does not validate individual criteria. If the field is
     omitted, the exposure defaults to qualifying (`True`) for backward compatibility.
+
+---
+
+## Real Estate — Underwriting Standards (Art. 124B)
+
+Article 124B is a one-paragraph **governance precondition** for originating real estate exposures: institutions must operate an underwriting policy that, at a minimum, requires assessment of the borrower's ability to repay. It sits upstream of the calculator and applies to **all** real estate exposures regardless of whether they subsequently qualify under Art. 124A — the affordability-assessment obligation is triggered at origination, not at risk-weighting.
+
+**Regulatory Reference:** PRA PS1/26 Art. 124B (ps126app1.pdf p. 52). Effective 1 January 2027.
+
+!!! quote "Art. 124B — Underwriting Standards for Real Estate Exposures"
+    1. An institution shall have an underwriting policy for originating real estate exposures which shall, at a minimum, require the institution to assess the ability of the borrower to repay.
+
+### Scope and Application
+
+- **All real estate exposures in scope** — regulatory RE (Art. 124F–124I), other RE (Art. 124J), and ADC (Art. 124K). There is no exposure-type carve-out; the obligation attaches at the point an institution **originates** a real estate exposure.
+- **Governance-level rule, not per-exposure calculation** — Art. 124B requires the *existence of an underwriting policy*, not a per-exposure affordability calculation surfaced through the risk-weight table. Compliance is evidenced by policy documentation, credit-committee approval records, and PRA supervisory review.
+- **"Ability to repay" is the minimum standard** — Art. 124B sets a floor ("at a minimum"). Firms are expected to extend the policy to cover other prudential aspects (collateral adequacy, concentration limits, product-specific affordability tests such as interest-rate stress tests for residential mortgages) per PRA supervisory expectations and CRD Art. 79 credit-risk management obligations.
+
+### Relationship to Other Art. 124-Series Provisions
+
+Art. 124B is distinct from the measurement rules of Art. 124–124L. It is the **origination-side governance** counterpart to the **calculation-side** gates and tables:
+
+| Article | Function | Calculator-visible? |
+|---------|----------|---------------------|
+| Art. 124 | Framework scope and mixed-RE proportional split | Yes — property-type routing |
+| Art. 124A | Six-criterion qualifying gate for preferential risk weights | Yes — `is_qualifying_re` input |
+| **Art. 124B** | **Origination governance — underwriting-policy obligation** | **No — firm-side** |
+| Art. 124C | Regulatory LTV formula (stacked prior charges) | Yes — `property_ltv`, `prior_charge_ltv` inputs |
+| Art. 124D | Valuation standard (qualifying valuation, revaluation triggers, self-build floor) | Indirect — `property_value` must already be Art. 124D-compliant |
+| Art. 124E | Material-dependency classification for routing between loan-splitting and income-producing tables | Yes — `is_income_producing` / dependency flags |
+
+A breach of Art. 124B does **not** reclassify an exposure under Art. 124J — the article is a standalone governance requirement enforced supervisorily, not a risk-weight trigger. A firm that continues to apply Art. 124F–124I preferential weights while breaching Art. 124B would face PRA enforcement (potentially a Pillar 2A capital add-on under SS31/15 ICAAP), not an automatic downgrade of the affected exposures' risk weights.
+
+### Relationship to Art. 110A Due Diligence
+
+Art. 124B is narrower than the framework-wide due-diligence obligation in [Art. 110A](#due-diligence-obligation-art-110a):
+
+- **Art. 110A** applies to every SA exposure (subject to five exemptions) and requires institution-wide processes to ensure "an adequate understanding of the risk profile, creditworthiness and characteristics of exposures to individual obligors and at a portfolio level" (Art. 110A(2)).
+- **Art. 124B** is specific to real-estate origination and zeros in on a single minimum test: the underwriting policy must require the institution to assess **the borrower's ability to repay**.
+
+The two obligations are cumulative. A compliant firm will satisfy Art. 124B through policy documentation and credit-committee evidence, and satisfy Art. 110A through broader risk-governance and annual review processes covering all SA exposures (including RE).
+
+### Implementation Status
+
+!!! warning "Firm-governance responsibility — no calculator enforcement"
+    The RWA calculator does **not** carry an "Art. 124B underwriting policy" input field and does **not** validate whether a real estate exposure was originated under an affordability-tested policy. Compliance is the firm's responsibility and sits outside the calculation pipeline. Analogous to Art. 124D valuation-governance, the calculator consumes the output of the origination process (approved facility, property value, LTV, qualifying-RE flag) as already-compliant.
+
+    Firms integrating the calculator must ensure their origination controls satisfy Art. 124B independently — e.g., through an underwriting-policy document that meets the "assess the ability of the borrower to repay" minimum, maintained and reviewed at a frequency consistent with PRA supervisory expectations (SS20/15 Residential Mortgage Risk Weights, SS11/13 Internal Ratings Based approaches).
+
+### CRR Comparison
+
+CRR had **no equivalent single-article underwriting-standards provision**. Legacy CRR Art. 125 (residential) and Art. 126 (commercial) set the risk-weight mechanics but did not carry an explicit affordability-assessment obligation as part of the onshored risk-weight rulebook — borrower-repayment governance was instead delivered through:
+
+- **CRD Art. 79** — credit-risk management, requiring institutions to have sound credit-granting criteria, including a well-defined target market;
+- **PRA SS20/15** — Residential Mortgage Risk Weights, which expects firms to apply robust affordability testing at origination;
+- **PRA SS11/13** — Internal Ratings Based approaches, which extends affordability-test expectations to IRB RE portfolios.
+
+Art. 124B brings the BCBS CRE20.81 origination-standards principle ("banks must have underwriting policies … that include the assessment of the borrower's ability to repay") directly into the PRA CRR rulebook, harmonising the minimum requirement across SA and IRB portfolios at the measurement-framework level rather than leaving it to supervisory statements.
+
+---
 
 ## Real Estate — Valuation Requirements (Art. 124D)
 
@@ -1363,8 +1424,8 @@ Paragraph (2) imposes a **continuous, framework-wide** monitoring obligation dis
 
 The "qualifying valuation" is the anchor used by:
 
-- [Art. 124C](#real-estate--ltv-definition-art-124c) LTV denominator for the 55% secured-portion split
-- [Art. 124F–124I](#real-estate--residential-art-124f124g) loan-splitting tables
+- [Art. 124C](#real-estate-ltv-definition-art-124c) LTV denominator for the 55% secured-portion split
+- [Art. 124F–124I](#real-estate-residential-art-124f124g) loan-splitting tables
 - [Art. 124J](#consequence-of-failing--other-real-estate-art-124j) 60% floor on commercial non-income-dependent other RE
 
 The "subject to paragraph 9" carve-out defers to the self-build formula ([see below](#self-build-valuation-art-124d9-and-124d10)) for exposures financing land-plus-construction before completion.
@@ -1781,11 +1842,11 @@ join) and determines the risk weight calculation path:
 ## Real Estate — Residential (Art. 124F–124G)
 
 All residential RE risk weights below require the exposure to meet the
-[Art. 124A qualifying criteria](#real-estate--qualifying-criteria-art-124a).
+[Art. 124A qualifying criteria](#real-estate-qualifying-criteria-art-124a).
 
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+Not [materially dependent](#real-estate-material-dependency-classification-art-124e)
 on cash flows. The exposure is split into a secured portion
 (up to 55% of property value) and a residual portion:
 
@@ -1815,7 +1876,7 @@ charge. This decreases the secured portion, increasing the blended risk weight.
 
 ### Income-Producing Residential — Whole-Loan (Art. 124G, Table 6B)
 
-[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+[Materially dependent](#real-estate-material-dependency-classification-art-124e)
 on cash flows (e.g., buy-to-let, multi-unit rental). Whole-loan approach — single
 risk weight on entire exposure:
 
@@ -1839,11 +1900,11 @@ it may exceed the highest table band (e.g., 105% x 1.25 = 131.25%).
 ## Real Estate — Commercial (Art. 124H–124I)
 
 All commercial RE risk weights below require the exposure to meet the
-[Art. 124A qualifying criteria](#real-estate--qualifying-criteria-art-124a).
+[Art. 124A qualifying criteria](#real-estate-qualifying-criteria-art-124a).
 
 ### CRE Loan-Splitting (Art. 124H(1))
 
-Not [materially dependent](#real-estate--material-dependency-classification-art-124e)
+Not [materially dependent](#real-estate-material-dependency-classification-art-124e)
 on cash flows — the borrower uses the property predominantly for its own business
 purpose (Art. 124E(6)).
 
@@ -1861,7 +1922,7 @@ purpose (Art. 124E(6)).
 
 ### CRE Income-Producing (Art. 124I)
 
-[Materially dependent](#real-estate--material-dependency-classification-art-124e)
+[Materially dependent](#real-estate-material-dependency-classification-art-124e)
 on cash flows — income from the property (rental, sale proceeds) is the primary
 repayment source:
 

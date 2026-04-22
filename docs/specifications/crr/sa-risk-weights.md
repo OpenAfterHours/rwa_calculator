@@ -530,7 +530,7 @@ charges** (Art. 124C(3)). CRM is excluded except pledged deposit accounts meetin
 on-balance-sheet netting requirements.
 
 !!! info "Full specification"
-    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c)
+    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate-ltv-definition-art-124c)
     for the complete LTV definition, prior charges stacking rules, and implementation
     field mapping.
 
@@ -549,11 +549,11 @@ the LTV numerator is a Basel 3.1 addition.
     Art. 126 (income-producing) had no formal classification gate. Art. 124E defines
     residential RE as materially dependent by default, with five exceptions (primary
     residence, three-property limit, SPE guarantor, social housing, cooperative). CRR
-    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
+Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
 - **Secured portion** (up to 55% of property value): **20%** risk weight
 - **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)
@@ -629,7 +629,7 @@ Materially dependent on cash flows:
 
 ### Other Real Estate (Art. 124J)
 
-Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)):
+Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a)):
 
 | Type | Risk Weight |
 |------|-------------|

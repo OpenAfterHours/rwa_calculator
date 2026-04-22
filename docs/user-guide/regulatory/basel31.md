@@ -256,7 +256,7 @@ qualifying criteria covering property condition, legal certainty, charge conditi
 valuation (Art. 124D), borrower independence, and insurance monitoring. Exposures failing
 any criterion are "other real estate" under Art. 124J (150% if income-dependent, or
 counterparty / floor RW otherwise). See the
-[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a)
 for full details.
 
 !!! info "Mixed Residential/Commercial Property (Art. 124(4))"
@@ -267,14 +267,26 @@ for full details.
     Art. 124A — if either part fails the six-criterion gate, **both** parts fall to
     Art. 124J. Pre-split mixed-use exposures into two input rows (one residential, one
     commercial) at the loader boundary with `EAD` apportioned by property value. See
-    [Art. 124 specification](../../specifications/basel31/sa-risk-weights.md#real-estate--framework-scope-art-124).
+    [Art. 124 specification](../../specifications/basel31/sa-risk-weights.md#real-estate-framework-scope-art-124).
+
+!!! info "Underwriting Standards (Art. 124B)"
+    Basel 3.1 introduces a one-paragraph governance obligation: institutions must have an
+    **underwriting policy for originating real estate exposures** that, at a minimum,
+    requires assessment of the **borrower's ability to repay**. The obligation applies to
+    **all** RE exposures (regulatory RE, other RE, ADC) and sits upstream of the calculator
+    — there is no input field or validation step. Compliance is evidenced through policy
+    documentation, credit-committee records, and PRA supervisory review (SS20/15, SS11/13).
+    A breach does **not** reclassify exposures under Art. 124J; it is a standalone
+    governance requirement enforced via supervisory action (potentially a Pillar 2A
+    capital add-on). See
+    [Art. 124B specification](../../specifications/basel31/sa-risk-weights.md#real-estate-underwriting-standards-art-124b).
 
 !!! info "LTV Definition (Art. 124C)"
     Basel 3.1 defines a formal regulatory LTV: outstanding balance + undrawn committed
     amounts + **all prior/pari passu charges** (Art. 124C(3)), divided by property value.
     The `property_ltv` input field must reflect this stacked calculation. Where charge
     ranking is unknown, treat other charges as pari passu (conservative default).
-    See [Art. 124C specification](../../specifications/basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c).
+    See [Art. 124C specification](../../specifications/basel31/sa-risk-weights.md#real-estate-ltv-definition-art-124c).
 
 !!! info "Valuation Requirements (Art. 124D)"
     The property value used by the calculator must be an Art. 124D-compliant **qualifying
@@ -293,7 +305,7 @@ for full details.
     allowing the most recent legacy valuation to count as a qualifying valuation, subject
     to the three-circumstance test. The calculator does **not** validate Art. 124D
     compliance — the `property_value` supplied must already be the Art. 124D-compliant
-    value. See the [Art. 124D specification](../../specifications/basel31/sa-risk-weights.md#real-estate--valuation-requirements-art-124d)
+    value. See the [Art. 124D specification](../../specifications/basel31/sa-risk-weights.md#real-estate-valuation-requirements-art-124d)
     for the full paragraph-by-paragraph breakdown.
 
 !!! info "Material Dependency Classification (Art. 124E)"
@@ -305,7 +317,7 @@ for full details.
     (d) social housing, or (e) cooperative/association for primary residence use.
     **Commercial** RE is materially dependent unless the borrower uses each property
     predominantly for its own business (not rental). Set `is_income_producing` accordingly
-    on the collateral record. See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+    on the collateral record. See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 
@@ -389,7 +401,7 @@ Commercial ADC always receives 150%.
 
 Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
 overrides all LTV-based RE treatment. See the
-[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
+[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate-adc-exposures-art-124k)
 for full qualifying conditions.
 
 #### Retail Exposures

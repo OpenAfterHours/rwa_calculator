@@ -734,8 +734,28 @@ a fundamentally different methodology based on the institution's own capital ade
 
     CRR had no explicit mixed-RE paragraph; mixed-use collateral was handled via the
     residential-vs-commercial classification of the predominant security interest. See
-    [B31 SA Risk Weights — Art. 124](../specifications/basel31/sa-risk-weights.md#real-estate--framework-scope-art-124)
+    [B31 SA Risk Weights — Art. 124](../specifications/basel31/sa-risk-weights.md#real-estate-framework-scope-art-124)
     for the routing decision tree, worked example, and current input-schema gap (D3.59).
+
+!!! info "Underwriting Standards (Art. 124B) — New in Basel 3.1"
+    Basel 3.1 Art. 124B is a new, one-paragraph governance obligation:
+
+    > *"An institution shall have an underwriting policy for originating real estate exposures
+    > which shall, at a minimum, require the institution to assess the ability of the borrower
+    > to repay."* — PS1/26 Art. 124B (p. 52).
+
+    The obligation applies to **all** RE exposures (regulatory RE, other RE, ADC). It sits
+    upstream of the calculator — there is no risk-weight impact or input field. A breach does
+    not reclassify the exposure under Art. 124J; compliance is enforced supervisorily
+    (potentially a Pillar 2A capital add-on under SS31/15 ICAAP).
+
+    **CRR had no equivalent** single-article underwriting-standards provision — affordability
+    assessment for RE origination was delivered through CRD Art. 79 (credit-risk management)
+    and PRA supervisory statements (SS20/15 Residential Mortgage Risk Weights, SS11/13 IRB
+    approaches). Art. 124B embeds the BCBS CRE20.81 minimum origination standard directly
+    in the PRA CRR rulebook, harmonising the minimum across SA and IRB at the measurement-
+    framework level. See
+    [Art. 124B specification](../specifications/basel31/sa-risk-weights.md#real-estate-underwriting-standards-art-124b).
 
 !!! info "Material Dependency Classification (Art. 124E) — New in Basel 3.1"
     Basel 3.1 introduces Art. 124E, a formal test for routing RE exposures between
@@ -753,7 +773,7 @@ a fundamentally different methodology based on the institution's own capital ade
     **Commercial RE** is materially dependent unless the borrower uses each property
     predominantly for its own business purpose, excluding rental income (Art. 124E(6)).
 
-    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+    See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 !!! warning "Art. 124A Qualifying Gate"
     All preferential RE risk weights below (Art. 124F–124I) require the exposure to be a
@@ -762,7 +782,7 @@ a fundamentally different methodology based on the institution's own capital ade
     per Art. 124D, (e) value independence from borrower, (f) insurance monitoring.
     Exposures failing any criterion receive Art. 124J treatment: **150%** if income-dependent,
     counterparty RW if RESI non-dependent, or max(60%, counterparty RW) if CRE non-dependent.
-    See [SA Risk Weights — Art. 124A](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+    See [SA Risk Weights — Art. 124A](../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a)
     for the full criteria.
 
 !!! info "Valuation Requirements (Art. 124D) — New in Basel 3.1"
@@ -780,7 +800,7 @@ a fundamentally different methodology based on the institution's own capital ade
     valuation counts as a qualifying valuation subject to the three-circumstance test.
     The Art. 124D(5) cadence applies **equally** to residential and commercial — a change
     from CRR Art. 208(3)'s 1-year CRE / 3-year RRE split.
-    See [Art. 124D specification](../specifications/basel31/sa-risk-weights.md#real-estate--valuation-requirements-art-124d)
+    See [Art. 124D specification](../specifications/basel31/sa-risk-weights.md#real-estate-valuation-requirements-art-124d)
     for the paragraph-by-paragraph breakdown.
 
 **General (not cash-flow dependent) — PRA Art. 124F: Loan-Splitting**
@@ -875,7 +895,7 @@ Note: applying 1.375× to the 110% >80% base would produce 151.25% — an over-c
 
 ### Other Real Estate (Art. 124J)
 
-Exposures that fail any [Art. 124A qualifying criterion](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a) are classified as "other real estate" and receive punitive treatment:
+Exposures that fail any [Art. 124A qualifying criterion](../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a) are classified as "other real estate" and receive punitive treatment:
 
 | Sub-Type | Risk Weight | Reference |
 |----------|-------------|-----------|
@@ -914,7 +934,7 @@ by SI 2021/1078).
     They cannot qualify for LTV-based loan-splitting (Art. 124F–124H) or income-producing
     tables (Art. 124I). The `is_adc` flag takes priority over all other RE classification.
 
-See also: [B31 ADC specification](../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
+See also: [B31 ADC specification](../specifications/basel31/sa-risk-weights.md#real-estate-adc-exposures-art-124k)
 
 ### Retail Exposures
 

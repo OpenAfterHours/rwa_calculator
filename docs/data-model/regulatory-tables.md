@@ -253,7 +253,7 @@ The multiplied weight is **not capped** at the Table 6B ceiling — it may excee
 
 #### Other Real Estate (Art. 124J)
 
-Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a):
+Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a):
 
 | Sub-Type | Risk Weight |
 |----------|------------|

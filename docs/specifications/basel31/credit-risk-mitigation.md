@@ -664,9 +664,11 @@ The maturity-mismatch framework applies to credit protection recognised under
 
 !!! warning "FCSM and LGD-AM are out of scope"
     - **Financial Collateral Simple Method (FCSM)** — Art. 239(1) excludes
-      FCSM entirely: where a maturity mismatch exists, the collateral
-      ceases to be eligible funded credit protection (no GA / CVAM
-      adjustment is permitted). Cross-reference: [Art. 222 — No Maturity
+      FCSM entirely: where a maturity mismatch exists, *"an institution
+      using the Financial Collateral Simple Method **shall not use** the
+      collateral as eligible funded credit protection"* (PS1/26 Art. 239(1)
+      verbatim). The collateral is simply not recognised — no GA / CVAM
+      adjustment is permitted. Cross-reference: [Art. 222 — No Maturity
       Mismatch](#art-222-no-maturity-mismatch).
     - **LGD Adjustment Method (LGD-AM, Art. 183)** — A-IRB own-estimate of
       LGD is not listed in Art. 238(1A). Maturity mismatches on unfunded
@@ -685,17 +687,36 @@ adjustment formula is applied; the protection is simply ignored.
 A maturity mismatch arises when the residual maturity of the credit protection
 is less than that of the protected exposure. Where the protection has
 **residual maturity < 3 months *and*** the protection maturity is less than
-the underlying exposure maturity, the institution shall not use that
-protection as eligible credit protection.
+the underlying exposure maturity, *"an institution **shall not use** that
+protection as eligible credit protection"* (PS1/26 Art. 237(1) verbatim).
 
 **Art. 237(2) — Disqualifying conditions (either limb).** Where there is a
-maturity mismatch, the credit protection is also ineligible if either:
+maturity mismatch, *"an institution **shall not use** the credit protection
+as eligible credit protection where either of the following conditions is
+met"* (PS1/26 Art. 237(2) verbatim):
 
 - **(a)** the original maturity of the protection is less than one year; or
 - **(b)** the exposure is a short-term exposure subject to a one-day floor on
   the maturity value M under Credit Risk: Internal Ratings Based Approach
   (CRR) Part Article 162(3) (e.g. certain repo / SFT / short-term
   trade-finance IRB exposures with M floored at one day).
+
+!!! info "Near-final → final wording change (resolves D2.55)"
+    The near-final rule instrument (PS9/24) rendered both Art. 237(1) and
+    Art. 237(2) chapeau as *"an institution **may not** use that
+    protection"* — which could be read as discretionary. The final PS1/26
+    rule instrument (effective 1 January 2027) replaces *"may not"* with
+    *"**shall not**"* in both paragraphs and in Art. 239(1) (FCSM
+    exclusion), making the outcome unambiguously mandatory. The change
+    is visible in the comparison document at `docs/assets/comparison-of-the-final-rules.pdf`
+    pp. 221–223 (strikethrough / insert mark-up). Functionally the
+    outcome is identical in both drafts — the protection is simply not
+    recognised — but the final text removes any residual drafting
+    ambiguity. Under the prior CRR text the same outcome was framed as
+    *"that protection **does not qualify** as eligible credit
+    protection"* (CRR Art. 237, outcome-voiced rather than
+    obligation-voiced); see the CRR CRM spec for the verbatim CRR
+    phrasing.
 
 These eligibility gates apply uniformly to funded **and** unfunded protection
 under the six in-scope methods — a guarantee or CDS with original maturity

@@ -282,21 +282,41 @@ residual maturity), credit protection is only eligible if **all** of the
 following conditions are met:
 
 1. **Art. 237(1) — combined test:** if the protection has residual maturity
-   < 3 months *and* protection maturity < underlying exposure maturity, the
-   protection shall not be used as eligible credit protection.
-2. **Art. 237(2)(a) — original maturity ≥ 1 year:** protection instruments
-   originally issued with a term < 1 year are ineligible when a mismatch
-   exists.
-3. **Art. 237(2)(b) — not a 1-day M-floor exposure:** exposures subject to
-   the Art. 162(3) 1-day maturity floor (repos, SFTs with daily margining,
-   short-term trade-finance IRB exposures) cannot use maturity-mismatched
-   protection at all.
+   < 3 months *and* protection maturity < underlying exposure maturity,
+   *"that protection **does not qualify** as eligible credit protection"*
+   (CRR Art. 237(1) verbatim, `docs/assets/crr.pdf` p. 232).
+2. **Art. 237(2)(a) — original maturity ≥ 1 year:** *"Where there is a
+   maturity mismatch the credit protection **shall not qualify** as
+   eligible"* (CRR Art. 237(2) chapeau verbatim) where the original
+   maturity of the protection is less than one year.
+3. **Art. 237(2)(b) — not a 1-day M-floor exposure:** the same chapeau
+   applies where the exposure is a short-term exposure specified as
+   subject to a one-day floor rather than a one-year floor in respect of
+   the maturity value M under Art. 162(3) (repos, SFTs with daily
+   margining, short-term trade-finance IRB exposures).
 
 If any condition fails, the protection value is zeroed (collateral value =
 0 for the mismatched portion). These gates apply uniformly to funded **and**
 unfunded protection — a guarantee or CDS with original maturity < 1 year is
 ineligible for an exposure with residual maturity > 1 year, just as a
 financial-collateral instrument with the same characteristics is.
+
+!!! info "CRR → Basel 3.1 wording change (resolves D2.55)"
+    CRR Art. 237 uses **outcome-voiced** language — the protection "does
+    not qualify" / "shall not qualify" as eligible. PS1/26 Art. 237
+    (effective 1 January 2027) re-casts the same gates in
+    **obligation-voiced** form — *"an institution **shall not use** that
+    protection as eligible credit protection"*. The near-final
+    instrument appended to PS9/24 rendered this as *"may not use"*
+    (potentially discretionary); the final PS1/26 instrument replaces
+    *"may not"* with *"**shall not**"* in both Art. 237(1) and
+    Art. 237(2) chapeau, removing any residual drafting ambiguity. See
+    the comparison document at
+    `docs/assets/comparison-of-the-final-rules.pdf` pp. 221–223 for the
+    strikethrough / insert mark-up. The functional outcome is identical
+    across CRR and both PS9/24-near-final and PS1/26-final drafts — the
+    protection is simply not recognised — but the precision matters
+    when cross-referencing the text of individual paragraphs.
 
 ## Maturity Mismatch Adjustment (CRR Art. 239)
 
@@ -549,10 +569,12 @@ Method:
 Paragraph references below verified verbatim against `docs/assets/crr.pdf` pp. 216–217
 (UK-onshored CRR Art. 222, as amended to 1 Jan 2022).
 
-**Scope (Art. 222(1)).** SA-only method. Institutions may not use both the FCSM and the
-Financial Collateral Comprehensive Method simultaneously, except for the purposes of
-Art. 148(1) and Art. 150(1) (permanent partial use / phased IRB roll-out), and that
-exception may not be used selectively for own-funds arbitrage.
+**Scope (Art. 222(1)).** SA-only method. *"Institutions **shall not use** both the
+Financial Collateral Simple Method and the Financial Collateral Comprehensive Method,
+except for the purposes of Articles 148(1) and 150(1)"* (CRR Art. 222(1) verbatim —
+permanent partial use / phased IRB roll-out), and *"Institutions **shall not use** this
+exception selectively with the purpose of achieving reduced own funds requirements or
+with the purpose of conducting regulatory arbitrage"*.
 
 Under the FCSM the risk weight of the collateral substitutes for the obligor risk weight
 on the secured portion of the exposure. The unsecured remainder keeps the counterparty's
@@ -610,9 +632,15 @@ used in paragraphs 5 and 6 to include:
 ### No Maturity Mismatch Adjustment for FCSM (Art. 239(1))
 
 Where the credit protection's residual maturity is shorter than the exposure's residual
-maturity, **the FCSM may not be used** (Art. 239(1)). The
+maturity, under CRR Art. 239(1) *"the collateral **does not qualify** as eligible funded
+credit protection"* (CRR verbatim, `docs/assets/crr.pdf` p. 233). Under PS1/26 Art. 239(1)
+(effective 1 January 2027) the same rule is re-cast obligation-voiced: *"an institution
+using the Financial Collateral Simple Method **shall not use** the collateral as eligible
+funded credit protection"* — the near-final PS9/24 text *"may not use"* was replaced with
+*"shall not use"* in the final instrument (resolves D2.55). The
 [maturity-mismatch adjustment formulas in Art. 239(2)/(3)](#maturity-mismatch-adjustment-crr-art-239)
-do not apply to FCSM-collateralised exposures — the protection is simply not recognised.
+do not apply to FCSM-collateralised exposures under either framework — the protection is
+simply not recognised.
 
 ### FCSM Formula
 

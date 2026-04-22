@@ -1111,6 +1111,17 @@ residential RE (not cash-flow dependent) is a Basel 3.1 simplification.
     See [Defaulted Exposures Specification](../specifications/basel31/defaulted-exposures.md)
     for details.
 
+!!! info "A-IRB defaulted EL uses BEEL (Art. 158(5))"
+    On the IRB side, Art. 158(5) replaces the standard `PD × LGD × EAD` EL formula with
+    `BEEL × EAD` **only for A-IRB defaulted exposures** — F-IRB defaulted exposures
+    retain `1 × LGD × EAD`. BEEL (Best Estimate of Expected Loss) is the A-IRB firm's
+    own estimate of post-default economic loss under the Art. 181(1)(h)(ii) standards
+    (downturn conditions; symmetric use of recovery realisations; governance and
+    validation). Pre-revocation CRR used the symbol `ELBE`; PS1/26 renames to `BEEL`
+    with no substantive change. Sovereign/central-bank exposures are excluded from
+    A-IRB by Art. 147A(1)(a), so BEEL never applies to those classes. See
+    [Defaulted Exposures — BEEL](../specifications/basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).
+
 ### Regional Governments and Local Authorities
 
 Basel 3.1 introduces a tiered approach (PRA PS1/26 Art. 115):

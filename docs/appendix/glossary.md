@@ -24,6 +24,25 @@ The revised Basel framework implemented through PRA PS1/26, effective from Janua
 ### BCBS
 Basel Committee on Banking Supervision. The international body that develops banking standards.
 
+### BEEL (Best Estimate of Expected Loss)
+An A-IRB institution's own estimate of the economic loss expected on a defaulted
+exposure over the recovery period, expressed as a fraction of exposure at default.
+Under PRA PS1/26 Art. 158(5) the EL **amount** for defaulted exposures (PD = 1)
+treated under A-IRB is `BEEL × EAD` rather than `PD × LGD × EAD` — BEEL substitutes
+for the standard product only on the A-IRB side of the Art. 159 provisions-vs-EL
+comparison (Pool C). F-IRB defaulted exposures retain `1 × LGD` for Pool C.
+
+The A-IRB capital formula `K = max(0, LGD − BEEL)` in Art. 154(1)(i) additionally
+consumes BEEL in the RW calculation. BEEL must be estimated under the Art. 181(1)(h)(ii)
+standards (downturn conditions, recognition of unexpected additional loss during
+recovery, symmetric use of recovery realisations, governance and validation). Sovereign,
+central-bank, and quasi-sovereign exposures cannot use A-IRB under Art. 147A(1)(a), so
+BEEL does not arise for those classes.
+
+Pre-revocation CRR used the symbol `ELBE` (Expected Loss Best Estimate) for the same
+parameter; PS1/26 renames to `BEEL` with no substantive change. See
+[Defaulted Exposures spec — BEEL](../specifications/basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).
+
 ## C
 
 ### Capital Requirement

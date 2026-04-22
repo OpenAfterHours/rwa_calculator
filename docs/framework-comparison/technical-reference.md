@@ -527,6 +527,24 @@ EL_adjusted >= EL_unadjusted
 PMAs cannot decrease expected loss. The `pma_el_scalar` must be ≥ 0, ensuring conservative
 RWA overlays do not inadvertently reduce EL shortfall calculations (Art. 159).
 
+### Defaulted EL — BEEL Substitution (Art. 158(5))
+
+| Approach | Defaulted EL amount | Source |
+|----------|---------------------|--------|
+| F-IRB defaulted | `1 × LGD × EAD` | Standard Art. 158(5) formula with PD = 1 |
+| A-IRB defaulted | `BEEL × EAD` | Art. 158(5) closing proviso |
+
+**BEEL** (Best Estimate of Expected Loss) is the A-IRB firm's own estimate of post-default
+economic loss, estimated under the Art. 181(1)(h)(ii) standards. The substitution applies
+**only** to the A-IRB Pool C EL amount in the Art. 159 comparison; the A-IRB capital
+formula `K = max(0, LGD − BEEL)` (Art. 154(1)(i)) uses BEEL in the RW structure
+separately. Pre-revocation CRR used the symbol `ELBE`; PS1/26 renames to `BEEL` with no
+substantive change. Sovereigns and other Art. 147A(1)(a) quasi-sovereign classes are
+excluded from A-IRB, so BEEL never arises for them.
+
+See the [Defaulted Exposures spec — BEEL](../specifications/basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii)
+for estimation standards and required inputs.
+
 ### Output Floor Interaction
 
 PMAs are included in the un-floored TREA (U-TREA) used for the output floor comparison.

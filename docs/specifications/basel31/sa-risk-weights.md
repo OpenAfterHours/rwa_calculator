@@ -543,15 +543,76 @@ This replaces the CRR sovereign-derived approach (CRR Art. 121, Table 5).
 | Grade | Risk Weight | Short-Term (≤3m) | Criteria |
 |-------|-------------|------------------|----------|
 | Grade A enhanced | **30%** | 20% | CET1 ≥ 14%, leverage ratio ≥ 5% (Art. 121(5)) |
-| Grade A | **40%** | 20% | Meets all minimum prudential requirements and buffers (Art. 121(2)(b)) |
-| Grade B | **75%** | 50% | Does not meet Grade A criteria but not materially deficient |
-| Grade C | **150%** | 150% | Material deficiency in prudential standards |
+| Grade A | **40%** | 20% | Adequate capacity to meet financial commitments robust to the cycle; meets published minimum requirements **and buffers** (Art. 121(1)(a)) |
+| Grade B | **75%** | 50% | Substantial credit risk but meets published minimum requirements (**excluding buffers**) (Art. 121(1)(b)) |
+| Grade C | **150%** | 150% | Material default risk; does not meet Grade B requirements, or adverse audit / going-concern opinion in last 12 months (Art. 121(1)(c)) |
 
 !!! info "Grade A vs Grade A Enhanced"
     Grade A enhanced (30%, Art. 121(5)) requires **quantitative** thresholds: CET1 ≥ 14% and
     leverage ratio ≥ 5%. Grade A (40%) requires only **qualitative** compliance: the institution
     meets all minimum requirements and capital buffers. This distinction is new in Basel 3.1
     (CRE20.19).
+
+### SCRA Disclosure Barring Rules (Art. 121(1)(a), (1)(b))
+
+Art. 121(1) ties each SCRA grade to the **public disclosure** of the institution's
+minimum financial regulatory requirements. The disclosure tests are asymmetric between
+Grade A and Grade B and form a two-step barring ladder rather than a single
+"undisclosed → Grade C" rule. A single piece of missing disclosure can bar Grade A
+without forcing Grade C, producing a Grade B outcome that the simpler "undisclosed →
+Grade C" characterisation would miss.
+
+| Disclosure state                                                         | Consequence                                                  | Article        |
+|--------------------------------------------------------------------------|--------------------------------------------------------------|----------------|
+| Minimum requirements **and** buffers publicly disclosed                  | Grade A available (subject to qualitative adequacy in (1)(a)) | Art. 121(1)(a) |
+| Minimum requirements disclosed; **buffers not disclosed**                | **May not be classified as Grade A** → Grade B at best       | Art. 121(1)(a) |
+| Minimum requirements **not disclosed**                                   | **Shall be classified as Grade C**                           | Art. 121(1)(b) |
+
+!!! quote "Art. 121(1)(a) — Grade A disclosure barring (ps126app1.pdf p. 42)"
+    If such minimum financial regulatory requirements **and buffers** (other than
+    institution-specific minimum requirements or buffers) are not publicly disclosed
+    or otherwise made available by the counterparty institution, the counterparty
+    institution **may not be classified as Grade A**.
+
+!!! quote "Art. 121(1)(b) — Grade C forced classification (ps126app1.pdf p. 42)"
+    If such minimum financial regulatory requirements are not publicly disclosed or
+    otherwise made available by the counterparty institution, the counterparty
+    institution **shall be classified as Grade C**.
+
+**Institution-specific carve-out.** Both tests exclude "institution-specific"
+minimum requirements or buffers imposed through **supervisory actions and not made
+public** — a confidential Pillar 2A add-on kept private by the home supervisor does
+not itself trigger either barring rule. The disclosure test applies only to the
+**publicly applicable** prudential framework. For CRR firms, Art. 121(1A) defines
+that baseline as the Required Level of Own Funds (CRR Part Art. 92), the additional
+own funds required by regulation 34(1) of the Capital Requirements Regulations, the
+minimum leverage ratio requirement (Leverage Ratio — Capital Requirements and Buffers
+Part 3.1), the combined buffer (Capital Buffers Part 1.1), the countercyclical
+leverage ratio buffer, and the additional leverage ratio buffer.
+
+**Third-country counterparties (Art. 121(1B)).** For counterparties outside the UK,
+the disclosure test extends to any **local-equivalent or additional** regulatory
+requirements and buffers, so long as they are published and required to be met by
+CET1, Tier 1, or other own funds. A US G-SIB whose home supervisor requires a
+jurisdiction-specific SCB is assessed on the disclosure of that SCB alongside the
+baseline Basel minima. This is distinct from the Art. 119(3) third-country
+equivalence gate that governs whether the institution treatment is available at all.
+
+!!! warning "Near-final → final correction (PS9/24 → PS1/26)"
+    The near-final rules drafted the (1)(a) barring rule as "shall not be classified
+    as **Grade B or lower**" — a Grade B *floor*. Final PS1/26 inverted the direction
+    to "may not be classified as **Grade A**" — a Grade A *ceiling*. The two
+    formulations sound similar but produce opposite outcomes for an institution that
+    discloses requirements but withholds buffers: near-final would have forced
+    Grade A; final forces Grade B at best. Firms reconciling implementation against
+    PS9/24 drafts must pick up this change.
+
+**Implementation status.** The calculator consumes `scra_grade` as a pre-determined
+input (`A` / `A_ENHANCED` / `B` / `C`). Both barring rules are therefore **firm-side
+governance responsibilities** — the firm must evaluate disclosure (requirements
+*and* buffers for Grade A; requirements alone for Grade B) before passing the grade
+to the calculator. No dedicated input field flags the disclosure test outcome; no
+audit column surfaces the (1)(a) ceiling or (1)(b) forced-to-C path.
 
 ### SCRA Short-Term Trade Finance Exception (Art. 121(4))
 

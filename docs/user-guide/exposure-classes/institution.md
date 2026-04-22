@@ -20,6 +20,19 @@ Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 
 
 Under CRR, unrated institutions receive **100%** (Art. 120(2)). Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
 
+!!! info "SCRA Disclosure Barring Ladder (Art. 121(1)(a), (1)(b))"
+    SCRA classification depends on what the counterparty institution publicly discloses
+    about its prudential requirements. Missing disclosures bar grades asymmetrically:
+
+    - Buffers undisclosed (requirements disclosed) → barred from Grade A, Grade B (75%) at best.
+    - Minimum requirements undisclosed → forced to Grade C (150%).
+
+    `scra_grade` is a firm-supplied input; disclosure evaluation sits upstream of the
+    calculator. See
+    [B31 SA spec — Disclosure Barring Rules](../../specifications/basel31/sa-risk-weights.md#scra-disclosure-barring-rules-art-1211a-1b)
+    for the full barring table, Art. 121(1A)/(1B) disclosure-scope definitions, and
+    the near-final → final drafting reversal.
+
 !!! warning "SCRA Sovereign Floor (Art. 121(6))"
     Where an unrated institution exposure is denominated in a foreign currency (other
     than the local currency of the institution's jurisdiction of incorporation), its

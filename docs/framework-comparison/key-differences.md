@@ -580,8 +580,29 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
     These thresholds **do not appear** in PRA PS1/26 Art. 121 or BCBS CRE20. Grade B is a
     **qualitative** assessment: the institution meets published minimum regulatory requirements
     (excluding buffers) but does not qualify for Grade A. Only Grade A enhanced (30%) has
-    quantitative thresholds (CET1 ≥ 14%, leverage ≥ 5% per Art. 121(5)). If minimum
-    requirements are not publicly disclosed, the institution must be classified as Grade C.
+    quantitative thresholds (CET1 ≥ 14%, leverage ≥ 5% per Art. 121(5)).
+
+!!! info "Disclosure Barring Ladder (Art. 121(1)(a), (1)(b))"
+    The SCRA grade is not a single "disclosed → Grade A, undisclosed → Grade C" flip;
+    final PS1/26 creates a **two-step barring ladder** driven by which piece of
+    prudential disclosure is missing:
+
+    - **Buffers not disclosed** (requirements disclosed) → Art. 121(1)(a) bars Grade A;
+        institution receives **Grade B at best** (75%).
+    - **Minimum requirements not disclosed** → Art. 121(1)(b) forces **Grade C** (150%).
+
+    The (1)(a) test looks at *requirements **and** buffers* together; the (1)(b) test
+    looks at *requirements alone*. An institution-specific Pillar 2 add-on kept
+    confidential by the home supervisor is excluded from both tests.
+
+    **Near-final → final reversal.** PS9/24 drafted (1)(a) as "shall not be classified
+    as Grade B or lower" (a Grade B *floor*); final PS1/26 inverted it to "may not be
+    classified as Grade A" (a Grade A *ceiling*) — opposite outcomes for
+    buffers-undisclosed institutions. Firms migrating from PS9/24-era implementations
+    must re-verify. See
+    [B31 SA spec — Disclosure Barring Rules](../specifications/basel31/sa-risk-weights.md#scra-disclosure-barring-rules-art-1211a-1b)
+    for the full barring table, Art. 121(1A)/(1B) disclosure-scope definitions, and
+    implementation status.
 
 Under CRR, unrated institutions use the sovereign-based approach. The SCRA represents
 a fundamentally different methodology based on the institution's own capital adequacy.

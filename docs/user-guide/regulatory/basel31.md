@@ -641,7 +641,27 @@ Standardised Credit Risk Assessment Approach (SCRA):
     additionally requires **quantitative** thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
     (Art. 121(5)). Grade B has **no quantitative thresholds** — it is the qualitative residual
     for institutions meeting minimum requirements (excluding buffers) but not qualifying for
-    Grade A. If minimum requirements are not publicly disclosed, the institution is Grade C.
+    Grade A.
+
+!!! warning "Disclosure Barring Ladder (Art. 121(1)(a), (1)(b))"
+    Public disclosure of prudential requirements drives two distinct barring rules. A
+    single "undisclosed → Grade C" heuristic is **incorrect** under final PS1/26; missing
+    buffer disclosure bars Grade A without forcing Grade C, so the firm lands at Grade B.
+
+    - **Buffers not disclosed** (requirements disclosed): Art. 121(1)(a) — *may not be
+        classified as Grade A*. Grade B (75%) is the best available outcome.
+    - **Minimum requirements not disclosed**: Art. 121(1)(b) — *shall be classified as
+        Grade C* (150%).
+
+    Institution-specific Pillar 2 add-ons kept confidential by the home supervisor are
+    excluded from both tests (Art. 121(1)(a), (1)(b) disclosure carve-out). For
+    third-country counterparties, the disclosure test extends to any local-equivalent
+    published requirements and buffers (Art. 121(1B)).
+
+    `scra_grade` is a pre-determined input — the calculator relies on the firm to
+    evaluate disclosure before assigning the grade. See
+    [B31 SA spec — Disclosure Barring Rules](../../specifications/basel31/sa-risk-weights.md#scra-disclosure-barring-rules-art-1211a-1b)
+    for the full barring table and the near-final → final direction reversal.
 
 !!! info "Short-Term Trade Finance Exception (Art. 121(4))"
     Unrated institution exposures with an **original maturity ≤ 6 months** that **arose from

@@ -141,15 +141,84 @@ Table A structure:
 
 **Column assignment rules (Art. 153(5)(c)–(f)):**
 
-- **(c) Default:** Strong → column **B**; Good → column **D**. These are the risk weights
-  in the non-HVCRE and HVCRE tables above.
-- **(d) Short maturity:** If remaining maturity < 2.5 years, firms **may** assign column
-  **A** (Strong) or **C** (Good) instead — providing lower risk weights.
-- **(e) IPRE enhanced:** IPRE Strong exposures **may** use column **A** if: underwriting
-  substantially stronger than Strong criteria, very low LTV, investment-grade tenant
-  income (≥ 100% debt service), and no ADC characteristics.
-- **(f) PF enhanced:** PF Strong exposures **may** use column **A** if underwriting and
-  characteristics are substantially stronger than required for Strong.
+- **(c) Default:** Strong → column **B**; Good → column **D**; Satisfactory and Weak use
+  their single columns. These are the risk weights in the non-HVCRE and HVCRE tables above.
+- **(d) Short maturity:** If remaining maturity **< 2.5 years**, firms **may** assign column
+  **A** (Strong) or **C** (Good) instead — providing lower risk weights. Available for
+  **all** specialised lending categories (OF, CF, PF, IPRE, HVCRE).
+- **(e) IPRE enhanced:** IPRE Strong exposures **may** use column **A** if **all four**
+  sub-conditions (i)–(iv) are met — see verbatim quote below. The test combines (i) an
+  underwriting-quality bar, (ii) a very-low-LTV bar, (iii) an investment-grade **income
+  stream** bar that expressly **includes** tenant income ≥ 100% of the obligor's debt
+  service obligations, and (iv) exclusion of ADC (land acquisition, development and
+  construction of commercial real estate) characteristics.
+- **(f) PF enhanced:** PF Strong exposures **may** use column **A** if the institution's
+  underwriting and the exposure's other characteristics are substantially stronger than
+  required by the Strong rating grade. Unlike (e), Art. 153(5)(f) contains **no**
+  quantitative sub-conditions — it is a single substance-over-form test.
+
+!!! quote "Art. 153(5)(c)–(f) — verbatim (PS1/26 Appendix 1 pp. 102–103)"
+    **(c)** subject to points (d) to (f) of this paragraph an institution shall:
+
+    - (i) assign the relevant risk weight in column B of Table A to exposures assigned to
+      the 'Strong' rating grade;
+    - (ii) assign the relevant risk weight in column D of Table A to exposures assigned to
+      the 'Good' rating grade;
+    - (iii) assign the relevant risk weight in the 'Satisfactory' column of Table A to
+      exposures assigned to the 'Satisfactory' rating grade; and
+    - (iv) assign the relevant risk weight in the 'Weak' column of Table A to exposures
+      assigned to the 'Weak' rating grade.
+
+    **(d)** an institution may, for all categories of specialised lending exposures, if
+    less than 2.5 years remain until maturity of an exposure:
+
+    - (i) for exposures assigned to the 'Strong' rating grade: assign the relevant risk
+      weight in column A of Table A to the exposure instead of the risk weight in column
+      B of Table A; and
+    - (ii) for exposures assigned to the 'Good' rating grade: assign the relevant risk
+      weight in column C of Table A to the exposure instead of the risk weight in column
+      D of Table A;
+
+    **(e)** an institution may, for IPRE exposures assigned to the 'Strong' rating grade,
+    assign the relevant risk weight in column A of Table A to the exposure instead of the
+    risk weight in column B of Table A if:
+
+    - (i) the institution's underwriting of the exposure and the exposure's other
+      characteristics are substantially stronger than required by the 'Strong' rating
+      grade;
+    - (ii) the loan to value ratio is very low for the property type;
+    - (iii) the income stream on which the repayment of the obligation depends is
+      consistent with that which the institution would reasonably expect for an investment
+      grade exposure, including that the tenant income from the property is at least 100%
+      of the obligor's debt service obligations; and
+    - (iv) the exposure does not finance the land acquisition, development and
+      construction ('ADC') of commercial real estate;
+
+    **(f)** an institution may, for project finance exposures assigned to the 'Strong'
+    rating grade, assign the relevant risk weight in column A of Table A to the exposure
+    instead of the risk weight in column B of Table A if the institution's underwriting
+    of the exposure and the exposure's other characteristics are substantially stronger
+    than required by the 'Strong' rating grade;
+
+!!! info "Asymmetry between (e) and (f) — why IPRE carries four tests but PF only one"
+    Art. 153(5)(e) overlays three **additional** quantitative tests on top of the
+    substantial-strength bar in (i): LTV floor (ii), investment-grade income-stream /
+    tenant-coverage test (iii), and ADC exclusion (iv). Art. 153(5)(f) stops at the
+    substantial-strength bar alone. The difference reflects IPRE's dependence on
+    identifiable property-level cash flows (tenant income, LTV) — which lend themselves to
+    hard quantitative gates — whereas project-finance cash flows derive from a sponsor's
+    completed project and are evaluated holistically in the slotting factor lists
+    (Appendix 1 List 2). Firms cannot import the (e)(ii)–(iv) tests into (f) by analogy.
+
+!!! warning "Art. 153(5)(e)(iii) — the income-stream test is not just 'tenant ≥ 100%'"
+    A common paraphrase of (e)(iii) reduces it to "investment-grade tenant income (≥ 100%
+    debt service)". That conflates two requirements. The **primary** test is that the
+    income stream on which repayment depends is consistent with an investment-grade
+    exposure — the tenant-income coverage at ≥ 100% of the **obligor's** (not the
+    property's) debt service obligations is one component ("including that...") of that
+    broader investment-grade test, not the whole test. A property with a single
+    non-investment-grade tenant paying 110% of debt service would fail (e)(iii) despite
+    clearing the numerical threshold.
 
 !!! info "PRA vs BCBS — Maturity Differentiation Preserved"
     BCBS CRE33 removes maturity-based differentiation entirely and uses flat risk weights.

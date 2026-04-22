@@ -1353,8 +1353,8 @@ includes optional lower-weight columns (A/C):
 
 - **(c) Default:** Strong → column **B** (70% / 95%); Good → column **D** (90% / 120%)
 - **(d) Short maturity:** If remaining maturity **< 2.5 years**, firms **may** use column **A** for Strong (50% / 70%) or column **C** for Good (70% / 95%)
-- **(e) IPRE enhanced:** IPRE exposures in Strong **may** use column **A** if all criteria met: substantially stronger underwriting, very low LTV, investment-grade tenant income (≥ 100% debt service), and no ADC characteristics
-- **(f) PF enhanced:** PF exposures in Strong **may** use column **A** if underwriting and characteristics are substantially stronger than required for Strong
+- **(e) IPRE enhanced:** IPRE exposures in Strong **may** use column **A** if **all four** sub-conditions are met — (i) substantially stronger underwriting, (ii) very low LTV, (iii) income stream consistent with an investment-grade exposure *including* tenant income ≥ 100% of the obligor's debt service obligations, and (iv) no ADC characteristics. See the [B31 Slotting spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for the verbatim Art. 153(5)(e)(i)–(iv) text — the (iii) test is not reducible to "tenant ≥ 100% debt service" alone.
+- **(f) PF enhanced:** PF exposures in Strong **may** use column **A** if the institution's underwriting and the exposure's other characteristics are substantially stronger than required for Strong. Unlike (e), Art. 153(5)(f) contains no quantitative sub-conditions — it is a single substance-over-form test.
 
 !!! info "CRR vs PRA PS1/26 — Format Change, Non-HVCRE Values Preserved"
     Under CRR, the short-maturity concession was expressed as separate maturity bands in Table 1 (≥ 2.5yr vs < 2.5yr). PRA PS1/26 consolidates these into a single Table A with A/B/C/D subgrade columns. For non-HVCRE types, the **values are identical** — CRR "≥ 2.5yr" = Table A column B/D; CRR "< 2.5yr" = Table A column A/C. The column A/C concession is explicitly **optional** ("may") under both frameworks. The HVCRE row in Table A is a **PRA PS1/26 introduction** — UK CRR has no HVCRE table.

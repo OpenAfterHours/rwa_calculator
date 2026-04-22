@@ -72,8 +72,8 @@ C/D (Good) for maturity-based differentiation. Art. 153(5)(c) assigns column B (
 column D (Good) as the default. Column A/C (lower weights) may be used in three cases:
 
 - **Art. 153(5)(d):** remaining maturity **< 2.5 years** — optional for all SL types
-- **Art. 153(5)(e):** IPRE Strong with enhanced criteria (very low LTV, investment-grade tenant income, no ADC)
-- **Art. 153(5)(f):** PF Strong with substantially stronger underwriting
+- **Art. 153(5)(e):** IPRE Strong meeting all four sub-conditions — (i) substantially stronger underwriting, (ii) very low LTV, (iii) investment-grade income stream *including* tenant income ≥ 100% of the obligor's debt service obligations, (iv) no ADC characteristics
+- **Art. 153(5)(f):** PF Strong with substantially stronger underwriting (single substance test; no quantitative sub-conditions)
 
 Satisfactory/Weak/Default have no maturity split. See [Basel 3.1 Slotting spec](../basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for full details.
 

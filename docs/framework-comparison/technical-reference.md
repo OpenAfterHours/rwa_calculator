@@ -435,8 +435,8 @@ columns C and D:
 **Column B/D** is the default assignment (Art. 153(5)(c)). Column A/C may be used when:
 
 - **< 2.5yr** remaining maturity (Art. 153(5)(d)) — optional for all SL types
-- **IPRE** Strong meets enhanced criteria: very low LTV, investment-grade tenant income, no ADC (Art. 153(5)(e))
-- **PF** Strong meets enhanced underwriting criteria (Art. 153(5)(f))
+- **IPRE** Strong meets **all four** sub-conditions of Art. 153(5)(e): (i) substantially stronger underwriting, (ii) very low LTV, (iii) investment-grade income stream *including* tenant income ≥ 100% of the obligor's debt service obligations, and (iv) no ADC characteristics
+- **PF** Strong meets Art. 153(5)(f) — substantially stronger underwriting and characteristics; no additional quantitative sub-conditions
 
 For non-HVCRE types, the values are identical to CRR — PRA restructured the format from
 maturity-split tables to A/B/C/D columns but preserved all risk weight values. The HVCRE row

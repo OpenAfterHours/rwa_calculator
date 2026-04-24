@@ -5,10 +5,12 @@ Tests validate the production calculator correctly handles defaulted
 exposures under Basel 3.1 PRA PS1/26 Art. 127 and IRB Art. 153/154.
 
 SA defaulted treatment (B31-K1 through B31-K8):
-- Provision threshold at 20% of unsecured EAD (B31 denominator, not CRR's EAD + provision_deducted)
+- Provision threshold at 20% of outstanding amount (full ead_final under B31;
+  CRR adds provision_deducted to reconstruct the pre-provision value)
 - 100% RW when provisions meet threshold, 150% when below
 - RESI RE non-income-dependent: 100% flat regardless of provisions (CRE20.88)
-- Secured/unsecured split with non-financial collateral (Art. 127(2))
+- Non-financial collateral columns are IGNORED by the defaulted override —
+  the CRM stage already determines the unsecured portion per Art. 127(2)
 
 IRB defaulted treatment (B31-K9 through B31-K12):
 - F-IRB: K=0, RWA=0 (capital addressed via provisions)
@@ -393,24 +395,25 @@ class TestB31K6_ResiREIncomeDefaulted:
 
 class TestB31K7_CorporateDefaultedWithCollateral:
     """
-    B31-K7: Defaulted corporate with non-financial collateral → blended RW.
+    B31-K7: Defaulted corporate with non-financial collateral columns populated.
 
-    Art. 127(2) secured/unsecured split: secured portion retains base RW,
-    unsecured portion gets 100%/150% based on provision threshold.
+    Art. 127(2): the unsecured portion is determined by the CRM method the
+    institution applies (Art. 191A). Under FCCM (the default), eligible
+    collateral has already reduced ``ead_final`` in the CRM stage, so
+    ``ead_final`` represents the unsecured value and Art. 127(1) applies
+    to it flat. The defaulted override does NOT re-apply a secondary
+    secured/unsecured split on non-financial collateral columns.
 
     Input: Corporate CQS=2 (base RW=50%), EAD=100,000, collateral_re_value=60,000,
            provision_allocated=2,000
-    Expected: secured_pct = 60k/100k = 0.6, unsecured_pct = 0.4
-              unsecured_ead = 40,000
-              2,000 < 20% × 40,000 = 8,000 → provision_rw = 150%
-              blended_rw = 0.4 × 1.50 + 0.6 × 0.50 = 0.60 + 0.30 = 0.90
-              RWA = 100,000 × 0.90 = 90,000
+    Expected: 2,000 < 20% × 100,000 = 20,000 → provision_rw = 150%
+              RWA = 100,000 × 1.50 = 150,000
     """
 
-    def test_b31_k7_blended_risk_weight(
+    def test_b31_k7_risk_weight_150pct(
         self, sa_calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Collateral split blends 150% unsecured with 50% base secured."""
+        """Non-fin collateral columns do not trigger a secondary split."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -421,11 +424,10 @@ class TestB31K7_CorporateDefaultedWithCollateral:
             collateral_re_value=Decimal("60000"),
             config=b31_config,
         )
-        # blended = 0.4 × 1.50 + 0.6 × 0.50 = 0.90
-        assert result["risk_weight"] == pytest.approx(0.90, abs=1e-2)
+        assert result["risk_weight"] == pytest.approx(1.50, abs=1e-4)
 
     def test_b31_k7_rwa(self, sa_calculator: SACalculator, b31_config: CalculationConfig) -> None:
-        """Collateral split: RWA = EAD × blended_rw."""
+        """RWA = EAD × 150%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -436,7 +438,7 @@ class TestB31K7_CorporateDefaultedWithCollateral:
             collateral_re_value=Decimal("60000"),
             config=b31_config,
         )
-        assert result["rwa"] == pytest.approx(90_000.0, rel=1e-2)
+        assert result["rwa"] == pytest.approx(150_000.0, rel=1e-4)
 
 
 # =============================================================================

@@ -14,7 +14,7 @@ including the provision-coverage risk weight split and RESI RE exception.
 |----|-------------|----------|--------|
 | FR-10.1 | SA defaulted: provision-coverage 100%/150% RW split | P0 | Done |
 | FR-10.2 | SA defaulted: provision threshold at 20% of outstanding amount | P0 | Done |
-| FR-10.3 | SA defaulted: secured portion retains collateral-based RW | P0 | Done |
+| FR-10.3 | SA defaulted: unsecured portion determined by the CRM method (Art. 127(2)) | P0 | Done |
 | FR-10.4 | SA defaulted: RESI RE non-income-dependent flat 100% exception | P0 | Done |
 | FR-10.5 | IRB F-IRB defaulted: K = 0 (Art. 153(1)(ii)) | P0 | Done |
 | FR-10.6 | IRB A-IRB defaulted: K = max(0, LGD − BEEL) (Art. 154(1)(i)) | P0 | Done |
@@ -76,20 +76,29 @@ Where:
     The PRA denominator is typically larger, making it easier to reach the 20% threshold
     for a given level of provisioning.
 
-!!! warning "Code Divergence (D3.19)"
-    The code currently uses `unsecured_ead` (post-provision unsecured exposure value) as
-    the B31 denominator (`calculator.py:1250-1275`). PRA PS1/26 Art. 127(1) specifies the
-    "outstanding amount of the item or facility" which is the gross balance. This
-    underestimates the denominator for partially collateralised exposures.
-
 ### Secured Portion Treatment
 
-The **secured portion** of a defaulted exposure (covered by eligible collateral) retains
-its collateral-based risk weight from the CRM framework. Only the unsecured portion is
-subject to the 100%/150% provision-coverage split.
+PS1/26 Art. 127(2) defers to the CRM method the institution applies
+(Art. 191A(2)) to determine the unsecured portion:
+
+- **Financial Collateral Comprehensive Method (FCCM — default for SA)**:
+  eligible financial collateral has already reduced `ead_final` in the
+  CRM stage. The value entering the defaulted override IS the unsecured
+  value, and Art. 127(1) applies to it flat.
+- **Financial Collateral Simple Method (FCSM)**: handled downstream by
+  `apply_fcsm_rw_substitution`, which blends the defaulted RW with the
+  collateral RW per the substitution rule.
+- **Real estate**: eligible RE collateral routes through class
+  reclassification (mortgage treatment) upstream; it does not reappear
+  as a secured portion inside the defaulted override.
+
+The defaulted override therefore does NOT re-apply a secondary
+secured/unsecured split on non-financial collateral columns — that would
+double-count the CRM reduction and, for low-RW classes like retail (75%),
+drag the defaulted RW below the 100% floor required by Art. 127(1)(b).
 
 ```
-RWA_defaulted = (secured_ead x collateral_rw) + (unsecured_ead x provision_based_rw)
+RWA_defaulted = ead_final × provision_based_rw
 ```
 
 ### RESI RE Non-Income-Dependent Exception
@@ -180,16 +189,16 @@ and the firm's estimate of loss is captured directly by BEEL.
 |-------------|-------------|------------------|
 | B31-K1 | SA defaulted, provisions ≥ 20% of outstanding amount | 100% RW |
 | B31-K2 | SA defaulted, provisions < 20% of outstanding amount | 150% RW |
-| B31-K3 | SA defaulted, partially secured (collateral covers 50%) | Blended: secured at collateral RW, unsecured at provision-based RW |
+| B31-K3 | SA defaulted, zero provisions | 150% RW on full ead_final |
 | B31-K4 | SA defaulted, RESI RE non-income-dependent | 100% RW (flat, Art. 127(3)) |
-| B31-K5 | SA defaulted, RESI RE income-dependent (buy-to-let) | Provision-coverage split applies |
-| B31-K6 | SA defaulted, commercial RE | Provision-coverage split applies |
-| B31-K7 | F-IRB defaulted, senior unsecured | K=0, RW from max(0, 12.5×(LGD−BEEL)) |
-| B31-K8 | A-IRB defaulted, own LGD estimate | K=max(0, LGD−BEEL) |
-| B31-K9 | F-IRB defaulted with CRM collateral | K=0, EAD adjusted for CRM |
-| B31-K10 | SA defaulted, provisions exactly at 20% of outstanding amount | 100% RW (≥ threshold) |
-| B31-K11 | A-IRB defaulted, LGD < BEEL (no capital charge) | K=0 (floor at zero) |
-| B31-K12 | SA defaulted with full collateral coverage | Secured portion at collateral RW, no unsecured portion |
+| B31-K5 | SA defaulted, RESI RE non-income with collateral columns populated | 100% RW (flat, Art. 127(3) overrides) |
+| B31-K6 | SA defaulted, RESI RE income-dependent (IPRRE) | Provision-coverage test on full ead_final |
+| B31-K7 | SA defaulted corporate, non-fin collateral columns populated | Full provision-based RW (columns ignored by defaulted override) |
+| B31-K8 | SA defaulted, B31 vs CRR denominator difference | 100% under B31, 150% under CRR |
+| B31-K9 | F-IRB defaulted corporate | K=0, RW=0, EL = LGD × EAD |
+| B31-K10 | A-IRB retail defaulted | K = max(0, LGD − BEEL) |
+| B31-K11 | A-IRB corporate defaulted (no 1.06 scaling under B31) | RWA matches CRR (no 1.06 in Art. 153(1)(ii)) |
+| B31-K12 | A-IRB corporate defaulted, BEEL > LGD | K=0 (floored) |
 
 ## Acceptance Tests
 

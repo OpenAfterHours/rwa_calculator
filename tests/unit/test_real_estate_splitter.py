@@ -479,3 +479,159 @@ class TestSplitterAuditTrail:
         assert row["residual_ead"] == pytest.approx(45.0)
         assert row["target_class"] == "RESIDENTIAL_MORTGAGE"
         assert row["regime"] == "basel_3_1"
+
+
+class TestSplitterApproachGate:
+    """Loan-splitting is SA-only — IRB / Slotting rows pass through unsplit.
+
+    Rationale: CRR Art. 125/126 and PRA PS1/26 Art. 124F/H are all in the
+    Standardised Approach part. Under IRB, residential-property collateral
+    affects LGD (Art. 161(5) FIRB floor / AIRB own-estimate LGD), not
+    exposure-class reclassification. Splitting an IRB row into a
+    RESIDENTIAL_MORTGAGE secured child caused the IRB correlation formula
+    to return the 0.15 retail-mortgage correlation instead of the
+    corporate-SME supervisory correlation.
+    """
+
+    @pytest.mark.parametrize("approach", ["foundation_irb", "advanced_irb", "slotting"])
+    def test_irb_row_with_split_flag_is_pass_through(self, approach: str) -> None:
+        """FIRB/AIRB/Slotting rows keep their original exposure_class."""
+        bundle = _build_bundle(
+            [
+                {
+                    "exposure_reference": "IRB1",
+                    "exposure_class": "CORPORATE_SME",
+                    "approach": approach,
+                    "ead_final": 100.0,
+                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_mode": "split",
+                    "re_split_property_type": "residential",
+                    "re_split_property_value": 200.0,
+                    "property_collateral_value": 200.0,
+                    "is_sme": True,
+                }
+            ]
+        )
+
+        df = RealEstateSplitter().split(bundle, _b31()).exposures.collect()
+
+        assert df.height == 1, "IRB row must not be split into secured+residual"
+        row = df.to_dicts()[0]
+        assert row["exposure_class"] == "CORPORATE_SME"
+        assert row["ead_final"] == pytest.approx(100.0)
+        assert row["exposure_reference"] == "IRB1"
+        assert row["re_split_role"] is None
+        assert row["split_parent_id"] is None
+
+    def test_irb_row_with_whole_flag_is_pass_through(self) -> None:
+        """IRB row flagged as B3.1 Art. 124H(3) whole-loan is still IRB."""
+        bundle = _build_bundle(
+            [
+                {
+                    "exposure_reference": "IRB2",
+                    "exposure_class": "CORPORATE",
+                    "approach": "foundation_irb",
+                    "ead_final": 200.0,
+                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_mode": "whole",
+                    "re_split_property_type": "commercial",
+                    "re_split_property_value": 300.0,
+                    "property_collateral_value": 300.0,
+                }
+            ]
+        )
+
+        df = RealEstateSplitter().split(bundle, _b31()).exposures.collect()
+
+        assert df.height == 1
+        row = df.to_dicts()[0]
+        # Not reclassified to COMMERCIAL_MORTGAGE.
+        assert row["exposure_class"] == "CORPORATE"
+        assert row["ead_final"] == pytest.approx(200.0)
+
+    def test_sa_row_with_approach_column_still_splits(self) -> None:
+        """Regression guard: the gate must not break the SA path."""
+        bundle = _build_bundle(
+            [
+                {
+                    "exposure_reference": "SA1",
+                    "exposure_class": "CORPORATE",
+                    "approach": "standardised",
+                    "ead_final": 100.0,
+                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_mode": "split",
+                    "re_split_property_type": "residential",
+                    "re_split_property_value": 100.0,
+                    "property_collateral_value": 100.0,
+                }
+            ]
+        )
+
+        df = RealEstateSplitter().split(bundle, _b31()).exposures.collect()
+
+        secured = _by_role(df, "secured")
+        residual = _by_role(df, "residual")
+        assert secured["ead_final"] == pytest.approx(55.0)
+        assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+        assert residual["ead_final"] == pytest.approx(45.0)
+
+    def test_irb_row_does_not_emit_re002_warning(self) -> None:
+        """IRB rows with zero effective cap must not trigger SA RE002."""
+        bundle = _build_bundle(
+            [
+                {
+                    "exposure_reference": "IRB3",
+                    "exposure_class": "CORPORATE_SME",
+                    "approach": "foundation_irb",
+                    "ead_final": 100.0,
+                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_mode": "split",
+                    "re_split_property_type": "residential",
+                    "re_split_property_value": 0.0,  # zero cap
+                    "property_collateral_value": 0.0,
+                    "is_sme": True,
+                }
+            ]
+        )
+
+        result = RealEstateSplitter().split(bundle, _b31())
+        assert not any(e.code == "RE002" for e in result.crm_errors)
+
+    def test_mixed_sa_and_irb_batch(self) -> None:
+        """SA rows split; IRB rows with the same flag do not."""
+        bundle = _build_bundle(
+            [
+                {
+                    "exposure_reference": "SA_MIX",
+                    "exposure_class": "CORPORATE",
+                    "approach": "standardised",
+                    "ead_final": 100.0,
+                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_mode": "split",
+                    "re_split_property_type": "residential",
+                    "re_split_property_value": 100.0,
+                    "property_collateral_value": 100.0,
+                },
+                {
+                    "exposure_reference": "IRB_MIX",
+                    "exposure_class": "CORPORATE_SME",
+                    "approach": "foundation_irb",
+                    "ead_final": 100.0,
+                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_mode": "split",
+                    "re_split_property_type": "residential",
+                    "re_split_property_value": 100.0,
+                    "property_collateral_value": 100.0,
+                    "is_sme": True,
+                },
+            ]
+        )
+
+        df = RealEstateSplitter().split(bundle, _b31()).exposures.collect()
+
+        sa_rows = df.filter(pl.col("exposure_reference").str.starts_with("SA_MIX"))
+        irb_rows = df.filter(pl.col("exposure_reference").str.starts_with("IRB_MIX"))
+
+        assert sa_rows.height == 2  # split into _sec + _res
+        assert irb_rows.height == 1  # pass-through
+        assert irb_rows.to_dicts()[0]["exposure_class"] == "CORPORATE_SME"

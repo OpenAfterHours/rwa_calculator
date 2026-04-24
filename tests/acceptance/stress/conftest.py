@@ -222,6 +222,7 @@ def generate_stress_loans(
                 "due_diligence_performed": np.full(n_loans, None),
                 "due_diligence_override_rw": np.full(n_loans, None),
                 "is_sft": np.full(n_loans, None),
+                "effective_maturity": np.full(n_loans, None),
             }
         )
         .cast(dtypes_of(LOAN_SCHEMA))
@@ -276,6 +277,7 @@ def generate_stress_facilities(
                 "lgd_unsecured": np.full(n, None),
                 "has_sufficient_collateral_data": np.full(n, None),
                 "is_sft": np.full(n, None),
+                "effective_maturity": np.full(n, None),
             }
         )
         .cast(dtypes_of(FACILITY_SCHEMA))
@@ -445,6 +447,7 @@ def generate_stress_contingents(
                 "due_diligence_performed": np.full(n_cont, None),
                 "due_diligence_override_rw": np.full(n_cont, None),
                 "is_sft": np.full(n_cont, None),
+                "effective_maturity": np.full(n_cont, None),
             }
         )
         .cast(dtypes_of(CONTINGENTS_SCHEMA))

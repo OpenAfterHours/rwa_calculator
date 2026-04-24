@@ -2,9 +2,19 @@
 Real estate loan-splitter for SA exposures collateralised by property.
 
 Pipeline position:
-    CRMProcessor -> RealEstateSplitter -> SA / IRB / Slotting Calculators
+    CRMProcessor -> RealEstateSplitter -> SA Calculator
+    (pass-through for IRB / Slotting / Equity rows)
 
-Key responsibilities:
+Scope: loan-splitting is a Standardised Approach mechanism (CRR Art. 125/126,
+PRA PS1/26 Art. 124F/H all sit in the Credit Risk: Standardised Approach
+Part). For IRB and Slotting exposures the regulatory treatment of real estate
+collateral is via LGD (Art. 161(5) FIRB supervisory RRE floor / AIRB
+own-estimate LGD / Art. 230-231 funded-credit-protection), handled upstream
+by the CRM processor. Rows with ``approach != SA/EQUITY`` therefore pass
+through this stage untouched even when the classifier flagged them as
+``re_split_mode='split'``.
+
+Key responsibilities (SA-bound rows only):
 - Physically partitions a flagged exposure into:
     - a secured row reclassified to RESIDENTIAL_MORTGAGE / COMMERCIAL_MORTGAGE,
     - a residual row that retains the original counterparty exposure class so
@@ -67,6 +77,9 @@ from rwa_calc.data.tables.re_split_parameters import (
     SplitParameters,
     re_split_parameters,
 )
+from rwa_calc.domain.enums import ApproachType
+
+_SA_BOUND_APPROACHES: tuple[str, ...] = (ApproachType.SA.value, ApproachType.EQUITY.value)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -235,9 +248,18 @@ def _split_unified_frame(
     # Split mode is null → pass-through.
     # ``fill_null("none")`` so the boolean comparisons return False rather
     # than null on unflagged rows (Polars filter drops null rows by default).
+    #
+    # Loan-splitting is an SA-only regulatory mechanism. Gate on
+    # ``approach`` so IRB / Slotting rows with the classifier's flag set
+    # still pass through unchanged — their real-estate collateral is
+    # credited via LGD in the CRM + IRB engines, not by reclassification.
+    if "approach" in schema_names:
+        is_sa_bound = pl.col("approach").is_in(list(_SA_BOUND_APPROACHES))
+    else:
+        is_sa_bound = pl.lit(True)
     mode = pl.col("re_split_mode").fill_null("none")
-    is_split_mode = mode == "split"
-    is_whole_mode = mode == "whole"
+    is_split_mode = (mode == "split") & is_sa_bound
+    is_whole_mode = (mode == "whole") & is_sa_bound
     has_secured_cap = pl.col("_re_secured_ead").fill_null(0.0) > 0.0
     is_actual_split = is_split_mode & has_secured_cap
 
@@ -431,7 +453,12 @@ def _accumulate_split_errors(
     summary message per cause rather than an error per exposure.
     """
     errors: list[CalculationError] = []
-    is_split_mode = pl.col("re_split_mode") == "split"
+    schema_names = set(annotated.collect_schema().names())
+    if "approach" in schema_names:
+        is_sa_bound = pl.col("approach").is_in(list(_SA_BOUND_APPROACHES))
+    else:
+        is_sa_bound = pl.lit(True)
+    is_split_mode = (pl.col("re_split_mode") == "split") & is_sa_bound
     has_secured_cap = pl.col("_re_secured_ead") > 0.0
 
     diagnostics = (
@@ -468,12 +495,15 @@ def _accumulate_split_errors(
     # CRR-only: count rows that had property collateral but failed the
     # rental-coverage test. They are NOT flagged with re_split_mode='split'
     # but the user benefits from knowing why no preferential RW applied.
+    # Scoped to SA-bound rows — the warning text ("rows left at counterparty
+    # risk weight") does not describe IRB treatment.
     if not is_basel_3_1:
         cre_failed = (
             annotated.filter(
                 (pl.col("re_split_target_class") == "COMMERCIAL_MORTGAGE")
                 & (pl.col("re_split_mode").is_null())
                 & (pl.col("re_split_property_value").fill_null(0.0) > 0.0)
+                & is_sa_bound
             )
             .select(pl.len().alias("n"))
             .collect()

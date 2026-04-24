@@ -1,25 +1,27 @@
 """
-Tests for Art. 127 defaulted exposure secured/unsecured split.
+Tests for Art. 127 defaulted exposure risk weight treatment.
 
-CRR Art. 127(1)-(2) / CRE20.89-90 require that defaulted exposures be split
-into secured (non-financial collateral) and unsecured portions:
-- Secured portion: retains the base (non-defaulted) risk weight
-- Unsecured portion: 100% if provisions >= 20% of unsecured value, else 150%
+PS1/26 Art. 127(1)-(2) assign 100%/150% to the part of a defaulted exposure
+not secured by recognised collateral or covered by recognised unfunded credit
+protection. The unsecured part is determined by the CRM method the
+institution applies (Art. 191A(2)).
 
-Financial collateral already reduces EAD before the SA calculator runs.
-Non-financial collateral (RE, receivables, other physical) provides
-additional secured coverage that reduces the portion subject to the
-defaulted 100%/150% override.
-
-Why this matters: without the split, well-collateralised defaulted exposures
-are assigned 100%/150% on the entire EAD (including the portion backed by
-collateral), systematically overstating capital requirements.
+Under the Financial Collateral Comprehensive Method (the default for SA),
+eligible financial collateral has already reduced EAD in the CRM stage and
+eligible real estate has been routed via class reclassification. So
+``ead_final`` entering the SA risk-weight stage already represents the
+unsecured value — Art. 127(1) applies to it flat. Non-financial collateral
+columns (collateral_re_value, collateral_receivables_value,
+collateral_other_physical_value) do NOT produce a secondary secured/unsecured
+split inside the defaulted override — that would double-count the CRM
+reduction and, for low-RW classes like retail (75%), drag the defaulted RW
+below the 100% floor required by Art. 127(1)(b).
 
 References:
-- CRR Art. 127(1): unsecured part risk weight (100%/150%)
-- CRR Art. 127(2): secured/unsecured determination via eligible CRM
-- CRE20.88: B31 RESI RE non-income flat 100%
-- CRE20.89-90: B31 defaulted provision test and CRM eligibility
+- PS1/26 Art. 127(1): unsecured part 100%/150% by provision coverage
+- PS1/26 Art. 127(2): unsecured part determined by the CRM method
+- PS1/26 Art. 127(3) / CRE20.88: RESI RE non-income flat 100%
+- CRR Art. 127(1)-(2): predecessor with pre-provision denominator
 """
 
 from __future__ import annotations
@@ -50,12 +52,12 @@ def b31_config() -> CalculationConfig:
 
 
 # ---------------------------------------------------------------------------
-# CRR: Backward compatibility — no non-financial collateral
+# CRR: no non-financial collateral
 # ---------------------------------------------------------------------------
 
 
 class TestCRRDefaultedBackwardCompat:
-    """Defaulted exposures without non-financial collateral behave as before."""
+    """Defaulted exposures without non-financial collateral."""
 
     def test_crr_defaulted_low_provision_150pct(self, sa_calculator, crr_config):
         """No non-fin collateral, provisions < 20% → 150%."""
@@ -95,7 +97,7 @@ class TestCRRDefaultedBackwardCompat:
         assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_crr_defaulted_missing_crm_columns(self, sa_calculator, crr_config):
-        """When CRM columns are absent, defaults to 0 → no collateral → standard behaviour."""
+        """When CRM columns are absent, no effect — standard behaviour."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -104,24 +106,29 @@ class TestCRRDefaultedBackwardCompat:
             provision_allocated=Decimal("5000"),
             config=crr_config,
         )
-        # No collateral_re_value passed → defaults to 0 → full 150%
         assert result["risk_weight"] == pytest.approx(1.50)
 
 
 # ---------------------------------------------------------------------------
-# CRR: Secured/unsecured split with non-financial collateral
+# CRR: non-financial collateral columns are ignored by the defaulted override
 # ---------------------------------------------------------------------------
 
 
-class TestCRRDefaultedSecuredSplit:
-    """Art. 127(2) secured/unsecured split with non-financial collateral."""
+class TestCRRDefaultedNonFinCollateralIgnored:
+    """Art. 127(2): CRM stage has already netted eligible collateral from EAD.
 
-    def test_crr_defaulted_with_re_collateral_blended(self, sa_calculator, crr_config):
-        """RE collateral 60k on 100k EAD → 60% secured at base RW, 40% unsecured at 150%.
+    The defaulted override does not apply a secondary secured/unsecured split
+    on non-financial collateral columns — that would double-count. The full
+    post-CRM ``ead_final`` is subject to the 100%/150% provision test.
+    """
 
-        Base RW for corporate = 100% (from CQS join, unrated).
-        Unsecured portion = 40k. Provisions 0 < 20% of 40k = 8k → 150%.
-        Blended = 0.40 × 1.50 + 0.60 × 1.00 = 1.20.
+    def test_crr_defaulted_corporate_with_re_collateral_gets_150pct(
+        self, sa_calculator, crr_config
+    ):
+        """Corporate defaulted, collateral_re_value populated, provisions 0 → 150%.
+
+        Old behaviour blended to 1.20; under Art. 127(2) the full ead_final
+        is unsecured (CRM already netted eligible collateral), so 150% flat.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
@@ -132,12 +139,14 @@ class TestCRRDefaultedSecuredSplit:
             collateral_re_value=Decimal("60000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.20)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_crr_defaulted_fully_secured_base_rw(self, sa_calculator, crr_config):
-        """RE collateral >= EAD → fully secured → base RW only.
+    def test_crr_defaulted_corporate_full_re_coverage_still_150pct(self, sa_calculator, crr_config):
+        """RE collateral > EAD does NOT reduce the defaulted RW.
 
-        Secured pct = 100%, so blended = 0×150% + 1.0×100% = 100%.
+        Regression guard: previously secured_pct clipped to 1.0 drove the
+        blended RW to the exposure's class base (100% corporate, 75% retail),
+        undermining Art. 127(1)'s 100% floor.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
@@ -145,40 +154,29 @@ class TestCRRDefaultedSecuredSplit:
             exposure_class="CORPORATE",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
-            collateral_re_value=Decimal("120000"),  # > EAD
+            collateral_re_value=Decimal("120000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_crr_defaulted_provision_threshold_uses_unsecured(self, sa_calculator, crr_config):
-        """Provisions 5k sufficient for unsecured 20k (25%) but not for total 100k (5%).
-
-        EAD=100k, RE collateral=80k → unsecured=20k.
-        CRR denominator = (unsecured_ead + provision_deducted) × unsecured_pct
-          = (100k + 0) × 0.2 = 20k.
-        Provision 5k >= 20% of 20k = 4k → 100% for unsecured.
-        Blended = 0.2 × 1.0 + 0.8 × 1.0 = 1.0 (100%).
+    def test_crr_defaulted_retail_full_re_coverage_still_150pct(self, sa_calculator, crr_config):
+        """User-reported scenario: defaulted retail with non-fin collateral must
+        not return the retail 75% base.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="RETAIL_OTHER",
             is_defaulted=True,
-            provision_allocated=Decimal("5000"),
-            provision_deducted=Decimal("0"),
-            collateral_re_value=Decimal("80000"),
+            provision_allocated=Decimal("0"),
+            collateral_re_value=Decimal("120000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_crr_defaulted_mixed_collateral_types(self, sa_calculator, crr_config):
-        """RE 30k + receivables 20k + other 10k = 60k total non-fin collateral.
-
-        EAD=100k, total non-fin=60k → 60% secured, 40% unsecured.
-        Provisions 0 → 150% for unsecured.
-        Base RW = 100% (unrated corporate).
-        Blended = 0.4 × 1.50 + 0.6 × 1.00 = 1.20.
-        """
+    def test_crr_defaulted_mixed_collateral_types_gets_150pct(self, sa_calculator, crr_config):
+        """RE + receivables + other physical populated → still 150% (CRM already
+        netted eligible collateral)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -190,23 +188,20 @@ class TestCRRDefaultedSecuredSplit:
             collateral_other_physical_value=Decimal("10000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.20)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_crr_defaulted_provision_deducted_in_denominator(self, sa_calculator, crr_config):
-        """CRR adds provision_deducted to denominator — test with deducted provisions.
+    def test_crr_defaulted_provision_threshold_on_full_ead(self, sa_calculator, crr_config):
+        """CRR denominator = ead_final + provision_deducted (pre-provision value).
 
-        EAD=100k, provision_deducted=10k, RE collateral=50k.
-        Pre-provision EAD = 100k + 10k = 110k.
-        Unsecured pre-provision = 110k × (1 - 50k/100k) = 110k × 0.5 = 55k.
-        Provision 12k >= 20% of 55k = 11k → 100% for unsecured.
-        Blended = 0.5 × 1.0 + 0.5 × 1.0 = 1.0.
+        EAD=100k, provision_deducted=10k → denominator = 110k.
+        Provisions 25k >= 20% × 110k = 22k → 100%.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
             exposure_class="CORPORATE",
             is_defaulted=True,
-            provision_allocated=Decimal("12000"),
+            provision_allocated=Decimal("25000"),
             provision_deducted=Decimal("10000"),
             collateral_re_value=Decimal("50000"),
             config=crr_config,
@@ -214,14 +209,7 @@ class TestCRRDefaultedSecuredSplit:
         assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_crr_defaulted_rwa_correctness(self, sa_calculator, crr_config):
-        """Verify RWA = EAD × blended_rw.
-
-        EAD=200k, RE collateral=100k → 50% secured.
-        Provisions 0 → 150% for unsecured.
-        Base RW = 100% (unrated corporate).
-        Blended = 0.5 × 1.50 + 0.5 × 1.00 = 1.25.
-        RWA = 200k × 1.25 = 250k.
-        """
+        """RWA = EAD × defaulted_rw regardless of non-fin collateral."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
@@ -231,17 +219,17 @@ class TestCRRDefaultedSecuredSplit:
             collateral_re_value=Decimal("100000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.25)
-        assert result["rwa"] == pytest.approx(250000.0)
+        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["rwa"] == pytest.approx(300000.0)
 
 
 # ---------------------------------------------------------------------------
-# B31: Backward compatibility — no non-financial collateral
+# B31: no non-financial collateral
 # ---------------------------------------------------------------------------
 
 
 class TestB31DefaultedBackwardCompat:
-    """B31 defaulted exposures without non-financial collateral behave as before."""
+    """B31 defaulted exposures without non-financial collateral."""
 
     def test_b31_defaulted_low_provision_150pct(self, sa_calculator, b31_config):
         result = calculate_single_sa_exposure(
@@ -267,20 +255,17 @@ class TestB31DefaultedBackwardCompat:
 
 
 # ---------------------------------------------------------------------------
-# B31: Secured/unsecured split
+# B31: non-financial collateral columns ignored
 # ---------------------------------------------------------------------------
 
 
-class TestB31DefaultedSecuredSplit:
-    """Basel 3.1 Art. 127 / CRE20.89-90 secured/unsecured split."""
+class TestB31DefaultedNonFinCollateralIgnored:
+    """B31 Art. 127(2) / CRE20.90 — CRM method determines unsecured portion;
+    no secondary split inside the defaulted override."""
 
-    def test_b31_defaulted_with_re_collateral_blended(self, sa_calculator, b31_config):
-        """RE collateral 60k on 100k EAD → 60% secured, 40% unsecured.
-
-        B31 base RW for unrated corporate = 100%.
-        Unsecured = 40k. Provisions 0 < 20% of 40k = 8k → 150%.
-        Blended = 0.4 × 1.50 + 0.6 × 1.00 = 1.20.
-        """
+    def test_b31_defaulted_corporate_with_re_collateral_gets_150pct(
+        self, sa_calculator, b31_config
+    ):
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -290,22 +275,19 @@ class TestB31DefaultedSecuredSplit:
             collateral_re_value=Decimal("60000"),
             config=b31_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.20)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_b31_defaulted_provision_threshold_uses_unsecured(self, sa_calculator, b31_config):
-        """Provisions 5k sufficient for unsecured 20k but not total 100k.
+    def test_b31_defaulted_provision_threshold_on_full_ead(self, sa_calculator, b31_config):
+        """B31 denominator is ead_final (outstanding amount per Art. 127(1)).
 
-        EAD=100k, RE=80k → unsecured=20k.
-        B31 denominator = unsecured_ead = 100k × 0.2 = 20k.
-        5k >= 20% of 20k = 4k → 100%.
-        Blended = 0.2 × 1.0 + 0.8 × 1.0 = 1.0.
+        EAD=100k, provisions 20k = 20% × 100k → 100%.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
             exposure_class="CORPORATE",
             is_defaulted=True,
-            provision_allocated=Decimal("5000"),
+            provision_allocated=Decimal("20000"),
             collateral_re_value=Decimal("80000"),
             config=b31_config,
         )
@@ -313,20 +295,15 @@ class TestB31DefaultedSecuredSplit:
 
 
 # ---------------------------------------------------------------------------
-# B31: RESI RE exceptions
+# B31: RESI RE exceptions (Art. 127(3) / CRE20.88)
 # ---------------------------------------------------------------------------
 
 
 class TestB31DefaultedResiRE:
     """B31 RESI RE defaulted exceptions (CRE20.88)."""
 
-    def test_b31_resi_re_non_income_flat_100pct_no_split(self, sa_calculator, b31_config):
-        """Non-income RESI RE default = 100% flat for whole exposure (CRE20.88).
-
-        The secured/unsecured split does NOT apply to RESI RE non-income.
-        Even with RE collateral that would lower the blended RW, the
-        regulatory 100% flat overrides.
-        """
+    def test_b31_resi_re_non_income_flat_100pct(self, sa_calculator, b31_config):
+        """Non-income RESI RE default = 100% flat for whole exposure."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -336,16 +313,10 @@ class TestB31DefaultedResiRE:
             collateral_re_value=Decimal("80000"),
             config=b31_config,
         )
-        # 100% flat — no blending with base RW
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_b31_resi_re_income_dependent_gets_split(self, sa_calculator, b31_config):
-        """Income-dependent RESI RE default → provision-based with split.
-
-        EAD=100k, has_income_cover=True, RE collateral=60k.
-        Base RW for RESI RE = depends on LTV; with null LTV → falls through
-        to loan-splitting default. We use a specific LTV to get a known base RW.
-        """
+    def test_b31_resi_re_income_dependent_gets_provision_test(self, sa_calculator, b31_config):
+        """Income-dependent RESI RE default → provision-based on full EAD."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -357,9 +328,9 @@ class TestB31DefaultedResiRE:
             ltv=Decimal("0.50"),
             config=b31_config,
         )
-        # Income-dependent → provision test applies with split
-        # Base RW < 100% for well-secured mortgage, blended RW < 150%
-        assert result["risk_weight"] < 1.50
+        # Income-dependent + low provisions → 150% flat (Art. 127(3) doesn't
+        # apply; full ead_final is unsecured per Art. 127(2)).
+        assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_b31_resi_re_non_income_no_collateral_still_100pct(self, sa_calculator, b31_config):
         """Non-income RESI RE without collateral → still 100% flat."""
@@ -382,8 +353,8 @@ class TestB31DefaultedResiRE:
 class TestDefaultedEdgeCases:
     """Edge cases and cross-cutting concerns."""
 
-    def test_high_risk_unaffected_by_split(self, sa_calculator, crr_config):
-        """HIGH_RISK exposure → 150% regardless of collateral or provisions."""
+    def test_high_risk_unaffected(self, sa_calculator, crr_config):
+        """HIGH_RISK exposure → 150% via Art. 128, defaulted override skipped."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -396,7 +367,7 @@ class TestDefaultedEdgeCases:
         assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_non_defaulted_unaffected(self, sa_calculator, crr_config):
-        """Non-defaulted corporate → normal RW, collateral has no defaulted effect."""
+        """Non-defaulted corporate → normal RW, defaulted override does not fire."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
@@ -405,73 +376,24 @@ class TestDefaultedEdgeCases:
             collateral_re_value=Decimal("80000"),
             config=crr_config,
         )
-        # Unrated corporate = 100% (not affected by defaulted logic)
         assert result["risk_weight"] == pytest.approx(1.00)
 
-    def test_crr_b31_same_behaviour_no_collateral(self, sa_calculator, crr_config, b31_config):
-        """Both frameworks give same result without non-financial collateral."""
-        crr_result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("100000"),
-            exposure_class="CORPORATE",
-            is_defaulted=True,
-            provision_allocated=Decimal("5000"),
-            config=crr_config,
-        )
-        b31_result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("100000"),
-            exposure_class="CORPORATE",
-            is_defaulted=True,
-            provision_allocated=Decimal("5000"),
-            config=b31_config,
-        )
-        assert crr_result["risk_weight"] == pytest.approx(b31_result["risk_weight"])
-
-    def test_defaulted_mortgage_gets_split_crr(self, sa_calculator, crr_config):
-        """CRR defaulted mortgage with RE collateral gets blended RW.
-
-        CRR has no RESI RE flat-100% exception. All defaulted classes
-        (except HIGH_RISK) get the provision-based split.
-        EAD=100k, RE=60k. Base RW for mortgage LTV≤80% = 35%.
-        Unsecured=40k. Provisions 0 < 20% of 40k → 150%.
-        Blended = 0.4 × 1.50 + 0.6 × 0.35 = 0.60 + 0.21 = 0.81.
-        """
+    def test_defaulted_retail_no_collateral_150pct(self, sa_calculator, crr_config):
+        """User-reported scenario: defaulted retail with zero provisions → 150%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
-            ead=Decimal("100000"),
-            exposure_class="RETAIL_MORTGAGE",
+            ead=Decimal("50000"),
+            exposure_class="RETAIL_OTHER",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
-            ltv=Decimal("0.60"),
-            collateral_re_value=Decimal("60000"),
             config=crr_config,
         )
-        # Base RW for CRR mortgage LTV=60% (≤80% threshold) = 35%
-        # Blended: 0.4 × 1.50 + 0.6 × 0.35 = 0.81
-        assert result["risk_weight"] == pytest.approx(0.81, rel=0.01)
+        assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_defaulted_zero_ead_unchanged(self, sa_calculator, crr_config):
-        """Zero EAD → secured_pct = 0, RW doesn't matter but should not error."""
-        result = calculate_single_sa_exposure(
-            sa_calculator,
-            ead=Decimal("0"),
-            exposure_class="CORPORATE",
-            is_defaulted=True,
-            collateral_re_value=Decimal("50000"),
-            config=crr_config,
-        )
-        # Zero EAD → rwa = 0 regardless of risk weight
-        assert result["rwa"] == pytest.approx(0.0)
-
-    def test_defaulted_retail_with_receivables_collateral(self, sa_calculator, crr_config):
-        """Defaulted retail with receivables collateral.
-
-        EAD=50k, receivables=20k → 40% secured, 60% unsecured.
-        Base RW for retail = 75%.
-        Provisions 0 → 150% for unsecured.
-        Blended = 0.6 × 1.50 + 0.4 × 0.75 = 0.90 + 0.30 = 1.20.
-        """
+    def test_defaulted_retail_with_receivables_collateral_still_150pct(
+        self, sa_calculator, crr_config
+    ):
+        """Non-financial collateral on retail does not lower the defaulted RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("50000"),
@@ -481,4 +403,16 @@ class TestDefaultedEdgeCases:
             collateral_receivables_value=Decimal("20000"),
             config=crr_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.20)
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_defaulted_zero_ead_unchanged(self, sa_calculator, crr_config):
+        """Zero EAD → rwa = 0 regardless of risk weight, no error."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("0"),
+            exposure_class="CORPORATE",
+            is_defaulted=True,
+            collateral_re_value=Decimal("50000"),
+            config=crr_config,
+        )
+        assert result["rwa"] == pytest.approx(0.0)

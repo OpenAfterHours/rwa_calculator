@@ -1397,6 +1397,87 @@ class TestDefaultedExposureRiskWeights:
 
         assert result["risk_weight"] == pytest.approx(1.50)
 
+    def test_crr_defaulted_retail_non_mortgage_low_provision_150pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR defaulted regulatory retail (non-mortgage), provisions < 20% → 150%.
+
+        Regression guard for the user-reported bug where defaulted retail
+        exposures returned the 75% base RW instead of Art. 127(1)(a) 150%.
+        """
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("100000"),
+            exposure_class="RETAIL_OTHER",
+            cqs=None,
+            is_defaulted=True,
+            provision_allocated=Decimal("0"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_crr_defaulted_retail_non_mortgage_high_provision_100pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """CRR defaulted regulatory retail (non-mortgage), provisions >= 20% → 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("100000"),
+            exposure_class="RETAIL_OTHER",
+            cqs=None,
+            is_defaulted=True,
+            # 25k >= 20% × 100k = 20k → 100%
+            provision_allocated=Decimal("25000"),
+            provision_deducted=Decimal("0"),
+            config=crr_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.00)
+
+    def test_b31_defaulted_retail_non_mortgage_low_provision_150pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 defaulted retail (non-mortgage), provisions < 20% → 150%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("100000"),
+            exposure_class="RETAIL_OTHER",
+            cqs=None,
+            is_defaulted=True,
+            provision_allocated=Decimal("0"),
+            provision_deducted=Decimal("0"),
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.50)
+
+    def test_b31_defaulted_retail_non_mortgage_high_provision_100pct_rw(
+        self,
+        sa_calculator: SACalculator,
+        basel31_config: CalculationConfig,
+    ) -> None:
+        """Basel 3.1 defaulted retail (non-mortgage), provisions >= 20% → 100%."""
+        result = calculate_single_sa_exposure(
+            sa_calculator,
+            ead=Decimal("100000"),
+            exposure_class="RETAIL_OTHER",
+            cqs=None,
+            is_defaulted=True,
+            provision_allocated=Decimal("20000"),
+            provision_deducted=Decimal("0"),
+            config=basel31_config,
+        )
+
+        assert result["risk_weight"] == pytest.approx(1.00)
+
 
 class TestDefaultedSMEExclusion:
     """Tests for SME supporting factor exclusion of defaulted exposures.

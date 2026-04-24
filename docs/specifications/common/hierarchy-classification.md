@@ -33,6 +33,18 @@ ascending gives the same outcome as ranking by RW. External ratings are **not**
 inherited from the parent — only the counterparty's own assessments participate
 in Art. 138 resolution.
 
+!!! info "Basel 3.1 additions — Art. 138(1)(g) and Art. 139(6)"
+    Basel 3.1 extends Art. 138 with a new sub-point **(g)** and adds a new
+    Art. 139(6) "higher-of" rule for institution exposures whose ECAI ratings
+    incorporate **implicit government support**. Neither exists in CRR (CRR Art. 138
+    has only (a)–(f); CRR Art. 139 has only paragraphs (1)–(4)). The new provisions
+    apply **only where the obligor is an institution** and only on the ECRA (rated)
+    path — they do not change the per-agency dedup or second-best selection mechanics
+    above for corporate, sovereign, or retail obligors. See
+    [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full treatment, including the government-owned / government-sponsored
+    exemption and the distinction from Art. 121(6).
+
 ### Lending Group Aggregation
 
 Lending groups aggregate exposure across related counterparties for threshold calculations (e.g., SME turnover, retail exposure limits).
@@ -221,14 +233,25 @@ Under Basel 3.1, PRA PS1/26 Art. 147A mandates specific approaches by exposure s
 | HVCRE | **SA or Slotting only** (no F-IRB/A-IRB) | Art. 147A(1)(c) → Art. 147(2)(c)(i) |
 | **Large corporate (revenue > GBP 440m) AND Financial sector entity (all FSEs)** | **F-IRB only** (no A-IRB) — both share Art. 147(2)(c)(ii) | **Art. 147A(1)(e)** |
 | Corporate (other general) | **F-IRB** (default); A-IRB only with explicit Art. 143(2A)/(2B) permission | Art. 147A(1)(f) → Art. 147(2)(c)(iii) |
-| Retail — mortgage | A-IRB (if approved) | Art. 147A(1)(g) → Art. 147(2)(d) |
-| Retail — QRRE | A-IRB (if approved) | Art. 147A(1)(g) |
-| Retail — other | A-IRB (if approved) | Art. 147A(1)(g) |
+| Retail — mortgage | A-IRB (if approved) — **unchanged from CRR Art. 151(7)** | Art. 147A(1)(g) → Art. 147(2)(d) |
+| Retail — QRRE | A-IRB (if approved) — **unchanged from CRR Art. 151(7)** | Art. 147A(1)(g) |
+| Retail — other | A-IRB (if approved) — **unchanged from CRR Art. 151(7)** | Art. 147A(1)(g) |
 | Equity | **SA only** (IRB equity removed; Art. 155 left blank) | Art. 147A(1)(h) → Art. 147(2)(e) |
 | Specialised lending — OF / PF / CF | SA, F-IRB, A-IRB or Slotting subject to permission | Art. 147A(1)(d) → Art. 147(2)(c)(i) |
 
 !!! note "Implementation Status — Implemented (P1.4 Complete)"
     Art. 147A restrictions are enforced via `IRBPermissions.full_irb_b31()`, which encodes the mandatory approach assignments for sovereign/institution/IPRE/HVCRE/FSE/large corporate/equity sub-classes. The classifier enforces IPRE and HVCRE slotting routing, and blocks FSE and large-corporate exposures from A-IRB (F-IRB only). Equity is restricted to SA. Sovereign sub-classes (RGLA, PSE, MDB, international org with 0% RW) are forced to SA.
+
+!!! info "Retail Rows Are Carry-Forward from CRR Art. 151(7)"
+    The three retail rows (mortgage, QRRE, other) in the Art. 147A table above restate
+    an existing CRR obligation in the Basel 3.1 structured form. CRR Art. 151(7) already
+    required firms applying IRB to retail to "provide own estimates of LGDs and conversion
+    factors" (i.e. A-IRB); CRR Art. 151(8) explicitly restricted F-IRB to exposure classes
+    (a)–(c), omitting retail (d). Accordingly, Art. 147A(1)(g) is a **carry-forward**, not
+    a new Basel 3.1 restriction. See the detailed note in
+    [`../basel31/model-permissions.md#art-147a-approach-restrictions`](../basel31/model-permissions.md#art-147a-approach-restrictions)
+    and the CRR/B31 comparison matrix in
+    [`../../framework-comparison/key-differences.md#irb-approach-restrictions`](../../framework-comparison/key-differences.md#irb-approach-restrictions).
 
 ### Art. 112 Table A2 Priority Ordering
 
@@ -360,6 +383,20 @@ qualifying properties is performed.
     auto-classification). The cross-lender property count requires an
     external data source and is tracked as a v2.0 / Tier-7 item (see
     `IMPLEMENTATION_PLAN.md` §"Tier 7 — Future / v2.0").
+
+!!! info "Reassessment obligations (Art. 124E(5) and (7))"
+    Art. 124E(5) requires institutions to **reassess** material dependency of a
+    residential RE exposure whenever a new residential-RE-secured loan is issued to the
+    obligor (including replacement loans). Discretionary updates at other times are
+    permitted only if new information is applied consistently portfolio-wide —
+    Art. 124E(5) explicitly prohibits selective reassessment aimed at reducing own-funds
+    requirements. Art. 124E(7) requires **commercial RE** reassessment at least annually.
+
+    The mandatory residential trigger is **obligor-level**: a new RRE loan to the same
+    borrower at a different address re-opens the paragraph-2 three-property count for
+    every existing RRE exposure to that borrower. See the
+    [B31 SA spec reassessment subsection](../basel31/sa-risk-weights.md#reassessment-triggers-residential-re-art-124e5)
+    for verbatim PS1/26 wording.
 
 ### Art. 147A(1)(e)/(f) subclass reporting for corporates
 

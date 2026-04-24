@@ -72,8 +72,8 @@ C/D (Good) for maturity-based differentiation. Art. 153(5)(c) assigns column B (
 column D (Good) as the default. Column A/C (lower weights) may be used in three cases:
 
 - **Art. 153(5)(d):** remaining maturity **< 2.5 years** — optional for all SL types
-- **Art. 153(5)(e):** IPRE Strong with enhanced criteria (very low LTV, investment-grade tenant income, no ADC)
-- **Art. 153(5)(f):** PF Strong with substantially stronger underwriting
+- **Art. 153(5)(e):** IPRE Strong meeting all four sub-conditions — (i) substantially stronger underwriting, (ii) very low LTV, (iii) investment-grade income stream *including* tenant income ≥ 100% of the obligor's debt service obligations, (iv) no ADC characteristics
+- **Art. 153(5)(f):** PF Strong with substantially stronger underwriting (single substance test; no quantitative sub-conditions)
 
 Satisfactory/Weak/Default have no maturity split. See [Basel 3.1 Slotting spec](../basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for full details.
 
@@ -158,7 +158,7 @@ These EL rates are used when calculating the IRB EL shortfall/excess for slottin
 
 ### Large FSE Threshold
 
-A **large financial sector entity (FSE)** is defined as having total assets ≥ **EUR 70bn** (CRR Art. 4(1)(146), ≈ GBP 79bn at PRA FX rate). This threshold determines eligibility for the 1.25x correlation multiplier (Art. 153(2)), not the Art. 147A approach restriction (which applies to all FSEs regardless of size). This is distinct from the Art. 147A(1)(d) large corporate revenue threshold (GBP 440m).
+A **large financial sector entity (LFSE)** is defined under CRR as having total assets ≥ **EUR 70 billion** (CRR Art. 142(1)(4)); under Basel 3.1 the threshold is **GBP 79 billion** (PS1/26 Glossary p. 78, Note "corresponds to Article 142(1)(4) of CRR"). This threshold determines eligibility for the 1.25x correlation multiplier (Art. 153(2)), not the Art. 147A approach restriction (which applies to all FSEs regardless of size). It is distinct from the Art. 147A(1)(e) large corporate revenue threshold (GBP 440m).
 
 See [Framework Differences](../../framework-comparison/technical-reference.md) for full Basel 3.1 detail.
 

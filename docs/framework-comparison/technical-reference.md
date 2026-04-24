@@ -37,10 +37,18 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 | QRRE (Transactors) | 0.05% | Art. 163(1)(c) |
 | QRRE (Revolvers) | 0.10% | Art. 163(1)(a) |
 
-!!! note "Sovereign and Institution PD Floors"
-    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
-    exposures to F-IRB only. PD floors remain relevant for any grandfathered or transitional
-    IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Art. 147A(1)(a); F-IRB and A-IRB are both unavailable and PS1/26 provides no grandfathering
+    or transitional carve-out. The sovereign PD floor row above is retained for completeness
+    and CRR cross-reference only and cannot bind on any live Basel 3.1 exposure.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See the [IRB Approach Restrictions](key-differences.md#irb-approach-restrictions) section
+    for the full Art. 147A(1) class mapping.
 
 ## A-IRB LGD Floors (Basel 3.1)
 
@@ -60,11 +68,37 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10%* | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10%* | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15%* | Art. 164(4)(c)(iv)(4) |
+
+!!! info "Secured-retail blended floor (Art. 164(4)(c))"
+    For retail exposures outside the flat-5% RRE mortgage path, the LGD floor is the
+    variable LGD\* produced by the Foundation Collateral Method (Art. 230 single-collateral
+    or Art. 231 multi-collateral), with LGDU = 30% and the LGDS values above substituted
+    into the blended formula:
+
+    ```
+    LGD_floor = (E_u / E) x 30% + sum_i (E_s_i / E) x LGDS_i
+    ```
+
+    The canonical 8-row table and formula derivation live in the
+    [B31 A-IRB spec](../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644).
+    Art. 164(4A) additionally requires Art. 193(7) multi-facility collateral allocation
+    when the same collateral backs multiple facilities.
+
+!!! note "CRR comparison (Art. 164(4), pre-revocation)"
+    CRR used **portfolio exposure-weighted-average** floors: ≥ 10% for retail RRE-secured,
+    ≥ 15% for retail CRE-secured, excluding central-government-guaranteed exposures.
+    Basel 3.1 replaces these aggregate tests with the per-exposure input floors above
+    applied individually before the capital formula.
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
@@ -99,12 +133,25 @@ PRA PS1/26 Art. 160(1) (corporate, sovereign, institution) and Art. 163(1) (reta
     summary.
 
 !!! info "Purchased Receivables and Dilution Risk (Art. 161(1)(e)–(g))"
-    Art. 161(1)(e)/(f) apply where the institution cannot estimate PD for the purchased
-    receivables pool (per Art. 160(2)). Senior purchased receivables align with the standard
-    senior rate; subordinated purchased receivables are penalised at 100%. Basel 3.1 increases
-    the dilution risk LGD from 75% to 100% (Art. 161(1)(g)). See
-    [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values) for full
-    Art. 161(1)(a)–(g) breakdown.
+    Basel 3.1 recasts the triggering condition of each sub-paragraph. CRR Art. 161(1)(e)/(f)
+    apply where "the institution is not able to estimate PDs or the institution's PD estimates
+    do not meet the requirements set out in Section 6", and Art. 161(1)(g) applies
+    unconditionally. PS1/26 re-anchors each trigger to the specific Art. 160 PD-determination
+    method:
+
+    | Sub-paragraph | CRR trigger | PS1/26 trigger | LGD (CRR → PS1/26) |
+    |---------------|-------------|----------------|--------------------|
+    | 161(1)(e) senior | unable to estimate PDs / Section 6 fail | PD per **Art. 160(2)(a)** (EL ÷ LGD) | 45% → 40% |
+    | 161(1)(f) subordinated | unable to estimate PDs / Section 6 fail | PD per **Art. 160(2)(b)** (PD = EL) | 100% → 100% |
+    | 161(1)(g) dilution | unconditional | PD per **first sentence of Art. 160(6)** | 75% → 100% |
+
+    Art. 160(2)'s chapeau preserves the CRR "not able to estimate PDs / Section 6 fail" trigger
+    as the precondition for using 160(2)(a)/(b), so the substance of when (e)/(f) apply is
+    unchanged; only the drafting is cascaded through Art. 160. PS1/26 Art. 161(2)(a) also adds
+    a new explicit A-IRB → F-IRB LGD mapping absent in CRR. See
+    [CRR F-IRB spec](../specifications/crr/firb-calculation.md#art-1611-lgd-values) and
+    [B31 F-IRB spec](../specifications/basel31/firb-calculation.md#supervisory-lgd-art-161)
+    for the full Art. 161(1)(a)–(g) breakdown.
 
 !!! info "B31 Art. 230 — Subordinated LGDS Distinction Removed"
     CRR Art. 230 Table 5 has separate "senior" and "subordinated" LGDS columns (e.g.,
@@ -388,24 +435,52 @@ columns C and D:
 **Column B/D** is the default assignment (Art. 153(5)(c)). Column A/C may be used when:
 
 - **< 2.5yr** remaining maturity (Art. 153(5)(d)) — optional for all SL types
-- **IPRE** Strong meets enhanced criteria: very low LTV, investment-grade tenant income, no ADC (Art. 153(5)(e))
-- **PF** Strong meets enhanced underwriting criteria (Art. 153(5)(f))
+- **IPRE** Strong meets **all four** sub-conditions of Art. 153(5)(e): (i) substantially stronger underwriting, (ii) very low LTV, (iii) investment-grade income stream *including* tenant income ≥ 100% of the obligor's debt service obligations, and (iv) no ADC characteristics
+- **PF** Strong meets Art. 153(5)(f) — substantially stronger underwriting and characteristics; no additional quantitative sub-conditions
 
 For non-HVCRE types, the values are identical to CRR — PRA restructured the format from
 maturity-split tables to A/B/C/D columns but preserved all risk weight values. The HVCRE row
 is a PRA PS1/26 introduction (UK CRR has no HVCRE table). See [Key Differences](key-differences.md#slotting-subgrades-table-a-column-structure-art-1535) for the full comparison and [Slotting Approach spec](../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd) for implementation details.
 
-## Financial Institution Correlation Multiplier (CRE31.5)
+!!! warning "Not Yet Implemented — Column A/C Concession (Non-HVCRE and HVCRE)"
+    The Basel 3.1 calculator assigns every slotting exposure to columns B/D, regardless
+    of HVCRE status or remaining maturity. Short-maturity concessions in both sub-tables
+    are absent: non-HVCRE uses col B/D values instead of A/C (IMPLEMENTATION_PLAN P1.97);
+    HVCRE uses col B/D values instead of A/C (P1.117 — Strong 95% instead of 70%, Good
+    120% instead of 95%). CRR short-maturity differentiation is fully implemented.
+
+## Financial Institution Correlation Multiplier (Art. 153(2))
 
 The 1.25x correlation multiplier applies to exposures to **financial institutions** only (not non-financial corporates):
-- Regulated financial institutions with total assets above the applicable threshold:
-  - **CRR**: EUR 70bn (Art. 153(2))
-  - **BCBS/Basel 3.1**: USD 100bn (CRE31.5)
-- Unregulated financial institutions regardless of size
+
+- **Large financial sector entities (LFSEs)** — regulated FSEs meeting a total-assets threshold
+  that is framework-specific (see table below).
+- **Unregulated financial sector entities** — regardless of size.
+
+| Framework | LFSE threshold | Citation |
+| --- | --- | --- |
+| CRR | Total assets ≥ **EUR 70 billion** | CRR Art. 142(1)(4) |
+| Basel 3.1 | Total assets ≥ **GBP 79 billion** | PRA PS1/26 Glossary p. 78 (Note: "corresponds to Article 142(1)(4) of CRR") |
+
+!!! info "Threshold precision differs between frameworks"
+    PS1/26 fixes the LFSE threshold as a **GBP 79 billion** absolute value in its Glossary;
+    this is not an FX conversion of the CRR EUR 70 billion figure and will not fluctuate with
+    exchange rates. The BCBS standard (CRE31.5) sets the international baseline at
+    **USD 100 billion**, but the PRA's UK implementation uses GBP 79bn — treat USD 100bn as
+    the BCBS-only number, not the applicable UK threshold. Under CRR the threshold remains
+    EUR 70 billion per Art. 142(1)(4), converted to GBP via the configured EUR/GBP rate.
 
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
 
-Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26.
+!!! warning "Code divergence: Basel 3.1 threshold not enforced in engine"
+    `src/rwa_calc/contracts/config.py` defines `RegulatoryThresholds.basel_3_1()` with
+    `lfse_total_assets_threshold = Decimal("0")` — the GBP 79 billion value is **not**
+    currently held in code. The Basel 3.1 calculator relies exclusively on the upstream
+    `apply_fi_scalar` flag on the counterparty record; firms are responsible for determining
+    LFSE status against the GBP 79 billion threshold prior to ingest. Tracked as code-side
+    finding (D3.58 / IMPLEMENTATION_PLAN.md).
+
+Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26. See [key-differences.md § Financial Sector Correlation Multiplier](key-differences.md#financial-sector-correlation-multiplier) for the parallel CRR/B31 comparison and the distinction from the Art. 147A(1)(e) GBP 440m revenue approach restriction.
 
 ## Credit Conversion Factors (Art. 111 Table A1)
 
@@ -452,6 +527,24 @@ EL_adjusted >= EL_unadjusted
 PMAs cannot decrease expected loss. The `pma_el_scalar` must be ≥ 0, ensuring conservative
 RWA overlays do not inadvertently reduce EL shortfall calculations (Art. 159).
 
+### Defaulted EL — BEEL Substitution (Art. 158(5))
+
+| Approach | Defaulted EL amount | Source |
+|----------|---------------------|--------|
+| F-IRB defaulted | `1 × LGD × EAD` | Standard Art. 158(5) formula with PD = 1 |
+| A-IRB defaulted | `BEEL × EAD` | Art. 158(5) closing proviso |
+
+**BEEL** (Best Estimate of Expected Loss) is the A-IRB firm's own estimate of post-default
+economic loss, estimated under the Art. 181(1)(h)(ii) standards. The substitution applies
+**only** to the A-IRB Pool C EL amount in the Art. 159 comparison; the A-IRB capital
+formula `K = max(0, LGD − BEEL)` (Art. 154(1)(i)) uses BEEL in the RW structure
+separately. Pre-revocation CRR used the symbol `ELBE`; PS1/26 renames to `BEEL` with no
+substantive change. Sovereigns and other Art. 147A(1)(a) quasi-sovereign classes are
+excluded from A-IRB, so BEEL never arises for them.
+
+See the [Defaulted Exposures spec — BEEL](../specifications/basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii)
+for estimation standards and required inputs.
+
 ### Output Floor Interaction
 
 PMAs are included in the un-floored TREA (U-TREA) used for the output floor comparison.
@@ -482,6 +575,23 @@ The revolving maturity change (Art. 162(2A)(k)) typically increases M for revolv
 facilities, leading to higher maturity adjustments and therefore higher capital. The deletion
 of the F-IRB 0.5-year repo maturity means repo exposures will use the full cash-flow or
 contractual calculation, generally increasing M from 0.5 to ≥ 1 year.
+
+!!! warning "Revolving Facility Precedence — (k) over (a)"
+    Art. 162(2)(c) mandates that "where an exposure falls within both points (a) and (k)
+    of paragraph 2A, it shall calculate M in accordance with point (k) of paragraph 2A."
+    Art. 162(2A)(k) further states that "for revolving exposures, M shall be determined
+    using the maximum contractual termination date of the facility. An institution shall
+    not use the repayment date of the current drawing."
+
+    This precedence rule means a revolving facility **cannot** fall back to the cash-flow
+    schedule formula in (a), even when an explicit CF schedule exists — M is anchored to
+    the facility termination date. The calculator reads this via the
+    `facility_termination_date` input field; when non-null and the exposure is flagged
+    revolving, (k) is applied in preference to any cash-flow path.
+
+    Full precedence chain under Art. 162(2): (g)/(h) > (b), (c), (d), (da); (c) > (b);
+    (k) > (a). See the [Basel 3.1 F-IRB spec](../specifications/basel31/firb-calculation.md#art-1622a-calculation-methods)
+    for the method table and implementation notes.
 
 !!! info "One-Day Floor Exceptions (Art. 162(3))"
     Both CRR and Basel 3.1 allow a **one-day** maturity floor (overriding the general 1-year

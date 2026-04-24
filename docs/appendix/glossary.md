@@ -24,6 +24,25 @@ The revised Basel framework implemented through PRA PS1/26, effective from Janua
 ### BCBS
 Basel Committee on Banking Supervision. The international body that develops banking standards.
 
+### BEEL (Best Estimate of Expected Loss)
+An A-IRB institution's own estimate of the economic loss expected on a defaulted
+exposure over the recovery period, expressed as a fraction of exposure at default.
+Under PRA PS1/26 Art. 158(5) the EL **amount** for defaulted exposures (PD = 1)
+treated under A-IRB is `BEEL × EAD` rather than `PD × LGD × EAD` — BEEL substitutes
+for the standard product only on the A-IRB side of the Art. 159 provisions-vs-EL
+comparison (Pool C). F-IRB defaulted exposures retain `1 × LGD` for Pool C.
+
+The A-IRB capital formula `K = max(0, LGD − BEEL)` in Art. 154(1)(i) additionally
+consumes BEEL in the RW calculation. BEEL must be estimated under the Art. 181(1)(h)(ii)
+standards (downturn conditions, recognition of unexpected additional loss during
+recovery, symmetric use of recovery realisations, governance and validation). Sovereign,
+central-bank, and quasi-sovereign exposures cannot use A-IRB under Art. 147A(1)(a), so
+BEEL does not arise for those classes.
+
+Pre-revocation CRR used the symbol `ELBE` (Expected Loss Best Estimate) for the same
+parameter; PS1/26 renames to `BEEL` with no substantive change. See
+[Defaulted Exposures spec — BEEL](../specifications/basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).
+
 ## C
 
 ### Capital Requirement
@@ -47,7 +66,14 @@ EU regulation 575/2013 as onshored into UK law. The primary regulatory framework
 ## D
 
 ### Default
-An event where a counterparty fails to meet its credit obligations. Defined as 90+ days past due or unlikely to pay.
+An event where a counterparty fails to meet its credit obligations. Formally defined by Art. 178 (CRR and PRA PS1/26) as satisfying **either** limb:
+
+- **(a) Unlikeliness to pay (UTP)** — the institution considers the obligor unlikely to pay in full without recourse to actions such as realising security. Indicators include non-accrued status, specific credit risk adjustment for credit-quality decline, sale at material credit-related loss, distressed restructuring, institution-filed bankruptcy, or obligor-sought bankruptcy protection (Art. 178(3)(a)–(f)).
+- **(b) 90 days past due (DPD)** on any **material** credit obligation. Materiality under PS1/26: retail > GBP 0 / > 0%; non-retail > GBP 440 / > 1% (Art. 178(2)(d)/(da)). CRR delegates materiality to the competent authority.
+
+Retail exposures may apply the definition at the **facility level**; non-retail default at the **obligor level**. Return to non-defaulted status requires a 3-month cure (Art. 178(5)) or a 1-year probation with material payments after a distressed restructuring (Art. 178(5A)–(5C)).
+
+The calculator consumes default status via the `is_defaulted` input flag — **no DPD counter, UTP inference, or cure-period timer runs in-engine**. See the [Default Definition specification](../specifications/common/default-definition.md) for the full Art. 178 treatment.
 
 ### DPD (Days Past Due)
 The number of days a payment is overdue.
@@ -78,7 +104,7 @@ A regulatory classification of exposures (Central Govt / Central Bank, Instituti
 An IRB approach where the bank estimates PD but uses supervisory values for LGD and CCF.
 
 ### FI Scalar
-A 1.25x multiplier applied to the **asset correlation coefficient** (R) for large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) or unregulated financial sector entities (CRR Art. 153(2)). This has a non-linear effect on the capital requirement K. Not to be confused with the Art. 147A large corporate approach restriction (revenue > GBP 440m), which restricts A-IRB eligibility but does not affect correlation.
+A 1.25x multiplier applied to the **asset correlation coefficient** (R) for large financial sector entities (LFSEs) or unregulated financial sector entities (Art. 153(2), unchanged between CRR and Basel 3.1). This has a non-linear effect on the capital requirement K. LFSE threshold is **EUR 70 billion** total assets under CRR (Art. 142(1)(4)) and **GBP 79 billion** under Basel 3.1 (PRA PS1/26 Glossary p. 78, with Note "corresponds to Article 142(1)(4) of CRR"). Not to be confused with the Art. 147A large corporate approach restriction (revenue > GBP 440m), which restricts A-IRB eligibility but does not affect correlation.
 
 ### Financial Collateral
 Liquid assets (cash, bonds, equity) used as security for credit exposures.
@@ -107,11 +133,14 @@ Speculative commercial real estate development with elevated slotting risk weigh
 ### IFRS 9
 International accounting standard for financial instruments, including impairment (ECL) requirements.
 
+### Implicit Government Support
+A component of an ECAI credit assessment that relies on expected extraordinary support from central, regional, or local government (typically the "too big to fail" uplift for systemic private banks). **Basel 3.1 Art. 138(1)(g)** prohibits using such assessments to risk-weight exposures to institutions, *unless* the rated institution is owned by or set up and sponsored by a government body. **Art. 139(6)** then imposes a residual "higher-of" floor where no "clean" issue-specific rating exists. No CRR equivalent — CRR Art. 138 has only sub-points (a)–(f) and CRR Art. 139 has only paragraphs (1)–(4); CRR firms apply implicit-support ratings directly. See [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396).
+
 ### Infrastructure Factor
 CRR capital relief factor (0.75) for qualifying infrastructure project finance. Removed under Basel 3.1.
 
 ### IPRE (Income-Producing Real Estate)
-Real estate where repayment is materially dependent on cash flows generated by the property (rental income, sale proceeds). Under Basel 3.1 Art. 124E, residential RE is materially dependent by default unless it meets one of five exceptions (primary residence, three-property limit for natural persons, SPE with guarantor, social housing, or cooperative). Commercial RE is materially dependent unless the borrower uses the property predominantly for its own business (Art. 124E(6)). SA treatment: whole-loan LTV-band risk weights (Art. 124G/124I). IRB treatment: slotting approach (Art. 147A). See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+Real estate where repayment is materially dependent on cash flows generated by the property (rental income, sale proceeds). Under Basel 3.1 Art. 124E, residential RE is materially dependent by default unless it meets one of five exceptions (primary residence, three-property limit for natural persons, SPE with guarantor, social housing, or cooperative). Commercial RE is materially dependent unless the borrower uses the property predominantly for its own business (Art. 124E(6)). SA treatment: whole-loan LTV-band risk weights (Art. 124G/124I). IRB treatment: slotting approach (Art. 147A). See [Art. 124E specification](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 ### IRB (Internal Ratings-Based)
 Approaches allowing banks to use internal risk estimates for capital calculation, subject to regulatory approval.
@@ -194,6 +223,23 @@ Provisions allocated to specific exposures. Reduces EAD for SA, compares to EL f
 
 ### SCRA (Standardised Credit Risk Assessment Approach)
 Basel 3.1 approach for unrated institutions based on capital adequacy ratios.
+
+### Self-Build Exposure
+A residential real estate exposure secured by property or land that has been acquired
+or held for development and construction purposes, as defined in PS1/26 Appendix 1
+Art. 1.2 (p. 27). To qualify the property must (1) not have more than **four residential
+housing units** and (2) be (or be intended to be) the **borrower's primary residence**.
+Self-build exposures are the only category under **Art. 124A(1)(a)(iii)** that lets an
+exposure secured by land held for development qualify as **regulatory RE** before the
+build is complete — the other two gates in Art. 124A(1)(a)(i)/(ii) both require finished
+property. In exchange, Art. 124D(9) requires the property value used in the Art. 124C LTV
+denominator to be the **higher of** the pre-construction underlying land value and **0.8
+× the latest qualifying valuation**, with Art. 124D(10) applying the same 0.8 haircut (or
+max(0.8 × updated valuation, updated land estimate)) after any Art. 124D(5)(a)/(b)
+revaluation. The 0.8 multiplier enforces a 20% buffer against residual construction /
+permitting / market-absorption risk. CRR had no equivalent concept — Art. 124D(9)/(10) is
+new Basel 3.1 drafting effective 1 January 2027. See
+[SA Risk Weights — Self-Build Valuation](../specifications/basel31/sa-risk-weights.md#self-build-valuation-art-124d9-and-124d10).
 
 ### Slotting Approach
 A capital calculation method for specialised lending using supervisory categories (Strong/Good/Satisfactory/Weak).

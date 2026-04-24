@@ -252,6 +252,67 @@ sovereign's CQS:
 Unrated institutions with residual maturity ≤ 3 months receive **20%** regardless of
 sovereign CQS (Art. 121(3)).
 
+### National-Currency Short-Term Preferential Treatment (CRR Art. 119(2), 119(3))
+
+CRR provides a **separate** sovereign-derived preferential path for institution exposures
+in the borrower's national currency with residual maturity ≤ 3 months. This is distinct
+from Art. 120(2) Table 4 (ECAI-rated short-term) and Art. 121(3) (unrated short-term 20%)
+— those two articles carry the general ≤ 3-month preferential windows irrespective of
+currency, while Art. 119(2)/(3) layers an additional sovereign-derived channel on top
+for the national-currency subset.
+
+!!! quote "Art. 119(2) — verbatim (CRR p. 118)"
+    "Exposures to institutions of a residual maturity of three months or less denominated
+    and funded in the national currency of the borrower shall be assigned a risk weight
+    that is one category less favourable than the preferential risk weight, as described
+    in Article 114(4) to (7), assigned to exposures to the central government in which
+    the institution is incorporated."
+
+!!! quote "Art. 119(3) — verbatim (CRR p. 118)"
+    "No exposures with a residual maturity of three months or less denominated and funded
+    in the national currency of the borrower shall be assigned a risk weight less than
+    20 %."
+
+**Mechanism.** Where the institution's central government benefits from preferential
+sovereign treatment under Art. 114(4) (Member-State central government, domestic-currency
+exposure → 0%), Art. 114(6) (equivalent third-country competent authority), or
+Art. 114(7) (CRR transitional national-currency exposures), a national-currency short-term
+exposure to an institution incorporated in that jurisdiction steps down the preferential
+sovereign RW by **one CQS category** and then applies the Art. 119(3) **20% floor**. For
+a UK-domestic sterling-funded short-term exposure (UK sovereign RW = 0%, Art. 114(4))
+the one-category step-down would produce a sub-20% result, so the Art. 119(3) floor
+binds at **20%**.
+
+**Scope.** Applies to both rated and unrated institutions — unlike Art. 120(2) (ECAI
+required) and Art. 121(3) (unrated only), Art. 119(2)/(3) is an ECAI-agnostic path
+keyed on currency, funding, and residual maturity. Where both Art. 119(2) and Art. 120(2)
+could apply to the same rated exposure (e.g. a 2-month sterling-funded CQS 2 UK-bank
+exposure), the more favourable path prevails — in practice usually Art. 120(2) Table 4
+(20% at CQS 2) matches the Art. 119(3) floor (20%), so no operational difference.
+
+!!! warning "Removed under Basel 3.1 (PS1/26 Art. 119(2)/(3)/(4) blanked)"
+    PS1/26 Appendix 1 p. 40 marks Art. 119(2), (3), and (4) all as
+    `[Note: Provision left blank]`, removing the national-currency short-term preferential
+    path from Basel 3.1 entirely. Under Basel 3.1 all short-term institution exposures
+    must route through **Art. 120(2) Table 4** (rated) or **Art. 121(3)** (unrated 20%)
+    — there is no parallel sovereign-derived national-currency channel. See
+    [B31 SA Risk Weights — Institution Risk Weights](../basel31/sa-risk-weights.md#institution-risk-weights-ecra-art-120)
+    and
+    [Key Differences — Removal of Art. 119(2)/(3) National-Currency Preferential](../../framework-comparison/key-differences.md#removal-of-art-11923-national-currency-preferential-basel-31).
+
+!!! info "Practical impact of the Basel 3.1 removal"
+    **UK-domestic exposures**: neutral. Art. 120(2) Table 4 (20% at CQS 1–3, 50% at
+    CQS 4–5) for rated and Art. 121(3) 20% for unrated already match the Art. 119(3)
+    20% floor for the typical UK-bank domestic short-term case.
+
+    **Cross-border exposures**: materially tighter where the counterparty institution is
+    incorporated in a jurisdiction whose sovereign receives preferential Art. 114(6)/(7)
+    treatment in the borrower's national currency. Under CRR, those exposures could pick
+    up the Art. 119(2)/(3) path's 20% sovereign-derived weight regardless of the
+    institution's own rating; under Basel 3.1 they fall through to Art. 120(2) Table 4
+    (potentially 50% at CQS 4–5 or 150% at CQS 6) or Art. 121 SCRA grading (40%–150%),
+    with no national-currency override.
+
 !!! warning "Correction: CRR has no Table 4A"
     CRR Tables 3 and 4 both use the **institution's own ECAI rating** — Table 3 for
     general maturities (Art. 120(1)), Table 4 for short-term (Art. 120(2)). The
@@ -530,7 +591,7 @@ charges** (Art. 124C(3)). CRM is excluded except pledged deposit accounts meetin
 on-balance-sheet netting requirements.
 
 !!! info "Full specification"
-    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c)
+    See [Basel 3.1 SA Risk Weights — Art. 124C](../basel31/sa-risk-weights.md#real-estate-ltv-definition-art-124c)
     for the complete LTV definition, prior charges stacking rules, and implementation
     field mapping.
 
@@ -548,12 +609,15 @@ the LTV numerator is a Basel 3.1 addition.
     CRR's informal income-dependency distinction. Under CRR, Art. 125 (general) vs
     Art. 126 (income-producing) had no formal classification gate. Art. 124E defines
     residential RE as materially dependent by default, with five exceptions (primary
-    residence, three-property limit, SPE guarantor, social housing, cooperative). CRR
-    has no equivalent rule. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+    residence, three-property limit, SPE guarantor, social housing, cooperative).
+    Art. 124E(5)/(7) additionally impose reassessment obligations (new-loan-to-obligor
+    trigger for residential, annual trigger for commercial) that have no CRR analogue —
+    CRR had no codified reassessment cadence for the Art. 125/126 income-dependency
+    distinction. See [Art. 124E specification](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e).
 
 ### General Residential — Loan-Splitting (Art. 124F)
 
-Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
+Not materially dependent on cash flows from the property (per [Art. 124E](../basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e) exceptions). PRA adopted the **loan-splitting approach** (not the BCBS CRE20.73 whole-loan table):
 
 - **Secured portion** (up to 55% of property value): **20%** risk weight
 - **Residual portion** (above 55% of property value): **counterparty risk weight** (Art. 124L)
@@ -629,7 +693,7 @@ Materially dependent on cash flows:
 
 ### Other Real Estate (Art. 124J)
 
-Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)):
+Non-regulatory real estate (doesn't meet [Art. 124A qualifying criteria](../basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a)):
 
 | Type | Risk Weight |
 |------|-------------|

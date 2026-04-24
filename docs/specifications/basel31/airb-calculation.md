@@ -3,8 +3,16 @@
 Basel 3.1 Advanced IRB changes: LGD floors, post-model adjustments (PMA),
 CCF floor at 50% of SA, double default removal, and EL monotonicity.
 
-**Regulatory Reference:** PRA PS1/26 Art. 153–154, 161(5), 164(4), 166D, CRE31–32
+**Regulatory Reference:** PRA PS1/26 Art. 153–154, 158(5), 161(5), 164(4), 166D, 178, CRE31–32
 **Test Group:** B31-C
+
+!!! info "Default Definition — Art. 178"
+    A-IRB defaulted exposures consume a `beel` companion input (Art. 158(5) best
+    estimate of expected loss) in addition to the `is_defaulted` flag. The Art. 178
+    two-limb default trigger, UTP indicators, PS1/26 hardcoded materiality thresholds
+    (retail GBP 0 / 0%; non-retail GBP 440 / 1%), DPD-counter suspensions, and the
+    3-month cure / 1-year distressed-restructuring probation are documented in the
+    shared [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 

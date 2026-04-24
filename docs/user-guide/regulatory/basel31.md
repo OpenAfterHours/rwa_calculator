@@ -88,10 +88,17 @@ PD floors vary by exposure class instead of a uniform 0.03%:
 | Retail QRRE (revolver) | 0.03% | **0.10%** |
 | Retail Other | 0.03% | **0.05%** |
 
-!!! note "Sovereign and Institution PD Floors"
-    Under Basel 3.1, sovereign exposures are restricted to SA only (Art. 147A) and institution
-    exposures to F-IRB only. PD floors for these classes (Art. 160(1)) remain relevant for any
-    grandfathered or transitional IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Art. 147A(1)(a); PS1/26 provides no grandfathering or transitional carve-out for pre-existing
+    sovereign IRB models. The 0.05% sovereign row is retained for completeness and CRR
+    cross-reference only.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) — A-IRB is unavailable,
+    but F-IRB remains the default path. The 0.05% institution PD floor therefore applies normally
+    to F-IRB institution exposures. See
+    [IRB Approach Restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
 
 ### 5. A-IRB LGD Floors
 
@@ -116,11 +123,25 @@ defined separately:
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10%* | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10%* | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15%* | Art. 164(4)(c)(iv)(4) |
+
+!!! info "Secured-retail blended floor (Art. 164(4)(c))"
+    For retail exposures outside the flat-5% RRE-mortgage path, the LGD floor is the
+    variable LGD\* produced by the Foundation Collateral Method (Art. 230 single-collateral
+    or Art. 231 multi-collateral), substituting **LGDU = 30%** and the LGDS values above.
+    Art. 164(4A) additionally requires Art. 193(7) multi-facility collateral allocation
+    when the same collateral backs multiple facilities. See the
+    [B31 A-IRB spec](../../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644)
+    for the full formula and implementation detail.
 
 *Values reflect PRA PS1/26 implementation. BCBS standard values differ (Receivables: 15%, CRE: 10%, RRE: 10%, Other Physical: 20%).
 
@@ -235,15 +256,57 @@ qualifying criteria covering property condition, legal certainty, charge conditi
 valuation (Art. 124D), borrower independence, and insurance monitoring. Exposures failing
 any criterion are "other real estate" under Art. 124J (150% if income-dependent, or
 counterparty / floor RW otherwise). See the
-[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a)
+[Art. 124A specification](../../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a)
 for full details.
+
+!!! info "Mixed Residential/Commercial Property (Art. 124(4))"
+    A single exposure secured by **both** residential and commercial property (e.g., a
+    mixed-use building with flats above retail units) must be split in proportion to the
+    value of each property, and each part risk-weighted separately. The preferential
+    Art. 124F–124I treatment applies **only if both parts separately qualify** under
+    Art. 124A — if either part fails the six-criterion gate, **both** parts fall to
+    Art. 124J. Pre-split mixed-use exposures into two input rows (one residential, one
+    commercial) at the loader boundary with `EAD` apportioned by property value. See
+    [Art. 124 specification](../../specifications/basel31/sa-risk-weights.md#real-estate-framework-scope-art-124).
+
+!!! info "Underwriting Standards (Art. 124B)"
+    Basel 3.1 introduces a one-paragraph governance obligation: institutions must have an
+    **underwriting policy for originating real estate exposures** that, at a minimum,
+    requires assessment of the **borrower's ability to repay**. The obligation applies to
+    **all** RE exposures (regulatory RE, other RE, ADC) and sits upstream of the calculator
+    — there is no input field or validation step. Compliance is evidenced through policy
+    documentation, credit-committee records, and PRA supervisory review (SS20/15, SS11/13).
+    A breach does **not** reclassify exposures under Art. 124J; it is a standalone
+    governance requirement enforced via supervisory action (potentially a Pillar 2A
+    capital add-on). See
+    [Art. 124B specification](../../specifications/basel31/sa-risk-weights.md#real-estate-underwriting-standards-art-124b).
 
 !!! info "LTV Definition (Art. 124C)"
     Basel 3.1 defines a formal regulatory LTV: outstanding balance + undrawn committed
     amounts + **all prior/pari passu charges** (Art. 124C(3)), divided by property value.
     The `property_ltv` input field must reflect this stacked calculation. Where charge
     ranking is unknown, treat other charges as pari passu (conservative default).
-    See [Art. 124C specification](../../specifications/basel31/sa-risk-weights.md#real-estate--ltv-definition-art-124c).
+    See [Art. 124C specification](../../specifications/basel31/sa-risk-weights.md#real-estate-ltv-definition-art-124c).
+
+!!! info "Valuation Requirements (Art. 124D)"
+    The property value used by the calculator must be an Art. 124D-compliant **qualifying
+    valuation**. Firms are responsible for: (a) obtaining initial valuations from an
+    independent qualified valuer or a suitably robust statistical method (Art. 124D(8));
+    (b) revaluing after a **likely permanent** impairment event, after an estimated
+    **>10% market-price decline**, at least every **3 years for loans > GBP 2.6m** (or
+    5% of own funds), and at least every **5 years** for all other regulatory RE
+    (Art. 124D(5)); and (c) for **self-build exposures** (defined in Art. 1.2,
+    PS1/26 Appendix 1 p. 27 — residential exposure ≤ 4 units, borrower's primary residence),
+    using the higher of the pre-construction land value and 0.8 × the latest qualifying
+    valuation (Art. 124D(9)). Self-build is the only route under Art. 124A(1)(a)(iii) that
+    lets a development-phase mortgage qualify as regulatory RE before construction is
+    complete (see the [Glossary entry](../../appendix/glossary.md#self-build-exposure)).
+    Pre-2027 exposures benefit from an explicit grandfathering rule (Art. 124D(11))
+    allowing the most recent legacy valuation to count as a qualifying valuation, subject
+    to the three-circumstance test. The calculator does **not** validate Art. 124D
+    compliance — the `property_value` supplied must already be the Art. 124D-compliant
+    value. See the [Art. 124D specification](../../specifications/basel31/sa-risk-weights.md#real-estate-valuation-requirements-art-124d)
+    for the full paragraph-by-paragraph breakdown.
 
 !!! info "Material Dependency Classification (Art. 124E)"
     Basel 3.1 introduces a formal test for whether a RE exposure is "materially dependent
@@ -254,7 +317,21 @@ for full details.
     (d) social housing, or (e) cooperative/association for primary residence use.
     **Commercial** RE is materially dependent unless the borrower uses each property
     predominantly for its own business (not rental). Set `is_income_producing` accordingly
-    on the collateral record. See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e).
+    on the collateral record.
+
+    **Reassessment obligations (Art. 124E(5) and (7))** are firm-side — the calculator
+    consumes the `is_income_producing` flag as of the current reporting date and does not
+    track reassessment history:
+
+    - **Residential RE** — reassess whenever a new residential-RE-secured loan is issued
+      to the obligor (including replacement loans). Discretionary updates at other times
+      are allowed only if applied consistently portfolio-wide.
+    - **Commercial RE** — reassess at least annually.
+
+    See [Art. 124E specification](../../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e)
+    for the full reassessment rules and the
+    [residential reassessment triggers](../../specifications/basel31/sa-risk-weights.md#reassessment-triggers-residential-re-art-124e5)
+    subsection.
 
 **General Residential Real Estate — Loan-Splitting (PRA Art. 124F):**
 
@@ -338,7 +415,7 @@ Commercial ADC always receives 150%.
 
 Set `is_adc = True` and optionally `is_presold = True` in the input data. The `is_adc` flag
 overrides all LTV-based RE treatment. See the
-[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate--adc-exposures-art-124k)
+[ADC specification](../../specifications/basel31/sa-risk-weights.md#real-estate-adc-exposures-art-124k)
 for full qualifying conditions.
 
 #### Retail Exposures
@@ -427,7 +504,7 @@ See [Technical Reference](../../framework-comparison/technical-reference.md#irb-
 
 ### 9. Financial Sector Entity Correlation Multiplier (CRE31.5)
 
-**Large financial sector entities** (regulated FSEs with total assets > EUR 70bn per CRR Art. 4(1)(146)) and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier is unchanged between CRR and Basel 3.1.
+**Large financial sector entities (LFSEs)** — regulated FSEs with total assets **≥ GBP 79 billion** under PS1/26 Glossary p. 78 (CRR equivalent: ≥ EUR 70 billion per CRR Art. 142(1)(4)) — and **unregulated financial sector entities** (regardless of size) receive a **1.25x** multiplier on their asset correlation (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier mechanism is unchanged between CRR and Basel 3.1; only the LFSE definition switches from the CRR EUR 70bn threshold to the PS1/26 GBP 79bn threshold.
 
 !!! note "Not the same as the large corporate threshold"
     The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets**, not to large non-financial corporates. The Art. 147A large corporate threshold (revenue > £440m) is an **approach restriction** (F-IRB only) — it does not trigger the correlation uplift. See the [IRB restrictions table](#irb-restrictions) below.
@@ -519,6 +596,25 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
 | CQS 5 | 100% | — |
 | CQS 6 | 150% | — |
 
+!!! info "Trade Finance Exception (Art. 120(2A))"
+    Rated institution exposures with an **original maturity ≤ 6 months** that **arose from
+    the movement of goods** receive Table 4 short-term weights (CQS 1-3 = 20%, CQS 4-5 = 50%)
+    — even though the general short-term window under Art. 120(2) is limited to ≤ 3 months.
+    This mirrors the SCRA Art. 121(4) exception for unrated counterparties: together they
+    preserve the BCBS CRE20.20 capital treatment for cross-border documentary credits and
+    similar short-dated trade instruments.
+
+    **Input flag:** set `is_short_term_trade_lc = True` on the facility and provide
+    `original_maturity_years ≤ 0.5`. The SA calculator already routes these through the
+    ECRA short-term branch; no extra configuration is needed.
+
+    **No CRR equivalent.** Under CRR Art. 120(2), short-term preferential treatment is
+    gated solely on residual maturity ≤ 3 months with no trade-goods carve-out. A 5-month
+    trade-finance exposure to a rated CRR bank picks up Table 3's long-term weight. The
+    Basel 3.1 Art. 120(2A) extension closes this gap. See
+    [B31 SA Risk Weights — Art. 120(2A)](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
+    for worked examples and the side-by-side comparison with Art. 121(4).
+
 !!! warning "Table 4A — Short-Term ECAI (Art. 120(2B))"
     Institutions with a specific **short-term credit assessment** use Table 4A
     (CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%) instead of the general
@@ -537,6 +633,25 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
     [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#rated-institution-due-diligence-cqs-step-up-art-1204)
     for the full trigger/effect table and short-term Table 4 / Table 4A applicability.
 
+!!! info "Art. 138(1)(g) & Art. 139(6) — Implicit Government Support Higher-of Rule"
+    Basel 3.1 adds two new provisions restricting the use of ECAI ratings that
+    incorporate **implicit government support** when risk-weighting rated institution
+    exposures. Art. 138(1)(g) prohibits such ratings unless the institution is owned
+    by or set up and sponsored by central / regional / local government; Art. 139(6)
+    is a residual **higher-of** floor where no "clean" issue-specific rating exists.
+
+    Typical target: private banks whose BBB+ / A− ratings rely on market-anticipated
+    sovereign bailout uplift ("too big to fail"). The higher-of comparison forces
+    recognition of the unsupported creditworthiness (often one or two CQS bands
+    lower, e.g. BB+ / 100% instead of BBB+ / 50%).
+
+    **Not yet implemented** — the schema lacks both an issue-specific vs general-
+    issuer distinction and an implicit-support flag. Firms must pre-adjust
+    `external_cqs` offline or use `due_diligence_override_rw` (Art. 110A pathway)
+    as a workaround. CRR has no equivalent provision. See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full trigger, worked example, and exemption scope.
+
 Standardised Credit Risk Assessment Approach (SCRA):
 
 | Grade | Risk Weight (>3m) | Risk Weight (≤3m) | Criteria |
@@ -552,7 +667,27 @@ Standardised Credit Risk Assessment Approach (SCRA):
     additionally requires **quantitative** thresholds: CET1 ratio ≥ 14% and leverage ratio ≥ 5%
     (Art. 121(5)). Grade B has **no quantitative thresholds** — it is the qualitative residual
     for institutions meeting minimum requirements (excluding buffers) but not qualifying for
-    Grade A. If minimum requirements are not publicly disclosed, the institution is Grade C.
+    Grade A.
+
+!!! warning "Disclosure Barring Ladder (Art. 121(1)(a), (1)(b))"
+    Public disclosure of prudential requirements drives two distinct barring rules. A
+    single "undisclosed → Grade C" heuristic is **incorrect** under final PS1/26; missing
+    buffer disclosure bars Grade A without forcing Grade C, so the firm lands at Grade B.
+
+    - **Buffers not disclosed** (requirements disclosed): Art. 121(1)(a) — *may not be
+        classified as Grade A*. Grade B (75%) is the best available outcome.
+    - **Minimum requirements not disclosed**: Art. 121(1)(b) — *shall be classified as
+        Grade C* (150%).
+
+    Institution-specific Pillar 2 add-ons kept confidential by the home supervisor are
+    excluded from both tests (Art. 121(1)(a), (1)(b) disclosure carve-out). For
+    third-country counterparties, the disclosure test extends to any local-equivalent
+    published requirements and buffers (Art. 121(1B)).
+
+    `scra_grade` is a pre-determined input — the calculator relies on the firm to
+    evaluate disclosure before assigning the grade. See
+    [B31 SA spec — Disclosure Barring Rules](../../specifications/basel31/sa-risk-weights.md#scra-disclosure-barring-rules-art-1211a-1b)
+    for the full barring table and the near-final → final direction reversal.
 
 !!! info "Short-Term Trade Finance Exception (Art. 121(4))"
     Unrated institution exposures with an **original maturity ≤ 6 months** that **arose from
@@ -583,6 +718,37 @@ Standardised Credit Risk Assessment Approach (SCRA):
     weights, where eligible). See
     [B31 SA Risk Weights — Art. 121(6)](../../specifications/basel31/sa-risk-weights.md#scra-sovereign-floor-for-foreign-currency-exposures-art-1216)
     for the full conditions and worked examples.
+
+### Covered Bond Exposures
+
+Eligible covered bonds issued by institutions receive preferential treatment under Art. 129.
+Rated bonds map into Table 7 (CQS 1 → 10%, CQS 2/3 → 20%, CQS 4/5 → 50%, CQS 6 → 100%) —
+PRA PS1/26 retained the CRR values and did **not** adopt the BCBS CRE20.28–29 reductions.
+Unrated bonds derive their RW from the issuing institution's senior unsecured RW via the
+Art. 129(5) expanded 7-entry table (new rows at 15%/20%/25%/35% to accommodate ECRA 30% /
+SCRA 40%/50%/75% institution weights). See
+[Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129)
+for the full CQS table and CRR comparison, and the [institution exposure-class page](../exposure-classes/institution.md#covered-bonds)
+for the practitioner walk-through.
+
+!!! info "Art. 129(4A) — Due Diligence CQS Step-Up for Covered Bonds"
+    Where an ECAI rating drives the Table 7 lookup above, Art. 129(4A) requires firms to
+    conduct due diligence on the external assessment; if internal DD reveals higher risk
+    characteristics than implied by the CQS, the firm must assign **at least one CQS step
+    higher** than the ECAI-implied weight. Sample uplifts against Table 7: CQS 1 → CQS 2
+    (10% → 20%), CQS 3 → CQS 4 (20% → 50%), CQS 5 → CQS 6 (50% → 100%). The CQS 2 → CQS 3
+    and CQS 4 → CQS 5 transitions yield no numerical change because Table 7 assigns
+    identical weights to those adjacent steps — the reassignment is still mandatory for
+    any downstream CQS-keyed process (e.g. disclosure).
+
+    This is a class-specific instance of the framework-wide Art. 110A obligation discussed
+    in [section 10](#10-due-diligence-requirements), with parallels for corporates
+    (Art. 122(4)) and institutions (Art. 120(4)). CRR has no equivalent covered-bond
+    step-up rule. Currently routed through the Art. 110A `due_diligence_override_rw` input
+    (no dedicated Art. 129(4A) branch in the calculator) — set the override to the
+    next-CQS-band weight and the engine will apply it as a directional floor. See the
+    [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a)
+    for the full trigger/effect table and worked uplifts.
 
 ### Subordinated Debt
 
@@ -674,7 +840,19 @@ Basel 3.1 restructures CRM methods with clearer names and applicability:
 | Financial Collateral Comprehensive Method | SA + IRB | CRR Art. 223 |
 | Foundation Collateral Method | F-IRB | Scattered CRR IRB collateral provisions |
 | Parameter Substitution Method | F-IRB (unfunded) | CRR Art. 236 |
-| LGD Adjustment Method | A-IRB (unfunded) | CRR Art. 183 |
+| LGD Adjustment Method | A-IRB (unfunded) **— own-LGD permission required for the class** | CRR Art. 183 |
+
+!!! info "LGD-AM is not available to every A-IRB firm"
+    Under PS1/26 Art. 143(2A)(c), A-IRB permission is granted per exposure
+    class / subclass, not bank-wide. LGD-AM (Art. 183) is the Art. 179(1)(aa)
+    exception that lets an A-IRB firm take guarantee recoveries into its own
+    LGD estimates — it is only available for classes where the firm holds
+    A-IRB own-LGD permission. F-IRB classes, Art. 147A SA-only classes
+    (sovereigns, institutions, large corporates, FSEs, equity) and slotting
+    classes must use **PSM (Art. 236)** for unfunded credit protection
+    instead. See the [B31 CRM specification § LGD-AM Availability
+    Gate](../../specifications/basel31/credit-risk-mitigation.md#lgd-am-availability-gate-art-143-art-1791aa-art-147a)
+    for the full decision logic.
 
 **Foundation Collateral Method overcollateralisation thresholds (Art. 230):**
 

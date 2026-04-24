@@ -3,8 +3,15 @@
 Basel 3.1 Foundation IRB changes: reduced senior LGD, higher PD floors, covered bond LGD,
 1.06 scaling removal, and GBP-native SME correlation thresholds.
 
-**Regulatory Reference:** PRA PS1/26 Art. 153–163, CRE31–32
+**Regulatory Reference:** PRA PS1/26 Art. 153–163, 178, CRE31–32
 **Test Group:** B31-B
+
+!!! info "Default Definition — Art. 178"
+    Defaulted-exposure routing (K = 0) is triggered by the Art. 178 default definition.
+    PS1/26 Art. 178 introduces hardcoded materiality thresholds (retail GBP 0 / 0%;
+    non-retail GBP 440 / 1%), explicit DPD-counter suspensions (Art. 178(1A)–(1D)), and
+    a 1-year distressed-restructuring probation (Art. 178(5A)–(5C)). See the
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 
@@ -70,7 +77,8 @@ internal models by tightening supervisory parameters and removing the scaling fa
     Basel 3.1 introduces a new distinction for financial sector entities (FSEs). Non-FSE senior
     unsecured exposures benefit from a reduced 40% LGD, while FSE senior unsecured retains the
     CRR 45% rate. This recognises the higher loss severity observed for financial institution
-    defaults. FSE is defined per Art. 4(1)(27); "large FSE" per Art. 4(1)(146).
+    defaults. FSE is defined per Art. 4(1)(27); "large FSE" per PS1/26 Glossary p. 78
+    (total assets ≥ GBP 79 billion; corresponds to CRR Art. 142(1)(4) which sets EUR 70bn).
 
 !!! info "Purchased Receivables Changes (Art. 161(1)(e)–(g))"
     Art. 161(1)(e) aligns the senior purchased receivables LGD with the new non-FSE rate
@@ -133,6 +141,22 @@ See [CRM Specification](credit-risk-mitigation.md) for haircut application detai
 | Corporate SME | 0.03% | **0.05%** | Art. 160(1) |
 | Sovereign | 0.03% | **0.05%** | Art. 160(1) |
 | Institution | 0.03% | **0.05%** | Art. 160(1) |
+
+!!! warning "Sovereign PD Floor is Regulatory Dead Letter (Art. 147A(1)(a))"
+    Under Basel 3.1, central-government, central-bank and quasi-sovereign exposures
+    (Art. 147(2)(a)) are **restricted to the Standardised Approach** by Art. 147A(1)(a).
+    F-IRB and A-IRB are both unavailable, and PS1/26 provides **no grandfathering or
+    transitional carve-out** for pre-existing sovereign IRB models. The 0.05% sovereign
+    PD floor row above is retained for completeness and CRR cross-reference only — under
+    Basel 3.1 it cannot bind on any live exposure.
+
+    Institution exposures (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b)
+    (A-IRB unavailable; SA applies only where permission has been granted under
+    Art. 148 or Art. 150). The 0.05% institution PD floor therefore applies normally
+    to F-IRB institution exposures and is **not** dead letter.
+
+    See [framework-comparison — IRB approach restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class-by-class mapping.
 
 ### Retail
 
@@ -220,7 +244,8 @@ R_fse = R x 1.25
 ```
 
 Triggered by `apply_fi_scalar = True` in the input data. Applies to large FSEs (total assets
->= EUR 70bn / GBP 79bn, Art. 4(1)(146)) and all unregulated FSEs (Art. 153(2)). See
+≥ **GBP 79 billion** per PS1/26 Glossary p. 78, which corresponds to CRR Art. 142(1)(4) at
+EUR 70bn) and all unregulated FSEs (Art. 153(2)). See
 [Model Permissions](model-permissions.md) for the distinction between the FI scalar
 (correlation multiplier) and Art. 147A approach restrictions (all FSEs → F-IRB only).
 

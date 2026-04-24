@@ -52,7 +52,7 @@ This page provides links to key regulatory documents and resources.
 | Art. 119-121 | Institution exposures |
 | Art. 122 | Corporate exposures |
 | Art. 123 | Retail exposures |
-| Art. 124-125 | Real estate exposures |
+| Art. 124-125 | Real estate exposures (Basel 3.1 expands to Art. 124–124L: framework scope, Art. 124A qualifying criteria, Art. 124B underwriting-standards, Art. 124C LTV, Art. 124D valuation, Art. 124E material dependency, Art. 124F–124I risk-weight tables, Art. 124J other RE, Art. 124K ADC, Art. 124L counterparty RW) |
 | Art. 127 | Defaulted exposures |
 | Art. 128 | High risk items |
 | Art. 129 | Covered bonds |

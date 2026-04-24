@@ -35,7 +35,7 @@ This section contains the formal specifications for the RWA Calculator. These sp
 | [Provisions](basel31/provisions.md) | EL with revised LGD, Art. 158(6A) monotonicity, shortfall/excess | Art. 158–159 | B31-G |
 | [Defaulted Exposures](basel31/defaulted-exposures.md) | Provision-coverage split (100%/150%), RESI RE exception, IRB defaulted | Art. 127, 153(1), 154(1) | B31-K |
 | [Equity Approach](basel31/equity-approach.md) | New SA equity regime (250%/400%), IRB removal, transitional, CIU | Art. 133, 147A, Rules 4.1–4.8 | B31-L |
-| [Model Permissions](basel31/model-permissions.md) | Art. 147A approach restrictions: FSE, large corporate, institution, equity | Art. 147A, 4(1)(146) | B31-M |
+| [Model Permissions](basel31/model-permissions.md) | Art. 147A approach restrictions: FSE, large corporate, institution, equity | Art. 147A; PS1/26 Glossary (LFSE, CRR Art. 142(1)(4)) | B31-M |
 
 See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for comparison documentation.
 

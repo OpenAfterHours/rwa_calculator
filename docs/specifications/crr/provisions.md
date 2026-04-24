@@ -90,6 +90,14 @@ The `finalize_ead()` step does **not** subtract provisions again — they are al
     version was omitted by SI 2021/1078 (see header admonition). Art. 159 remains in
     UK CRR.
 
+!!! info "Default Definition — Art. 178"
+    The Art. 159 EL-vs-provisions comparison partitions exposures into non-defaulted
+    (Pool A) and defaulted (Pool C) sides based on the Art. 178 default trigger. The
+    formal two-limb trigger, UTP indicators, materiality threshold, and return-to-
+    non-defaulted conditions are documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
+    Default status enters the pipeline via the upstream `is_defaulted` flag.
+
 Under IRB, provisions are tracked (`provision_allocated`) but **not deducted** from EAD. The provision columns are set to zero:
 
 ```
@@ -105,7 +113,20 @@ EL = PD × LGD × EAD
 ```
 
 !!! warning "BEEL Exception for A-IRB Defaulted (Art. 158(5))"
-    For **A-IRB defaulted exposures** (PD=1), EL shall be the institution's **best estimate of expected loss (BEEL)**, not PD × LGD (which would give 1 × LGD). F-IRB defaulted exposures use the standard formula. The spec's `EL = PD × LGD × EAD` applies only to non-defaulted exposures and F-IRB defaulted.
+    For **A-IRB defaulted exposures** (PD=1), EL shall be the institution's **best
+    estimate of expected loss (BEEL)**, not `PD × LGD` (which would give `1 × LGD`).
+    F-IRB defaulted exposures use the standard `1 × LGD × EAD` formula. The spec's
+    `EL = PD × LGD × EAD` applies only to non-defaulted exposures and F-IRB defaulted.
+
+    **Article location note.** CRR Art. 158 was omitted on 1 Jan 2022 (SI 2021/1078)
+    and migrated to the PRA Rulebook's Credit Risk: Internal Ratings Based Approach
+    (CRR) Part — the live article text with the BEEL substitution lives at
+    [Basel 3.1 spec — BEEL Exception](../basel31/provisions.md#beel-exception-pool-c-art-1585)
+    and [Basel 3.1 Defaulted Exposures — BEEL](../basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).
+    Pre-revocation CRR used the symbol `ELBE`; PRA PS1/26 renames to `BEEL` with no
+    substantive change to the estimation standards in Art. 181(1)(h)(ii). CRR Art. 159
+    in the UK-onshored text still cross-references `Art. 158(5)` by that number even
+    though the substantive rule now lives in the PRA Rulebook.
 
 ### Basel 3.1: Post-Model EL Adjustment (Art. 158(6A))
 

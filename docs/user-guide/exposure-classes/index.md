@@ -114,19 +114,33 @@ Project/object/commodity finance where:
 
 ## Default Indicators
 
-An exposure is classified as defaulted if:
-- Past due > 90 days on material amount
-- Unlikely to pay in full
-- Subject to distressed restructuring
-- Bankruptcy/insolvency proceedings
-- Non-accrual status
+An exposure is classified as defaulted when **either** Art. 178 limb is met:
+
+- **Limb (a) — Unlikeliness to pay (UTP)** in full without recourse to realising security
+  (Art. 178(1)(a)). UTP indicators (Art. 178(3)) include: non-accrual status; specific
+  credit risk adjustment for credit-quality decline; sale at material credit-related
+  economic loss; distressed restructuring; institution-filed bankruptcy; or obligor-sought
+  bankruptcy protection.
+- **Limb (b) — 90 days past due** on any **material** credit obligation (Art. 178(1)(b)).
+  Materiality under PS1/26 is hardcoded: retail > GBP 0 / > 0%; non-retail > GBP 440 / > 1%
+  (Art. 178(2)(d)/(da)). Under CRR, materiality is set by the competent authority.
+
+Retail may apply the definition at the facility level; non-retail defaults at the obligor
+level. The calculator consumes default status via the upstream `is_defaulted` boolean —
+no DPD counter or UTP inference runs in-engine.
+
+!!! info "Full Treatment"
+    See the [Default Definition (Art. 178) specification](../../specifications/common/default-definition.md)
+    for the complete two-limb trigger, DPD counting rules, suspension paragraphs
+    (Art. 178(1A)–(1D)), the 3-month cure, and the 1-year distressed-restructuring
+    probation (Art. 178(5A)–(5C)).
 
 ```python
-# Default check
-if (days_past_due > 90 and past_due_amount > materiality_threshold) or
-   unlikely_to_pay or
-   distressed_restructuring:
-    exposure_class = ExposureClass.DEFAULTED
+# Upstream assessment (not performed by the calculator)
+facility = {
+    "is_defaulted": True,  # set by obligor-monitoring system
+    # ... other fields
+}
 ```
 
 ## Treatment by Class

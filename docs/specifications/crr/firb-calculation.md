@@ -2,7 +2,7 @@
 
 Foundation IRB calculation with supervisory LGD, PD floors, and correlation formulas.
 
-**Regulatory Reference:** CRR Articles 153-154, 161-163
+**Regulatory Reference:** CRR Articles 153-154, 161-163, 178
 
 **Test Group:** CRR-B
 
@@ -14,6 +14,13 @@ Foundation IRB calculation with supervisory LGD, PD floors, and correlation form
 |----|-------------|----------|--------|
 | FR-1.3 | F-IRB capital requirement (K): PD, supervisory LGD, maturity adjustment | P0 | Done |
 | FR-1.8 | Defaulted exposure treatment: F-IRB (K=0) | P0 | Done |
+
+!!! info "Default Definition — Art. 178"
+    F-IRB defaulted exposures (PD = 100%, K = 0) are driven by the Art. 178 default
+    trigger. The two-limb trigger (unlikeliness-to-pay and 90 DPD), UTP indicators,
+    materiality threshold, suspension rules, and 3-month cure / 1-year distressed-
+    restructuring probation are documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
 
 ---
 
@@ -107,9 +114,11 @@ Under Basel 3.1, senior unsecured LGD is differentiated by whether the counterpa
 
 !!! note "FSE Definition"
     Financial sector entity includes banks, building societies, investment firms, insurance
-    companies, and any entity primarily engaged in financial intermediation. Under CRR this is
-    Art. 4(1)(27); under Basel 3.1 Art. 4(1)(146) uses a total assets > EUR 70bn threshold for
-    the "large FSE" correlation multiplier.
+    companies, and any entity primarily engaged in financial intermediation (general FSE
+    definition: CRR Art. 4(1)(27)). The "large FSE" total-assets threshold driving the
+    1.25x correlation multiplier (Art. 153(2)) is **EUR 70 billion** under CRR Art. 142(1)(4)
+    and **GBP 79 billion** under Basel 3.1 (PS1/26 Glossary p. 78, with Note
+    "corresponds to Article 142(1)(4) of CRR").
 
 !!! info "Key B31 Changes to Purchased Receivables / Dilution"
     Basel 3.1 aligns the senior purchased receivables LGD with the new non-FSE rate (45% → 40%,
@@ -142,10 +151,19 @@ Under Basel 3.1, PD floors are differentiated by exposure class:
 | Retail — QRRE (revolver) | 0.03% | **0.10%** | Art. 163(1)(a) |
 | Retail — other | 0.03% | **0.05%** | Art. 163(1)(c) |
 
-!!! note "Sovereign/Institution PD Floors"
-    Under Basel 3.1, sovereign and institution exposures retain a PD floor but are restricted under Art. 147A (sovereign = SA only, institution = FIRB only). PD floors are still relevant for any grandfathered or transitional IRB treatment.
+!!! warning "Sovereign Row is Regulatory Dead Letter under Basel 3.1 (Art. 147A(1)(a))"
+    Under Basel 3.1, sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised
+    Approach** by Art. 147A(1)(a); PS1/26 provides no grandfathering or transitional carve-out
+    for pre-existing sovereign IRB models. The 0.05% sovereign row in the Basel 3.1 column is
+    retained for completeness only — under Basel 3.1 it cannot bind on any live exposure.
 
-See [Framework Differences](../../framework-comparison/technical-reference.md) for Basel 3.1 differentiated PD floors.
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See [Framework Differences](../../framework-comparison/technical-reference.md#differentiated-pd-floors-basel-31)
+    and [IRB Approach Restrictions](../../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
 
 ## Asset Correlation Formula (CRR Art. 153)
 
@@ -204,11 +222,14 @@ R = 0.03 x f(PD) + 0.16 x (1 - f(PD))
 
 ## FI Scalar (CRR Art. 153(2))
 
-A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for **large financial sector entities** (total assets ≥ EUR 70bn per CRR Art. 4(1)(146)) **and unregulated financial sector entities** (per CRR Art. 153(2)).
+A **1.25x** multiplier applied to the **asset correlation coefficient** (R) for **large financial sector entities (LFSEs)** (total assets ≥ **EUR 70 billion** per CRR Art. 142(1)(4)) **and unregulated financial sector entities** (per CRR Art. 153(2)).
 
 !!! warning "Two distinct thresholds — do not conflate"
-    - **EUR 70bn total assets** (≈ GBP 79bn) → 1.25x correlation multiplier (Art. 153(2)). Applies to large FSEs and all unregulated FSEs under both CRR and Basel 3.1.
-    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+    - **LFSE total-assets threshold** — **EUR 70 billion** under CRR Art. 142(1)(4);
+      **GBP 79 billion** under Basel 3.1 (PS1/26 Glossary p. 78, which cites CRR Art. 142(1)(4)
+      as the corresponding pre-revocation provision). Triggers the 1.25x correlation multiplier
+      (Art. 153(2)) for large FSEs and all unregulated FSEs under both frameworks.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(e), Basel 3.1 only). Does not affect correlation.
     - The Art. 147A(1)(e) F-IRB restriction applies to **all** FSEs regardless of size — it is separate from the correlation uplift which only applies to *large* or *unregulated* FSEs.
 
 ## Capital Requirement Formula

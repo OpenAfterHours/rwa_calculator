@@ -253,7 +253,7 @@ The multiplied weight is **not capped** at the Table 6B ceiling — it may excee
 
 #### Other Real Estate (Art. 124J)
 
-Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate--qualifying-criteria-art-124a):
+Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/sa-risk-weights.md#real-estate-qualifying-criteria-art-124a):
 
 | Sub-Type | Risk Weight |
 |----------|------------|
@@ -502,11 +502,22 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 
 **Retail (Art. 164(4)):**
 
-| Exposure Type | LGD Floor |
-|---------------|-----------|
-| Secured by residential RE | 5% |
-| QRRE unsecured | 50% |
-| Other unsecured retail | 30% |
+| Exposure Type | Collateral | LGD Floor | Sub-paragraph |
+|---------------|------------|-----------|---------------|
+| Residential RE mortgage (flat) | RE secured | 5% | Art. 164(4)(a) |
+| QRRE (transactor and revolver) | Unsecured | 50% | Art. 164(4)(b)(i) |
+| Other retail | Unsecured | 30% | Art. 164(4)(b)(ii) |
+| Other retail (LGDU in LGD* formula) | Partially unsecured | 30% | Art. 164(4)(c)(iii) |
+| Other retail | Financial collateral | 0% | Art. 164(4)(c)(iv)(1) |
+| Other retail | Receivables | 10% | Art. 164(4)(c)(iv)(2) |
+| Other retail | Immovable property (CRE / RRE as collateral) | 10% | Art. 164(4)(c)(iv)(3) |
+| Other retail | Other physical | 15% | Art. 164(4)(c)(iv)(4) |
+
+Art. 164(4)(a) applies the flat 5% floor to retail RRE mortgages irrespective of
+the level of collateral provided. For all other secured or partially-secured retail
+exposures, the blended LGD floor is LGD* from the Foundation Collateral Method
+(Art. 230 / Art. 231) with LGDU substituted at 30% and LGDS values from the table
+above. Canonical source: [B31 A-IRB spec](../specifications/basel31/airb-calculation.md#retail-a-irb-lgd-floors-art-1644).
 
 ---
 
@@ -521,6 +532,19 @@ Art. 161(5)(a) sets a flat 25% for all corporate unsecured — no senior/subordi
 | Retail QRRE (transactor) | 0.03% | 0.05% |
 | Retail QRRE (revolver) | 0.03% | 0.10% |
 | Retail Other | 0.03% | 0.05% |
+
+!!! warning "Sovereign Row is Regulatory Dead Letter under Basel 3.1 (Art. 147A(1)(a))"
+    Sovereign exposures (Art. 147(2)(a)) are **restricted to the Standardised Approach** by
+    Basel 3.1 Art. 147A(1)(a) — F-IRB and A-IRB are both unavailable and PS1/26 provides no
+    grandfathering or transitional carve-out. The 0.05% sovereign row in the Basel 3.1 column
+    is retained for completeness and CRR cross-reference only.
+
+    Institutions (Art. 147(2)(b)) are capped at F-IRB by Art. 147A(1)(b) (A-IRB unavailable;
+    SA applies only where permission has been granted under Art. 148 or Art. 150). The 0.05%
+    institution PD floor applies normally to F-IRB institution exposures.
+
+    See [IRB Approach Restrictions](../framework-comparison/key-differences.md#irb-approach-restrictions)
+    for the full Art. 147A(1) class mapping.
 
 **Source**: `CRR_PD_FLOOR` in `data/tables/firb_lgd.py`, `PDFloors` in `contracts/config.py`
 

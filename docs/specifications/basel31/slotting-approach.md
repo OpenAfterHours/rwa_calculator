@@ -96,6 +96,19 @@ Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short m
 | Weak | 250% | 250% | 8.0% |
 | Default | 0% | 0% | 50.0% |
 
+!!! warning "Not Yet Implemented — HVCRE Short-Maturity Subgrades (Art. 153(5)(d))"
+    HVCRE Table A has distinct short-maturity values in columns A and C (Strong A = 70%,
+    Good C = 95%) — see the same rows above. The calculator does **not** implement these:
+    `data/tables/b31_slotting.py` has `B31_SLOTTING_RISK_WEIGHTS_HVCRE` only (no
+    `_HVCRE_SHORT` variant) and `engine/slotting/namespace.py` ignores `is_short` for
+    B31 HVCRE. Short-maturity HVCRE Strong exposures therefore receive 95% (col B)
+    instead of 70% (col A) and Good exposures receive 120% (col D) instead of 95%
+    (col C) — capital overstatement of 36% and 26% respectively for well-rated,
+    short-dated HVCRE. Tracked as IMPLEMENTATION_PLAN.md P1.117 (separate from P1.97
+    which covers non-HVCRE subgrades). See
+    [Subgrade Treatment](#subgrade-treatment-table-a-columns-abcd) below for the
+    consolidated column A/C implementation gap covering both HVCRE and non-HVCRE.
+
 !!! note "HVCRE EL — No Maturity Split AND No Strong/Good Differentiation"
     Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat
     (no < 2.5yr / >= 2.5yr distinction) **and** Strong and Good both carry the same
@@ -128,15 +141,84 @@ Table A structure:
 
 **Column assignment rules (Art. 153(5)(c)–(f)):**
 
-- **(c) Default:** Strong → column **B**; Good → column **D**. These are the risk weights
-  in the non-HVCRE and HVCRE tables above.
-- **(d) Short maturity:** If remaining maturity < 2.5 years, firms **may** assign column
-  **A** (Strong) or **C** (Good) instead — providing lower risk weights.
-- **(e) IPRE enhanced:** IPRE Strong exposures **may** use column **A** if: underwriting
-  substantially stronger than Strong criteria, very low LTV, investment-grade tenant
-  income (≥ 100% debt service), and no ADC characteristics.
-- **(f) PF enhanced:** PF Strong exposures **may** use column **A** if underwriting and
-  characteristics are substantially stronger than required for Strong.
+- **(c) Default:** Strong → column **B**; Good → column **D**; Satisfactory and Weak use
+  their single columns. These are the risk weights in the non-HVCRE and HVCRE tables above.
+- **(d) Short maturity:** If remaining maturity **< 2.5 years**, firms **may** assign column
+  **A** (Strong) or **C** (Good) instead — providing lower risk weights. Available for
+  **all** specialised lending categories (OF, CF, PF, IPRE, HVCRE).
+- **(e) IPRE enhanced:** IPRE Strong exposures **may** use column **A** if **all four**
+  sub-conditions (i)–(iv) are met — see verbatim quote below. The test combines (i) an
+  underwriting-quality bar, (ii) a very-low-LTV bar, (iii) an investment-grade **income
+  stream** bar that expressly **includes** tenant income ≥ 100% of the obligor's debt
+  service obligations, and (iv) exclusion of ADC (land acquisition, development and
+  construction of commercial real estate) characteristics.
+- **(f) PF enhanced:** PF Strong exposures **may** use column **A** if the institution's
+  underwriting and the exposure's other characteristics are substantially stronger than
+  required by the Strong rating grade. Unlike (e), Art. 153(5)(f) contains **no**
+  quantitative sub-conditions — it is a single substance-over-form test.
+
+!!! quote "Art. 153(5)(c)–(f) — verbatim (PS1/26 Appendix 1 pp. 102–103)"
+    **(c)** subject to points (d) to (f) of this paragraph an institution shall:
+
+    - (i) assign the relevant risk weight in column B of Table A to exposures assigned to
+      the 'Strong' rating grade;
+    - (ii) assign the relevant risk weight in column D of Table A to exposures assigned to
+      the 'Good' rating grade;
+    - (iii) assign the relevant risk weight in the 'Satisfactory' column of Table A to
+      exposures assigned to the 'Satisfactory' rating grade; and
+    - (iv) assign the relevant risk weight in the 'Weak' column of Table A to exposures
+      assigned to the 'Weak' rating grade.
+
+    **(d)** an institution may, for all categories of specialised lending exposures, if
+    less than 2.5 years remain until maturity of an exposure:
+
+    - (i) for exposures assigned to the 'Strong' rating grade: assign the relevant risk
+      weight in column A of Table A to the exposure instead of the risk weight in column
+      B of Table A; and
+    - (ii) for exposures assigned to the 'Good' rating grade: assign the relevant risk
+      weight in column C of Table A to the exposure instead of the risk weight in column
+      D of Table A;
+
+    **(e)** an institution may, for IPRE exposures assigned to the 'Strong' rating grade,
+    assign the relevant risk weight in column A of Table A to the exposure instead of the
+    risk weight in column B of Table A if:
+
+    - (i) the institution's underwriting of the exposure and the exposure's other
+      characteristics are substantially stronger than required by the 'Strong' rating
+      grade;
+    - (ii) the loan to value ratio is very low for the property type;
+    - (iii) the income stream on which the repayment of the obligation depends is
+      consistent with that which the institution would reasonably expect for an investment
+      grade exposure, including that the tenant income from the property is at least 100%
+      of the obligor's debt service obligations; and
+    - (iv) the exposure does not finance the land acquisition, development and
+      construction ('ADC') of commercial real estate;
+
+    **(f)** an institution may, for project finance exposures assigned to the 'Strong'
+    rating grade, assign the relevant risk weight in column A of Table A to the exposure
+    instead of the risk weight in column B of Table A if the institution's underwriting
+    of the exposure and the exposure's other characteristics are substantially stronger
+    than required by the 'Strong' rating grade;
+
+!!! info "Asymmetry between (e) and (f) — why IPRE carries four tests but PF only one"
+    Art. 153(5)(e) overlays three **additional** quantitative tests on top of the
+    substantial-strength bar in (i): LTV floor (ii), investment-grade income-stream /
+    tenant-coverage test (iii), and ADC exclusion (iv). Art. 153(5)(f) stops at the
+    substantial-strength bar alone. The difference reflects IPRE's dependence on
+    identifiable property-level cash flows (tenant income, LTV) — which lend themselves to
+    hard quantitative gates — whereas project-finance cash flows derive from a sponsor's
+    completed project and are evaluated holistically in the slotting factor lists
+    (Appendix 1 List 2). Firms cannot import the (e)(ii)–(iv) tests into (f) by analogy.
+
+!!! warning "Art. 153(5)(e)(iii) — the income-stream test is not just 'tenant ≥ 100%'"
+    A common paraphrase of (e)(iii) reduces it to "investment-grade tenant income (≥ 100%
+    debt service)". That conflates two requirements. The **primary** test is that the
+    income stream on which repayment depends is consistent with an investment-grade
+    exposure — the tenant-income coverage at ≥ 100% of the **obligor's** (not the
+    property's) debt service obligations is one component ("including that...") of that
+    broader investment-grade test, not the whole test. A property with a single
+    non-investment-grade tenant paying 110% of debt service would fail (e)(iii) despite
+    clearing the numerical threshold.
 
 !!! info "PRA vs BCBS — Maturity Differentiation Preserved"
     BCBS CRE33 removes maturity-based differentiation entirely and uses flat risk weights.
@@ -145,10 +227,25 @@ Table A structure:
     (CRR "≥ 2.5yr" = column B/D; CRR "< 2.5yr" = column A/C). Column A/C assignment is
     explicitly optional ("may") under Art. 153(5)(d)–(f).
 
-!!! warning "Not Yet Implemented — Column A/C Concession"
-    The calculator assigns all Basel 3.1 slotting exposures to columns B/D (the default
-    per Art. 153(5)(c)). The optional column A/C short-maturity concession and
-    enhanced-underwriting concessions are not yet implemented.
+!!! warning "Not Yet Implemented — Column A/C Concession (Non-HVCRE and HVCRE)"
+    The calculator assigns **all** Basel 3.1 slotting exposures to columns B/D (the
+    default per Art. 153(5)(c)), regardless of HVCRE status or remaining maturity:
+
+    - **Non-HVCRE short maturity (P1.97):** `data/tables/b31_slotting.py` has no
+      `B31_SLOTTING_RISK_WEIGHTS_SHORT` variant. Short-dated Strong receives 70%
+      (col B) instead of 50% (col A); Good receives 90% (col D) instead of 70% (col C).
+    - **HVCRE short maturity (P1.117):** `data/tables/b31_slotting.py` has no
+      `B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` variant. Short-dated Strong receives
+      95% (col B) instead of 70% (col A); Good receives 120% (col D) instead of 95%
+      (col C).
+    - **Enhanced-underwriting concessions** (Art. 153(5)(e) IPRE, Art. 153(5)(f) PF)
+      are not implemented — no input field exists to mark an exposure as meeting the
+      enhanced-criteria threshold.
+
+    `engine/slotting/namespace.py` (`lookup_rw()`) ignores `is_short` for B31 across
+    both HVCRE and non-HVCRE branches. CRR maturity-based differentiation **is**
+    implemented via separate short/long maturity tables
+    (`SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT`).
 
 ## Default Category (0% RW, EL Treatment)
 

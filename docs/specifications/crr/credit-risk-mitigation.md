@@ -42,15 +42,15 @@ CRR uses 3 maturity bands for bond haircuts; Basel 3.1 expands to 5 bands with i
 | 2-3 | 1% | 3% | 6% |
 | 4 | 15% | 15% | 15% |
 
-**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224 Table 1, 10-day liquidation period):**
 
 | CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
 |-----|-------|-------|-------|--------|-------|
 | 1 | 0.5% | 2% | 2% | 4% | 4% |
-| 2-3 | 1% | 3% | 4% | 6% | 12% |
+| 2-3 | 1% | 3% | 3% | 6% | 6% |
 | 4 | 15% | 15% | 15% | 15% | 15% |
 
-Key B31 change: CQS 2-3 govt bond >10yr raised from 6% to 12%.
+Key B31 change: the 5-band split re-groups the CRR 1–5yr and 5yr+ bands but **does not raise sovereign haircuts** for well-rated issuers. CQS 2–3 sovereigns remain at 6% even at the longest tenor; the CRR-era "5yr+ = 6%" simply splits into 5–10yr = 6% and >10yr = 6%. The cross-reference to the authoritative B31 spec is [Government Bond Haircuts (5-Band)](../basel31/credit-risk-mitigation.md#government-bond-haircuts-5-band).
 
 **CQS eligibility (Art. 197):**
 
@@ -67,14 +67,17 @@ Key B31 change: CQS 2-3 govt bond >10yr raised from 6% to 12%.
 | 1 | 1% | 4% | 8% |
 | 2-3 | 2% | 6% | 12% |
 
-**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224):**
+**Basel 3.1 (5 maturity bands — PRA PS1/26 Art. 224 Table 1, 10-day liquidation period):**
 
 | CQS | 0–1yr | 1–3yr | 3–5yr | 5–10yr | >10yr |
 |-----|-------|-------|-------|--------|-------|
-| 1 | 1% | 4% | 6% | 10% | 12% |
-| 2-3 | 2% | 6% | 8% | 15% | 15% |
+| 1 | 1% | 3% | 4% | 6% | 12% |
+| 2-3 | 2% | 4% | 6% | 12% | 20% |
 
-Key B31 changes: CQS 1 longer tenors increased (5yr+ was flat 8%, now granular 6%/10%/12%). CQS 2-3 longer tenors increased (5yr+ was 12%, now 8%/15%/15%).
+Key B31 changes: the 5-band split **raises the longest-tenor haircuts** materially while easing short-to-mid tenors. CQS 1 >10yr moves from the CRR 5yr+ flat 8% to **12%**; CQS 2–3 >10yr moves from 12% to **20%** (a +8pp uplift). By contrast, CQS 1 / 1–3yr eases from 4% to 3% and CQS 2–3 / 1–3yr eases from 6% to 4%. The cross-reference to the authoritative B31 spec is [Corporate and Institution Bond Haircuts (5-Band)](../basel31/credit-risk-mitigation.md#corporate-and-institution-bond-haircuts-5-band).
+
+!!! note "Change log — B31 comparison table corrections (2026-04-21)"
+    Prior versions of this CRR spec showed pre-correction B31 haircuts (CQS 2–3 / 10yr+ govt at 12%; corporate/institution CQS 2–3 / 5–10yr and 10yr+ both at 15%; CQS 1 / 1–3yr at 4%). These were drafted before the 17 Apr 2026 re-audit of PS1/26 Art. 224 Table 1. Values above now match the authoritative Basel 3.1 CRM spec and `ps126app1.pdf` page 203.
 
 ### Equity (Art. 224 Table 3)
 
@@ -236,29 +239,115 @@ Art. 230 specifies conditions for collateral eligibility:
 - The collateral value must be sufficient to justify the LGDS applied
 - Specific conditions apply per collateral type (e.g., real estate valuation requirements per Art. 229)
 
+## Maturity Mismatch (CRR Art. 237-239)
+
+CRR Section 5 of Chapter 4 covers maturity mismatches across **both funded
+and unfunded** credit protection. Art. 238(1A) (carried into PRA Rulebook
+unchanged) enumerates the in-scope CRM methods; Art. 237 sets the
+eligibility gates; Art. 239 sets the per-method valuation formula.
+
+!!! info "B31 alignment"
+    PRA PS1/26 (effective 1 January 2027) carries Art. 237/238/239 forward
+    unchanged in substance — each PS1/26 article carries the note "This
+    rule corresponds to Article 237/238/239 of CRR as it applied
+    immediately before revocation by the Treasury". The B31 spec
+    [b31/credit-risk-mitigation.md#maturity-mismatch-art-237-239](../basel31/credit-risk-mitigation.md#maturity-mismatch-art-237-239)
+    holds the authoritative restatement.
+
+### Methods in Scope (CRR Art. 238(1A))
+
+The CRR maturity-mismatch framework applies to credit protection recognised
+under any of the following methods:
+
+| Letter | Method | Type |
+|--------|--------|------|
+| (a) | On-balance sheet netting (Art. 219) | Funded |
+| (b) | FCCM (excluding SFTs covered by a master netting agreement) | Funded |
+| (c) | Foundation Collateral Method (Art. 230) | Funded |
+| (d) | Other Funded Credit Protection Method (Art. 232) | Funded |
+| (e) | Risk-Weight Substitution Method — SA / Slotting guarantees and CDS (Art. 235) | **Unfunded** |
+| (f) | Parameter Substitution Method — F-IRB / A-IRB guarantees and CDS (Art. 236) | **Unfunded** |
+
+The same eligibility gates and adjustment formulas therefore apply to
+collateral *and* to guarantees/CDS — there is no separate maturity-mismatch
+treatment for unfunded protection in CRR. **FCSM** (Art. 222) and the A-IRB
+**own-LGD** treatment (Art. 183) are the only CRM methods that sit outside
+this perimeter (FCSM is excluded by Art. 239(1); own-LGD captures maturity
+mismatches inside the LGD model).
+
 ## Maturity Mismatch Eligibility (CRR Art. 237)
 
-When a maturity mismatch exists (collateral maturity < exposure maturity), credit protection
-is only eligible if **all** of the following conditions are met (Art. 237(2)):
+When a maturity mismatch exists (protection residual maturity < exposure
+residual maturity), credit protection is only eligible if **all** of the
+following conditions are met:
 
-1. **Residual maturity ≥ 3 months** — protection with < 3 months residual maturity is disallowed
-2. **Original maturity ≥ 1 year** — protection instruments originally issued with a term < 1 year are ineligible when a mismatch exists
-3. **Not a 1-day M floor exposure** — exposures subject to Art. 162(3) 1-day maturity floor (repos, SFTs with daily margining) cannot use maturity-mismatched protection at all
+1. **Art. 237(1) — combined test:** if the protection has residual maturity
+   < 3 months *and* protection maturity < underlying exposure maturity,
+   *"that protection **does not qualify** as eligible credit protection"*
+   (CRR Art. 237(1) verbatim, `docs/assets/crr.pdf` p. 232).
+2. **Art. 237(2)(a) — original maturity ≥ 1 year:** *"Where there is a
+   maturity mismatch the credit protection **shall not qualify** as
+   eligible"* (CRR Art. 237(2) chapeau verbatim) where the original
+   maturity of the protection is less than one year.
+3. **Art. 237(2)(b) — not a 1-day M-floor exposure:** the same chapeau
+   applies where the exposure is a short-term exposure specified as
+   subject to a one-day floor rather than a one-year floor in respect of
+   the maturity value M under Art. 162(3) (repos, SFTs with daily
+   margining, short-term trade-finance IRB exposures).
 
-If any condition fails, the protection value is zeroed (collateral value = 0 for the mismatched portion).
+If any condition fails, the protection value is zeroed (collateral value =
+0 for the mismatched portion). These gates apply uniformly to funded **and**
+unfunded protection — a guarantee or CDS with original maturity < 1 year is
+ineligible for an exposure with residual maturity > 1 year, just as a
+financial-collateral instrument with the same characteristics is.
 
-## Maturity Mismatch Adjustment (CRR Art. 238)
+!!! info "CRR → Basel 3.1 wording change (resolves D2.55)"
+    CRR Art. 237 uses **outcome-voiced** language — the protection "does
+    not qualify" / "shall not qualify" as eligible. PS1/26 Art. 237
+    (effective 1 January 2027) re-casts the same gates in
+    **obligation-voiced** form — *"an institution **shall not use** that
+    protection as eligible credit protection"*. The near-final
+    instrument appended to PS9/24 rendered this as *"may not use"*
+    (potentially discretionary); the final PS1/26 instrument replaces
+    *"may not"* with *"**shall not**"* in both Art. 237(1) and
+    Art. 237(2) chapeau, removing any residual drafting ambiguity. See
+    the comparison document at
+    `docs/assets/comparison-of-the-final-rules.pdf` pp. 221–223 for the
+    strikethrough / insert mark-up. The functional outcome is identical
+    across CRR and both PS9/24-near-final and PS1/26-final drafts — the
+    protection is simply not recognised — but the precision matters
+    when cross-referencing the text of individual paragraphs.
 
-When collateral maturity is shorter than exposure maturity and the Art. 237 eligibility
-conditions are met:
+## Maturity Mismatch Adjustment (CRR Art. 239)
+
+Two parallel formulas — Art. 239(2) for funded methods (a)–(d) and
+Art. 239(3) for unfunded methods (e)–(f). The multiplier
+`(t − 0.25) / (T − 0.25)` is identical between the two; only the
+protection input differs.
+
+**Art. 239(2) — funded protection (methods (a)–(d)):**
 
 ```
-adjustment_factor = (t - 0.25) / (T - 0.25)
+CVAM = CVA × (t - 0.25) / (T - 0.25)
 ```
 
-Where `t` = residual collateral maturity (years), `T` = min(residual exposure maturity, 5) years.
+`CVAM` substitutes for `CVA` in the FCCM E* formula at Art. 223(5), or
+flows through Art. 219(3) for on-balance sheet netting.
 
-**No adjustment** when collateral residual maturity ≥ exposure residual maturity (no mismatch).
+**Art. 239(3) — unfunded protection (methods (e)–(f)):**
+
+```
+GA = G* × (t - 0.25) / (T - 0.25)
+```
+
+`GA` is used as the credit-protection amount input to the **RWSM** (Art.
+235, SA / slotting) or the **PSM** (Art. 236, IRB) — the same formula
+governs guarantee and credit-derivative maturity mismatches under both
+SA and IRB.
+
+In both formulas: `t` = residual protection maturity (years, capped at T);
+`T` = min(residual exposure maturity, 5) years. **No adjustment** when
+`t ≥ T` (the multiplier collapses to 1).
 
 ## Multi-Level Collateral Allocation
 
@@ -477,47 +566,119 @@ Method:
 
 ## Financial Collateral Simple Method — FCSM (Art. 222)
 
-SA-only method. The risk weight of the collateral substitutes for the exposure risk weight
-on the secured portion.
+Paragraph references below verified verbatim against `docs/assets/crr.pdf` pp. 216–217
+(UK-onshored CRR Art. 222, as amended to 1 Jan 2022).
 
-### Art. 222(1) — 20% RW Floor
+**Scope (Art. 222(1)).** SA-only method. *"Institutions **shall not use** both the
+Financial Collateral Simple Method and the Financial Collateral Comprehensive Method,
+except for the purposes of Articles 148(1) and 150(1)"* (CRR Art. 222(1) verbatim —
+permanent partial use / phased IRB roll-out), and *"Institutions **shall not use** this
+exception selectively with the purpose of achieving reduced own funds requirements or
+with the purpose of conducting regulatory arbitrage"*.
 
-All collateral-secured portions receive a minimum **20%** risk weight under the FCSM,
-regardless of the collateral's own risk weight.
+Under the FCSM the risk weight of the collateral substitutes for the obligor risk weight
+on the secured portion of the exposure. The unsecured remainder keeps the counterparty's
+unsecured risk weight.
 
-### Art. 222(4) — 0% Floor Exceptions
+### Art. 222(3) — 20% RW Floor
 
-The 20% floor is reduced to **0%** for the following repo-style / SFT transactions where
-the collateral is denominated in the **same currency** as the exposure:
+The collateralised portion takes the risk weight that would apply to a direct exposure
+to the collateral instrument (Art. 222(3), first sub-paragraph), subject to a minimum
+**20%** floor (Art. 222(3), second sub-paragraph), **except as specified in paragraphs
+4 to 6**.
 
-- **(a)** Cash deposits or cash-assimilated instruments as collateral
-- **(d)** Core market participant repos/SFTs where the collateral is sovereign/CB debt,
-  PSE debt, or institution debt rated CQS 1-2
+### Art. 222(4) — 0% / 10% Floor for SFTs (Art. 227 Criteria)
 
-The "core market participant" definition includes central governments, central banks,
-institutions, recognised investment firms, qualifying CCPs, and regulated CIUs.
+For **repurchase transactions and securities lending or borrowing transactions** that
+meet the criteria in Art. 227, the collateralised portion receives:
 
-### Art. 222(7) — No Maturity Mismatch
+- **0%** RW where the counterparty is a **core market participant** (as defined in
+  Art. 227);
+- **10%** RW where the counterparty is not a core market participant.
 
-Under the FCSM, the **residual maturity of the collateral must be at least equal to the
-residual maturity of the exposure**. Where the collateral has a shorter residual maturity
-than the exposure, the FCSM may not be used (the maturity mismatch adjustment in Art. 238
-does not apply to the FCSM).
+Art. 222(4) governs SFTs only — it does not extend to non-SFT transactions or to OTC
+derivative collateralisation (those fall under paragraphs 5 and 6 respectively).
+
+### Art. 222(6) — 0% Floor for Same-Currency Cash or 0%-RW Sovereign Debt (non-SFT, non-derivative)
+
+For **transactions other than those referred to in paragraphs 4 and 5**, institutions
+may assign a **0%** risk weight where the exposure and the collateral are denominated
+in the **same currency** and either:
+
+- **(a)** the collateral is cash on deposit or a cash-assimilated instrument; or
+- **(b)** the collateral is debt securities issued by central governments or central
+  banks eligible for a 0% RW under Art. 114, with the collateral's market value
+  discounted by **20%**.
+
+Art. 222(7) extends the "central government / central bank debt securities" definition
+used in paragraphs 5 and 6 to include:
+
+- debt securities of regional governments or local authorities treated as
+  central-government exposures under Art. 115;
+- debt securities of multilateral development banks attracting a 0% RW under
+  Art. 117(2);
+- debt securities of international organisations attracting a 0% RW under Art. 118;
+- debt securities of public sector entities treated as central-government exposures
+  under Art. 116(4).
+
+!!! note "Art. 222(5) — OTC Derivatives (not documented here)"
+    Art. 222(5) assigns 0% to OTC derivatives (Annex II) subject to daily MTM and
+    collateralised by cash with no currency mismatch, and 10% to such transactions
+    collateralised by central-government/CB debt with 0% RW under Chapter 2. It is
+    noted here for completeness; the calculator's FCSM path does not cover derivative
+    collateralisation (Art. 299(2)(b) prohibits FCSM for trading-book counterparty-risk
+    items in any case).
+
+### No Maturity Mismatch Adjustment for FCSM (Art. 239(1))
+
+Where the credit protection's residual maturity is shorter than the exposure's residual
+maturity, under CRR Art. 239(1) *"the collateral **does not qualify** as eligible funded
+credit protection"* (CRR verbatim, `docs/assets/crr.pdf` p. 233). Under PS1/26 Art. 239(1)
+(effective 1 January 2027) the same rule is re-cast obligation-voiced: *"an institution
+using the Financial Collateral Simple Method **shall not use** the collateral as eligible
+funded credit protection"* — the near-final PS9/24 text *"may not use"* was replaced with
+*"shall not use"* in the final instrument (resolves D2.55). The
+[maturity-mismatch adjustment formulas in Art. 239(2)/(3)](#maturity-mismatch-adjustment-crr-art-239)
+do not apply to FCSM-collateralised exposures under either framework — the protection is
+simply not recognised.
 
 ### FCSM Formula
 
 ```
-RW_secured = max(20%, RW_collateral)   [or 0% if Art. 222(4) exception applies]
+RW_secured   = max(floor, RW_collateral)
 RW_unsecured = RW_obligor
+
+where floor ∈ {0%, 10%, 20%} selected per Art. 222(3)–(6):
+    0%  → Art. 222(4) core-market SFT, or Art. 222(6) same-currency (a)/(b)
+    10% → Art. 222(4) non-core-market SFT
+    20% → Art. 222(3) default floor (no carve-out applies)
 ```
 
 Eligibility: Collateral must be eligible financial collateral per Art. 197.
 
-The calculator uses the Financial Collateral Comprehensive Method by default.
+The calculator uses the Financial Collateral Comprehensive Method by default; the FCSM
+path is reserved for firms that elect it under Art. 148(1) / Art. 150(1).
+
+!!! note "Change log — Art. 222 carve-outs clarified (21 April 2026, D2.63)"
+    Earlier drafts of this section conflated the Art. 222(4) SFT rule (0% core-market
+    participant / 10% otherwise, subject to Art. 227 criteria) with the Art. 222(6)
+    same-currency carve-out for non-SFT transactions. Sub-points **(a)** cash and
+    **(b)** 0%-RW central-government/CB debt sit under Art. 222(**6**); there is no
+    sub-point (d) in Art. 222(4). The previous "Art. 222(7) — No Maturity Mismatch"
+    heading was also relabelled — Art. 222(7) is the definition-extension paragraph
+    for "central government / central bank debt securities" referenced in paragraphs
+    5 and 6; the FCSM maturity-mismatch exclusion lives in Art. 239(1). The "Art.
+    222(1) — 20% RW Floor" heading was corrected to Art. 222(**3**) (Art. 222(1) is
+    the FCSM-scope paragraph). This aligns the CRR CRM spec with the 17 April 2026
+    correction already applied to the
+    [Basel 3.1 CRM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222).
 
 !!! note "Basel 3.1 FCSM Retention"
     Under Basel 3.1 (PRA PS1/26), the FCSM remains available for SA exposures only.
     IRB exposures must use the Comprehensive Method or LGD Modelling Collateral Method.
+    See [B31 FCSM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222)
+    for the corresponding paragraph structure (the Art. 222(3)/(4)/(6) three-tier
+    split carries forward unchanged).
 
 ## Financial Collateral Comprehensive Method — FCCM (Art. 223)
 
@@ -564,18 +725,28 @@ Note: Art. 218 does not introduce a separate issuer risk weight check — the CL
 Life insurance policies assigned to the lending institution as collateral:
 
 - **Eligible**: Only life insurance policies with a current surrender value assigned/pledged to the institution (Art. 200(b) + Art. 212(2) operational requirements)
-- **Haircut**: The collateral value is the current surrender value, subject to a haircut based on the difference between surrender value and the claim at maturity
-- **SA risk weight**: The secured portion uses a **mapped risk weight** (not direct substitution):
+- **Collateral value**: The current surrender value, reduced for currency mismatch per Art. 233(3)
+- **SA risk weight** (Art. 232(3)): The secured portion uses a **mapped risk weight** (not direct substitution) keyed off the senior-unsecured RW assigned to the insurer under the SA:
 
-| Insurer Risk Weight | Secured Portion RW |
-|--------------------|-------------------|
-| 20% | 20% |
-| 30% or 50% | 35% |
-| 65%, 100%, or 135% | 70% |
+| Insurer Senior-Unsecured RW | Secured Portion RW |
+|-----------------------------|--------------------|
+| 20%  | 20%  |
+| 50%  | 35%  |
+| 100% | 70%  |
 | 150% | 150% |
 
 - **F-IRB treatment** (Art. 232(2)(b)): The secured portion uses LGD = **40%** (not the standard LGDU)
 - **A-IRB treatment**: Own LGD estimate for the secured portion
+
+!!! info "Basel 3.1 expands the input tiers"
+    PRA PS1/26 Art. 232(3) widens the paragraph 3 groupings so that the new SA
+    corporate / institution risk weights are first-class inputs: 30% (SCRA
+    Grade A enhanced) joins row (b), and 65% / 135% (investment-grade and
+    non-investment-grade corporate) join row (c). The output columns are
+    unchanged (20% / 35% / 70% / 150%). See the Basel 3.1 CRM spec
+    [Life Insurance Method (Art. 232)](../basel31/credit-risk-mitigation.md#life-insurance-method-art-232)
+    for the expanded table and the new paragraph A1 / paragraph 5 structural
+    changes.
 
 Note: Eligibility is per Art. 200(b) (eligible funded collateral) + Art. 212(2) (operational requirements), not Art. 201 (unfunded protection providers).
 

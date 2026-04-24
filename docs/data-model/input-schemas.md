@@ -42,7 +42,7 @@ This page documents the authoritative schemas for all input data files required 
 | `entity_type` | `String` | Yes | **Single source of truth** for exposure class (see valid values below) |
 | `country_code` | `String` | Yes | ISO 3166-1 alpha-2 country code |
 | `annual_revenue` | `Float64` | No | Annual revenue in GBP (for SME classification - EUR 50m threshold) |
-| `total_assets` | `Float64` | No | Total assets in GBP (for large FSE threshold - EUR 70bn per CRR Art. 4(1)(146)) |
+| `total_assets` | `Float64` | No | Total assets in GBP (for LFSE threshold: EUR 70bn under CRR Art. 142(1)(4); GBP 79bn under PS1/26 Glossary p. 78) |
 | `default_status` | `Boolean` | No | Whether counterparty is in default |
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
 | `apply_fi_scalar` | `Boolean` | No | User flag: True = apply 1.25x FI correlation scalar (CRR Art. 153(2)) |
@@ -103,13 +103,18 @@ For certain entity types, the regulatory treatment differs between SA and IRB ap
 
 ### Financial Sector Entity (FSE) and FI Scalar
 
-The **1.25x correlation multiplier** (CRR Art. 153(2)) applies to large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) and unregulated financial sector entities.
+The **1.25x correlation multiplier** (Art. 153(2)) applies to **large financial sector entities (LFSEs)** and **unregulated financial sector entities**. The LFSE total-assets threshold differs by framework:
 
-**How it works in the calculator:** The `apply_fi_scalar` flag on the counterparty record is the **sole input** — the calculator does not automatically compare `total_assets` against the EUR 70bn threshold. The user is responsible for setting `apply_fi_scalar = True` on counterparties that meet the regulatory criteria. The classifier derives `requires_fi_scalar` directly from this flag with no entity-type gate.
+| Framework | LFSE threshold | Citation |
+| --- | --- | --- |
+| CRR | Total assets ≥ **EUR 70 billion** | CRR Art. 142(1)(4) |
+| Basel 3.1 | Total assets ≥ **GBP 79 billion** | PS1/26 Glossary p. 78 (Note: "corresponds to Article 142(1)(4) of CRR") |
+
+**How it works in the calculator:** The `apply_fi_scalar` flag on the counterparty record is the **sole input** — the calculator does not automatically compare `total_assets` against the framework-specific threshold. The user is responsible for setting `apply_fi_scalar = True` on counterparties that meet the regulatory LFSE (or unregulated FSE) criteria for the framework in use. The classifier derives `requires_fi_scalar` directly from this flag with no entity-type gate.
 
 !!! warning "Two distinct thresholds — do not conflate"
-    - **EUR 70bn total assets** → 1.25x correlation multiplier (Art. 153(2), both CRR and Basel 3.1). Applies to the asset correlation coefficient R, not to the capital requirement directly.
-    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(d), Basel 3.1 only). Does not affect correlation.
+    - **LFSE total-assets threshold** (EUR 70bn CRR / GBP 79bn B31) → 1.25x correlation multiplier (Art. 153(2), both CRR and Basel 3.1). Applies to the asset correlation coefficient R, not to the capital requirement directly.
+    - **GBP 440m annual revenue** → F-IRB only approach restriction (Art. 147A(1)(e), Basel 3.1 only). Does not affect correlation.
 
     These thresholds serve entirely different purposes and apply to different entity populations. See [Key Differences](../framework-comparison/key-differences.md#financial-sector-correlation-multiplier) for details.
 
@@ -371,7 +376,7 @@ contingents = pl.DataFrame({
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
 | `property_ltv` | `Float64` | No | Regulatory LTV per Art. 124C — must include prior/pari passu charges (Art. 124C(3)) in numerator |
 | `prior_charge_ltv` | `Float64` | No | LTV portion from prior/pari passu charges only (Art. 124C(3)); 0.0 = first charge. Used by Art. 124F(2)/124G(2) junior charge treatment |
-| `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate--material-dependency-classification-art-124e) |
+| `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e) |
 | `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
 | `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
 

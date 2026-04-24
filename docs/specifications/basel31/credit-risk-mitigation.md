@@ -20,6 +20,7 @@ and IRB parameter substitution replacing double default.
 | FR-8.6 | Art. 191A method taxonomy (FCM, PSM, LGD-AM) | P1 | Done |
 | FR-8.7 | Unfunded credit protection transitional (Rule 4.11) | P2 | Not Implemented |
 | FR-8.8 | Art. 123B currency mismatch 1.5x multiplier (retail/RRE) | P1 | Partial (flag only; auto-detection and 90% hedge test not implemented) |
+| FR-8.9 | Art. 232(3) life insurance derivation table with B31 input tiers (30% / 65% / 135%) | P1 | Done |
 
 ---
 
@@ -40,6 +41,7 @@ with parameter substitution for IRB-rated guarantors.
 | Double default | Available (Art. 202–203) | **Removed** | — |
 | IRB guarantor treatment | Double default / SA-RW substitution | **PD parameter substitution** | New |
 | Method names | Unnamed | **FCM / PSM / LGD-AM** (Art. 191A) | Art. 191A |
+| Life insurance derivation (Art. 232(3)) | 4 input tiers (20/50/100/150) | **7 input tiers** — adds 30%, 65%, 135% | Art. 232(3) |
 
 ---
 
@@ -318,7 +320,7 @@ CRM method selection with explicit method names.
 | Financial Collateral Comprehensive Method | FCCM | SA + IRB: financial collateral (Art. 223) |
 | Foundation Collateral Method | FCM | F-IRB: financial and physical collateral (Art. 230) |
 | Parameter Substitution Method | PSM | F-IRB / A-IRB: unfunded credit protection (Art. 236) |
-| LGD Adjustment Method | LGD-AM | A-IRB: unfunded credit protection (Art. 183) |
+| LGD Adjustment Method | LGD-AM | A-IRB **with own-LGD estimate permission** for the exposure class: unfunded credit protection (Art. 183) |
 | Risk-Weight Substitution Method | RWSM | SA / Slotting: unfunded credit protection (Art. 235) |
 
 ### Art. 191A Decision Tree
@@ -336,8 +338,11 @@ CCR exposures use IMM / SFT VaR / FCCM / FCSM (SA only).
 **Part 3 — Unfunded CRM:**
 
 - SA / Slotting → Risk-Weight Substitution Method (Art. 235)
-- F-IRB / A-IRB → Parameter Substitution Method (Art. 236)
-- A-IRB (own estimates) → LGD Adjustment Method (Art. 183)
+- F-IRB → Parameter Substitution Method (Art. 236) only
+- A-IRB without own-LGD permission for the class → Parameter Substitution Method (Art. 236) only
+- A-IRB **with own-LGD permission** for the class → LGD Adjustment Method (Art. 183) **or** Parameter
+  Substitution Method (Art. 236). Selection is a firm-level methodology choice subject to the Art.
+  191A(3) consistency rule (same method across the same type of unfunded protection).
 
 **Part 4 — Unfunded CP covered by funded CP:**
 Where unfunded protection is itself collateralised, funded CRM is applied to the unfunded
@@ -356,7 +361,95 @@ protection first, then the adjusted unfunded protection is applied to the origin
 |----------|-------------------|---------------------|
 | SA | FCSM (Art. 222) or FCCM (Art. 223) | RWSM — SA-RW substitution (Art. 235) |
 | F-IRB | FCM (Art. 230) or FCCM (Art. 223) | PSM — PD substitution for IRB guarantors, SA-RW for SA guarantors (Art. 236) |
-| A-IRB | LGD modelling (Art. 169A/169B) or FCM/FCCM | LGD-AM (Art. 183) or PSM (Art. 236) |
+| A-IRB (own-LGD permission **not** held for class) | LGD modelling unavailable — use FCM / FCCM | PSM (Art. 236) — LGD-AM not available |
+| A-IRB (own-LGD permission held for class) | LGD modelling (Art. 169A/169B) or FCM / FCCM | LGD-AM (Art. 183) **or** PSM (Art. 236) — firm methodology choice under Art. 191A(3) |
+
+!!! warning "LGD-AM is not universally available to A-IRB firms"
+    "A-IRB" is not a single blanket permission. Under PS1/26 Art. 143(2A)(c) / Art.
+    143(2B)(b)(iii), a firm specifies in its IRB permission which exposure classes,
+    exposure subclasses or types of exposure it proposes to run under A-IRB — and
+    A-IRB permission for one class does not extend to another. A firm holding A-IRB
+    permission for one class (e.g. retail mortgages) but only F-IRB for another
+    (e.g. general corporates) must use **PSM (Art. 236)** for the F-IRB class and
+    may not reach for LGD-AM there. See [LGD-AM Availability Gate](#lgd-am-availability-gate-art-143-art-1791aa-art-147a)
+    below.
+
+### LGD-AM Availability Gate (Art. 143, Art. 179(1)(aa), Art. 147A)
+
+LGD-AM sits inside the A-IRB own-LGD model rather than as a stand-alone CRM
+overlay. Four PS1/26 provisions, read together, gate whether a firm may apply
+LGD-AM to a given exposure at all.
+
+#### 1. A-IRB permission for the exposure class (Art. 143(2A)(c))
+
+Art. 143(2A) requires a firm, when applying for IRB permission, to state "in
+relation to **each exposure class, exposure subclass or type of exposures**"
+which IRB approach it proposes — (a) Slotting, (b) F-IRB, or (c) A-IRB. The
+permission therefore attaches to the class/subclass, not to the institution as
+a whole. Art. 143(2B) confirms that a firm with IRB permission for one approach
+(e.g. F-IRB) that wishes to move a class to a more sophisticated approach
+(e.g. A-IRB) needs **further** prior PRA permission.
+
+Consequence: LGD-AM is available **only** for exposures that fall inside an
+exposure class / subclass / type of exposures for which the firm currently
+holds A-IRB permission. F-IRB classes are restricted to PSM under Art. 236.
+
+#### 2. Art. 179(1)(aa) — own-LGD ban on guarantee recoveries except via LGD-AM
+
+Art. 179(1)(aa) (ps126app1.pdf p.131) states verbatim: "an institution shall
+**not** take account of recoveries from guarantees, credit derivatives and
+other support arrangements when quantifying LGD estimates, **except where
+recoveries are recognised under the LGD Adjustment Method in accordance with
+Article 183**."
+
+Consequence: the LGD Adjustment Method is the *only* channel through which an
+A-IRB firm may reflect unfunded credit protection inside its own-LGD model.
+Firms without A-IRB permission for the class cannot take the Art. 179(1)(aa)
+exception — they fall back to PSM (Art. 236) applied outside the LGD model.
+
+#### 3. Art. 147A — approach restrictions that pre-empt LGD-AM
+
+Even where a firm holds A-IRB permission historically, PS1/26 Art. 147A
+removes A-IRB from the menu for certain classes. The restrictions most
+material for LGD-AM scope are:
+
+| Art. 147A limb | Exposure class | Permitted approaches | LGD-AM available? |
+|----------------|----------------|----------------------|-------------------|
+| (1)(a) | Sovereigns and quasi-sovereigns (incl. RGLAs, PSEs, MDBs, International Organisations) | SA only | **No** — A-IRB not available |
+| (1)(b) | Institutions | F-IRB or SA | **No** — A-IRB not available |
+| (1)(e) | Large corporates (consolidated revenue > £440m) and financial sector entities | F-IRB or SA | **No** — A-IRB not available |
+| (1)(d) | Equity exposures | SA only | **No** — IRB approach not available |
+
+For these classes, PSM under Art. 236 is the only unfunded-CRM channel,
+regardless of any historical A-IRB permission. See
+[Model Permissions spec](model-permissions.md) for the full Art. 147A
+restriction table.
+
+#### 4. Art. 191A(3) — portfolio-wide consistency
+
+Art. 191A(3) requires a firm to use the **same CRM method for the same type of
+unfunded credit protection** across its portfolio. A firm that elects LGD-AM
+for guarantees in one A-IRB class must not also run PSM on the same type of
+guarantee in another A-IRB class — the consistency rule is per protection
+type, not per exposure class. (The rule does not force LGD-AM onto F-IRB
+classes: PSM remains mandatory there under limb 1 above.)
+
+!!! info "Decision summary — where LGD-AM is available"
+    For a given (exposure class, protection type) pair, LGD-AM is on the menu
+    **only** when **all** of the following hold:
+
+    1. The firm holds an A-IRB permission for the exposure class under Art.
+       143(2A)(c) or Art. 143(2B)(b)(iii).
+    2. Art. 147A does not remove A-IRB from the permitted-approach list for
+       that class.
+    3. The firm has chosen LGD-AM (rather than PSM) as its portfolio-wide
+       method for this protection type under Art. 191A(3).
+    4. The unfunded credit protection meets the Art. 183(1A) eligibility
+       conditions (written contract, no unilateral cancellation, not a
+       second-to-default derivative).
+
+    If any condition fails, the firm applies PSM (Art. 236) instead, with SA
+    risk-weight substitution for SA-approach guarantors.
 
 ---
 
@@ -422,35 +515,291 @@ E* = max(0, E(1 + HE) - CVA(1 - HC - HFX))
 
 ---
 
-## Maturity Mismatch (Art. 237-238)
+## Life Insurance Method (Art. 232)
 
-### Art. 237(2) — Eligibility
+Life insurance policies assigned to the institution are the principal
+non-cash item recognised through the **Other Funded Credit Protection
+Method** (`OFCP`) introduced by PS1/26 Art. 191A. Paragraph references below
+verified against `ps126app1.pdf` pp.211–212.
 
-When a maturity mismatch exists (protection maturity < exposure maturity), credit protection
-is only eligible if **all** conditions are met:
+### Scope Gate (Art. 232(A1))
 
-1. **Residual maturity >= 3 months** — protection with < 3 months residual maturity is
-   ineligible
-2. **Original maturity >= 1 year** — protection originally issued with a term < 1 year
-   is ineligible when a mismatch exists
+Art. 232 applies only to an institution that has elected the Other Funded
+Credit Protection Method under the Art. 191A(1) taxonomy. Under Basel 3.1
+life insurance is **not** available through FCSM or FCCM — those methods
+are restricted to financial collateral (Art. 222, 223). This is a structural
+change from CRR, where Art. 232 stood alone without the Art. 191A method
+taxonomy.
 
-### Art. 238 — Adjustment Formula
+### Paragraph 1 — Cash / Cash-Assimilated Deposits Held by a Third Party
 
-When eligible, the maturity-adjusted protection value is:
+Where the Art. 212(1) conditions are met (pledge / assignment, notification,
+payment-control), cash on deposit with — or cash-assimilated instruments
+issued by the institution and held by — a **third-party institution** in a
+**non-custodial arrangement** may be treated as a **guarantee by the third
+party institution**. The exposure is then routed through the unfunded CRM
+path (Art. 235 Risk-Weight Substitution for SA, or Art. 236 Parameter
+Substitution for IRB) per the Part 3 decision tree of Appendix 1.
+
+### Paragraph 2 — Life Insurance Treatment
+
+Where the Art. 212(2) conditions are met (policy pledged / assigned,
+insurer notified, right to cancel on default, surrender value declared and
+non-reducible, maturity-match), the portion of the exposure collateralised
+by the **current surrender value** is subjected to:
+
+- **(a) Standardised Approach**: risk-weighted per paragraph 3 (derivation
+  table below).
+- **(b) Foundation IRB**: assigned **LGD = 40%**. CRR's broader "IRB but not
+  own estimates of LGD" phrasing is narrowed to F-IRB in PS1/26 — A-IRB
+  firms now handle life insurance through their own LGD models (subject to
+  Art. 169A/169B).
+
+The credit protection value equals the current surrender value, reduced for
+currency mismatch in accordance with Art. 233(3) **and (4)** (PS1/26 adds
+the (4) cross-reference to capture the full Art. 233 currency-mismatch
+machinery, not just the 8% haircut).
+
+### Paragraph 3 — SA Derivation Table (Life Insurance)
+
+The risk weight applied to the secured portion is derived from the risk
+weight that **would** be assigned to a **senior unsecured exposure to the
+insurer** under the SA (Credit Risk: Standardised Approach (CRR) Part and
+Chapter 2 of Title II of Part Three of CRR):
+
+| PS1/26 para | Insurer Senior-Unsecured RW        | Secured Portion RW |
+|-------------|------------------------------------|--------------------|
+| (a)         | 20%                                | 20%  |
+| (b)         | **30%** or 50%                     | 35%  |
+| (c)         | **65%**, 100% or **135%**          | 70%  |
+| (d)         | 150%                               | 150% |
+
+!!! info "New Basel 3.1 input tiers — 30%, 65%, 135%"
+    PS1/26 Art. 232(3) expands the paragraph 3 groupings to accommodate the
+    new SA institution / corporate risk weights introduced by the Basel 3.1
+    reforms. The output columns are unchanged; only the inputs widen:
+
+    | New input | Origin | Article |
+    |-----------|--------|---------|
+    | **30%** → 35% | SCRA Grade A enhanced (well-capitalised bank) | Art. 121(5) |
+    | **65%** → 70% | Investment-grade corporate | Art. 122(2)(a) |
+    | **135%** → 70% | Non-investment-grade corporate (institution permission) | Art. 122(6)(b) |
+
+    Under CRR the derivation table had only **four** input tiers
+    (20% / 50% / 100% / 150%). A CRR firm holding life insurance issued by a
+    well-capitalised but unrated bank could not map the B31 30% SCRA Grade A
+    enhanced weight onto the derivation table at all — the gap is closed by
+    Art. 232(3)(b). The 135% non-IG corporate tier is gated on PRA permission
+    per Art. 122(6); firms without that permission fall back to the 100%
+    tier (Art. 122(5)).
+
+### Paragraph 4 — Repurchase-on-Request Instruments (Art. 200(1)(c))
+
+Instruments repurchased on request by the issuing institution and eligible
+under Art. 200(1)(c) may be treated as a **guarantee by the issuing
+institution** (again routed via Art. 235 / 236 per the Part 3 decision
+tree). Protection value = face value if face-repurchase, or the Art. 197(4)
+valuation if market-price-repurchase.
+
+### Paragraph 5 — Mandatory Maturity-Mismatch Adjustment (new)
+
+Unlike FCSM, which is exempt from the Art. 237-239 maturity-mismatch
+framework (see [Art. 239(1)](#art-237-eligibility-gates)), the Other
+Funded Credit Protection Method **is** in scope. Paragraph 5 makes this
+explicit: an institution using OFCP "shall take into account any maturity
+mismatch in accordance with the provisions of Articles 237 to 239". CRR
+had no equivalent standalone sub-paragraph — the obligation was implicit
+through the general Art. 238 scope — so PS1/26 tightens the wording
+without changing the substantive outcome.
+
+### Structural Changes vs CRR Art. 232
+
+| Change | CRR Art. 232 | PS1/26 Art. 232 |
+|--------|--------------|-----------------|
+| Scope gate | Standalone article | New paragraph A1: only for firms using OFCP under Art. 191A |
+| Para 1 routing | "Guarantee by the third party institution" | Same, but explicitly routed via Art. 235 / 236 decision tree (Part 3 Appendix 1); cash instruments must be in a **non-custodial arrangement** |
+| Para 2 IRB scope | "IRB Approach but not subject to own estimates of LGD" | Narrowed to "Foundation IRB Approach" |
+| Para 3 input tiers | 4 tiers: 20% / 50% / 100% / 150% | 7 tiers: 20% / **30%** / 50% / **65%** / 100% / **135%** / 150% |
+| Para 2 currency mismatch | Cross-ref Art. 233(3) only | Cross-ref Art. 233(3) **and (4)** |
+| Para 5 maturity mismatch | Not stated (implicit via Art. 238) | Explicit sub-paragraph requiring Art. 237-239 adjustment |
+
+### Implementation
+
+Life insurance collateral flows through the Art. 232 derivation table in
+`engine/crm/life_insurance.py`. Inputs: the insurer identifier on the
+facility / loan row, the pledged surrender value, and the policy currency.
+The insurer's senior-unsecured SA RW is re-computed against the framework
+in play (CRR: CRR Table 3 / 4; B31: ECRA Table 3 / 4 or SCRA Table 5 per
+Art. 121). The mapping is then applied to produce the secured-portion RW
+emitted as the `life_ins_secured_rw` column (see
+[Output Schemas](../../data-model/output-schemas.md)).
+
+!!! warning "Output-column naming documented separately"
+    The `life_ins_collateral_value` / `life_ins_secured_rw` output columns
+    are tracked for schema documentation under DOCS_IMPLEMENTATION_PLAN
+    D3.53 — not part of the current D2.48 closure.
+
+---
+
+## Maturity Mismatch (Art. 237-239)
+
+PS1/26 Section 5 (ps126app1.pdf pp.217–219) covers maturity mismatches across
+**both funded and unfunded** credit protection. Article 238(1A) enumerates the
+six CRM methods within scope; Article 237 sets the eligibility gates that
+apply to all six; Article 239 sets the per-method valuation formula.
+
+### Methods in Scope (Art. 238(1A))
+
+The maturity-mismatch framework applies to credit protection recognised under
+**any** of the following methods:
+
+| Letter | Method | Type |
+|--------|--------|------|
+| (a) | On-balance sheet netting (Art. 219) | Funded |
+| (b) | FCCM (excluding SFTs covered by a master netting agreement) | Funded |
+| (c) | Foundation Collateral Method (Art. 230) | Funded |
+| (d) | Other Funded Credit Protection Method (Art. 232) | Funded |
+| (e) | Risk-Weight Substitution Method — SA / Slotting guarantees and CDS (Art. 235) | **Unfunded** |
+| (f) | Parameter Substitution Method — F-IRB / A-IRB guarantees and CDS (Art. 236) | **Unfunded** |
+
+!!! warning "FCSM and LGD-AM are out of scope"
+    - **Financial Collateral Simple Method (FCSM)** — Art. 239(1) excludes
+      FCSM entirely: where a maturity mismatch exists, *"an institution
+      using the Financial Collateral Simple Method **shall not use** the
+      collateral as eligible funded credit protection"* (PS1/26 Art. 239(1)
+      verbatim). The collateral is simply not recognised — no GA / CVAM
+      adjustment is permitted. Cross-reference: [Art. 222 — No Maturity
+      Mismatch](#art-222-no-maturity-mismatch).
+    - **LGD Adjustment Method (LGD-AM, Art. 183)** — A-IRB own-estimate of
+      LGD is not listed in Art. 238(1A). Maturity mismatches on unfunded
+      protection recognised through own-LGD estimates are captured within
+      the institution's own LGD model rather than via the Art. 239 GA
+      formula. This is the only treatment of unfunded protection that
+      sits *outside* the Art. 237–239 perimeter.
+
+### Art. 237 — Eligibility Gates
+
+Two cumulative tests determine whether the protection is eligible at all when
+a mismatch exists. Failing either makes the protection ineligible — no
+adjustment formula is applied; the protection is simply ignored.
+
+**Art. 237(1) — Combined residual-maturity and shorter-than-exposure test.**
+A maturity mismatch arises when the residual maturity of the credit protection
+is less than that of the protected exposure. Where the protection has
+**residual maturity < 3 months *and*** the protection maturity is less than
+the underlying exposure maturity, *"an institution **shall not use** that
+protection as eligible credit protection"* (PS1/26 Art. 237(1) verbatim).
+
+**Art. 237(2) — Disqualifying conditions (either limb).** Where there is a
+maturity mismatch, *"an institution **shall not use** the credit protection
+as eligible credit protection where either of the following conditions is
+met"* (PS1/26 Art. 237(2) verbatim):
+
+- **(a)** the original maturity of the protection is less than one year; or
+- **(b)** the exposure is a short-term exposure subject to a one-day floor on
+  the maturity value M under Credit Risk: Internal Ratings Based Approach
+  (CRR) Part Article 162(3) (e.g. certain repo / SFT / short-term
+  trade-finance IRB exposures with M floored at one day).
+
+!!! info "Near-final → final wording change (resolves D2.55)"
+    The near-final rule instrument (PS9/24) rendered both Art. 237(1) and
+    Art. 237(2) chapeau as *"an institution **may not** use that
+    protection"* — which could be read as discretionary. The final PS1/26
+    rule instrument (effective 1 January 2027) replaces *"may not"* with
+    *"**shall not**"* in both paragraphs and in Art. 239(1) (FCSM
+    exclusion), making the outcome unambiguously mandatory. The change
+    is visible in the comparison document at `docs/assets/comparison-of-the-final-rules.pdf`
+    pp. 221–223 (strikethrough / insert mark-up). Functionally the
+    outcome is identical in both drafts — the protection is simply not
+    recognised — but the final text removes any residual drafting
+    ambiguity. Under the prior CRR text the same outcome was framed as
+    *"that protection **does not qualify** as eligible credit
+    protection"* (CRR Art. 237, outcome-voiced rather than
+    obligation-voiced); see the CRR CRM spec for the verbatim CRR
+    phrasing.
+
+These eligibility gates apply uniformly to funded **and** unfunded protection
+under the six in-scope methods — a guarantee or CDS with original maturity
+< 1 year is ineligible for an exposure with residual maturity > 1 year, just
+as a financial-collateral instrument with the same characteristics is.
+
+### Art. 238 — Measuring Protection Maturity
+
+Effective protection maturity is the **time to the earliest date at which the
+protection may terminate** (or be terminated). Specific rules:
+
+- **On-balance sheet netting** — earlier of the netting agreement termination
+  date and the date the deposit can be withdrawn / loan called (Art. 238(1)).
+- **Protection-seller termination option** — maturity is the earliest exercise
+  date of that option (Art. 238(2), first sentence).
+- **Protection-buyer termination option** — maturity is the earliest exercise
+  date **only if** the contract contained a positive incentive at origination
+  for the institution to call before contractual maturity; otherwise the
+  buyer option is ignored for maturity measurement (Art. 238(2)(a)–(b)).
+- **Credit-derivative grace period** — protection maturity is reduced by the
+  length of any grace period before failure-to-pay default, where the credit
+  derivative is not prevented from terminating before the grace period
+  expires (Art. 238(3)).
+
+The effective maturity of the **underlying exposure** is the longest possible
+remaining time before the obligor is scheduled to perform, capped at **5
+years** (Art. 238(1)).
+
+### Art. 239 — Adjustment Formulas (Funded vs Unfunded)
+
+Two parallel formulas — Art. 239(2) for funded methods (a)–(d) and
+Art. 239(3) for unfunded methods (e)–(f). The multiplier
+`(t − 0.25) / (T − 0.25)` is identical between the two; only the protection
+input differs.
+
+**Art. 239(2) — Funded credit protection (methods (a)–(d)):**
+
+```
+CVAM = CVA x (t - 0.25) / (T - 0.25)
+```
+
+| Variable | Definition |
+|----------|-----------|
+| CVA | Volatility-adjusted collateral value per Art. 223(2), or the exposure amount if lower |
+| t | Years to credit-protection maturity per Art. 238, capped at T |
+| T | Years to exposure maturity per Art. 238, capped at 5 |
+
+For **FCCM**, `CVAM` substitutes for `CVA` in the E* formula at Art. 223(5).
+For **on-balance sheet netting**, `CVAM` flows through Art. 219(3), where
+"collateral" is read as the netted loans/deposits.
+
+**Art. 239(3) — Unfunded credit protection (methods (e)–(f)):**
 
 ```
 GA = G* x (t - 0.25) / (T - 0.25)
 ```
 
-Where:
-
 | Variable | Definition |
 |----------|-----------|
-| G* | Protection value after any haircut adjustments |
-| t | Residual maturity of the protection (years) |
-| T | Residual maturity of the exposure (years), capped at 5 |
+| G* | Protection amount adjusted for any currency mismatch (Art. 233) |
+| t | Years to credit-protection maturity per Art. 238, capped at T |
+| T | Years to exposure maturity per Art. 238, capped at 5 |
 
-When t >= T, no maturity mismatch adjustment is needed.
+`GA` is then used as the credit-protection amount input to the **RWSM**
+(Art. 235, SA / slotting guarantees and CDS) or the **PSM** (Art. 236,
+F-IRB / A-IRB guarantees and CDS). The same GA formula governs guarantee
+and credit-derivative maturity mismatches under both SA and IRB — the
+distinction between RWSM and PSM is only in *how* the resulting `GA` is
+consumed (RW substitution vs PD/LGD parameter substitution), not in the
+maturity-mismatch adjustment itself.
+
+When **t ≥ T**, no maturity-mismatch adjustment is needed — the multiplier
+collapses to 1 and `GA = G*` / `CVAM = CVA`.
+
+!!! info "Heading scope correction (21 April 2026)"
+    Earlier drafts of this spec presented the maturity-mismatch formula
+    under the heading "Art. 237–238" with only the unfunded `GA` formula
+    visible, which left ambiguity about whether the framework applied to
+    guarantee / CDS mismatches at all. The formulas themselves sit in
+    **Art. 239**: paragraph 2 (`CVAM`, funded methods (a)–(d)) and
+    paragraph 3 (`GA`, unfunded methods (e)–(f)). Art. 237 sets the
+    eligibility gates that govern *all* six methods listed in
+    Art. 238(1A). Resolves D2.39.
 
 ---
 

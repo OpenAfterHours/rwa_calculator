@@ -29,6 +29,15 @@ Under CRR, defaulted exposures generally received a flat 100% or 150% risk weigh
 distinction. Basel 3.1 introduces a **provision-coverage mechanism** that rewards firms for
 adequate provisioning.
 
+!!! info "Default Trigger — Art. 178"
+    This specification covers the **consequence** of default (risk weight treatment). The
+    **definition** of default — the Art. 178 two-limb trigger (unlikeliness-to-pay and
+    90 DPD), UTP indicators, materiality thresholds, suspension rules, and cure/probation
+    requirements — is documented in the shared
+    [Default Definition (Art. 178) specification](../common/default-definition.md).
+    The calculator consumes default status via the upstream `is_defaulted` flag and
+    routes accordingly.
+
 ### Key Changes from CRR
 
 | Feature | CRR | Basel 3.1 | Reference |
@@ -172,14 +181,98 @@ RW = max(0, 12.5 x K)
 
 ### Expected Loss for Defaulted
 
-For both F-IRB and A-IRB defaulted exposures:
+Art. 158(5) sets a **different** EL rule for the two IRB approaches:
 
-```
-EL = BEEL x EAD
-```
+| Approach | Defaulted EL amount | Rationale |
+|---|---|---|
+| **F-IRB defaulted** | `EL = PD x LGD x EAD = 1 x LGD x EAD` | Standard Art. 158(5) first formula with PD = 1 |
+| **A-IRB defaulted** | `EL = BEEL x EAD` | Art. 158(5) closing proviso — firm's own best estimate substitutes for the PD x LGD product |
 
-The expected loss uses BEEL (not PD × LGD) because PD = 100% for defaulted exposures,
-and the firm's estimate of loss is captured directly by BEEL.
+!!! quote "PRA PS1/26 Art. 158(5) verbatim (ps126app1.pdf p. 107)"
+    "An institution using the Foundation IRB Approach or Advanced IRB Approach shall,
+    subject to the specific treatment laid down in paragraphs 6 and 6A, calculate the
+    expected loss (EL) and expected loss amounts for exposures to corporates and
+    institutions and for retail exposures in accordance with the following formulae:
+
+    Expected loss (EL) = PD · LGD
+
+    Expected loss amount = EL · exposure value
+
+    **except for defaulted exposures (PD = 1) where the institution uses the Advanced
+    IRB Approach, EL shall be BEEL.**"
+
+The substitution applies **only** to the A-IRB EL amount (the figure that feeds Pool C
+of the Art. 159 provisions comparison). The **RW formulas** in Art. 153(1)(b) and
+Art. 154(1)(i) reference BEEL for both F-IRB and A-IRB defaulted exposures — that is a
+capital-calculation mechanic distinct from the Art. 158(5) EL-amount definition.
+
+### BEEL — Best Estimate of Expected Loss (Art. 158(5), Art. 181(1)(h)(ii))
+
+**Definition.** BEEL is the institution's own estimate of the economic loss expected
+on a defaulted exposure over the period from the default event to the final
+liquidation or recovery, expressed as a fraction of exposure at default. It is the
+A-IRB counterpart to the supervisory LGD applied to non-defaulted exposures.
+
+**PRA Rulebook source.** BEEL is a defined term in the Credit Risk: Internal Ratings
+Based Approach (CRR) Part of the PRA Rulebook (Rule 1.3): *"BEEL means an institution's
+best estimate of expected loss for a defaulted exposure as referred to in point
+(h)(ii) of Article 181(1)"*. Art. 181(1)(h)(ii) sets the **estimation standards**
+an institution must satisfy before it may recognise its own BEEL estimate:
+
+- **Downturn conditions.** BEEL must be estimated on the basis of economic conditions
+  observed during periods of stress relevant to the exposure, consistent with the
+  downturn-LGD requirements of Art. 181(1)(b).
+- **Evidence of unexpected additional loss during recovery.** Where the institution
+  has evidence of unexpected loss during the recovery period, the BEEL estimate must
+  be greater than or equal to the expected economic loss given default (i.e. BEEL ≥
+  LGD-in-default after recoveries).
+- **No cherry-picking.** Observed recovery realisations must be used symmetrically —
+  favourable and unfavourable outcomes must both inform the estimate.
+- **Governance and independence.** Estimates must be subject to the same validation,
+  human oversight, and back-testing processes applied to other A-IRB parameters
+  (Art. 185 validation rules apply by reference).
+
+**Scope — A-IRB only.** BEEL is an A-IRB-specific input for the EL-amount calculation
+in Art. 158(5); under F-IRB the EL amount uses the standard Art. 158(5) formula
+`PD x LGD x EAD` with PD = 1, so F-IRB firms do not need to estimate BEEL separately
+for Pool C. The supervisory LGD parameter (40% senior non-FSE, 45% FSE, etc.) already
+provides the conservative loss expectation under F-IRB.
+
+**Sovereign/central-bank carve-out.** Under PS1/26 Art. 147A(1)(a), sovereign,
+central-bank, RGLA, PSE, MDB and international-organisation exposures are **excluded**
+from A-IRB; BEEL therefore cannot arise for these classes — any exposure to a
+defaulted quasi-sovereign counterparty must be treated under SA (Art. 127).
+
+**Required input.** The engine consumes BEEL as a row-level input named `beel` of type
+Float64. The column is defined in `src/rwa_calc/data/schemas.py` on `loans`,
+`contingents`, and `facility_details`, defaults to `0.0`, and is read by
+`engine/irb/adjustments.py` solely when `is_defaulted = True` and the exposure is
+routed through the A-IRB approach (see
+[Default Definition spec — BEEL Companion Input](../common/default-definition.md#beel-companion-input-a-irb-only)).
+
+**Relationship to `LGD-in-default`.** The A-IRB capital formula `K = max(0, LGD − BEEL)`
+uses the institution's **LGD-in-default estimate** (the firm's current best view of
+post-default economic loss, used in the RW structure) minus BEEL (the firm's best
+estimate of EL amount already accrued). Where BEEL ≥ LGD-in-default, `K = 0` and the
+RW collapses to `max(0, 12.5 × 0) = 0`; Pool C of the Art. 159 comparison still
+carries the full BEEL × EAD amount as the defaulted EL contribution.
+
+!!! info "CRR → PS1/26 terminology change"
+    Pre-revocation CRR used the symbol **`ELBE`** (Expected Loss Best Estimate) in
+    Art. 158(5) and Art. 181(1)(h). PS1/26 renames this to **`BEEL`** (Best Estimate of
+    Expected Loss) with no substantive change in the estimation standards —
+    Art. 181(1)(h)(ii) wording tracks the CRR version. The engine's `beel` column and
+    internal variable names use the PS1/26 term. Legacy CRR documentation and model
+    validation reports that reference `ELBE` denote the same parameter.
+
+!!! warning "Interaction with Art. 158(6A) post-model EL uplift"
+    PS1/26 introduces a new paragraph 6A requiring institutions to **increase** the
+    total EL amounts (paragraphs 5 and 6) to reflect any post-model adjustments
+    recognised under Art. 146(3)(c). For A-IRB defaulted exposures this means the
+    `BEEL × EAD` contribution is uplifted by any PMA component before entering Pool C
+    of the Art. 159 comparison. See
+    [Provisions spec — Art. 158(6A) EL Monotonicity](provisions.md#art-1586a-el-monotonicity).
+    No equivalent paragraph existed under pre-revocation CRR.
 
 ---
 

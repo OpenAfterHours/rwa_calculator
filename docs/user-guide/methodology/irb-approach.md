@@ -73,9 +73,14 @@ Under Basel 3.1, A-IRB firms have two methods for incorporating collateral into 
 - **Foundation Collateral Method** (FCM, Art. 230) — uses supervisory LGDS values by collateral
   type, blended with LGDU for partially secured exposures.
 
-For unfunded credit protection (guarantees), A-IRB firms use the **LGD Adjustment Method**
-(LGD-AM) or Parameter Substitution Method (PSM). See [Credit Risk Mitigation](crm.md) and the
-[CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
+For unfunded credit protection (guarantees), A-IRB firms may use the **LGD Adjustment
+Method** (LGD-AM, Art. 183) **or** the Parameter Substitution Method (PSM, Art. 236).
+LGD-AM is available only for exposure classes where the firm holds A-IRB own-LGD
+permission under Art. 143(2A)(c); F-IRB classes and Art. 147A SA-only classes
+(sovereigns, institutions, large corporates, FSEs) must use PSM instead. See
+[Credit Risk Mitigation](crm.md), the [B31 CRM § LGD-AM Availability
+Gate](../../specifications/basel31/credit-risk-mitigation.md#lgd-am-availability-gate-art-143-art-1791aa-art-147a),
+and the [CRM Specification](../../specifications/crr/credit-risk-mitigation.md#lgd-modelling-collateral-method-basel-31-art-169a169b)
 for details.
 
 ### Exposure at Default (EAD)
@@ -207,12 +212,15 @@ R = 0.03 × (1 - exp(-35 × PD)) / (1 - exp(-35)) +
 
 ### Financial Sector Entity Correlation Multiplier
 
-Large financial sector entities (total assets ≥ EUR 70bn per Art. 4(1)(146)) and unregulated financial sector entities receive a **1.25x multiplier** on their asset correlation R (CRR Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier applies under both CRR and Basel 3.1.
+Large financial sector entities (**LFSEs**) and unregulated financial sector entities receive a **1.25x multiplier** on their asset correlation R (Art. 153(2) / CRE31.5). This increases capital requirements for exposures to financial institutions. The multiplier mechanism is unchanged between CRR and Basel 3.1; only the LFSE total-assets threshold differs:
+
+- **CRR:** total assets ≥ **EUR 70 billion** (CRR Art. 142(1)(4)).
+- **Basel 3.1:** total assets ≥ **GBP 79 billion** (PS1/26 Glossary p. 78, with Note "corresponds to Article 142(1)(4) of CRR").
 
 Set `apply_fi_scalar = True` on the counterparty record for entities meeting these criteria. The calculator derives `requires_fi_scalar` directly from this flag.
 
 !!! warning "Not the same as the Art. 147A large corporate threshold"
-    The 1.25x correlation multiplier applies to **financial sector entities** based on **total assets** (EUR 70bn). The Art. 147A(1)(d) large corporate threshold (**GBP 440m revenue**) is an approach restriction (F-IRB only under Basel 3.1) — it does not trigger the correlation uplift. See the [Key Differences](../../framework-comparison/key-differences.md#financial-sector-correlation-multiplier) for comparison.
+    The 1.25x correlation multiplier applies to **financial sector entities** based on the LFSE **total-assets** threshold (EUR 70bn CRR / GBP 79bn B31). The Art. 147A(1)(e) large corporate threshold (**GBP 440m revenue**) is an approach restriction (F-IRB only under Basel 3.1) — it does not trigger the correlation uplift. See the [Key Differences](../../framework-comparison/key-differences.md#financial-sector-correlation-multiplier) for comparison.
 
 ## Maturity Adjustment
 
@@ -500,7 +508,8 @@ el = calculate_expected_loss(
 |-------|-------------|----------|
 | IRB approach overview | Art. 142-150 | CRE30 |
 | K formula | Art. 153 | CRE31 |
-| PD estimation | Art. 178-180 | CRE32 |
+| Default definition | Art. 178 ([specification](../../specifications/common/default-definition.md)) | CRE36.67–82 |
+| PD estimation | Art. 179-180 | CRE32 |
 | LGD estimation | Art. 181 | CRE32 |
 | Correlation | Art. 153 | CRE31 |
 | Maturity adjustment | Art. 162 | CRE31 |

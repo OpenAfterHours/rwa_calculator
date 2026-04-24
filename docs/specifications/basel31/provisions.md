@@ -195,12 +195,45 @@ The following amounts are **excluded** from the provisions side (B and D):
 - Provisions relating to securitised exposures
 - Portions covered by CRM risk-weight substitution
 
-### BEEL Exception
+### BEEL Exception (Pool C — Art. 158(5))
 
-For **A-IRB defaulted exposures**, the expected loss is BEEL (best estimate of expected
-loss), not PD x LGD. Per Art. 158(5), BEEL is the firm's own estimate of loss given
-that default has already occurred. F-IRB defaulted exposures use the standard
-PD x LGD formula.
+For **A-IRB defaulted exposures**, Pool C of the Art. 159 comparison uses the
+institution's own **BEEL** (Best Estimate of Expected Loss), not `PD x LGD`. The
+defaulted EL amount feeding the provisions-vs-EL shortfall/excess test is therefore:
+
+```
+Pool C (A-IRB defaulted) = Σ (BEEL_i × EAD_i)
+Pool C (F-IRB defaulted) = Σ (1 × LGD_i × EAD_i)   # standard Art. 158(5) formula, PD = 1
+```
+
+!!! quote "PRA PS1/26 Art. 158(5) verbatim (ps126app1.pdf p. 107)"
+    "[E]xcept for defaulted exposures (PD = 1) where the institution uses the Advanced
+    IRB Approach, EL shall be BEEL."
+
+**BEEL is an Art. 158(5) / Art. 181(1)(h)(ii) parameter**, defined in the PRA Rulebook
+(Credit Risk: IRB Approach (CRR) Part, Rule 1.3) as *"an institution's best estimate of
+expected loss for a defaulted exposure as referred to in point (h)(ii) of Article
+181(1)"*. The estimation standards (downturn conditions, unexpected additional
+loss during the recovery period, governance and back-testing) are set out in
+Art. 181(1)(h)(ii). Under pre-revocation CRR the same parameter was called **`ELBE`**;
+PS1/26 renames it to `BEEL` with no substantive change.
+
+**Scope — A-IRB only.** The BEEL substitution operates solely on the Pool C EL
+**amount**. F-IRB defaulted exposures use `1 × LGD` (supervisory) for Pool C, since
+they do not benefit from own-LGD estimation permissions. The distinct A-IRB
+**capital formula** `K = max(0, LGD − BEEL)` (Art. 154(1)(i)) lives in the
+defaulted-exposures spec, not here — see
+[Defaulted Exposures — BEEL](defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).
+
+**Interaction with Art. 158(6A).** The BEEL-based Pool C total is **increased** by any
+post-model adjustments recognised under Art. 146(3)(c) before entering the Art. 159
+test (see [Art. 158(6A) — EL Monotonicity](#art-1586a-el-monotonicity) above).
+
+!!! info "Sovereign/central-bank carve-out"
+    Under Art. 147A(1)(a), sovereign, central-bank, RGLA, PSE, MDB and
+    international-organisation exposures cannot use A-IRB, so BEEL does not arise for
+    these classes — any defaulted quasi-sovereign exposure is handled under SA
+    (Art. 127) with no Pool C contribution from the IRB side.
 
 ---
 

@@ -20,6 +20,19 @@ Institution risk weights range from 20% (CQS 1) to 150% (CQS 6). Under CRR Art. 
 
 Under CRR, unrated institutions receive **100%** (Art. 120(2)). Under Basel 3.1, unrated institutions use the **Standardised Credit Risk Assessment Approach (SCRA)** based on capital adequacy (Grade A: 40%, Grade A enhanced: 30%, Grade B: 75%, Grade C: 150%). Grade A enhanced requires CET1 ≥ 14% and leverage ratio ≥ 5%.
 
+!!! info "SCRA Disclosure Barring Ladder (Art. 121(1)(a), (1)(b))"
+    SCRA classification depends on what the counterparty institution publicly discloses
+    about its prudential requirements. Missing disclosures bar grades asymmetrically:
+
+    - Buffers undisclosed (requirements disclosed) → barred from Grade A, Grade B (75%) at best.
+    - Minimum requirements undisclosed → forced to Grade C (150%).
+
+    `scra_grade` is a firm-supplied input; disclosure evaluation sits upstream of the
+    calculator. See
+    [B31 SA spec — Disclosure Barring Rules](../../specifications/basel31/sa-risk-weights.md#scra-disclosure-barring-rules-art-1211a-1b)
+    for the full barring table, Art. 121(1A)/(1B) disclosure-scope definitions, and
+    the near-final → final drafting reversal.
+
 !!! warning "SCRA Sovereign Floor (Art. 121(6))"
     Where an unrated institution exposure is denominated in a foreign currency (other
     than the local currency of the institution's jurisdiction of incorporation), its
@@ -56,8 +69,7 @@ F-IRB uses supervisory LGD (45% senior, 75% subordinated) with PD floors of 0.03
 ### Table 4 — General Short-Term Preferential (Art. 120(2))
 
 Rated institution exposures with original maturity ≤ 3 months receive preferential
-treatment under Table 4. Trade finance exposures (movement of goods) with original
-maturity ≤ 6 months also qualify (Art. 120(2A)).
+treatment under Table 4.
 
 | CQS | Standard RW (>3m) | Table 4 RW (≤3m) |
 |-----|-------------------|-------------------|
@@ -66,6 +78,21 @@ maturity ≤ 6 months also qualify (Art. 120(2A)).
 | CQS 3 | 50% | 20% |
 | CQS 4-5 | 100% | 50% |
 | CQS 6 | 150% | 150% |
+
+!!! info "Art. 120(2A) Trade Finance ≤ 6m Extension — Basel 3.1 only"
+    Trade-finance exposures arising from the **movement of goods** qualify for Table 4
+    weights when original maturity ≤ **6 months** (not the general 3-month window).
+    Both limbs must hold: `is_short_term_trade_lc = True` **and** `original_maturity_years ≤ 0.5`.
+    A 5-month documentary credit to a CQS 3 rated bank therefore receives Table 4's 20%
+    rather than Table 3's 50%.
+
+    This is the **rated** counterpart of the SCRA Art. 121(4) carve-out below; both were
+    introduced in Basel 3.1 to align with BCBS CRE20.20. **No CRR analogue** — CRR
+    Art. 120(2) has no trade-goods extension, so a 5-month trade-finance exposure to a
+    rated CRR bank reverts to Table 3's long-term weight. See
+    [B31 SA Risk Weights — Art. 120(2A)](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
+    for worked examples, interaction with Art. 120(2B) Table 4A, and the side-by-side
+    comparison with Art. 121(4).
 
 ### Table 4A — Short-Term ECAI Assessment (Art. 120(2B))
 
@@ -96,6 +123,61 @@ The interaction between Table 4 and Table 4A is governed by Art. 120(3):
 - **(b)** Short-term assessment yields more favourable or equal RW → Table 4A for that exposure only; other short-term exposures still use Table 4
 - **(c)** Short-term assessment yields less favourable RW → Table 4 preferential treatment withdrawn; all unrated short-term claims against that obligor receive the Table 4A weight
 
+### Implicit Government Support Higher-of Rule (Art. 138(1)(g), Art. 139(6))
+
+Basel 3.1 introduces two new provisions governing how ECAI ratings that incorporate
+**implicit government support** may be used to risk-weight institution exposures.
+Both apply only where the obligor is an institution and only on the ECRA (rated) path:
+
+- **Art. 138(1)(g)** prohibits using a credit assessment that incorporates assumptions
+    of implicit government support, *unless* the rated institution is owned by or set
+    up and sponsored by central, regional, or local government (the government-owned /
+    government-sponsored exemption).
+- **Art. 139(6)** is a residual "higher-of" floor: where no "clean" issue-specific
+    rating exists but an implicit-support issue-specific rating does, the firm must
+    assign the **higher of** (i) the baseline RW derived from Art. 138 with implicit-
+    support assessments suppressed, and (ii) the RW from the issue-specific rating
+    disregarding Art. 138(1)(g).
+
+!!! warning "Not Yet Implemented — Use Art. 110A Override as Workaround"
+    The calculator does not distinguish issue-specific from general-issuer ratings
+    and has no flag for implicit-support assumption — so the Art. 139(6) higher-of
+    comparison cannot be computed automatically. Firms with material rated-institution
+    exposures whose ratings embed implicit support should either:
+
+    - **Pre-adjust** `external_cqs` offline to reflect the Art. 139(6) higher-of
+        result before loading, or
+    - Set `due_diligence_override_rw` to the required floor via the framework-wide
+        Art. 110A pathway ([see Art. 110A discussion](../../user-guide/regulatory/basel31.md#10-due-diligence-requirements)).
+
+    Firms must also independently determine whether the rated institution falls
+    within the Art. 138(1)(g) exemption (government-owned / government-sponsored) —
+    this is a firm governance question, not a calculator input. See
+    [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
+    for the full trigger, worked example, exemption scope, and distinction from the
+    Art. 121(6) SCRA sovereign floor.
+
+    No CRR equivalent — CRR Art. 138 has only sub-points (a)–(f), and CRR Art. 139
+    has only paragraphs (1)–(4). CRR firms apply implicit-support ratings directly.
+
+!!! warning "CRR Art. 119(2)/(3) National-Currency Preferential — Removed under Basel 3.1"
+    Under CRR, an institution exposure of residual maturity ≤ 3 months denominated and
+    funded in the borrower's **national currency** received a risk weight "one category
+    less favourable than the preferential risk weight, as described in Article 114(4) to
+    (7), assigned to exposures to the central government in which the institution is
+    incorporated" (Art. 119(2)), floored at 20% by Art. 119(3). PS1/26 Appendix 1 p. 40
+    marks Art. 119(2), (3), and (4) all as `[Note: Provision left blank]` — the
+    national-currency short-term preferential path is **not retained** in Basel 3.1.
+
+    **Under Basel 3.1**, all short-term institution exposures flow through Table 4
+    (Art. 120(2), rated — 20% at CQS 1–3) or Art. 121(3) (unrated, 20% at ≤ 3 months).
+    UK-domestic sterling-funded exposures are neutral; cross-border exposures to
+    institutions incorporated in jurisdictions benefiting from Art. 114(6)/(7)
+    preferential sovereign treatment lose the national-currency override and take
+    the full Art. 120/121 grade. See
+    [CRR SA spec — Art. 119(2), 119(3)](../../specifications/crr/sa-risk-weights.md#national-currency-short-term-preferential-treatment-crr-art-1192-1193)
+    for the removed mechanism and worked examples.
+
 ## Interbank Exposures
 
 ### Due From Banks
@@ -120,6 +202,20 @@ The interaction between Table 4 and Table 4A is governed by Art. 120(3):
 Covered bonds issued by institutions receive preferential treatment under Art. 129. Rated bonds range from 10% (CQS 1) to 100% (CQS 6) per Table 6A/Table 7. Unrated bonds derive their RW from the issuing institution's senior unsecured RW via Art. 129(5), producing values from 10% to 100%. PRA PS1/26 retains the same rated table — the BCBS CRE20 reductions (CQS 2→15%, CQS 4–6→50%) were not adopted.
 
 > **Details:** See [Key Differences — Covered Bonds](../../framework-comparison/key-differences.md#covered-bonds-art-129) for the full CQS table and CRR vs Basel 3.1 comparison.
+
+!!! info "Art. 129(4A) Due Diligence CQS Step-Up — Basel 3.1 only"
+    Where a rated covered bond is risk-weighted from Table 7, Basel 3.1 Art. 129(4A) requires
+    firms to conduct due diligence on the ECAI assessment. If DD reveals higher risk than the
+    assigned CQS implies, the firm must assign **at least one CQS step higher** than the
+    ECAI-implied weight (e.g. CQS 1 → CQS 2 = 10% → 20%, CQS 3 → CQS 4 = 20% → 50%,
+    CQS 5 → CQS 6 = 50% → 100%). Note that CQS 2 → CQS 3 and CQS 4 → CQS 5 transitions
+    produce no numerical change (Table 7 assigns identical weights to those adjacent steps);
+    the reassignment is still mandatory for any downstream CQS-keyed process. Currently
+    routed through the Art. 110A `due_diligence_override_rw` input (no dedicated Art. 129(4A)
+    branch in the calculator). Parallels Art. 120(4) for rated institutions and Art. 122(4)
+    for rated corporates; no CRR equivalent. See
+    [B31 SA Risk Weights — Art. 129(4A)](../../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a)
+    for the full trigger/effect table.
 
 ## Central Counterparties (CCPs)
 
@@ -212,7 +308,9 @@ Exposures to subordinated debt of institutions:
 |-------|-------------|----------|
 | Institution definition | Art. 119 | CRE20.15-20 |
 | Risk weights | Art. 119-121 | CRE20.21-25 |
-| Short-term treatment | Art. 119(2) | CRE20.26 |
+| Short-term (general, rated) | Art. 120(2) Table 4 | CRE20.22 |
+| Short-term (unrated) | Art. 121(3) | CRE20.23 |
+| Short-term (national-currency; CRR only) | Art. 119(2), 119(3) — blanked in PS1/26 | — |
 | Covered bonds | Art. 129 | CRE20.27-30 |
 | CCPs | Art. 300-311 | CRE54 |
 

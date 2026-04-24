@@ -245,6 +245,7 @@ class IRBCalculator:
         return exposures.with_columns(
             pl.col("approach").alias("approach_applied"),
             pl.col("rwa").alias("rwa_final"),
+            pl.col("maturity").alias("irb_maturity_m"),
         )
 
     def _apply_supporting_factors(

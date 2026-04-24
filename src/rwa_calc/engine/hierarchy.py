@@ -636,6 +636,7 @@ class HierarchyResolver:
                     "facility_limit": pl.Float64,
                     "source_facility_reference": pl.String,
                     "facility_termination_date": pl.Date,
+                    "effective_maturity": pl.Float64,
                 }
             )
 
@@ -876,6 +877,11 @@ class HierarchyResolver:
                 if "is_sft" in facility_cols
                 else pl.lit(False).alias("is_sft")
             ),
+            (
+                pl.col("effective_maturity")
+                if "effective_maturity" in facility_cols
+                else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
+            ),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55)
             (
@@ -992,6 +998,11 @@ class HierarchyResolver:
                 else pl.lit(False).alias("is_sft")
             ),
             (
+                pl.col("effective_maturity")
+                if "effective_maturity" in loan_cols
+                else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
+            ),
+            (
                 pl.col("has_netting_agreement").fill_null(False)
                 if "has_netting_agreement" in loan_cols
                 else pl.lit(False).alias("has_netting_agreement")
@@ -1092,6 +1103,11 @@ class HierarchyResolver:
                         pl.col("is_sft").fill_null(False)
                         if "is_sft" in cont_cols
                         else pl.lit(False).alias("is_sft")
+                    ),
+                    (
+                        pl.col("effective_maturity")
+                        if "effective_maturity" in cont_cols
+                        else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
                     ),
                     pl.lit(False).alias("has_netting_agreement"),
                     # facility_termination_date is facility-level; inherited via facility join later

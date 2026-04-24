@@ -411,6 +411,7 @@ def generate_facilities(
                 "underlying_risk_type": pl.Series([None] * n_facilities, dtype=pl.String),
                 "lgd_unsecured": np.full(n_facilities, None),  # A-IRB unsecured LGD
                 "has_sufficient_collateral_data": np.full(n_facilities, None),  # LGD modelling flag
+                "effective_maturity": np.full(n_facilities, None),  # Art. 162(3) numeric M override
             }
         )
         .cast(dtypes_of(FACILITY_SCHEMA))
@@ -609,6 +610,7 @@ def generate_loans(
             "netting_facility_reference": np.full(n_loans, None),  # Facility for netting agreement
             "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
             "due_diligence_override_rw": np.full(n_loans, None),  # Art. 110A override RW (B31 only)
+            "effective_maturity": np.full(n_loans, None),  # Art. 162(3) numeric M override
         }
     ).cast(dtypes_of(LOAN_SCHEMA))
 
@@ -956,6 +958,9 @@ def generate_contingents(
                 "due_diligence_override_rw": np.full(
                     n_contingents, None
                 ),  # Art. 110A override RW (B31 only)
+                "effective_maturity": np.full(
+                    n_contingents, None
+                ),  # Art. 162(3) numeric M override
             }
         )
         .cast(dtypes_of(CONTINGENTS_SCHEMA))

@@ -240,8 +240,15 @@ class IRBLazyFrame:
                 exprs.append(pl.lit(0.0).alias("ead_final"))
 
         # Maturity
-        # Basel 3.1 Art. 162(2A)(k): revolving exposures use facility_termination_date
-        # for M instead of the drawing's maturity_date. CRR path is unchanged.
+        # Priority chain (highest wins):
+        #   1. effective_maturity input populated → firm override, clipped [1 day, 5y]
+        #   2. has_one_day_maturity_floor flag → M = 1/365 (Art. 162(3) carve-out:
+        #      daily-margined SFTs/derivatives/margin lending, short-term trade)
+        #   3. Basel 3.1 revolving + facility_termination_date (Art. 162(2A)(k))
+        #   4. maturity_date standard derivation, clipped [1y, 5y]
+        #   5. Fallback default 2.5y
+        # CRR F-IRB SFT supervisory M = 0.5y (Art. 162(1)) is applied to the base
+        # chain (4/3) but is superseded by the two explicit overrides above.
         if "maturity" not in names:
             if "maturity_date" in names:
                 maturity_from_date = (
@@ -286,6 +293,25 @@ class IRBLazyFrame:
                         & pl.col("is_sft").fill_null(False)
                     )
                     .then(pl.lit(0.5))
+                    .otherwise(maturity_expr)
+                )
+
+            # Art. 162(3) 1-day M floor for daily-margined SFTs/derivatives,
+            # margin lending, and short-term self-liquidating trade transactions.
+            one_day_years = 1.0 / 365.0
+            if "has_one_day_maturity_floor" in names:
+                maturity_expr = (
+                    pl.when(pl.col("has_one_day_maturity_floor").fill_null(False))
+                    .then(pl.lit(one_day_years))
+                    .otherwise(maturity_expr)
+                )
+
+            # Explicit firm-supplied effective_maturity — highest priority.
+            # Clipped to [1 day, 5 years]; nulls fall through to the chain above.
+            if "effective_maturity" in names:
+                maturity_expr = (
+                    pl.when(pl.col("effective_maturity").is_not_null())
+                    .then(pl.col("effective_maturity").clip(one_day_years, 5.0))
                     .otherwise(maturity_expr)
                 )
 

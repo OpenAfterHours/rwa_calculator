@@ -84,6 +84,10 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "facility_termination_date": ColumnSpec(pl.Date, required=False),
+    # Art. 162(3) / PS1/26: explicit numeric M override (years). When populated it
+    # supersedes the maturity_date-derived M and bypasses the 1-year floor —
+    # firm-owned judgement for short-term carve-outs.
+    "effective_maturity": ColumnSpec(pl.Float64, required=False),
 }
 
 LOAN_SCHEMA: dict[str, ColumnSpec] = {
@@ -105,6 +109,7 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
+    "effective_maturity": ColumnSpec(pl.Float64, required=False),
     "has_netting_agreement": ColumnSpec(pl.Boolean, default=False, required=False),
     "netting_facility_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -135,6 +140,7 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
+    "effective_maturity": ColumnSpec(pl.Float64, required=False),
     "bs_type": ColumnSpec(pl.String, default="OFB", required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
@@ -798,6 +804,7 @@ RAW_EXPOSURE_SCHEMA = {
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "is_sft": pl.Boolean,  # CRR Art. 162(1): repurchase / securities / commodities lending/borrowing — F-IRB M = 0.5y
     "facility_termination_date": pl.Date,  # Art. 162(2A)(k): max contractual termination date for revolving facilities (Basel 3.1 M)
+    "effective_maturity": pl.Float64,  # Art. 162(3): explicit numeric M override (years); bypasses 1y floor when populated
     # FX conversion audit trail (populated after FX conversion)
     "original_currency": pl.String,  # Currency before FX conversion
     "original_amount": pl.Float64,  # Amount before FX conversion (drawn + interest + nominal)

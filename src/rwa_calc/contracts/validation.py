@@ -19,6 +19,7 @@ import polars as pl
 
 from rwa_calc.contracts.errors import (
     ERROR_INVALID_COLUMN_VALUE,
+    ERROR_MATURITY_INVALID,
     ERROR_MISSING_FIELD,
     ERROR_TYPE_MISMATCH,
     CalculationError,
@@ -681,12 +682,56 @@ def validate_bundle_values(
         if lf is None:
             continue
         table_constraints = constraints.get(table_name, {})
-        if not table_constraints:
-            continue
-        errors = _validate_table_columns_batched(lf, table_constraints, table_name)
-        all_errors.extend(errors)
+        if table_constraints:
+            errors = _validate_table_columns_batched(lf, table_constraints, table_name)
+            all_errors.extend(errors)
+
+        # Art. 162(3) override is restricted to exposure tables — the 1-day to
+        # 5-year range mirrors the regulatory cap; out-of-range values are clipped
+        # downstream but flagged here so firms see the mismatch.
+        if table_name in {"facilities", "loans", "contingents"}:
+            all_errors.extend(_validate_effective_maturity_range(lf, table_name))
 
     return all_errors
+
+
+def _validate_effective_maturity_range(
+    lf: pl.LazyFrame,
+    context: str,
+) -> list[CalculationError]:
+    """Flag effective_maturity values outside (0, 5.0] for an exposure table."""
+    schema_names = lf.collect_schema().names()
+    if "effective_maturity" not in schema_names:
+        return []
+
+    bad = (
+        lf.filter(pl.col("effective_maturity").is_not_null())
+        .filter((pl.col("effective_maturity") <= 0.0) | (pl.col("effective_maturity") > 5.0))
+        .select(
+            pl.len().alias("n"),
+            pl.col("effective_maturity").min().alias("min_val"),
+            pl.col("effective_maturity").max().alias("max_val"),
+        )
+        .collect()
+    )
+    if bad.height == 0 or bad["n"][0] == 0:
+        return []
+
+    row = bad.row(0, named=True)
+    return [
+        CalculationError(
+            code=ERROR_MATURITY_INVALID,
+            message=(
+                f"[{context}] effective_maturity has {row['n']} value(s) outside the "
+                f"regulatory range (0, 5.0] years (observed min={row['min_val']}, "
+                f"max={row['max_val']}). Values will be clipped to [1/365, 5.0]."
+            ),
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.DATA_QUALITY,
+            field_name="effective_maturity",
+            expected_value="(0, 5.0]",
+        )
+    ]
 
 
 def _validate_table_columns_batched(

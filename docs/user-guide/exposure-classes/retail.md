@@ -50,7 +50,20 @@ Exposures secured by residential property that is or will be:
 
 ### SA Risk Weights
 
-CRR uses a flat 35% (LTV ≤ 80%) or 75% (LTV > 80%). Basel 3.1 introduces LTV-based bands from 20% to 70%+ for general mortgages, and 30% to 105% for income-producing (buy-to-let).
+For exposures classified as `RETAIL_MORTGAGE`, CRR Art. 125 applies **35%** to
+the portion of the exposure up to 80% LTV and **75%** to any residual portion
+above 80% LTV (rather than 75% on the whole loan). Basel 3.1 replaces this
+treatment with LTV-based bands from 20% to 70%+ for general mortgages, and
+30% to 105% for income-producing (buy-to-let).
+
+The CRR 35%/75% treatment is conditional on the Art. 125(2) qualifying
+conditions (property value not materially dependent on borrower credit
+quality, repayment not materially dependent on cash flows from the property,
+Art. 208 / 229 valuation requirements). Residential-mortgage-secured
+exposures to non-retail counterparties (corporates, institutions) are
+**not** routed through `RETAIL_MORTGAGE`; they enter the SA real-estate
+loan-splitter via `RESIDENTIAL_MORTGAGE` instead — see
+[Real Estate Loan-Splitter](../../specifications/crr/sa-risk-weights.md#real-estate-loan-splitter-crr-art-125126-pra-ps126-art-124f124h).
 
 > **Details:** See [Key Differences — Residential Real Estate](../../framework-comparison/key-differences.md#residential-real-estate) for the complete LTV tables.
 

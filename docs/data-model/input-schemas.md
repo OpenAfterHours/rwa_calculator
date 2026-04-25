@@ -17,6 +17,7 @@ This page documents the authoritative schemas for all input data files required 
 | [FX Rates](#fx-rates-schema) | `fx_rates/fx_rates.parquet` | No | Currency conversion rates |
 | [Specialised Lending](#specialised-lending-schema) | `ratings/specialised_lending.parquet` | No | Slotting approach data |
 | [Equity Exposure](#equity-exposure-schema) | N/A | No | Equity holdings |
+| [CIU Holdings](#ciu-holdings-schema) | N/A | No | Per-fund holdings for CIU look-through (Art. 132) |
 | [Model Permissions](#model-permissions-schema) | `config/model_permissions.parquet` | No | Per-model IRB approach permissions |
 
 **Mapping Files:**
@@ -38,15 +39,23 @@ This page documents the authoritative schemas for all input data files required 
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `counterparty_reference` | `String` | Yes | Unique identifier for the counterparty |
-| `counterparty_name` | `String` | Yes | Legal name of the counterparty |
+| `counterparty_name` | `String` | No | Legal name of the counterparty |
 | `entity_type` | `String` | Yes | **Single source of truth** for exposure class (see valid values below) |
-| `country_code` | `String` | Yes | ISO 3166-1 alpha-2 country code |
+| `country_code` | `String` | No | ISO 3166-1 alpha-2 country code |
 | `annual_revenue` | `Float64` | No | Annual revenue in GBP (for SME classification - EUR 50m threshold) |
 | `total_assets` | `Float64` | No | Total assets in GBP (for LFSE threshold: EUR 70bn under CRR Art. 142(1)(4); GBP 79bn under PS1/26 Glossary p. 78) |
 | `default_status` | `Boolean` | No | Whether counterparty is in default |
 | `sector_code` | `String` | No | Industry sector code (SIC-based) |
 | `apply_fi_scalar` | `Boolean` | No | User flag: True = apply 1.25x FI correlation scalar (CRR Art. 153(2)) |
 | `is_managed_as_retail` | `Boolean` | No | SME managed on pooled retail basis (75% RW per CRR Art. 123) |
+| `is_natural_person` | `Boolean` | No | True for individuals — drives Basel 3.1 retail RE classification gates (Art. 124E(1) primary-residence exception, Art. 124H natural-person CRE branch) |
+| `is_social_housing` | `Boolean` | No | True for social-housing providers — qualifies for the Art. 124E(1) materially-dependent exception so the loan-splitter treats it as non-income-producing residential RE (PRA PS1/26) |
+| `is_financial_sector_entity` | `Boolean` | No | True for FSEs (regulated or unregulated). Used in conjunction with `apply_fi_scalar` and `total_assets` for the LFSE 1.25x correlation gate (Art. 142(1)(4)) |
+| `is_ccp_client_cleared` | `Boolean` | No | True when the counterparty is a CCP whose exposures arise from client-cleared trades — drives the QCCP 4% RW (vs 2% proprietary) under CRR Art. 306 / PS1/26 Art. 306 |
+| `borrower_income_currency` | `String` | No | ISO 4217 currency in which the borrower earns income — used for currency-mismatch unhedged-FX retail uplift (PRA PS1/26 Art. 123A) |
+| `local_currency` | `String` | No | Counterparty's domestic currency — used in conjunction with `borrower_income_currency` for the currency-mismatch test |
+| `sovereign_cqs` | `Int32` | No | External CQS for the counterparty's sovereign — feeds the institution sovereign floor (CRR Art. 121(6) / Art. 119(2)) and SCRA derivations |
+| `institution_cqs` | `Int8` | No | External CQS for the counterparty when treated as an institution — used by ECRA institution risk weights (CRR Art. 120 Table 3 / PS1/26 Table 3) |
 | `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
 | `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
 
@@ -161,23 +170,32 @@ See [Classification](../features/classification.md) for the complete classificat
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `facility_reference` | `String` | Yes | Unique identifier for the facility |
-| `product_type` | `String` | Yes | Product classification |
-| `book_code` | `String` | Yes | Portfolio/book classification |
+| `product_type` | `String` | No | Product classification |
+| `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
-| `value_date` | `Date` | Yes | Facility start date |
-| `maturity_date` | `Date` | Yes | Final maturity date |
-| `currency` | `String` | Yes | ISO 4217 currency code |
-| `limit` | `Float64` | Yes | Committed facility limit |
-| `committed` | `Boolean` | Yes | Whether facility is committed |
+| `value_date` | `Date` | No | Facility start date |
+| `maturity_date` | `Date` | No | Final maturity date — used to derive `M` for IRB unless `effective_maturity` is populated |
+| `facility_termination_date` | `Date` | No | Bank's contractual right-to-terminate date — overrides `maturity_date` for IRB `M` derivation when shorter (Art. 162(2)(g)) |
+| `currency` | `String` | No | ISO 4217 currency code |
+| `limit` | `Float64` | No | Committed facility limit |
+| `committed` | `Boolean` | No | Whether facility is committed (default `False`) |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
+| `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `is_revolving` | `Boolean` | Yes | Revolving vs term facility |
+| `has_sufficient_collateral_data` | `Boolean` | No | A-IRB attestation that the firm has data quality sufficient to recognise own-estimate collateral effects under Art. 181(1)(f). When `False`, the LGD floor framework treats the row as if no collateral data is available |
+| `is_revolving` | `Boolean` | No | Revolving vs term facility (default `False`) |
 | `is_qrre_transactor` | `Boolean` | No | QRRE transactor flag. Drives the Basel 3.1 SA 45% weight (Art. 123(3)(a)) and the IRB 0.05% PD floor (Art. 163(1)(c)). True iff the revolving account has been repaid in full at each scheduled repayment date for the previous 12 months, OR the overdraft has not been drawn for the previous 12 months (PRA Glossary p. 9). Per Art. 154(4), accounts with less than 12 months of repayment history must be flagged False. Assessed upstream — not validated by the calculator. See [Transactor Exposure](../appendix/glossary.md#transactor-exposure). |
-| `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
-| `risk_type` | `String` | Yes | Off-balance sheet risk category (see below) |
+| `seniority` | `String` | No | `senior` (default) or `subordinated` (affects F-IRB LGD) |
+| `risk_type` | `String` | No | Off-balance sheet risk category (see below) |
+| `underlying_risk_type` | `String` | No | Underlying-exposure risk type used by the CRM substitution path when the facility's own `risk_type` would otherwise mask the protection's true category |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — when populated and approach is A-IRB, replaces the `drawn_amount + ccf x undrawn_amount` derivation (CRR Art. 166(8a)) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
+| `has_one_day_maturity_floor` | `Boolean` | No | Set True for short-term self-liquidating trade exposures and certain capital-markets-driven exposures eligible for the 1-day `M` floor under CRR Art. 162(3) (otherwise the standard 1-year floor applies) |
+| `is_sft` | `Boolean` | No | Securities Financing Transaction — drives the 0.4-year `M` floor (Art. 162(3)) and SFT-specific CCR treatment |
+| `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. When populated it supersedes the `maturity_date`-derived `M` and bypasses the 1-year floor — firm-owned judgement for short-term carve-outs |
 
 **Valid `product_type` values:**
 
@@ -254,20 +272,28 @@ facilities = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `loan_reference` | `String` | Yes | Unique identifier for the loan |
-| `product_type` | `String` | Yes | Product classification |
-| `book_code` | `String` | Yes | Portfolio/book classification |
+| `product_type` | `String` | No | Product classification |
+| `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
-| `value_date` | `Date` | Yes | Loan origination date |
-| `maturity_date` | `Date` | Yes | Loan maturity date |
-| `currency` | `String` | Yes | ISO 4217 currency code |
-| `drawn_amount` | `Float64` | Yes | Outstanding principal balance |
+| `value_date` | `Date` | No | Loan origination date |
+| `maturity_date` | `Date` | No | Loan maturity date |
+| `currency` | `String` | No | ISO 4217 currency code |
+| `drawn_amount` | `Float64` | No | Outstanding principal balance (default `0.0`) |
 | `interest` | `Float64` | No | Accrued interest (adds to on-balance-sheet EAD) |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
+| `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `seniority` | `String` | Yes | `senior` or `subordinated` (affects F-IRB LGD) |
+| `has_sufficient_collateral_data` | `Boolean` | No | A-IRB collateral data-quality attestation per Art. 181(1)(f). See Facility schema |
+| `seniority` | `String` | No | `senior` (default) or `subordinated` (affects F-IRB LGD) |
+| `is_payroll_loan` | `Boolean` | No | Payroll-deduction / pension lending — qualifies for the Basel 3.1 35% retail RW (PS1/26 Art. 123(2)) |
 | `is_buy_to_let` | `Boolean` | No | Buy-to-let property lending — excluded from SME supporting factor (CRR Art. 501) |
+| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor in lieu of the standard 1-year floor |
+| `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
+| `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26. Bypasses the 1-year floor when populated |
 | `has_netting_agreement` | `Boolean` | No | Whether loan is part of a netting agreement |
 | `netting_facility_reference` | `String` | No | Reference to netting facility (if applicable) |
+| `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A: True if the firm has performed the prescribed due-diligence assessment of the obligor. Required for the SA RW override below to apply. Absence raises diagnostic warning **SA004** under B3.1 |
+| `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (decimal, e.g. `1.50` for 150%). Applied as `max(calculated_rw, override_rw)` — the override can only **increase** the regulatory RW, never decrease it. CRR-only runs ignore this column |
 
 **Note:** Loans do not have CCF fields (`risk_type`, `ccf_modelled`, `is_short_term_trade_lc`) because CCF only applies to off-balance sheet items. For drawn loans, EAD = `drawn_amount` + `interest` directly.
 
@@ -307,20 +333,29 @@ loans = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `contingent_reference` | `String` | Yes | Unique identifier |
-| `product_type` | `String` | Yes | Product classification |
-| `book_code` | `String` | Yes | Portfolio/book classification |
+| `product_type` | `String` | No | Product classification |
+| `book_code` | `String` | No | Portfolio/book classification |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
-| `value_date` | `Date` | Yes | Contract start date |
-| `maturity_date` | `Date` | Yes | Contract expiry date |
-| `currency` | `String` | Yes | ISO 4217 currency code |
-| `nominal_amount` | `Float64` | Yes | Notional/nominal amount |
+| `value_date` | `Date` | No | Contract start date |
+| `maturity_date` | `Date` | No | Contract expiry date |
+| `currency` | `String` | No | ISO 4217 currency code |
+| `nominal_amount` | `Float64` | No | Notional/nominal amount (default `0.0`) |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
+| `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
 | `beel` | `Float64` | No | Best estimate expected loss |
-| `seniority` | `String` | Yes | `senior` or `subordinated` |
-| `risk_type` | `String` | Yes | Off-balance sheet risk category (see Facility schema) |
+| `has_sufficient_collateral_data` | `Boolean` | No | A-IRB collateral data-quality attestation per Art. 181(1)(f). See Facility schema |
+| `seniority` | `String` | No | `senior` (default) or `subordinated` |
+| `risk_type` | `String` | No | Off-balance sheet risk category (see Facility schema) |
+| `underlying_risk_type` | `String` | No | Underlying-exposure risk type for CRM substitution (see Facility schema) |
 | `ccf_modelled` | `Float64` | No | A-IRB modelled CCF (0.0-1.5) |
+| `ead_modelled` | `Float64` | No | A-IRB modelled EAD — replaces the CCF-derived value when populated under A-IRB (CRR Art. 166(8a)) |
 | `is_short_term_trade_lc` | `Boolean` | No | Short-term trade LC for goods movement (Art. 166(9)) |
+| `has_one_day_maturity_floor` | `Boolean` | No | Eligible for the CRR Art. 162(3) 1-day `M` floor |
+| `is_sft` | `Boolean` | No | Securities Financing Transaction — see Facility schema |
+| `effective_maturity` | `Float64` | No | Explicit numeric `M` override (years) per CRR Art. 162(3) / PS1/26 |
 | `bs_type` | `String` | No | `"ONB"` (on-balance-sheet / drawn) or `"OFB"` (off-balance-sheet / undrawn). Default: `"OFB"` |
+| `due_diligence_performed` | `Boolean` | No | Basel 3.1 Art. 110A due-diligence attestation (see Loan schema) |
+| `due_diligence_override_rw` | `Float64` | No | Basel 3.1 Art. 110A SA RW override (max-only — see Loan schema) |
 
 **Example:**
 
@@ -359,7 +394,7 @@ contingents = pl.DataFrame({
 |--------|------|----------|-------------|
 | `collateral_reference` | `String` | Yes | Unique identifier |
 | `collateral_type` | `String` | Yes | Type of collateral (see valid values) |
-| `currency` | `String` | Yes | ISO 4217 currency code |
+| `currency` | `String` | No | ISO 4217 currency code |
 | `maturity_date` | `Date` | No | Collateral maturity (if applicable) |
 | `market_value` | `Float64` | Conditional | Current market value (required unless `pledge_percentage` provided) |
 | `nominal_value` | `Float64` | No | Nominal/face value |
@@ -369,8 +404,11 @@ contingents = pl.DataFrame({
 | `issuer_cqs` | `Int8` | No | CQS of issuer (for securities) |
 | `issuer_type` | `String` | No | Issuer type (for haircut lookup) |
 | `residual_maturity_years` | `Float64` | No | Residual maturity in years |
+| `original_maturity_years` | `Float64` | No | Original maturity in years — used for collateral maturity-band differentiation where the haircut depends on issuance maturity rather than residual maturity |
 | `is_eligible_financial_collateral` | `Boolean` | No | Meets SA eligibility (CRR Art 197) |
 | `is_eligible_irb_collateral` | `Boolean` | No | Meets IRB eligibility (CRR Art 199) |
+| `is_qualifying_re` | `Boolean` | No | Meets Basel 3.1 qualifying real-estate criteria for the loan-splitter (PS1/26 Art. 124A finished-property / legal-enforceability / valuation / borrower-ability tests). Drives Art. 124F (RRE) / Art. 124H (CRE) eligibility |
+| `is_main_index` | `Boolean` | No | Equity collateral listed on a recognised main index (e.g. FTSE 100) — qualifies for the lower main-index haircut (CRR Art. 197(8)) |
 | `valuation_date` | `Date` | No | Date of last valuation |
 | `valuation_type` | `String` | No | `market`, `indexed`, `independent` |
 | `property_type` | `String` | No | `residential` or `commercial` (RE only) |
@@ -379,6 +417,11 @@ contingents = pl.DataFrame({
 | `is_income_producing` | `Boolean` | No | Material dependency on property cash flows per Art. 124E. `True` = materially dependent (residential: Art. 124G whole-loan; commercial: Art. 124I). `False`/null = not materially dependent (residential: Art. 124F loan-splitting; commercial: Art. 124H). For residential RE, this requires upstream assessment of Art. 124E(1) exceptions (primary residence, three-property limit, social housing, cooperative). For commercial RE, the own-business-use test (Art. 124E(6)). See [Art. 124E spec](../specifications/basel31/sa-risk-weights.md#real-estate-material-dependency-classification-art-124e) |
 | `is_adc` | `Boolean` | No | Acquisition/Development/Construction |
 | `is_presold` | `Boolean` | No | ADC pre-sold to qualifying buyer |
+| `rental_to_interest_ratio` | `Float64` | No | CRR Art. 126(2)(d): rental income / interest payments ratio. The ≥ 1.5 test gates the 50% preferential CRE risk weight; if absent, CRE collateral is conservatively treated as failing the test under CRR and the loan-splitter leaves the exposure in its original corporate / retail class. **Not used under Basel 3.1.** |
+| `liquidation_period_days` | `Int32` | No | Liquidation period in business days — used to scale supervisory haircuts under the Comprehensive method when the firm's holding period differs from the supervisory minimum (CRR Art. 224) |
+| `qualifies_for_zero_haircut` | `Boolean` | No | Repo-style transaction qualifying for the zero-haircut carve-out under CRR Art. 224(1) / Art. 227 (core market participants, eligible securities, daily margining) |
+| `insurer_risk_weight` | `Float64` | No | Credit-protection insurer risk weight override — when funded credit protection is provided by an eligible insurer, this RW is substituted for the obligor RW on the protected portion (CRR Art. 235) |
+| `credit_event_reduction` | `Float64` | No | Adjustment factor (decimal, default `0.0`) applied to the protection's covered amount when the contract restricts the set of credit events. Reduces recognised CRM accordingly (CRR Art. 213-216) |
 
 **Valid `collateral_type` values:**
 
@@ -443,14 +486,16 @@ collateral = pl.DataFrame({
 | Column | Type | Required | Description |
 |--------|------|----------|-------------|
 | `guarantee_reference` | `String` | Yes | Unique identifier |
-| `guarantee_type` | `String` | Yes | Type of guarantee |
+| `guarantee_type` | `String` | No | Type of guarantee |
 | `guarantor` | `String` | Yes | Guarantor counterparty reference |
-| `currency` | `String` | Yes | ISO 4217 currency code |
+| `currency` | `String` | No | ISO 4217 currency code |
 | `maturity_date` | `Date` | No | Guarantee expiry date |
-| `amount_covered` | `Float64` | Yes | Amount covered by guarantee |
-| `percentage_covered` | `Float64` | No | Percentage of exposure covered |
+| `amount_covered` | `Float64` | Conditional | Amount covered by guarantee (required unless `percentage_covered` provided) |
+| `percentage_covered` | `Float64` | Conditional | Fraction of exposure covered (`1.0` = 100%). Used when `amount_covered` not provided |
 | `beneficiary_type` | `String` | Yes | Level of allocation |
 | `beneficiary_reference` | `String` | Yes | Reference to counterparty/facility/loan |
+| `protection_type` | `String` | No | `"guarantee"` (default) or `"credit_derivative"` — drives CRM treatment under CRR Art. 213 vs Art. 215 (credit-derivative-specific eligibility tests) |
+| `includes_restructuring` | `Boolean` | No | True when the credit derivative includes restructuring as a credit event. Required for full recognition under CRR Art. 216(1)(d); when False the recognised cover is reduced to 60% per Art. 216(1)(e) |
 
 **Valid `guarantee_type` values:**
 
@@ -664,7 +709,8 @@ fx_rates = pl.DataFrame({
 |--------|------|----------|-------------|
 | `counterparty_reference` | `String` | Yes | Links to counterparty (all exposures inherit SL treatment) |
 | `sl_type` | `String` | Yes | Type of specialised lending |
-| `slotting_category` | `String` | Yes | Slotting category |
+| `project_phase` | `String` | No | Project lifecycle phase — typically `"planning"`, `"construction"`, or `"operational"`. Drives the CRE33.5 < 2.5-year strong/good preferential weights (which only apply during construction / pre-operational phase) |
+| `slotting_category` | `String` | No | Slotting category |
 | `is_hvcre` | `Boolean` | No | High-volatility commercial real estate |
 
 **Valid `sl_type` values:**
@@ -697,14 +743,19 @@ fx_rates = pl.DataFrame({
 |--------|------|----------|-------------|
 | `exposure_reference` | `String` | Yes | Unique identifier |
 | `counterparty_reference` | `String` | Yes | Link to counterparty |
-| `equity_type` | `String` | Yes | Type of equity exposure |
-| `currency` | `String` | Yes | ISO 4217 currency code |
-| `carrying_value` | `Float64` | Yes | Balance sheet value |
+| `equity_type` | `String` | No | Type of equity exposure (default `"other"`) |
+| `currency` | `String` | No | ISO 4217 currency code |
+| `carrying_value` | `Float64` | No | Balance sheet value |
 | `fair_value` | `Float64` | No | Mark-to-market value |
 | `is_speculative` | `Boolean` | No | Higher-risk equity (unlisted + business < 5yr) |
 | `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange |
 | `is_government_supported` | `Boolean` | No | Government-supported programme |
 | `is_significant_investment` | `Boolean` | No | >10% of CET1 |
+| `ciu_approach` | `String` | No | CIU treatment selector — `"look_through"` (Art. 132(3)), `"mandate_based"` (Art. 132(4)), or `"fallback"` (1,250% per Art. 132(2)). When null the calculator selects based on data availability and falls back conservatively |
+| `ciu_mandate_rw` | `Float64` | No | Mandate-based RW (decimal) when `ciu_approach = "mandate_based"`. Calculated upstream from the fund's investment mandate |
+| `ciu_third_party_calc` | `Boolean` | No | True when the look-through RW has been calculated by an eligible third party (custodian / depositary / management company) per Art. 132(3) — relaxes the holding-level evidence requirement |
+| `fund_reference` | `String` | No | Join key into the [CIU Holdings schema](#ciu-holdings-schema). Required when `ciu_approach = "look_through"` and `ciu_third_party_calc = False` |
+| `fund_nav` | `Float64` | No | Fund NAV — denominator of the look-through RW formula `sum(holding_value_i × rw_i) / fund_nav`. See [equity-approach spec](../specifications/basel31/equity-approach.md) |
 
 **Valid `equity_type` values:**
 
@@ -720,6 +771,58 @@ fx_rates = pl.DataFrame({
 | `speculative` | 400% | Higher-risk (unlisted + business < 5yr) |
 | `ciu` | Look-through | Collective investment undertakings |
 | `other` | 250% | Other equity exposures |
+
+---
+
+## CIU Holdings Schema
+
+**Purpose:** Per-holding constituents of a Collective Investment Undertaking (CIU) used by the **look-through approach** (Art. 132(3)). Each row represents one underlying exposure inside a fund, joined to the parent equity row via `fund_reference`. The look-through RW is computed as `sum(holding_value_i × rw_i) / fund_nav` and applied to the equity exposure's carrying value.
+
+**File:** No canonical loader path — passed in-memory via `DataSourceConfig.ciu_holdings_file` (loader source: `engine/loader.py:139`). Not part of the standard fixture registry, since the CIU look-through is opt-in.
+
+**When required:** Only when one or more `EQUITY_EXPOSURE` rows have `ciu_approach = "look_through"` and `ciu_third_party_calc = False`. If absent, CIU rows fall through to the mandate-based or punitive 1,250% fallback (Art. 132(2)) — see [equity-approach spec](../specifications/basel31/equity-approach.md).
+
+| Column | Type | Required | Description |
+|--------|------|----------|-------------|
+| `fund_reference` | `String` | Yes | Join key to `EQUITY_EXPOSURE.fund_reference` — uniquely identifies the parent fund |
+| `holding_reference` | `String` | Yes | Unique identifier for the holding within the fund |
+| `exposure_class` | `String` | Yes | Exposure class of the underlying holding (`"corporate"`, `"institution"`, `"sovereign"`, etc.) — drives the SA risk weight applied |
+| `cqs` | `Int8` | No | Credit Quality Step of the underlying holding, where applicable |
+| `holding_value` | `Float64` | No | Market value of the holding inside the fund — numerator of the look-through formula |
+
+**Regulatory references:**
+
+- **CRR Art. 132**: CIU treatment under the Standardised Approach
+- **PRA PS1/26 Art. 132(2)**: Punitive 1,250% fallback when neither look-through nor mandate-based data is available
+- **PRA PS1/26 Art. 132(3)**: Look-through approach — requires sufficient and frequent information about the underlying exposures
+- **PRA PS1/26 Art. 132(4)**: Mandate-based approach — uses the fund's investment mandate / prospectus
+
+**Example:**
+
+```python
+import polars as pl
+
+ciu_holdings = pl.DataFrame({
+    "fund_reference": ["FUND_001", "FUND_001", "FUND_001"],
+    "holding_reference": ["HOLD_001", "HOLD_002", "HOLD_003"],
+    "exposure_class": ["corporate", "sovereign", "institution"],
+    "cqs": [3, 1, 2],
+    "holding_value": [40_000_000.0, 30_000_000.0, 30_000_000.0],
+})
+
+# Parent equity row links via fund_reference:
+equity_exposures = pl.DataFrame({
+    "exposure_reference": ["EQ_001"],
+    "counterparty_reference": ["FUND_MGR_001"],
+    "equity_type": ["ciu"],
+    "ciu_approach": ["look_through"],
+    "ciu_third_party_calc": [False],
+    "fund_reference": ["FUND_001"],
+    "fund_nav": [100_000_000.0],
+    "carrying_value": [5_000_000.0],
+    # ... other equity fields
+})
+```
 
 ---
 

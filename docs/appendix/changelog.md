@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+
+## [0.1.67] - 2026-04-25
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.66] - 2026-04-24
 
 ### Changed

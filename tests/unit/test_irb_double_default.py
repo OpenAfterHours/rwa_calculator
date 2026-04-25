@@ -254,11 +254,13 @@ class TestDoubleDefaultRWA:
         lf = _make_guaranteed_frame(guarantor_pd=0.0003, guarantor_cqs=1)
         result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
 
-        # DD should be applied (low guarantor PD → DD RW < SA substitution RW)
+        # DD eligibility allows DD treatment OR plain substitution (SA RW for SA
+        # guarantors, PD-parameter substitution for IRB guarantors per Art. 161(3))
         if result["is_double_default_eligible"][0]:
             assert result["guarantee_method_used"][0] in (
                 "DOUBLE_DEFAULT",
                 "SA_RW_SUBSTITUTION",
+                "PD_PARAMETER_SUBSTITUTION",
             )
 
     def test_dd_unfunded_protection_tracked(self):

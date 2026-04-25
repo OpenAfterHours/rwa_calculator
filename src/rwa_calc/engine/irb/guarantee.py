@@ -82,7 +82,12 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 
     has_expected_loss = "expected_loss" in cols
     has_guarantor_pd = "guarantor_pd" in cols
-    use_parameter_substitution = config.is_basel_3_1 and has_guarantor_pd
+    # PD substitution applies whenever the guarantor has an internal PD.
+    # Per-row routing (IRB-derived RW vs SA-derived RW) is decided inside
+    # _apply_parameter_substitution by guarantor_approach, which is itself
+    # beneficiary-aware (set in engine/crm/guarantees.py). This covers both
+    # CRR Art. 161(3) and Basel 3.1 CRE22.70-85 — only the F-IRB LGD differs.
+    use_parameter_substitution = has_guarantor_pd
 
     # Store original IRB values before substitution (pre-CRM values)
     store_originals = [
@@ -286,12 +291,14 @@ def _apply_parameter_substitution(
     config: CalculationConfig,
     use_parameter_substitution: bool,
 ) -> pl.LazyFrame:
-    """Apply Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85)."""
+    """Apply parameter substitution for IRB guarantors (CRR Art. 161(3) /
+    Basel 3.1 CRE22.70-85). The F-IRB supervisory LGD differs by framework:
+    0.45 under CRR, 0.40 under Basel 3.1."""
     if use_parameter_substitution:
         from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 
-        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
-        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.40
+        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
 
         # Ensure columns required by _parametric_irb_risk_weight_expr exist
         ensure_cols: list[pl.Expr] = []
@@ -428,12 +435,12 @@ def _apply_double_default(
             .then(pl.col("lgd_floored") if "lgd_floored" in cols else pl.col("lgd"))
             .otherwise(pl.lit(None).cast(pl.Float64))
             .alias("irb_lgd_double_default"),
-            # Track DD method
+            # Track DD method — True only when actual double-default treatment is
+            # applied (eligible AND beneficial vs. plain substitution). PD substitution
+            # is tracked independently via _is_pd_substitution.
             pl.when(_is_dd_eligible & (rw_dd_floored < pl.col("guarantor_rw")))
             .then(pl.lit(True))
-            .otherwise(
-                pl.col("_is_pd_substitution") if use_parameter_substitution else pl.lit(False)
-            )
+            .otherwise(pl.lit(False))
             .alias("_is_dd_applied"),
         ]
     )
@@ -445,49 +452,15 @@ def _adjust_expected_loss(
     ead_col: str,
     use_parameter_substitution: bool,
 ) -> pl.LazyFrame:
-    """Adjust expected loss for guaranteed portion."""
-    # SA guarantor: no EL concept -- only unguaranteed portion retains IRB EL
-    # IRB guarantor (parameter sub): EL = guarantor_pd x firb_lgd x guaranteed_portion
-    if use_parameter_substitution:
-        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
+    """Adjust expected loss for guaranteed portion.
 
-        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=True)
-        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
-
-        has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
-        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
-        guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
-
-        return lf.with_columns(
-            [
-                pl.when(
-                    (pl.col("guaranteed_portion").fill_null(0) > 0)
-                    & (pl.col("guarantor_rw").is_not_null())
-                    & (pl.col("is_guarantee_beneficial"))
-                )
-                .then(
-                    pl.when(pl.col("_is_pd_substitution"))
-                    .then(
-                        # IRB guarantor: blend IRB EL for unguaranteed +
-                        # substituted EL for guaranteed
-                        pl.col("expected_loss_irb_original")
-                        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-                        + guarantor_pd_floored * firb_lgd_senior * pl.col("guaranteed_portion")
-                    )
-                    .otherwise(
-                        # SA guarantor: SA has no EL -- only unguaranteed retains EL
-                        pl.col("expected_loss_irb_original")
-                        * (pl.col("unguaranteed_portion") / pl.col(ead_col)).fill_null(1.0)
-                    )
-                )
-                .otherwise(pl.col("expected_loss_irb_original"))
-                .alias("expected_loss"),
-            ]
-        )
-
-    # CRR: SA guarantors -> reduce EL for guaranteed portion (SA has no EL concept)
-    # CRR: IRB guarantors (non-DD, with PD) -> PD substitution for EL (Art. 161(3))
-    # Double default exposures retain full obligor EL (DD modifies K, not EL)
+    SA guarantor: SA has no EL concept; only the unguaranteed portion retains EL.
+    IRB guarantor: blend borrower EL (unguaranteed) + guarantor EL (guaranteed)
+        per CRR Art. 161(3) / Basel 3.1 CRE22.70-85, using the framework's
+        F-IRB supervisory LGD (0.45 CRR / 0.40 Basel 3.1).
+    Double-default exposures (CRR Art. 153(3)) retain the full obligor EL —
+        DD modifies K, not EL.
+    """
     _base_el = (
         (pl.col("guaranteed_portion").fill_null(0) > 0)
         & (pl.col("guarantor_rw").is_not_null())
@@ -497,34 +470,27 @@ def _adjust_expected_loss(
         pl.col("unguaranteed_portion") / pl.col(ead_col)
     ).fill_null(1.0)
 
-    has_guarantor_pd = "guarantor_pd" in lf.collect_schema().names()
-    if has_guarantor_pd:
+    if use_parameter_substitution:
         from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 
         firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
-        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])  # 0.45 CRR
+        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
 
         has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
         pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
-        _is_irb_non_dd = (
-            (pl.col("guarantor_approach").fill_null("") == "irb")
-            & pl.col("guarantor_pd").is_not_null()
-            & ~pl.col("_is_dd_applied")
-        )
+        _is_irb_non_dd = pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
 
         return lf.with_columns(
             [
-                pl.when(_base_el & (pl.col("guarantor_approach").fill_null("") == "sa"))
-                .then(_el_unguaranteed)
-                .when(_base_el & _is_irb_non_dd)
+                pl.when(_base_el & _is_irb_non_dd)
                 .then(
-                    # IRB guarantor: blend borrower EL (unguaranteed) +
-                    # guarantor EL (guaranteed) per Art. 161(3)
                     _el_unguaranteed
                     + guarantor_pd_floored * firb_lgd_senior * pl.col("guaranteed_portion")
                 )
+                .when(_base_el & (pl.col("guarantor_approach").fill_null("") == "sa"))
+                .then(_el_unguaranteed)
                 .otherwise(pl.col("expected_loss_irb_original"))
                 .alias("expected_loss"),
             ]

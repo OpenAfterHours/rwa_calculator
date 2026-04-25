@@ -157,10 +157,13 @@ class TestParameterSubstitutionMethod:
         assert result["rwa"][0] == pytest.approx(0.0)
         assert result["guarantor_rw"][0] == pytest.approx(0.0)
 
-    def test_crr_always_uses_sa_rw_substitution(self, crr_config: CalculationConfig) -> None:
-        """CRR should always use SA RW substitution, even for IRB guarantors."""
+    def test_crr_uses_pd_substitution_for_irb_guarantor(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """CRR with an IRB guarantor (internal PD) uses PD parameter substitution
+        per Art. 161(3). SA RW substitution is reserved for SA guarantors."""
         ead = 1_000_000.0
-        borrower_rw = 0.80  # Higher than guarantor's SA RW (20%) → beneficial
+        borrower_rw = 1.00  # high enough that PD-derived IRB RW is beneficial
         borrower_rwa = borrower_rw * ead
 
         lf = pl.LazyFrame(
@@ -176,19 +179,52 @@ class TestParameterSubstitutionMethod:
                 "guaranteed_portion": [ead],
                 "unguaranteed_portion": [0.0],
                 "guarantor_entity_type": ["corporate"],
-                "guarantor_cqs": [1],  # Corporate CQS 1 = 20% RW under SA
+                "guarantor_cqs": [1],
                 "guarantor_approach": ["irb"],
-                "guarantor_pd": [0.005],  # IRB guarantor with PD
+                "guarantor_pd": [0.005],
             }
         )
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
-        # CRR: always SA RW substitution regardless of guarantor approach
+        assert result["guarantee_method_used"][0] == "PD_PARAMETER_SUBSTITUTION"
+        assert result["guarantee_status"][0] == "PD_PARAMETER_SUBSTITUTION"
+        # IRB-derived RW from PD=0.005 under CRR LGD=0.45 must be lower than
+        # the 100% borrower RW to be beneficial; the exact value depends on the
+        # parametric IRB formula.
+        assert result["guarantor_rw"][0] < borrower_rw
+
+    def test_crr_uses_sa_rw_substitution_for_sa_guarantor(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """CRR with an SA guarantor (external CQS only) uses SA RW substitution."""
+        ead = 1_000_000.0
+        borrower_rw = 0.80
+        borrower_rwa = borrower_rw * ead
+
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "pd": [0.05],
+                "lgd": [0.45],
+                "ead_final": [ead],
+                "maturity": [2.5],
+                "exposure_class": ["CORPORATE"],
+                "rwa": [borrower_rwa],
+                "risk_weight": [borrower_rw],
+                "guaranteed_portion": [ead],
+                "unguaranteed_portion": [0.0],
+                "guarantor_entity_type": ["corporate"],
+                "guarantor_cqs": [1],
+                "guarantor_approach": ["sa"],
+                "guarantor_pd": [None],
+            }
+        )
+
+        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
         assert result["guarantee_status"][0] == "SA_RW_SUBSTITUTION"
-
-        # SA RW for corporate CQS 1 = 20%
         assert result["guarantor_rw"][0] == pytest.approx(0.20)
 
     def test_partial_guarantee_blends_irb_and_parameter_sub(

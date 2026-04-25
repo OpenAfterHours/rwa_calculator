@@ -476,7 +476,7 @@ def _sovereign_exposure(currency: str, original_currency: str | None = None) -> 
         "exposure_reference": ["EXP001"],
         "counterparty_reference": ["CP001"],
         "exposure_class": ["corporate"],
-        "approach": ["IRB"],
+        "approach": ["foundation_irb"],
         "ead_pre_crm": [1_000_000.0],
         "lgd": [0.45],
         "cqs": [3],
@@ -646,6 +646,129 @@ class TestDomesticSovereignGuarantorForcedToSA:
             _sovereign_counterparty_lookup("DE"),
             b31_irb_config,
             rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.001),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "sa"
+
+
+# ---------------------------------------------------------------------------
+# Beneficiary-aware routing: institution beneficiary + institution guarantor
+# ---------------------------------------------------------------------------
+
+
+def _institution_exposure(approach: str) -> pl.LazyFrame:
+    """Institution-class exposure where `approach` is the BENEFICIARY's approach."""
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["EXP001"],
+            "counterparty_reference": ["CP001"],
+            "exposure_class": ["institution"],
+            "approach": [approach],
+            "ead_pre_crm": [1_000_000.0],
+            "lgd": [0.45],
+            "cqs": [3],
+            "product_type": ["LOAN"],
+            "drawn_amount": [1_000_000.0],
+            "undrawn_amount": [0.0],
+            "nominal_amount": [0.0],
+            "risk_type": [None],
+            "interest": [0.0],
+            "maturity_date": [date(2029, 12, 31)],
+            "ead_after_collateral": [1_000_000.0],
+            "ead_from_ccf": [0.0],
+            "ccf": [1.0],
+            "collateral_adjusted_value": [0.0],
+            "lgd_pre_crm": [0.45],
+            "lgd_post_crm": [0.45],
+        }
+    )
+
+
+def _institution_counterparty_lookup() -> pl.LazyFrame:
+    """Counterparty lookup for an institution guarantor."""
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": ["GUAR001"],
+            "entity_type": ["institution"],
+            "country_code": ["GB"],
+        }
+    )
+
+
+class TestInstitutionGuarantorBeneficiaryAware:
+    """Beneficiary-aware guarantor routing for an institution-on-institution
+    guarantee where both parties have internal AND external ratings.
+
+    Expected (CRR Art. 161 / Basel 3.1 CRE22.70-85):
+    - Beneficiary on IRB → guarantor_approach == "irb" (use internal PD)
+    - Beneficiary on SA  → guarantor_approach == "sa"  (use external CQS)
+    """
+
+    def test_crr_irb_beneficiary_routes_guarantor_to_irb(
+        self, crr_irb_config: CalculationConfig
+    ) -> None:
+        result = apply_guarantees(
+            _institution_exposure(approach="foundation_irb"),
+            _guarantee(),
+            _institution_counterparty_lookup(),
+            crr_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.005),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "irb"
+
+    def test_crr_sa_beneficiary_routes_guarantor_to_sa(
+        self, crr_irb_config: CalculationConfig
+    ) -> None:
+        """SA beneficiary always uses guarantor's external CQS, even if guarantor
+        has an internal PD that would otherwise route to IRB."""
+        result = apply_guarantees(
+            _institution_exposure(approach="standardised"),
+            _guarantee(),
+            _institution_counterparty_lookup(),
+            crr_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.005),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "sa"
+
+    def test_b31_irb_beneficiary_routes_guarantor_to_irb(
+        self, b31_irb_config: CalculationConfig
+    ) -> None:
+        result = apply_guarantees(
+            _institution_exposure(approach="foundation_irb"),
+            _guarantee(),
+            _institution_counterparty_lookup(),
+            b31_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.005),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "irb"
+
+    def test_b31_sa_beneficiary_routes_guarantor_to_sa(
+        self, b31_irb_config: CalculationConfig
+    ) -> None:
+        result = apply_guarantees(
+            _institution_exposure(approach="standardised"),
+            _guarantee(),
+            _institution_counterparty_lookup(),
+            b31_irb_config,
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.005),
+        ).collect()
+
+        assert result["guarantor_approach"][0] == "sa"
+
+    def test_irb_beneficiary_without_firm_irb_permission_falls_back_to_sa(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """If the firm lacks IRB permission for the guarantor's exposure class,
+        the guarantor is routed to SA even when the beneficiary is IRB."""
+        result = apply_guarantees(
+            _institution_exposure(approach="foundation_irb"),
+            _guarantee(),
+            _institution_counterparty_lookup(),
+            crr_config,  # default permissions (SA-only)
+            rating_inheritance=_rating_inheritance(cqs=2, internal_pd=0.005),
         ).collect()
 
         assert result["guarantor_approach"][0] == "sa"

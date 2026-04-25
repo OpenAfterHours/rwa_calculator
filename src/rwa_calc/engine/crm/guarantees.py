@@ -176,16 +176,28 @@ def apply_guarantees(
         ]
     )
 
-    # Determine guarantor approach from IRB permissions AND rating type.
+    # Determine guarantor approach from IRB permissions, rating type, AND
+    # the BENEFICIARY's approach.
     # A guarantor is treated under IRB only if:
-    # 1. The firm has IRB permission for the guarantor's exposure class, AND
-    # 2. The guarantor has an internal rating (PD) — indicating the firm
+    # 1. The beneficiary exposure is itself on FIRB/AIRB (CRR Art. 161 /
+    #    Basel 3.1 CRE22.70-85: parameter substitution applies only to IRB
+    #    beneficiaries; SA beneficiaries always substitute via guarantor's
+    #    SA risk weight regardless of the guarantor's internal rating), AND
+    # 2. The firm has IRB permission for the guarantor's exposure class, AND
+    # 3. The guarantor has an internal rating (PD) — indicating the firm
     #    actively rates this counterparty under its IRB model.
     # Counterparties with only external ratings (CQS) are treated under SA.
     irb_exposure_class_values = set()
     for ec, approaches in config.irb_permissions.permissions.items():
         if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
             irb_exposure_class_values.add(ec.value)
+
+    irb_beneficiary_approaches = [ApproachType.FIRB.value, ApproachType.AIRB.value]
+    beneficiary_is_irb = (
+        pl.col("approach").fill_null("").is_in(irb_beneficiary_approaches)
+        if "approach" in exposures.collect_schema().names()
+        else pl.lit(False)
+    )
 
     # Art. 114(4)/(7): an EU/UK domestic-currency CGCB guarantor must receive 0% RW
     # via the SA short-circuit, even if the guarantor has an internal PD that would
@@ -218,7 +230,8 @@ def apply_guarantees(
             pl.when(is_domestic_cgcb_guarantor)
             .then(pl.lit("sa"))
             .when(
-                (pl.col("guarantor_exposure_class") != "")
+                beneficiary_is_irb
+                & (pl.col("guarantor_exposure_class") != "")
                 & pl.col("guarantor_exposure_class").is_in(list(irb_exposure_class_values))
                 & pl.col("guarantor_internal_pd").is_not_null()
             )

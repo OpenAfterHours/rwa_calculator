@@ -248,17 +248,16 @@ class TestB31D7_ParameterSubstitution:
         assert row["guarantee_method_used"] == "SA_RW_SUBSTITUTION"
         assert row["guarantor_rw"] == pytest.approx(0.0)
 
-    def test_b31_d7_crr_irb_guarantor_uses_sa_rw_substitution(
+    def test_b31_d7_crr_irb_guarantor_uses_pd_parameter_substitution(
         self,
         crr_firb_config: CalculationConfig,
     ) -> None:
         """
-        B31-D7c: Under CRR, even IRB guarantors use SA RW substitution.
+        B31-D7c: Under CRR, IRB guarantors with internal PD use PD parameter
+        substitution per CRR Art. 161(3).
 
-        CRR does not support parameter substitution. All guarantee methods
-        fall back to SA risk weight substitution.
-
-        Expected: SA_RW_SUBSTITUTION even though guarantor has IRB PD.
+        Expected: PD_PARAMETER_SUBSTITUTION when the guarantor has an internal PD
+        and the firm has IRB permission for the guarantor's exposure class.
         """
         result_df = _create_crm_and_irb_result(
             config=crr_firb_config,
@@ -272,8 +271,7 @@ class TestB31D7_ParameterSubstitution:
         assert len(result_df) > 0
         row = result_df.row(0, named=True)
 
-        # CRR: always SA RW substitution
-        assert row["guarantee_method_used"] == "SA_RW_SUBSTITUTION"
+        assert row["guarantee_method_used"] == "PD_PARAMETER_SUBSTITUTION"
 
     def test_b31_d7_partial_guarantee_blends_correctly(
         self,

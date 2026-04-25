@@ -136,7 +136,11 @@ class TestELGuaranteeAdjustment:
         assert result["expected_loss"][0] == pytest.approx(450.0)
 
     def test_irb_guarantor_el_substituted_with_pd(self, crr_config: CalculationConfig) -> None:
-        """IRB guarantor with PD should substitute guarantor PD for EL (Art. 161(3))."""
+        """IRB guarantor with PD should substitute guarantor PD for EL (Art. 161(3)).
+
+        Borrower RW is set to 100% so the IRB-derived guarantor RW (computed from
+        PD=0.005 with the CRR FIRB LGD of 45%) is unambiguously beneficial.
+        """
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -145,8 +149,8 @@ class TestELGuaranteeAdjustment:
                 "ead_final": [1_000_000.0],
                 "maturity": [2.5],
                 "exposure_class": ["CORPORATE"],
-                "rwa": [500_000.0],
-                "risk_weight": [0.50],
+                "rwa": [1_000_000.0],
+                "risk_weight": [1.00],
                 "expected_loss": [4_500.0],  # PD * LGD * EAD = 0.01 * 0.45 * 1M
                 "guaranteed_portion": [1_000_000.0],
                 "unguaranteed_portion": [0.0],
@@ -159,7 +163,7 @@ class TestELGuaranteeAdjustment:
 
         result = lf.irb.apply_guarantee_substitution(crr_config).collect()
 
-        # EL = guarantor_PD(0.005) × LGD_senior(0.45) × guaranteed(1M) + 0 (no unguaranteed)
+        # EL = guarantor_PD(0.005) × LGD_senior(0.45 CRR) × guaranteed(1M) + 0
         # = 2,250.0
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(2_250.0)

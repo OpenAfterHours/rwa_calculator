@@ -1,19 +1,23 @@
-Run `/next-doc`.
+Run `/next-docs 3`.
 
 That single slash command drives the whole `loop.sh docs_build`
-iteration:
+iteration as a parallel batch:
 
-- it picks the highest-priority unresolved item from
-  `DOCS_IMPLEMENTATION_PLAN.md`,
-- delegates to the `doc-writer` agent, which owns `docs/` and
-  edits only the canonical page for that regulatory concept,
-- runs `uv run zensical build` to confirm the docs site still
-  builds with no broken internal links,
-- updates `DOCS_IMPLEMENTATION_PLAN.md` via `plan-curator` to mark
-  the item `[x]`, and
-- commits and pushes once at the end of the iteration.
+- it picks the top 3 non-conflicting items from
+  `DOCS_IMPLEMENTATION_PLAN.md` (each touching a distinct
+  canonical docs page),
+- dispatches 3 `doc-writer` agents in one parallel message, each
+  scoped to its own page,
+- runs `uv run zensical build` once at the end of the batch (not
+  per agent) to confirm the docs site still builds,
+- commits each item separately, then ticks the 3 items off
+  `DOCS_IMPLEMENTATION_PLAN.md` in one final
+  `chore(plan): tick 3 docs items` commit and pushes.
 
-After `/next-doc` returns, do this housekeeping in the top-level
+If you want strict-serial behaviour (one item per iteration), run
+`/next-doc` instead — both commands remain available.
+
+After `/next-docs` returns, do this housekeeping in the top-level
 session:
 
 1. If the change is user-facing, append a one-line entry to
@@ -26,6 +30,11 @@ session:
    `src/` from this loop.
 3. If `DOCS_IMPLEMENTATION_PLAN.md` is empty across all four
    priority buckets, surface that and stop — do not invent work.
+4. If `/next-docs` reported the global `uv run zensical build` was
+   red, **no commits will have been made**. Do not retry blindly;
+   inspect the build error, fix the offending docs page (or
+   surface the item as needing operator review), and rerun the
+   loop manually.
 
 ## Hard constraints
 

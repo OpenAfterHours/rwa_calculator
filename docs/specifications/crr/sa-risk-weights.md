@@ -273,22 +273,85 @@ for the national-currency subset.
     in the national currency of the borrower shall be assigned a risk weight less than
     20 %."
 
-**Mechanism.** Where the institution's central government benefits from preferential
-sovereign treatment under Art. 114(4) (Member-State central government, domestic-currency
-exposure → 0%), Art. 114(6) (equivalent third-country competent authority), or
-Art. 114(7) (CRR transitional national-currency exposures), a national-currency short-term
-exposure to an institution incorporated in that jurisdiction steps down the preferential
-sovereign RW by **one CQS category** and then applies the Art. 119(3) **20% floor**. For
-a UK-domestic sterling-funded short-term exposure (UK sovereign RW = 0%, Art. 114(4))
-the one-category step-down would produce a sub-20% result, so the Art. 119(3) floor
-binds at **20%**.
+**Eligibility (cumulative).** All four conditions must hold:
+
+1. **Counterparty type** — exposure is to an *institution* (Art. 119 scope; the
+   preferential is excluded for RGLAs by Art. 115(1) and for MDBs by Art. 117(1)).
+2. **Residual maturity** — three months or less. Note this is *residual* maturity
+   (cf. Art. 120(2) which uses the same residual-maturity test but Art. 121(3)
+   which references the same residual ≤ 3m window).
+3. **Currency** — exposure is denominated in the borrower's *national currency*
+   (the currency of the jurisdiction in which the institution is incorporated).
+4. **Funding** — exposure is also *funded* in that same national currency (i.e.
+   the institution's funding leg matches the asset currency, ruling out
+   off-shore-funded foreign-currency lending wrapped as domestic-currency claims).
+
+**Mechanism (RW derivation).** Where the institution's central government benefits
+from preferential sovereign treatment under Art. 114(4) (UK central government and
+the Bank, sterling-denominated/funded → 0%), Art. 114(6) (Member-State central
+government domestic-currency exposure — onshored CRR text retains the Member-State
+gateway), or Art. 114(7) (third-country sovereign domestic-currency exposure where
+the Treasury determines equivalent supervision), a national-currency short-term
+exposure to an institution incorporated in that jurisdiction is assigned a risk
+weight **one CQS category less favourable** than the preferential sovereign RW, and
+is then floored at **20%** by Art. 119(3).
+
+The "one category less favourable" step uses the sovereign Art. 114(2) Table 1
+ladder (0% / 20% / 50% / 100% / 100% / 150%):
+
+| Sovereign preferential RW (Art. 114(4)–(7)) | One CQS step less favourable | After Art. 119(3) 20% floor |
+|---|---|---|
+| 0% (CQS 1, UK sterling, third-country equivalent) | 20% (CQS 2) | **20%** |
+| 20% (CQS 2) | 50% (CQS 3) | **50%** |
+| 50% (CQS 3) | 100% (CQS 4) | **100%** |
+| 100% (CQS 4–5) | 150% (CQS 6) | **150%** |
+| 150% (CQS 6) | 150% (capped at the bottom of the ladder) | **150%** |
+
+**UK worked example — sterling short-term claim on a UK institution.**
+
+Consider a 2-month £25m interbank placement with a UK-incorporated bank,
+sterling-denominated and sterling-funded:
+
+1. Art. 119(2) eligibility check — counterparty = institution (yes); residual
+   maturity = 2 months ≤ 3 months (yes); denomination = sterling (yes); funding =
+   sterling (yes). All four conditions met.
+2. Identify the sovereign preferential RW. UK central government / Bank of England,
+   sterling-denominated and sterling-funded → 0% under Art. 114(4) (CRR p. 112).
+3. Step one category less favourable on the Art. 114(2) Table 1 sovereign ladder:
+   0% (CQS 1) → 20% (CQS 2).
+4. Apply the Art. 119(3) floor: 20% is exactly at the floor, so the floor binds
+   without effect.
+5. Final risk weight: **20%**. RWA = £25m × 20% = £5m.
+
+For the same exposure routed through Art. 120(2) Table 4 (rated CQS 2 institution,
+≤ 3 months) the result is also 20%; routed through Art. 121(3) (if unrated, ≤ 3
+months) it is again 20%. In the UK-domestic sterling-funded case the three paths
+converge — the Art. 119(2)/(3) channel becomes operationally meaningful only where
+the institution is incorporated in a third-country jurisdiction whose sovereign
+benefits from Art. 114(6)/(7) preferential treatment but whose own ECAI grade
+(Art. 120) or sovereign-derived grade (Art. 121) would otherwise produce a higher
+weight.
 
 **Scope.** Applies to both rated and unrated institutions — unlike Art. 120(2) (ECAI
 required) and Art. 121(3) (unrated only), Art. 119(2)/(3) is an ECAI-agnostic path
-keyed on currency, funding, and residual maturity. Where both Art. 119(2) and Art. 120(2)
-could apply to the same rated exposure (e.g. a 2-month sterling-funded CQS 2 UK-bank
-exposure), the more favourable path prevails — in practice usually Art. 120(2) Table 4
-(20% at CQS 2) matches the Art. 119(3) floor (20%), so no operational difference.
+keyed on currency, funding, and residual maturity. Where both Art. 119(2) and
+Art. 120(2) could apply to the same rated exposure (e.g. a 2-month sterling-funded
+CQS 2 UK-bank exposure), the **more favourable** path prevails — in practice
+usually Art. 120(2) Table 4 (20% at CQS 1–3) matches or beats the Art. 119(3)
+floor (20%), so no operational difference for UK-domestic short-term claims.
+
+**Distinction from Art. 120(2) Table 4 and Art. 121(3).** The three short-term
+preferential channels operate on different keys and must not be conflated:
+
+| Article | Eligibility key | Currency condition | Sovereign linkage | Floor / cap |
+|---------|----------------|---------------------|-------------------|-------------|
+| Art. 120(2) Table 4 | Rated institution + residual ≤ 3 months | None | None — uses institution's own ECAI CQS | Table 4 grid (20%/20%/20%/50%/50%/150%) |
+| Art. 121(3) | Unrated institution + residual ≤ 3 months | None | None | Flat 20% |
+| Art. 119(2)/(3) | Any institution + residual ≤ 3 months + national-currency denom & funding | Required (denom AND funded in borrower's national currency) | One step less favourable than Art. 114(4)–(7) sovereign preferential | 20% floor (Art. 119(3)) |
+
+Art. 120(2) and Art. 121(3) are general short-term windows; Art. 119(2)/(3) is a
+**parallel, currency-conditioned, sovereign-derived** path — the borrower picks the
+most favourable applicable grade across the three.
 
 !!! warning "Removed under Basel 3.1 (PS1/26 Art. 119(2)/(3)/(4) blanked)"
     PS1/26 Appendix 1 p. 40 marks Art. 119(2), (3), and (4) all as
@@ -312,6 +375,36 @@ exposure), the more favourable path prevails — in practice usually Art. 120(2)
     institution's own rating; under Basel 3.1 they fall through to Art. 120(2) Table 4
     (potentially 50% at CQS 4–5 or 150% at CQS 6) or Art. 121 SCRA grading (40%–150%),
     with no national-currency override.
+
+!!! bug "Implementation Status — Not implemented in CRR calculator (D3.28)"
+    The CRR SA calculator branch (`engine/sa/calculator.py`) does **not** evaluate
+    Art. 119(2)/(3). The calculator routes all short-term institution exposures through
+    Art. 120(2) Table 4 (rated) or Art. 121(3) (unrated 20%), with no national-currency
+    sovereign-derived channel. There is no `art_119_2` branch and no domestic-currency
+    short-term institution risk-weight constant in `data/tables/crr_risk_weights.py`.
+
+    **Materiality.** For UK-domestic sterling-funded short-term claims the gap is
+    immaterial — Art. 120(2) and Art. 121(3) already converge on 20%, matching the
+    Art. 119(3) floor. The gap **is** material for cross-border short-term exposures
+    where the counterparty institution is incorporated in a third country whose
+    sovereign benefits from Art. 114(6)/(7) preferential domestic-currency treatment:
+    in those cases the calculator overstates RW by skipping the Art. 119(2)
+    one-CQS-step-down channel.
+
+    **Operational note.** Firms with material exposures in this corner case must
+    apply the Art. 119(2)/(3) override outside the engine until the branch is
+    implemented. The CRR-only nature of the path means this gap will not affect
+    Basel 3.1 calculations from 1 January 2027 — PS1/26 blanks Art. 119(2)/(3)/(4)
+    entirely (see the "Removed under Basel 3.1" callout above).
+
+!!! info "User-guide cross-reference"
+    See [User Guide — Institution Exposures § Short-Term Exposures](../../user-guide/exposure-classes/institution.md#short-term-exposures)
+    for the user-facing summary of this CRR-only path and its Basel 3.1 removal
+    (the "CRR Art. 119(2)/(3) National-Currency Preferential — Removed under
+    Basel 3.1" warning admonition closing that section). The "Regulatory References"
+    table at the foot of that page distinguishes the three short-term rows:
+    Art. 120(2) Table 4 (general rated), Art. 121(3) (unrated), and Art. 119(2)/(3)
+    (national-currency, CRR only — blanked in PS1/26).
 
 !!! warning "Correction: CRR has no Table 4A"
     CRR Tables 3 and 4 both use the **institution's own ECAI rating** — Table 3 for

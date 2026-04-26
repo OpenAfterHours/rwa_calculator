@@ -1104,6 +1104,7 @@ def generate_collateral(
             "residual_maturity_years": residual_maturities,
             "is_eligible_financial_collateral": is_eligible_fc,
             "is_eligible_irb_collateral": is_eligible_irb,
+            "is_airb_model_collateral": np.full(n_collateral, False),
             "valuation_date": valuation_dates,
             "valuation_type": valuation_types,
             "property_type": property_types,

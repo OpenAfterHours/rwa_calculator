@@ -354,6 +354,16 @@ protection first, then the adjusted unfunded protection is applied to the origin
   portion of an exposure (no double-counting).
 - **Para 3**: An institution must use the same CRM method for the same type of unfunded
   credit protection across its portfolio (consistency requirement).
+- **AIRB own-LGD anti-double-counting (Art. 169A)**: Where collateral has been used to
+  construct the firm's own LGD model, that collateral must not also contribute supervisory
+  CRM benefit to non-AIRB exposures of the same counterparty. The pipeline supports this via
+  the `is_airb_model_collateral` flag on the collateral table (default `False`):
+  - When `True`, the collateral is allocated only to AIRB-pool exposures (rows where the
+    modelled LGD is preserved). Non-AIRB exposures receive zero. Direct allocation onto a
+    non-AIRB exposure raises a CRM006 data-quality warning.
+  - Even when `False`, AIRB-pool exposures are excluded from the **pro-rata base** at
+    facility / counterparty level, so unflagged collateral routes entirely to non-AIRB rows
+    rather than being "wasted" on AIRB rows whose LGD ignores it.
 
 ### Method Selection by Approach
 

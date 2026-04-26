@@ -359,6 +359,22 @@ Collateral is allocated at three levels, distributed pro-rata:
 
 Financial and non-financial collateral are tracked separately to apply the correct overcollateralisation ratios and minimum thresholds.
 
+### Pool-Aware Pro-Rata for AIRB Mixes (CRR Art. 181)
+
+Under A-IRB, the firm's own modelled LGD already reflects the credit-risk-mitigating effect of any collateral incorporated in the model. To prevent double-counting when a counterparty has both A-IRB and non-A-IRB exposures, the pipeline splits the pro-rata base by pool:
+
+- **AIRB-eligible pool** = exposures where the modelled LGD is preserved by CRM (`approach == AIRB` and the row is not falling back to the supervisory formula).
+- **Non-AIRB pool** = FIRB / SA / Slotting (and AIRB rows that fall back to the supervisory formula under Art. 169B insufficient-data fallback or Foundation election under Basel 3.1).
+
+Behaviour:
+
+| Collateral row | Direct (`beneficiary_type` = `loan` / `exposure`) | Facility / Counterparty pro-rata |
+|---|---|---|
+| `is_airb_model_collateral = False` (default) | 1:1 to the named exposure (unchanged) | Pro-rata over the **non-AIRB pool only**; AIRB-pool rows get zero |
+| `is_airb_model_collateral = True`            | 1:1 if the named exposure is in the AIRB pool; otherwise zero allocation + **CRM006** warning | Pro-rata over the **AIRB pool only**; non-AIRB rows get zero |
+
+Setting `is_airb_model_collateral = True` is the firm's assertion that the collateral has been used to construct the internal LGD model. The flag has no numerical effect on AIRB rows (their modelled LGD is preserved either way) but it ensures the collateral is excluded from CRM allocation to non-AIRB exposures of the same counterparty / facility.
+
 ## Guarantee Substitution (CRR Art. 213-217)
 
 ### Approach

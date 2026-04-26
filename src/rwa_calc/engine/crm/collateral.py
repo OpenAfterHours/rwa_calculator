@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.schemas import NON_ELIGIBLE_RE_TYPES
+from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
 from rwa_calc.data.tables.crm_supervisory import MIN_COLLATERALISATION_THRESHOLDS
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
@@ -44,6 +44,98 @@ from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+
+
+def airb_lgd_preserved_expr(
+    config: CalculationConfig,
+    is_basel_3_1: bool,
+    schema_names: set[str],
+) -> pl.Expr:
+    """
+    Build a boolean expression marking exposures whose modelled LGD is preserved.
+
+    True iff the row is AIRB and CRM does not overwrite ``lgd_pre_crm`` with the
+    supervisory formula. Used both to drive the LGD branch in
+    ``_apply_collateral_unified`` and to define the AIRB-eligible pro-rata pool
+    for collateral allocation: rows where the modelled LGD is preserved are
+    members of the AIRB pool, all others fall in the non-AIRB pool.
+
+    Returns False for FIRB / SA / Slotting and for AIRB rows that fall back to
+    the supervisory formula under Art. 169B (insufficient data) or under the
+    Foundation Collateral Method election.
+
+    References:
+        CRR Art. 181 — AIRB own-LGD framework
+        CRE36.34-36 — collateral effects reflected in own LGD estimates
+        Basel 3.1 Art. 169A/169B — LGD Modelling Collateral Method
+        Basel 3.1 Art. 191A — AIRB collateral method election
+    """
+    is_airb = pl.col("approach") == ApproachType.AIRB.value
+    airb_method = config.airb_collateral_method
+
+    if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
+        return pl.lit(False)
+    if is_basel_3_1 and airb_method == AIRBCollateralMethod.LGD_MODELLING:
+        if "has_sufficient_collateral_data" in schema_names:
+            return is_airb & pl.col("has_sufficient_collateral_data").fill_null(True)
+        return is_airb
+    return is_airb
+
+
+def find_misdirected_airb_model_collateral(
+    exposures: pl.LazyFrame,
+    collateral: pl.LazyFrame,
+    config: CalculationConfig,
+    is_basel_3_1: bool,
+) -> list[tuple[str, str]]:
+    """
+    Identify direct collateral rows flagged as ``is_airb_model_collateral`` but
+    pledged to an exposure outside the AIRB-eligible pool.
+
+    The flag asserts that the collateral has been used to construct the firm's
+    internal LGD model. Direct allocation onto a non-AIRB-pool exposure
+    therefore has no LGD effect (the supervisory formula doesn't reach it via
+    this row) and indicates a data-quality issue — typically a mis-tagged row
+    or a pledge that should be at facility/counterparty level.
+
+    Returns:
+        A list of ``(collateral_reference, exposure_reference)`` tuples for
+        each misdirected row. Caller emits CRM006 warnings.
+    """
+    coll_schema = collateral.collect_schema()
+    if "is_airb_model_collateral" not in coll_schema.names():
+        return []
+    if "beneficiary_type" not in coll_schema.names():
+        return []
+    if "collateral_reference" not in coll_schema.names():
+        return []
+
+    schema_names = set(exposures.collect_schema().names())
+    pool_lookup = exposures.select(
+        pl.col("exposure_reference"),
+        airb_lgd_preserved_expr(config, is_basel_3_1, schema_names).alias("_is_airb_pool"),
+    )
+
+    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
+    misdirected = (
+        collateral.filter(
+            pl.col("is_airb_model_collateral").fill_null(False)
+            & bt_lower.is_in(DIRECT_BENEFICIARY_TYPES)
+        )
+        .join(
+            pool_lookup,
+            left_on="beneficiary_reference",
+            right_on="exposure_reference",
+            how="left",
+        )
+        .filter(~pl.col("_is_airb_pool").fill_null(False))
+        .select("collateral_reference", "beneficiary_reference")
+        .collect()
+    )
+    return [
+        (row["collateral_reference"], row["beneficiary_reference"])
+        for row in misdirected.iter_rows(named=True)
+    ]
 
 
 def generate_netting_collateral(
@@ -230,6 +322,16 @@ def apply_collateral(
     Returns:
         Exposures with collateral effects applied
     """
+    # Tag each exposure with its AIRB-pool membership so downstream pro-rata
+    # bases can be split into AIRB and non-AIRB pools. CRR Art. 181 / Basel 3.1
+    # Art. 169A: AIRB own LGD already reflects collateral, so collateral
+    # incorporated in the model must not also be allocated to non-AIRB
+    # exposures of the same counterparty.
+    schema_names = set(exposures.collect_schema().names())
+    exposures = exposures.with_columns(
+        airb_lgd_preserved_expr(config, is_basel_3_1, schema_names).alias("_is_airb_pool")
+    )
+
     # Pre-compute shared exposure lookups once
     direct_lookup, facility_lookup, cp_lookup = build_exposure_lookups_fn(exposures)
 
@@ -242,14 +344,21 @@ def apply_collateral(
     facility_lookup = facility_df.lazy()
     cp_lookup = cp_df.lazy()
 
-    # Derive EAD totals from the lookups for allocation methods
+    # Derive pool-aware EAD totals from the lookups for allocation methods.
+    # Unflagged collateral pro-rates over the non-AIRB pool only; flagged
+    # collateral (is_airb_model_collateral=True) pro-rates over the AIRB pool
+    # only.
     facility_ead_totals = facility_lookup.select(
         pl.col("_ben_ref_facility").alias("parent_facility_reference"),
         pl.col("_ead_facility").alias("_fac_ead_total"),
+        pl.col("_ead_facility_airb").alias("_fac_ead_total_airb"),
+        pl.col("_ead_facility_non_airb").alias("_fac_ead_total_non_airb"),
     )
     cp_ead_totals = cp_lookup.select(
         pl.col("_ben_ref_cp").alias("counterparty_reference"),
         pl.col("_ead_cp").alias("_cp_ead_total"),
+        pl.col("_ead_cp_airb").alias("_cp_ead_total_airb"),
+        pl.col("_ead_cp_non_airb").alias("_cp_ead_total_non_airb"),
     )
 
     # Single pass: join all lookup columns (EAD, currency, maturity)
@@ -429,6 +538,31 @@ def _apply_collateral_unified(
     if _has_fse_col:
         lgd_unsecured_fse = lgd_values["unsecured_fse"]
 
+    # Defensive: fill in pool-aware columns when callers (typically unit tests)
+    # construct ead-total frames or exposures without them. Missing pool flag
+    # → all exposures treated as non-AIRB pool, which matches legacy behaviour
+    # (unflagged collateral pro-rates over the full population).
+    if "_is_airb_pool" not in exposure_schema.names():
+        exposures = exposures.with_columns(pl.lit(False).alias("_is_airb_pool"))
+
+    fac_totals_schema = facility_ead_totals.collect_schema().names()
+    fac_total_fills: list[pl.Expr] = []
+    if "_fac_ead_total_non_airb" not in fac_totals_schema:
+        fac_total_fills.append(pl.col("_fac_ead_total").alias("_fac_ead_total_non_airb"))
+    if "_fac_ead_total_airb" not in fac_totals_schema:
+        fac_total_fills.append(pl.lit(0.0).alias("_fac_ead_total_airb"))
+    if fac_total_fills:
+        facility_ead_totals = facility_ead_totals.with_columns(fac_total_fills)
+
+    cp_totals_schema = cp_ead_totals.collect_schema().names()
+    cp_total_fills: list[pl.Expr] = []
+    if "_cp_ead_total_non_airb" not in cp_totals_schema:
+        cp_total_fills.append(pl.col("_cp_ead_total").alias("_cp_ead_total_non_airb"))
+    if "_cp_ead_total_airb" not in cp_totals_schema:
+        cp_total_fills.append(pl.lit(0.0).alias("_cp_ead_total_airb"))
+    if cp_total_fills:
+        cp_ead_totals = cp_ead_totals.with_columns(cp_total_fills)
+
     collateral_schema = adjusted_collateral.collect_schema()
 
     # --- Determine eligible expression for EAD reduction ---
@@ -438,12 +572,21 @@ def _apply_collateral_unified(
         is_eligible = ~pl.col("collateral_type").str.to_lowercase().is_in(NON_ELIGIBLE_RE_TYPES)
 
     # --- Annotate collateral with LGD categories (using shared expressions) ---
+    # Ensure the AIRB-model flag is present (default False) so the pool-aware
+    # aggregation below can rely on it. Backward-compatible with collateral
+    # frames built before the column existed.
+    if "is_airb_model_collateral" in collateral_schema.names():
+        airb_flag_expr = pl.col("is_airb_model_collateral").fill_null(False)
+    else:
+        airb_flag_expr = pl.lit(False)
+
     annotated = adjusted_collateral.with_columns(
         [
             collateral_lgd_expr(is_basel_3_1).alias("collateral_lgd"),
             overcollateralisation_ratio_expr().alias("overcollateralisation_ratio"),
             is_financial_collateral_type_expr().alias("is_financial_collateral_type"),
             collateral_category_expr().alias("_coll_category"),
+            airb_flag_expr.alias("_is_airb_model_collateral"),
             pl.coalesce(
                 pl.col("value_after_maturity_adj")
                 if "value_after_maturity_adj" in collateral_schema.names()
@@ -461,19 +604,33 @@ def _apply_collateral_unified(
         ),
     )
 
-    # --- Single group_by: EAD + LGD aggregates in one pass ---
+    # --- Single group_by: EAD + LGD aggregates in one pass, split by AIRB pool ---
+    # Each metric is split into a non-AIRB-pool variant (suffix ``_n``,
+    # collateral with is_airb_model_collateral=False) and an AIRB-pool variant
+    # (suffix ``_a``, collateral with is_airb_model_collateral=True). The two
+    # variants are pro-rata-allocated against disjoint exposure pools so that
+    # collateral incorporated in the AIRB internal LGD model never reaches
+    # non-AIRB exposures (CRR Art. 181 / Basel 3.1 Art. 169A).
     val_expr = pl.coalesce(
         pl.col("value_after_maturity_adj"),
         pl.col("value_after_haircut"),
     )
     is_fin = pl.col("is_financial_collateral_type")
     cat = pl.col("_coll_category")
+    is_flagged = pl.col("_is_airb_model_collateral")
+    is_unflagged = ~is_flagged
+
+    def _split_aggs(base_alias: str, value: pl.Expr, value_filter: pl.Expr) -> list[pl.Expr]:
+        return [
+            value.filter(value_filter & is_unflagged).sum().alias(f"{base_alias}_n"),
+            value.filter(value_filter & is_flagged).sum().alias(f"{base_alias}_a"),
+        ]
 
     # Build per-category effectively_secured aggregates for Art. 231 waterfall
-    waterfall_aggs = []
+    waterfall_aggs: list[pl.Expr] = []
     for cat_values, _lgds_key, suffix in WATERFALL_ORDER:
-        waterfall_aggs.append(
-            pl.col("effectively_secured").filter(cat.is_in(cat_values)).sum().alias(f"_e{suffix}")
+        waterfall_aggs.extend(
+            _split_aggs(f"_e{suffix}", pl.col("effectively_secured"), cat.is_in(cat_values))
         )
 
     all_coll = (
@@ -482,25 +639,20 @@ def _apply_collateral_unified(
         )
         .group_by(["_level", "beneficiary_reference"])
         .agg(
-            [
-                # EAD aggregates (eligible financial only)
-                val_expr.filter(is_eligible).sum().alias("_cv"),
-                pl.col("market_value").filter(is_eligible).sum().alias("_mv"),
-                # Raw non-financial adjusted_value for 30% threshold
-                pl.col("adjusted_value").filter(~is_fin).sum().alias("_rn"),
-                # Per-type collateral values for COREP
-                pl.col("adjusted_value").filter(cat == "financial").sum().alias("_adj_fin"),
-                pl.col("adjusted_value").filter(cat == "cash").sum().alias("_adj_cash"),
-                pl.col("adjusted_value").filter(cat == "real_estate").sum().alias("_adj_re"),
-                pl.col("adjusted_value").filter(cat == "receivables").sum().alias("_adj_rec"),
-                pl.col("adjusted_value").filter(cat == "other_physical").sum().alias("_adj_oth"),
-            ]
+            _split_aggs("_cv", val_expr, is_eligible)
+            + _split_aggs("_mv", pl.col("market_value"), is_eligible)
+            + _split_aggs("_rn", pl.col("adjusted_value"), ~is_fin)
+            + _split_aggs("_adj_fin", pl.col("adjusted_value"), cat == "financial")
+            + _split_aggs("_adj_cash", pl.col("adjusted_value"), cat == "cash")
+            + _split_aggs("_adj_re", pl.col("adjusted_value"), cat == "real_estate")
+            + _split_aggs("_adj_rec", pl.col("adjusted_value"), cat == "receivables")
+            + _split_aggs("_adj_oth", pl.col("adjusted_value"), cat == "other_physical")
             + waterfall_aggs
         )
     )
 
     _wf_suffixes = [suffix for _, _, suffix in WATERFALL_ORDER]
-    _agg = [
+    _metrics = [
         "_cv",
         "_mv",
         "_rn",
@@ -510,6 +662,9 @@ def _apply_collateral_unified(
         "_adj_rec",
         "_adj_oth",
     ] + [f"_e{s}" for s in _wf_suffixes]
+    # Each metric has both _n (non-AIRB pool) and _a (AIRB pool) variants in the
+    # aggregated frame; the level suffix (_d/_f/_c) is appended on rename below.
+    _agg = [f"{m}_{p}" for m in _metrics for p in ("n", "a")]
 
     # Split the small aggregated result for per-level joins
     coll_direct = (
@@ -551,7 +706,12 @@ def _apply_collateral_unified(
         )
     else:
         exposures = exposures.with_columns(
-            [pl.lit(0.0).alias(f"{c}_f") for c in _agg] + [pl.lit(0.0).alias("_fac_ead_total")]
+            [pl.lit(0.0).alias(f"{c}_f") for c in _agg]
+            + [
+                pl.lit(0.0).alias("_fac_ead_total"),
+                pl.lit(0.0).alias("_fac_ead_total_airb"),
+                pl.lit(0.0).alias("_fac_ead_total_non_airb"),
+            ]
         )
 
     exposures = exposures.join(
@@ -573,45 +733,73 @@ def _apply_collateral_unified(
     fill_exprs.extend(
         [
             pl.col("_fac_ead_total").fill_null(0.0),
+            pl.col("_fac_ead_total_airb").fill_null(0.0),
+            pl.col("_fac_ead_total_non_airb").fill_null(0.0),
             pl.col("_cp_ead_total").fill_null(0.0),
+            pl.col("_cp_ead_total_airb").fill_null(0.0),
+            pl.col("_cp_ead_total_non_airb").fill_null(0.0),
         ]
     )
     exposures = exposures.with_columns(fill_exprs)
 
+    # Pool-aware pro-rata weights. ``_is_airb_pool`` was tagged on exposures in
+    # ``apply_collateral`` via ``airb_lgd_preserved_expr``; weights bake in the
+    # pool-match gate so non-matching pools always contribute zero.
+    in_airb = pl.col("_is_airb_pool").fill_null(False)
+    in_non_airb = ~in_airb
     exposures = exposures.with_columns(
         [
-            pl.when(pl.col("_fac_ead_total") > 0)
-            .then(pl.col("ead_gross") / pl.col("_fac_ead_total"))
+            pl.when(in_non_airb & (pl.col("_fac_ead_total_non_airb") > 0))
+            .then(pl.col("ead_gross") / pl.col("_fac_ead_total_non_airb"))
             .otherwise(pl.lit(0.0))
-            .alias("_fw"),
-            pl.when(pl.col("_cp_ead_total") > 0)
-            .then(pl.col("ead_gross") / pl.col("_cp_ead_total"))
+            .alias("_fw_n"),
+            pl.when(in_airb & (pl.col("_fac_ead_total_airb") > 0))
+            .then(pl.col("ead_gross") / pl.col("_fac_ead_total_airb"))
             .otherwise(pl.lit(0.0))
-            .alias("_cw"),
+            .alias("_fw_a"),
+            pl.when(in_non_airb & (pl.col("_cp_ead_total_non_airb") > 0))
+            .then(pl.col("ead_gross") / pl.col("_cp_ead_total_non_airb"))
+            .otherwise(pl.lit(0.0))
+            .alias("_cw_n"),
+            pl.when(in_airb & (pl.col("_cp_ead_total_airb") > 0))
+            .then(pl.col("ead_gross") / pl.col("_cp_ead_total_airb"))
+            .otherwise(pl.lit(0.0))
+            .alias("_cw_a"),
+            in_airb.cast(pl.Float64).alias("_airb_match"),
         ]
     )
 
     # --- Combine all levels for EAD + LGD ---
-    def _sum3(col: str) -> pl.Expr:
+    # Non-AIRB-flagged collateral (``_n`` family) flows to non-AIRB-pool
+    # exposures via the ``_fw_n`` / ``_cw_n`` weights (already gated to that
+    # pool); direct unflagged is unconditional (1:1, no pro-rata).
+    # AIRB-flagged collateral (``_a`` family) flows only to AIRB-pool exposures
+    # — facility/counterparty via ``_fw_a`` / ``_cw_a``, and direct gated by
+    # ``_airb_match``. Direct flagged collateral on a non-AIRB exposure is a
+    # data-quality issue surfaced as CRM006 by the validation pass.
+    def _sum6(metric: str) -> pl.Expr:
         return (
-            pl.col(f"{col}_d")
-            + pl.col(f"{col}_f") * pl.col("_fw")
-            + pl.col(f"{col}_c") * pl.col("_cw")
+            pl.col(f"{metric}_n_d")
+            + pl.col(f"{metric}_a_d") * pl.col("_airb_match")
+            + pl.col(f"{metric}_n_f") * pl.col("_fw_n")
+            + pl.col(f"{metric}_a_f") * pl.col("_fw_a")
+            + pl.col(f"{metric}_n_c") * pl.col("_cw_n")
+            + pl.col(f"{metric}_a_c") * pl.col("_cw_a")
         )
 
     combine_exprs = [
-        _sum3("_cv").alias("collateral_adjusted_value"),
-        _sum3("_mv").alias("collateral_market_value"),
-        _sum3("_adj_fin").alias("collateral_financial_value"),
-        _sum3("_adj_cash").alias("collateral_cash_value"),
-        _sum3("_adj_re").alias("collateral_re_value"),
-        _sum3("_adj_rec").alias("collateral_receivables_value"),
-        _sum3("_adj_oth").alias("collateral_other_physical_value"),
-        _sum3("_rn").alias("_raw_nf_a"),
+        _sum6("_cv").alias("collateral_adjusted_value"),
+        _sum6("_mv").alias("collateral_market_value"),
+        _sum6("_adj_fin").alias("collateral_financial_value"),
+        _sum6("_adj_cash").alias("collateral_cash_value"),
+        _sum6("_adj_re").alias("collateral_re_value"),
+        _sum6("_adj_rec").alias("collateral_receivables_value"),
+        _sum6("_adj_oth").alias("collateral_other_physical_value"),
+        _sum6("_rn").alias("_raw_nf_a"),
     ]
     # Per-category effectively_secured after multi-level combination
     for suffix in _wf_suffixes:
-        combine_exprs.append(_sum3(f"_e{suffix}").alias(f"_eff_{suffix}_a"))
+        combine_exprs.append(_sum6(f"_e{suffix}").alias(f"_eff_{suffix}_a"))
     exposures = exposures.with_columns(combine_exprs)
 
     # Per-type minimum collateralisation thresholds (Art. 230)
@@ -700,7 +888,21 @@ def _apply_collateral_unified(
     # absorbed by each collateral category in the Art. 231 waterfall.
     drop_cols = (
         [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg]
-        + ["_fac_ead_total", "_cp_ead_total", "_fw", "_cw", "_raw_nf_a"]
+        + [
+            "_fac_ead_total",
+            "_fac_ead_total_airb",
+            "_fac_ead_total_non_airb",
+            "_cp_ead_total",
+            "_cp_ead_total_airb",
+            "_cp_ead_total_non_airb",
+            "_fw_n",
+            "_fw_a",
+            "_cw_n",
+            "_cw_a",
+            "_airb_match",
+            "_is_airb_pool",
+            "_raw_nf_a",
+        ]
         + [f"_eff_{s}_a" for s in _wf_suffixes]
     )
     exposures = exposures.drop(drop_cols)
@@ -726,29 +928,17 @@ def _apply_collateral_unified(
     # Under CRR, AIRB is free-form — own LGD always kept unchanged.
     exposure_schema = exposures.collect_schema()
     _has_lgd_unsecured_col = "lgd_unsecured" in exposure_schema.names()
-    _has_suff_data_col = "has_sufficient_collateral_data" in exposure_schema.names()
+    schema_names = set(exposure_schema.names())
 
     airb_method = config.airb_collateral_method
     is_airb = pl.col("approach") == ApproachType.AIRB.value
 
-    # AIRB exposures that use the Foundation formula (like FIRB):
-    if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
-        # All AIRB exposures use Foundation Collateral Method with supervisory LGDU
-        _airb_uses_formula = is_airb
-        _airb_own_lgdu = False  # Use supervisory LGDU
-    elif is_basel_3_1 and airb_method == AIRBCollateralMethod.LGD_MODELLING:
-        # Art. 169B: AIRB with insufficient data → Foundation formula with own LGDU
-        if _has_suff_data_col:
-            _airb_uses_formula = is_airb & (
-                pl.col("has_sufficient_collateral_data").fill_null(True) == False  # noqa: E712
-            )
-        else:
-            _airb_uses_formula = pl.lit(False)  # No flag → assume sufficient data
-        _airb_own_lgdu = True  # Art. 169B(2)(c): use firm's own unsecured LGD
-    else:
-        # CRR or None: AIRB keeps own modelled LGD, no formula applied
-        _airb_uses_formula = pl.lit(False)
-        _airb_own_lgdu = False
+    # ``_airb_uses_formula`` is the negation of the LGD-preserved condition:
+    # AIRB rows that fall back to the supervisory formula under Foundation
+    # election or Art. 169B insufficient-data fallback.
+    _airb_uses_formula = is_airb & ~airb_lgd_preserved_expr(config, is_basel_3_1, schema_names)
+    # Art. 169B(2)(c): use firm's own unsecured LGD when LGD-modelling falls back
+    _airb_own_lgdu = is_basel_3_1 and airb_method == AIRBCollateralMethod.LGD_MODELLING
 
     # Combined condition: FIRB OR qualifying AIRB exposures use the formula
     _uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | _airb_uses_formula

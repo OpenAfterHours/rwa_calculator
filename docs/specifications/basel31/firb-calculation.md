@@ -326,6 +326,163 @@ Where:
 
 ---
 
+## Purchased Receivables (Pool Treatment & Dilution Risk)
+
+PS1/26 carries forward the CRR top-down treatment for purchased receivables: a pool of
+receivables purchased from a third-party seller is risk-weighted as a single exposure on the
+basis of pool-level PD, LGD and dilution-risk parameters, rather than by rating each
+individual obligor. Two parallel risk components apply:
+
+1. **Default risk** of the underlying obligors (treated like other corporate or retail IRB
+   exposures, but parameterised at pool level when individual PDs are not estimable).
+2. **Dilution risk** — the risk that the receivable amount is reduced by credits, returns,
+   set-offs, or counter-claims unrelated to obligor default — calculated as a **separate
+   exposure** with its own EAD, PD, LGD and 1-year maturity (Art. 157).
+
+The treatment splits along corporate vs retail receivables, with two key linkages back to the
+F-IRB framework already specified above: senior / subordinated / dilution LGD values from
+Art. 161(1)(e)–(g) (40% / 100% / 100% under PS1/26) and the 0.05% corporate PD floor from
+Art. 160(1).
+
+!!! warning "Implementation Status — Pool/Dilution EAD Not Modelled"
+    The current input schema treats every IRB row as an obligor-level exposure with a single
+    PD and LGD. There is no field for **dilution-risk EAD as a separate component** alongside
+    default-risk EAD, no pool-level rollup of obligor PDs, and no flag to route an exposure
+    to Art. 161(1)(e)/(f)/(g) (the senior 40% / subordinated 100% / dilution 100%
+    purchased-receivables LGD paths). Purchased-receivables pools therefore currently fall
+    through to the standard senior unsecured LGD (40% non-FSE / 45% FSE) and the dilution
+    component is omitted entirely. See [CRR F-IRB spec — Art. 161(1) LGD Values](../crr/firb-calculation.md#art-1611-lgd-values) for the corresponding LGD-side gap (D3.10) and
+    [`schemas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py)
+    for the input field surface area.
+
+### (a) Pool as a Single Exposure (Top-Down Treatment)
+
+PS1/26 Art. 154(5)–(7) (retail) and the corporate analogues in Art. 160(2) / Art. 161(1)(e)–(f)
+treat the pool, not its individual obligors, as the unit of measurement. Eligibility of the
+pool is conditional on the operational requirements in Art. 184, summarised below:
+
+| Operational Requirement | PS1/26 Reference |
+|-------------------------|------------------|
+| Effective ownership and control of cash remittances; bankruptcy-remote structure | Art. 184(2) |
+| Monitoring of seller and servicer financial condition; periodic reviews | Art. 184(3)(a)–(b) |
+| Pool-level monitoring: over-advances, arrears, dilutions, contra-accounts | Art. 184(3)(c)–(e) |
+| Single-obligor concentration limits within and across pools | Art. 184(3)(d) |
+| Early-warning systems for seller deterioration; covenant monitoring | Art. 184(4) |
+| Written advance-rate, eligible-collateral, documentation and concentration policies | Art. 184(5) |
+| Independent internal audit of the receivables purchase programme | Art. 184(6) |
+
+If the institution has **full recourse to the seller** for both default risk and dilution risk,
+the exposure is treated as a collateralised exposure to the seller and Articles 151(2),
+152 and 158(1)–(4) cease to apply at pool level (Art. 151(2), final sentence).
+
+### (b) Dilution Risk as a Separate Component
+
+Art. 157 establishes that dilution risk is calculated as a **distinct exposure** alongside the
+default-risk exposure on the same pool. The two components have independent parameters:
+
+| Parameter | Default-Risk Exposure | Dilution-Risk Exposure |
+|-----------|----------------------|------------------------|
+| Formula | Art. 153(1) corporate / Art. 154(1) retail | Art. 153(1) (corporate formula) for both pool types |
+| PD | Pool PD per Art. 160(2) (corporate) / Art. 163 (retail) | EL for dilution per Art. 160(6) (corporate) / Art. 163(3) (retail) |
+| LGD | Art. 161(1)(e)/(f) (corporate) / own estimates (retail) | **100%** — Art. 161(1)(g) (corporate) / Art. 164(1)(b) (retail) |
+| EAD | Art. 166A(5) — drawn amount minus dilution own-funds requirement | Drawn pool balance (no separate netting) |
+| Maturity (M) | Art. 162(2A)(e) — minimum **1 year** for purchased corporate receivables | Art. 157(4) — **1 year** if dilution can be resolved within a year, otherwise the period over which it can be resolved, capped at **5 years** |
+
+!!! info "EAD Interaction — Art. 166A(5)"
+    For the default-risk exposure, the EAD is the drawn pool value **minus** the own-funds
+    requirement for dilution risk, computed before credit risk mitigation. This avoids
+    double-counting capital across the two components. Undrawn purchase commitments for
+    revolving pools attract a **40% CCF** (or **10%** if the commitment qualifies as
+    unconditionally cancellable under Art. 111 Table A1 row 7).
+
+!!! note "Materiality Carve-Out — Art. 157(5)"
+    Where dilution risk is immaterial for a given type of purchased corporate or retail
+    receivable, the institution is **not required** to calculate or recognise risk-weighted
+    exposure amounts for the dilution component. PS1/26 removes the CRR requirement for prior
+    competent-authority exemption — the firm self-assesses materiality.
+
+### (c) Art. 160(2) / 160(6) — Estimating PD and EL for the Dilution Component
+
+When the institution **cannot** estimate PD for the obligors in the pool (or the estimates do
+not meet the Section 6 IRB requirements), Art. 160(2) provides three top-down PD methods for
+purchased corporate receivables:
+
+| Method | PD Definition | Pairs With LGD |
+|--------|--------------|----------------|
+| **Art. 160(2)(a)** — Senior claims | PD = institution's EL estimate ÷ LGD for the receivables | Art. 161(1)(e) — **40%** (senior, non-FSE rate; was 45% under CRR) |
+| **Art. 160(2)(b)** — Subordinated claims | PD = institution's EL estimate (LGD is 100%) | Art. 161(1)(f) — **100%** |
+| **Art. 160(2)(c)** — A-IRB decomposition | PD = decomposed PD from EL where the firm can split EL into PD and LGD reliably | LGD also from the decomposition (Art. 161(2)(b)(i)) |
+
+For the **dilution-risk component** specifically (Art. 160(6)):
+
+```
+PD_dilution = EL_estimate_for_dilution_risk
+LGD_dilution = 100% (Art. 161(1)(g)) under Foundation IRB
+```
+
+A-IRB firms operating under Art. 147A may, **as an alternative**, decompose the dilution EL
+into PD and LGD components reliably and use the decomposed PD with the matching decomposed
+LGD (Art. 161(2)(b)(ii)), subject to the same Art. 184 operational requirements. Unfunded
+credit protection on the dilution PD is recognised under Credit Risk Mitigation (CRR) Part
+Article 191A.
+
+!!! warning "Dilution LGD Increased under PS1/26"
+    Art. 161(1)(g) was **75% under CRR** and is **100% under PS1/26**. The PRA's stated
+    rationale is that dilution losses (returns, credit notes, set-offs) are not mitigated by
+    collateral recovery and should receive the same severity as subordinated unsecured claims.
+    See [Art. 161 Purchased Receivables Changes](#supervisory-lgd-art-161) above.
+
+### (d) Art. 154(5)–(7) — Retail Pool Eligibility Conditions
+
+To qualify for the retail risk-weight function (Art. 154(1)) at pool level, the purchased
+receivables must satisfy the operational requirements of Art. 184 **plus** the four pool
+eligibility conditions in Art. 154(5):
+
+| Condition | Requirement | Reference |
+|-----------|-------------|-----------|
+| (a) Third-party origination | Pool purchased from unrelated third-party sellers; the institution has no direct or indirect originating exposure to the underlying obligor | Art. 154(5)(a) |
+| (b) Arm's-length generation | Receivables generated arm's-length between seller and obligor; **inter-company and contra-account receivables ineligible** | Art. 154(5)(b) |
+| (c) Cash-flow claim | Purchasing institution has a claim on all proceeds (or a pro-rata interest) from the purchased receivables | Art. 154(5)(c) |
+| (d) Diversification | Pool is sufficiently diversified | Art. 154(5)(d) |
+
+Pools that meet (a)–(d) are routed through the retail F-IRB / A-IRB risk-weight function with
+correlation per Art. 154(1) (general retail) and the relevant retail PD floor from Art. 163(1)
+(0.10% mortgage / 0.10% QRRE revolver / 0.05% other).
+
+!!! info "First-Loss Protection — Art. 154(6)"
+    Refundable purchase price discounts, collateral or partial guarantees that provide
+    first-loss protection for default losses, dilution losses, or both, may be treated as
+    first-loss protection by the purchaser (or by the beneficiary of the collateral or
+    guarantee) under Subsections 2 and 3 of Section 3 of Chapter 5 of Title II of Part Three
+    of CRR. The seller providing the discount, or the provider of the collateral or guarantee,
+    treats it as an exposure to a first-loss position — i.e. the protection is recognised
+    symmetrically on both sides of the transaction.
+
+!!! note "Hybrid Pools — Art. 154(7)"
+    Where a purchasing institution **cannot** separate retail-mortgage / QRRE exposures from
+    other retail exposures within a hybrid pool, Art. 154(7) requires application of the retail
+    risk-weight function producing the **highest** capital requirement for the entire pool.
+    This is a conservative carve-out to discourage classification arbitrage on mixed pools.
+
+### Cross-Reference Summary
+
+| Article | Topic | Where Else in This Spec |
+|---------|-------|-------------------------|
+| Art. 154(5)–(7) | Retail pool eligibility, first-loss protection, hybrid pools | This section only |
+| Art. 157 | RWA for dilution risk (separate component, M = 1y default / 5y max) | This section only |
+| Art. 158(10) | EL for dilution risk (`EL = PD x LGD`, EL amount = `EL x EAD`) | This section only |
+| Art. 160(1) | 0.05% corporate PD floor | [PD Floors](#pd-floors-art-160-163) |
+| Art. 160(2) | Top-down PD for purchased corporate receivables | This section only |
+| Art. 160(6) | PD = EL for corporate dilution (or A-IRB decomposition) | This section only |
+| Art. 161(1)(e)–(g) | LGD 40% / 100% / 100% — senior / sub / dilution corporate | [Supervisory LGD](#supervisory-lgd-art-161) |
+| Art. 163(3) | PD = EL for retail dilution | [PD Floors](#pd-floors-art-160-163) |
+| Art. 164(1)(b)–(c) | LGD 100% for retail dilution (or decomposed) | A-IRB spec |
+| Art. 166A(5) | EAD net of dilution own-funds requirement; 40%/10% CCF on undrawn revolving commitments | This section only |
+| Art. 162(2A)(e) | Minimum **1 year** M for purchased corporate receivables (CRR was 90 days) | [Effective Maturity](#effective-maturity-art-162) |
+| Art. 184 | Operational requirements for purchased receivables (governance, monitoring, audit) | This section only |
+
+---
+
 ## Key Scenarios
 
 | Scenario ID | Description | Key Parameter |

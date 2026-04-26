@@ -177,14 +177,16 @@ Project subagents in `.claude/agents/` (role-based, not domain-based — regulat
 - **`plan-curator`** — owns the two work-queue files at the repo root: `IMPLEMENTATION_PLAN.md` and `DOCS_IMPLEMENTATION_PLAN.md`. Audits code/specs/PDFs against each other and writes prioritised bullet items.
 - **`doc-writer`** — owns `docs/`. Writes or updates one canonical docs page per `DOCS_IMPLEMENTATION_PLAN.md` item; runs `uv run zensical build` before returning.
 
-Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps to one slash command, and each slash command commits once at the end:
+Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps to one slash command. The default build / docs_build commands are the **parallel batch** orchestrators (`/next-items`, `/next-docs`); the strict-serial single-item commands (`/next-scenario`, `/next-doc`) remain available for one-off / debugging use.
 
-| `loop.sh` mode | Prompt file | Slash command | Owns |
+| `loop.sh` mode | Prompt file | Default command | Strict-serial alternative |
 |---|---|---|---|
-| `loop.sh` (build) | `PROMPT_build.md` | `/next-scenario` | code/test backlog → implementation |
-| `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | refresh `IMPLEMENTATION_PLAN.md` |
-| `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-doc` | docs backlog → docs page edit |
-| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | refresh `DOCS_IMPLEMENTATION_PLAN.md` |
+| `loop.sh` (build) | `PROMPT_build.md` | `/next-items 3` | `/next-scenario` |
+| `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | — |
+| `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-docs 3` | `/next-doc` |
+| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | — |
+
+The batch commands pick N non-conflicting items, dispatch the agent pipeline as parallel waves, and run the validation gate (or `uv run zensical build`) **once at the end** — not per agent. Items that touch shared engine files (`engine/pipeline.py`, `contracts/protocols.py`, `contracts/bundles.py`, `engine/aggregator/aggregator.py`) are forced single-stream by `/next-items` even when N>1 was requested.
 
 Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID.
 

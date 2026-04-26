@@ -7,20 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+---
+
+## [0.2.0] - 2026-04-26
+
 ### Added
 - **`is_airb_model_collateral` flag on the collateral table to prevent AIRB collateral double-counting (CRR Art. 181 / Basel 3.1 Art. 169A)**: under A-IRB, the firm's own modelled LGD already reflects the credit-risk-mitigating effect of any collateral incorporated in the model, so allocating that same collateral to non-AIRB exposures of the counterparty supervisorily double-counts it. New optional Boolean column on `COLLATERAL_SCHEMA` (default `False`) that asserts the row's collateral has been used to construct the firm's internal LGD model. The CRM allocator (`engine/crm/collateral.py::_apply_collateral_unified`) is now pool-aware: (1) exposures are partitioned at the start of `apply_collateral` into an **AIRB pool** (rows where the modelled LGD is preserved by CRM — `approach == AIRB` AND not falling back to the supervisory formula under Foundation election or Art. 169B insufficient-data) and a **non-AIRB pool** (FIRB / SA / Slotting and AIRB rows that use the formula); (2) `_build_exposure_lookups` in `engine/crm/processor.py` now emits pool-specific facility / counterparty EAD aggregates (`_ead_facility_airb` / `_ead_facility_non_airb`, `_ead_cp_airb` / `_ead_cp_non_airb`); (3) the group-by aggregation splits each metric into `_n` (unflagged collateral) and `_a` (flagged) variants via filter on `is_airb_model_collateral`; (4) pro-rata weights `_fw_n` / `_fw_a` / `_cw_n` / `_cw_a` bake in the pool-match gate so non-matching pools contribute zero. Behaviour: flagged collateral routes only to AIRB-pool rows (facility / counterparty pro-rata over AIRB pool only); unflagged facility / counterparty collateral routes only to non-AIRB rows (AIRB pool excluded from the pro-rata base — non-AIRB rows now absorb 100% of unflagged counterparty / facility collateral that previously was wasted on AIRB rows whose modelled LGD ignores it); direct unflagged collateral is unchanged (1:1 to the named exposure). Direct flagged collateral pledged onto a non-AIRB exposure emits new `CRM006` (`ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED`) data-quality warning via `find_misdirected_airb_model_collateral` and is given zero allocation. The inline `_airb_uses_formula` expression in `_apply_collateral_unified` was lifted into a top-level helper `airb_lgd_preserved_expr(config, is_basel_3_1, schema_names)` reused by both the LGD branch and the new pool-membership tagging. `_apply_collateral_unified` is defensive about missing pool-aware columns (test helpers that supply only `_fac_ead_total` / `_cp_ead_total` are backfilled to legacy behaviour: AIRB total = 0, non-AIRB total = full total). Schema, processor lookups, and pro-rata logic are all backward-compatible with fixtures that don't set the column — `ensure_columns(COLLATERAL_SCHEMA)` in the loader (`engine/loader.py:88`) fills the default. Test coverage: new `tests/unit/crm/test_airb_model_collateral_flag.py` (7 tests across schema, unflagged-counterparty AIRB-exclusion, flagged-counterparty user scenario `loan_1`/`loan_2`/`loan_3`, CRM006 misdirection emission and silence, homogeneous-FIRB backward-compat); benchmark data generator (`tests/benchmarks/data_generators.py`) updated to include the new column. Full suite: 5,505 passed, 1 skipped — no acceptance goldens shifted because no existing scenario combined mixed AIRB / non-AIRB exposures with counterparty / facility-level collateral. Docs updated in `docs/specifications/crr/credit-risk-mitigation.md` (new "Pool-Aware Pro-Rata for AIRB Mixes" subsection under Multi-Level Collateral Allocation) and `docs/specifications/basel31/credit-risk-mitigation.md` ("AIRB own-LGD anti-double-counting" bullet under Art. 191A(2)(d) anti-double-counting rules). Ref: CRR Art. 181; Basel 3.1 Art. 169A, Art. 191A(2)(d); CRE36.34-36.
 
 ### Changed
 - **Promote `RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE` from uppercase magic strings to first-class `ExposureClass` enum members**: the SA real-estate loan-splitter (`engine/re_splitter.py`) labels its secured child row's `exposure_class` with one of two values that, until now, lived only as uppercase string literals (`_SECURED_TARGET_RESIDENTIAL = "RESIDENTIAL_MORTGAGE"` and `_SECURED_TARGET_COMMERCIAL = "COMMERCIAL_MORTGAGE"` in `engine/classifier.py:158-159`), with an explicit code comment noting they "are not in the ExposureClass enum (only `RETAIL_MORTGAGE` is)". The exposure-class enum convention is lowercase string values (e.g. `"retail_mortgage"`, `"corporate"`); the loan-splitter therefore broke that convention every time it materialised a non-retail residential or commercial mortgage row. Behavioural impact: none (the SA RW expressions in `engine/sa/namespace.py` uppercase `exposure_class` via `_uc = pl.col("exposure_class").str.to_uppercase()` before any substring match, so both cases route identically). Hygiene impact: the loan-splitter outputs are now indistinguishable from any other classifier output. Changes: (1) add `ExposureClass.RESIDENTIAL_MORTGAGE = "residential_mortgage"` and `ExposureClass.COMMERCIAL_MORTGAGE = "commercial_mortgage"` in `domain/enums.py` with docstrings citing CRR Art. 125 / Art. 126 and PRA PS1/26 Art. 124F / Art. 124H; (2) replace the `_SECURED_TARGET_*` magic-string assignments in `engine/classifier.py:158-159` with `ExposureClass.<X>.value` references and rewrite the surrounding comment to point at the new enum members; (3) update `engine/re_splitter.py` to import `ExposureClass` and replace the literal `"COMMERCIAL_MORTGAGE"` filter at line 503 with `ExposureClass.COMMERCIAL_MORTGAGE.value`; (4) update all four `target_class=` initialisers in `data/tables/re_split_parameters.py` (`RE_SPLIT_PARAMS_CRR_RESIDENTIAL`, `RE_SPLIT_PARAMS_CRR_COMMERCIAL`, `RE_SPLIT_PARAMS_B31_RESIDENTIAL`, `RE_SPLIT_PARAMS_B31_COMMERCIAL`) to use enum-value references via a new `from rwa_calc.domain.enums import ExposureClass` (the existing arch-check allowlist permits `data/tables/` to import from `domain/enums`, mirroring the pre-existing `CQS` import in `crr_risk_weights.py`); (5) update test fixtures and assertions in `tests/unit/test_real_estate_splitter.py`, `tests/unit/test_b31_re_junior_charges.py`, `tests/integration/test_re_split_pipeline.py`, `tests/unit/test_b31_sa_risk_weights.py`, and `tests/unit/crr/test_crr_sa.py` to use the lowercase enum values, matching what the production classifier now emits. **Intentionally not changed**: (a) the uppercase `"RESIDENTIAL_MORTGAGE"` join key in the `crr_risk_weights.py:458` LTV-split lookup table — it is joined against `_lookup_class` which is uppercased via `.str.to_uppercase()`, so it stays uppercase to preserve the case-insensitive routing behaviour; (b) the `uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True) | uc.str.contains("COMMERCIAL", literal=True) | uc.str.contains("CRE", literal=True)` substring matches in `engine/sa/namespace.py:_b31_append_real_estate_branches` and `_crr_append_real_estate_branches` — they cover both the canonical enum values *and* a real non-enum user-input path (`"CRE"` appears as a direct `exposure_class` value in `tests/expected_outputs/crr/expected_rwa_crr.json:213` for the `LOAN_CRE_001` acceptance fixture). Switching to `is_in([ExposureClass.X.value.upper(), …])` would lose that fallback unless the list reintroduced `"CRE"` as a magic string, defeating the refactor's purpose. Verification: 70 splitter-focused unit + integration tests pass (`tests/unit/test_real_estate_splitter.py`, `tests/unit/test_b31_re_junior_charges.py`, `tests/integration/test_re_split_pipeline.py`); 330 SA / classifier / data-boundary tests pass (`tests/unit/test_b31_sa_risk_weights.py`, `tests/unit/crr/test_crr_sa.py`, `tests/unit/test_classifier.py`, `tests/contracts/test_data_layer_boundary.py`); `scripts/arch_check.py` clean; the broader acceptance + contracts + integration sweep was also run, and the failure count is identical to the parent commit baseline (106 acceptance failures, all pre-existing — `hierarchy_resolver` errors in FIRB/AIRB/Slotting/Provisions scenarios that don't touch the SA real-estate path). Ref: CRR Art. 125, Art. 126; PRA PS1/26 Art. 124F, Art. 124H.
 
+### Fixed
+- **SME supporting factor `E*` aggregated across group of connected clients (CRR Art. 501)**: the SA SME supporting factor previously evaluated the EUR 1.5m / GBP-equivalent `E*` exposure threshold on a per-counterparty basis, ignoring Art. 4(1)(39) connected-client aggregation. The check now aggregates across the full group of connected clients, matching the regulatory definition of the obligor used elsewhere in the pipeline. Acceptance scenarios CRR-F* updated; new test class in `tests/unit/test_supporting_factors.py`. (PR #279)
+
 ### Docs
 - **Clarify counterparty scope of the CRR Art. 125 35% / 75% residential mortgage RW**: three doc updates document that CRR Art. 125 is **not** restricted to retail individuals — any exposure secured by qualifying residential property may receive the 35% secured / residual-counterparty-RW split, contingent on the Art. 125(2) qualifying conditions (value/repayment not materially dependent on borrower credit quality or property cash flows; Art. 208 / Art. 229(1) valuation). The calculator routes individuals via `RETAIL_MORTGAGE` (in `engine/classifier.py` when `is_mortgage=True` and `cp_entity_type=="individual"`) and non-retail counterparties via `RESIDENTIAL_MORTGAGE` (through the SA real-estate loan-splitter `engine/re_splitter.py`); both paths apply the same Art. 125 split. (1) `docs/user-guide/exposure-classes/retail.md` — replaced the misleading "CRR uses a flat 35% (LTV ≤ 80%) or 75% (LTV > 80%)" sentence with the correct split treatment and added a pointer to the loan-splitter for non-retail RRE; (2) `docs/framework-comparison/key-differences.md` — added a "Counterparty scope of the CRR 35%/75% column" callout under the Residential RE General loan-splitting comparison table noting that the CRR column is regime treatment, not a retail-only label; (3) `docs/specifications/crr/sa-risk-weights.md` — extended the "Residential Mortgage Exposures (CRR Art. 125)" section with the Art. 125(2)(a)–(d) qualifying-conditions list (mirroring the existing Art. 126(2) list) and a "Counterparty scope" info admonition mapping the two routing buckets and noting that the calculator infers the qualifying-condition gate from the `is_mortgage` flag rather than independently verifying (a)–(c). No code changes.
+
+---
+
+## [0.1.67] - 2026-04-25
+
+### Fixed
+- **Guarantor rating routing now beneficiary-aware (CRR Art. 161(3) / Basel 3.1 CRE22.70-85)**: guarantor substitution previously chose between the guarantor's internal PD and external CQS based purely on the guarantor's own properties — an SA exposure could end up routed through IRB parameter substitution, and an IRB exposure under CRR was always forced through SA RW substitution because parameter substitution was gated on `config.is_basel_3_1`. Now the routing is keyed on the beneficiary's approach: IRB beneficiaries use the guarantor's internal PD when available; SA beneficiaries always use external CQS. The F-IRB supervisory LGD used in PD substitution and EL blending now tracks the active framework (0.45 CRR / 0.40 Basel 3.1) instead of being hard-coded. (PR #277)
+
+### Docs
 - **Refresh `docs/data-model/input-schemas.md` to match `src/rwa_calc/data/schemas.py`**: the input schema reference had drifted ~30 columns behind the source of truth. Added documentation for `effective_maturity` (CRR Art. 162(3) / PS1/26 numeric `M` override that bypasses the 1-year floor) on Facility / Loan / Contingent; the Art. 110A due-diligence override fields (`due_diligence_performed`, `due_diligence_override_rw`); A-IRB modelled-EAD and unsecured-LGD fields (`ead_modelled`, `lgd_unsecured`, `has_sufficient_collateral_data`); maturity-floor and SFT flags (`has_one_day_maturity_floor`, `is_sft`); the `is_payroll_loan` 35% retail RW flag; counterparty classification flags (`is_natural_person`, `is_social_housing`, `is_financial_sector_entity`, `is_ccp_client_cleared`, `borrower_income_currency`, `local_currency`, `sovereign_cqs`, `institution_cqs`); the Basel 3.1 real-estate collateral fields (`is_qualifying_re`, `original_maturity_years`, `rental_to_interest_ratio`, `liquidation_period_days`, `qualifies_for_zero_haircut`, `is_main_index`, `insurer_risk_weight`, `credit_event_reduction`); guarantee credit-derivative fields (`protection_type`, `includes_restructuring`); specialised-lending `project_phase`; equity / CIU look-through fields (`ciu_approach`, `ciu_mandate_rw`, `ciu_third_party_calc`, `fund_reference`, `fund_nav`); and an entirely new **CIU Holdings schema** section documenting the look-through input (Art. 132(3)). Also corrected several `Required: Yes` cells that were stale relative to the `ColumnSpec(required=...)` source of truth (Counterparty, Facility, Loan, Contingent — only the reference IDs and `entity_type` are loader-required). No code changes.
+
+- **Comprehensive regulatory documentation refresh (D2.34–D2.73)**: ~30 documentation commits land verbatim citations and clarifications across A-IRB, CRM, slotting, real-estate, SCRA, covered bonds, and SL specs. Highlights: Art. 124B underwriting-standards obligation (D2.60); Art. 124D valuation requirements (D2.43, D2.62); Art. 124E(5)/(7) RE reassessment obligations (D2.56); Art. 122(7)-(8) output-floor election for unrated corporates (D2.46); Art. 129(4A) covered-bond due-diligence CQS step-up (D2.34); Art. 138(1)(g) + Art. 139(6) implicit-support higher-of rule (D2.49); Art. 153(5)(c)-(f) slotting column-assignment rules (D2.68); Art. 161(1)(e)/(f)/(g) purchased-receivables trigger recast (D2.51); Art. 162(2A)(k) revolving maturity precedence (D2.52); Art. 232(3) life insurance derivation (D2.48); Art. 237/239 CRM maturity-mismatch wording aligned to PS1/26 (D2.55); Art. 121(1)(a)/(1)(b) SCRA disclosure barring ladder (D2.54); BEEL substitution for A-IRB defaulted exposures (D2.67); retail A-IRB LGD floor reconciliation (D2.50); removal of Art. 119(2)/(3) national-currency preferential in B3.1 (D2.73). Misc fixes: USD 100bn LFSE threshold (D2.53); CRR FCSM Art. 222 paragraph attributions (D1.47, D2.63); LFSE citation to Art. 142(1)(4) (D1.49); MDBs/IOs in Art. 147A(1)(a) SA-only scope (D2.38). No code changes. (PR #275)
+
+---
+
+## [0.1.66] - 2026-04-24
+
+### Added
+- **`effective_maturity` override (CRR Art. 162(3) / PRA PS1/26)**: new optional column on Facility / Loan / Contingent that lets firms supply a numeric maturity `M` directly, bypassing the 1-year maturity floor and the date-derived calculation for IRB exposures. When populated, it takes precedence over derived maturity in correlation, K, and maturity-adjustment formulas. Documented in `docs/data-model/input-schemas.md`. (PR #274)
+
+### Fixed
+- **IRB / Slotting exposures secured by real estate no longer receive the 0.15 retail-mortgage correlation (CRR Art. 153 / CRE31.11)**: `RealEstateSplitter._split_unified_frame` in `engine/re_splitter.py` previously split every row flagged by the classifier as `re_split_mode='split'` (or `'whole'`) regardless of the row's `approach`, emitting a secured child row with `exposure_class = RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE`. For FIRB / AIRB / Slotting rows, the IRB correlation expression in `engine/irb/formulas.py::_correlation_expr_from_pd` reads `pl.col("exposure_class")` and hits the `str.contains("MORTGAGE")` branch → `pl.lit(0.15)`, i.e. the retail-mortgage correlation under CRR Art. 154(3). A FIRB corporate-SME exposure collateralised by residential property was therefore splitting into (a) a `corporate_sme` residual row with the correct supervisory-formula-with-SME-adjustment correlation and (b) a `RESIDENTIAL_MORTGAGE` secured row stuck at 0.15 — a regime that doesn't exist under IRB. Loan-splitting is an SA-only regulatory mechanism (CRR Art. 125/126 and PRA PS1/26 Art. 124F/H all sit in the Credit Risk: Standardised Approach Part); IRB recognises real-estate collateral via LGD (Art. 161(5) FIRB supervisory RRE floor / AIRB own-estimate LGD / Art. 230-231 funded credit protection), already handled upstream by the CRM processor's `crm_alloc_real_estate` allocation. Fix: gate `is_split_mode` and `is_whole_mode` on `approach ∈ {standardised, equity}` (a new `_SA_BOUND_APPROACHES` module constant backed by `ApproachType` enum values). Rows with `approach ∈ {foundation_irb, advanced_irb, slotting}` and the classifier's split flag set now fall into the pass-through bucket and retain their original `exposure_class` — the downstream IRB correlation formula then correctly lands on the corporate / corporate-SME / retail branches. `_accumulate_split_errors` is similarly gated so IRB rows do not emit SA-specific `RE002` zero-cap or `RE004` CRR rental-coverage warnings. When the `approach` column is absent (pure SA-only bundles, older test fixtures) the predicate defaults to `True` — existing SA-only tests continue to pass. 5 new regression tests in `tests/unit/test_real_estate_splitter.py::TestSplitterApproachGate` (parametrised over FIRB/AIRB/Slotting pass-through, whole-loan pass-through, SA-with-explicit-approach still splits, no spurious RE002 on IRB zero-cap rows, mixed SA+IRB batch). Full suite: 4,640 unit passed, 810 acceptance+contracts+integration passed. Ref: CRR Art. 125, Art. 126, Art. 153(1)-(4), Art. 154(3), Art. 161(5), Art. 230-231; PRA PS1/26 Art. 124F, Art. 124H.
+- **Defaulted SA exposures no longer return the base class RW when non-financial collateral columns are populated (PS1/26 Art. 127)**: `_apply_defaulted_risk_weight` in `engine/sa/namespace.py` previously computed `secured_pct = (collateral_re_value + collateral_receivables_value + collateral_other_physical_value) / ead` and blended `unsecured_pct × provision_rw + secured_pct × pl.col("risk_weight")`. `pl.col("risk_weight")` at that point is the exposure's base class RW (75% for retail, 100% for unrated corporate, 35% for mortgage), so whenever non-financial collateral reached or exceeded EAD, the blended RW collapsed back to the class base — for defaulted regulatory retail with RE collateral the SA path returned 75% instead of the Art. 127(1) 100%/150%. Art. 127(2) defers to the CRM method the institution applies (Art. 191A(2)); under FCCM (the default for SA) eligible financial collateral has already reduced `ead_final` upstream and eligible RE is routed through class reclassification, so the post-CRM value IS the unsecured portion and no secondary split is required inside the defaulted override. Fix: drop the non-financial collateral split entirely; apply the provision-based 100%/150% to `ead_final` directly (CRR denominator keeps the `+ provision_deducted` pre-provision reconstruction; B31 uses `ead_final` per "outstanding amount of the item or facility"). The Basel 3.1 RESI RE non-income-dependent flat-100% branch (Art. 127(3) / CRE20.88) and the HIGH_RISK precedence guard (Art. 128) are unchanged. `tests/unit/test_defaulted_secured_split.py` rewritten to assert the new behaviour (regulatorily-incorrect "fully secured returns base RW" cases deleted; new regression tests pin down the retail scenario). New unit tests in `tests/unit/crr/test_crr_sa.py::TestDefaultedRWApplication` for defaulted non-mortgage retail under both CRR and Basel 3.1. Acceptance scenario B31-K7 re-baselined (collateral columns no longer produce a blend). Spec `docs/specifications/basel31/defaulted-exposures.md` updated: FR-10.3 reworded to "unsecured portion determined by the CRM method"; D3.19 code-divergence warning on the B31 denominator removed (resolved); secured-portion section rewritten. Ref: PS1/26 Art. 127(1)-(3); Art. 191A(2); CRR Art. 127(1)-(2); CRE20.88-90.
+
+---
+
+## [0.1.65] - 2026-04-21
 
 ### Added
 - **Auto-sync of `config.eur_gbp_rate` from the loaded `fx_rates` table**: the pipeline now keeps the scalar EUR/GBP rate used by the IRB SME correlation formula (CRR Art. 153(4)) and the GBP equivalents of EUR regulatory thresholds (`RegulatoryThresholds.crr`) in step with the `(EUR, GBP)` row of the loaded `fx_rates` input. Previously these two FX mechanisms were independent: a user could load an up-to-date `fx_rates.parquet` and get all exposure/collateral/guarantee/provision amounts converted at e.g. 0.90 while the IRB SME correlation and the derived GBP thresholds continued to run at the default 0.8732, silently. Implementation: (1) new module `src/rwa_calc/engine/fx_rate_sync.py` exposes `extract_eur_gbp_rate(fx_rates: pl.LazyFrame | None) -> Decimal | None` — returns the rate when the table contains exactly one `(EUR, GBP)` row, returns `None` and logs WARNING `"fx_rates table has N (EUR, GBP) rows; skipping eur_gbp_rate auto-sync"` when multiple rows match; (2) new method `CalculationConfig.with_fx_rate(eur_gbp_rate)` in `src/rwa_calc/contracts/config.py` uses `dataclasses.replace` to produce a new config with both `eur_gbp_rate` and `thresholds=RegulatoryThresholds.crr(eur_gbp_rate=...)` rebuilt, so the SME turnover threshold, SME exposure threshold, retail max exposure, QRRE limit, and LFSE threshold are all re-derived at the new rate; the method is a no-op on Basel 3.1 (GBP-native per PRA PS1/26 Art. 153(4)) and a no-op when the rate is unchanged; (3) `PipelineOrchestrator.run_with_data` in `src/rwa_calc/engine/pipeline.py` calls `extract_eur_gbp_rate(data.fx_rates)` immediately before `_ensure_components_initialized(config)` and, when the derived rate differs from the caller-supplied rate, logs WARNING `"eur_gbp_rate auto-sync: replacing <old> with <new> from fx_rates table"` on `rwa_calc.engine.pipeline` and swaps the local `config` via `with_fx_rate`. New opt-out field `CalculationConfig.sync_eur_gbp_rate_from_fx_table: bool = True` lets callers force their passed-in rate to win regardless of the data; when False, no WARNING is emitted and the supplied rate stands. Tests: 5 contract tests (`tests/contracts/test_config.py::TestCalculationConfig` — `test_sync_eur_gbp_rate_flag_defaults_true`, `test_with_fx_rate_rebuilds_thresholds`, `test_with_fx_rate_noop_when_rate_unchanged`, `test_with_fx_rate_noop_for_basel_3_1`, `test_with_fx_rate_preserves_post_init_derivations`); 6 unit tests (`tests/unit/test_fx_rate_sync.py` — single/missing/None/multiple rows, reverse-direction row, Decimal precision); 4 integration tests (`tests/integration/test_fx_rate_autosync.py` — divergence-warns-and-replaces, same-rate no-warn, opt-out suppresses, B3.1 no-op). Documented in `docs/user-guide/methodology/fx-conversion.md` under a new "Auto-sync of `eur_gbp_rate` from the FX table" section covering the match rules, divergence warning, multiple-row skip, opt-out flag, and Basel 3.1 behaviour. Ref: CRR Art. 153(4); `RegulatoryThresholds.crr` at `contracts/config.py:619`.
+
+### Changed
+- Refactor: `stage_timer` logging format enhanced for clearer pipeline traces.
+- Refactor: inline sidebar theme CSS for improved styling.
+
+### Fixed
+- **Retail Art. 123(c) threshold now aggregates across the full counterparty when no lending group is defined**: `HierarchyResolver._enrich_with_lending_group` in `engine/hierarchy.py` previously set `lending_group_total_exposure` and `lending_group_adjusted_exposure` to `0.0` whenever `lending_group_reference` was null, and the classifier's fallback in `_build_qualifies_as_retail_expr` then compared the **per-row** `exposure_for_retail_threshold` against the EUR 1m / GBP 880k limit. A counterparty with, say, three GBP 400k loans and no lending group was therefore classified as retail even though the aggregate GBP 1.2m exposure exceeded the threshold. CRR Art. 123(c) read with Art. 4(1)(39) ("group of connected clients") and PRA PS1/26 Art. 123A require aggregation across every exposure to a single obligor — a standalone counterparty is a group-of-one. Fix: the `.otherwise(0.0)` branches now aggregate via `.sum().over("counterparty_reference")` so both totals are always populated with the connected-client figure. The now-redundant `zero_lending_group_fail` branch in `engine/classifier.py` is removed. New regression tests: `tests/unit/test_hierarchy.py::TestLendingGroupAggregation::test_standalone_counterparty_aggregates_own_exposures` (three-loan counterparty, 1.2m aggregate) and `tests/unit/test_art123a_retail_criteria.py::TestCounterpartyAggregationWithoutLendingGroup` (three cases covering above-threshold B3.1, below-threshold B3.1, and above-threshold CRR). Existing `test_standalone_not_in_lending_group` updated to expect the counterparty aggregate (50k) rather than 0.0. Ref: CRR Art. 123(c), Art. 4(1)(39); PRA PS1/26 Art. 123A.
+
+---
+
+## [0.1.64] - 2026-04-19
+
+### Added
 - **stdlib `logging` observability layer (`rwa_calc.observability`)**: a new cross-cutting package (`src/rwa_calc/observability/`) configures stdlib `logging` idempotently on the `rwa_calc` namespace logger (never root), installs a `contextvars`-backed correlation `run_id` injected onto every LogRecord, and provides `stage_timer` — a context manager that emits INFO `"stage entered"` / `"stage completed"` records with an `elapsed_ms` extra (WARNING `"stage failed"` on exception). Every `_run_*` helper in `PipelineOrchestrator` is wrapped with `stage_timer`, so each pipeline run now emits matching entry/exit records for loader, hierarchy_resolver, classifier, crm_processor, re_splitter, calculators, aggregator, and equity_calculator, all sharing one freshly-generated 12-hex-char `run_id` bound at `run_with_data` entry and cleared in the existing `finally`. Two output formats — `"text"` (human-readable) and `"json"` (single-line, audit-friendly with a whitelisted extras set) — are selectable via two new fields on `CalculationConfig` (`log_level` default `"INFO"`, `log_format` default `"text"`) that also flow through `CreditRiskCalc(log_level=..., log_format=...)` and both `.crr()` / `.basel_3_1()` factories. `CreditRiskCalc.calculate()` now calls `configure_logging(config.log_level, config.log_format)` before constructing the pipeline; the orchestrator itself does NOT call `configure_logging` so it remains usable in embedded contexts. Noisy third-party loggers (`polars`, `uvicorn.access`, `fastapi`, `asyncio`) are pinned to WARNING. Contract: logging is operational-only — data-quality issues remain in `CalculationError`, and the integration test asserts no log record's `message` equals any `CalculationError.message` in the same run. Enforcement: ruff rules `G` / `LOG` / `T20` (f-string lazy-formatting, deprecated API detection, `print()` ban with `tests/**` + marimo apps exempted); `scripts/arch_check.py` gains check 8 (engine modules must declare `logger = logging.getLogger(__name__)`, no `print(` or `logging.basicConfig(` — helper modules listed in `LOGGER_REQUIRED_EXEMPT`); `tests/contracts/test_logging_contract.py` asserts every stage module exports a correctly-named `Logger` and that `observability.__all__` is stable; `tests/integration/test_logging_pipeline.py` runs the pipeline end-to-end and asserts entry/exit record pairs, shared `run_id`, distinct ids on back-to-back runs, no handler stacking, and no regulatory-error duplication. The ~19 `print()` calls in `src/rwa_calc/ui/marimo/server.py:main()` are converted to `logger.info` with `configure_logging("INFO", "text")` called at startup. New spec `docs/specifications/observability.md` documents the public API, record schema, levels, correlation-ID lifecycle, reference stage skeleton, enforcement layers, and anti-patterns. CLAUDE.md gains a **Logging** section mirroring the **Error Handling** section. `CalculationConfig` fields are listed in `docs/specifications/configuration.md` (FR-5.7, CONFIG-7).
-- **Regression coverage: IRB-denied exposures must still use the counterparty's external ECAI rating on SA**: `tests/integration/test_model_permissions_pipeline.py::TestIRBDeniedUsesExternalRatingOnSA` adds three end-to-end tests that wire a counterparty with **both** an internal rating (PD + `model_id`) and an external rating (CQS) through the full pipeline, then assert that when `model_permissions` deny IRB (via `filter_rejected` on exposure-class mismatch, via `unmatched_model_id`, and via PRA PS1/26 Art. 147A(1)(a) sovereign SA-only routing) the resulting SA row carries `approach="SA"`, the counterparty's external `cqs`, and a CQS-based `risk_weight` rather than the unrated fallback — the scenario the CLS006 diagnostic warning already signals. A new `_make_external_rating` helper mirrors the existing `_make_internal_rating` shape. These tests pin down the expected behaviour end-to-end; previously, `tests/integration/test_model_permissions_pipeline.py` and `tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py` always built internal-only ratings with `cqs=None`, so the external-rating path through SA after IRB denial was never exercised from rating inheritance through `SACalculator._apply_risk_weights`.
+
+### Changed
+- Refactor: hoist SA risk-weight scalars and scaffold `lf.sa` namespace (no behavioural change).
+
+---
+
+## [0.1.63] - 2026-04-19
+
+### Added
 - **Real estate loan-splitter for SA exposures collateralised by property (CRR Art. 125/126, PRA PS1/26 Art. 124F/H)**: A new pipeline stage (`engine/re_splitter.py`) inserted between `CRMProcessor` and the calculators physically partitions a property-collateralised non-RE SA exposure into two rows — a secured row reclassified to `RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE` capped at the regulatory secured-LTV cap, and an uncollateralised residual row that retains the original counterparty exposure class so the standard corporate / retail risk weight applies on the remainder. Both rows share a `split_parent_id` lineage key so downstream aggregations reconcile back to the parent exposure. Previously, a corporate / retail loan secured by eligible property collateral that was not already classified as a mortgage received the full counterparty risk weight on the entire EAD, materially overstating capital. Mechanics are identical across regimes; parameters (secured LTV cap / secured RW / prior-charge reduction / counterparty carve-outs) live in `data/tables/re_split_parameters.py` (`re_split_parameters(is_basel_3_1=...)`):
   - **CRR Art. 125 (RRE):** secured cap = 80% LTV, secured RW = 35%, residual at counterparty CQS RW.
   - **CRR Art. 126 (CRE):** secured cap = 50% LTV, secured RW = 50% — applied only when the rental coverage test (≥ 1.5× interest costs) is met (new optional input `rental_to_interest_ratio` on collateral). When not met, no split is applied (`RE004` informational warning) and the exposure stays in its original class. Default conservative (no split) when the column is absent.
@@ -30,89 +86,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The split is gated by a new classifier Phase 4c (`_flag_property_reclassification_candidates`) that emits `re_split_target_class`, `re_split_mode` (`"split"` / `"whole"` / null), `re_split_property_type`, `re_split_property_value`, and `re_split_cre_rental_coverage_met` candidate columns. Income-producing real estate continues to use the existing whole-loan path (Art. 124G / Art. 124I bands); already-classified `RESIDENTIAL_MORTGAGE` / `RETAIL_MORTGAGE` / `COMMERCIAL_MORTGAGE` / defaulted / equity / CIU / subordinated / high-risk / covered-bond rows are excluded from the split. The downstream SA RW expressions are reused unchanged — the secured row's LTV is capped by construction at the secured-LTV threshold, so the existing `b31_residential_rw_expr` / `b31_commercial_rw_expr` / CRR `_apply_residential_mortgage_rw` paths produce 35% / 50% / 20% / 60% naturally, and the residual row keeps its original `exposure_class` and gets the corporate / retail RW. Provisions allocate pro-rata by the EAD share. New audit LazyFrame `CRMAdjustedBundle.re_split_audit` captures one row per parent (parent EAD, secured/residual EAD, effective cap, target class, regime). New error codes: `RE001` (non-eligible RE), `RE002` (zero effective cap), `RE003` (mixed property types), `RE004` (CRR CRE rental coverage failed). New `RealEstateSplitterProtocol` in `contracts/protocols.py`. 14 new unit tests (`tests/unit/test_real_estate_splitter.py`), 3 end-to-end pipeline integration tests (`tests/integration/test_re_split_pipeline.py`), 2 protocol contract tests. Output floor / aggregator semantics unchanged: each child row contributes its own `sa_rwa` so portfolio-level totals are mathematically equivalent to the pre-split blended-RW row. Ref: CRR Art. 125, Art. 126(2)(d); PRA PS1/26 Art. 124A, Art. 124F, Art. 124F(2), Art. 124H(1)-(3), Art. 124L; SS10/13.
 
-### Fixed
-- **IRB / Slotting exposures secured by real estate no longer receive the 0.15 retail-mortgage correlation (CRR Art. 153 / CRE31.11)**: `RealEstateSplitter._split_unified_frame` in `engine/re_splitter.py` previously split every row flagged by the classifier as `re_split_mode='split'` (or `'whole'`) regardless of the row's `approach`, emitting a secured child row with `exposure_class = RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE`. For FIRB / AIRB / Slotting rows, the IRB correlation expression in `engine/irb/formulas.py::_correlation_expr_from_pd` reads `pl.col("exposure_class")` and hits the `str.contains("MORTGAGE")` branch → `pl.lit(0.15)`, i.e. the retail-mortgage correlation under CRR Art. 154(3). A FIRB corporate-SME exposure collateralised by residential property was therefore splitting into (a) a `corporate_sme` residual row with the correct supervisory-formula-with-SME-adjustment correlation and (b) a `RESIDENTIAL_MORTGAGE` secured row stuck at 0.15 — a regime that doesn't exist under IRB. Loan-splitting is an SA-only regulatory mechanism (CRR Art. 125/126 and PRA PS1/26 Art. 124F/H all sit in the Credit Risk: Standardised Approach Part); IRB recognises real-estate collateral via LGD (Art. 161(5) FIRB supervisory RRE floor / AIRB own-estimate LGD / Art. 230-231 funded credit protection), already handled upstream by the CRM processor's `crm_alloc_real_estate` allocation. Fix: gate `is_split_mode` and `is_whole_mode` on `approach ∈ {standardised, equity}` (a new `_SA_BOUND_APPROACHES` module constant backed by `ApproachType` enum values). Rows with `approach ∈ {foundation_irb, advanced_irb, slotting}` and the classifier's split flag set now fall into the pass-through bucket and retain their original `exposure_class` — the downstream IRB correlation formula then correctly lands on the corporate / corporate-SME / retail branches. `_accumulate_split_errors` is similarly gated so IRB rows do not emit SA-specific `RE002` zero-cap or `RE004` CRR rental-coverage warnings. When the `approach` column is absent (pure SA-only bundles, older test fixtures) the predicate defaults to `True` — existing SA-only tests continue to pass. 5 new regression tests in `tests/unit/test_real_estate_splitter.py::TestSplitterApproachGate` (parametrised over FIRB/AIRB/Slotting pass-through, whole-loan pass-through, SA-with-explicit-approach still splits, no spurious RE002 on IRB zero-cap rows, mixed SA+IRB batch). Full suite: 4,640 unit passed, 810 acceptance+contracts+integration passed. Ref: CRR Art. 125, Art. 126, Art. 153(1)-(4), Art. 154(3), Art. 161(5), Art. 230-231; PRA PS1/26 Art. 124F, Art. 124H.
-- **Defaulted SA exposures no longer return the base class RW when non-financial collateral columns are populated (PS1/26 Art. 127)**: `_apply_defaulted_risk_weight` in `engine/sa/namespace.py` previously computed `secured_pct = (collateral_re_value + collateral_receivables_value + collateral_other_physical_value) / ead` and blended `unsecured_pct × provision_rw + secured_pct × pl.col("risk_weight")`. `pl.col("risk_weight")` at that point is the exposure's base class RW (75% for retail, 100% for unrated corporate, 35% for mortgage), so whenever non-financial collateral reached or exceeded EAD, the blended RW collapsed back to the class base — for defaulted regulatory retail with RE collateral the SA path returned 75% instead of the Art. 127(1) 100%/150%. Art. 127(2) defers to the CRM method the institution applies (Art. 191A(2)); under FCCM (the default for SA) eligible financial collateral has already reduced `ead_final` upstream and eligible RE is routed through class reclassification, so the post-CRM value IS the unsecured portion and no secondary split is required inside the defaulted override. Fix: drop the non-financial collateral split entirely; apply the provision-based 100%/150% to `ead_final` directly (CRR denominator keeps the `+ provision_deducted` pre-provision reconstruction; B31 uses `ead_final` per "outstanding amount of the item or facility"). The Basel 3.1 RESI RE non-income-dependent flat-100% branch (Art. 127(3) / CRE20.88) and the HIGH_RISK precedence guard (Art. 128) are unchanged. `tests/unit/test_defaulted_secured_split.py` rewritten to assert the new behaviour (regulatorily-incorrect "fully secured returns base RW" cases deleted; new regression tests pin down the retail scenario). New unit tests in `tests/unit/crr/test_crr_sa.py::TestDefaultedRWApplication` for defaulted non-mortgage retail under both CRR and Basel 3.1. Acceptance scenario B31-K7 re-baselined (collateral columns no longer produce a blend). Spec `docs/specifications/basel31/defaulted-exposures.md` updated: FR-10.3 reworded to "unsecured portion determined by the CRM method"; D3.19 code-divergence warning on the B31 denominator removed (resolved); secured-portion section rewritten. Ref: PS1/26 Art. 127(1)-(3); Art. 191A(2); CRR Art. 127(1)-(2); CRE20.88-90.
-- **Retail Art. 123(c) threshold now aggregates across the full counterparty when no lending group is defined**: `HierarchyResolver._enrich_with_lending_group` in `engine/hierarchy.py` previously set `lending_group_total_exposure` and `lending_group_adjusted_exposure` to `0.0` whenever `lending_group_reference` was null, and the classifier's fallback in `_build_qualifies_as_retail_expr` then compared the **per-row** `exposure_for_retail_threshold` against the EUR 1m / GBP 880k limit. A counterparty with, say, three GBP 400k loans and no lending group was therefore classified as retail even though the aggregate GBP 1.2m exposure exceeded the threshold. CRR Art. 123(c) read with Art. 4(1)(39) ("group of connected clients") and PRA PS1/26 Art. 123A require aggregation across every exposure to a single obligor — a standalone counterparty is a group-of-one. Fix: the `.otherwise(0.0)` branches now aggregate via `.sum().over("counterparty_reference")` so both totals are always populated with the connected-client figure. The now-redundant `zero_lending_group_fail` branch in `engine/classifier.py` is removed. New regression tests: `tests/unit/test_hierarchy.py::TestLendingGroupAggregation::test_standalone_counterparty_aggregates_own_exposures` (three-loan counterparty, 1.2m aggregate) and `tests/unit/test_art123a_retail_criteria.py::TestCounterpartyAggregationWithoutLendingGroup` (three cases covering above-threshold B3.1, below-threshold B3.1, and above-threshold CRR). Existing `test_standalone_not_in_lending_group` updated to expect the counterparty aggregate (50k) rather than 0.0. Ref: CRR Art. 123(c), Art. 4(1)(39); PRA PS1/26 Art. 123A.
-- **RGLA / PSE institution-treated exposures now correctly route to IRB (CRR Art. 147(3)/(4)(b), PRA PS1/26 Art. 147A(1)(b))**: `rgla_institution` and `pse_institution` counterparties carrying an internal rating were silently forced to SA regardless of IRB permissions. Under CRR the org-wide `IRBPermissions.full_irb()` map keys IRB eligibility off `exposure_class`, but the classifier set `exposure_class` from the SA map (RGLA / PSE) while `full_irb()` only listed CGCB / INSTITUTION / corporate / retail / SL — so every `rgla_*` / `pse_*` row's `firb_permitted_expr` evaluated to `False` and fell through to the SA default. Under Basel 3.1 the `_b31_sa_only` filter additionally swept `ExposureClass.RGLA` / `ExposureClass.PSE` into the Art. 147A(1)(a) sovereign-only set, but Art. 147(3) scopes that restriction to quasi-sovereigns with 0% SA RW (i.e. `rgla_sovereign` / `pse_sovereign` / `mdb` / `international_org`) — institution-treated variants should follow the Art. 147A(1)(b) INSTITUTION F-IRB-only path. Fix in `engine/classifier.py`: (1) `_build_orgwide_permission_exprs` and `_resolve_model_permissions` now key their permission-match expressions on `exposure_class_irb`; (2) `_b31_sa_only` now keys on `cp_entity_type` with the explicit Art. 147(3) list; (3) `_b31_institution_no_airb` now keys on `exposure_class_irb == INSTITUTION`; (4) new Step 4a re-syncs `exposure_class_irb` with the reclassified `exposure_class` after Phases 3-4 (SME / QRRE / retail) so retail-reclassified corporates still match retail model permissions; (5) after approach assignment, `exposure_class` is rewritten to `exposure_class_irb` for IRB-routed `rgla_*` / `pse_*` rows so the IRB calculator reads INSTITUTION / CGCB for correlation & LGD selection. SA-routed RGLA / PSE rows keep `exposure_class = RGLA` / `PSE` and continue to use Art. 115 / Art. 116 SA risk weight tables. Net effect under CRR: a `rgla_institution` with internal PD + modelled LGD now correctly lands on A-IRB via the INSTITUTION class; under B3.1 it lands on F-IRB with supervisory LGD per Art. 147A(1)(b). 11 new regression tests in `tests/unit/test_b31_approach_restrictions.py` (`TestCRRRGLAPSEIRBRouting` plus additional `TestB31QuasiSovereignSAOnly` cases) cover CRR AIRB/FIRB routing, B3.1 FIRB routing, A-IRB blocking under B3.1, LGD clearing, and SA-fallback behaviour for unrated rgla/pse rows. Full suite: 4,711 unit passed, 627 acceptance + integration passed. `IRBPermissions.full_irb_b31()` permissions map unchanged (RGLA / PSE / MDB entries remain as defensive defaults); docstring updated to clarify the quasi-sovereign scope is tied to the 0%-RW entity treatment, not the SA exposure class label. Ref: CRR Art. 147(3), Art. 147(4)(b); PRA PS1/26 Art. 147A(1)(a), Art. 147A(1)(b) read with Art. 147(3).
-- **CRR Art. 138 multi-rating resolution now applied**: `HierarchyResolver._build_rating_inheritance_lazy` in `engine/hierarchy.py` previously collapsed multiple external ratings per counterparty to the single most recent one, silently ignoring assessments from additional nominated ECAIs. Replaced the "most recent wins" logic for external ratings with Art. 138: per-agency dedup (most recent per agency) followed by the 1-rating / 2-rating (higher RW) / ≥ 3-rating (second-best) selection rule. Resolution is performed on CQS rather than RW because within every SA exposure class the CQS → RW mapping is monotone non-decreasing. Internal-rating resolution, inheritance, and the external-rating non-inheritance rule are unchanged. New `TestArt138ExternalRatingResolution` class in `tests/unit/test_hierarchy.py` covers single/two/three/four-rating cases, ties at the two lowest CQS, same-agency repeats, and null-CQS rows. Existing fixture counterparties have ≤ 1 external agency each, so no acceptance-golden changes. Ref: CRR Art. 138.
-
-
-
-
-
-
-## [0.2.0] - 2026-04-26
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.67] - 2026-04-25
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.66] - 2026-04-24
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.65] - 2026-04-21
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.64] - 2026-04-19
-
-### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.202] — 2026-04-18
-
-### Fixed
-- **CRR Art. 120(2) Table 4 short-term rated institution risk weights now applied [P1.99]**: The CRR SA branch fell through to Art. 120 Table 3 (long-term) for every rated institution regardless of maturity, so a CQS 2 institution with 1-month residual maturity received the 50% long-term weight instead of the 20% Table 4 short-term weight. Added `INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR` in `data/tables/crr_risk_weights.py` (CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150%) and a new `.when()` branch in `engine/sa/calculator.py` keyed on `residual_maturity_years <= 0.25` with `INSTITUTION` exposure class and non-null CQS. CRR Art. 120(2) keys on *residual* maturity and imposes no domestic-currency restriction (distinct from Art. 119(2)). Diverges from B31 Table 4 which applies 20% uniformly across CQS 1-5.
-- **CRR Art. 121(3) unrated institution short-term 20% RW now applied [P1.121]**: The CRR SA branch provided no short-term override for unrated institutions, so a 1-month-original-maturity unrated institution fell through to the Table 5 sovereign-derived fallback (typically 100%). Added `INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = 0.20` and a `.when()` branch in `engine/sa/calculator.py` keyed on `original_maturity_years <= 0.25` with `INSTITUTION` exposure class and null-or-zero CQS. Art. 121(3) uses *original* effective maturity (consistent with the P1.133 B31 PSE/SCRA fix), so a seasoned 5-year bond with 1 month remaining does NOT qualify. Art. 121(6) sovereign floor (applied later via `_apply_sovereign_floor_for_institutions`) still lifts this to the sovereign weight for FX exposures. Capital previously overstated by up to 80 percentage points for short-term unrated interbank exposures.
-- Both fixes: 13 new regression tests in `tests/unit/crr/test_crr_institution_standard.py` (`TestCRRShortTermInstitutionTables`, `TestCRRShortTermInstitutionSACalculator`) cover parametrized CQS 1-6 short-term rated, >3m fall-through, unrated short-term, original vs residual maturity keying, sovereign-floor interaction, and B31 isolation. 2 existing tests in `tests/unit/test_b31_sa_risk_weights.py` that previously asserted CRR does NOT apply short-term treatment renamed to assert the new correct behaviour. Full suite: 5,329 passed, 21 skipped. Ref: CRR Art. 120(1)-(2), Art. 121(3)/(6).
-
-## [0.1.201] — 2026-04-18
-
-### Fixed
-- **Short-term PSE/institution treatment now keys on original maturity [P1.133]**: `SACalculator._SA_INPUT_CONTRACT` extended with `original_maturity_years`, `value_date`, `maturity_date`; `calculate_branch` derives `original_maturity_years` inline from `(maturity_date - value_date)/365.0` when the column is null, so hierarchy-supplied facility data flows through without a new schema column. Five SA call-sites updated to use `original_maturity_years`: B31 PSE short-term (Art. 116(3)), B31 ECRA rated institution short-term (Art. 120(2)/(2A) incl. 6m trade-goods carve-out), B31 SCRA unrated institution short-term (Art. 121(3)), CRR PSE short-term (Art. 116(3)), and Art. 121(6) trade-goods sovereign-floor exception. Previously a 5-year bond with 1 month residual incorrectly attracted short-term 20% RW; it now correctly receives the long-term CQS/SCRA weight. 8 new regression tests cover seasoned-vs-fresh scenarios across both CRR and B31 branches in `tests/unit/test_pse_risk_weights.py` and `tests/unit/test_b31_sa_risk_weights.py`. Understates-capital bug; fix tightens RWs on seasoned short-residual exposures. Ref: CRR Art. 116(3), PRA PS1/26 Art. 120(2)/(2A), Art. 121(3)/(6).
-
-## [0.1.200] — 2026-04-18
-
-### Fixed
-- **PRA PS1/26 Art. 224 Table 1 B31 haircut corrections [P1.155]**: `BASEL31_COLLATERAL_HAIRCUTS` in `data/tables/haircuts.py` had 9 stale values (P1.155 originally cited 4; PDF verification found 5 more in the same table). Corrections verified against ps126app1.pdf p.203: sovereign CQS 2-3 3_5y 4%→3% and 10y+ 12%→6%; corp/institution CQS 1 1_3y/3_5y/5_10y 4/6/10%→3/4/6%; corp/institution CQS 2-3 1_3y/3_5y/5_10y/10y+ 6/8/15/15%→4/6/12/20%. The 10y+ CQS 2-3 correction (15%→20%) widens FCCM haircut on long-dated lower-rated corporate bonds (capital increase); the other 8 corrections were conservative over-haircuts whose correction reduces collateral haircut in FCCM, increases collateral value recognised, and lowers post-CRM EAD. Test class `TestBasel31BondHaircuts` in `tests/unit/crm/test_crm_basel31.py` parametrized into a single `test_b31_bond_haircuts_match_pra_table_1` with 13 cases; `test_b31_corp_bond_long_dated_higher_haircut` in `TestHaircutCalculatorFrameworkBranching` updated accordingly. All 5,307 tests pass.
-
-## [0.1.199] — 2026-04-18
+- **Regression coverage: IRB-denied exposures must still use the counterparty's external ECAI rating on SA**: `tests/integration/test_model_permissions_pipeline.py::TestIRBDeniedUsesExternalRatingOnSA` adds three end-to-end tests that wire a counterparty with **both** an internal rating (PD + `model_id`) and an external rating (CQS) through the full pipeline, then assert that when `model_permissions` deny IRB (via `filter_rejected` on exposure-class mismatch, via `unmatched_model_id`, and via PRA PS1/26 Art. 147A(1)(a) sovereign SA-only routing) the resulting SA row carries `approach="SA"`, the counterparty's external `cqs`, and a CQS-based `risk_weight` rather than the unrated fallback — the scenario the CLS006 diagnostic warning already signals. A new `_make_external_rating` helper mirrors the existing `_make_internal_rating` shape. These tests pin down the expected behaviour end-to-end; previously, `tests/integration/test_model_permissions_pipeline.py` and `tests/acceptance/basel31/test_scenario_b31_m_model_permissions.py` always built internal-only ratings with `cqs=None`, so the external-rating path through SA after IRB denial was never exercised from rating inheritance through `SACalculator._apply_risk_weights`.
 
 ### Changed
 - **Institution guarantor RW expression unified**: SA (`engine/sa/calculator.py::_apply_guarantee_substitution`) and IRB (`engine/irb/guarantee.py::_compute_guarantor_rw_sa`) guarantee substitution paths had near-identical hard-coded `pl.when().then()` ladders for institution CQS → RW with `pl.lit(0.30) if config.is_basel_3_1 else pl.lit(0.50)` branches. Extracted shared helper `build_institution_guarantor_rw_expr(cqs_col, is_basel_3_1)` in `data/tables/crr_risk_weights.py` that drives values from `INSTITUTION_RISK_WEIGHTS_CRR` / `INSTITUTION_RISK_WEIGHTS_B31_ECRA` so the dicts remain the single source of truth and the two sites cannot drift on future edits. Also removed the dead `extra_cols={"is_basel_3_1": ...}` column previously emitted by `_create_institution_df` (never consumed by any downstream join).
 
 ### Fixed
+- **RGLA / PSE institution-treated exposures now correctly route to IRB (CRR Art. 147(3)/(4)(b), PRA PS1/26 Art. 147A(1)(b))**: `rgla_institution` and `pse_institution` counterparties carrying an internal rating were silently forced to SA regardless of IRB permissions. Under CRR the org-wide `IRBPermissions.full_irb()` map keys IRB eligibility off `exposure_class`, but the classifier set `exposure_class` from the SA map (RGLA / PSE) while `full_irb()` only listed CGCB / INSTITUTION / corporate / retail / SL — so every `rgla_*` / `pse_*` row's `firb_permitted_expr` evaluated to `False` and fell through to the SA default. Under Basel 3.1 the `_b31_sa_only` filter additionally swept `ExposureClass.RGLA` / `ExposureClass.PSE` into the Art. 147A(1)(a) sovereign-only set, but Art. 147(3) scopes that restriction to quasi-sovereigns with 0% SA RW (i.e. `rgla_sovereign` / `pse_sovereign` / `mdb` / `international_org`) — institution-treated variants should follow the Art. 147A(1)(b) INSTITUTION F-IRB-only path. Fix in `engine/classifier.py`: (1) `_build_orgwide_permission_exprs` and `_resolve_model_permissions` now key their permission-match expressions on `exposure_class_irb`; (2) `_b31_sa_only` now keys on `cp_entity_type` with the explicit Art. 147(3) list; (3) `_b31_institution_no_airb` now keys on `exposure_class_irb == INSTITUTION`; (4) new Step 4a re-syncs `exposure_class_irb` with the reclassified `exposure_class` after Phases 3-4 (SME / QRRE / retail) so retail-reclassified corporates still match retail model permissions; (5) after approach assignment, `exposure_class` is rewritten to `exposure_class_irb` for IRB-routed `rgla_*` / `pse_*` rows so the IRB calculator reads INSTITUTION / CGCB for correlation & LGD selection. SA-routed RGLA / PSE rows keep `exposure_class = RGLA` / `PSE` and continue to use Art. 115 / Art. 116 SA risk weight tables. Net effect under CRR: a `rgla_institution` with internal PD + modelled LGD now correctly lands on A-IRB via the INSTITUTION class; under B3.1 it lands on F-IRB with supervisory LGD per Art. 147A(1)(b). 11 new regression tests in `tests/unit/test_b31_approach_restrictions.py` (`TestCRRRGLAPSEIRBRouting` plus additional `TestB31QuasiSovereignSAOnly` cases) cover CRR AIRB/FIRB routing, B3.1 FIRB routing, A-IRB blocking under B3.1, LGD clearing, and SA-fallback behaviour for unrated rgla/pse rows. Full suite: 4,711 unit passed, 627 acceptance + integration passed. `IRBPermissions.full_irb_b31()` permissions map unchanged (RGLA / PSE / MDB entries remain as defensive defaults); docstring updated to clarify the quasi-sovereign scope is tied to the 0%-RW entity treatment, not the SA exposure class label. Ref: CRR Art. 147(3), Art. 147(4)(b); PRA PS1/26 Art. 147A(1)(a), Art. 147A(1)(b) read with Art. 147(3).
+- **CRR Art. 138 multi-rating resolution now applied**: `HierarchyResolver._build_rating_inheritance_lazy` in `engine/hierarchy.py` previously collapsed multiple external ratings per counterparty to the single most recent one, silently ignoring assessments from additional nominated ECAIs. Replaced the "most recent wins" logic for external ratings with Art. 138: per-agency dedup (most recent per agency) followed by the 1-rating / 2-rating (higher RW) / ≥ 3-rating (second-best) selection rule. Resolution is performed on CQS rather than RW because within every SA exposure class the CQS → RW mapping is monotone non-decreasing. Internal-rating resolution, inheritance, and the external-rating non-inheritance rule are unchanged. New `TestArt138ExternalRatingResolution` class in `tests/unit/test_hierarchy.py` covers single/two/three/four-rating cases, ties at the two lowest CQS, same-agency repeats, and null-CQS rows. Existing fixture counterparties have ≤ 1 external agency each, so no acceptance-golden changes. Ref: CRR Art. 138.
+
+- **CRR Art. 120(2) Table 4 short-term rated institution risk weights now applied [P1.99]**: The CRR SA branch fell through to Art. 120 Table 3 (long-term) for every rated institution regardless of maturity, so a CQS 2 institution with 1-month residual maturity received the 50% long-term weight instead of the 20% Table 4 short-term weight. Added `INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR` in `data/tables/crr_risk_weights.py` (CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150%) and a new `.when()` branch in `engine/sa/calculator.py` keyed on `residual_maturity_years <= 0.25` with `INSTITUTION` exposure class and non-null CQS. CRR Art. 120(2) keys on *residual* maturity and imposes no domestic-currency restriction (distinct from Art. 119(2)). Diverges from B31 Table 4 which applies 20% uniformly across CQS 1-5.
+- **CRR Art. 121(3) unrated institution short-term 20% RW now applied [P1.121]**: The CRR SA branch provided no short-term override for unrated institutions, so a 1-month-original-maturity unrated institution fell through to the Table 5 sovereign-derived fallback (typically 100%). Added `INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = 0.20` and a `.when()` branch in `engine/sa/calculator.py` keyed on `original_maturity_years <= 0.25` with `INSTITUTION` exposure class and null-or-zero CQS. Art. 121(3) uses *original* effective maturity (consistent with the P1.133 B31 PSE/SCRA fix), so a seasoned 5-year bond with 1 month remaining does NOT qualify. Art. 121(6) sovereign floor (applied later via `_apply_sovereign_floor_for_institutions`) still lifts this to the sovereign weight for FX exposures. Capital previously overstated by up to 80 percentage points for short-term unrated interbank exposures.
+- Both fixes: 13 new regression tests in `tests/unit/crr/test_crr_institution_standard.py` (`TestCRRShortTermInstitutionTables`, `TestCRRShortTermInstitutionSACalculator`) cover parametrized CQS 1-6 short-term rated, >3m fall-through, unrated short-term, original vs residual maturity keying, sovereign-floor interaction, and B31 isolation. 2 existing tests in `tests/unit/test_b31_sa_risk_weights.py` that previously asserted CRR does NOT apply short-term treatment renamed to assert the new correct behaviour. Full suite: 5,329 passed, 21 skipped. Ref: CRR Art. 120(1)-(2), Art. 121(3)/(6).
+- **Short-term PSE/institution treatment now keys on original maturity [P1.133]**: `SACalculator._SA_INPUT_CONTRACT` extended with `original_maturity_years`, `value_date`, `maturity_date`; `calculate_branch` derives `original_maturity_years` inline from `(maturity_date - value_date)/365.0` when the column is null, so hierarchy-supplied facility data flows through without a new schema column. Five SA call-sites updated to use `original_maturity_years`: B31 PSE short-term (Art. 116(3)), B31 ECRA rated institution short-term (Art. 120(2)/(2A) incl. 6m trade-goods carve-out), B31 SCRA unrated institution short-term (Art. 121(3)), CRR PSE short-term (Art. 116(3)), and Art. 121(6) trade-goods sovereign-floor exception. Previously a 5-year bond with 1 month residual incorrectly attracted short-term 20% RW; it now correctly receives the long-term CQS/SCRA weight. 8 new regression tests cover seasoned-vs-fresh scenarios across both CRR and B31 branches in `tests/unit/test_pse_risk_weights.py` and `tests/unit/test_b31_sa_risk_weights.py`. Understates-capital bug; fix tightens RWs on seasoned short-residual exposures. Ref: CRR Art. 116(3), PRA PS1/26 Art. 120(2)/(2A), Art. 121(3)/(6).
+- **PRA PS1/26 Art. 224 Table 1 B31 haircut corrections [P1.155]**: `BASEL31_COLLATERAL_HAIRCUTS` in `data/tables/haircuts.py` had 9 stale values (P1.155 originally cited 4; PDF verification found 5 more in the same table). Corrections verified against ps126app1.pdf p.203: sovereign CQS 2-3 3_5y 4%→3% and 10y+ 12%→6%; corp/institution CQS 1 1_3y/3_5y/5_10y 4/6/10%→3/4/6%; corp/institution CQS 2-3 1_3y/3_5y/5_10y/10y+ 6/8/15/15%→4/6/12/20%. The 10y+ CQS 2-3 correction (15%→20%) widens FCCM haircut on long-dated lower-rated corporate bonds (capital increase); the other 8 corrections were conservative over-haircuts whose correction reduces collateral haircut in FCCM, increases collateral value recognised, and lowers post-CRM EAD. Test class `TestBasel31BondHaircuts` in `tests/unit/crm/test_crm_basel31.py` parametrized into a single `test_b31_bond_haircuts_match_pra_table_1` with 13 cases; `test_b31_corp_bond_long_dated_higher_haircut` in `TestHaircutCalculatorFrameworkBranching` updated accordingly. All 5,307 tests pass.
 - **CRR Institution CQS 2 risk weight corrected to 50% (CRR Art. 120 Table 3) [P1.149]**: The CRR table (misnamed `INSTITUTION_RISK_WEIGHTS_UK`) conflated the PRA PS1/26 Basel 3.1 ECRA values (CQS 2 = 30%, unrated = 40%) with a non-existent "UK deviation" to CRR Art. 120, and the SA calculator keyed framework selection off `base_currency == "GBP"` via `use_uk_deviation`. Under CRR Art. 120 Table 3, CQS 2 institutions are 50% and unrated institutions are 100% — no deviation exists in the UK-onshored CRR. Renamed data tables to `INSTITUTION_RISK_WEIGHTS_CRR` and `INSTITUTION_RISK_WEIGHTS_B31_ECRA`; replaced `use_uk_deviation` boolean (keyed on base currency) with `config.is_basel_3_1` (keyed on framework) throughout `engine/sa/calculator.py`, `engine/irb/guarantee.py`, and `engine/equity/calculator.py`. Also caught an additional instance of the same root-cause bug in `irb/guarantee.py:269` where unrated institution guarantors were hard-coded to 40% regardless of framework — now returns 100% under CRR and 40% under B31. CRR-A4 acceptance scenario updated (RW 0.30 → 0.50, RWA £300k → £500k); CRR-D4 updated (blended RW 0.58 → 0.70). Unit tests in `tests/unit/test_sovereign_floor_institutions.py`, `test_b31_sa_risk_weights.py`, `test_covered_bonds.py`, `test_guarantor_exposure_class_rw.py`, `crr/test_crr_sa.py`, `crr/test_crr_tables.py`, `crr/test_crr_institution_standard.py`, and `crr/test_irb_namespace.py` updated to reflect the correct CRR values.
 - **HVCRE Good slotting EL rate corrected to 0.4% (PRA PS1/26 Art. 158(6) Table B) [P1.150]**: Both `B31_SLOTTING_EL_RATES_HVCRE[GOOD]` (`data/tables/b31_slotting.py`) and `SLOTTING_EL_RATES_HVCRE[GOOD]` (`data/tables/crr_slotting.py`) returned 0.8% — mirroring non-HVCRE long-maturity Good — but PRA PS1/26 Table B (Appendix 1 p.108) shows the HVCRE row flat at 0.4% across both Strong (cols A/B) and Good (cols C/D), i.e. HVCRE collapses the subgrade differentiation that non-HVCRE retains. **Halves the EL shortfall for HVCRE Good exposures** (capital overstatement when EL > provisions). Under UK CRR the substantive Article 158 was omitted by SI 2021/1078 in 2022, so PRA PS1/26 Table B is the only extant UK source — applied symmetrically to both framework data tables. Updated unit tests in `tests/unit/test_slotting_el_rates.py` (renamed `test_hvcre_good_zero_point_eight` → `test_hvcre_good_zero_point_four` for both CRR and B31, replaced `test_hvcre_matches_long_maturity_non_hvcre` with `test_hvcre_good_diverges_from_non_hvcre_long_maturity` regression guard, parametrized cases `("good", True, False, ...)` and `("good", True, True, ...)` now expect 0.004). Updated B31 slotting spec admonition. Acceptance scenarios CRR-E4/E7/E8 unchanged (they assert HVCRE risk weights, not EL rates).
 - **FX haircut on collateral silently zero after FX conversion (CRR Art. 224, PRA PS1/26 Art. 224) [P1.135/P1.136]**: `FXConverter.convert_exposures()` and `convert_collateral()` both rewrite the `currency` column to the reporting currency, so by the time `HaircutCalculator.apply_haircuts` compared `currency != exposure_currency` both sides were equal and the 8% Art. 224 FX volatility haircut was silently never applied to any FX-mismatched secured exposure (HIGH capital understatement). Root cause: only `convert_exposures` and `convert_guarantees` preserved `original_currency`; `convert_collateral`, `convert_provisions`, and `convert_equity_exposures` did not — and `_build_exposure_lookups` sourced the collateral-side `exposure_currency` from the post-conversion `currency`. Fix: (1) `engine/fx_converter.py` — all four sibling converters now alias `currency` into `original_currency` on both the conversion and no-conversion paths; (2) `engine/hierarchy.py` — removed the `apply_fx_conversion`/`fx_rates is not None` branching block (converters now handle the no-op path consistently); (3) `engine/crm/processor.py::_build_exposure_lookups` — prefers `original_currency` with fallback to `currency`; (4) `engine/crm/haircuts.py::apply_haircuts` — compares the collateral's `original_currency` with fallback. Regression coverage: 5 tests in `tests/unit/crm/test_collateral_fx_mismatch.py` (including the post-conversion pipeline path that the existing scalar-based `calculate_single_haircut` tests did not exercise) + 2 tests in `tests/unit/test_fx_converter.py` covering the new collateral audit column.
 - **Domestic sovereign guarantor 0% RW uses guarantee currency (CRR Art. 114(4)/(7))**: The Art. 114(4)/(7) domestic-currency test on a guaranteed portion was being evaluated against the underlying exposure's currency rather than the guarantee's currency, which meant a GBP loan guaranteed by an EU sovereign in that sovereign's domestic currency (e.g. DE in EUR) did not receive 0% RW even though, under the substitution approach (Art. 215-217), the substituted claim against the sovereign is denominated in EUR. The Art. 233(3) 8% FX haircut already handles the cross-currency layer between guarantee and underlying loan; layering Art. 114(4)/(7) on top of the exposure currency effectively nullified Art. 233(3) for sovereign guarantees. Switched the three call sites that implement the check (`engine/crm/guarantees.py` routing, `engine/irb/guarantee.py::_compute_guarantor_rw_sa`, `engine/sa/calculator.py::_apply_guarantee_substitution`) to read `guarantee_currency` (already populated on guaranteed rows by `_apply_guarantee_splits`) with a null-safe fallback to the exposure's `denomination_currency_expr`. Added shared helper `build_domestic_cgcb_guarantor_expr` in `data/tables/eu_sovereign.py` combining the UK and EU-member branches into a single expression so the three sites cannot drift. New regression coverage: `tests/integration/test_domestic_sovereign_guarantor_end_to_end.py` (4 end-to-end cases through the full pipeline), a new `TestGuarantorSubstitutionReadsGuaranteeCurrency` class in `tests/unit/test_guarantor_exposure_class_rw.py` (5 cases covering the cross-currency SA+IRB substitution), and an extended `TestDomesticSovereignGuarantorForcedToSA` in `tests/unit/crm/test_guarantor_rating_type.py` adding the reported GBP-loan/EUR-guarantee/DE-sovereign case plus a guard against reading exposure currency (EUR loan + GBP guarantee + DE sovereign must stay IRB). Applies under both CRR and Basel 3.1 / PRA PS1/26.
 - **Domestic sovereign guarantor 0% RW vs internal rating (CRR Art. 114(4)/(7))**: When a guarantee from an EU/UK central government/central bank in its domestic currency was provided by a counterparty that the firm rates internally (i.e. carries an `internal_pd`) and the firm holds IRB permission for the CGCB exposure class, the guarantor was being routed to the IRB substitution path. The downstream `_apply_parameter_substitution` step in `engine/irb/guarantee.py` then overwrote the SA branch's correct 0% RW with the parametric F-IRB risk weight derived from the PD, so e.g. a DE sovereign + EUR guarantor with `internal_pd = 0.001` produced ~2.6% instead of the regulatory 0%. The previous EU/UK domestic 0% fix (PR #253) handled the FX-conversion edge case but only inside the SA branch — it did not change routing, so internal-PD guarantors bypassed it. Promoted the Art. 114(4)/(7) check into the guarantor-approach routing step in `engine/crm/guarantees.py`: domestic-currency CGCB guarantors are now forced to `guarantor_approach = "sa"` ahead of the internal-PD branch, so the existing SA 0% short-circuit fires regardless of whether the guarantor has an internal rating. The `guarantor_rating_type` audit field is unchanged — still reports `"internal"` when an internal PD exists, since the override is an approach decision, not a rating-source decision. Reuses `build_eu_domestic_currency_expr` and `denomination_currency_expr` (post-FX safe). Applies under both CRR (Art. 114(4) UK/GBP, Art. 114(7) EU member states) and Basel 3.1 (PRA PS1/26 preserves Art. 114(7) by cross-reference via third-country reciprocity). Added `TestDomesticSovereignGuarantorForcedToSA` regression class in `tests/unit/crm/test_guarantor_rating_type.py` covering UK/GBP, DE/EUR (post-FX), PL/PLN (non-euro EU) and a non-domestic DE/USD counter-case under both frameworks.
-
-
-
-
-## [0.1.63] - 2026-04-18
-
-### Fixed
-- FX haircut on collateral silently zero after FX conversion (see Unreleased). P1.135 / P1.136.
 
 ---
 
@@ -125,318 +117,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.61] - 2026-04-15
 
-### Changed
-- Version bump for PyPI release
+### Fixed
+- **EU sovereign guarantee 0% RW (CRR Art. 114(4))**: Exposures guaranteed by an EU member state central government/central bank in that state's domestic currency (e.g. a German sovereign guaranteeing a EUR-denominated exposure) were failing to receive the mandated 0% risk weight when the pipeline's FX converter was active. Root cause: `engine/fx_converter.py` overwrites the exposure's `currency` column with the reporting currency and stores the pre-conversion denomination in `original_currency`, but every downstream "denominated in domestic currency" check read the now-overwritten `currency` column. After FX conversion a DE sovereign + EUR exposure appeared as DE + GBP (or whatever the reporting currency was), so the Art. 114(4) short-circuit never fired; unrated EU sovereign guarantors then fell through to `.otherwise(1.0)` = 100% instead of 0%. Added `denomination_currency_expr()` helper in `data/tables/eu_sovereign.py` that returns `pl.col("original_currency")` when present, else `pl.col("currency")`. Extended `build_eu_domestic_currency_expr` to accept a `pl.Expr` for the currency side. Updated all seven affected call sites in `engine/sa/calculator.py` (borrower + guarantor), `engine/irb/guarantee.py` (guarantor, IRB path), and `engine/classifier.py` (forced-SA check for EU domestic sovereigns). Existing `TestSAEUDomesticSovereignTreatment` unit tests were bypassing the bug because they fabricated LazyFrames with `currency` set to the denomination directly; added `TestSAEUDomesticSovereignPostFX` / `TestIRBEUDomesticSovereignPostFX` regression classes covering the post-FX pipeline state.
 
 ---
 
 ## [0.1.60] - 2026-04-14
 
 ### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.193] — 2026-04-13
-
-### Fixed
-- **EU sovereign guarantee 0% RW (CRR Art. 114(4))**: Exposures guaranteed by an EU member state central government/central bank in that state's domestic currency (e.g. a German sovereign guaranteeing a EUR-denominated exposure) were failing to receive the mandated 0% risk weight when the pipeline's FX converter was active. Root cause: `engine/fx_converter.py` overwrites the exposure's `currency` column with the reporting currency and stores the pre-conversion denomination in `original_currency`, but every downstream "denominated in domestic currency" check read the now-overwritten `currency` column. After FX conversion a DE sovereign + EUR exposure appeared as DE + GBP (or whatever the reporting currency was), so the Art. 114(4) short-circuit never fired; unrated EU sovereign guarantors then fell through to `.otherwise(1.0)` = 100% instead of 0%. Added `denomination_currency_expr()` helper in `data/tables/eu_sovereign.py` that returns `pl.col("original_currency")` when present, else `pl.col("currency")`. Extended `build_eu_domestic_currency_expr` to accept a `pl.Expr` for the currency side. Updated all seven affected call sites in `engine/sa/calculator.py` (borrower + guarantor), `engine/irb/guarantee.py` (guarantor, IRB path), and `engine/classifier.py` (forced-SA check for EU domestic sovereigns). Existing `TestSAEUDomesticSovereignTreatment` unit tests were bypassing the bug because they fabricated LazyFrames with `currency` set to the denomination directly; added `TestSAEUDomesticSovereignPostFX` / `TestIRBEUDomesticSovereignPostFX` regression classes covering the post-FX pipeline state.
-
-## [0.1.192] — 2026-04-12
-
-### Changed
 - **Data tables**: Eliminated duplicated regulatory values in `data/tables/`. Previously most `_create_*_df` builders hardcoded numeric literals that were already defined in the module's constant dicts (`CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS`, `CORPORATE_RISK_WEIGHTS`, `COLLATERAL_HAIRCUTS`, `BASEL31_FIRB_SUPERVISORY_LGD`, etc.), meaning a regulatory update required changes in 2+ places. Builders now derive their values by iterating the authoritative dict: new helpers `_build_cqs_rw_df` (crr), `_build_int_cqs_rw_df` (b31), `_build_haircut_df` (haircuts), and `_build_firb_lgd_df` / `_build_b31_firb_lgd_df` (firb_lgd) read values from the dicts via small row-spec tuples that define column ordering. `B31_FIRB_LGD_*` scalar aliases now derive from `BASEL31_FIRB_SUPERVISORY_LGD`. Matches the gold-standard pattern already used in `b31_equity_rw.py`. New test `tests/unit/test_tables_dict_dataframe_parity.py` (18 cases) locks in the invariant so regressions cannot reintroduce duplication. DataFrame schemas, column/row ordering, and public API are unchanged — no regulatory values changed.
-
-## [0.1.191] — 2026-04-12
-
-### Changed
 - **Data tables**: Renamed `data/tables/crr_haircuts.py` -> `data/tables/haircuts.py` and `data/tables/crr_firb_lgd.py` -> `data/tables/firb_lgd.py`; both files already held dual-framework content (CRR Art. 224/161 and PRA PS1/26 equivalents), so the `crr_` prefix was misleading. Merged `data/tables/b31_firb_lgd.py` into `firb_lgd.py` — it was a thin re-export of the Basel 3.1 LGD dict that physically lived in the CRR-prefixed file. All `BASEL31_*` / `B31_*` constants, lookup helpers (`lookup_b31_firb_lgd`, `get_b31_firb_lgd_table`, `get_b31_vs_crr_lgd_comparison`), and framework-shared helpers (`FIRB_OVERCOLLATERALISATION_RATIOS`, `FIRB_MIN_COLLATERALISATION_THRESHOLDS`, `CRR_K_SCALING_FACTOR`) are now in `firb_lgd.py`. Module docstrings updated to reflect dual-framework scope; `crm_supervisory.py` docstring updated to match. Import sites updated across `engine/`, tests, and docs; public `data/tables/__init__.py` re-exports preserved. No regulatory values changed.
 
-## [0.1.190] — 2026-04-11
-
-### Fixed
-- **Guarantees (#239)**: Fixed two bugs in multi-guarantor handling:
-  1. **Non-beneficial guarantors consuming EAD**: When an exposure has multiple guarantors and some are non-beneficial, the pro-rata scaling no longer wastes EAD on non-beneficial guarantors. After the SA/IRB beneficial check, a new `redistribute_non_beneficial()` function reallocates freed portions to beneficial guarantors using a greedy strategy ordered by ascending risk weight (lowest RW fills first), minimising total RWA.
-  2. **FX/restructuring haircuts applied after capping**: The 8% FX mismatch haircut (Art. 233(3-4)) and 40% CDS restructuring exclusion haircut (Art. 233(2)) are now applied to the nominal credit protection value (G) *before* capping at EAD, per CRR Art. 233/235. Previously, a large cross-currency guarantee that vastly exceeded EAD would incorrectly have coverage reduced (e.g. £200m guarantee on €1m loan → was 920k, now correctly 1m).
-- **CCF (P1.166)**: CRR OC (Other Commitments) CCF corrected from **0%** to maturity-dependent values. Under CRR, the OC category did not exist — commitments were classified by maturity: >1yr → MR (50% SA / 75% F-IRB), ≤1yr → MLR (20% SA / 75% F-IRB). The only 0% category was LR (unconditionally cancellable). Previously **understated capital** for all OC-tagged exposures under CRR. SA CRR: OC now receives 50% (>1yr) or 20% (≤1yr, based on maturity_date vs reporting_date); 50% conservative default when maturity_date absent. F-IRB CRR: OC moved from 0% to 75% (both MR and MLR are 75% under F-IRB). Basel 3.1 OC (40%) unchanged. Updated `sa_ccf_expression()`, `_firb_ccf_for_col()`, and `_compute_ccf()` with maturity-aware override. Spec F-IRB table corrected. 7 unit tests updated, 6 new tests added.
-
-## [0.1.189] — 2026-04-11
-
-### Fixed
-- **Equity (P1.132)**: B31 government-supported equity risk weight corrected from 100% to **250%** per Art. 133(3). Art. 133(6) is an exclusion clause (own funds deductions, Art. 89(3), Art. 48(4)), not a 100% risk weight — CRR Art. 133(3)(c) legislative equity carve-out has no equivalent in B31. Previously **understated capital** by 2.5x for government-supported equity under B31. Government-supported equity also removed from transitional floor exclusion (now subject to floor as standard equity, though 250% already exceeds all transitional floors). Updated risk weight table, calculator, transitional floor logic, 8 unit tests, 4 acceptance tests, and spec documentation. Art. 133 paragraph references corrected across codebase (subordinated debt = Art. 133(5) not 133(1); PE/VC = Art. 133(4) not 133(5)).
-
-## [0.1.187] — 2026-04-11
-
-### Fixed
-- **Covered Bonds (P1.113)**: B31 rated covered bond risk weights corrected from BCBS CRE20.28 values to PRA PS1/26 Art. 129(4) Table 7 values. CQS 2: 15%→20%, CQS 6: 50%→100%. PRA retained CRR Table 6A unchanged — did NOT adopt BCBS reductions. Previously **understated capital** for CQS 2 and CQS 6 covered bonds. Both `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` DataFrame corrected. All 77 covered bond tests updated. 3 stale doc divergence warnings converted to "Fixed" admonitions.
-
-## [0.1.184] — 2026-04-11
-
-### Fixed
-- **Equity (P1.119)**: CIU fallback risk weight corrected from 150% (CRR) / 250%-400% (B31) to **1,250%** per Art. 132(2). Was the highest-severity capital understatement bug (3-8x). Root cause: original implementation used Art. 133 equity risk weights instead of Art. 132(2) punitive CIU fallback. Extracted shared `CIU_FALLBACK_RW` constant and `_append_ciu_branches()` helper to eliminate CRR/B31 code duplication. Updated risk weight tables, calculator, 27 unit tests, 7 acceptance tests, and both equity spec documents.
-
-## [0.1.183] — 2026-04-10
-
-### Changed
-- **Naming**: Renamed functions with "and" in their names to better reflect single responsibility:
-  - `_classify_sme_and_retail` -> `_classify_exposure_subtypes` (classifier)
-  - `_determine_approach_and_finalize` -> `_assign_approach` (classifier)
-  - `_sink_and_scan` -> `_spill_to_disk` (materialise)
-  - `_combine_irb_and_slotting` -> `_merge_el_sources` (EL summary aggregator)
-  - `commit_and_push` -> `publish_changes` (git ops)
-- **Classifier**: Moved `B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP` (PRA PS1/26 Art. 147A(1)(e)) and `B31_SME_TURNOVER_THRESHOLD_GBP` (PRA PS1/26 Art. 153(4)) from `engine/classifier.py` to `data/tables/b31_risk_weights.py` for consistency with other B31 regulatory thresholds. Converted from `float` to `Decimal`.
-
-## [0.1.182] — 2026-04-10
-
-### Changed
-- **Pipeline**: Renamed private methods in `PipelineOrchestrator` to remove stale fan-out/single-pass terminology: `_run_crm_processor_unified` -> `_run_crm_processor`, `_run_single_pass` -> `_run_calculators`, `_aggregate_single_pass` -> `_aggregate_results`. Section header renamed from "Single-Pass Pipeline" to "Calculation".
-- **Pipeline**: Removed dead code `_run_sa_calculator` and `_run_irb_calculator` (never called from production; superseded by `calculate_branch()` in the single-pass path). Associated tests removed.
-
-## [0.1.181] — 2026-04-09
-
-### Fixed
-- **Classifier**: Exposures with internal ratings no longer silently route to Standardised Approach when `permission_mode="irb"` is set on `CreditRiskCalc`. Two independent bugs are addressed:
-  - **Pipeline downgrade (Bug #1)**: `PipelineOrchestrator.run_with_data` used `dataclasses.replace(config, permission_mode=STANDARDISED)` when `model_permissions` was absent, which re-ran `CalculationConfig.__post_init__` and wiped `irb_permissions` to `sa_only()`. The pipeline now preserves the user's org-wide IRB permissions and emits a `missing_model_permissions` pipeline error explaining that per-model gating is disabled.
-  - **Silent classifier join failure (Bug #2)**: `ExposureClassifier._resolve_model_permissions` joined `exposure.model_id` LEFT against `model_permissions.model_id`. Null or unmatched `model_id` values produced no match and silently routed to SA with no diagnostic. The classifier now tags each IRB-eligible miss with one of three causes (`null_model_id`, `unmatched_model_id`, `filter_rejected`) and emits a rolled-up `CLS006` (`ERROR_MODEL_PERMISSION_UNMATCHED`) classification warning per cause with targeted remediation guidance.
-- **Tests**: Added `TestModelPermissionsDiagnostics` (4 integration tests) and `TestPipelineIRBWithoutModelPermissions` (1 integration test) in `tests/integration/test_model_permissions_pipeline.py`, plus a regression guard `test_irb_mode_preserves_full_irb_after_pipeline_init` in `tests/unit/test_irb_approach_selection.py`.
-
-## [0.1.180] — 2026-04-09
-
-### Fixed
-- **Docs**: Replaced fabricated double-default formula in `crm.md` with correct CRR Art. 153(3) formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)` (D3.7). Added eligibility requirements (Art. 202/217), guarantor RW floor, and Basel 3.1 removal warning with cross-link to A-IRB spec.
-
-## [0.1.179] — 2026-04-09
-
-### Fixed
-- **Docs**: SA specialised lending waterfall position documented in `key-differences.md` (D2.20). Waterfall item 15 annotated with Art. 122–122B SA SL sub-classification cross-reference. New admonition added explaining SA SL sits within corporates (row 15, Art. 112(1)(g)), with IPRE excluded per Art. 122A(1) ("not a real estate exposure") — IPRE is caught at row 7 (real estate, Art. 124–124L) instead. SA SL section expanded with:
-  - Art. 122A(1) 4-part definition criteria (SPV structure, asset dependency, lender control, asset income repayment)
-  - Art. 122A(2) sub-type classification (OF, CF, PF)
-  - IPRE exclusion warning admonition with cross-reference to real estate section
-  - Art. 122B(1) rated SL fallthrough to corporate CQS table
-  - Art. 122B(2) unrated risk weight table with article references per row
-  - Art. 122B(3) operational phase definition (positive net cash-flow + declining LT debt)
-  - Art. 122B(4)–(5) high-quality PF criteria (8 structural conditions)
-
-## [0.1.178] — 2026-04-08
-
-### Fixed
-- **Docs**: Art. 128 (high-risk items, 150%) UK CRR omission clarified across 6 files (D1.28, D4.9). Art. 128 was omitted from UK onshored CRR by SI 2021/1078, reg. 6(3)(a), effective 1 January 2022 — the high-risk exposure class is a dead letter under current UK CRR. Re-introduced under PRA PS1/26 (Basel 3.1, from 1 January 2027) with paragraphs 1 and 3 retained (paragraph 2 left blank). Files updated:
-  - `specifications/crr/sa-risk-weights.md`: Added omission admonition, B31 re-introduction note, code bug cross-reference (D3.12), and exposure class waterfall clarification (equity priority 3 > high-risk priority 4)
-  - `user-guide/exposure-classes/other.md`: Restructured "Items Associated with High Risk" section — added framework applicability warning, corrected table to Art. 128 items only (speculative RE, PRA-designated), added waterfall note explaining PE/VC are equity (Art. 133), not high-risk
-  - `framework-comparison/key-differences.md`: Corrected equity table row (removed "(or 150% if Art. 128 high-risk)" — PE/VC is equity per waterfall), added Art. 128 re-introduction admonition to priority waterfall section
-  - `user-guide/regulatory/crr.md`: Added "Omitted Provisions" section documenting Art. 128 and Art. 132 omissions by SI 2021/1078
-  - `specifications/crr/equity-approach.md`: Corrected Art. 128 note to explain waterfall precedence (equity > high-risk) and UK CRR omission
-  - `specifications/common/hierarchy-classification.md`: Updated calculator coverage note with Art. 128 framework status and CRR legal basis issue
-
-## [0.1.177] — 2026-04-08
-
-### Added
-- **COREP**: Reporting basis conditionality for output floor (P1.38(c)). `COREPGenerator` now accepts `output_floor_config: OutputFloorConfig` to gate floor-related COREP template content on entity-type applicability per Art. 92 para 2A:
-  - **OF 02.00 rows 0034-0036** (floor activated/multiplier/OF-ADJ) show 0.0 for exempt entities (international subsidiaries, ring-fenced bodies on individual basis, etc.)
-  - **OF 02.01** (output floor comparison) returns None for exempt entities — only applicable entities report the floor comparison
-  - **C 08.07 materiality columns 0160-0180** documented as consolidated-basis-only (Art. 150(1A)), threaded with `is_consolidated` flag for future population
-  - **COREPTemplateBundle** extended with `reporting_basis` and `institution_type` metadata fields
-  - **ResultExporterProtocol** and **ResultExporter** accept `output_floor_config` keyword parameter
-- **Tests**: 38 new tests in `tests/unit/test_corep_reporting_basis.py` across 7 test classes: COREPTemplateBundleMetadata (7), OF0201FloorApplicability (6), OF0200FloorIndicatorRows (7), C0807MaterialityColumns (4), BackwardCompatibility (3), EntityTypeCombinations (9 parametrized), ExporterProtocolCompliance (2). Total: 5,125 (was 5,087). Contract tests: 145.
-
-## [0.1.176] — 2026-04-08
-
-### Fixed
-- **Docs**: Documentation accuracy sweep correcting wrong regulatory values across 13 files (P4.5, P4.6, P4.22):
-  - **PD floors (P4.5)**: Retail mortgage Basel 3.1 PD floor corrected from 0.05% to **0.10%** (Art. 163(1)(b)) in 5 files. QRRE transactor Basel 3.1 PD floor corrected from 0.03% to **0.05%** (Art. 163(1)(c)) in 5 files. Affected: `api/configuration.md`, `user-guide/configuration.md`, `user-guide/exposure-classes/retail.md`, `data-model/regulatory-tables.md`.
-  - **LGD floors (P4.6)**: Corporate LGD floor code example corrected (RECEIVABLES 15%→10%, CRE 15%→10%, OTHER_PHYSICAL 20%→15%) in `user-guide/configuration.md`. Corporate `residential_real_estate` field corrected from 0.05 to **0.10** (Art. 161(5)) in `api/configuration.md` — was showing retail floor instead of corporate floor.
-  - **Output floor schedule (P4.22)**: BCBS 6-year schedule (50%/55%/60%/65%/70%/72.5%, 2027–2032) replaced with PRA 4-year schedule (**60%/65%/70%/72.5%**, 2027–2030) across 12 files. Affected: `plans/implementation-plan.md`, `api/engine.md`, `api/contracts.md`, `framework-comparison/reporting-differences.md`, `plans/prd.md`, `specifications/index.md`, `features/index.md`, `specifications/regulatory-compliance.md`, `framework-comparison/index.md`, `appendix/index.md`, `framework-comparison/impact-analysis.md`, `user-guide/configuration.md`.
-
-## [0.1.175] — 2026-04-08
-
-### Fixed
-- **CRM**: Decoupled `is_main_index` from `is_eligible_financial_collateral` for equity collateral haircuts (P6.21). Added `is_main_index` Boolean field to `COLLATERAL_SCHEMA`. When present, drives haircut lookup directly: `True` = main-index (CRR 15%, B31 20%), `False` = other-listed (CRR 25%, B31 30%). When absent, falls back to `is_eligible_financial_collateral` for backward compatibility. Previously all eligible equity was forced to the main-index haircut tier.
-
-### Added
-- **Tests**: 26 new tests in `tests/unit/crm/test_equity_main_index.py` across 7 test classes: schema validation, CRR/B31 haircut verification for main-index and other-listed, backward compatibility, precedence over eligibility flag, mixed collateral, and full pipeline end-to-end (other-listed EAD = 625k vs main-index EAD = 575k on 1M exposure with 500k equity collateral). Total: 5,087 (was 5,061).
-
-## [0.1.174] — 2026-04-08
-
-### Added
-- **Tests**: 36 new CRM acceptance tests in `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` across 13 test classes covering advanced CRM scenarios not tested by the basic D1-D6/G1-G3 groups: non-beneficial guarantee (guarantor RW = borrower RW), sovereign guarantee 0% substitution, CDS restructuring exclusion (40% haircut, Art. 216(1)/233(2)), CDS with restructuring (no haircut contrast), gold collateral (15% CRR haircut), equity collateral (main-index 15%), overcollateralisation (EAD=0), full CRM chain (provision+collateral+guarantee), mixed collateral types (cash+bond), SA provision EAD deduction, multiple provisions summed, provision+collateral combined, and structural baseline validation. CRR acceptance: 169 (was 133). Total: 5,061 (was 5,025). (P5.3)
-
-### Found
-- **CRM**: Equity collateral `is_eligible_financial_collateral` was overloaded as `is_main_index` proxy in haircut lookup (`haircuts.py:282-285`). Fixed in v0.1.175 (P6.21).
-
-## [0.1.173] — 2026-04-08
-
-### Fixed
-- **COREP**: OF 02.00 IRB sub-row splits — rows 0295-0297 (FSE/large, SME, non-SME corporates), 0355-0356 (retail RE SME/non-SME), 0382-0385 (corporate RE sub-splits), 0400/0410 (other retail SME/non-SME) now populated from pipeline data instead of hardcoded 0.0. Uses finer-grained aggregation keyed by (approach, exposure_class, is_sme, apply_fi_scalar, property_type).
-- **COREP**: OF 02.00 floor indicator rows 0035/0036 — floor_pct and of_adj now populated from `OutputFloorSummary` when provided, instead of hardcoded 0.0.
-- **COREP**: `_filter_re()` fallback chain — gracefully degrades from `materially_dependent_on_property` → `has_income_cover` → `is_income_producing` when pipeline columns vary. Null handling corrected: only fallback columns use `fill_null(False)`, preserving null-as-unclassified semantics for the primary column.
-- **Equity**: `_apply_transitional_floor()` now emits `equity_transitional_approach` and `equity_higher_risk` annotation columns for COREP OF 07.00 rows 0371-0374.
-- **Tests**: 24 new COREP tests across 4 classes (IRB sub-row splits, floor indicators, RE fallback, equity transitional columns). COREP tests: 687 (was 663). Total: 5,025 (was 5,001). (P2.5)
-
-## [0.1.170] — 2026-04-08
-
-### Added
-- **COREP**: C 09.01 / OF 09.01 — CR GB 1 geographical breakdown SA. One DataFrame per country code + TOTAL. CRR: 13 columns (0010-0090 incl. supporting factors), 23 rows. Basel 3.1: 10 columns (removes supporting factors), 29 rows (adds SL sub-rows 0071-0073, RE sub-rows 0091-0094, removes short-term row). Uses `cp_country_code` from counterparty schema. Template definitions, generator methods, class maps, framework selectors.
-- **COREP**: C 09.02 / OF 09.02 — CR GB 2 geographical breakdown IRB. One DataFrame per country code + TOTAL. CRR: 17 columns (incl. PD, LGD, EL, supporting factors), 16 rows (incl. equity). Basel 3.1: 15 columns (adds 0107 defaulted EV, removes supporting factors), 19 rows (adds corporate sub-rows, restructures retail RE, removes equity).
-- **Tests**: 80 new COREP tests for C 09.01/09.02 across 10 test classes. COREP tests: 635 (was 555). Total: 4,953 (was 4,873). (P2.3)
-
-## [0.1.169] — 2026-04-08
-
-### Added
-- **COREP**: C 08.04 / OF 08.04 — CR IRB RWEA flow statements. 1 column (RWEA) × 9 rows (opening, 7 movement drivers, closing) per IRB exposure class. Closing RWEA (row 0090) populated from pipeline; opening and drivers null (require prior-period data). Slotting excluded. CRR column names "after supporting factors"; Basel 3.1 removes supporting factors reference. Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`, `C08_04_COLUMN_REFS`, `get_c08_04_columns()`. Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`. `COREPTemplateBundle.c08_04` field (dict[str, pl.DataFrame]). Excel export with C 08.04 / OF 08.04 prefix.
-- **Tests**: 41 new COREP tests for C 08.04 across 6 test classes (TestC0804TemplateDefinitions: 13, TestC0804Generation: 5, TestC0804ClosingRWEA: 4, TestC0804NullDriverRows: 9, TestC0804B31Features: 3, TestC0804EdgeCases: 7). COREP tests: 555 (was 514). (P2.2)
-
-## [0.1.168] — 2026-04-08
-
-### Added
-- **Pillar III**: UKB CR9 — IRB PD backtesting per exposure class (Art. 452(h)). 8 columns × 17 PD buckets + total row. Basel 3.1 only. Separate F-IRB and A-IRB template sets. Uses `irb_pd_original` for bucket allocation (beginning-of-period proxy). Includes obligor count, default count, observed default rate, EAD-weighted average PD, arithmetic mean PD, historical annual default rate.
-- **Pillar III**: UKB CR9.1 — ECAI mapping PD backtesting (Art. 180(1)(f)). Template definitions only; generation deferred until pipeline provides firm-specific ECAI mapping data.
-- **Pillar III**: `Pillar3TemplateBundle.cr9` field added (dict of approach–class keyed DataFrames)
-- **Pillar III**: CR9 Excel export via `export_to_excel()` with human-readable sheet names (e.g., "UKB CR9 F-IRB Corp")
-- **Tests**: 44 new tests for CR9/CR9.1 across 7 test classes (definitions, generation, column values, PD allocation, edge cases, bundle integration, Excel export). Total: 4,832 (was 4,788). (P3.2)
-
-## [Unreleased]
-
-### Added
-- **Pillar III**: CMS1 — Output floor comparison by risk type (Art. 456(1)(a)). 4 columns × 8 rows. Basel 3.1 only. Only credit risk row populated from pipeline.
-- **Pillar III**: CMS2 — Output floor comparison by asset class (Art. 456(1)(b)). 4 columns × 17 rows. Basel 3.1 only. Full asset class breakdown with FIRB/AIRB/slotting sub-rows.
-- **Pillar III**: `Pillar3TemplateBundle.cms1` and `.cms2` fields added
-- **Pillar III**: CMS1/CMS2 Excel export via `export_to_excel()` (UKB CMS1, UKB CMS2 sheets)
-- **Tests**: 47 new tests for CMS1/CMS2 (7 CMS1 definition, 13 CMS1 generation, 8 CMS2 definition, 16 CMS2 generation, 3 end-to-end). Total: 4,687 (was 4,640). (P3.4)
-
-### Added
-- **SA**: Implement Art. 110A due diligence risk weight override (Basel 3.1 only). Two new optional schema fields (`due_diligence_performed`, `due_diligence_override_rw`) allow firms to flag DD assessment status and override SA risk weights upward where due diligence reveals higher risk. Override uses max(calculated_rw, override_rw) — can only increase, never decrease. SA004 warning emitted when DD assessment status is absent under B31. 25 new unit tests (P1.49)
-
-### Fixed
-- **IRB**: `IRBCalculator.calculate_expected_loss()` now emits IRB004/IRB005 warnings when PD/LGD columns are absent, instead of silently defaulting to PD=1%/LGD=45% with no error reporting (P1.88)
-- **Spec**: Fix CCF spec incorrect F-IRB Basel 3.1 table values (75%→50%, 40%→10% per Art. 166C), add missing Table A1 rows (P4.13)
-- **Spec**: Fix key-differences.md stale implementation status — currency mismatch, SA specialised lending, provision-based defaulted treatment now correctly shown as implemented (P4.14)
-- **Spec**: Fix SA risk weights spec stale Basel 3.1 status markers for completed features
-
-### Added
-- **CRM**: Implement Financial Collateral Simple Method (Art. 222) — `CRMCollateralMethod` enum (`COMPREHENSIVE`/`SIMPLE`) on `CalculationConfig`, new `engine/crm/simple_method.py` module with collateral RW derivation by type/CQS, Art. 222(4) zero-RW exceptions, multi-level allocation, 20% RW floor, blended secured/unsecured risk weight substitution in SA calculator, COREP row 0070 reporting. 49 new unit tests
-- **UI**: Add template workbench — duplicate read-only template workbooks into editable user workspace with full Python and SQL support via `marimo edit`
-- **UI**: Add workspace management REST API (`/api/templates`, `/api/workbooks`, `/api/workbooks/duplicate`, `/api/workbooks/{name}`)
-- **UI**: Add "Workbench" link to sidebar navigation in all template apps
-
-### Changed
-- **API**: Replace `RWAService` + `CalculationRequest` + `quick_calculate` + `create_service` with single `CreditRiskCalc` class. Usage: `CreditRiskCalc(data_path=..., framework=..., reporting_date=...).calculate()`. All response models (`CalculationResponse`, `SummaryStatistics`, etc.) are unchanged.
-- **Config**: Replace granular `IRBPermissions` config (with `sa_only()`, `full_irb()`, `firb_only()`, etc.) with a simple two-mode `PermissionMode` enum (`STANDARDISED` / `IRB`). The `permission_mode` parameter on `CalculationConfig.crr()` and `.basel_3_1()` replaces the old `irb_permissions` parameter. In IRB mode, `model_permissions` input data drives all approach routing (AIRB, FIRB, slotting); without it, the pipeline falls back to SA with a warning. `IRBPermissions` remains as an internal implementation detail but is no longer part of the public API.
-- **Classifier**: Add `model_slotting_permitted` flag to model permissions resolution, enabling slotting to be driven by per-model permissions alongside AIRB and FIRB
-- **Model Permissions**: Add `"slotting"` as a valid `approach` value (alongside `"foundation_irb"` and `"advanced_irb"`)
-- **Comparison**: `TransitionalScheduleRunner.run()` now accepts `permission_mode` instead of `irb_permissions`
-
-### Added
-- **Engine**: Add `materialise.py` module with strategy-aware materialization barriers — supports disk-spill (`sink_parquet` → `scan_parquet`) for out-of-core datasets and in-memory (`collect().lazy()`) for backward compatibility, controlled by `config.collect_engine`
-- **Config**: Add `spill_dir` field to `CalculationConfig` for configuring temp file directory during streaming materialization
-- **Tests**: Add unit tests for `materialise_barrier`, `materialise_branches`, and `cleanup_spill_files`
-
-### Changed
-- **Data Tables**: Consolidate slotting risk weights — `engine/slotting/namespace.py` now sources all risk weights from `data/tables/` instead of defining them inline, consistent with SA/IRB/Equity engines
-- **Data Tables**: Export all 4 CRR slotting weight dicts and convenience functions from `data/tables/__init__.py` (previously only 2 of 4 were exported)
-
-### Added
-- **Data Tables**: Add `b31_slotting.py` with Basel 3.1 slotting risk weights (base, pre-operational, HVCRE) per BCBS CRE33
-- **Tests**: Add unit tests for Basel 3.1 slotting tables and extend CRR slotting short-maturity test coverage
-
-### Removed
-- **Engine**: Remove unused `calculate_unified()` from `SlottingCalculator`, `IRBCalculator`, and their protocols — only SA uses this method (for the output floor). Simplifies the slotting and IRB calculator interfaces.
-- **Engine**: Remove unused `calculate()` from `SlottingCalculator` and its protocol — the pipeline uses `calculate_branch()` directly. Also remove dead `_run_slotting_calculator()` from pipeline.
-
-### Added
-- **Docs**: Add OF 02.00 and OF 02.01 output floor reporting documentation — master own funds requirements template with new SA-only and output floor columns, dedicated output floor comparison template (U-TREA vs S-TREA), flow diagram showing how IRB output floor columns feed into total capital, Pillar III cross-reference (UKB OV1/KM1)
-- **Docs**: Add CIU exposure treatment to key-differences — three approaches (look-through, mandate-based, 1250% fallback), impact of IRB equity removal on CIU underlyings, and CIU transitional (Art. 4.7–4.8)
-- **Docs**: Add IRB equity transitional to key-differences — floor-based transition for firms with existing IRB permission (Art. 4.4–4.6), irrevocable opt-out (Art. 4.9–4.10)
-- **Docs**: Add post-model adjustments (PMAs) section to key-differences — new Basel 3.1 concept (Art. 146(3)) with no CRR equivalent
-- **Docs**: Add retail-specific A-IRB LGD floor table to key-differences — 5% mortgage, 50% QRRE, 30% other unsecured, 30% LGDU
-- **Docs**: Add "Why Basel 3.1?" section to framework comparison index — explains the rationale for transitioning from CRR (risk-weight variability, inadequate capital, IRB complexity) and how Basel 3.1 responds
-
-### Fixed
-- **Docs**: Add missing sovereign (central govts, central banks, quasi-sovereigns) SA-only restriction to IRB approach tables — Art. 147A(1)(a) mandates SA for all sovereign exposures under Basel 3.1, removing F-IRB and A-IRB
-- **Docs**: Add missing IPRE/HVCRE specialised lending Slotting-only restriction — Art. 147A(1)(c); replaces misleading "Specialised Lending (no PD)" row which conflated all SL sub-types
-- **Docs**: Correct large corporate revenue threshold in `basel31.md` from >£500m to >£440m (Art. 147(4C))
-- **Docs**: Correct equity transitional schedule — 2027 starts at 160%/220% (not 130%/160%) after implementation date shifted to 2027
-- **Docs**: Split F-IRB senior LGD into financial entities (45%, unchanged) and other corporates (40%) — previously shown as single 40% row
-- **Docs**: Correct large corporate threshold from >£500m to >£440m (Art. 147(4C))
-- **Docs**: Correct correlation multiplier scope — 1.25x applies to financial sector entities (Art. 153(2)), not all large corporates
-- **Docs**: Correct PD floor for retail mortgage from 0.05% to 0.10% (PRA Art. 163(1)(b))
-- **Docs**: Correct PD floor for QRRE transactor from 0.03% to 0.05% (falls under "all other retail")
-- **Docs**: Correct unfunded credit protection terminology — "cancel or change" (Art. 213(1)(c)(i)), not "change of control"
-- **Docs**: Add Pillar III disclosure documentation covering 9 quantitative credit risk templates (OV1, CR4, CR5, CR6, CR6-A, CR7, CR7-A, CR8, CR10) with CRR and Basel 3.1 column/row definitions
-- **Docs**: Add CRR vs Basel 3.1 disclosure differences page — template naming (UK→UKB), output floor rows, expanded risk weight columns, post-model adjustments, slotting CRM, equity transitional treatment
-- **Docs**: Expand COREP template comparison documentation to cover all 9 key credit risk templates (C 07.00, C 08.01–08.07, C 09.01–09.02) — previously only C 07.00, C 08.01, C 08.02 were documented
-- **Docs**: Add full CRR vs Basel 3.1 column/row reference for C 08.03 (PD ranges), C 08.04 (RWEA flow), C 08.06 (slotting), C 08.07 (scope of use), C 09.01 (geo SA), C 09.02 (geo IRB)
-
-### Fixed
-- **Docs**: Correct Template Overview in reporting-differences.md — C 08.03 exists in CRR (PD ranges breakdown), not a new Basel 3.1 slotting template
-
-### Changed
-- **Engine**: Simplify IRB engine module structure — extract `adjustments.py` (defaulted treatment, post-model adjustments, EL shortfall) and `guarantee.py` (guarantee substitution) from `namespace.py`, deduplicate correlation/K/maturity-adjustment formulas in `formulas.py`, remove dead code (`_norm_cdf`, `_norm_ppf`, `IRBCalculationError`)
-
-### Removed
-- **Engine**: Remove unused `HierarchyLazyFrame` namespace (`hierarchy_namespace.py`) — duplicated logic from `hierarchy.py` and was not used in production code
-- **Engine**: Remove unused `CRMLazyFrame` namespace (`crm/namespace.py`) and `HaircutsLazyFrame`/`HaircutsExpr` namespaces (`crm/haircuts_namespace.py`) — independent reimplementations not used in production pipeline (CRMProcessor is the sole production API)
-- **Engine**: Remove unused `SALazyFrame`/`SAExpr` namespaces (`sa/namespace.py`) — SACalculator uses private methods directly
-
-### Added
-- **Docs**: New top-level "CRR vs Basel 3.1" section consolidating all framework comparison content — key differences, reporting differences, impact analysis, and technical reference
-- **Docs**: New reporting differences page documenting COREP template changes between C-prefix (CRR) and OF-prefix (Basel 3.1) templates
-- **Docs**: Add retail transactor (45%) and payroll/pension (35%) risk weights to framework comparison and Basel 3.1 guide
-- **Docs**: Add equity risk weight section with 250%/400% structure and 2027-2029 transitional phase-in schedule
-- **Docs**: Add currency mismatch 1.5x risk weight multiplier for unhedged FX retail/residential RE exposures
-- **Docs**: Add SA specialised lending risk weights (Art. 122A-122B: object/commodities/project finance)
-- **Docs**: Add CRM structural changes — Foundation Collateral Method, Parameter Substitution Method, overcollateralisation thresholds, change of control provisions
-- **Docs**: Add exposure class priority waterfall restructuring (real estate as standalone class)
-- **Docs**: Add institution ECRA/SCRA risk weight detail with short-term exposure weights
-- **Docs**: Add financial sector entities to IRB A-IRB restrictions table
-- **Docs**: Add IRB 10% RW floor for UK residential mortgages (PRA-specific)
-- **Docs**: Add regional government/local authority and covered bond risk weight changes
-- **Docs**: Add output floor OF-ADJ formula detail to technical reference
-- **Docs**: Add full supervisory haircut comparison tables (CRR 3-band vs Basel 3.1 5-band)
-- **Docs**: Add IRB maturity calculation changes (revolving: M = max contractual termination date)
-- **Docs**: Add slotting subgrade detail (Strong A/B, Good C/D for residual maturity)
-
-### Changed
-- **Regulatory**: Update all Basel 3.1 references from PRA PS9/24 (near-final) to PRA PS1/26 (final rules) across source code, documentation, tests, and workbooks
-- **Regulatory**: Replace old PS9/24 and CP16/22 URLs with PS1/26 final rules links (policy statement, Appendix 1, Appendix 17)
-- **Regulatory**: Mark CP16/22 consultation paper as superseded where retained for historical context
-- **CI**: Add version consistency validation step to publish workflow
-- **CI**: Add step to generate test fixtures in CI pipeline
-- **CI**: Replace mypy with ty for type checking
-- **Docs**: Migrate documentation from mkdocs to zensical (`zensical.toml` replaces `mkdocs.yml`)
-
-### Removed
-- **Docs**: Remove completed development roadmap (`docs/plans/roadmap.md`) to reduce maintenance burden
-
-### Fixed
-- **Regulatory**: Replace incorrect BCBS whole-loan LTV-band approach for general residential RE with PRA-mandated loan-splitting (Art. 124F) — secured portion (up to 55% of property value) at 20%, residual at counterparty RW
-- **Regulatory**: Fix income-producing residential RE 60-70% LTV band risk weight from 45% to 40% per PRA Table 6B (Art. 124G)
-- **Docs**: Fix incorrect Basel 3.1 haircut table in `basel31.md` — equity haircuts are 25%/35% (not 15%/25%), long-dated bond haircuts also increased
-- **Docs**: Fix defaulted exposure comparison table to show residential RE flat 100% under Basel 3.1
-- **Docs**: Fix residential RE tables to describe PRA loan-splitting instead of BCBS whole-loan table
-- **Docs**: Fix mermaid diagrams not rendering by adding `custom_fences` configuration for `pymdownx.superfences`
-- **Style**: Update theme color palette to orange
-
-### Refactored
-- Improve risk weight dictionary creation in test helpers
-- Clean up code formatting and assertions in tests
-
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## [0.1.59] - 2026-04-14
 
@@ -447,22 +139,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.58] - 2026-04-11
 
-### Changed
-- Version bump for PyPI release
+### Fixed
+- **Guarantees (#239)**: Fixed two bugs in multi-guarantor handling:
+  1. **Non-beneficial guarantors consuming EAD**: When an exposure has multiple guarantors and some are non-beneficial, the pro-rata scaling no longer wastes EAD on non-beneficial guarantors. After the SA/IRB beneficial check, a new `redistribute_non_beneficial()` function reallocates freed portions to beneficial guarantors using a greedy strategy ordered by ascending risk weight (lowest RW fills first), minimising total RWA.
+  2. **FX/restructuring haircuts applied after capping**: The 8% FX mismatch haircut (Art. 233(3-4)) and 40% CDS restructuring exclusion haircut (Art. 233(2)) are now applied to the nominal credit protection value (G) *before* capping at EAD, per CRR Art. 233/235. Previously, a large cross-currency guarantee that vastly exceeded EAD would incorrectly have coverage reduced (e.g. £200m guarantee on €1m loan → was 920k, now correctly 1m).
+- **CCF (P1.166)**: CRR OC (Other Commitments) CCF corrected from **0%** to maturity-dependent values. Under CRR, the OC category did not exist — commitments were classified by maturity: >1yr → MR (50% SA / 75% F-IRB), ≤1yr → MLR (20% SA / 75% F-IRB). The only 0% category was LR (unconditionally cancellable). Previously **understated capital** for all OC-tagged exposures under CRR. SA CRR: OC now receives 50% (>1yr) or 20% (≤1yr, based on maturity_date vs reporting_date); 50% conservative default when maturity_date absent. F-IRB CRR: OC moved from 0% to 75% (both MR and MLR are 75% under F-IRB). Basel 3.1 OC (40%) unchanged. Updated `sa_ccf_expression()`, `_firb_ccf_for_col()`, and `_compute_ccf()` with maturity-aware override. Spec F-IRB table corrected. 7 unit tests updated, 6 new tests added.
+- **Equity (P1.132)**: B31 government-supported equity risk weight corrected from 100% to **250%** per Art. 133(3). Art. 133(6) is an exclusion clause (own funds deductions, Art. 89(3), Art. 48(4)), not a 100% risk weight — CRR Art. 133(3)(c) legislative equity carve-out has no equivalent in B31. Previously **understated capital** by 2.5x for government-supported equity under B31. Government-supported equity also removed from transitional floor exclusion (now subject to floor as standard equity, though 250% already exceeds all transitional floors). Updated risk weight table, calculator, transitional floor logic, 8 unit tests, 4 acceptance tests, and spec documentation. Art. 133 paragraph references corrected across codebase (subordinated debt = Art. 133(5) not 133(1); PE/VC = Art. 133(4) not 133(5)).
+- **Covered Bonds (P1.113)**: B31 rated covered bond risk weights corrected from BCBS CRE20.28 values to PRA PS1/26 Art. 129(4) Table 7 values. CQS 2: 15%→20%, CQS 6: 50%→100%. PRA retained CRR Table 6A unchanged — did NOT adopt BCBS reductions. Previously **understated capital** for CQS 2 and CQS 6 covered bonds. Both `B31_COVERED_BOND_RISK_WEIGHTS` dict and `_create_b31_covered_bond_df()` DataFrame corrected. All 77 covered bond tests updated. 3 stale doc divergence warnings converted to "Fixed" admonitions.
+- **Equity (P1.119)**: CIU fallback risk weight corrected from 150% (CRR) / 250%-400% (B31) to **1,250%** per Art. 132(2). Was the highest-severity capital understatement bug (3-8x). Root cause: original implementation used Art. 133 equity risk weights instead of Art. 132(2) punitive CIU fallback. Extracted shared `CIU_FALLBACK_RW` constant and `_append_ciu_branches()` helper to eliminate CRR/B31 code duplication. Updated risk weight tables, calculator, 27 unit tests, 7 acceptance tests, and both equity spec documents.
 
 ---
 
 ## [0.1.57] - 2026-04-11
 
 ### Changed
-- Version bump for PyPI release
-
----
-
-## [0.1.194] - 2026-04-11
-
-### Changed
-- Version bump for PyPI release
+- **Naming**: Renamed functions with "and" in their names to better reflect single responsibility:
+  - `_classify_sme_and_retail` -> `_classify_exposure_subtypes` (classifier)
+  - `_determine_approach_and_finalize` -> `_assign_approach` (classifier)
+  - `_sink_and_scan` -> `_spill_to_disk` (materialise)
+  - `_combine_irb_and_slotting` -> `_merge_el_sources` (EL summary aggregator)
+  - `commit_and_push` -> `publish_changes` (git ops)
+- **Classifier**: Moved `B31_LARGE_CORPORATE_REVENUE_THRESHOLD_GBP` (PRA PS1/26 Art. 147A(1)(e)) and `B31_SME_TURNOVER_THRESHOLD_GBP` (PRA PS1/26 Art. 153(4)) from `engine/classifier.py` to `data/tables/b31_risk_weights.py` for consistency with other B31 regulatory thresholds. Converted from `float` to `Decimal`.
+- **Pipeline**: Renamed private methods in `PipelineOrchestrator` to remove stale fan-out/single-pass terminology: `_run_crm_processor_unified` -> `_run_crm_processor`, `_run_single_pass` -> `_run_calculators`, `_aggregate_single_pass` -> `_aggregate_results`. Section header renamed from "Single-Pass Pipeline" to "Calculation".
+- **Pipeline**: Removed dead code `_run_sa_calculator` and `_run_irb_calculator` (never called from production; superseded by `calculate_branch()` in the single-pass path). Associated tests removed.
 
 ---
 
@@ -475,15 +174,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.55] - 2026-04-09
 
-### Changed
-- Version bump for PyPI release
+### Fixed
+- **Classifier**: Exposures with internal ratings no longer silently route to Standardised Approach when `permission_mode="irb"` is set on `CreditRiskCalc`. Two independent bugs are addressed:
+  - **Pipeline downgrade (Bug #1)**: `PipelineOrchestrator.run_with_data` used `dataclasses.replace(config, permission_mode=STANDARDISED)` when `model_permissions` was absent, which re-ran `CalculationConfig.__post_init__` and wiped `irb_permissions` to `sa_only()`. The pipeline now preserves the user's org-wide IRB permissions and emits a `missing_model_permissions` pipeline error explaining that per-model gating is disabled.
+  - **Silent classifier join failure (Bug #2)**: `ExposureClassifier._resolve_model_permissions` joined `exposure.model_id` LEFT against `model_permissions.model_id`. Null or unmatched `model_id` values produced no match and silently routed to SA with no diagnostic. The classifier now tags each IRB-eligible miss with one of three causes (`null_model_id`, `unmatched_model_id`, `filter_rejected`) and emits a rolled-up `CLS006` (`ERROR_MODEL_PERMISSION_UNMATCHED`) classification warning per cause with targeted remediation guidance.
+- **Tests**: Added `TestModelPermissionsDiagnostics` (4 integration tests) and `TestPipelineIRBWithoutModelPermissions` (1 integration test) in `tests/integration/test_model_permissions_pipeline.py`, plus a regression guard `test_irb_mode_preserves_full_irb_after_pipeline_init` in `tests/unit/test_irb_approach_selection.py`.
+- **Docs**: Replaced fabricated double-default formula in `crm.md` with correct CRR Art. 153(3) formula `K_dd = K_obligor × (0.15 + 160 × PD_guarantor)` (D3.7). Added eligibility requirements (Art. 202/217), guarantor RW floor, and Basel 3.1 removal warning with cross-link to A-IRB spec.
+- **Docs**: SA specialised lending waterfall position documented in `key-differences.md` (D2.20). Waterfall item 15 annotated with Art. 122–122B SA SL sub-classification cross-reference. New admonition added explaining SA SL sits within corporates (row 15, Art. 112(1)(g)), with IPRE excluded per Art. 122A(1) ("not a real estate exposure") — IPRE is caught at row 7 (real estate, Art. 124–124L) instead. SA SL section expanded with:
+  - Art. 122A(1) 4-part definition criteria (SPV structure, asset dependency, lender control, asset income repayment)
+  - Art. 122A(2) sub-type classification (OF, CF, PF)
+  - IPRE exclusion warning admonition with cross-reference to real estate section
+  - Art. 122B(1) rated SL fallthrough to corporate CQS table
+  - Art. 122B(2) unrated risk weight table with article references per row
+  - Art. 122B(3) operational phase definition (positive net cash-flow + declining LT debt)
+  - Art. 122B(4)–(5) high-quality PF criteria (8 structural conditions)
 
 ---
 
 ## [0.1.54] - 2026-04-08
 
-### Changed
-- Version bump for PyPI release
+### Added
+- **COREP**: Reporting basis conditionality for output floor (P1.38(c)). `COREPGenerator` now accepts `output_floor_config: OutputFloorConfig` to gate floor-related COREP template content on entity-type applicability per Art. 92 para 2A:
+  - **OF 02.00 rows 0034-0036** (floor activated/multiplier/OF-ADJ) show 0.0 for exempt entities (international subsidiaries, ring-fenced bodies on individual basis, etc.)
+  - **OF 02.01** (output floor comparison) returns None for exempt entities — only applicable entities report the floor comparison
+  - **C 08.07 materiality columns 0160-0180** documented as consolidated-basis-only (Art. 150(1A)), threaded with `is_consolidated` flag for future population
+  - **COREPTemplateBundle** extended with `reporting_basis` and `institution_type` metadata fields
+  - **ResultExporterProtocol** and **ResultExporter** accept `output_floor_config` keyword parameter
+- **Tests**: 38 new tests in `tests/unit/test_corep_reporting_basis.py` across 7 test classes: COREPTemplateBundleMetadata (7), OF0201FloorApplicability (6), OF0200FloorIndicatorRows (7), C0807MaterialityColumns (4), BackwardCompatibility (3), EntityTypeCombinations (9 parametrized), ExporterProtocolCompliance (2). Total: 5,125 (was 5,087). Contract tests: 145.
+- **Tests**: 26 new tests in `tests/unit/crm/test_equity_main_index.py` across 7 test classes: schema validation, CRR/B31 haircut verification for main-index and other-listed, backward compatibility, precedence over eligibility flag, mixed collateral, and full pipeline end-to-end (other-listed EAD = 625k vs main-index EAD = 575k on 1M exposure with 500k equity collateral). Total: 5,087 (was 5,061).
+- **Tests**: 36 new CRM acceptance tests in `tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py` across 13 test classes covering advanced CRM scenarios not tested by the basic D1-D6/G1-G3 groups: non-beneficial guarantee (guarantor RW = borrower RW), sovereign guarantee 0% substitution, CDS restructuring exclusion (40% haircut, Art. 216(1)/233(2)), CDS with restructuring (no haircut contrast), gold collateral (15% CRR haircut), equity collateral (main-index 15%), overcollateralisation (EAD=0), full CRM chain (provision+collateral+guarantee), mixed collateral types (cash+bond), SA provision EAD deduction, multiple provisions summed, provision+collateral combined, and structural baseline validation. CRR acceptance: 169 (was 133). Total: 5,061 (was 5,025). (P5.3)
+- **COREP**: C 09.01 / OF 09.01 — CR GB 1 geographical breakdown SA. One DataFrame per country code + TOTAL. CRR: 13 columns (0010-0090 incl. supporting factors), 23 rows. Basel 3.1: 10 columns (removes supporting factors), 29 rows (adds SL sub-rows 0071-0073, RE sub-rows 0091-0094, removes short-term row). Uses `cp_country_code` from counterparty schema. Template definitions, generator methods, class maps, framework selectors.
+- **COREP**: C 09.02 / OF 09.02 — CR GB 2 geographical breakdown IRB. One DataFrame per country code + TOTAL. CRR: 17 columns (incl. PD, LGD, EL, supporting factors), 16 rows (incl. equity). Basel 3.1: 15 columns (adds 0107 defaulted EV, removes supporting factors), 19 rows (adds corporate sub-rows, restructures retail RE, removes equity).
+- **Tests**: 80 new COREP tests for C 09.01/09.02 across 10 test classes. COREP tests: 635 (was 555). Total: 4,953 (was 4,873). (P2.3)
+- **COREP**: C 08.04 / OF 08.04 — CR IRB RWEA flow statements. 1 column (RWEA) × 9 rows (opening, 7 movement drivers, closing) per IRB exposure class. Closing RWEA (row 0090) populated from pipeline; opening and drivers null (require prior-period data). Slotting excluded. CRR column names "after supporting factors"; Basel 3.1 removes supporting factors reference. Template definitions: `CRR_C08_04_COLUMNS`, `B31_C08_04_COLUMNS`, `C08_04_ROWS`, `C08_04_COLUMN_REFS`, `get_c08_04_columns()`. Generator: `_generate_all_c08_04()`, `_generate_c08_04_for_class()`. `COREPTemplateBundle.c08_04` field (dict[str, pl.DataFrame]). Excel export with C 08.04 / OF 08.04 prefix.
+- **Tests**: 41 new COREP tests for C 08.04 across 6 test classes (TestC0804TemplateDefinitions: 13, TestC0804Generation: 5, TestC0804ClosingRWEA: 4, TestC0804NullDriverRows: 9, TestC0804B31Features: 3, TestC0804EdgeCases: 7). COREP tests: 555 (was 514). (P2.2)
+- **Pillar III**: UKB CR9 — IRB PD backtesting per exposure class (Art. 452(h)). 8 columns × 17 PD buckets + total row. Basel 3.1 only. Separate F-IRB and A-IRB template sets. Uses `irb_pd_original` for bucket allocation (beginning-of-period proxy). Includes obligor count, default count, observed default rate, EAD-weighted average PD, arithmetic mean PD, historical annual default rate.
+- **Pillar III**: UKB CR9.1 — ECAI mapping PD backtesting (Art. 180(1)(f)). Template definitions only; generation deferred until pipeline provides firm-specific ECAI mapping data.
+- **Pillar III**: `Pillar3TemplateBundle.cr9` field added (dict of approach–class keyed DataFrames)
+- **Pillar III**: CR9 Excel export via `export_to_excel()` with human-readable sheet names (e.g., "UKB CR9 F-IRB Corp")
+- **Tests**: 44 new tests for CR9/CR9.1 across 7 test classes (definitions, generation, column values, PD allocation, edge cases, bundle integration, Excel export). Total: 4,832 (was 4,788). (P3.2)
+
+### Fixed
+- **Docs**: Art. 128 (high-risk items, 150%) UK CRR omission clarified across 6 files (D1.28, D4.9). Art. 128 was omitted from UK onshored CRR by SI 2021/1078, reg. 6(3)(a), effective 1 January 2022 — the high-risk exposure class is a dead letter under current UK CRR. Re-introduced under PRA PS1/26 (Basel 3.1, from 1 January 2027) with paragraphs 1 and 3 retained (paragraph 2 left blank). Files updated:
+  - `specifications/crr/sa-risk-weights.md`: Added omission admonition, B31 re-introduction note, code bug cross-reference (D3.12), and exposure class waterfall clarification (equity priority 3 > high-risk priority 4)
+  - `user-guide/exposure-classes/other.md`: Restructured "Items Associated with High Risk" section — added framework applicability warning, corrected table to Art. 128 items only (speculative RE, PRA-designated), added waterfall note explaining PE/VC are equity (Art. 133), not high-risk
+  - `framework-comparison/key-differences.md`: Corrected equity table row (removed "(or 150% if Art. 128 high-risk)" — PE/VC is equity per waterfall), added Art. 128 re-introduction admonition to priority waterfall section
+  - `user-guide/regulatory/crr.md`: Added "Omitted Provisions" section documenting Art. 128 and Art. 132 omissions by SI 2021/1078
+  - `specifications/crr/equity-approach.md`: Corrected Art. 128 note to explain waterfall precedence (equity > high-risk) and UK CRR omission
+  - `specifications/common/hierarchy-classification.md`: Updated calculator coverage note with Art. 128 framework status and CRR legal basis issue
+- **Docs**: Documentation accuracy sweep correcting wrong regulatory values across 13 files (P4.5, P4.6, P4.22):
+  - **PD floors (P4.5)**: Retail mortgage Basel 3.1 PD floor corrected from 0.05% to **0.10%** (Art. 163(1)(b)) in 5 files. QRRE transactor Basel 3.1 PD floor corrected from 0.03% to **0.05%** (Art. 163(1)(c)) in 5 files. Affected: `api/configuration.md`, `user-guide/configuration.md`, `user-guide/exposure-classes/retail.md`, `data-model/regulatory-tables.md`.
+  - **LGD floors (P4.6)**: Corporate LGD floor code example corrected (RECEIVABLES 15%→10%, CRE 15%→10%, OTHER_PHYSICAL 20%→15%) in `user-guide/configuration.md`. Corporate `residential_real_estate` field corrected from 0.05 to **0.10** (Art. 161(5)) in `api/configuration.md` — was showing retail floor instead of corporate floor.
+  - **Output floor schedule (P4.22)**: BCBS 6-year schedule (50%/55%/60%/65%/70%/72.5%, 2027–2032) replaced with PRA 4-year schedule (**60%/65%/70%/72.5%**, 2027–2030) across 12 files. Affected: `plans/implementation-plan.md`, `api/engine.md`, `api/contracts.md`, `framework-comparison/reporting-differences.md`, `plans/prd.md`, `specifications/index.md`, `features/index.md`, `specifications/regulatory-compliance.md`, `framework-comparison/index.md`, `appendix/index.md`, `framework-comparison/impact-analysis.md`, `user-guide/configuration.md`.
+- **CRM**: Decoupled `is_main_index` from `is_eligible_financial_collateral` for equity collateral haircuts (P6.21). Added `is_main_index` Boolean field to `COLLATERAL_SCHEMA`. When present, drives haircut lookup directly: `True` = main-index (CRR 15%, B31 20%), `False` = other-listed (CRR 25%, B31 30%). When absent, falls back to `is_eligible_financial_collateral` for backward compatibility. Previously all eligible equity was forced to the main-index haircut tier.
+- **COREP**: OF 02.00 IRB sub-row splits — rows 0295-0297 (FSE/large, SME, non-SME corporates), 0355-0356 (retail RE SME/non-SME), 0382-0385 (corporate RE sub-splits), 0400/0410 (other retail SME/non-SME) now populated from pipeline data instead of hardcoded 0.0. Uses finer-grained aggregation keyed by (approach, exposure_class, is_sme, apply_fi_scalar, property_type).
+- **COREP**: OF 02.00 floor indicator rows 0035/0036 — floor_pct and of_adj now populated from `OutputFloorSummary` when provided, instead of hardcoded 0.0.
+- **COREP**: `_filter_re()` fallback chain — gracefully degrades from `materially_dependent_on_property` → `has_income_cover` → `is_income_producing` when pipeline columns vary. Null handling corrected: only fallback columns use `fill_null(False)`, preserving null-as-unclassified semantics for the primary column.
+- **Equity**: `_apply_transitional_floor()` now emits `equity_transitional_approach` and `equity_higher_risk` annotation columns for COREP OF 07.00 rows 0371-0374.
+- **Tests**: 24 new COREP tests across 4 classes (IRB sub-row splits, floor indicators, RE fallback, equity transitional columns). COREP tests: 687 (was 663). Total: 5,025 (was 5,001). (P2.5)
 
 ---
 
@@ -656,11 +404,6 @@ The `apply_fi_scalar` counterparty flag was gated on `is_financial_sector_entity
 - Documentation aligned with code schemas across 13 files
 
 ---
-
-
-
-
-
 
 ## [0.1.37] - 2026-03-17
 

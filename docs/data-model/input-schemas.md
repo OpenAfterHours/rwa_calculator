@@ -407,6 +407,7 @@ contingents = pl.DataFrame({
 | `original_maturity_years` | `Float64` | No | Original maturity in years — used for collateral maturity-band differentiation where the haircut depends on issuance maturity rather than residual maturity |
 | `is_eligible_financial_collateral` | `Boolean` | No | Meets SA eligibility (CRR Art 197) |
 | `is_eligible_irb_collateral` | `Boolean` | No | Meets IRB eligibility (CRR Art 199) |
+| `is_airb_model_collateral` | `Boolean` | No | Default `False`. When `True`, the firm asserts the collateral has been used to construct the internal LGD model (CRR Art. 181 / Basel 3.1 Art. 169A). The CRM allocator excludes flagged rows from non-AIRB exposures (no double-counting of the modelled-LGD effect) and routes them only to AIRB-pool exposures whose modelled LGD is preserved. Direct allocation of a flagged row onto a non-AIRB exposure raises CRM006 |
 | `is_qualifying_re` | `Boolean` | No | Meets Basel 3.1 qualifying real-estate criteria for the loan-splitter (PS1/26 Art. 124A finished-property / legal-enforceability / valuation / borrower-ability tests). Drives Art. 124F (RRE) / Art. 124H (CRE) eligibility |
 | `is_main_index` | `Boolean` | No | Equity collateral listed on a recognised main index (e.g. FTSE 100) — qualifies for the lower main-index haircut (CRR Art. 197(8)) |
 | `valuation_date` | `Date` | No | Date of last valuation |

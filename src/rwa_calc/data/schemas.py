@@ -218,6 +218,12 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 181 / CRE36 / Basel 3.1 Art. 169A: AIRB own LGD already reflects
+    # the collateral effect, so collateral incorporated into the firm's internal
+    # LGD model must not contribute CRM benefit to non-AIRB exposures of the
+    # same counterparty (otherwise double-counted). When True, the row is
+    # routed only to AIRB exposures whose modelled LGD is preserved.
+    "is_airb_model_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_main_index": ColumnSpec(pl.Boolean, default=False, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),

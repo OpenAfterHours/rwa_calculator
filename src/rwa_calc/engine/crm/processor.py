@@ -33,6 +33,7 @@ from rwa_calc.contracts.bundles import (
     CRMAdjustedBundle,
 )
 from rwa_calc.contracts.errors import (
+    ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
     ERROR_INELIGIBLE_COLLATERAL,
     ERROR_INVALID_GUARANTEE,
     LazyFrameResult,
@@ -67,14 +68,27 @@ def _build_exposure_lookups(
     methods. Computing these once avoids duplicate references to the upstream
     exposures plan.
 
+    Pool-aware EAD aggregates are also computed at facility and counterparty
+    level: ``_ead_facility_airb`` / ``_ead_facility_non_airb`` and the cp
+    equivalents. These are used by ``_apply_collateral_unified`` to pro-rata
+    collateral within the appropriate pool, preventing double-counting against
+    AIRB exposures whose modelled LGD already reflects collateral effects
+    (CRR Art. 181, CRE36, Basel 3.1 Art. 169A). The caller must add the
+    ``_is_airb_pool`` column to ``exposures`` before invoking this function;
+    when the column is absent it is treated as all-False (legacy behaviour).
+
     Returns:
         (direct_lookup, facility_lookup, cp_lookup) where each has a _ben_ref_*
         key column plus _ead_*, _currency_*, and _maturity_* value columns.
+        Facility and counterparty lookups additionally carry pool-aware EAD
+        aggregates.
     """
     exp_schema = exposures.collect_schema()
 
     # Determine whether has_one_day_maturity_floor is available
     has_floor_col = "has_one_day_maturity_floor" in exp_schema.names()
+    has_pool_col = "_is_airb_pool" in exp_schema.names()
+    pool_expr = pl.col("_is_airb_pool").fill_null(False) if has_pool_col else pl.lit(False)
 
     # Use pre-FX-conversion currency for downstream Art. 224 H_fx mismatch check.
     # After FX conversion the `currency` column holds the reporting currency, so a
@@ -102,6 +116,8 @@ def _build_exposure_lookups(
     if "parent_facility_reference" in exp_schema.names():
         facility_agg = [
             pl.col("ead_gross").sum().alias("_ead_facility"),
+            pl.col("ead_gross").filter(pool_expr).sum().alias("_ead_facility_airb"),
+            pl.col("ead_gross").filter(~pool_expr).sum().alias("_ead_facility_non_airb"),
             pl.col(exposure_ccy_col).first().alias("_currency_facility"),
             pl.col("maturity_date").first().alias("_maturity_facility"),
         ]
@@ -126,6 +142,8 @@ def _build_exposure_lookups(
             schema={
                 "_ben_ref_facility": pl.String,
                 "_ead_facility": pl.Float64,
+                "_ead_facility_airb": pl.Float64,
+                "_ead_facility_non_airb": pl.Float64,
                 "_currency_facility": pl.String,
                 "_maturity_facility": pl.Date,
                 "_floor_facility": pl.Boolean,
@@ -135,6 +153,8 @@ def _build_exposure_lookups(
     # Counterparty: aggregated per counterparty_reference
     cp_agg = [
         pl.col("ead_gross").sum().alias("_ead_cp"),
+        pl.col("ead_gross").filter(pool_expr).sum().alias("_ead_cp_airb"),
+        pl.col("ead_gross").filter(~pool_expr).sum().alias("_ead_cp_non_airb"),
         pl.col(exposure_ccy_col).first().alias("_currency_cp"),
         pl.col("maturity_date").first().alias("_maturity_cp"),
     ]
@@ -253,7 +273,11 @@ def _join_collateral_to_lookups(
         [
             "_ead_direct",
             "_ead_facility",
+            "_ead_facility_airb",
+            "_ead_facility_non_airb",
             "_ead_cp",
+            "_ead_cp_airb",
+            "_ead_cp_non_airb",
             "_currency_direct",
             "_currency_facility",
             "_currency_cp",
@@ -448,6 +472,22 @@ class CRMProcessor:
         # adjustment. SA EAD reduction is undone in Step 4b.
         collateral_applied = False
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+            misdirected = collateral_mod.find_misdirected_airb_model_collateral(
+                exposures, collateral, config, self._is_basel_3_1
+            )
+            for coll_ref, exp_ref in misdirected:
+                errors.append(
+                    crm_warning(
+                        ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
+                        f"Collateral '{coll_ref}' is flagged as is_airb_model_collateral "
+                        f"but is pledged directly to non-AIRB exposure '{exp_ref}'. "
+                        "The flag asserts the collateral is incorporated in the firm's "
+                        "internal LGD model; pledging it to a non-AIRB exposure has no "
+                        "LGD effect and is treated as zero allocation.",
+                        exposure_reference=exp_ref,
+                        regulatory_reference="CRR Art. 181 / Basel 3.1 Art. 169A",
+                    )
+                )
             exposures = self.apply_collateral(exposures, collateral, config)
             collateral_applied = True
         else:

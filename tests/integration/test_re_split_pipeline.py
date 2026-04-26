@@ -195,7 +195,7 @@ def test_crr_corporate_with_rre_splits_into_two_rows() -> None:
     secured = rows["secured"]
     residual = rows["residual"]
 
-    assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+    assert secured["exposure_class"] == "residential_mortgage"
     assert secured["ead_final"] == pytest.approx(800_000.0, rel=1e-6)
     assert secured["risk_weight"] == pytest.approx(0.35, rel=1e-6)
 
@@ -231,7 +231,7 @@ def test_b31_corporate_with_rre_splits_into_two_rows() -> None:
     secured = rows["secured"]
     residual = rows["residual"]
 
-    assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+    assert secured["exposure_class"] == "residential_mortgage"
     assert secured["ead_final"] == pytest.approx(550_000.0, rel=1e-6)
     # b31_residential_rw_expr returns 20% when secured_share = 1 (LTV ≤ 0.55).
     assert secured["risk_weight"] == pytest.approx(0.20, rel=1e-6)

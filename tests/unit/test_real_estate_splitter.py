@@ -104,7 +104,7 @@ class TestCRRResidentialSplit:
                     "exposure_reference": "RRE1",
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -120,7 +120,7 @@ class TestCRRResidentialSplit:
         residual = _by_role(df, "residual")
 
         assert secured["ead_final"] == pytest.approx(80.0)
-        assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+        assert secured["exposure_class"] == "residential_mortgage"
         assert secured["ltv"] == pytest.approx(0.80)
         assert residual["ead_final"] == pytest.approx(20.0)
         assert residual["exposure_class"] == "CORPORATE"
@@ -134,7 +134,7 @@ class TestCRRResidentialSplit:
                 {
                     "exposure_reference": "RRE2",
                     "ead_final": 60.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -162,7 +162,7 @@ class TestCRRCommercialSplit:
                     "exposure_reference": "CRE1",
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 200.0,
@@ -188,7 +188,7 @@ class TestCRRCommercialSplit:
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
                     # Classifier emits re_split_mode=None when CRR rental cov fails
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": None,
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 200.0,
@@ -224,7 +224,7 @@ class TestB31ResidentialSplit:
                     "exposure_reference": "B31RRE1",
                     "exposure_class": "RETAIL_OTHER",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 200.0,
@@ -248,7 +248,7 @@ class TestB31ResidentialSplit:
                     "exposure_reference": "B31RRE2",
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -261,7 +261,7 @@ class TestB31ResidentialSplit:
         secured = _by_role(df, "secured")
         residual = _by_role(df, "residual")
         assert secured["ead_final"] == pytest.approx(55.0)
-        assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+        assert secured["exposure_class"] == "residential_mortgage"
         assert residual["ead_final"] == pytest.approx(45.0)
         assert residual["exposure_class"] == "CORPORATE"
 
@@ -273,7 +273,7 @@ class TestB31ResidentialSplit:
                     "exposure_reference": "B31RRE3",
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -301,7 +301,7 @@ class TestB31CommercialSplit:
                     "exposure_reference": "B31CRE1",
                     "exposure_class": "RETAIL_OTHER",
                     "ead_final": 200.0,
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 300.0,
@@ -315,7 +315,7 @@ class TestB31CommercialSplit:
         secured = _by_role(df, "secured")
         residual = _by_role(df, "residual")
         assert secured["ead_final"] == pytest.approx(165.0)
-        assert secured["exposure_class"] == "COMMERCIAL_MORTGAGE"
+        assert secured["exposure_class"] == "commercial_mortgage"
         assert residual["ead_final"] == pytest.approx(35.0)
         assert residual["exposure_class"] == "RETAIL_OTHER"
 
@@ -327,7 +327,7 @@ class TestB31CommercialSplit:
                     "exposure_reference": "B31CRE2",
                     "exposure_class": "CORPORATE",
                     "ead_final": 200.0,
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "whole",
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 300.0,
@@ -341,7 +341,7 @@ class TestB31CommercialSplit:
         df = RealEstateSplitter().split(bundle, _b31()).exposures.collect()
         assert df.height == 1
         row = df.to_dicts()[0]
-        assert row["exposure_class"] == "COMMERCIAL_MORTGAGE"
+        assert row["exposure_class"] == "commercial_mortgage"
         assert row["ead_final"] == pytest.approx(200.0)
         assert row["re_split_role"] == "whole"
         assert row["split_parent_id"] == "B31CRE2"
@@ -384,7 +384,7 @@ class TestSplitterPassThrough:
                     "exposure_reference": "REC1",
                     "exposure_class": "CORPORATE",
                     "ead_final": 137.5,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 200.0,
@@ -394,7 +394,7 @@ class TestSplitterPassThrough:
                     "exposure_reference": "REC2",
                     "exposure_class": "CORPORATE_SME",
                     "ead_final": 250.0,
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 400.0,
@@ -425,7 +425,7 @@ class TestSplitterPassThrough:
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
                     "provision_allocated": 10.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -454,7 +454,7 @@ class TestSplitterAuditTrail:
                     "exposure_reference": "AUD1",
                     "exposure_class": "CORPORATE",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -477,7 +477,7 @@ class TestSplitterAuditTrail:
         assert row["split_parent_id"] == "AUD1"
         assert row["secured_ead"] == pytest.approx(55.0)
         assert row["residual_ead"] == pytest.approx(45.0)
-        assert row["target_class"] == "RESIDENTIAL_MORTGAGE"
+        assert row["target_class"] == "residential_mortgage"
         assert row["regime"] == "basel_3_1"
 
 
@@ -503,7 +503,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE_SME",
                     "approach": approach,
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 200.0,
@@ -532,7 +532,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE",
                     "approach": "foundation_irb",
                     "ead_final": 200.0,
-                    "re_split_target_class": "COMMERCIAL_MORTGAGE",
+                    "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "whole",
                     "re_split_property_type": "commercial",
                     "re_split_property_value": 300.0,
@@ -558,7 +558,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE",
                     "approach": "standardised",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -572,7 +572,7 @@ class TestSplitterApproachGate:
         secured = _by_role(df, "secured")
         residual = _by_role(df, "residual")
         assert secured["ead_final"] == pytest.approx(55.0)
-        assert secured["exposure_class"] == "RESIDENTIAL_MORTGAGE"
+        assert secured["exposure_class"] == "residential_mortgage"
         assert residual["ead_final"] == pytest.approx(45.0)
 
     def test_irb_row_does_not_emit_re002_warning(self) -> None:
@@ -584,7 +584,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE_SME",
                     "approach": "foundation_irb",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 0.0,  # zero cap
@@ -606,7 +606,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE",
                     "approach": "standardised",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,
@@ -617,7 +617,7 @@ class TestSplitterApproachGate:
                     "exposure_class": "CORPORATE_SME",
                     "approach": "foundation_irb",
                     "ead_final": 100.0,
-                    "re_split_target_class": "RESIDENTIAL_MORTGAGE",
+                    "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
                     "re_split_property_type": "residential",
                     "re_split_property_value": 100.0,

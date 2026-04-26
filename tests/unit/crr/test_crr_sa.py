@@ -469,7 +469,7 @@ class TestResidentialMortgageRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.60"),
             config=crr_config,
         )
@@ -486,7 +486,7 @@ class TestResidentialMortgageRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=crr_config,
         )
@@ -504,7 +504,7 @@ class TestResidentialMortgageRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("1.00"),
             config=crr_config,
         )

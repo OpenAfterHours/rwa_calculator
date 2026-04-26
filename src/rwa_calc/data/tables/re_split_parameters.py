@@ -35,6 +35,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from rwa_calc.domain.enums import ExposureClass
+
 
 @dataclass(frozen=True)
 class SplitParameters:
@@ -72,14 +74,14 @@ class SplitParameters:
 RE_SPLIT_PARAMS_CRR_RESIDENTIAL = SplitParameters(
     secured_ltv_cap=Decimal("0.80"),
     secured_rw=Decimal("0.35"),
-    target_class="RESIDENTIAL_MORTGAGE",
+    target_class=ExposureClass.RESIDENTIAL_MORTGAGE.value,
 )
 
 # CRR Art. 126 — Commercial real estate (rental coverage required)
 RE_SPLIT_PARAMS_CRR_COMMERCIAL = SplitParameters(
     secured_ltv_cap=Decimal("0.50"),
     secured_rw=Decimal("0.50"),
-    target_class="COMMERCIAL_MORTGAGE",
+    target_class=ExposureClass.COMMERCIAL_MORTGAGE.value,
     requires_cre_rental_coverage=True,
 )
 
@@ -87,7 +89,7 @@ RE_SPLIT_PARAMS_CRR_COMMERCIAL = SplitParameters(
 RE_SPLIT_PARAMS_B31_RESIDENTIAL = SplitParameters(
     secured_ltv_cap=Decimal("0.55"),
     secured_rw=Decimal("0.20"),
-    target_class="RESIDENTIAL_MORTGAGE",
+    target_class=ExposureClass.RESIDENTIAL_MORTGAGE.value,
     uses_prior_charge_reduction=True,
 )
 
@@ -97,7 +99,7 @@ RE_SPLIT_PARAMS_B31_RESIDENTIAL = SplitParameters(
 RE_SPLIT_PARAMS_B31_COMMERCIAL = SplitParameters(
     secured_ltv_cap=Decimal("0.55"),
     secured_rw=Decimal("0.60"),
-    target_class="COMMERCIAL_MORTGAGE",
+    target_class=ExposureClass.COMMERCIAL_MORTGAGE.value,
     uses_prior_charge_reduction=True,
     whole_only_when_not_npsme=True,
 )

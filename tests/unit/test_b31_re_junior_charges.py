@@ -140,7 +140,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             cp_is_natural_person=True,
@@ -157,7 +157,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             is_sme=True,
@@ -175,7 +175,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             is_sme=True,
@@ -198,7 +198,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             cp_is_social_housing=True,
@@ -237,7 +237,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             # Not natural person, not SME, not social housing → "other"
@@ -259,7 +259,7 @@ class TestArt124LCounterpartyType:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             # Not natural person, not SME, not social housing → "other"
@@ -282,7 +282,7 @@ class TestArt124LCounterpartyType:
             {
                 "exposure_reference": ["TEST"],
                 "ead_final": [500000.0],
-                "exposure_class": ["RESIDENTIAL_MORTGAGE"],
+                "exposure_class": ["residential_mortgage"],
                 "cqs": [None],
                 "ltv": [0.80],
                 "has_income_cover": [False],
@@ -318,7 +318,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             prior_charge_ltv=Decimal("0.20"),
@@ -337,7 +337,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             prior_charge_ltv=Decimal("0.60"),
@@ -356,7 +356,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             prior_charge_ltv=Decimal("0.00"),
@@ -374,7 +374,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             cp_is_natural_person=True,
@@ -392,7 +392,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.70"),
             config=b31_config,
             prior_charge_ltv=Decimal("0.10"),
@@ -411,7 +411,7 @@ class TestArt124F2JuniorChargeRRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=b31_config,
             prior_charge_ltv=Decimal("0.20"),
@@ -508,7 +508,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.70"),
             has_income_cover=True,
             config=b31_config,
@@ -525,7 +525,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.90"),
             has_income_cover=True,
             config=b31_config,
@@ -542,7 +542,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.50"),
             has_income_cover=True,
             config=b31_config,
@@ -559,7 +559,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("1.10"),
             has_income_cover=True,
             config=b31_config,
@@ -576,7 +576,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.70"),
             has_income_cover=True,
             config=b31_config,
@@ -593,7 +593,7 @@ class TestArt124G2ResiIncomeJunior:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.60"),
             has_income_cover=True,
             config=b31_config,
@@ -843,7 +843,7 @@ class TestCRRNoJuniorChargeEffect:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.80"),
             config=crr_config,
             prior_charge_ltv=Decimal("0.20"),
@@ -896,8 +896,8 @@ class TestMixedBatch:
                 "exposure_reference": ["FIRST_RESI", "JUNIOR_RESI", "JUNIOR_CRE_INC"],
                 "ead_final": [500000.0, 500000.0, 1000000.0],
                 "exposure_class": [
-                    "RESIDENTIAL_MORTGAGE",
-                    "RESIDENTIAL_MORTGAGE",
+                    "residential_mortgage",
+                    "residential_mortgage",
                     "COMMERCIAL_RE",
                 ],
                 "cqs": [None, None, None],

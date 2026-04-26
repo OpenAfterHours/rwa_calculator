@@ -77,7 +77,7 @@ from rwa_calc.data.tables.re_split_parameters import (
     SplitParameters,
     re_split_parameters,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, ExposureClass
 
 _SA_BOUND_APPROACHES: tuple[str, ...] = (ApproachType.SA.value, ApproachType.EQUITY.value)
 
@@ -500,7 +500,7 @@ def _accumulate_split_errors(
     if not is_basel_3_1:
         cre_failed = (
             annotated.filter(
-                (pl.col("re_split_target_class") == "COMMERCIAL_MORTGAGE")
+                (pl.col("re_split_target_class") == ExposureClass.COMMERCIAL_MORTGAGE.value)
                 & (pl.col("re_split_mode").is_null())
                 & (pl.col("re_split_property_value").fill_null(0.0) > 0.0)
                 & is_sa_bound

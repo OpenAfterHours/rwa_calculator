@@ -166,6 +166,22 @@ Rules for new code:
 
 Reference stage skeleton and format details — see `docs/specifications/observability.md`.
 
+## Agents and Slash Commands
+
+Project subagents in `.claude/agents/` (role-based, not domain-based — regulatory knowledge stays in the `basel31` and `crr` skills):
+
+- **`scenario-architect`** — read-only. Designs one CRR-* / B31-* acceptance scenario end-to-end (inputs, hand-calc, citations).
+- **`fixture-builder`** — owns `tests/fixtures/`. Implements parquet rows and builders from a scenario proposal.
+- **`test-writer`** — owns `tests/{unit,acceptance,contracts,integration}/`. Writes the failing test that drives the next implementation step.
+- **`engine-implementer`** — owns `src/rwa_calc/`. Makes the failing test pass with the minimum diff and a green validation gate (arch_check, ruff, ty, contracts).
+
+Orchestration lives in slash commands, not in agents:
+
+- **`/implement-scenario <ID>`** — runs the four agents in sequence on one scenario, then commits once at the end.
+- **`/next-scenario`** — picks the highest-priority unimplemented scenario from `docs/plans/implementation-plan.md` and delegates to `/implement-scenario`.
+
+Agents do not have commit/push permissions and do not invoke other agents — keep the call graph one level deep so `scripts/pre_commit_gate.sh` fires once per scenario with full context.
+
 ## Documentation
 
 - **Zensical site**: Source in `docs/`, config in `zensical.toml`. Run locally: `uv run zensical serve`

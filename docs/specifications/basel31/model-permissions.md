@@ -188,6 +188,187 @@ The classifier applies restrictions in the following order:
     Model permissions are loaded from the `model_permissions` data source and resolved
     at the exposure level. Invalid `model_id` values fall back to SA silently.
 
+## Art. 143(2A)/(2B) — A-IRB Permission Conditions for Other General Corporates
+
+For "other general corporates" (Art. 147(2)(c)(iii) — non-FSE corporates with consolidated
+revenue ≤ £440m), Art. 147A(1)(f) makes the **Foundation IRB Approach the default** IRB
+treatment, and the **Advanced IRB Approach is available only where the PRA has granted
+permission under Art. 143(2A) or Art. 143(2B)**. This subsection documents the substantive
+conditions a firm must satisfy to obtain that A-IRB permission.
+
+### Routing Reminder (Art. 147A(1)(f))
+
+| Condition | Approach used |
+|-----------|---------------|
+| SA permission granted under Art. 148 or Art. 150 | Standardised Approach |
+| **A-IRB permission granted under Art. 143(2A) or (2B)** | **Advanced IRB Approach** |
+| All other other-general-corporate exposures | Foundation IRB Approach (default) |
+
+> **Verbatim source:** PRA PS1/26 Appendix 1, p. 92 (Art. 147A(1)(f)).
+
+### When Each Permission Article Applies
+
+| Article | Trigger | Object of the application |
+|---------|---------|---------------------------|
+| **Art. 143(2A)** | Initial IRB permission application (firm has no current IRB permission for the class/subclass/type) | Firm declares, **per exposure class / subclass / type**, whether it proposes to adopt the Slotting Approach, the Foundation IRB Approach, or the Advanced IRB Approach **instead of the Standardised Approach** |
+| **Art. 143(2B)** | Subsequent application by a firm that already has an IRB permission, seeking to **move up the IRB hierarchy** (e.g. SA → IRB, Slotting → F-IRB, Slotting → A-IRB, **F-IRB → A-IRB**) | The "more sophisticated" approach for the chosen exposure class / subclass / type |
+
+For other general corporates, an A-IRB application will be **Art. 143(2B)** in the typical
+case — the firm is already running F-IRB (the Art. 147A(1)(f)(iii) default) on those
+exposures and is now applying for A-IRB on top.
+
+### Substantive Permission Test — "Materially Comply With This Part"
+
+Both Art. 143(2A) and Art. 143(2B) gate permission on the same substantive standard: the
+applicant must **demonstrate to the satisfaction of the PRA** that its proposed
+arrangements **materially comply with Part 3 (Credit Risk: IRB)**. The two paragraphs
+operationalise that test slightly differently:
+
+**Art. 143(1)(b) standard (referenced by Art. 143(2A) initial applications):**
+
+> "An institution shall be considered to materially comply with this Part if:
+> (i) the effect of any non-compliance is immaterial for each of its rating systems; and
+> (ii) the overall effect of any non-compliance is immaterial."
+>
+> — PRA PS1/26 Appendix 1, p. 81 (Art. 143(1)(b))
+
+**Art. 143(2C) standard (referenced by Art. 143(2B) sophistication applications):**
+
+> "The change proposed in an application shall be considered to materially comply with
+> this Part if it fully complies with this Part or if both of the following conditions
+> are met:
+> (a) the effect of any non-compliance for each of the institution's relevant rating
+> systems would be immaterial if the institution made the proposed change; and
+> (b) the overall effect of the non-compliance would be immaterial if the institution
+> made the proposed change."
+>
+> — PRA PS1/26 Appendix 1, p. 82 (Art. 143(2C))
+
+Both tests apply at **two levels**: the individual rating system, and the overall IRB
+permission perimeter. Material non-compliance at either level is sufficient to deny
+permission.
+
+### High-Level Requirements the Rating System Must Meet (Art. 144(1))
+
+"Materially comply with this Part" is a forward-reference to the substantive minimum
+requirements in Article 144 onwards. For an A-IRB other-general-corporate application,
+each rating system in scope must satisfy **all** of the following (PRA PS1/26 Appendix 1,
+pp. 86–87, Art. 144(1)):
+
+| Letter | Requirement (paraphrased; see PDF for verbatim text) |
+|--------|--------------------------------------------------------|
+| (a) | Meaningful assessment of obligor and transaction characteristics, meaningful differentiation of risk, accurate and consistent quantitative estimates of risk |
+| (b) | **Use test** — internal ratings, default and loss estimates play an *essential role* in risk management, decision-making, credit approval, internal capital allocation and corporate governance |
+| (c) | **Independent credit risk control unit** responsible for each rating system, free from undue influence |
+| (d) | All relevant data collected and stored to support credit risk measurement and management |
+| (e) | Each rating system **documented** (design rationale) and **validated** |
+| (f) | Each rating system has been validated **prior to permission** for an appropriate time period, with assessed suitability for the rating system's range of application and any necessary changes made |
+| (g) | Firm has computed IRB own-funds requirements and can submit Reporting (CRR) Part Article 430 returns |
+| (h) | Each exposure in the rating system's range of application has been (and continues to be) assigned to a rating grade or pool |
+
+Article 144(1A) extends each of these obligations to **third-party (vendor) rating
+systems and models** — the firm cannot offload compliance to a vendor.
+
+### Minimum Data History — Art. 145
+
+Article 145 sets the minimum **prior experience** thresholds. For A-IRB on
+other general corporates, the relevant requirements are (PRA PS1/26 Appendix 1, pp. 87–88):
+
+| Paragraph | Requirement |
+|-----------|-------------|
+| **Art. 145(1)** | The applicant must demonstrate it has been using rating systems "broadly in line with the requirements set out in Section 6 for internal risk measurement and management purposes for **at least three years** prior to its qualification to use the IRB Approach" — for the IRB exposure classes in question. |
+| **Art. 145(2)** | A firm applying for A-IRB on **non-retail** exposures (which includes other general corporates) must demonstrate that it "has been **estimating and employing own estimates of LGDs, and conversion factors or EADs**, in a manner that is broadly consistent with the requirements for use of own estimates of those parameters set out in Section 6 for **at least three years** prior to qualification to use the Advanced IRB Approach for non-retail exposures." |
+| **Art. 145(3)** | When extending an existing IRB permission to additional exposures, the firm must demonstrate that its prior experience is sufficient for the additional scope. If the new exposures are *significantly different* from the existing coverage, the firm must submit fresh documentary evidence that the three-year tests in (1) and (2) are met for the new scope. |
+
+The Art. 145(2) three-year own-estimate track record is the **A-IRB-specific gate** —
+F-IRB applicants need only the (1) three-year IRB-broadly-consistent track record, while
+A-IRB applicants must also evidence three years of own-LGD and own-CCF/EAD estimation.
+
+> **Cross-reference to Section 6 minimum requirements.** Art. 144(1) and Art. 145 both
+> point to the detailed minimum requirements in Section 6 of Part 3 (Articles 169–191 in
+> the PS1/26 numbering — rating system structure, risk quantification, validation, use
+> test, data maintenance, internal governance, and the Article 181 / Article 182
+> requirements specific to **own estimates of LGD** and **own estimates of conversion
+> factors**). Those articles are the substantive content the PRA tests against the
+> "materially complies" standard. They are out of scope for this routing-focused page.
+
+### Application Process (PS1/26 / FSMA Framework)
+
+The mechanical process for lodging an Art. 143(2A) or (2B) application is governed by
+the FSMA permission framework rather than by Art. 143 itself:
+
+- **Permission instrument:** Art. 143(1) and (2A), and Art. 143(2B) together with (2C),
+  are each flagged as *"a permission under sections 144G and 192XC of FSMA to which
+  Part 8 of the Capital Requirements Regulations applies"* (PS1/26 Appendix 1, pp. 81–82).
+  The Capital Requirements Regulations Part 8 sets out the procedural rules (form of
+  application, fees, PRA decision timetable, modification powers).
+- **Per-class declaration (Art. 143(2A)):** The application must "make clear in relation
+  to each exposure class, exposure subclass or type of exposures, as the case may be,
+  its proposal to adopt one or more of [the Slotting Approach, F-IRB, A-IRB] instead of
+  the Standardised Approach" (PS1/26 Appendix 1, p. 81). For other general corporates
+  the relevant subclass is Art. 147(2)(c)(iii).
+- **Documentation requirements:** Article 143E (PS1/26 Appendix 1, p. 86) prescribes
+  the documentation that must accompany any change requiring PRA permission — including
+  (a) description of the change, its rationale and objective, (d) technical and process
+  documents, (e) reports of the institution's independent review or validation,
+  (f) confirmation of management body approval under Article 189(1), and (g) the
+  quantitative impact on RWA / EL where applicable.
+- **Annual confirmation (Art. 143(4)(a)):** Once permission is granted, the firm must
+  "at least annually, submit details to the PRA of all rating systems that are included
+  within the scope of its IRB permission" (PS1/26 Appendix 1, p. 83).
+
+### Ongoing Obligations After Permission Is Granted
+
+Permission is not a one-shot event. Three articles impose continuing duties on a firm
+holding A-IRB permission for other general corporates:
+
+| Article | Continuing obligation |
+|---------|------------------------|
+| Art. 143(3) | **Material changes** to the range of application of a rating system, or to the rating system itself, require fresh PRA permission. The thresholds for "material" are quantified in Art. 143C — primarily a 1.5% change in group-level RWA or a 15% change in the rating system's own RWA range. |
+| Art. 143(4) | Annual rating-system inventory submission and notification of all non-material changes via Art. 143D. |
+| Art. 146 | If the firm **ceases to comply** with the requirements, it must notify the PRA "promptly" and either (a) demonstrate that the non-compliance is immaterial, or (b) submit and execute a remediation plan. Where the non-compliance results in a material RWA / EL reduction, **post-model adjustments** under Art. 146(3) must offset the impact. |
+
+> **Stress testing and model risk management** are not addressed substantively in
+> Art. 143 itself. The PRA's stress-testing obligations for IRB models flow from
+> Section 6 (Art. 177 — stress tests used in assessment of capital adequacy) and from
+> SS1/23 *Model risk management principles for banks* (which sits outside the CRR
+> rulebook but applies to all PRA-authorised firms running internal models). Both apply
+> to A-IRB models for other general corporates as for any other IRB rating system.
+
+### Worked Routing Example
+
+A firm with the following position:
+
+- Has F-IRB permission for the corporate exposure class.
+- Has not previously held A-IRB permission for any corporate subclass.
+- Wishes to use A-IRB on other general corporates only (revenue ≤ £440m, non-FSE).
+
+Submits an **Art. 143(2B)** application (existing IRB permission → more sophisticated
+approach within the same class) for the *other general corporates* subclass under
+Art. 147(2)(c)(iii). The application must:
+
+1. Demonstrate at least **three years** of own-LGD and own-CCF/EAD estimates broadly
+   consistent with Section 6 for the corporate population in scope (Art. 145(2)).
+2. Show that each rating system in the proposed perimeter satisfies all eight
+   high-level requirements in Art. 144(1)(a)–(h), including the use test and an
+   independent credit risk control unit.
+3. Pass the Art. 143(2C) materiality test — non-compliance immaterial both per rating
+   system and overall.
+4. Include the Art. 143E documentation pack (rationale, scope, technical docs, validation
+   reports, management body approval, quantitative impact).
+
+Until PRA permission is granted, **the classifier continues to route the relevant
+exposures via Art. 147A(1)(f)(iii) to the Foundation IRB Approach** — the calculator
+treats absence of an A-IRB `model_permissions` record exactly as the regulation does:
+F-IRB by default for other general corporates, A-IRB only with explicit permission.
+
+> **Implementation note.** The calculator does **not** evaluate any of the substantive
+> Art. 143(2A)/(2B) gating criteria above; it trusts the `model_permissions` table as
+> evidence that the firm holds the relevant PRA permission. See [Permission
+> Configuration](#permission-configuration) for the data model and
+> [`hierarchy-classification.md`](../common/hierarchy-classification.md#basel-31-approach-restrictions-art-147a)
+> for the runtime routing logic.
+
 ## Permanent Partial Use Materiality Thresholds (Art. 150(1A))
 
 Art. 150(1A) permits firms to use the Standardised Approach permanently for certain exposure

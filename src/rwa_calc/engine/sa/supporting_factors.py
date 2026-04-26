@@ -12,11 +12,18 @@ SME Supporting Factor - Tiered Approach (CRR2 Art. 501):
 Formula:
     factor = [min(D, threshold) × 0.7619 + max(D - threshold, 0) × 0.85] / D
 
-    Where D = drawn_amount + interest (on-balance-sheet amount owed)
+    Where D (= E* in Art. 501) is the on-balance-sheet amount owed by the SME's
+    group of connected clients, excluding claims secured on residential property
+    collateral.
 
 The tier threshold is applied to drawn (on-balance-sheet) amounts only,
 not the full post-CRM EAD which includes CCF-adjusted undrawn commitments.
-The resulting blended factor is then applied to the full RWA.
+Drawn amounts are aggregated across the SME's group of connected clients
+(``lending_group_reference``), with fallback to ``counterparty_reference``
+when no lending group is mapped. Buy-to-let / residential-property-secured
+drawn is excluded from E* per the Art. 501 carve-out, but the row itself
+also receives ``factor=1.0`` (BTL is not eligible for the SF). The resulting
+blended factor is applied to each SME row's full RWA.
 
 Infrastructure Supporting Factor (CRR Art. 501a):
 - Qualifying infrastructure: factor of 0.75
@@ -166,11 +173,15 @@ class SupportingFactorCalculator:
         """
         Apply supporting factors to exposures LazyFrame.
 
-        The SME supporting factor threshold (EUR 2.5m) is applied at the
-        counterparty level using drawn (on-balance-sheet) amounts only.
-        All drawn amounts to the same counterparty are aggregated before
-        determining the tiered factor. The resulting blended factor is
-        then applied to each exposure's full RWA.
+        The SME supporting factor threshold (EUR 2.5m) is applied to E*,
+        which CRR Art. 501 defines as the total drawn amount owed by the SME's
+        group of connected clients, excluding claims secured on residential
+        property collateral. The implementation aggregates drawn amounts over
+        ``lending_group_reference`` first and falls back to
+        ``counterparty_reference`` when no lending group is mapped (mirroring
+        the retail aggregation pattern). BTL drawn is excluded from E*; BTL
+        rows themselves receive factor=1.0. The resulting blended factor is
+        applied to each SME row's full RWA.
 
         The tier calculation uses drawn_amount + interest ("amount owed"),
         NOT ead_final which includes CCF-adjusted undrawn commitments.
@@ -182,13 +193,16 @@ class SupportingFactorCalculator:
         - interest: float (accrued interest)
         - ead_final: float (fallback if drawn_amount not available)
         - rwa_pre_factor: float (RWA before supporting factor)
-        - counterparty_reference: str (optional, for aggregation)
+        - counterparty_reference: str (optional, for fallback aggregation)
+        - lending_group_reference: str (optional, primary aggregation key)
+        - is_buy_to_let: bool (optional, used to apply Art. 501 residential carve-out)
 
         Adds columns:
         - supporting_factor: float
         - rwa_post_factor: float (RWA after supporting factor)
         - supporting_factor_applied: bool
-        - total_cp_drawn: float (total counterparty drawn amount, for SME)
+        - total_cp_drawn: float (E* — drawn aggregated across the SME's group of
+          connected clients, with BTL drawn excluded per Art. 501)
 
         Args:
             exposures: Exposures with RWA calculated
@@ -219,6 +233,7 @@ class SupportingFactorCalculator:
         has_sme = "is_sme" in schema.names()
         has_infra = "is_infrastructure" in schema.names()
         has_counterparty = "counterparty_reference" in schema.names()
+        has_lending_group = "lending_group_reference" in schema.names()
         has_btl = "is_buy_to_let" in schema.names()
         has_defaulted = "is_defaulted" in schema.names()
         has_drawn = "drawn_amount" in schema.names()
@@ -232,40 +247,62 @@ class SupportingFactorCalculator:
         else:
             drawn_expr = pl.col("ead_final")
 
-        # Build SME factor expression with counterparty-level aggregation
+        # Build SME factor expression with group-of-connected-clients aggregation.
+        # CRR Art. 501 defines E* as the total amount owed across the SME's group
+        # of connected clients, excluding claims secured on residential property.
+        # We use lending_group_reference as the codebase's connected-clients
+        # identifier, falling back to counterparty_reference (mirrors the retail
+        # aggregation pattern in engine/hierarchy.py).
         if has_sme:
-            if has_counterparty:
-                # Aggregate drawn amounts at counterparty level using window function
-                # Only aggregate SME exposures with valid counterparty references
+            if has_lending_group and has_counterparty:
+                group_key_expr = (
+                    pl.when(pl.col("lending_group_reference").is_not_null())
+                    .then(pl.col("lending_group_reference"))
+                    .otherwise(pl.col("counterparty_reference"))
+                ).alias("_sme_group_key")
+            elif has_lending_group:
+                group_key_expr = pl.col("lending_group_reference").alias("_sme_group_key")
+            elif has_counterparty:
+                group_key_expr = pl.col("counterparty_reference").alias("_sme_group_key")
+            else:
+                group_key_expr = None
+
+            if group_key_expr is not None:
+                exposures = exposures.with_columns([group_key_expr])
+
+                # Art. 501 carve-out: claims secured on residential property are
+                # excluded from E*. BTL is the codebase's residential-property
+                # proxy. Defaulted exposures stay in E* (Art. 501 explicitly
+                # includes "any exposure in default").
+                is_btl_excl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
+                drawn_in_e_star = pl.when(is_btl_excl).then(0.0).otherwise(drawn_expr)
+
                 total_cp_drawn_expr = (
-                    pl.when(pl.col("is_sme") & pl.col("counterparty_reference").is_not_null())
-                    .then(drawn_expr.sum().over("counterparty_reference"))
-                    .otherwise(
-                        # Fall back to individual drawn if no counterparty ref or not SME
-                        drawn_expr
-                    )
+                    pl.when(pl.col("is_sme") & pl.col("_sme_group_key").is_not_null())
+                    .then(drawn_in_e_star.sum().over("_sme_group_key"))
+                    .otherwise(drawn_in_e_star)
                 )
-
                 exposures = exposures.with_columns([total_cp_drawn_expr.alias("total_cp_drawn")])
-
-                # Use counterparty total drawn for tier calculation
                 ead_for_tier = pl.col("total_cp_drawn")
             else:
-                # No counterparty reference column — per-exposure fallback.
-                # This can misclassify the tier when multiple exposures to the
-                # same counterparty individually fall below the EUR 2.5m threshold
-                # but aggregate above it (Art. 501 requires counterparty-level aggregation).
+                # Neither lending_group_reference nor counterparty_reference is
+                # present — per-exposure fallback. This can misclassify the tier
+                # when multiple exposures to the same group individually fall
+                # below the EUR 2.5m threshold but aggregate above it (Art. 501
+                # requires aggregation across the SME's group of connected
+                # clients).
                 if errors is not None:
                     errors.append(
                         CalculationError(
                             code=ERROR_SME_MISSING_COUNTERPARTY_REF,
                             message=(
-                                "SME supporting factor: counterparty_reference column is absent. "
-                                "Tier threshold (EUR 2.5m) evaluated per-exposure instead of "
-                                "per-counterparty as required by CRR Art. 501. This may produce "
-                                "an incorrectly low supporting factor when multiple exposures to "
-                                "the same counterparty individually fall below the threshold but "
-                                "aggregate above it."
+                                "SME supporting factor: neither counterparty_reference "
+                                "nor lending_group_reference is available. Tier threshold "
+                                "(EUR 2.5m) evaluated per-exposure instead of across the "
+                                "SME's group of connected clients as required by CRR "
+                                "Art. 501. This may produce an incorrectly low supporting "
+                                "factor when multiple exposures to the same group "
+                                "individually fall below the threshold but aggregate above it."
                             ),
                             severity=ErrorSeverity.WARNING,
                             category=ErrorCategory.DATA_QUALITY,
@@ -288,8 +325,10 @@ class SupportingFactorCalculator:
                 .otherwise(pl.lit(0.0))
             )
 
-            # BTL exposures are excluded from the SME factor but still
-            # contribute to total_cp_drawn for tier calculation (CRR Art. 501)
+            # BTL exposures are excluded from BOTH the SME factor AND from E*
+            # (CRR Art. 501 carves out claims secured on residential property
+            # collateral from the aggregate amount owed). E* exclusion is
+            # applied via drawn_in_e_star above.
             is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
             # Defaulted exposures are excluded from SME factor (CRR Art. 501)
             is_defaulted = pl.col("is_defaulted") if has_defaulted else pl.lit(False)

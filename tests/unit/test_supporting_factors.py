@@ -2,12 +2,13 @@
 Unit tests for supporting factors (CRR2 Art. 501).
 
 Tests cover:
-- BTL exclusion from SME factor (BTL still counts toward total_cp_drawn)
+- BTL exclusion from SME factor AND from E* (Art. 501 residential carve-out)
 - Drawn-only tier weighting: tier calculation uses drawn_amount + interest,
   NOT ead_final (which includes CCF-adjusted undrawn commitments)
 - Infrastructure factor interaction with BTL
 - Backward compatibility when drawn_amount column is missing
-- Missing counterparty_reference warning (P1.31)
+- Group-of-connected-clients aggregation via lending_group_reference
+- Missing counterparty/lending-group reference warning (P1.31)
 """
 
 from datetime import date
@@ -36,12 +37,13 @@ def _make_exposures(
     include_btl: bool = True,
     include_drawn: bool = True,
     include_counterparty: bool = True,
+    include_lending_group: bool = False,
 ) -> pl.LazyFrame:
     """Build a LazyFrame of exposures for supporting factor tests.
 
     Each row dict supports keys:
         ref, cp, ead, rwa, drawn (defaults to ead), interest (defaults to 0),
-        is_sme (True), is_infra (False), is_btl (False).
+        is_sme (True), is_infra (False), is_btl (False), lending_group (None).
     """
     data: dict = {
         "exposure_reference": [r["ref"] for r in rows],
@@ -57,21 +59,28 @@ def _make_exposures(
         data["interest"] = [r.get("interest", 0.0) for r in rows]
     if include_btl:
         data["is_buy_to_let"] = [r.get("is_btl", False) for r in rows]
+    if include_lending_group:
+        data["lending_group_reference"] = [r.get("lending_group") for r in rows]
     return pl.LazyFrame(data)
 
 
 class TestBTLExcludedFromSMEFactor:
-    """BTL exposures get supporting_factor=1.0 but still count toward total_cp_drawn."""
+    """BTL exposures get supporting_factor=1.0 AND are excluded from E*.
 
-    def test_btl_excluded_non_btl_gets_blended(
+    CRR Art. 501 carves out claims secured on residential property collateral
+    from the aggregate amount owed (E*), so BTL drawn does NOT contribute to
+    total_cp_drawn.
+    """
+
+    def test_btl_excluded_non_btl_below_threshold_gets_tier1(
         self,
         calculator: SupportingFactorCalculator,
         crr_config: CalculationConfig,
     ) -> None:
         """
         CP with 1.5m non-BTL + 1.0m BTL (all drawn):
-        - total_cp_drawn = 2.5m (includes BTL)
-        - Non-BTL gets the tiered blended factor (all within tier 1 threshold)
+        - total_cp_drawn = 1.5m (BTL excluded from E* per Art. 501 carve-out)
+        - Non-BTL gets pure Tier 1 factor (1.5m < EUR 2.5m threshold)
         - BTL gets 1.0
         """
         exposures = _make_exposures(
@@ -83,13 +92,13 @@ class TestBTLExcludedFromSMEFactor:
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
-        # Both exposures should see total_cp_drawn = 2.5m (BTL included)
-        assert result.filter(pl.col("exposure_reference") == "E1")["total_cp_drawn"][0] == 2_500_000
-        assert result.filter(pl.col("exposure_reference") == "E2")["total_cp_drawn"][0] == 2_500_000
+        # Both exposures should see total_cp_drawn = 1.5m (BTL excluded from E*)
+        assert result.filter(pl.col("exposure_reference") == "E1")["total_cp_drawn"][0] == 1_500_000
+        assert result.filter(pl.col("exposure_reference") == "E2")["total_cp_drawn"][0] == 1_500_000
 
-        # Non-BTL (E1) gets the SME factor < 1.0
+        # Non-BTL (E1) gets pure Tier 1 (0.7619) since E* = 1.5m < threshold
         sf_e1 = result.filter(pl.col("exposure_reference") == "E1")["supporting_factor"][0]
-        assert sf_e1 < 1.0, "Non-BTL exposure should get SME factor"
+        assert sf_e1 == pytest.approx(0.7619, rel=0.001)
 
         # BTL (E2) gets factor = 1.0
         sf_e2 = result.filter(pl.col("exposure_reference") == "E2")["supporting_factor"][0]
@@ -103,12 +112,12 @@ class TestBTLExcludedFromSMEFactor:
         rwa_e2 = result.filter(pl.col("exposure_reference") == "E2")["rwa_post_factor"][0]
         assert rwa_e2 == pytest.approx(400_000)
 
-    def test_btl_contributes_to_total_cp_drawn(
+    def test_btl_excluded_from_total_cp_drawn(
         self,
         calculator: SupportingFactorCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """total_cp_drawn = 3.0m (includes 2.0m BTL)."""
+        """total_cp_drawn = 1.0m (Art. 501 excludes the 2.0m BTL from E*)."""
         exposures = _make_exposures(
             [
                 {"ref": "E1", "cp": "CP1", "ead": 1_000_000, "rwa": 400_000, "is_btl": False},
@@ -118,9 +127,9 @@ class TestBTLExcludedFromSMEFactor:
 
         result = calculator.apply_factors(exposures, crr_config).collect()
 
-        # total_cp_drawn should include BTL
+        # total_cp_drawn excludes BTL drawn per Art. 501 residential carve-out
         total_cp = result["total_cp_drawn"][0]
-        assert total_cp == pytest.approx(3_000_000)
+        assert total_cp == pytest.approx(1_000_000)
 
     def test_all_btl_no_factor(
         self,
@@ -597,3 +606,270 @@ class TestMissingCounterpartyReferenceWarning:
         calculator.apply_factors(exposures, crr_config, errors=errors)
 
         assert errors[0].field_name == "counterparty_reference"
+
+
+class TestLendingGroupAggregation:
+    """E* aggregates across the SME's group of connected clients (CRR Art. 501).
+
+    The implementation aggregates drawn over `lending_group_reference` first
+    and falls back to `counterparty_reference` when no lending group is
+    mapped — mirroring the retail aggregation pattern in engine/hierarchy.py.
+    """
+
+    def test_aggregates_drawn_across_lending_group(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Two SMEs (CP1, CP2) in the same lending group, GBP 1.5m drawn each.
+        Without group aggregation each falls below the EUR 2.5m threshold
+        and would get pure Tier 1. With Art. 501 group aggregation, E* = 3m
+        and both rows get the blended factor.
+        """
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_500_000,
+                    "rwa": 600_000,
+                    "lending_group": "LG1",
+                },
+                {
+                    "ref": "E2",
+                    "cp": "CP2",
+                    "ead": 1_500_000,
+                    "rwa": 600_000,
+                    "lending_group": "LG1",
+                },
+            ],
+            include_lending_group=True,
+        )
+
+        result = calculator.apply_factors(exposures, crr_config).collect()
+
+        # E* = 3m for both rows
+        assert result["total_cp_drawn"].to_list() == pytest.approx([3_000_000, 3_000_000])
+
+        expected_factor = (
+            min(3_000_000, threshold_gbp) * 0.7619 + max(3_000_000 - threshold_gbp, 0) * 0.85
+        ) / 3_000_000
+        assert result["supporting_factor"].to_list() == pytest.approx(
+            [expected_factor, expected_factor], rel=0.001
+        )
+        # Sanity: blended factor strictly worse than pure Tier 1
+        assert expected_factor > 0.7619
+
+    def test_falls_back_to_counterparty_when_lending_group_null(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Lending group column present but null — fallback to counterparty
+        aggregation preserves prior behaviour.
+        """
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000, "lending_group": None},
+                {"ref": "E2", "cp": "CP1", "ead": 1_500_000, "rwa": 600_000, "lending_group": None},
+            ],
+            include_lending_group=True,
+        )
+
+        result = calculator.apply_factors(exposures, crr_config).collect()
+
+        # E* = 3m via counterparty fallback
+        assert result["total_cp_drawn"].to_list() == pytest.approx([3_000_000, 3_000_000])
+
+        expected_factor = (
+            min(3_000_000, threshold_gbp) * 0.7619 + max(3_000_000 - threshold_gbp, 0) * 0.85
+        ) / 3_000_000
+        assert result["supporting_factor"].to_list() == pytest.approx(
+            [expected_factor, expected_factor], rel=0.001
+        )
+
+    def test_three_member_group_below_threshold_individually(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Three SMEs in same lending group, each well below threshold (1m drawn).
+        Aggregate E* = 3m → blended factor on all three. Regression test for
+        the gap where counterparty-only aggregation would give 0.7619 each.
+        """
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_000_000,
+                    "rwa": 400_000,
+                    "lending_group": "LG1",
+                },
+                {
+                    "ref": "E2",
+                    "cp": "CP2",
+                    "ead": 1_000_000,
+                    "rwa": 400_000,
+                    "lending_group": "LG1",
+                },
+                {
+                    "ref": "E3",
+                    "cp": "CP3",
+                    "ead": 1_000_000,
+                    "rwa": 400_000,
+                    "lending_group": "LG1",
+                },
+            ],
+            include_lending_group=True,
+        )
+
+        result = calculator.apply_factors(exposures, crr_config).collect()
+
+        assert result["total_cp_drawn"].to_list() == pytest.approx(
+            [3_000_000, 3_000_000, 3_000_000]
+        )
+
+        expected_factor = (
+            min(3_000_000, threshold_gbp) * 0.7619 + max(3_000_000 - threshold_gbp, 0) * 0.85
+        ) / 3_000_000
+        assert result["supporting_factor"].to_list() == pytest.approx(
+            [expected_factor] * 3, rel=0.001
+        )
+        assert expected_factor > 0.7619
+
+    def test_lending_group_with_mixed_sme_non_sme_aggregates_whole_group(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        CRR Art. 501 says E* is the total amount owed by 'the SME OR the group
+        of connected clients of the SME'. When a lending group spans an SME
+        and a non-SME, the non-SME's drawn STILL counts toward E* (whole-group
+        reading). The SF is then applied only to the SME-flagged row; the
+        non-SME row gets factor=1.0.
+        """
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_500_000,
+                    "rwa": 600_000,
+                    "is_sme": True,
+                    "lending_group": "LG1",
+                },
+                {
+                    "ref": "E2",
+                    "cp": "CP2",
+                    "ead": 5_000_000,
+                    "rwa": 2_000_000,
+                    "is_sme": False,
+                    "lending_group": "LG1",
+                },
+            ],
+            include_lending_group=True,
+        )
+
+        result = calculator.apply_factors(exposures, crr_config).collect()
+
+        # E1 (SME) sees E* = 6.5m (whole group)
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["total_cp_drawn"][0] == pytest.approx(6_500_000)
+        expected_factor = (
+            min(6_500_000, threshold_gbp) * 0.7619 + max(6_500_000 - threshold_gbp, 0) * 0.85
+        ) / 6_500_000
+        assert e1["supporting_factor"][0] == pytest.approx(expected_factor, rel=0.001)
+
+        # E2 (non-SME) gets factor = 1.0 regardless
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        assert e2["supporting_factor"][0] == pytest.approx(1.0)
+
+    def test_btl_in_lending_group_does_not_count_toward_e_star(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Lending group with one non-BTL SME (1.5m drawn) and one BTL SME (3m
+        drawn). Art. 501 carves residential-property-secured claims out of
+        E*, so E* = 1.5m and the non-BTL row gets pure Tier 1. The BTL row
+        gets factor=1.0 regardless.
+        """
+        exposures = _make_exposures(
+            [
+                {
+                    "ref": "E1",
+                    "cp": "CP1",
+                    "ead": 1_500_000,
+                    "rwa": 600_000,
+                    "is_btl": False,
+                    "lending_group": "LG1",
+                },
+                {
+                    "ref": "E2",
+                    "cp": "CP2",
+                    "ead": 3_000_000,
+                    "rwa": 1_200_000,
+                    "is_btl": True,
+                    "lending_group": "LG1",
+                },
+            ],
+            include_lending_group=True,
+        )
+
+        result = calculator.apply_factors(exposures, crr_config).collect()
+
+        # E* = 1.5m (BTL drawn excluded from the group sum)
+        assert result["total_cp_drawn"].to_list() == pytest.approx([1_500_000, 1_500_000])
+
+        e1 = result.filter(pl.col("exposure_reference") == "E1")
+        assert e1["supporting_factor"][0] == pytest.approx(0.7619, rel=0.001)
+
+        e2 = result.filter(pl.col("exposure_reference") == "E2")
+        assert e2["supporting_factor"][0] == pytest.approx(1.0)
+
+    def test_no_lending_group_column_uses_counterparty_only(
+        self,
+        calculator: SupportingFactorCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """
+        Frame without lending_group_reference column at all: counterparty
+        fallback path runs cleanly and no SF001 warning is emitted (because
+        counterparty_reference IS present).
+        """
+        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+
+        exposures = _make_exposures(
+            [
+                {"ref": "E1", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000},
+                {"ref": "E2", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000},
+            ],
+            include_lending_group=False,
+        )
+
+        errors: list[CalculationError] = []
+        result = calculator.apply_factors(exposures, crr_config, errors=errors).collect()
+
+        assert len(errors) == 0
+        assert result["total_cp_drawn"].to_list() == pytest.approx([4_000_000, 4_000_000])
+
+        expected_factor = (
+            min(4_000_000, threshold_gbp) * 0.7619 + max(4_000_000 - threshold_gbp, 0) * 0.85
+        ) / 4_000_000
+        assert result["supporting_factor"].to_list() == pytest.approx(
+            [expected_factor, expected_factor], rel=0.001
+        )

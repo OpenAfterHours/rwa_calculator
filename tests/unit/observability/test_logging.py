@@ -6,6 +6,7 @@ import asyncio
 import io
 import json
 import logging
+from collections.abc import Iterator
 from datetime import date
 
 import pytest
@@ -25,7 +26,7 @@ from rwa_calc.observability.logging_setup import _NAMESPACE
 
 
 @pytest.fixture(autouse=True)
-def _reset_namespace_logger() -> None:
+def _reset_namespace_logger() -> Iterator[None]:
     """Strip handlers + reset the idempotency guard between tests."""
     from rwa_calc.observability import logging_setup
 

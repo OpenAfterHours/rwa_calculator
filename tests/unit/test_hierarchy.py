@@ -635,9 +635,11 @@ class TestArt138ExternalRatingResolution:
                 "hierarchy_depth": pl.Int32,
             }
         )
-        return resolver._build_rating_inheritance_lazy(
+        df = resolver._build_rating_inheritance_lazy(
             counterparties, ratings, ultimate_parents
         ).collect()
+        assert isinstance(df, pl.DataFrame)
+        return df
 
     @staticmethod
     def _ratings(cqs_by_agency: list[tuple[str, int, date]]) -> pl.LazyFrame:

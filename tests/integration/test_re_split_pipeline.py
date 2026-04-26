@@ -172,7 +172,9 @@ def _run(config: CalculationConfig) -> pl.DataFrame:
     bundle = _build_corporate_with_residential_collateral_bundle()
     result = PipelineOrchestrator().run_with_data(bundle, config)
     assert result.results is not None
-    return result.results.collect()
+    df = result.results.collect()
+    assert isinstance(df, pl.DataFrame)
+    return df
 
 
 # ---------------------------------------------------------------------------

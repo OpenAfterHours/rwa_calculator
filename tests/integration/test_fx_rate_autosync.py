@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 
@@ -25,7 +26,7 @@ from .conftest import make_counterparty, make_loan, make_raw_data_bundle
 
 
 @pytest.fixture(autouse=True)
-def _reset_logging_state() -> None:
+def _reset_logging_state() -> Iterator[None]:
     """Strip handlers/state from the rwa_calc namespace logger between runs."""
     from rwa_calc.observability import logging_setup
 

@@ -13,6 +13,7 @@ asserts that:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from datetime import date
 
 import pytest
@@ -40,7 +41,7 @@ _NAMESPACE_LOGGER_NAMES: tuple[str, ...] = (
 
 
 @pytest.fixture(autouse=True)
-def _reset_logging_state() -> None:
+def _reset_logging_state() -> Iterator[None]:
     """Strip handlers/state from the rwa_calc namespace logger between runs."""
     from rwa_calc.observability import logging_setup
 

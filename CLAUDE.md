@@ -170,17 +170,25 @@ Reference stage skeleton and format details — see `docs/specifications/observa
 
 Project subagents in `.claude/agents/` (role-based, not domain-based — regulatory knowledge stays in the `basel31` and `crr` skills):
 
-- **`scenario-architect`** — read-only. Designs one CRR-* / B31-* acceptance scenario end-to-end (inputs, hand-calc, citations).
+- **`scenario-architect`** — read-only. Designs one CRR-* / B31-* / P-coded item end-to-end (inputs, hand-calc, citations).
 - **`fixture-builder`** — owns `tests/fixtures/`. Implements parquet rows and builders from a scenario proposal.
 - **`test-writer`** — owns `tests/{unit,acceptance,contracts,integration}/`. Writes the failing test that drives the next implementation step.
 - **`engine-implementer`** — owns `src/rwa_calc/`. Makes the failing test pass with the minimum diff and a green validation gate (arch_check, ruff, ty, contracts).
+- **`plan-curator`** — owns the two work-queue files at the repo root: `IMPLEMENTATION_PLAN.md` and `DOCS_IMPLEMENTATION_PLAN.md`. Audits code/specs/PDFs against each other and writes prioritised bullet items.
+- **`doc-writer`** — owns `docs/`. Writes or updates one canonical docs page per `DOCS_IMPLEMENTATION_PLAN.md` item; runs `uv run zensical build` before returning.
 
-Orchestration lives in slash commands, not in agents:
+Orchestration lives in slash commands, not in agents. Each `loop.sh` mode maps to one slash command, and each slash command commits once at the end:
 
-- **`/implement-scenario <ID>`** — runs the four agents in sequence on one scenario, then commits once at the end.
-- **`/next-scenario`** — picks the highest-priority unimplemented scenario from `docs/plans/implementation-plan.md` and delegates to `/implement-scenario`.
+| `loop.sh` mode | Prompt file | Slash command | Owns |
+|---|---|---|---|
+| `loop.sh` (build) | `PROMPT_build.md` | `/next-scenario` | code/test backlog → implementation |
+| `loop.sh plan` | `PROMPT_plan.md` | `/refresh-plan` | refresh `IMPLEMENTATION_PLAN.md` |
+| `loop.sh docs_build` | `PROMPT_docs_build.md` | `/next-doc` | docs backlog → docs page edit |
+| `loop.sh docs_plan` | `PROMPT_docs_plan.md` | `/refresh-docs-plan` | refresh `DOCS_IMPLEMENTATION_PLAN.md` |
 
-Agents do not have commit/push permissions and do not invoke other agents — keep the call graph one level deep so `scripts/pre_commit_gate.sh` fires once per scenario with full context.
+Plus `/implement-scenario <ID>` for ad-hoc one-off work on a specific P-code or scenario ID.
+
+Agents do not have commit/push permissions and do not invoke other agents — keep the call graph one level deep so `scripts/pre_commit_gate.sh` fires once per iteration with full context. The two root plan files (`IMPLEMENTATION_PLAN.md`, `DOCS_IMPLEMENTATION_PLAN.md`) are the source of truth for outstanding work; `docs/plans/implementation-plan.md` is published narrative on the Zensical site.
 
 ## Documentation
 

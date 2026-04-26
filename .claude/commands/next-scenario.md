@@ -1,50 +1,49 @@
 ---
-description: Pick the highest-priority unimplemented scenario from the docs implementation plan and run /implement-scenario on it.
+description: Pick the highest-priority unimplemented item from IMPLEMENTATION_PLAN.md and run /implement-scenario on it.
 ---
 
-You are picking the next scenario to implement from
-`docs/plans/implementation-plan.md`.
+You are picking the next code/test item to implement from
+`IMPLEMENTATION_PLAN.md` (root of the repo — **not** the published
+`docs/plans/implementation-plan.md`, which is narrative).
 
 ## Step 1 — pick
 
-Read `docs/plans/implementation-plan.md`. The priority order is:
+Read `IMPLEMENTATION_PLAN.md`. Items are P-coded
+(`P1.92`, `P2.13`, etc.) and grouped by tier:
 
-1. **CRR remaining fixtures** — items still listed under "Remaining
-   Fixture Work":
-   - CRR-A7 (commercial RE low LTV)
-   - CRR-A8 (off-balance sheet commitment CCF)
-   - CRR-C3 (specialised lending A-IRB)
+1. **Tier 1 — Calculation Correctness** (highest priority).
+2. **Tier 2 — Test Coverage Gaps**.
+3. **Tier 3 — COREP Reporting Completeness**.
+4. **Tier 4 — Pillar III Disclosure Gaps**.
+5. **Tier 5 — Documentation & Consistency** — defer to
+   `/next-doc` rather than handling here.
+6. **Tier 6 — Code Quality**.
+7. **Tier 7 — Future / v2.0** — skip unless explicitly asked.
 
-2. **Basel 3.1 extension** — items listed under "Basel 3.1 Extension",
-   in scenario-table order (B31-A1, A2, … A10, then B31-F1 …).
-
-3. **Spec divergences** — D-coded entries inside
-   `docs/specifications/` (e.g. D1.38, D3.37 in
-   `basel31/equity-approach.md`). Treat each divergence as its own
-   scenario named `D<id>`.
-
-Pick the first unimplemented item from the highest-priority bucket. To
-check whether a scenario is implemented, grep
-`tests/acceptance/` for the scenario ID — if a passing test asserts
-its expected outputs, it is done.
+Pick the first item that is **not** marked `[x] FIXED` and **not** in
+Tier 5 / 7. Confirm the item is still open by spot-checking the cited
+file/test rather than trusting the checkbox.
 
 ## Step 2 — confirm
 
-State to the user, in one line, which scenario you picked and why
-(e.g. "CRR-A7 — first remaining fixture, no test currently asserts the
-£600k @ 50% LTV → £300k RWA expected output").
+State to the user, in one line, the picked P-code, its tier, and the
+one-line summary from the plan (e.g. "P1.99 — Tier 1 — CRR short-term
+institution risk weights (Art. 120) not applied").
 
 ## Step 3 — delegate
 
-Invoke `/implement-scenario <SCENARIO_ID>` with the picked ID. Do not
-re-implement the orchestration here — that command owns the sequence.
+Invoke `/implement-scenario <P-CODE>` with the picked ID. The
+slash command owns the agent sequence and the single end-of-iteration
+commit.
 
 ## Constraints
 
-- One scenario per invocation. Do not chain into the next one.
-- If the backlog is empty across all three buckets, report so and
-  stop — do not invent work.
-- If the picked scenario depends on infrastructure that does not yet
-  exist (e.g. a missing engine subpackage for a new approach), stop
-  and surface the dependency to the user; do not silently expand
-  scope.
+- One item per invocation. Do not chain into the next one.
+- If every Tier 1–4, 6 item is already fixed, report so and stop —
+  do not promote Tier 5 or 7 work without operator approval.
+- If the picked item is actually a docs gap mis-filed in the code
+  plan, stop and surface that to the operator; do not silently shift
+  to `/next-doc`.
+- If the picked item depends on infrastructure that does not yet
+  exist (a missing engine subpackage, a not-yet-modelled approach),
+  stop and surface the dependency.

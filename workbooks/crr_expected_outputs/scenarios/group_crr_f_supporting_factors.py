@@ -296,6 +296,50 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
     )
 
     # =========================================================================
+    # CRR-F8: Lending Group of Two SMEs (Group-of-Connected-Clients Aggregation)
+    # =========================================================================
+    # Synthetic scenario: two SMEs in the same lending group, each drawn £1.5m.
+    # Per CRR Art. 501 E* aggregates across the SME's group of connected clients,
+    # so E* = £3m. Each row receives the blended factor (not pure Tier 1 0.7619
+    # which a counterparty-only aggregation would have given).
+    ead_per_member_f8 = Decimal("1500000")
+    e_star_f8 = ead_per_member_f8 * Decimal("2")  # group total
+    turnover_f8 = Decimal("20000000")
+    rw_f8 = Decimal("1.00")
+    rwa_before_f8 = ead_per_member_f8 * rw_f8
+
+    factor_f8 = calculate_sme_supporting_factor(e_star_f8, "GBP")
+    rwa_after_f8 = rwa_before_f8 * factor_f8
+
+    results.append(
+        CRRSupportingFactorResult(
+            scenario_id="CRR-F8",
+            scenario_group="CRR-F",
+            description=(
+                "Lending group of two SMEs at £1.5m each — E* = £3m → blended "
+                "factor (Art. 501 group-of-connected-clients aggregation)"
+            ),
+            regulatory_framework="CRR",
+            approach="SA",
+            exposure_class="CORPORATE_SME",
+            exposure_reference="LOAN_SME_LG_001",
+            counterparty_reference="CORP_SME_LG_001",
+            ead=float(ead_per_member_f8),
+            turnover=float(turnover_f8),
+            risk_weight=float(rw_f8),
+            rwa_before_sf=float(rwa_before_f8),
+            supporting_factor=float(factor_f8),
+            rwa_after_sf=float(rwa_after_f8),
+            regulatory_reference="CRR2 Art. 501",
+            calculation_notes=(
+                f"Group total E* = £{e_star_f8 / 1000000:.2f}m across lending "
+                f"group LG_001. Blended factor = {float(factor_f8):.4f}. "
+                f"Pipeline fixture for two-member lending group is a follow-up."
+            ),
+        )
+    )
+
+    # =========================================================================
     # CRR-F7: At Exposure Threshold Boundary
     # =========================================================================
     # Exposure exactly at threshold

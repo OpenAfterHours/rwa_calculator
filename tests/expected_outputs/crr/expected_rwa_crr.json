@@ -2,7 +2,7 @@
   "framework": "CRR",
   "version": "2.0",
   "effective_until": "2026-12-31",
-  "generated_at": "2026-04-19T12:40:01.428725",
+  "generated_at": "2026-04-26T16:18:49.232829",
   "regulatory_references": {
     "primary": "UK CRR (Regulation (EU) No 575/2013 as retained)",
     "supporting_factors": "CRR Art. 501 (SME), Art. 501a (Infrastructure)",
@@ -35,7 +35,7 @@
     },
     "CRR-F": {
       "name": "Supporting Factors (Tiered SME)",
-      "count": 7
+      "count": 8
     },
     "CRR-G": {
       "name": "Provisions & Impairments",
@@ -56,7 +56,7 @@
     "Slotting: Strong=Good=70% (Basel 3.1 Strong=50%)",
     "HVCRE same weights as non-HVCRE under CRR"
   ],
-  "scenario_count": 46,
+  "scenario_count": 47,
   "scenarios": [
     {
       "scenario_id": "CRR-A1",
@@ -1017,6 +1017,30 @@
       "expected_loss": null,
       "regulatory_reference": "CRR Art. 501",
       "calculation_notes": "Turnover \u00a3200m exceeds \u00a344m threshold. No SME factor applies."
+    },
+    {
+      "scenario_id": "CRR-F8",
+      "scenario_group": "CRR-F",
+      "description": "Lending group of two SMEs at \u00a31.5m each \u2014 E* = \u00a33m \u2192 blended factor (Art. 501 group-of-connected-clients aggregation)",
+      "regulatory_framework": "CRR",
+      "approach": "SA",
+      "exposure_class": "CORPORATE_SME",
+      "exposure_reference": "LOAN_SME_LG_001",
+      "counterparty_reference": "CORP_SME_LG_001",
+      "ead": 1500000.0,
+      "pd": null,
+      "lgd": null,
+      "maturity": null,
+      "cqs": null,
+      "ltv": null,
+      "turnover": 20000000.0,
+      "risk_weight": 1.0,
+      "rwa_before_sf": 1500000.0,
+      "supporting_factor": 0.7858925666666666,
+      "rwa_after_sf": 1178838.85,
+      "expected_loss": null,
+      "regulatory_reference": "CRR2 Art. 501",
+      "calculation_notes": "Group total E* = \u00a33.00m across lending group LG_001. Blended factor = 0.7859. Pipeline fixture for two-member lending group is a follow-up."
     },
     {
       "scenario_id": "CRR-F7",

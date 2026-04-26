@@ -176,6 +176,7 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
 _SUPPORTING_FACTOR_COLUMNS: dict[str, ColumnSpec] = {
     "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
+    "lending_group_reference": ColumnSpec(pl.String, default=None, required=False),
 }
 
 

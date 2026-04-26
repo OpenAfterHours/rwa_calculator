@@ -37,6 +37,7 @@ SCENARIO_EXPOSURE_MAP = {
     "CRR-F5": "LOAN_INFRA_001",
     "CRR-F6": "LOAN_CORP_LARGE",
     "CRR-F7": "LOAN_SME_BOUNDARY",
+    "CRR-F8": "LOAN_SME_LG_001",
 }
 
 
@@ -226,6 +227,35 @@ class TestCRRGroupF_TieredSMEFactor:
             scenario_id="CRR-F7",
         )
 
+    def test_crr_f8_lending_group_aggregation(
+        self,
+        pipeline_results_df: pl.DataFrame,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        CRR-F8: Two SMEs in same lending group at GBP 1.5m drawn each.
+
+        Expected: E* = GBP 3m → blended factor (Art. 501 group-of-connected-
+        clients aggregation). A pure Tier 1 result would indicate the engine
+        aggregated only at counterparty level.
+
+        Pipeline fixture for two-member lending group is a follow-up; this
+        test will skip cleanly until that fixture exists.
+        """
+        expected = expected_outputs_dict["CRR-F8"]
+        exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-F8"]
+
+        result = get_result_for_exposure(pipeline_results_df, exposure_ref)
+
+        if result is None:
+            pytest.skip(f"Fixture data not available for {exposure_ref}")
+
+        assert_supporting_factor_match(
+            result["supporting_factor"],
+            expected["supporting_factor"],
+            scenario_id="CRR-F8",
+        )
+
 
 class TestCRRGroupF_ParameterizedValidation:
     """
@@ -238,7 +268,7 @@ class TestCRRGroupF_ParameterizedValidation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """Verify all CRR-F scenarios exist in expected outputs."""
-        expected_ids = [f"CRR-F{i}" for i in range(1, 8)]
+        expected_ids = [f"CRR-F{i}" for i in range(1, 9)]
         for scenario_id in expected_ids:
             assert scenario_id in expected_outputs_dict, (
                 f"Missing expected output for {scenario_id}"
@@ -316,6 +346,24 @@ class TestCRRGroupF_ParameterizedValidation:
         scenario = expected_outputs_dict["CRR-F6"]
         assert scenario["supporting_factor"] == pytest.approx(1.0), (
             "CRR-F6 should have no supporting factor (1.0)"
+        )
+
+    def test_crr_f8_has_blended_group_factor(
+        self,
+        expected_outputs_dict: dict[str, dict[str, Any]],
+    ) -> None:
+        """
+        Verify CRR-F8 (lending group of two SMEs at GBP 1.5m each) yields a
+        blended factor — confirms E* is aggregated across the group of
+        connected clients per CRR Art. 501. Pure Tier 1 (0.7619) would
+        indicate counterparty-only aggregation, which would be incorrect.
+        """
+        scenario = expected_outputs_dict["CRR-F8"]
+        sf = scenario["supporting_factor"]
+        assert 0.7619 < sf < 0.85, (
+            f"CRR-F8 should have a blended factor (0.7619 < SF < 0.85), got {sf}. "
+            "If SF == 0.7619 the engine likely aggregated at counterparty level "
+            "instead of across the lending group (CRR Art. 501)."
         )
 
     def test_tiered_factor_calculation_formula(

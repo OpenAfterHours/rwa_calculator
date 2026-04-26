@@ -18,7 +18,11 @@ A tiered discount applied to RWA for qualifying SME exposures.
 ### Eligibility
 
 - Turnover < EUR 50m (converted from GBP at the configured FX rate)
-- Aggregated at counterparty level, not per-exposure
+- E* aggregated across the SME's group of connected clients
+  (`lending_group_reference`), with fallback to `counterparty_reference` when
+  no lending group is mapped, per CRR Art. 501
+- Claims secured on residential property collateral (e.g. BTL) are excluded
+  from E* per the Art. 501 carve-out; those rows also receive `factor=1.0`
 
 !!! info "Regulatory Scope vs Implementation"
     CRR Art. 501 applies the factor to **all** exposures to SMEs, including corporate, retail,
@@ -44,7 +48,7 @@ For exposures that span both tiers:
 SF = [min(D, threshold) x 0.7619 + max(D - threshold, 0) x 0.85] / D
 ```
 
-Where `D` is the on-balance-sheet amount (`max(0, drawn_amount) + interest`) aggregated at counterparty level, and `threshold` is EUR 2.5m (or GBP equivalent).
+Where `D` (= E* in Art. 501) is the on-balance-sheet amount (`max(0, drawn_amount) + interest`) aggregated across the SME's group of connected clients (`lending_group_reference`, falling back to `counterparty_reference` when the lending group is null), excluding drawn from rows secured on residential property (BTL). `threshold` is EUR 2.5m (or GBP equivalent).
 
 ## Infrastructure Supporting Factor (CRR Art. 501a)
 
@@ -70,6 +74,7 @@ When both factors apply to an exposure, the calculator uses the **minimum** (mos
 | CRR-F5 | Infrastructure — flat factor (not tiered) | 0.75 (Art. 501a) |
 | CRR-F6 | Large corporate — no SME factor (turnover > EUR 50m threshold) | 1.0 (no discount) |
 | CRR-F7 | Boundary — exposure exactly at EUR 2.5m (GBP ~£2.18m) threshold | Tier 1 factor (0.7619) applies up to threshold |
+| CRR-F8 | Lending group of two SMEs at GBP 1.5m drawn each — E* = 3m → blended factor (not pure Tier 1) | Blended (E* aggregated across `lending_group_reference`) |
 
 !!! note "Combined Factors"
     When both SME and infrastructure factors apply, the calculator uses the minimum (most beneficial) factor. This is validated within CRR-F5 where infrastructure exposures may also qualify as SME.
@@ -78,4 +83,4 @@ When both factors apply to an exposure, the calculator uses the **minimum** (mos
 
 | Group | Scenarios | Tests | Pass Rate |
 |-------|-----------|-------|-----------|
-| CRR-F: Supporting Factors | F1–F7 | 15 | 100% (15/15) |
+| CRR-F: Supporting Factors | F1–F8 | 17 | 94% (16/17 passing, 1 skipped — F8 pipeline fixture is a follow-up) |

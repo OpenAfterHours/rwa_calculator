@@ -60,6 +60,18 @@ class ExposureClass(StrEnum):
     RETAIL_MORTGAGE = "retail_mortgage"
     """Retail - residential mortgages (CRR Art. 112(h), CRE20.71-81)"""
 
+    RESIDENTIAL_MORTGAGE = "residential_mortgage"
+    """Residential mortgage exposures emitted by the SA real-estate loan-splitter
+    for non-retail counterparties (CRR Art. 125, PRA PS1/26 Art. 124F).
+    Set by ``engine/re_splitter.py`` on the secured child row of a
+    property-collateralised SA exposure whose original class was non-RE."""
+
+    COMMERCIAL_MORTGAGE = "commercial_mortgage"
+    """Commercial mortgage exposures emitted by the SA real-estate loan-splitter
+    (CRR Art. 126, PRA PS1/26 Art. 124H). Set by ``engine/re_splitter.py``
+    on the secured child row (split mode) or whole-loan reclassified row
+    (Art. 124H(3) corporate path)."""
+
     RETAIL_QRRE = "retail_qrre"
     """Retail - qualifying revolving retail exposures (CRE30.23-24)"""
 

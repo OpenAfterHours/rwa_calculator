@@ -154,7 +154,7 @@ class TestB31ResidentialGeneral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=ltv,
             cp_is_natural_person=True,
             config=b31_config,
@@ -171,7 +171,7 @@ class TestB31ResidentialGeneral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=None,
             cp_is_natural_person=True,
             config=b31_config,
@@ -193,7 +193,7 @@ class TestB31ResidentialGeneral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("400000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.65"),
             cp_is_natural_person=True,
             config=b31_config,
@@ -249,7 +249,7 @@ class TestB31ResidentialIncomeProducing:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=ltv,
             has_income_cover=True,
             config=b31_config,
@@ -918,7 +918,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.50"),  # Would be 20% under B31 LTV bands
             is_adc=True,
             config=b31_config,
@@ -1534,7 +1534,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.60"),
             config=crr_config,
         )
@@ -1550,7 +1550,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("1.00"),
             config=crr_config,
         )
@@ -1654,7 +1654,7 @@ class TestCRRvsBasel31Comparison:
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("400000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.50"),
             config=crr_config,
         )
@@ -1662,7 +1662,7 @@ class TestCRRvsBasel31Comparison:
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("400000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("0.50"),
             config=b31_config,
         )
@@ -1681,7 +1681,7 @@ class TestCRRvsBasel31Comparison:
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("400000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("1.10"),
             cp_is_natural_person=True,
             config=crr_config,
@@ -1690,7 +1690,7 @@ class TestCRRvsBasel31Comparison:
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("400000"),
-            exposure_class="RESIDENTIAL_MORTGAGE",
+            exposure_class="residential_mortgage",
             ltv=Decimal("1.10"),
             cp_is_natural_person=True,
             config=b31_config,

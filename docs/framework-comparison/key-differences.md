@@ -859,6 +859,18 @@ The PRA adopted loan-splitting (not the BCBS whole-loan LTV-band table):
 
 Example: At 80% LTV, secured share = 55%/80% = 68.75%. Weighted RW = 20%×0.6875 + 75%×0.3125 = **37.2%** (vs CRR 35%).
 
+!!! info "Counterparty scope of the CRR 35%/75% column"
+    The CRR column above shows the regime treatment under Art. 125 — it is not
+    contingent on the borrower being an individual. Art. 125 applies to any
+    exposure secured by residential property that meets the Art. 125(2)
+    qualifying conditions (value/repayment not materially dependent on
+    borrower credit quality or property cash flows; Art. 208 / 229 valuation).
+    In the calculator this routes through `RETAIL_MORTGAGE` for retail
+    individuals and through `RESIDENTIAL_MORTGAGE` (via the
+    [SA real-estate loan-splitter](../specifications/crr/sa-risk-weights.md#real-estate-loan-splitter-crr-art-125126-pra-ps126-art-124f124h))
+    for non-retail counterparties; both paths apply the same Art. 125 35% /
+    residual-counterparty-RW split.
+
 **Income-producing (cash-flow dependent) — PRA Art. 124G, Table 6B: Whole-Loan**
 
 | LTV | CRR | Basel 3.1 |

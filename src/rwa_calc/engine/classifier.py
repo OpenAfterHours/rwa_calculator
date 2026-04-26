@@ -150,13 +150,13 @@ _B31_SLOTTING_ONLY_SL_TYPES = {
     SpecialisedLendingType.HVCRE.value,
 }
 
-# Target exposure-class labels used by the RE loan-splitter.
-# These are not in the ExposureClass enum (only RETAIL_MORTGAGE is); the SA
-# calculator's RE branch keys on substring matches against these literals,
-# matching the existing RW table labels in data/tables/crr_risk_weights.py
-# and data/tables/b31_risk_weights.py.
-_SECURED_TARGET_RESIDENTIAL = "RESIDENTIAL_MORTGAGE"
-_SECURED_TARGET_COMMERCIAL = "COMMERCIAL_MORTGAGE"
+# Target exposure-class labels used by the RE loan-splitter. Sourced from
+# ``ExposureClass`` so the lowercase enum convention (e.g. ``"retail_mortgage"``)
+# extends consistently to the loan-splitter outputs. The SA calculator's RE
+# branch in ``engine/sa/namespace.py`` uppercases ``exposure_class`` before
+# substring-matching, so either case routes correctly.
+_SECURED_TARGET_RESIDENTIAL = ExposureClass.RESIDENTIAL_MORTGAGE.value
+_SECURED_TARGET_COMMERCIAL = ExposureClass.COMMERCIAL_MORTGAGE.value
 
 
 class ExposureClassifier:

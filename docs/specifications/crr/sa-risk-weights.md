@@ -543,6 +543,38 @@ Risk weight depends on LTV ratio with a split at 80%:
 avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 ```
 
+**Art. 125(2) qualifying conditions** for the 35% secured portion:
+
+- (a) Property value does not materially depend on borrower credit quality
+- (b) Borrower risk does not materially depend on property/project performance —
+  repayment capacity from other sources (i.e. not income-dependent)
+- (c) Art. 208 requirements and Art. 229(1) valuation rules are met
+- (d) The exposure is fully and completely secured by mortgages on residential
+  property which is or shall be occupied or let by the owner
+
+!!! info "Counterparty scope (Art. 125 vs `RETAIL_MORTGAGE`)"
+    Art. 125 is **not** restricted to retail individuals — any exposure secured
+    by qualifying residential property may receive the 35% / residual-RW split,
+    regardless of whether the borrower is an individual, SME, corporate, or
+    institution. In the calculator the eligibility routes are:
+
+    - **`RETAIL_MORTGAGE`** — assigned by `engine/classifier.py` when the
+      exposure is `is_mortgage=True` and the counterparty is an individual
+      (or already classified as `RETAIL_OTHER`). This bucket consumes the
+      Art. 125 split directly in the SA calculator.
+    - **`RESIDENTIAL_MORTGAGE`** — assigned by the SA real-estate
+      loan-splitter (`engine/re_splitter.py`) for residential-property-
+      collateralised SA exposures whose `exposure_class` is **not** already
+      RE-typed (e.g. `CORPORATE`, `INSTITUTION`). The split applies the
+      same 35% secured / counterparty-RW residual decomposition — see
+      [Real Estate Loan-Splitter](#real-estate-loan-splitter-crr-art-125126-pra-ps126-art-124f124h).
+
+    The qualifying-condition gate (Art. 125(2)(a)–(d)) is presently inferred
+    from the input `is_mortgage` flag and the residential-collateral inputs;
+    the calculator does not independently verify (a)–(c). Institutions remain
+    responsible for evidencing the Art. 125(2) conditions for any exposure
+    routed to either bucket.
+
 ## Commercial Real Estate (CRR Art. 126)
 
 Exposures secured by mortgages on commercial immovable property. Art. 126(2)(d) applies a

@@ -5297,3 +5297,222 @@ class TestMOFAndFacilityShare:
         # Share: CP_B (corporate CQS=5, RW=150%) beats CP_A (retail RW=75%).
         assert row["counterparty_reference"][0] == "CP_B"
         assert row["original_counterparty_reference"][0] == "CP_A"
+
+    def test_facility_share_all_undrawn_uses_sub_facility_counterparties(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """A MOF with multi-CP sub-facilities and zero draws still allocates undrawn to riskiest CP.
+
+        Closes the all-undrawn gap: previously the helper only walked loans
+        and contingents, so a brand-new MOF whose sub-facilities span multiple
+        obligors fell through to the parent's own ``counterparty_reference``.
+        Sub-facility ``counterparty_reference`` values are now first-class
+        share members because any of those obligors could draw against the
+        parent's limit and the conservative undrawn EAD must sit with the
+        worst credit.
+        """
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_PARENT", "CP_LIGHT", "CP_HEAVY"],
+                "counterparty_name": ["Parent", "Light", "Heavy"],
+                # CP_PARENT corporate CQS=2 (50%); CP_LIGHT retail (75%);
+                # CP_HEAVY corporate CQS=5 (150%) — the worst credit, must win.
+                "entity_type": ["corporate", "retail", "corporate"],
+                "country_code": ["GB"] * 3,
+                "default_status": [False] * 3,
+            }
+        ).lazy()
+        org_mappings = pl.DataFrame(
+            schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["R_P", "R_H"],
+                "counterparty_reference": ["CP_PARENT", "CP_HEAVY"],
+                "rating_type": ["external", "external"],
+                "rating_agency": ["MOODYS", "MOODYS"],
+                "rating_value": ["A2", "B"],
+                "cqs": [2, 5],
+                "pd": [None, None],
+                "rating_date": [date(2024, 6, 1)] * 2,
+                "is_solicited": [True, True],
+            }
+        ).lazy()
+
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["MOF_DRY", "SUB_LIGHT", "SUB_HEAVY"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_PARENT", "CP_LIGHT", "CP_HEAVY"],
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [1_000_000.0, 600_000.0, 400_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "FR", "MR"],
+            }
+        ).lazy()
+
+        # No loans, no contingents — the all-undrawn case.
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "counterparty_reference": pl.String,
+                "drawn_amount": pl.Float64,
+                "currency": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["MOF_DRY", "MOF_DRY"],
+                "child_reference": ["SUB_LIGHT", "SUB_HEAVY"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            counterparties, org_mappings, ratings
+        )
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+            counterparty_lookup=counterparty_lookup,
+            config=config,
+        ).collect()
+
+        row = undrawn.filter(pl.col("exposure_reference") == "MOF_DRY_UNDRAWN")
+        assert len(row) == 1
+        # Even with zero draws, riskiest sub-facility CP wins:
+        # CP_HEAVY (corporate CQS=5, RW=150%) beats CP_LIGHT (retail RW=75%)
+        # and CP_PARENT (corporate CQS=2, RW=50%).
+        assert row["counterparty_reference"][0] == "CP_HEAVY"
+        assert row["original_counterparty_reference"][0] == "CP_PARENT"
+        # Undrawn = full parent limit since nothing is drawn anywhere.
+        assert row["undrawn_amount"][0] == 1_000_000.0
+
+    def test_facility_share_mixed_drawn_and_undrawn_subs(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Mixed case: one sub-facility CP fully undrawn, another has a drawn loan.
+
+        SUB_DRY is owned by CP_DRY and has no loans (fully undrawn). SUB_WET is
+        owned by CP_WET and has a drawn loan to CP_WET. Both counterparties
+        must be detected as share members so the riskiest still wins, even
+        though one of them has zero current exposure.
+        """
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["CP_PARENT", "CP_DRY", "CP_WET"],
+                "counterparty_name": ["Parent", "Dry", "Wet"],
+                # CP_DRY is the riskiest (corporate CQS=5, RW=150%) but has no draws.
+                # CP_WET (corporate CQS=2, RW=50%) has the drawn loan.
+                # Pre-fix behaviour would have allocated to CP_WET (only loan-CP).
+                # Post-fix: CP_DRY wins because it's a sub-facility share member.
+                "entity_type": ["corporate", "corporate", "corporate"],
+                "country_code": ["GB"] * 3,
+                "default_status": [False] * 3,
+            }
+        ).lazy()
+        org_mappings = pl.DataFrame(
+            schema={
+                "parent_counterparty_reference": pl.String,
+                "child_counterparty_reference": pl.String,
+            }
+        ).lazy()
+        ratings = pl.DataFrame(
+            {
+                "rating_reference": ["R_DRY", "R_WET", "R_PARENT"],
+                "counterparty_reference": ["CP_DRY", "CP_WET", "CP_PARENT"],
+                "rating_type": ["external"] * 3,
+                "rating_agency": ["MOODYS"] * 3,
+                "rating_value": ["B", "A2", "A2"],
+                "cqs": [5, 2, 2],
+                "pd": [None, None, None],
+                "rating_date": [date(2024, 6, 1)] * 3,
+                "is_solicited": [True] * 3,
+            }
+        ).lazy()
+
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["MOF_MIX", "SUB_DRY", "SUB_WET"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_PARENT", "CP_DRY", "CP_WET"],
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [1_000_000.0, 500_000.0, 500_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR"] * 3,
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["L_WET"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_WET"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2027, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [200_000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["MOF_MIX", "MOF_MIX", "SUB_WET"],
+                "child_reference": ["SUB_DRY", "SUB_WET", "L_WET"],
+                "child_type": ["facility", "facility", "loan"],
+            }
+        ).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            counterparties, org_mappings, ratings
+        )
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+            counterparty_lookup=counterparty_lookup,
+            config=config,
+        ).collect()
+
+        row = undrawn.filter(pl.col("exposure_reference") == "MOF_MIX_UNDRAWN")
+        assert len(row) == 1
+        # CP_DRY (RW=150%) wins despite having zero drawn exposure — any sub-facility
+        # CP could draw against the limit, so the worst credit holds the undrawn EAD.
+        assert row["counterparty_reference"][0] == "CP_DRY"
+        assert row["original_counterparty_reference"][0] == "CP_PARENT"
+        # Parent limit 1M minus 200k drawn under SUB_WET = 800k undrawn.
+        assert row["undrawn_amount"][0] == 800_000.0

@@ -1092,9 +1092,15 @@ class HierarchyResolver:
 
         A Facility Share is a single facility linked to multiple counterparties
         — identified here by the union of distinct ``counterparty_reference``
-        values on descendant loans and contingents. When that set has more than
-        one member, the facility's undrawn must be allocated to the riskiest
-        member (highest SA-equivalent risk weight).
+        values on descendant loans, contingents, **and sub-facilities**. When
+        that set has more than one member, the facility's undrawn must be
+        allocated to the riskiest member (highest SA-equivalent risk weight),
+        because any of the linked counterparties could draw against the limit
+        and the conservative undrawn EAD must sit with the worst credit.
+
+        Sub-facility counterparties are included so that a MOF parent whose
+        sub-facilities span multiple obligors triggers riskiest-CP allocation
+        even when nothing has been drawn yet (the all-undrawn case).
 
         The risk-weight preview uses :func:`_preview_sa_rw_expr` and is
         non-binding: the chosen counterparty still flows through the full
@@ -1130,8 +1136,35 @@ class HierarchyResolver:
         type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
 
         # Gather descendant (root_facility_reference, counterparty_reference) pairs
-        # from loans and contingents that map to a facility.
+        # from loans, contingents, and sub-facilities that map to a facility.
         candidate_frames: list[pl.LazyFrame] = []
+
+        # Sub-facility counterparties — every descendant facility's own owner
+        # is a potential drawer against the parent's limit. Joining via the
+        # root_lookup gives every sub-facility its MOF root in a single hop.
+        fac_cols = set(facilities.collect_schema().names())
+        if "facility_reference" in fac_cols and "counterparty_reference" in fac_cols:
+            sub_fac_with_root = (
+                facilities.select([pl.col("facility_reference"), pl.col("counterparty_reference")])
+                .join(
+                    root_lookup.select(
+                        [
+                            pl.col("child_facility_reference"),
+                            pl.col("root_facility_reference"),
+                        ]
+                    ),
+                    left_on="facility_reference",
+                    right_on="child_facility_reference",
+                    how="inner",
+                )
+                .select(
+                    [
+                        pl.col("root_facility_reference").alias("facility_reference"),
+                        pl.col("counterparty_reference"),
+                    ]
+                )
+            )
+            candidate_frames.append(sub_fac_with_root)
 
         loan_cols = set(loans.collect_schema().names())
         if "loan_reference" in loan_cols and "counterparty_reference" in loan_cols:

@@ -68,7 +68,7 @@ This calculator supports two regulatory regimes:
 | Regime | Effective Period | UK Implementation | Status |
 |--------|------------------|-------------------|--------|
 | **CRR (Basel 3.0)** | Until 31 December 2026 | UK CRR (EU 575/2013 as onshored) | **Active** |
-| **Basel 3.1** | From 1 January 2027 | PRA PS1/26 | **Active Development** |
+| **Basel 3.1** | From 1 January 2027 | PRA PS1/26 | **Implemented** |
 
 A configuration toggle allows switching between calculation modes for:
 - Current regulatory reporting under UK CRR
@@ -98,7 +98,7 @@ A configuration toggle allows switching between calculation modes for:
 
 ### Supported Exposure Classes
 
-Sovereign, Institution, Corporate, Corporate SME, Retail Mortgage, Retail QRRE, Retail Other, Specialised Lending, Equity
+Sovereign / Central Bank, Institution, Corporate, Corporate SME, PSE, MDB, RGLA, Retail Mortgage, Retail QRRE, Retail Other, Specialised Lending, Equity, Covered Bond, Residential Mortgage, Commercial Mortgage (Basel 3.1 RE split), High Risk, Defaulted, Other
 
 ## Documentation
 
@@ -127,7 +127,7 @@ uv run pytest --cov=src/rwa_calc
 uv run pytest tests/benchmarks/ -m "benchmark and not slow" -k "not 1m" -o "addopts=" --benchmark-only -v
 ```
 
-**Test Results:** ~1,915 tests (1,485 unit + 275 acceptance + 123 contract + ~30 benchmark)
+**Test Results:** ~5,500 tests (~4,675 unit + ~500 acceptance + ~165 contract + ~145 integration + ~30 benchmark)
 
 ## License
 

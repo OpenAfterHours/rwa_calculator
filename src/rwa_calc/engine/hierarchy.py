@@ -45,7 +45,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     MDB_RISK_WEIGHTS_TABLE_2B,
     RETAIL_RISK_WEIGHT,
 )
-from rwa_calc.domain.enums import CQS
+from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.engine.classifier import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns
 
@@ -712,14 +713,7 @@ class HierarchyResolver:
                 }
             )
         else:
-            if type_col is not None:
-                loan_mappings = facility_mappings.filter(
-                    pl.col(type_col).fill_null("").str.to_lowercase() == "loan"
-                ).unique(subset=["child_reference", "parent_facility_reference"])
-            else:
-                loan_mappings = facility_mappings.unique(
-                    subset=["child_reference", "parent_facility_reference"]
-                )
+            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
 
             # Sum drawn amounts by parent facility
             # Clamp negative drawn amounts to 0 before summing - negative balances
@@ -754,15 +748,9 @@ class HierarchyResolver:
                 }
             )
         else:
-            # Filter mappings to only contingent children
-            if type_col is not None:
-                contingent_mappings = facility_mappings.filter(
-                    pl.col(type_col).fill_null("").str.to_lowercase() == "contingent"
-                ).unique(subset=["child_reference", "parent_facility_reference"])
-            else:
-                contingent_mappings = facility_mappings.unique(
-                    subset=["child_reference", "parent_facility_reference"]
-                )
+            contingent_mappings = _filter_mappings_by_child_type(
+                facility_mappings, "contingent", type_col
+            )
 
             # Join contingents with their parent facility
             contingent_with_parent = contingents.join(
@@ -1147,14 +1135,7 @@ class HierarchyResolver:
 
         loan_cols = set(loans.collect_schema().names())
         if "loan_reference" in loan_cols and "counterparty_reference" in loan_cols:
-            if type_col is not None:
-                loan_mappings = facility_mappings.filter(
-                    pl.col(type_col).fill_null("").str.to_lowercase() == "loan"
-                ).unique(subset=["child_reference", "parent_facility_reference"])
-            else:
-                loan_mappings = facility_mappings.unique(
-                    subset=["child_reference", "parent_facility_reference"]
-                )
+            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
 
             loan_with_parent = loans.select(
                 [pl.col("loan_reference"), pl.col("counterparty_reference")]
@@ -1179,14 +1160,9 @@ class HierarchyResolver:
         if contingents is not None:
             cont_cols = set(contingents.collect_schema().names())
             if "contingent_reference" in cont_cols and "counterparty_reference" in cont_cols:
-                if type_col is not None:
-                    cont_mappings = facility_mappings.filter(
-                        pl.col(type_col).fill_null("").str.to_lowercase() == "contingent"
-                    ).unique(subset=["child_reference", "parent_facility_reference"])
-                else:
-                    cont_mappings = facility_mappings.unique(
-                        subset=["child_reference", "parent_facility_reference"]
-                    )
+                cont_mappings = _filter_mappings_by_child_type(
+                    facility_mappings, "contingent", type_col
+                )
 
                 cont_with_parent = contingents.select(
                     [pl.col("contingent_reference"), pl.col("counterparty_reference")]
@@ -2328,6 +2304,23 @@ def _detect_type_column(schema_names: set[str]) -> str | None:
     return None
 
 
+def _filter_mappings_by_child_type(
+    facility_mappings: pl.LazyFrame,
+    child_type: str,
+    type_col: str | None,
+) -> pl.LazyFrame:
+    """Return facility_mappings filtered to a single child_type, deduped on child+parent.
+
+    When ``type_col`` is None (legacy mappings without a type column), the input
+    is passed through with the same uniqueness guarantee — the caller is
+    responsible for any further filtering.
+    """
+    deduped = facility_mappings.unique(subset=["child_reference", "parent_facility_reference"])
+    if type_col is None:
+        return deduped
+    return deduped.filter(pl.col(type_col).fill_null("").str.to_lowercase() == child_type)
+
+
 def _resolve_graph_eager(
     edges: pl.DataFrame,
     child_col: str,
@@ -2422,27 +2415,28 @@ def _preview_sa_rw_expr(
             .otherwise(pl.lit(float(table[CQS.UNRATED])))
         )
 
+    sovereign_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value])
+    institution_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.INSTITUTION.value])
+    corporate_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CORPORATE.value])
+    retail_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.RETAIL_OTHER.value])
+    high_risk_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.HIGH_RISK.value])
+    mdb_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.MDB.value])
+    covered_bond_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.COVERED_BOND.value])
+
     return (
-        pl.when(et.is_in(["sovereign", "central_bank"]))
+        pl.when(et.is_in(sovereign_types))
         .then(_cqs_lookup(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS))
-        .when(et.is_in(["institution", "bank", "ccp", "financial_institution"]))
+        .when(et.is_in(institution_types))
         .then(_cqs_lookup(inst_table))
-        .when(et.is_in(["corporate", "company", "specialised_lending", "covered_bond"]))
+        # SA covered_bond uses corporate-equivalent CQS RWs in the preview;
+        # the precise covered-bond table only kicks in for IRB/SA SL pricing.
+        .when(et.is_in(corporate_types + covered_bond_types))
         .then(_cqs_lookup(CORPORATE_RISK_WEIGHTS))
-        .when(et.is_in(["individual", "retail"]))
+        .when(et.is_in(retail_types))
         .then(pl.lit(float(RETAIL_RISK_WEIGHT)))
-        .when(
-            et.is_in(
-                [
-                    "high_risk",
-                    "high_risk_venture_capital",
-                    "high_risk_private_equity",
-                    "high_risk_speculative_re",
-                ]
-            )
-        )
+        .when(et.is_in(high_risk_types))
         .then(pl.lit(float(HIGH_RISK_RW)))
-        .when(et.is_in(["mdb", "mdb_named", "international_org"]))
+        .when(et.is_in(mdb_types))
         .then(_cqs_lookup(MDB_RISK_WEIGHTS_TABLE_2B))
         .otherwise(pl.lit(1.0))
     )

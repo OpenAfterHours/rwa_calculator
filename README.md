@@ -1,4 +1,5 @@
-*This package is still in development and is not production ready*
+> [!IMPORTANT]
+> *This package is still in development and is not production ready*
 
 # UK Credit Risk RWA Calculator
 

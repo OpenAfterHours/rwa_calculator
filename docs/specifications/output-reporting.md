@@ -165,8 +165,18 @@ breakdown, risk weight breakdown, memorandum items).
 - Rows 0180-0260: Roll-out class breakdowns for corporate sub-classes, retail sub-classes, and SL types
 
 **OF 09.01 (SA Geographic Breakdown)** — missing row IDs:
-- Rows 0071-0073: Specialised lending sub-rows
-- Rows 0091-0094: Real estate sub-breakdowns (regulatory RESI, regulatory CRE, ADC, other RE)
+- Rows 0071-0073: Specialised lending sub-rows (0071=object finance, 0072=commodities finance, 0073=project finance — same definitions as OF 07.00 rows 0021-0023; sub-rows under Corporates 0070)
+- Row 0075: Of which: SME — sub-row under Corporates (0070); same definition as OF 07.00 row 0020 (Art. 112(1)(g))
+- Row 0085: Of which: SME — sub-row under Retail (0080); same definition as OF 07.00 row 0020 (Art. 112(1)(h))
+- Rows 0091-0094: Real estate sub-breakdowns (0091=regulatory residential RE, 0092=regulatory commercial RE, 0093=other RE, 0094=ADC — same definitions as OF 07.00 rows 0330/0340/0350/0360; sum of 0091-0094 equals row 0090)
+- Row 0095: Of which: SME — sub-row under Real estate exposures (0090); same definition as OF 07.00 row 0020 (Art. 112(1)(i))
+- Row 0141: CIU look-through approach — sub-row under Collective investment undertakings (0140); same definition as OF 07.00 row 0281
+- Row 0142: CIU mandate-based approach — sub-row under Collective investment undertakings (0140); same definition as OF 07.00 row 0282
+- Row 0143: CIU fall-back approach — sub-row under Collective investment undertakings (0140); same definition as OF 07.00 row 0283 (sum of 0141-0143 equals row 0140, Art. 112(1)(o))
+- Row 0160: Other items — Art. 112(1)(q) of the Credit Risk: Standardised Approach (CRR) Part
+- Row 0170: Total exposures — geographic-breakdown grand total across all SA exposure classes
+
+Source: PS1/26 Annex II §3.4.1 (OF 09.01 row instructions, pp. 139-141 of `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`).
 
 **OF 09.02 (IRB Geographic Breakdown)** — missing row IDs:
 - Row 0042: Specialised lending (excluding slotting approach)

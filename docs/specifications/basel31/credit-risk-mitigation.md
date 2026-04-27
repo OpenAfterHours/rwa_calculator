@@ -463,6 +463,30 @@ classes: PSM remains mandatory there under limb 1 above.)
 
 ---
 
+## Tranched Coverage (Art. 234)
+
+Art. 234 governs **partial / tranched** unfunded credit protection — structures
+where the protection covers only part of the loss range on the underlying exposure
+(for example, a guarantee that absorbs losses between an attachment point and a
+detachment point, while the borrower retains the first-loss and senior tranches).
+
+Under Art. 234 the protected and unprotected tranches are treated as separate
+exposures, and the protection is recognised only on the covered tranche, with the
+risk weight or PD/LGD of the protection provider substituted via the appropriate
+method (RWSM under Art. 235 for SA / Slotting, or PSM under Art. 236 for IRB).
+
+!!! warning "Not Yet Implemented"
+    Art. 234 tranched / partial-coverage unfunded protection is not modelled. The
+    CRM processor treats unfunded credit protection as covering a single contiguous
+    portion of the exposure (the `covered_amount` field) and does not split the
+    underlying exposure into attachment / detachment tranches with separate risk
+    weights per tranche. Structured protection arrangements that cover only a
+    middle loss tranche are therefore mis-stated.
+    See IMPLEMENTATION_PLAN.md item **P1.30(e)** (Art. 234 partial protection
+    tranching) for the tracking entry and effort estimate.
+
+---
+
 ## FCSM Under Basel 3.1 (Art. 222)
 
 The Financial Collateral Simple Method is retained for SA exposures under Basel 3.1.

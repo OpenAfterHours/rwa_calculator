@@ -1750,14 +1750,17 @@ The reporting institution is responsible for computing the stacked LTV externall
 the calculator consumes the pre-computed `property_ltv` value and assumes it already
 incorporates Art. 124C(2)–(3) components. The separate `prior_charge_ltv` field
 enables the calculator to determine the junior charge effect on the loan-splitting
-threshold (55% for RRE, 60% for CRE).
+threshold (55% of property value for both RRE under Art. 124F(1) and CRE under
+Art. 124H(1)).
 
 !!! info "Relationship between `property_ltv` and `prior_charge_ltv`"
     - `property_ltv` = total regulatory LTV including all prior charges (the single
       number used for risk weight band lookup in Art. 124G/124I tables)
     - `prior_charge_ltv` = the LTV contribution of prior/pari passu charges only (used
-      to reduce the secured threshold from 55%/60% under Art. 124F(2)/124H junior charge
-      treatment)
+      to reduce the **55% of property value** secured threshold under Art. 124F(2) (RRE)
+      and Art. 124H(2) (CRE) junior charge treatment — note both classes share the same
+      55% threshold; the difference is the secured-portion **risk weight** (20% RRE per
+      Art. 124F(1)(a), 60% CRE per Art. 124H(1)(a)))
     - A first-charge exposure has `prior_charge_ltv = 0.0`
     - An exposure behind a senior lien has `prior_charge_ltv > 0.0`
 

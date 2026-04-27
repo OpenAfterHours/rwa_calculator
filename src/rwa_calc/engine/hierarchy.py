@@ -36,6 +36,17 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.tables.crr_risk_weights import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    HIGH_RISK_RW,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
+    MDB_RISK_WEIGHTS_TABLE_2B,
+    RETAIL_RISK_WEIGHT,
+)
+from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.engine.classifier import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns
 
@@ -88,6 +99,7 @@ class HierarchyResolver:
             data.facilities,
             data.facility_mappings,
             counterparty_lookup,
+            config,
         )
         errors.extend(exp_errors)
 
@@ -578,6 +590,8 @@ class HierarchyResolver:
         contingents: pl.LazyFrame | None,
         facility_mappings: pl.LazyFrame,
         facility_root_lookup: pl.LazyFrame | None = None,
+        counterparty_lookup: CounterpartyLookup | None = None,
+        config: CalculationConfig | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate undrawn amounts for facilities.
@@ -590,12 +604,30 @@ class HierarchyResolver:
         sub-facilities are aggregated up to the root facility. Sub-facilities
         do not produce their own undrawn exposure records.
 
+        Two facility-product overrides are applied to the resulting undrawn
+        rows when ``counterparty_lookup`` and ``config`` are provided:
+
+        - **Multiple Option Facility (MOF)**: any facility with at least one
+          ``child_type='facility'`` mapping inherits the descendant ``risk_type``
+          producing the highest SA CCF, ensuring the parent's undrawn EAD
+          reflects the worst-case off-balance commitment among its components.
+        - **Facility Share**: when the descendant loans/contingents reference
+          more than one distinct counterparty, the undrawn is allocated to the
+          riskiest member by SA-equivalent risk weight.
+
+        Both overrides preserve the original facility values in audit columns
+        (``original_counterparty_reference``, ``mof_risk_type_source``).
+
         Args:
             facilities: Facilities with limit, risk_type, and other CCF fields
             loans: Loans with drawn_amount
             contingents: Contingents with nominal_amount (optional)
             facility_mappings: Mappings between facilities and children
             facility_root_lookup: Root lookup from _build_facility_root_lookup
+            counterparty_lookup: Used to resolve riskiest counterparty for
+                Facility Shares (entity_type + cqs preview lookup)
+            config: Calculation configuration (frame switch for SA CCF /
+                SA RW preview tables)
 
         Returns:
             LazyFrame with facility_undrawn exposure records
@@ -611,6 +643,7 @@ class HierarchyResolver:
                     "product_type": pl.String,
                     "book_code": pl.String,
                     "counterparty_reference": pl.String,
+                    "original_counterparty_reference": pl.String,
                     "value_date": pl.Date,
                     "maturity_date": pl.Date,
                     "currency": pl.String,
@@ -622,6 +655,7 @@ class HierarchyResolver:
                     "beel": pl.Float64,
                     "seniority": pl.String,
                     "risk_type": pl.String,
+                    "mof_risk_type_source": pl.String,
                     "underlying_risk_type": pl.String,
                     "ccf_modelled": pl.Float64,
                     "ead_modelled": pl.Float64,
@@ -679,14 +713,7 @@ class HierarchyResolver:
                 }
             )
         else:
-            if type_col is not None:
-                loan_mappings = facility_mappings.filter(
-                    pl.col(type_col).fill_null("").str.to_lowercase() == "loan"
-                ).unique(subset=["child_reference", "parent_facility_reference"])
-            else:
-                loan_mappings = facility_mappings.unique(
-                    subset=["child_reference", "parent_facility_reference"]
-                )
+            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
 
             # Sum drawn amounts by parent facility
             # Clamp negative drawn amounts to 0 before summing - negative balances
@@ -721,15 +748,9 @@ class HierarchyResolver:
                 }
             )
         else:
-            # Filter mappings to only contingent children
-            if type_col is not None:
-                contingent_mappings = facility_mappings.filter(
-                    pl.col(type_col).fill_null("").str.to_lowercase() == "contingent"
-                ).unique(subset=["child_reference", "parent_facility_reference"])
-            else:
-                contingent_mappings = facility_mappings.unique(
-                    subset=["child_reference", "parent_facility_reference"]
-                )
+            contingent_mappings = _filter_mappings_by_child_type(
+                facility_mappings, "contingent", type_col
+            )
 
             # Join contingents with their parent facility
             contingent_with_parent = contingents.join(
@@ -793,6 +814,39 @@ class HierarchyResolver:
             how="anti",
         )
 
+        # MOF: derive parent risk_type from descendant sub-facilities (max SA CCF).
+        # Facility Share: derive riskiest counterparty from descendant loans/contingents.
+        # Both lookups are no-ops when their inputs are missing or trivial.
+        is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
+        mof_lookup = self._derive_mof_risk_type(
+            facilities, facility_mappings, root_lookup, is_basel_3_1
+        )
+        facility_with_drawn = facility_with_drawn.join(
+            mof_lookup,
+            on="facility_reference",
+            how="left",
+        )
+
+        if counterparty_lookup is not None:
+            share_lookup = self._derive_facility_share_counterparty(
+                facilities,
+                facility_mappings,
+                loans,
+                contingents,
+                counterparty_lookup,
+                root_lookup,
+                is_basel_3_1,
+            )
+            facility_with_drawn = facility_with_drawn.join(
+                share_lookup,
+                on="facility_reference",
+                how="left",
+            )
+        else:
+            facility_with_drawn = facility_with_drawn.with_columns(
+                pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
+            )
+
         # Get facility schema to check for optional columns
         facility_schema = facilities.collect_schema()
         facility_cols = set(facility_schema.names())
@@ -809,9 +863,17 @@ class HierarchyResolver:
             pl.col("book_code").cast(pl.String, strict=False)
             if "book_code" in facility_cols
             else pl.lit(None).cast(pl.String).alias("book_code"),
-            pl.col("counterparty_reference")
-            if "counterparty_reference" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("counterparty_reference"),
+            pl.coalesce(
+                pl.col("share_counterparty_reference"),
+                pl.col("counterparty_reference")
+                if "counterparty_reference" in facility_cols
+                else pl.lit(None).cast(pl.String),
+            ).alias("counterparty_reference"),
+            (
+                pl.col("counterparty_reference").alias("original_counterparty_reference")
+                if "counterparty_reference" in facility_cols
+                else pl.lit(None).cast(pl.String).alias("original_counterparty_reference")
+            ),
             pl.col("value_date")
             if "value_date" in facility_cols
             else pl.lit(None).cast(pl.Date).alias("value_date"),
@@ -840,9 +902,13 @@ class HierarchyResolver:
             pl.col("seniority")
             if "seniority" in facility_cols
             else pl.lit(None).cast(pl.String).alias("seniority"),
-            pl.col("risk_type")
-            if "risk_type" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("risk_type"),
+            pl.coalesce(
+                pl.col("mof_risk_type"),
+                pl.col("risk_type")
+                if "risk_type" in facility_cols
+                else pl.lit(None).cast(pl.String),
+            ).alias("risk_type"),
+            pl.col("mof_risk_type_source"),
             pl.col("underlying_risk_type")
             if "underlying_risk_type" in facility_cols
             else pl.lit(None).cast(pl.String).alias("underlying_risk_type"),
@@ -917,6 +983,298 @@ class HierarchyResolver:
 
         return facility_undrawn_exposures
 
+    def _derive_mof_risk_type(
+        self,
+        facilities: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        root_lookup: pl.LazyFrame,
+        is_basel_3_1: bool,
+    ) -> pl.LazyFrame:
+        """Derive Multiple Option Facility (MOF) parent risk_type from descendant sub-facilities.
+
+        Any facility that has at least one ``child_type='facility'`` mapping is
+        treated as a MOF parent. Its undrawn CCF must reflect the worst-case
+        off-balance commitment among its descendants, so the parent inherits
+        the ``risk_type`` of whichever descendant sub-facility produces the
+        highest SA CCF under the active framework.
+
+        Args:
+            facilities: Facilities frame with ``facility_reference`` and ``risk_type``.
+            facility_mappings: Mappings between facilities and children.
+            root_lookup: Output of :meth:`_build_facility_root_lookup` — gives
+                each descendant sub-facility its root parent.
+            is_basel_3_1: Frame switch passed to :func:`sa_ccf_expression`.
+
+        Returns:
+            LazyFrame with columns:
+                - facility_reference: the MOF parent reference.
+                - mof_risk_type: the descendant's risk_type that won the max-CCF tie.
+                - mof_risk_type_source: the descendant facility reference that won.
+        """
+        from rwa_calc.engine.ccf import sa_ccf_expression
+
+        empty = pl.LazyFrame(
+            schema={
+                "facility_reference": pl.String,
+                "mof_risk_type": pl.String,
+                "mof_risk_type_source": pl.String,
+            }
+        )
+
+        fac_cols = set(facilities.collect_schema().names())
+        if "facility_reference" not in fac_cols or "risk_type" not in fac_cols:
+            return empty
+
+        root_cols = set(root_lookup.collect_schema().names())
+        if (
+            "child_facility_reference" not in root_cols
+            or "root_facility_reference" not in root_cols
+        ):
+            return empty
+
+        # For each (root, descendant) pair, look up the descendant's risk_type and
+        # compute the SA CCF it would produce under the active framework.
+        descendants = root_lookup.select(
+            [
+                pl.col("root_facility_reference").alias("facility_reference"),
+                pl.col("child_facility_reference").alias("descendant_facility_reference"),
+            ]
+        ).join(
+            facilities.select(
+                [
+                    pl.col("facility_reference").alias("descendant_facility_reference"),
+                    pl.col("risk_type").alias("descendant_risk_type"),
+                ]
+            ),
+            on="descendant_facility_reference",
+            how="inner",
+        )
+
+        descendants = descendants.filter(pl.col("descendant_risk_type").is_not_null()).with_columns(
+            sa_ccf_expression(
+                risk_type_col="descendant_risk_type", is_basel_3_1=is_basel_3_1
+            ).alias("descendant_sa_ccf")
+        )
+
+        # Per parent, pick the descendant with the highest SA CCF. Tie-break on
+        # alphabetical lowercase risk_type (deterministic), then on alphabetical
+        # descendant facility reference for full reproducibility.
+        return (
+            descendants.sort(
+                [
+                    "facility_reference",
+                    "descendant_sa_ccf",
+                    "descendant_risk_type",
+                    "descendant_facility_reference",
+                ],
+                descending=[False, True, False, False],
+            )
+            .group_by("facility_reference")
+            .agg(
+                [
+                    pl.col("descendant_risk_type").first().alias("mof_risk_type"),
+                    pl.col("descendant_facility_reference").first().alias("mof_risk_type_source"),
+                ]
+            )
+        )
+
+    def _derive_facility_share_counterparty(
+        self,
+        facilities: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        loans: pl.LazyFrame,
+        contingents: pl.LazyFrame | None,
+        counterparty_lookup: CounterpartyLookup,
+        root_lookup: pl.LazyFrame,
+        is_basel_3_1: bool,
+    ) -> pl.LazyFrame:
+        """Derive the riskiest counterparty for facilities with multi-CP shares.
+
+        A Facility Share is a single facility linked to multiple counterparties
+        — identified here by the union of distinct ``counterparty_reference``
+        values on descendant loans, contingents, **and sub-facilities**. When
+        that set has more than one member, the facility's undrawn must be
+        allocated to the riskiest member (highest SA-equivalent risk weight),
+        because any of the linked counterparties could draw against the limit
+        and the conservative undrawn EAD must sit with the worst credit.
+
+        Sub-facility counterparties are included so that a MOF parent whose
+        sub-facilities span multiple obligors triggers riskiest-CP allocation
+        even when nothing has been drawn yet (the all-undrawn case).
+
+        The risk-weight preview uses :func:`_preview_sa_rw_expr` and is
+        non-binding: the chosen counterparty still flows through the full
+        classifier and SA/IRB pipeline downstream.
+
+        Args:
+            facilities: Facilities frame, used for the root-facility schema only.
+            facility_mappings: Mappings between facilities and children.
+            loans: Loans frame; descendant counterparties come from here.
+            contingents: Contingents frame (optional); descendants also come from here.
+            counterparty_lookup: Used to look up ``entity_type`` and ``cqs``
+                per candidate counterparty.
+            root_lookup: Output of :meth:`_build_facility_root_lookup`.
+            is_basel_3_1: Frame switch passed to :func:`_preview_sa_rw_expr`.
+
+        Returns:
+            LazyFrame with columns:
+                - facility_reference: root facility with a multi-CP share.
+                - share_counterparty_reference: the chosen riskiest member.
+        """
+        empty = pl.LazyFrame(
+            schema={
+                "facility_reference": pl.String,
+                "share_counterparty_reference": pl.String,
+            }
+        )
+
+        if not has_required_columns(
+            facility_mappings, {"parent_facility_reference", "child_reference"}
+        ):
+            return empty
+
+        type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
+
+        # Gather descendant (root_facility_reference, counterparty_reference) pairs
+        # from loans, contingents, and sub-facilities that map to a facility.
+        candidate_frames: list[pl.LazyFrame] = []
+
+        # Sub-facility counterparties — every descendant facility's own owner
+        # is a potential drawer against the parent's limit. Joining via the
+        # root_lookup gives every sub-facility its MOF root in a single hop.
+        fac_cols = set(facilities.collect_schema().names())
+        if "facility_reference" in fac_cols and "counterparty_reference" in fac_cols:
+            sub_fac_with_root = (
+                facilities.select([pl.col("facility_reference"), pl.col("counterparty_reference")])
+                .join(
+                    root_lookup.select(
+                        [
+                            pl.col("child_facility_reference"),
+                            pl.col("root_facility_reference"),
+                        ]
+                    ),
+                    left_on="facility_reference",
+                    right_on="child_facility_reference",
+                    how="inner",
+                )
+                .select(
+                    [
+                        pl.col("root_facility_reference").alias("facility_reference"),
+                        pl.col("counterparty_reference"),
+                    ]
+                )
+            )
+            candidate_frames.append(sub_fac_with_root)
+
+        loan_cols = set(loans.collect_schema().names())
+        if "loan_reference" in loan_cols and "counterparty_reference" in loan_cols:
+            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
+
+            loan_with_parent = loans.select(
+                [pl.col("loan_reference"), pl.col("counterparty_reference")]
+            ).join(
+                loan_mappings.select(
+                    [pl.col("child_reference"), pl.col("parent_facility_reference")]
+                ),
+                left_on="loan_reference",
+                right_on="child_reference",
+                how="inner",
+            )
+            loan_with_parent = _resolve_to_root_facility(loan_with_parent, root_lookup)
+            candidate_frames.append(
+                loan_with_parent.select(
+                    [
+                        pl.col("aggregation_facility").alias("facility_reference"),
+                        pl.col("counterparty_reference"),
+                    ]
+                )
+            )
+
+        if contingents is not None:
+            cont_cols = set(contingents.collect_schema().names())
+            if "contingent_reference" in cont_cols and "counterparty_reference" in cont_cols:
+                cont_mappings = _filter_mappings_by_child_type(
+                    facility_mappings, "contingent", type_col
+                )
+
+                cont_with_parent = contingents.select(
+                    [pl.col("contingent_reference"), pl.col("counterparty_reference")]
+                ).join(
+                    cont_mappings.select(
+                        [pl.col("child_reference"), pl.col("parent_facility_reference")]
+                    ),
+                    left_on="contingent_reference",
+                    right_on="child_reference",
+                    how="inner",
+                )
+                cont_with_parent = _resolve_to_root_facility(cont_with_parent, root_lookup)
+                candidate_frames.append(
+                    cont_with_parent.select(
+                        [
+                            pl.col("aggregation_facility").alias("facility_reference"),
+                            pl.col("counterparty_reference"),
+                        ]
+                    )
+                )
+
+        if not candidate_frames:
+            return empty
+
+        candidates = (
+            pl.concat(candidate_frames, how="diagonal_relaxed")
+            .filter(pl.col("counterparty_reference").is_not_null())
+            .unique(subset=["facility_reference", "counterparty_reference"])
+        )
+
+        # Only facilities with > 1 distinct member are Facility Shares.
+        member_counts = candidates.group_by("facility_reference").agg(
+            pl.len().alias("_member_count")
+        )
+        candidates = candidates.join(member_counts, on="facility_reference", how="inner").filter(
+            pl.col("_member_count") > 1
+        )
+
+        # Pull entity_type + cqs from the resolved counterparty lookup.
+        cp_cols = set(counterparty_lookup.counterparties.collect_schema().names())
+        cp_select = [pl.col("counterparty_reference")]
+        if "entity_type" in cp_cols:
+            cp_select.append(pl.col("entity_type").alias("_share_entity_type"))
+        else:
+            return empty
+        if "cqs" in cp_cols:
+            cp_select.append(pl.col("cqs").alias("_share_cqs"))
+        else:
+            cp_select.append(pl.lit(None).cast(pl.Int8).alias("_share_cqs"))
+
+        candidates = candidates.join(
+            counterparty_lookup.counterparties.select(cp_select),
+            on="counterparty_reference",
+            how="left",
+        ).with_columns(
+            _preview_sa_rw_expr(
+                entity_type_col="_share_entity_type",
+                cqs_col="_share_cqs",
+                is_basel_3_1=is_basel_3_1,
+            ).alias("_preview_rw")
+        )
+
+        # Per facility, pick the candidate with max preview RW. Tie-break on
+        # higher CQS (worse credit) then alphabetical counterparty_reference.
+        return (
+            candidates.sort(
+                [
+                    "facility_reference",
+                    "_preview_rw",
+                    "_share_cqs",
+                    "counterparty_reference",
+                ],
+                descending=[False, True, True, False],
+                nulls_last=True,
+            )
+            .group_by("facility_reference")
+            .agg(pl.col("counterparty_reference").first().alias("share_counterparty_reference"))
+        )
+
     def _unify_exposures(
         self,
         loans: pl.LazyFrame,
@@ -924,6 +1282,7 @@ class HierarchyResolver:
         facilities: pl.LazyFrame | None,
         facility_mappings: pl.LazyFrame,
         counterparty_lookup: CounterpartyLookup,
+        config: CalculationConfig | None = None,
     ) -> tuple[pl.LazyFrame, list[CalculationError]]:
         """
         Unify loans, contingents, and facility undrawn into a single exposures LazyFrame.
@@ -1122,7 +1481,13 @@ class HierarchyResolver:
         # Calculate and add facility undrawn exposures
         # This creates separate exposure records for undrawn facility headroom
         facility_undrawn = self._calculate_facility_undrawn(
-            facilities, loans, contingents, facility_mappings, facility_root_lookup
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
+            counterparty_lookup=counterparty_lookup,
+            config=config,
         )
         exposure_frames.append(facility_undrawn)
 
@@ -1972,6 +2337,23 @@ def _detect_type_column(schema_names: set[str]) -> str | None:
     return None
 
 
+def _filter_mappings_by_child_type(
+    facility_mappings: pl.LazyFrame,
+    child_type: str,
+    type_col: str | None,
+) -> pl.LazyFrame:
+    """Return facility_mappings filtered to a single child_type, deduped on child+parent.
+
+    When ``type_col`` is None (legacy mappings without a type column), the input
+    is passed through with the same uniqueness guarantee — the caller is
+    responsible for any further filtering.
+    """
+    deduped = facility_mappings.unique(subset=["child_reference", "parent_facility_reference"])
+    if type_col is None:
+        return deduped
+    return deduped.filter(pl.col(type_col).fill_null("").str.to_lowercase() == child_type)
+
+
 def _resolve_graph_eager(
     edges: pl.DataFrame,
     child_col: str,
@@ -2024,4 +2406,70 @@ def _resolve_graph_eager(
     return pl.DataFrame(
         {"entity": entities, "root": roots, "depth": depths},
         schema={"entity": pl.String, "root": pl.String, "depth": pl.Int32},
+    )
+
+
+def _preview_sa_rw_expr(
+    entity_type_col: str,
+    cqs_col: str,
+    is_basel_3_1: bool,
+) -> pl.Expr:
+    """SA-equivalent risk weight preview for facility-share counterparty selection.
+
+    Routes the candidate counterparty's ``entity_type`` to the matching CRR /
+    PRA PS1/26 SA risk weight table and returns the RW for its CQS. Used only
+    to pick the riskiest counterparty in a Facility Share — the chosen
+    counterparty still goes through the full classifier and SA/IRB pipeline
+    downstream, so this lookup is non-binding. Keeping the preview SA-only
+    avoids a circular dependency with the classifier's IRB approach gating.
+
+    References:
+        - CRR Art. 114, 120, 122, 123 / PRA PS1/26 equivalents
+    """
+    et = pl.col(entity_type_col).fill_null("").str.to_lowercase()
+    cqs = pl.col(cqs_col).fill_null(0).cast(pl.Int8)
+
+    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
+
+    def _cqs_lookup(table: dict[CQS, object]) -> pl.Expr:
+        return (
+            pl.when(cqs == 1)
+            .then(pl.lit(float(table[CQS.CQS1])))
+            .when(cqs == 2)
+            .then(pl.lit(float(table[CQS.CQS2])))
+            .when(cqs == 3)
+            .then(pl.lit(float(table[CQS.CQS3])))
+            .when(cqs == 4)
+            .then(pl.lit(float(table[CQS.CQS4])))
+            .when(cqs == 5)
+            .then(pl.lit(float(table[CQS.CQS5])))
+            .when(cqs == 6)
+            .then(pl.lit(float(table[CQS.CQS6])))
+            .otherwise(pl.lit(float(table[CQS.UNRATED])))
+        )
+
+    sovereign_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value])
+    institution_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.INSTITUTION.value])
+    corporate_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CORPORATE.value])
+    retail_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.RETAIL_OTHER.value])
+    high_risk_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.HIGH_RISK.value])
+    mdb_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.MDB.value])
+    covered_bond_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.COVERED_BOND.value])
+
+    return (
+        pl.when(et.is_in(sovereign_types))
+        .then(_cqs_lookup(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS))
+        .when(et.is_in(institution_types))
+        .then(_cqs_lookup(inst_table))
+        # SA covered_bond uses corporate-equivalent CQS RWs in the preview;
+        # the precise covered-bond table only kicks in for IRB/SA SL pricing.
+        .when(et.is_in(corporate_types + covered_bond_types))
+        .then(_cqs_lookup(CORPORATE_RISK_WEIGHTS))
+        .when(et.is_in(retail_types))
+        .then(pl.lit(float(RETAIL_RISK_WEIGHT)))
+        .when(et.is_in(high_risk_types))
+        .then(pl.lit(float(HIGH_RISK_RW)))
+        .when(et.is_in(mdb_types))
+        .then(_cqs_lookup(MDB_RISK_WEIGHTS_TABLE_2B))
+        .otherwise(pl.lit(1.0))
     )

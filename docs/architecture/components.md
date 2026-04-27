@@ -141,6 +141,8 @@ class HierarchyResolver:
 | `_build_rating_inheritance_lazy()` | Inherit ratings: own → parent → unrated |
 | `_build_facility_root_lookup()` | Traverse facility-to-facility hierarchies to find root facility |
 | `_calculate_facility_undrawn()` | Calculate undrawn = limit - sum(descendant drawn), excluding sub-facilities |
+| `_derive_mof_risk_type()` | For Multiple Option Facility (MOF) parents — pick the descendant `risk_type` producing the highest SA CCF (frame-aware) so the parent's undrawn EAD reflects the worst-case off-balance commitment among its components |
+| `_derive_facility_share_counterparty()` | For Facility Shares (one facility, many counterparties on its loans/contingents) — allocate the undrawn to the riskiest member by SA-equivalent risk-weight preview |
 | `_unify_exposures()` | Combine loan, contingent, and facility_undrawn into single LazyFrame |
 | `_calculate_lending_group_totals()` | Aggregate exposure by lending group for retail threshold |
 | `_add_collateral_ltv()` | Add LTV from collateral (direct → facility → counterparty priority) |
@@ -153,6 +155,8 @@ class HierarchyResolver:
 - Support for deep hierarchies (up to 10 levels)
 - Multi-level facility hierarchy: drawn amounts aggregated to root facility
 - Sub-facility exclusion from undrawn exposure output (avoids double-counting)
+- **Multiple Option Facility (MOF) parents inherit the descendant `risk_type` whose SA CCF is highest under the active framework** (any facility with at least one `child_type='facility'` mapping is treated as a MOF; the original parent `risk_type` is preserved as `mof_risk_type_source` for audit)
+- **Facility Share undrawn is allocated to the riskiest counterparty among the descendant loan/contingent counterparties** by SA-equivalent risk-weight preview; the original facility counterparty is preserved as `original_counterparty_reference` for audit
 - Rating inheritance from parent (own → parent → unrated)
 - Lending group aggregation with residential property exclusion (CRR Art. 123(c))
 - Multi-level collateral linking (direct, facility, counterparty) with pro-rata allocation

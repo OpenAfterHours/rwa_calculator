@@ -144,6 +144,14 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
     "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
 }
 
+# Inverse of ENTITY_TYPE_TO_SA_CLASS: SA exposure class → tuple of entity_types.
+# Derived at module load so any addition to ENTITY_TYPE_TO_SA_CLASS automatically
+# flows through to consumers (e.g. the SA RW preview in engine/hierarchy.py).
+ENTITY_TYPES_BY_SA_CLASS: dict[str, tuple[str, ...]] = {
+    sa_class: tuple(et for et, c in ENTITY_TYPE_TO_SA_CLASS.items() if c == sa_class)
+    for sa_class in dict.fromkeys(ENTITY_TYPE_TO_SA_CLASS.values())
+}
+
 # SL types restricted to slotting-only under B31 Art. 147A(1)(c)
 _B31_SLOTTING_ONLY_SL_TYPES = {
     SpecialisedLendingType.IPRE.value,

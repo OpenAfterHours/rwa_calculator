@@ -143,6 +143,7 @@ nav = [
   ]},
   { "Blog" = [
     "blog/index.md",
+    { "The Pipeline: Why Regulation Forced an Immutable Design" = "blog/2026-05-12-the-pipeline.md" },
     { "Building a UK Basel 3.1 RWA Calculator in Public" = "blog/2026-04-28-building-a-uk-basel-31-rwa-calculator-in-public.md" },
   ]},
   { "Appendix" = [

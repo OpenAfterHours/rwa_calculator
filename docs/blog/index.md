@@ -8,6 +8,9 @@ Posts land roughly every two to three weeks.
 
 ## Posts
 
+- **2026-05-12 — [The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md)**
+  Architecture deep-dive. Frozen bundles, structural protocols, lazy graphs, accumulated errors, and a data/engine split — each one falling out of a real regulatory demand rather than aesthetic preference.
+
 - **2026-04-28 — [Building a UK Basel 3.1 RWA Calculator in Public](2026-04-28-building-a-uk-basel-31-rwa-calculator-in-public.md)**
   Series kickoff. Why an open-source reference implementation of UK Basel 3.1 / PS1/26 credit risk RWA, what the calculator does, and what is in the rest of the series.
 
@@ -17,7 +20,6 @@ The remaining posts in the planned arc, with rough working titles:
 
 | # | Title | Audience lean |
 |---|---|---|
-| 2 | The Pipeline: Why Regulation Forced an Immutable Design | Engineers |
 | 3 | Risk Weights Are Not a Lookup Table: SA & Exposure Classification | Regulatory |
 | 4 | Building With an Agent Swarm: How `loop.sh` Writes This Codebase | Engineers |
 | 5 | The Output Floor and Why Basel 3.1 Bites | Regulatory |

@@ -141,6 +141,10 @@ nav = [
     "plans/index.md",
     { "Implementation Plan" = "plans/implementation-plan.md" },
   ]},
+  { "Blog" = [
+    "blog/index.md",
+    { "Building a UK Basel 3.1 RWA Calculator in Public" = "blog/2026-04-28-building-a-uk-basel-31-rwa-calculator-in-public.md" },
+  ]},
   { "Appendix" = [
     "appendix/index.md",
     { "Glossary" = "appendix/glossary.md" },

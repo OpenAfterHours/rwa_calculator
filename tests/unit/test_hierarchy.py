@@ -1718,15 +1718,18 @@ class TestFacilityUndrawnCalculation:
         assert len(fac) == 1
         assert fac["undrawn_amount"][0] == pytest.approx(1000000.0)
 
-    def test_facility_uncommitted_lr_risk_type(
+    def test_facility_lr_risk_type(
         self,
         resolver: HierarchyResolver,
         facilities_with_undrawn: pl.LazyFrame,
         loans_for_facilities: pl.LazyFrame,
         facility_loan_mappings: pl.LazyFrame,
     ) -> None:
-        """Uncommitted facility with LR risk type should create exposure with LR."""
-        # FAC005: limit=1M, no linked loans, risk_type=LR (0% CCF)
+        """Committed facility with LR risk type should create exposure with LR."""
+        # FAC005: limit=1M, committed=True, no linked loans, risk_type=LR (0% CCF).
+        # The LR-with-zero-CCF treatment under CRR is for the on-pipeline row;
+        # genuine uncommitted (committed=False) suppression is covered by the
+        # dedicated tests below.
         facility_undrawn = resolver._calculate_facility_undrawn(
             facilities_with_undrawn,
             loans_for_facilities,
@@ -1852,6 +1855,102 @@ class TestFacilityUndrawnCalculation:
 
         assert len(df) == 0
 
+    def test_uncommitted_facility_suppresses_undrawn_row(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Uncommitted facility (committed=False) generates no synthetic undrawn row.
+
+        The bank can refuse to lend, so no commitment EAD/RWA is held against the
+        unused headroom — even when limit > 0 and no loans are drawn.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_UNCOMMIT"],
+                "product_type": ["UNCOMMITTED_RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [False],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["LR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "drawn_amount": pl.Float64,
+            }
+        )
+
+        mappings = pl.LazyFrame(
+            schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }
+        )
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        df = facility_undrawn.collect()
+
+        # No facility_undrawn row at all — undrawn headroom carries no commitment
+        # EAD because the bank is not contractually obliged to lend.
+        assert len(df) == 0
+
+    def test_committed_null_treated_as_committed(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Null committed values default to True (committed) — defensive behaviour
+        matching FACILITY_SCHEMA's default. Legacy callers that omit committed or
+        pass null must keep generating undrawn rows as before.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_NULL_COMMIT"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [500000.0],
+                "committed": pl.Series([None], dtype=pl.Boolean),
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "drawn_amount": pl.Float64,
+            }
+        )
+
+        mappings = pl.LazyFrame(
+            schema={
+                "parent_facility_reference": pl.String,
+                "child_reference": pl.String,
+                "child_type": pl.String,
+            }
+        )
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        df = facility_undrawn.collect()
+
+        # Null committed → treated as True → undrawn row IS generated.
+        assert len(df) == 1
+        assert df["exposure_reference"][0] == "FAC_NULL_COMMIT_UNDRAWN"
+        assert df["undrawn_amount"][0] == pytest.approx(500000.0)
+
 
 class TestFacilityUndrawnInUnifyExposures:
     """Tests for facility undrawn integration in _unify_exposures."""
@@ -1933,6 +2032,175 @@ class TestFacilityUndrawnInUnifyExposures:
         assert facility_undrawn["undrawn_amount"][0] == pytest.approx(400000.0)  # 1M - 600k
         assert facility_undrawn["nominal_amount"][0] == pytest.approx(400000.0)
         assert facility_undrawn["risk_type"][0] == "MR"
+
+    def test_uncommitted_facility_loans_still_flow(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Uncommitted facility suppresses its undrawn row, but the loan mapped to
+        it is unaffected — the loan is already on-balance-sheet and still flows
+        through the unified exposures with correct counterparty linkage.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_UNCOMMIT_FLOW"],
+                "product_type": ["UNCOMMITTED_RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [False],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["LR"],
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_ON_UNCOMMIT"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [100000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_UNCOMMIT_FLOW"],
+                "child_reference": ["LOAN_ON_UNCOMMIT"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
+        )
+
+        exposures, _ = resolver._unify_exposures(
+            loans,
+            None,
+            facilities,
+            facility_mappings,
+            counterparty_lookup,
+        )
+
+        df = exposures.collect()
+
+        # Loan is still present, no facility_undrawn synthetic row.
+        assert "facility_undrawn" not in df["exposure_type"].to_list()
+        loan_rows = df.filter(pl.col("exposure_type") == "loan")
+        assert len(loan_rows) == 1
+        assert loan_rows["exposure_reference"][0] == "LOAN_ON_UNCOMMIT"
+        assert loan_rows["counterparty_reference"][0] == "CP002"
+        assert loan_rows["drawn_amount"][0] == pytest.approx(100000.0)
+
+    def test_uncommitted_facility_contingents_still_flow(
+        self,
+        resolver: HierarchyResolver,
+        simple_counterparties: pl.LazyFrame,
+        simple_org_mappings: pl.LazyFrame,
+        simple_ratings: pl.LazyFrame,
+    ) -> None:
+        """Uncommitted facility suppresses its undrawn row, but a contingent mapped
+        to it is unaffected — the contingent retains its own exposure row with
+        nominal_amount intact for downstream CCF and reporting.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_UNCOMMIT_CONT"],
+                "product_type": ["UNCOMMITTED_RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "committed": [False],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["LR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "counterparty_reference": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "currency": pl.String,
+                "drawn_amount": pl.Float64,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        contingents = pl.DataFrame(
+            {
+                "contingent_reference": ["CONT_ON_UNCOMMIT"],
+                "product_type": ["FINANCIAL_GUARANTEE"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP002"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2025, 1, 1)],
+                "currency": ["GBP"],
+                "nominal_amount": [200000.0],
+                "lgd": [0.45],
+                "beel": [0.01],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+                "ccf_modelled": [None],
+                "is_short_term_trade_lc": [False],
+                "bs_type": ["OFB"],
+            }
+        ).lazy()
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_UNCOMMIT_CONT"],
+                "child_reference": ["CONT_ON_UNCOMMIT"],
+                "child_type": ["contingent"],
+            }
+        ).lazy()
+
+        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+            simple_counterparties,
+            simple_org_mappings,
+            simple_ratings,
+        )
+
+        exposures, _ = resolver._unify_exposures(
+            loans,
+            contingents,
+            facilities,
+            facility_mappings,
+            counterparty_lookup,
+        )
+
+        df = exposures.collect()
+
+        assert "facility_undrawn" not in df["exposure_type"].to_list()
+        cont_rows = df.filter(pl.col("exposure_type") == "contingent")
+        assert len(cont_rows) == 1
+        assert cont_rows["exposure_reference"][0] == "CONT_ON_UNCOMMIT"
+        assert cont_rows["counterparty_reference"][0] == "CP002"
+        assert cont_rows["nominal_amount"][0] == pytest.approx(200000.0)
 
     def test_full_resolve_includes_facility_undrawn(
         self,

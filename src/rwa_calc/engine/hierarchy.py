@@ -976,9 +976,18 @@ class HierarchyResolver:
             pl.col("facility_reference").alias("source_facility_reference"),
         ]
 
-        # Create exposure records for facilities with undrawn > 0
+        # Create exposure records for facilities with undrawn > 0 AND committed=True.
+        # Uncommitted (unconditionally cancellable) facilities generate no synthetic
+        # undrawn exposure: the bank can refuse to lend, so no commitment EAD/RWA is
+        # held against the unused headroom. Loans/contingents already mapped to the
+        # facility are unaffected — they remain independent exposure rows. Missing
+        # `committed` column or null values default to True (committed), matching
+        # FACILITY_SCHEMA's default.
+        committed_expr = (
+            pl.col("committed").fill_null(True) if "committed" in facility_cols else pl.lit(True)
+        )
         facility_undrawn_exposures = facility_with_drawn.filter(
-            pl.col("undrawn_amount") > 0
+            (pl.col("undrawn_amount") > 0) & committed_expr
         ).select(select_exprs)
 
         return facility_undrawn_exposures

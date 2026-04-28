@@ -178,7 +178,7 @@ See [Classification](../features/classification.md) for the complete classificat
 | `facility_termination_date` | `Date` | No | Bank's contractual right-to-terminate date — overrides `maturity_date` for IRB `M` derivation when shorter (Art. 162(2)(g)) |
 | `currency` | `String` | No | ISO 4217 currency code |
 | `limit` | `Float64` | No | Committed facility limit |
-| `committed` | `Boolean` | No | Whether facility is committed (default `False`) |
+| `committed` | `Boolean` | No | Whether the facility is a binding commitment to lend (default `True`). When `False`, the facility is treated as unconditionally cancellable: the hierarchy resolver does **not** generate a `facility_undrawn` exposure row, so no commitment CCF / EAD / RWA is held against the unused headroom. Loans and contingents already mapped to the facility are unaffected and continue to flow through the pipeline as their own exposure rows, with normal counterparty / parent rollup and collateral allocation. |
 | `lgd` | `Float64` | No | Internal LGD estimate (A-IRB) |
 | `lgd_unsecured` | `Float64` | No | A-IRB unsecured LGD estimate, applied to the residual EAD after eligible collateral (CRR Art. 181) |
 | `beel` | `Float64` | No | Best estimate expected loss |

@@ -140,7 +140,7 @@ class HierarchyResolver:
 | `_build_ultimate_parent_lazy()` | Traverse org_mappings to find ultimate parent (up to 10 levels) |
 | `_build_rating_inheritance_lazy()` | Inherit ratings: own → parent → unrated |
 | `_build_facility_root_lookup()` | Traverse facility-to-facility hierarchies to find root facility |
-| `_calculate_facility_undrawn()` | Calculate undrawn = limit - sum(descendant drawn), excluding sub-facilities |
+| `_calculate_facility_undrawn()` | Calculate undrawn = limit - sum(descendant drawn), excluding sub-facilities. Suppresses the synthetic `facility_undrawn` exposure row when `committed=False` — uncommitted (unconditionally cancellable) facilities carry no commitment EAD because the bank can refuse to lend; loans and contingents mapped to the facility are unaffected and continue to flow as their own exposure rows |
 | `_derive_mof_risk_type()` | For Multiple Option Facility (MOF) parents — pick the descendant `risk_type` producing the highest SA CCF (frame-aware) so the parent's undrawn EAD reflects the worst-case off-balance commitment among its components |
 | `_derive_facility_share_counterparty()` | For Facility Shares (one facility, many counterparties on its loans/contingents) — allocate the undrawn to the riskiest member by SA-equivalent risk-weight preview |
 | `_unify_exposures()` | Combine loan, contingent, and facility_undrawn into single LazyFrame |

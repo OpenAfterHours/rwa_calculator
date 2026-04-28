@@ -66,7 +66,7 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "maturity_date": ColumnSpec(pl.Date, required=False),
     "currency": ColumnSpec(pl.String, required=False),
     "limit": ColumnSpec(pl.Float64, required=False),
-    "committed": ColumnSpec(pl.Boolean, default=False, required=False),
+    "committed": ColumnSpec(pl.Boolean, default=True, required=False),
     "lgd": ColumnSpec(pl.Float64, required=False),
     "lgd_unsecured": ColumnSpec(pl.Float64, required=False),
     "has_sufficient_collateral_data": ColumnSpec(pl.Boolean, default=False, required=False),

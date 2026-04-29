@@ -72,7 +72,7 @@ Facilities can form their own hierarchies (e.g., a master facility with sub-faci
 
 #### Undrawn Amount Aggregation
 
-For multi-level facility hierarchies, drawn amounts from loans under sub-facilities are aggregated up to the root facility:
+For multi-level facility hierarchies, drawn amounts from loans under sub-facilities are aggregated up to the root facility. The root undrawn equals the parent's headroom net of every drawn loan/contingent across the descendant tree:
 
 ```
 Root Facility (limit = 1,000,000)
@@ -90,7 +90,67 @@ Key rules:
 - **Root/standalone facilities** produce undrawn exposure records
 - **Sub-facilities are excluded** from producing their own undrawn records (avoids double-counting)
 - Negative drawn amounts are clamped to zero before aggregation (negative balances do not increase headroom)
-- Only facilities with `undrawn_amount > 0` generate exposure records
+- Only facilities with `undrawn_amount > 0` and `committed = True` generate exposure records
+
+#### Multi-Option Facility (MOF) Waterfall Allocation
+
+A **Multi-Option Facility** is any facility with at least one `child_type='facility'` mapping. Each sub-facility carries its own `risk_type` (and therefore its own SA CCF), so the parent's undrawn headroom is split across sub-facility CCF buckets — not collapsed onto the worst-case CCF as in earlier versions of the engine.
+
+**Allocation rule** (per MOF parent):
+
+1. Compute per-sub headroom: `sub_headroom = max(0, sub_limit − sub_drawn)`, where `sub_drawn` sums loans and contingents directly mapped to that sub (no roll-up).
+2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree.
+3. Sort committed sub-facilities by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
+4. Walk subs in order. Allocate `min(sub_headroom_i, max(0, parent_headroom − cum_{i-1}))` to each sub, where `cum_{i-1}` is the running sum of higher-CCF allocations.
+5. Emit one `facility_undrawn` row per sub with `allocation > 0`. Each row carries the **sub's** `risk_type` and `counterparty_reference`; provenance is captured in `mof_risk_type_source`.
+6. If `parent_headroom > sum(allocations)`, emit one **residual** row at the parent's own `risk_type` and `counterparty_reference` for the leftover headroom.
+
+**Worked example** — sub-limits exceed parent limit (waterfall caps):
+
+```
+FAC_01    limit £100m,  parent's risk_type = MR
+├── FAC_SUB_01  limit £60m, risk_type = MR  (50% CCF)
+└── FAC_SUB_02  limit £60m, risk_type = MLR (20% CCF)
+```
+
+| sub | sub_limit | sub_drawn | sub_headroom | CCF | allocation | EAD |
+|---|---|---|---|---|---|---|
+| FAC_SUB_01 | 60m | 0 | 60m | 50% | 60m | 30m |
+| FAC_SUB_02 | 60m | 0 | 60m | 20% | 40m (capped) | 8m |
+| residual | — | — | — | — | 0 | — |
+| **total** | | | | | **100m** | **38m** |
+
+**Worked example** — drawn loans nets per sub, residual emerges:
+
+```
+FAC_01    limit £100m,  parent's risk_type = FR (100% CCF)
+├── FAC_SUB_01  limit £50m, MR (50% CCF), Loan_A drawn £20m
+└── FAC_SUB_02  limit £30m, MLR (20% CCF)
+
+per-sub: sub_01 headroom = 30m, sub_02 headroom = 30m
+parent headroom = 100m − 20m = 80m
+```
+
+| sub | CCF | sub_headroom | allocation | EAD |
+|---|---|---|---|---|
+| FAC_SUB_01 | 50% | 30m | 30m | 15m |
+| FAC_SUB_02 | 20% | 30m | 30m | 6m |
+| residual (FR) | 100% | — | 80m − 60m = 20m | 20m |
+| **total** | | | **80m** | **41m** |
+
+**Output schema**:
+
+- `exposure_reference = "{parent_ref}_UNDRAWN_{sub_ref}"` for sub waterfall rows; `"{parent_ref}_UNDRAWN_RESIDUAL"` for the parent residual row.
+- `source_facility_reference = parent_ref` on every row, so facility-level collateral allocation and downstream rollups still group by the MOF parent.
+- `mof_risk_type_source = sub_ref` on sub rows; `null` on the residual row.
+
+**Edge cases**:
+
+- **Uncommitted sub** (`committed=False`): skipped entirely from the waterfall — no row, no headroom consumption. The bank can refuse to lend, so the sub carries no commitment EAD.
+- **Uncommitted parent** (`committed=False`): no rows emitted at all (existing behaviour preserved). Loans/contingents already mapped under the parent flow as their own exposure rows unaffected.
+- **Sub with zero headroom** (fully drawn): drops out of the waterfall — emits no row.
+- **Sub-limits sum below parent limit**: residual at parent's own `risk_type` covers the gap.
+- **Standalone facility (no facility-typed children)**: single undrawn row with parent's own `risk_type` (non-MOF path unchanged).
 
 #### Type Column Handling
 

@@ -815,19 +815,25 @@ class HierarchyResolver:
             how="anti",
         )
 
-        # MOF: derive parent risk_type from descendant sub-facilities (max SA CCF).
-        # Facility Share: derive riskiest counterparty from descendant loans/contingents.
-        # Both lookups are no-ops when their inputs are missing or trivial.
+        # MOF parents (those with at least one facility-typed descendant) are
+        # expanded into per-sub waterfall rows below. Non-MOF parents flow through
+        # the single-row path with the optional Facility Share counterparty override.
         is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
-        mof_lookup = self._derive_mof_risk_type(
-            facilities, facility_mappings, root_lookup, is_basel_3_1
-        )
-        facility_with_drawn = facility_with_drawn.join(
-            mof_lookup,
-            on="facility_reference",
-            how="left",
+        mof_parent_marker = (
+            root_lookup.select(pl.col("root_facility_reference").alias("facility_reference"))
+            .unique()
+            .with_columns(pl.lit(True).alias("_is_mof_parent"))
         )
 
+        facility_with_drawn = facility_with_drawn.join(
+            mof_parent_marker,
+            on="facility_reference",
+            how="left",
+        ).with_columns(pl.col("_is_mof_parent").fill_null(False))
+
+        # MOF parents do not need the share-counterparty override — each waterfall
+        # row already carries its sub-facility's own counterparty. Non-MOF parents
+        # still benefit from the riskiest-CP allocation.
         if counterparty_lookup is not None:
             share_lookup = self._derive_facility_share_counterparty(
                 facilities,
@@ -842,11 +848,34 @@ class HierarchyResolver:
                 share_lookup,
                 on="facility_reference",
                 how="left",
+            ).with_columns(
+                # Suppress share override on MOF parents — sub rows handle it.
+                pl.when(pl.col("_is_mof_parent"))
+                .then(pl.lit(None).cast(pl.String))
+                .otherwise(pl.col("share_counterparty_reference"))
+                .alias("share_counterparty_reference")
             )
         else:
             facility_with_drawn = facility_with_drawn.with_columns(
                 pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
             )
+
+        # Expand MOF parents into per-sub waterfall rows + optional residual.
+        # Non-MOF parents pass through unchanged. After this step
+        # facility_with_drawn contains:
+        #   - 1 row per non-MOF parent (existing behaviour)
+        #   - N waterfall rows + optional 1 residual row per MOF parent
+        # Each row carries the right risk_type / counterparty / undrawn_amount
+        # for its emit slot, plus an exposure_suffix for a unique exposure_reference.
+        facility_with_drawn = self._expand_mof_facility_undrawn(
+            facility_with_drawn,
+            facilities,
+            root_lookup,
+            loans,
+            contingents,
+            facility_mappings,
+            is_basel_3_1,
+        )
 
         # Get facility schema to check for optional columns
         facility_schema = facilities.collect_schema()
@@ -854,9 +883,14 @@ class HierarchyResolver:
 
         # Build select expressions with defaults for missing columns
         # Note: parent_facility_reference is set to the source facility to enable
-        # facility-level collateral allocation to undrawn amounts
+        # facility-level collateral allocation to undrawn amounts.
+        # _exposure_suffix is "" for non-MOF rows, "_{sub_ref}" for MOF waterfall
+        # rows, and "_RESIDUAL" for the optional MOF residual row — set by
+        # _expand_mof_facility_undrawn.
         select_exprs = [
-            (pl.col("facility_reference") + "_UNDRAWN").alias("exposure_reference"),
+            (pl.col("facility_reference") + pl.lit("_UNDRAWN") + pl.col("_exposure_suffix")).alias(
+                "exposure_reference"
+            ),
             pl.lit("facility_undrawn").alias("exposure_type"),
             pl.col("product_type")
             if "product_type" in facility_cols
@@ -1001,100 +1035,264 @@ class HierarchyResolver:
 
         return facility_undrawn_exposures
 
-    def _derive_mof_risk_type(
+    def _expand_mof_facility_undrawn(
         self,
+        facility_with_drawn: pl.LazyFrame,
         facilities: pl.LazyFrame,
-        facility_mappings: pl.LazyFrame,
         root_lookup: pl.LazyFrame,
+        loans: pl.LazyFrame,
+        contingents: pl.LazyFrame | None,
+        facility_mappings: pl.LazyFrame,
         is_basel_3_1: bool,
     ) -> pl.LazyFrame:
-        """Derive Multiple Option Facility (MOF) parent risk_type from descendant sub-facilities.
+        """Expand Multiple Option Facility (MOF) parent rows into per-sub waterfall rows.
 
-        Any facility that has at least one ``child_type='facility'`` mapping is
-        treated as a MOF parent. Its undrawn CCF must reflect the worst-case
-        off-balance commitment among its descendants, so the parent inherits
-        the ``risk_type`` of whichever descendant sub-facility produces the
-        highest SA CCF under the active framework.
+        For non-MOF parents (no ``child_type='facility'`` descendants), the input
+        row passes through unchanged with empty ``_exposure_suffix`` and null
+        ``mof_risk_type`` — downstream :func:`select_exprs` therefore uses the
+        parent's own ``risk_type`` and ``counterparty_reference``.
+
+        For MOF parents, the parent row is replaced by:
+            - One waterfall row per committed descendant sub-facility with
+              positive headroom, sorted by descending SA CCF (tie-break:
+              alphabetical risk_type, then descendant reference).
+            - At most one residual row when ``parent_headroom`` exceeds the
+              sum of sub allocations — emitted at the parent's own ``risk_type``
+              and ``counterparty_reference``.
+
+        Allocation rule per parent:
+            sub_headroom_i = max(0, sub_limit_i - sub_drawn_i)         # per-sub netting
+            cum_i          = sum(sub_headroom_j for j <= i)
+            allocation_i   = min(sub_headroom_i,
+                                 max(0, parent_headroom - cum_{i-1}))
+
+        Uncommitted (``committed=False``) sub-facilities are skipped entirely —
+        the bank can refuse to lend on them, so they carry no commitment EAD and
+        do not consume parent headroom.
 
         Args:
-            facilities: Facilities frame with ``facility_reference`` and ``risk_type``.
+            facility_with_drawn: One row per parent with ``_is_mof_parent`` flag,
+                aggregate ``undrawn_amount`` (= parent_headroom), parent fields,
+                and ``share_counterparty_reference`` (suppressed for MOF parents).
+            facilities: Facilities frame; supplies sub-facility risk_type,
+                counterparty_reference, limit, and committed flag.
+            root_lookup: Output of :meth:`_build_facility_root_lookup`.
+            loans: Loans frame; per-sub drawn aggregates net each sub's headroom.
+            contingents: Contingents frame (optional); same role as loans.
             facility_mappings: Mappings between facilities and children.
-            root_lookup: Output of :meth:`_build_facility_root_lookup` — gives
-                each descendant sub-facility its root parent.
             is_basel_3_1: Frame switch passed to :func:`sa_ccf_expression`.
 
         Returns:
-            LazyFrame with columns:
-                - facility_reference: the MOF parent reference.
-                - mof_risk_type: the descendant's risk_type that won the max-CCF tie.
-                - mof_risk_type_source: the descendant facility reference that won.
+            LazyFrame with the same column shape as the input, plus three
+            expansion columns (``_exposure_suffix``, ``mof_risk_type``,
+            ``mof_risk_type_source``) populated per emitted row.
         """
         from rwa_calc.engine.ccf import sa_ccf_expression
 
-        empty = pl.LazyFrame(
-            schema={
-                "facility_reference": pl.String,
-                "mof_risk_type": pl.String,
-                "mof_risk_type_source": pl.String,
-            }
-        )
-
-        fac_cols = set(facilities.collect_schema().names())
-        if "facility_reference" not in fac_cols or "risk_type" not in fac_cols:
-            return empty
-
-        root_cols = set(root_lookup.collect_schema().names())
-        if (
-            "child_facility_reference" not in root_cols
-            or "root_facility_reference" not in root_cols
-        ):
-            return empty
-
-        # For each (root, descendant) pair, look up the descendant's risk_type and
-        # compute the SA CCF it would produce under the active framework.
-        descendants = root_lookup.select(
+        # Add expansion columns with defaults — non-MOF rows keep these defaults.
+        expanded = facility_with_drawn.with_columns(
             [
-                pl.col("root_facility_reference").alias("facility_reference"),
-                pl.col("child_facility_reference").alias("descendant_facility_reference"),
+                pl.lit("").alias("_exposure_suffix"),
+                pl.lit(None).cast(pl.String).alias("mof_risk_type"),
+                pl.lit(None).cast(pl.String).alias("mof_risk_type_source"),
             ]
-        ).join(
-            facilities.select(
+        )
+
+        non_mof_rows = expanded.filter(~pl.col("_is_mof_parent"))
+        mof_parents = expanded.filter(pl.col("_is_mof_parent"))
+
+        # Build per-sub direct drawn (loans + contingents directly mapped to each sub,
+        # NOT rolled up to root). Per-sub netting is what makes the waterfall
+        # economically accurate when loans are booked against specific sub-facilities.
+        type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
+
+        loan_per_sub = pl.LazyFrame(schema={"_sub_ref": pl.String, "sub_drawn_loans": pl.Float64})
+        loan_cols = set(loans.collect_schema().names())
+        if "loan_reference" in loan_cols and "drawn_amount" in loan_cols:
+            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
+            loan_per_sub = (
+                loans.select([pl.col("loan_reference"), pl.col("drawn_amount")])
+                .join(
+                    loan_mappings.select(
+                        [pl.col("child_reference"), pl.col("parent_facility_reference")]
+                    ),
+                    left_on="loan_reference",
+                    right_on="child_reference",
+                    how="inner",
+                )
+                .group_by("parent_facility_reference")
+                .agg(pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("sub_drawn_loans"))
+                .rename({"parent_facility_reference": "_sub_ref"})
+            )
+
+        cont_per_sub = pl.LazyFrame(
+            schema={"_sub_ref": pl.String, "sub_drawn_contingents": pl.Float64}
+        )
+        if contingents is not None:
+            cont_cols = set(contingents.collect_schema().names())
+            if "contingent_reference" in cont_cols and "nominal_amount" in cont_cols:
+                cont_mappings = _filter_mappings_by_child_type(
+                    facility_mappings, "contingent", type_col
+                )
+                cont_per_sub = (
+                    contingents.select([pl.col("contingent_reference"), pl.col("nominal_amount")])
+                    .join(
+                        cont_mappings.select(
+                            [pl.col("child_reference"), pl.col("parent_facility_reference")]
+                        ),
+                        left_on="contingent_reference",
+                        right_on="child_reference",
+                        how="inner",
+                    )
+                    .group_by("parent_facility_reference")
+                    .agg(
+                        pl.col("nominal_amount")
+                        .clip(lower_bound=0.0)
+                        .sum()
+                        .alias("sub_drawn_contingents")
+                    )
+                    .rename({"parent_facility_reference": "_sub_ref"})
+                )
+
+        # Pull sub-facility attributes from the facilities frame — risk_type,
+        # counterparty, limit, and the committed flag (defaulting to True).
+        fac_cols = set(facilities.collect_schema().names())
+        sub_select: list[pl.Expr] = [pl.col("facility_reference").alias("_sub_ref")]
+        if "risk_type" in fac_cols:
+            sub_select.append(pl.col("risk_type").alias("_sub_risk_type"))
+        else:
+            sub_select.append(pl.lit(None).cast(pl.String).alias("_sub_risk_type"))
+        if "counterparty_reference" in fac_cols:
+            sub_select.append(pl.col("counterparty_reference").alias("_sub_counterparty"))
+        else:
+            sub_select.append(pl.lit(None).cast(pl.String).alias("_sub_counterparty"))
+        if "limit" in fac_cols:
+            sub_select.append(pl.col("limit").alias("_sub_limit"))
+        else:
+            sub_select.append(pl.lit(0.0).alias("_sub_limit"))
+        if "committed" in fac_cols:
+            sub_select.append(pl.col("committed").fill_null(True).alias("_sub_committed"))
+        else:
+            sub_select.append(pl.lit(True).alias("_sub_committed"))
+
+        sub_facilities = facilities.select(sub_select)
+
+        # Build (parent, sub) frame — only descendants that exist as actual
+        # facilities and are committed participate in the waterfall.
+        descendants = (
+            root_lookup.select(
                 [
-                    pl.col("facility_reference").alias("descendant_facility_reference"),
-                    pl.col("risk_type").alias("descendant_risk_type"),
+                    pl.col("root_facility_reference").alias("facility_reference"),
+                    pl.col("child_facility_reference").alias("_sub_ref"),
                 ]
-            ),
-            on="descendant_facility_reference",
-            how="inner",
-        )
-
-        descendants = descendants.filter(pl.col("descendant_risk_type").is_not_null()).with_columns(
-            sa_ccf_expression(
-                risk_type_col="descendant_risk_type", is_basel_3_1=is_basel_3_1
-            ).alias("descendant_sa_ccf")
-        )
-
-        # Per parent, pick the descendant with the highest SA CCF. Tie-break on
-        # alphabetical lowercase risk_type (deterministic), then on alphabetical
-        # descendant facility reference for full reproducibility.
-        return (
-            descendants.sort(
+            )
+            .join(sub_facilities, on="_sub_ref", how="inner")
+            .filter(pl.col("_sub_committed"))
+            .filter(pl.col("_sub_risk_type").is_not_null())
+            .join(loan_per_sub, on="_sub_ref", how="left")
+            .join(cont_per_sub, on="_sub_ref", how="left")
+            .with_columns(
                 [
-                    "facility_reference",
-                    "descendant_sa_ccf",
-                    "descendant_risk_type",
-                    "descendant_facility_reference",
-                ],
+                    pl.col("sub_drawn_loans").fill_null(0.0),
+                    pl.col("sub_drawn_contingents").fill_null(0.0),
+                ]
+            )
+            .with_columns(
+                sub_drawn=(pl.col("sub_drawn_loans") + pl.col("sub_drawn_contingents")),
+                sub_sa_ccf=sa_ccf_expression(
+                    risk_type_col="_sub_risk_type", is_basel_3_1=is_basel_3_1
+                ),
+            )
+            .with_columns(
+                sub_headroom=(pl.col("_sub_limit") - pl.col("sub_drawn")).clip(lower_bound=0.0)
+            )
+        )
+
+        # Join parent_headroom (= parent's undrawn_amount), sort by descending
+        # SA CCF then risk_type then sub reference, and apply the waterfall.
+        parent_headroom = mof_parents.select(
+            [
+                pl.col("facility_reference"),
+                pl.col("undrawn_amount").alias("_parent_headroom"),
+            ]
+        )
+
+        waterfall = (
+            descendants.join(parent_headroom, on="facility_reference", how="inner")
+            .sort(
+                ["facility_reference", "sub_sa_ccf", "_sub_risk_type", "_sub_ref"],
                 descending=[False, True, False, False],
             )
-            .group_by("facility_reference")
-            .agg(
+            .with_columns(
+                cum_sub_headroom=pl.col("sub_headroom").cum_sum().over("facility_reference"),
+            )
+            .with_columns(
+                allocation=pl.min_horizontal(
+                    pl.col("sub_headroom"),
+                    (
+                        pl.col("_parent_headroom")
+                        - (pl.col("cum_sub_headroom") - pl.col("sub_headroom"))
+                    ).clip(lower_bound=0.0),
+                ).clip(lower_bound=0.0)
+            )
+            .filter(pl.col("allocation") > 0.0)
+        )
+
+        # Build sub waterfall rows: replicate parent's row per sub, then override
+        # the per-row attributes (allocation, risk_type, counterparty, suffix).
+        # The helper columns are dropped at the end so the schema matches non-MOF.
+        helper_cols = [
+            "_sub_ref",
+            "_sub_risk_type",
+            "_sub_counterparty",
+            "_sub_limit",
+            "_sub_committed",
+            "sub_drawn_loans",
+            "sub_drawn_contingents",
+            "sub_drawn",
+            "sub_sa_ccf",
+            "sub_headroom",
+            "cum_sub_headroom",
+            "allocation",
+            "_parent_headroom",
+        ]
+        sub_rows = (
+            mof_parents.join(waterfall, on="facility_reference", how="inner")
+            .with_columns(
                 [
-                    pl.col("descendant_risk_type").first().alias("mof_risk_type"),
-                    pl.col("descendant_facility_reference").first().alias("mof_risk_type_source"),
+                    pl.col("allocation").alias("undrawn_amount"),
+                    pl.col("_sub_risk_type").alias("mof_risk_type"),
+                    pl.col("_sub_ref").alias("mof_risk_type_source"),
+                    pl.col("_sub_counterparty").alias("share_counterparty_reference"),
+                    (pl.lit("_") + pl.col("_sub_ref")).alias("_exposure_suffix"),
                 ]
             )
+            .drop(helper_cols)
         )
+
+        # Residual: parent_headroom - sum(allocation). Emitted only when positive,
+        # at parent's own risk_type / counterparty (mof_risk_type stays null so
+        # select_exprs falls back through pl.coalesce to the parent's risk_type).
+        parent_alloc_total = waterfall.group_by("facility_reference").agg(
+            pl.col("allocation").sum().alias("_total_alloc")
+        )
+        residual_rows = (
+            mof_parents.join(parent_alloc_total, on="facility_reference", how="left")
+            .with_columns(pl.col("_total_alloc").fill_null(0.0))
+            .with_columns(
+                _residual=(pl.col("undrawn_amount") - pl.col("_total_alloc")).clip(lower_bound=0.0),
+            )
+            .filter(pl.col("_residual") > 0.0)
+            .with_columns(
+                [
+                    pl.col("_residual").alias("undrawn_amount"),
+                    pl.lit("_RESIDUAL").alias("_exposure_suffix"),
+                ]
+            )
+            .drop(["_total_alloc", "_residual"])
+        )
+
+        return pl.concat([non_mof_rows, sub_rows, residual_rows], how="diagonal_relaxed")
 
     def _derive_facility_share_counterparty(
         self,

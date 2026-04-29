@@ -3919,13 +3919,14 @@ class TestMultiLevelFacilityUndrawn:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """Parent (limit=2M) with two sub-facilities containing loans.
+        """MOF parent (limit=2M) with two sub-facilities containing loans.
 
-        FAC_PARENT (limit=2M)
-        ├── SUB001 (limit=1M) → LOAN01 (drawn=0.5M)
-        └── SUB002 (limit=0.5M) → LOAN02 (drawn=0.25M)
+        FAC_PARENT (limit=2M, MR)
+        ├── SUB001 (limit=1M, MR) → LOAN01 (drawn=0.5M)
+        └── SUB002 (limit=0.5M, MR) → LOAN02 (drawn=0.25M)
 
-        Expected: FAC_PARENT_UNDRAWN = 2M - 0.75M = 1.25M
+        Waterfall split: SUB001 row £500k (sub headroom), SUB002 row £250k,
+        residual £500k at parent's MR. Total off-balance = 1.25M.
         """
         facilities = pl.DataFrame(
             {
@@ -3993,10 +3994,15 @@ class TestMultiLevelFacilityUndrawn:
         )
         df = facility_undrawn.collect()
 
-        # Only root facility should produce undrawn exposure
-        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
-        assert len(parent_undrawn) == 1
-        assert parent_undrawn["undrawn_amount"][0] == pytest.approx(1250000.0)
+        # Sub-facilities still don't emit standalone undrawn rows
+        sub_refs = df["exposure_reference"].to_list()
+        assert "SUB001_UNDRAWN" not in sub_refs
+        assert "SUB002_UNDRAWN" not in sub_refs
+
+        # MOF parent emits multiple split rows summing to parent headroom
+        rows = df.filter(pl.col("source_facility_reference") == "FAC_PARENT")
+        assert len(rows) == 3  # SUB001, SUB002, residual
+        assert float(rows["undrawn_amount"].sum()) == pytest.approx(1_250_000.0)
 
     def test_sub_facilities_excluded_from_undrawn(
         self,
@@ -4057,9 +4063,10 @@ class TestMultiLevelFacilityUndrawn:
         sub_undrawn = df.filter(pl.col("exposure_reference") == "SUB001_UNDRAWN")
         assert len(sub_undrawn) == 0
 
-        # Only FAC_PARENT should have undrawn
-        assert len(df) == 1
-        assert df["exposure_reference"][0] == "FAC_PARENT_UNDRAWN"
+        # MOF parent emits split rows under source_facility_reference = FAC_PARENT.
+        # SUB001 (MR 50%, headroom £500k) fills first; residual £1m at parent's MR.
+        rows = df.filter(pl.col("source_facility_reference") == "FAC_PARENT")
+        assert float(rows["undrawn_amount"].sum()) == pytest.approx(1_500_000.0)
 
     def test_single_level_undrawn_unchanged(
         self,
@@ -4964,10 +4971,9 @@ class TestContingentInFacilityUndrawn:
         )
         df = facility_undrawn.collect()
 
-        # Only root facility should produce undrawn
-        assert len(df) == 1
-        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
-        assert parent_undrawn["undrawn_amount"][0] == pytest.approx(1000000.0)
+        # MOF parent emits split rows summing to parent headroom
+        rows = df.filter(pl.col("source_facility_reference") == "FAC_PARENT")
+        assert float(rows["undrawn_amount"].sum()) == pytest.approx(1_000_000.0)
 
     def test_full_scenario_from_spec(
         self,
@@ -5074,10 +5080,9 @@ class TestContingentInFacilityUndrawn:
         )
         df = facility_undrawn.collect()
 
-        # Only root facility should produce undrawn
-        assert len(df) == 1
-        parent_undrawn = df.filter(pl.col("exposure_reference") == "FAC_PARENT_UNDRAWN")
-        assert parent_undrawn["undrawn_amount"][0] == pytest.approx(750000.0)
+        # MOF parent emits split rows summing to parent headroom
+        rows = df.filter(pl.col("source_facility_reference") == "FAC_PARENT")
+        assert float(rows["undrawn_amount"].sum()) == pytest.approx(750_000.0)
 
         # Sub-facilities should NOT have undrawn records
         sub_refs = df["exposure_reference"].to_list()
@@ -5088,11 +5093,15 @@ class TestMOFAndFacilityShare:
     """Tests for Multiple Option Facility (MOF) parent-CCF derivation and
     Facility Share riskiest-counterparty allocation."""
 
-    def test_mof_parent_inherits_max_child_ccf(
+    def test_mof_waterfall_emits_one_row_per_sub(
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """Parent of two sub-facilities (FR and MR) inherits FR (highest SA CCF)."""
+        """MOF parent emits one undrawn row per sub-facility, each with the sub's risk_type.
+
+        Two sub-facilities, sub-limits sum equals parent limit, no draws → 2 rows
+        with the sub's own risk_type and full sub-limit allocation. No residual.
+        """
         facilities = pl.DataFrame(
             {
                 "facility_reference": ["MOF", "SUB_FR", "SUB_MR"],
@@ -5105,8 +5114,8 @@ class TestMOFAndFacilityShare:
                 "limit": [1_000_000.0, 600_000.0, 400_000.0],
                 "lgd": [0.45] * 3,
                 "seniority": ["senior"] * 3,
-                # Parent intentionally LR (would otherwise produce 0% CCF under CRR);
-                # MOF inference must override this with FR (100%) from SUB_FR.
+                # Parent intentionally LR (0% CCF under CRR). The waterfall must
+                # emit per-sub rows using the sub's own risk_type, not the parent's.
                 "risk_type": ["LR", "FR", "MR"],
             }
         ).lazy()
@@ -5144,17 +5153,102 @@ class TestMOFAndFacilityShare:
             root_lookup,
         ).collect()
 
-        mof_row = undrawn.filter(pl.col("exposure_reference") == "MOF_UNDRAWN")
-        assert len(mof_row) == 1
-        # Parent's own LR risk_type is overridden by FR (highest CCF descendant)
-        assert mof_row["risk_type"][0] == "FR"
-        assert mof_row["mof_risk_type_source"][0] == "SUB_FR"
+        mof_rows = undrawn.filter(pl.col("source_facility_reference") == "MOF").sort(
+            "exposure_reference"
+        )
+        assert len(mof_rows) == 2
 
-    def test_mof_basel_3_1_ccf_table_used(
+        fr_row = mof_rows.filter(pl.col("mof_risk_type_source") == "SUB_FR")
+        mr_row = mof_rows.filter(pl.col("mof_risk_type_source") == "SUB_MR")
+        assert len(fr_row) == 1 and len(mr_row) == 1
+
+        # FR sub fills first (100% > 50%), full sub-limit £600k
+        assert fr_row["risk_type"][0] == "FR"
+        assert fr_row["nominal_amount"][0] == pytest.approx(600_000.0)
+        assert fr_row["exposure_reference"][0] == "MOF_UNDRAWN_SUB_FR"
+        # MR sub fills second, remaining headroom £400k
+        assert mr_row["risk_type"][0] == "MR"
+        assert mr_row["nominal_amount"][0] == pytest.approx(400_000.0)
+        assert mr_row["exposure_reference"][0] == "MOF_UNDRAWN_SUB_MR"
+
+    def test_mof_waterfall_caps_at_parent_limit(
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """Under Basel 3.1, OC (40%) > LR (10%) — MOF picks the OC child."""
+        """Sub-limits sum > parent limit — waterfall caps the lower-CCF row at residual headroom.
+
+        User scenario: parent £100m, sub_01 £60m @ MR (50%) + sub_02 £60m @ MLR (20%).
+        Sub-limits sum to £120m but parent caps at £100m → £60m @ MR + £40m @ MLR.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_01", "FAC_SUB_01", "FAC_SUB_02"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_X"] * 3,
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [100_000_000.0, 60_000_000.0, 60_000_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "MR", "MLR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "counterparty_reference": pl.String,
+                "drawn_amount": pl.Float64,
+                "currency": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_01", "FAC_01"],
+                "child_reference": ["FAC_SUB_01", "FAC_SUB_02"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "FAC_01")
+        assert len(rows) == 2
+
+        sub01 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_01")
+        sub02 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_02")
+
+        # MR (50%) fills first up to its £60m limit
+        assert sub01["risk_type"][0] == "MR"
+        assert sub01["nominal_amount"][0] == pytest.approx(60_000_000.0)
+        # MLR (20%) takes the remaining £40m of parent headroom (capped from £60m)
+        assert sub02["risk_type"][0] == "MLR"
+        assert sub02["nominal_amount"][0] == pytest.approx(40_000_000.0)
+        # Total coverage = parent limit
+        total_nominal = float(rows["nominal_amount"].sum())
+        assert total_nominal == pytest.approx(100_000_000.0)
+
+    def test_mof_waterfall_basel_3_1_ccf_table_used(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Under Basel 3.1, OC (40%) > LR (10%) — waterfall fills OC first."""
         facilities = pl.DataFrame(
             {
                 "facility_reference": ["MOF_B31", "SUB_OC", "SUB_LR"],
@@ -5206,11 +5300,378 @@ class TestMOFAndFacilityShare:
             config=config_b31,
         ).collect()
 
-        mof_row = undrawn.filter(pl.col("exposure_reference") == "MOF_B31_UNDRAWN")
-        assert len(mof_row) == 1
-        # Basel 3.1: OC=40%, LR=10% — OC wins
-        assert mof_row["risk_type"][0] == "OC"
-        assert mof_row["mof_risk_type_source"][0] == "SUB_OC"
+        rows = undrawn.filter(pl.col("source_facility_reference") == "MOF_B31")
+        assert len(rows) == 2
+        oc_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_OC")
+        lr_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_LR")
+        # Basel 3.1: OC=40% beats LR=10% → OC fills first up to its £600k sub-limit
+        assert oc_row["risk_type"][0] == "OC"
+        assert oc_row["nominal_amount"][0] == pytest.approx(600_000.0)
+        assert lr_row["risk_type"][0] == "LR"
+        assert lr_row["nominal_amount"][0] == pytest.approx(400_000.0)
+
+    def test_mof_waterfall_sub_drawn_nets_per_sub(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Drawn loans booked under a specific sub net only that sub's headroom.
+
+        Parent £100m. Sub_01 £60m @ MR drawn £20m. Sub_02 £60m @ MLR drawn £10m.
+        Per-sub headroom: sub_01 = £40m, sub_02 = £50m.
+        Parent headroom = £70m. Waterfall: £40m @ MR, then £30m @ MLR.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_01", "FAC_SUB_01", "FAC_SUB_02"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_X"] * 3,
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [100_000_000.0, 60_000_000.0, 60_000_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "MR", "MLR"],
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["L_A", "L_B"],
+                "counterparty_reference": ["CP_X", "CP_X"],
+                "drawn_amount": [20_000_000.0, 10_000_000.0],
+                "currency": ["GBP"] * 2,
+                "product_type": ["TERM_LOAN"] * 2,
+                "book_code": ["CORP"] * 2,
+                "value_date": [date(2024, 1, 1)] * 2,
+                "maturity_date": [date(2027, 1, 1)] * 2,
+                "lgd": [0.45] * 2,
+                "seniority": ["senior"] * 2,
+            }
+        ).lazy()
+
+        # L_A under sub_01, L_B under sub_02
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": [
+                    "FAC_01",
+                    "FAC_01",
+                    "FAC_SUB_01",
+                    "FAC_SUB_02",
+                ],
+                "child_reference": ["FAC_SUB_01", "FAC_SUB_02", "L_A", "L_B"],
+                "child_type": ["facility", "facility", "loan", "loan"],
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "FAC_01")
+        assert len(rows) == 2
+        sub01 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_01")
+        sub02 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_02")
+        # MR fills first: sub_01 headroom £40m
+        assert sub01["risk_type"][0] == "MR"
+        assert sub01["nominal_amount"][0] == pytest.approx(40_000_000.0)
+        # MLR fills second: parent headroom £70m - £40m = £30m
+        assert sub02["risk_type"][0] == "MLR"
+        assert sub02["nominal_amount"][0] == pytest.approx(30_000_000.0)
+
+    def test_mof_waterfall_sub_fully_drawn_drops_out(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """A sub-facility fully drawn against its limit emits no undrawn row."""
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_01", "FAC_SUB_01", "FAC_SUB_02"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_X"] * 3,
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [100_000_000.0, 60_000_000.0, 40_000_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "MR", "MLR"],
+            }
+        ).lazy()
+
+        # Sub_01 fully drawn (£60m drawn vs £60m limit). Sub_02 untouched.
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["L_FULL"],
+                "counterparty_reference": ["CP_X"],
+                "drawn_amount": [60_000_000.0],
+                "currency": ["GBP"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "value_date": [date(2024, 1, 1)],
+                "maturity_date": [date(2027, 1, 1)],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_01", "FAC_01", "FAC_SUB_01"],
+                "child_reference": ["FAC_SUB_01", "FAC_SUB_02", "L_FULL"],
+                "child_type": ["facility", "facility", "loan"],
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "FAC_01")
+        # Only sub_02 emits a row — sub_01 has zero headroom.
+        assert len(rows) == 1
+        assert rows["mof_risk_type_source"][0] == "FAC_SUB_02"
+        assert rows["risk_type"][0] == "MLR"
+        # Parent headroom = £100m - £60m = £40m, fully absorbed by sub_02 (limit £40m)
+        assert rows["nominal_amount"][0] == pytest.approx(40_000_000.0)
+
+    def test_mof_waterfall_sub_limits_under_parent_emits_residual(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """When sub-limits sum below parent limit, residual headroom emits a parent-risk_type row."""
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_01", "FAC_SUB_01", "FAC_SUB_02"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_PARENT", "CP_X", "CP_X"],
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [100_000_000.0, 50_000_000.0, 30_000_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                # Parent's own risk_type FR (100%) drives the residual £20m row.
+                "risk_type": ["FR", "MR", "MLR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "counterparty_reference": pl.String,
+                "drawn_amount": pl.Float64,
+                "currency": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_01", "FAC_01"],
+                "child_reference": ["FAC_SUB_01", "FAC_SUB_02"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "FAC_01")
+        # 2 sub rows + 1 residual row at parent's own risk_type.
+        assert len(rows) == 3
+
+        sub01 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_01")
+        sub02 = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_02")
+        residual = rows.filter(pl.col("mof_risk_type_source").is_null())
+
+        assert sub01["risk_type"][0] == "MR"
+        assert sub01["nominal_amount"][0] == pytest.approx(50_000_000.0)
+        assert sub02["risk_type"][0] == "MLR"
+        assert sub02["nominal_amount"][0] == pytest.approx(30_000_000.0)
+        # Residual £20m at parent's FR risk_type and parent's counterparty
+        assert residual["risk_type"][0] == "FR"
+        assert residual["nominal_amount"][0] == pytest.approx(20_000_000.0)
+        assert residual["counterparty_reference"][0] == "CP_PARENT"
+
+    def test_mof_waterfall_uncommitted_sub_skipped(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """An uncommitted (committed=False) sub-facility is skipped from the waterfall.
+
+        The bank can refuse to lend on an unconditionally cancellable sub, so it
+        carries no commitment EAD and must not consume parent headroom — the
+        higher-CCF sub's limit is preserved for the still-committed sub.
+        """
+        # FAC_SUB_HIGH (committed=False, FR 100%) would otherwise win the waterfall
+        # but is skipped. FAC_SUB_LOW (committed=True, MLR 20%) takes the full headroom.
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_TOP", "FAC_SUB_HIGH", "FAC_SUB_LOW"],
+                "product_type": ["RCF"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP_X"] * 3,
+                "value_date": [date(2024, 1, 1)] * 3,
+                "maturity_date": [date(2027, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "limit": [100_000_000.0, 60_000_000.0, 60_000_000.0],
+                "lgd": [0.45] * 3,
+                "seniority": ["senior"] * 3,
+                "risk_type": ["MR", "FR", "MLR"],
+                "committed": [True, False, True],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "counterparty_reference": pl.String,
+                "drawn_amount": pl.Float64,
+                "currency": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_TOP", "FAC_TOP"],
+                "child_reference": ["FAC_SUB_HIGH", "FAC_SUB_LOW"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "FAC_TOP")
+        # Uncommitted FAC_SUB_HIGH (FR 100%) does NOT emit a row and does NOT
+        # consume any parent headroom. FAC_SUB_LOW (MLR 20%) gets its full sub
+        # headroom (£60m), with the remaining £40m falling to parent's MR residual.
+        sub_high = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_HIGH")
+        assert len(sub_high) == 0
+        sub_low = rows.filter(pl.col("mof_risk_type_source") == "FAC_SUB_LOW")
+        assert len(sub_low) == 1
+        assert sub_low["risk_type"][0] == "MLR"
+        assert sub_low["nominal_amount"][0] == pytest.approx(60_000_000.0)
+        residual = rows.filter(pl.col("mof_risk_type_source").is_null())
+        assert len(residual) == 1
+        # Residual £40m at parent's own MR risk_type
+        assert residual["risk_type"][0] == "MR"
+        assert residual["nominal_amount"][0] == pytest.approx(40_000_000.0)
+
+    def test_mof_waterfall_three_subs_mixed_ccf(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Three sub-facilities sort deterministically by descending CCF, then risk_type, then ref."""
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["MOF_3", "SUB_A", "SUB_B", "SUB_C"],
+                "product_type": ["RCF"] * 4,
+                "book_code": ["CORP"] * 4,
+                "counterparty_reference": ["CP_X"] * 4,
+                "value_date": [date(2024, 1, 1)] * 4,
+                "maturity_date": [date(2027, 1, 1)] * 4,
+                "currency": ["GBP"] * 4,
+                "limit": [
+                    1_000_000.0,
+                    300_000.0,
+                    300_000.0,
+                    300_000.0,
+                ],
+                "lgd": [0.45] * 4,
+                "seniority": ["senior"] * 4,
+                # FR (100%) > MR (50%) > LR (0% under CRR)
+                "risk_type": ["MR", "FR", "MR", "LR"],
+            }
+        ).lazy()
+
+        loans = pl.LazyFrame(
+            schema={
+                "loan_reference": pl.String,
+                "counterparty_reference": pl.String,
+                "drawn_amount": pl.Float64,
+                "currency": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "lgd": pl.Float64,
+                "seniority": pl.String,
+            }
+        )
+
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["MOF_3"] * 3,
+                "child_reference": ["SUB_A", "SUB_B", "SUB_C"],
+                "child_type": ["facility"] * 3,
+            }
+        ).lazy()
+
+        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        undrawn = resolver._calculate_facility_undrawn(
+            facilities,
+            loans,
+            None,
+            facility_mappings,
+            root_lookup,
+        ).collect()
+
+        rows = undrawn.filter(pl.col("source_facility_reference") == "MOF_3")
+        # Parent headroom £1m. SUB_A (FR 100%) £300k → SUB_B (MR 50%) £300k →
+        # SUB_C (LR 0%) £300k → residual £100k at parent's MR.
+        assert len(rows) == 4
+
+        a_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_A")
+        b_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_B")
+        c_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_C")
+        residual = rows.filter(pl.col("mof_risk_type_source").is_null())
+
+        assert a_row["risk_type"][0] == "FR"
+        assert a_row["nominal_amount"][0] == pytest.approx(300_000.0)
+        assert b_row["risk_type"][0] == "MR"
+        assert b_row["nominal_amount"][0] == pytest.approx(300_000.0)
+        assert c_row["risk_type"][0] == "LR"
+        assert c_row["nominal_amount"][0] == pytest.approx(300_000.0)
+        assert residual["risk_type"][0] == "MR"
+        assert residual["nominal_amount"][0] == pytest.approx(100_000.0)
 
     def test_mof_with_no_facility_children_uses_own_risk_type(
         self,
@@ -5463,20 +5924,19 @@ class TestMOFAndFacilityShare:
         # Only one distinct member — no share override
         assert row["counterparty_reference"][0] == "CP_ONLY"
 
-    def test_mof_and_share_combined(
+    def test_mof_waterfall_per_sub_counterparty(
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """A MOF parent whose sub-facilities' loans span multiple counterparties.
+        """Each MOF undrawn split-row carries its own sub-facility's counterparty.
 
-        Both overrides apply: parent risk_type from max-CCF descendant, and undrawn CP
-        from highest-RW member among descendant loan counterparties.
+        With waterfall splitting, share-counterparty override is not needed for
+        MOF parents — each row already names the sub it came from.
         """
         counterparties = pl.DataFrame(
             {
                 "counterparty_reference": ["CP_A", "CP_B"],
                 "counterparty_name": ["A", "B"],
-                # CP_A retail (75%), CP_B corporate CQS=5 (150%) — CP_B wins.
                 "entity_type": ["retail", "corporate"],
                 "country_code": ["GB", "GB"],
                 "default_status": [False, False],
@@ -5557,29 +6017,25 @@ class TestMOFAndFacilityShare:
             config=config,
         ).collect()
 
-        row = undrawn.filter(pl.col("exposure_reference") == "MOF_TOP_UNDRAWN")
-        assert len(row) == 1
-        # MOF: SUB_B has FR (100%) which beats SUB_A's MLR (20%) and parent's LR (0%).
-        assert row["risk_type"][0] == "FR"
-        assert row["mof_risk_type_source"][0] == "SUB_B"
-        # Share: CP_B (corporate CQS=5, RW=150%) beats CP_A (retail RW=75%).
-        assert row["counterparty_reference"][0] == "CP_B"
-        assert row["original_counterparty_reference"][0] == "CP_A"
+        rows = undrawn.filter(pl.col("source_facility_reference") == "MOF_TOP")
+        # Two sub-facility split rows, no residual (sub limits sum to parent limit).
+        assert len(rows) == 2
 
-    def test_facility_share_all_undrawn_uses_sub_facility_counterparties(
+        a_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_A")
+        b_row = rows.filter(pl.col("mof_risk_type_source") == "SUB_B")
+
+        # FR (100%) fills first — SUB_B with CP_B
+        assert b_row["risk_type"][0] == "FR"
+        assert b_row["counterparty_reference"][0] == "CP_B"
+        # MLR (20%) fills second — SUB_A with CP_A
+        assert a_row["risk_type"][0] == "MLR"
+        assert a_row["counterparty_reference"][0] == "CP_A"
+
+    def test_mof_waterfall_all_undrawn_per_sub_counterparties(
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """A MOF with multi-CP sub-facilities and zero draws still allocates undrawn to riskiest CP.
-
-        Closes the all-undrawn gap: previously the helper only walked loans
-        and contingents, so a brand-new MOF whose sub-facilities span multiple
-        obligors fell through to the parent's own ``counterparty_reference``.
-        Sub-facility ``counterparty_reference`` values are now first-class
-        share members because any of those obligors could draw against the
-        parent's limit and the conservative undrawn EAD must sit with the
-        worst credit.
-        """
+        """All-undrawn MOF with multi-CP sub-facilities — each split row carries its sub's CP."""
         counterparties = pl.DataFrame(
             {
                 "counterparty_reference": ["CP_PARENT", "CP_LIGHT", "CP_HEAVY"],
@@ -5667,15 +6123,20 @@ class TestMOFAndFacilityShare:
             config=config,
         ).collect()
 
-        row = undrawn.filter(pl.col("exposure_reference") == "MOF_DRY_UNDRAWN")
-        assert len(row) == 1
-        # Even with zero draws, riskiest sub-facility CP wins:
-        # CP_HEAVY (corporate CQS=5, RW=150%) beats CP_LIGHT (retail RW=75%)
-        # and CP_PARENT (corporate CQS=2, RW=50%).
-        assert row["counterparty_reference"][0] == "CP_HEAVY"
-        assert row["original_counterparty_reference"][0] == "CP_PARENT"
-        # Undrawn = full parent limit since nothing is drawn anywhere.
-        assert row["undrawn_amount"][0] == 1_000_000.0
+        rows = undrawn.filter(pl.col("source_facility_reference") == "MOF_DRY")
+        # Two sub-facility split rows. SUB_LIGHT (FR 100%) fills first £600k,
+        # SUB_HEAVY (MR 50%) fills remaining £400k.
+        assert len(rows) == 2
+        light = rows.filter(pl.col("mof_risk_type_source") == "SUB_LIGHT")
+        heavy = rows.filter(pl.col("mof_risk_type_source") == "SUB_HEAVY")
+        assert light["risk_type"][0] == "FR"
+        assert light["counterparty_reference"][0] == "CP_LIGHT"
+        assert light["nominal_amount"][0] == pytest.approx(600_000.0)
+        assert heavy["risk_type"][0] == "MR"
+        assert heavy["counterparty_reference"][0] == "CP_HEAVY"
+        assert heavy["nominal_amount"][0] == pytest.approx(400_000.0)
+        # Total = parent limit
+        assert float(rows["nominal_amount"].sum()) == pytest.approx(1_000_000.0)
 
     def test_facility_share_mixed_drawn_and_undrawn_subs(
         self,
@@ -5776,11 +6237,17 @@ class TestMOFAndFacilityShare:
             config=config,
         ).collect()
 
-        row = undrawn.filter(pl.col("exposure_reference") == "MOF_MIX_UNDRAWN")
-        assert len(row) == 1
-        # CP_DRY (RW=150%) wins despite having zero drawn exposure — any sub-facility
-        # CP could draw against the limit, so the worst credit holds the undrawn EAD.
-        assert row["counterparty_reference"][0] == "CP_DRY"
-        assert row["original_counterparty_reference"][0] == "CP_PARENT"
-        # Parent limit 1M minus 200k drawn under SUB_WET = 800k undrawn.
-        assert row["undrawn_amount"][0] == 800_000.0
+        rows = undrawn.filter(pl.col("source_facility_reference") == "MOF_MIX")
+        # Two split rows, both MR (50%). Tie-break: alphabetical risk_type then
+        # facility_reference, so SUB_DRY fills first up to its £500k limit, then
+        # SUB_WET fills its remaining headroom (£500k - £200k drawn = £300k).
+        assert len(rows) == 2
+        dry = rows.filter(pl.col("mof_risk_type_source") == "SUB_DRY")
+        wet = rows.filter(pl.col("mof_risk_type_source") == "SUB_WET")
+        # Each row carries its own sub's counterparty
+        assert dry["counterparty_reference"][0] == "CP_DRY"
+        assert dry["nominal_amount"][0] == pytest.approx(500_000.0)
+        assert wet["counterparty_reference"][0] == "CP_WET"
+        assert wet["nominal_amount"][0] == pytest.approx(300_000.0)
+        # Total undrawn = parent headroom = £1m - £200k = £800k
+        assert float(rows["nominal_amount"].sum()) == pytest.approx(800_000.0)

@@ -141,8 +141,8 @@ class HierarchyResolver:
 | `_build_rating_inheritance_lazy()` | Inherit ratings: own → parent → unrated |
 | `_build_facility_root_lookup()` | Traverse facility-to-facility hierarchies to find root facility |
 | `_calculate_facility_undrawn()` | Calculate undrawn = limit - sum(descendant drawn), excluding sub-facilities. Suppresses the synthetic `facility_undrawn` exposure row when `committed=False` — uncommitted (unconditionally cancellable) facilities carry no commitment EAD because the bank can refuse to lend; loans and contingents mapped to the facility are unaffected and continue to flow as their own exposure rows |
-| `_derive_mof_risk_type()` | For Multiple Option Facility (MOF) parents — pick the descendant `risk_type` producing the highest SA CCF (frame-aware) so the parent's undrawn EAD reflects the worst-case off-balance commitment among its components |
-| `_derive_facility_share_counterparty()` | For Facility Shares (one facility, many counterparties on its loans/contingents) — allocate the undrawn to the riskiest member by SA-equivalent risk-weight preview |
+| `_expand_mof_facility_undrawn()` | For Multiple Option Facility (MOF) parents — replaces the parent's single undrawn row with one row per **committed** descendant sub-facility (with positive headroom), allocated by waterfall in descending SA CCF order, capped per-sub at `sub_limit − sub_drawn` and globally at the parent's headroom. Emits a residual row at the parent's own `risk_type` when sub-limits don't cover the full parent limit. Uncommitted subs are skipped entirely. Each split row carries the sub's `risk_type` and `counterparty_reference`; provenance lives in `mof_risk_type_source` |
+| `_derive_facility_share_counterparty()` | For non-MOF Facility Shares (one facility, many counterparties on its loans/contingents) — allocate the undrawn to the riskiest member by SA-equivalent risk-weight preview. Skipped on MOF parents because each sub waterfall row already carries the right counterparty natively |
 | `_unify_exposures()` | Combine loan, contingent, and facility_undrawn into single LazyFrame |
 | `_calculate_lending_group_totals()` | Aggregate exposure by lending group for retail threshold |
 | `_add_collateral_ltv()` | Add LTV from collateral (direct → facility → counterparty priority) |
@@ -155,8 +155,8 @@ class HierarchyResolver:
 - Support for deep hierarchies (up to 10 levels)
 - Multi-level facility hierarchy: drawn amounts aggregated to root facility
 - Sub-facility exclusion from undrawn exposure output (avoids double-counting)
-- **Multiple Option Facility (MOF) parents inherit the descendant `risk_type` whose SA CCF is highest under the active framework** (any facility with at least one `child_type='facility'` mapping is treated as a MOF; the original parent `risk_type` is preserved as `mof_risk_type_source` for audit)
-- **Facility Share undrawn is allocated to the riskiest counterparty among the descendant loan/contingent counterparties** by SA-equivalent risk-weight preview; the original facility counterparty is preserved as `original_counterparty_reference` for audit
+- **Multiple Option Facility (MOF) parents emit per-sub waterfall undrawn rows** (any facility with at least one `child_type='facility'` mapping is a MOF). Sub-facilities are sorted by descending SA CCF under the active framework and each takes the lesser of its own headroom (`sub_limit − sub_drawn`) and the parent's remaining headroom. Sub-limits beyond the parent's cap spill out, leftover parent headroom emits a residual row at the parent's own `risk_type`, uncommitted subs are skipped, and each row records its source in `mof_risk_type_source` for audit.
+- **Non-MOF Facility Share undrawn is allocated to the riskiest counterparty among the descendant loan/contingent counterparties** by SA-equivalent risk-weight preview; the original facility counterparty is preserved as `original_counterparty_reference` for audit. MOF parents skip this override because each waterfall row already carries its sub-facility's own counterparty.
 - Rating inheritance from parent (own → parent → unrated)
 - Lending group aggregation with residential property exclusion (CRR Art. 123(c))
 - Multi-level collateral linking (direct, facility, counterparty) with pro-rata allocation

@@ -258,6 +258,208 @@ class TestFIRBCCF:
 
 
 # =============================================================================
+# CRR F-IRB Art. 166(10) Fallback Tests
+# =============================================================================
+
+
+class TestFIRBArt16610Fallback:
+    """Tests for CRR Art. 166(10) — the residual fallback for off-balance sheet
+    items not covered by Art. 166(8).
+
+    Art. 166(8) bespoke F-IRB CCFs only cover:
+        (a) UCC credit lines -> 0%
+        (b) Short-term trade LCs (goods movement) -> 20%
+        (c) Revolving purchased-receivables UCC -> 0%
+        (d) Other credit lines / NIFs / RUFs -> 75%
+
+    Anything else falls under Art. 166(10) with its own four-tier scale:
+        (a) Full risk -> 100%; (b) Medium-risk -> 50%;
+        (c) Medium/low-risk -> 20%; (d) Low-risk -> 0%.
+
+    The engine uses ``is_obs_commitment`` to distinguish the two paths:
+        True  -> Art. 166(8)(d) credit-line/commitment bucket (75%)
+        False -> Art. 166(10) issued-OBS-item bucket (50%/20%/100%/0%)
+    """
+
+    def test_firb_mr_issued_uses_art_166_10_50_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """MR issued OBS item under F-IRB falls to 50% per Art. 166(10)(b)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_PERFORMANCE_BOND"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "is_obs_commitment": [False],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.50)
+        assert result["ead_from_ccf"][0] == pytest.approx(500_000.0)
+
+    def test_firb_mr_commitment_keeps_art_166_8d_75_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """MR credit line / NIF / RUF under F-IRB still gets 75% per Art. 166(8)(d)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_NIF"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "is_obs_commitment": [True],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+        assert result["ead_from_ccf"][0] == pytest.approx(750_000.0)
+
+    def test_firb_mlr_issued_uses_art_166_10_20_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """MLR issued OBS item under F-IRB falls to 20% per Art. 166(10)(c).
+
+        Example: a self-liquidating documentary credit where the underlying
+        shipment acts as collateral. Not a "short-term trade LC arising from
+        movement of goods" (Art. 166(8)(b)), so the 20% comes from the
+        Art. 166(10) fallback rather than the Art. 166(8)(b) carve-out — but
+        the numerical result is the same.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_SHIPPING_GUARANTEE"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500_000.0],
+                "risk_type": ["MLR"],
+                "is_obs_commitment": [False],
+                "is_short_term_trade_lc": [False],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.20)
+        assert result["ead_from_ccf"][0] == pytest.approx(100_000.0)
+
+    def test_firb_mlr_commitment_keeps_art_166_8d_75_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """MLR commitment (e.g., short-maturity credit line) still gets 75% under Art. 166(8)(d)."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_SHORT_MLR_LINE"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [500_000.0],
+                "risk_type": ["MLR"],
+                "is_obs_commitment": [True],
+                "is_short_term_trade_lc": [False],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+        assert result["ead_from_ccf"][0] == pytest.approx(375_000.0)
+
+    def test_firb_short_term_trade_lc_carve_out_wins_over_issued_default(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Art. 166(8)(b) short-term trade LC keeps 20% even when ``is_obs_commitment=False``.
+
+        Both the Art. 166(8)(b) carve-out and the Art. 166(10)(c) MLR fallback
+        give 20% — this test pins down that the carve-out path is exercised
+        and not silently shadowed by the new fallback.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_TRADE_LC"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [200_000.0],
+                "risk_type": ["MLR"],
+                "is_obs_commitment": [False],
+                "is_short_term_trade_lc": [True],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.20)
+        assert result["ead_from_ccf"][0] == pytest.approx(40_000.0)
+
+    def test_firb_oc_issued_falls_back_to_50_percent(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """OC tagged as issued (not a credit line) falls back to MR-equivalent 50%.
+
+        OC has no dedicated Annex I bucket under CRR; the conservative
+        Art. 166(10)(b) treatment applies (50%) for issued OBS items.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_OC_ISSUED"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [100_000.0],
+                "risk_type": ["OC"],
+                "is_obs_commitment": [False],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.50)
+
+    def test_firb_default_when_is_obs_commitment_missing_preserves_75(
+        self,
+        ccf_calculator: CCFCalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """When ``is_obs_commitment`` is absent, default is True (commitment) -> 75% for MR/MLR.
+
+        The hierarchy stage sets the per-source-table default (False for
+        contingents, True for facilities) before exposures reach the CCF
+        calculator. When callers bypass hierarchy and call ``apply_ccf``
+        directly without the column, default to commitment-style for backwards
+        compatibility with existing fixtures.
+        """
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["FIRB_NO_FLAG"],
+                "drawn_amount": [0.0],
+                "nominal_amount": [1_000_000.0],
+                "risk_type": ["MR"],
+                "approach": ["foundation_irb"],
+            }
+        ).lazy()
+
+        result = ccf_calculator.apply_ccf(exposures, crr_config).collect()
+
+        assert result["ccf"][0] == pytest.approx(0.75)
+
+
+# =============================================================================
 # Basel 3.1 F-IRB CCF Tests (PRA PS1/26 Art. 166C)
 # =============================================================================
 

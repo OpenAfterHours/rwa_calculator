@@ -79,6 +79,11 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "ccf_modelled": ColumnSpec(pl.Float64, required=False),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 166(8)(d) vs Art. 166(10): True for credit lines / NIFs / RUFs
+    # (75% F-IRB CCF), False for issued OBS items (Art. 166(10) — 50% MR / 20% MLR).
+    # Facilities default to True because a facility row is, by construction, a
+    # commitment / credit line.
+    "is_obs_commitment": ColumnSpec(pl.Boolean, default=True, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -138,6 +143,11 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "ccf_modelled": ColumnSpec(pl.Float64, required=False),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued OBS items by
+    # default (False -> Art. 166(10) fallback: 50% MR / 20% MLR / 100% FR / 0% LR).
+    # Override to True for genuine commitment-style contingents (e.g., an
+    # NIF / RUF booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
+    "is_obs_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "effective_maturity": ColumnSpec(pl.Float64, required=False),

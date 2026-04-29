@@ -660,6 +660,7 @@ class HierarchyResolver:
                     "ccf_modelled": pl.Float64,
                     "ead_modelled": pl.Float64,
                     "is_short_term_trade_lc": pl.Boolean,
+                    "is_obs_commitment": pl.Boolean,
                     "is_payroll_loan": pl.Boolean,
                     "is_buy_to_let": pl.Boolean,
                     "has_one_day_maturity_floor": pl.Boolean,
@@ -922,6 +923,14 @@ class HierarchyResolver:
                 pl.col("is_short_term_trade_lc").fill_null(False)
                 if "is_short_term_trade_lc" in facility_cols
                 else pl.lit(False).alias("is_short_term_trade_lc")
+            ),
+            # CRR Art. 166(8)(d): facility undrawn is a credit line by construction,
+            # so default True. An explicit False override flips the row to the
+            # Art. 166(10) issued-item bucket (50% MR / 20% MLR).
+            (
+                pl.col("is_obs_commitment").fill_null(True)
+                if "is_obs_commitment" in facility_cols
+                else pl.lit(True).alias("is_obs_commitment")
             ),
             (
                 pl.col("is_payroll_loan").fill_null(False)
@@ -1345,6 +1354,7 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Float64).alias("ead_modelled"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
+            pl.lit(None).cast(pl.Boolean).alias("is_obs_commitment"),  # N/A for drawn loans
             (
                 pl.col("is_payroll_loan").fill_null(False)
                 if "is_payroll_loan" in loan_cols
@@ -1456,6 +1466,18 @@ class HierarchyResolver:
                     .then(pl.lit(None).cast(pl.Boolean))
                     .otherwise(pl.col("is_short_term_trade_lc"))
                     .alias("is_short_term_trade_lc"),
+                    # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued
+                    # OBS items by default (False -> Art. 166(10) fallback under F-IRB).
+                    # Callers may override to True for commitment-style contingents
+                    # (e.g., a contingent representing a NIF/RUF).
+                    pl.when(is_drawn)
+                    .then(pl.lit(None).cast(pl.Boolean))
+                    .otherwise(
+                        pl.col("is_obs_commitment").fill_null(False)
+                        if "is_obs_commitment" in cont_cols
+                        else pl.lit(False)
+                    )
+                    .alias("is_obs_commitment"),
                     pl.lit(False).alias(
                         "is_payroll_loan"
                     ),  # Payroll loans are term loans, not contingents

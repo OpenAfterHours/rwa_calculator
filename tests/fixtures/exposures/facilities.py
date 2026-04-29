@@ -55,8 +55,11 @@ class Facility:
         None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
     )
     is_short_term_trade_lc: bool | None = (
-        None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+        None  # Art. 166(8)(b): short-term LC for goods = 20% under F-IRB
     )
+    # CRR Art. 166(8)(d) vs Art. 166(10): facilities are commitments by default (75% F-IRB).
+    # Override to False to flip into the Art. 166(10) issued-OBS bucket (50% MR / 20% MLR).
+    is_obs_commitment: bool | None = None
     is_qrre_transactor: bool | None = (
         None  # CRR Art. 147(5), CRE30.55: True if borrower repays in full each period
     )
@@ -80,6 +83,7 @@ class Facility:
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
             "is_short_term_trade_lc": self.is_short_term_trade_lc,
+            "is_obs_commitment": self.is_obs_commitment,
         }
 
 

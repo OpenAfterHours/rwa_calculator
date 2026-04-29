@@ -403,6 +403,7 @@ def generate_facilities(
                 "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
                 "ead_modelled": np.full(n_facilities, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
+                "is_obs_commitment": np.full(n_facilities, None),  # Default True via schema
                 "is_payroll_loan": np.full(n_facilities, None),  # Payroll loan flag
                 "is_buy_to_let": np.full(n_facilities, None),  # BTL flag for SME supporting factor
                 "has_one_day_maturity_floor": np.full(n_facilities, None),  # Repo/SFT 1-day floor
@@ -951,6 +952,9 @@ def generate_contingents(
                 "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
                 "ead_modelled": np.full(n_contingents, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": is_short_term_trade_lc,  # True for LCs
+                "is_obs_commitment": np.full(
+                    n_contingents, None
+                ),  # Default False via schema (issued OBS)
                 "has_one_day_maturity_floor": np.full(n_contingents, None),  # Repo/SFT 1-day floor
                 "is_sft": np.full(n_contingents, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
                 "bs_type": np.full(n_contingents, "OFB"),  # Off-balance-sheet by default

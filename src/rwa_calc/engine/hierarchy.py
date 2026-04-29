@@ -1101,58 +1101,50 @@ class HierarchyResolver:
         non_mof_rows = expanded.filter(~pl.col("_is_mof_parent"))
         mof_parents = expanded.filter(pl.col("_is_mof_parent"))
 
-        # Build per-sub direct drawn (loans + contingents directly mapped to each sub,
-        # NOT rolled up to root). Per-sub netting is what makes the waterfall
-        # economically accurate when loans are booked against specific sub-facilities.
+        # Per-sub netting: aggregate loans/contingents at the directly-mapped
+        # facility level (NOT rolled up to root). This is what lets the waterfall
+        # reflect actual sub-level utilisation rather than parent-level totals.
         type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
 
-        loan_per_sub = pl.LazyFrame(schema={"_sub_ref": pl.String, "sub_drawn_loans": pl.Float64})
-        loan_cols = set(loans.collect_schema().names())
-        if "loan_reference" in loan_cols and "drawn_amount" in loan_cols:
-            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
-            loan_per_sub = (
-                loans.select([pl.col("loan_reference"), pl.col("drawn_amount")])
+        def _per_sub_drawn(
+            frame: pl.LazyFrame | None,
+            ref_col: str,
+            amount_col: str,
+            child_type: str,
+            out_col: str,
+        ) -> pl.LazyFrame:
+            empty = pl.LazyFrame(schema={"_sub_ref": pl.String, out_col: pl.Float64})
+            if frame is None:
+                return empty
+            cols = set(frame.collect_schema().names())
+            if ref_col not in cols or amount_col not in cols:
+                return empty
+            child_mappings = _filter_mappings_by_child_type(facility_mappings, child_type, type_col)
+            return (
+                frame.select([pl.col(ref_col), pl.col(amount_col)])
                 .join(
-                    loan_mappings.select(
+                    child_mappings.select(
                         [pl.col("child_reference"), pl.col("parent_facility_reference")]
                     ),
-                    left_on="loan_reference",
+                    left_on=ref_col,
                     right_on="child_reference",
                     how="inner",
                 )
                 .group_by("parent_facility_reference")
-                .agg(pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("sub_drawn_loans"))
+                .agg(pl.col(amount_col).clip(lower_bound=0.0).sum().alias(out_col))
                 .rename({"parent_facility_reference": "_sub_ref"})
             )
 
-        cont_per_sub = pl.LazyFrame(
-            schema={"_sub_ref": pl.String, "sub_drawn_contingents": pl.Float64}
+        loan_per_sub = _per_sub_drawn(
+            loans, "loan_reference", "drawn_amount", "loan", "sub_drawn_loans"
         )
-        if contingents is not None:
-            cont_cols = set(contingents.collect_schema().names())
-            if "contingent_reference" in cont_cols and "nominal_amount" in cont_cols:
-                cont_mappings = _filter_mappings_by_child_type(
-                    facility_mappings, "contingent", type_col
-                )
-                cont_per_sub = (
-                    contingents.select([pl.col("contingent_reference"), pl.col("nominal_amount")])
-                    .join(
-                        cont_mappings.select(
-                            [pl.col("child_reference"), pl.col("parent_facility_reference")]
-                        ),
-                        left_on="contingent_reference",
-                        right_on="child_reference",
-                        how="inner",
-                    )
-                    .group_by("parent_facility_reference")
-                    .agg(
-                        pl.col("nominal_amount")
-                        .clip(lower_bound=0.0)
-                        .sum()
-                        .alias("sub_drawn_contingents")
-                    )
-                    .rename({"parent_facility_reference": "_sub_ref"})
-                )
+        cont_per_sub = _per_sub_drawn(
+            contingents,
+            "contingent_reference",
+            "nominal_amount",
+            "contingent",
+            "sub_drawn_contingents",
+        )
 
         # Pull sub-facility attributes from the facilities frame — risk_type,
         # counterparty, limit, and the committed flag (defaulting to True).
@@ -1192,13 +1184,10 @@ class HierarchyResolver:
             .join(loan_per_sub, on="_sub_ref", how="left")
             .join(cont_per_sub, on="_sub_ref", how="left")
             .with_columns(
-                [
-                    pl.col("sub_drawn_loans").fill_null(0.0),
-                    pl.col("sub_drawn_contingents").fill_null(0.0),
-                ]
-            )
-            .with_columns(
-                sub_drawn=(pl.col("sub_drawn_loans") + pl.col("sub_drawn_contingents")),
+                sub_drawn=(
+                    pl.col("sub_drawn_loans").fill_null(0.0)
+                    + pl.col("sub_drawn_contingents").fill_null(0.0)
+                ),
                 sub_sa_ccf=sa_ccf_expression(
                     risk_type_col="_sub_risk_type", is_basel_3_1=is_basel_3_1
                 ),
@@ -1278,16 +1267,15 @@ class HierarchyResolver:
         )
         residual_rows = (
             mof_parents.join(parent_alloc_total, on="facility_reference", how="left")
-            .with_columns(pl.col("_total_alloc").fill_null(0.0))
             .with_columns(
-                _residual=(pl.col("undrawn_amount") - pl.col("_total_alloc")).clip(lower_bound=0.0),
+                _residual=(pl.col("undrawn_amount") - pl.col("_total_alloc").fill_null(0.0)).clip(
+                    lower_bound=0.0
+                )
             )
             .filter(pl.col("_residual") > 0.0)
             .with_columns(
-                [
-                    pl.col("_residual").alias("undrawn_amount"),
-                    pl.lit("_RESIDUAL").alias("_exposure_suffix"),
-                ]
+                undrawn_amount=pl.col("_residual"),
+                _exposure_suffix=pl.lit("_RESIDUAL"),
             )
             .drop(["_total_alloc", "_residual"])
         )

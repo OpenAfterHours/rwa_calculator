@@ -18,17 +18,54 @@ CCF application for off-balance sheet exposures under SA, F-IRB, and A-IRB.
 | Medium-Low Risk (MLR) | 20% | Undrawn commitments ≤ 1 year, trade-related LCs |
 | Low Risk (LR) | 0% | Unconditionally cancellable commitments |
 
-## F-IRB Approach (CRR Art. 166(8))
+## F-IRB Approach (CRR Art. 166(8) and Art. 166(10))
 
-| CCF Category | CCF | Notes | Reference |
-|-------------|-----|-------|-----------|
-| Full Risk (FR) | 100% | Same as SA | Art. 166(8) general |
-| Full Risk Commitment (FRC) | 100% | Same as SA — repos, factoring, forward deposits (Annex I para 2) | Art. 166(8) general |
-| UCC (Low Risk) | 0% | Unconditionally cancellable commitments | **Art. 166(8)(a)** |
-| Trade LCs (short-term) | 20% | Short-term letters of credit arising from the movement of goods — both issuing and confirming institutions | **Art. 166(8)(b)** |
-| Revolving purchased receivables UCC | 0% | Undrawn purchase commitments for revolving purchased receivables that are unconditionally cancellable | **Art. 166(8)(c)** |
-| Other credit lines / NIFs / RUFs | 75% | Default F-IRB CCF for committed non-UCC facilities | **Art. 166(8)(d)** |
-| Medium/Low Risk — general | 75% | Items mapped to MLR under SA (non-trade) take the default Art. 166(8)(d) 75% under F-IRB | Art. 166(8)(d) |
+CRR Article 166 has **two** F-IRB CCF clauses, and both apply:
+
+- **Art. 166(8)** prescribes bespoke F-IRB CCFs for the named commitment types
+  (UCC, short-term trade LCs, revolving purchased-receivables UCC, "other
+  credit lines / NIFs / RUFs").
+- **Art. 166(10)** is the residual fallback for off-balance sheet items not in
+  scope of paragraphs 1–8 — it carries its own four-tier scale referencing
+  Annex I risk categories.
+
+The engine routes each row to the correct clause via the
+`is_obs_commitment` schema flag:
+
+- `True` → row is a credit line / NIF / RUF (Art. 166(8)(d) bucket → 75%).
+  Default for **facility** rows (commitments by construction).
+- `False` → row is an issued OBS item (Art. 166(10) fallback). Default for
+  **contingent** rows (issued items by construction; performance bonds,
+  warranties, documentary credits, shipping guarantees, etc.).
+
+Callers may override per row — e.g., a contingent that genuinely represents
+a NIF/RUF can be tagged `is_obs_commitment=True` to opt back into 75%.
+
+### F-IRB CCFs by source (Art. 166(8))
+
+| CCF Category | CCF | Applies when | Reference |
+|-------------|-----|--------------|-----------|
+| Full Risk (FR) | 100% | Issued FR items (guarantees, credit derivatives, acceptances) regardless of source | Art. 166(8) general / 166(10)(a) (numerically identical) |
+| Full Risk Commitment (FRC) | 100% | Certain-drawdown commitments — repos, factoring, forward deposits | Art. 166(8) general |
+| UCC (Low Risk) | 0% | Any LR row regardless of source | **Art. 166(8)(a)** / 166(10)(d) (numerically identical) |
+| Trade LCs (short-term, MLR) | 20% | `is_short_term_trade_lc=True` — overrides both Art. 166(8)(d) and 166(10)(c) | **Art. 166(8)(b)** |
+| Revolving purchased receivables UCC | 0% | LR + UCC purchase commitments | **Art. 166(8)(c)** |
+| Other credit lines / NIFs / RUFs | 75% | `is_obs_commitment=True` AND risk_type in {MR, MLR, OC} | **Art. 166(8)(d)** |
+
+### F-IRB CCFs by source (Art. 166(10) fallback for issued OBS items)
+
+| CCF Category | CCF | Applies when | Reference |
+|-------------|-----|--------------|-----------|
+| MR — issued OBS items | **50%** | `is_obs_commitment=False` AND risk_type=MR — performance bonds, warranties, tender bonds, non-credit-substitute documentary credits / standby LCs | **Art. 166(10)(b)** |
+| MLR — issued OBS items (non-trade-LC) | **20%** | `is_obs_commitment=False` AND risk_type=MLR AND `is_short_term_trade_lc=False` — self-liquidating documentary credits, shipping guarantees, customs/tax bonds | **Art. 166(10)(c)** |
+| OC — issued OBS items | **50%** | `is_obs_commitment=False` AND risk_type=OC — conservative MR-equivalent treatment (no dedicated Annex I bucket) | **Art. 166(10)(b)** (analogue) |
+
+!!! note "Art. 166(10) is self-contained — not a delegation to Art. 111"
+    Art. 166(10) is a *self-contained* fallback with its own four-tier scale.
+    It does **not** delegate to Art. 111. The numerical values happen to
+    coincide with the SA Annex I scale, which is why a Medium-Risk issued
+    item under F-IRB and under SA both produce 50% — but the regulatory
+    drivers are different (Art. 166(10)(b) for F-IRB; Art. 111 / Annex I for SA).
 
 !!! note "Art. 166(9) vs 166(8)(b) — reference correction"
     The 20% short-term trade LC CCF sits in **Art. 166(8)(b)** of the CRR (see p. 165 of the
@@ -36,6 +73,15 @@ CCF application for off-balance sheet exposures under SA, F-IRB, and A-IRB.
     "lower-of-the-two conversion factors" rule where a commitment refers to the extension of
     another commitment. An earlier version of this spec cited Art. 166(9) for the trade LC
     carve-out; that citation was incorrect.
+
+!!! warning "Behaviour change — Art. 166(10) fallback (April 2026)"
+    Prior to the introduction of `is_obs_commitment`, the engine blanket-applied
+    75% to all CRR F-IRB MR / MLR / OC rows, treating Art. 166(8)(d) as the
+    catch-all. This over-stated EAD on issued OBS items (performance bonds,
+    documentary credits, shipping guarantees, etc.) that should have fallen
+    under the Art. 166(10) scale. The fix is gated to CRR (`is_basel_3_1=False`);
+    Basel 3.1 already aligns F-IRB CCFs to SA Table A1 via Art. 166C and is
+    unaffected.
 
 ## Basel 3.1 SA Changes (PRA PS1/26 Art. 111 Table A1)
 
@@ -359,14 +405,16 @@ receivables commitments without a dedicated CCF.
 
 ### CRR Scenarios
 
-| Scenario ID | CCF Category | SA CCF | F-IRB CCF | Reference |
-|-------------|-------------|--------|-----------|-----------|
-| CRR-D.CCF1 | Full Risk (FR) — guarantee | 100% | 100% | Art. 111, Art. 166(8) |
-| CRR-D.CCF2 | Medium Risk (MR) — undrawn commitment >1yr | 50% | 75% | Art. 111, Art. 166(8)(d) |
-| CRR-D.CCF3 | Medium-Low Risk (MLR) — trade LC for goods movement | 20% | 20% | Art. 111, **Art. 166(8)(b)** |
-| CRR-D.CCF4 | Low Risk (LR) — unconditionally cancellable | 0% | 0% | Art. 111, Art. 166(8)(a) |
-| CRR-D.CCF5 | Other Commitments (OC) >1yr | 50% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent |
-| CRR-D.CCF6 | Other Commitments (OC) <=1yr | 20% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent |
+| Scenario ID | CCF Category | Source | SA CCF | F-IRB CCF | Reference |
+|-------------|-------------|--------|--------|-----------|-----------|
+| CRR-D.CCF1 | Full Risk (FR) — guarantee | issued | 100% | 100% | Art. 111, Art. 166(8) general / 166(10)(a) |
+| CRR-D.CCF2 | Medium Risk (MR) — undrawn commitment >1yr | facility (commitment) | 50% | 75% | Art. 111, Art. 166(8)(d) |
+| CRR-D.CCF3 | Medium-Low Risk (MLR) — trade LC for goods movement | issued | 20% | 20% | Art. 111, **Art. 166(8)(b)** |
+| CRR-D.CCF4 | Low Risk (LR) — unconditionally cancellable | facility | 0% | 0% | Art. 111, Art. 166(8)(a) / 166(10)(d) |
+| CRR-D.CCF5 | Other Commitments (OC) >1yr | facility (commitment) | 50% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent on SA |
+| CRR-D.CCF6 | Other Commitments (OC) ≤1yr | facility (commitment) | 20% | 75% | Art. 111, Art. 166(8)(d); maturity-dependent on SA |
+| **CRR-D.CCF7** | **MR — issued OBS item (performance bond)** | **contingent (issued)** | **50%** | **50%** | Art. 111, **Art. 166(10)(b)** |
+| **CRR-D.CCF8** | **MLR — issued OBS item (non-trade-LC documentary credit, shipping guarantee)** | **contingent (issued)** | **20%** | **20%** | Art. 111, **Art. 166(10)(c)** |
 
 ### Basel 3.1 Scenarios
 

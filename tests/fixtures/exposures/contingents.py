@@ -58,8 +58,13 @@ class Contingent:
         None  # Optional: A-IRB modelled CCF (0.0-1.5, Retail can exceed 100%)
     )
     is_short_term_trade_lc: bool | None = (
-        None  # Art. 166(9): short-term LC for goods = 20% under F-IRB
+        None  # Art. 166(8)(b): short-term LC for goods = 20% under F-IRB
     )
+    # CRR Art. 166(8)(d) vs Art. 166(10): contingents are issued OBS items by
+    # default (False -> Art. 166(10) fallback under F-IRB: 50% MR / 20% MLR).
+    # Override to True for genuine commitment-style contingents (e.g., NIF/RUF
+    # booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
+    is_obs_commitment: bool | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -77,6 +82,7 @@ class Contingent:
             "risk_type": self.risk_type,
             "ccf_modelled": self.ccf_modelled,
             "is_short_term_trade_lc": self.is_short_term_trade_lc,
+            "is_obs_commitment": self.is_obs_commitment,
         }
 
 

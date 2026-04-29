@@ -421,6 +421,121 @@ class TestCCFConversion:
         # EAD should be drawn + interest
         assert loan_row["ead_pre_crm"][0] == pytest.approx(drawn + interest)
 
+    def test_crr_d_ccf7_firb_mr_contingent_falls_to_50_via_art_166_10(
+        self, hierarchy_resolver, classifier, crm_processor, crr_firb_config
+    ):
+        """CRR-D.CCF7: FIRB MR contingent (issued OBS item) -> 50% via Art. 166(10)(b).
+
+        End-to-end check that the per-source-table default flowing through
+        ``HierarchyResolver`` correctly tags a contingent row as
+        ``is_obs_commitment=False``, routing it to the Art. 166(10) fallback
+        rather than the Art. 166(8)(d) 75% commitment bucket.
+        """
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[make_counterparty(entity_type="corporate")],
+                loans=[make_loan(drawn_amount=0.0)],
+                facilities=[make_facility(limit=0.0)],
+                contingents=[
+                    make_contingent(
+                        contingent_reference="CT_CCF7_PERFORMANCE_BOND",
+                        product_type="PERFORMANCE_BOND",
+                        risk_type="medium_risk",
+                        nominal_amount=1_000_000.0,
+                    )
+                ],
+            ),
+            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
+        )
+
+        crm_bundle = _run_pipeline(
+            hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
+        )
+        df = crm_bundle.exposures.collect()
+
+        cont_row = df.filter(pl.col("exposure_reference") == "CT_CCF7_PERFORMANCE_BOND")
+        assert cont_row.height == 1
+        assert cont_row["approach"][0] == ApproachType.FIRB.value
+        assert cont_row["ccf"][0] == pytest.approx(0.50)
+        assert cont_row["ead_from_ccf"][0] == pytest.approx(500_000.0)
+
+    def test_crr_d_ccf8_firb_mlr_contingent_falls_to_20_via_art_166_10(
+        self, hierarchy_resolver, classifier, crm_processor, crr_firb_config
+    ):
+        """CRR-D.CCF8: FIRB MLR contingent (non-trade-LC) -> 20% via Art. 166(10)(c).
+
+        Distinct from the Art. 166(8)(b) trade LC carve-out: this contingent
+        has ``is_short_term_trade_lc=False`` and is not a credit line, so it
+        falls under the Art. 166(10) fallback rather than the 166(8)(b) 20%
+        carve-out (which produces the same numerical result but for a
+        different regulatory reason).
+        """
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[make_counterparty(entity_type="corporate")],
+                loans=[make_loan(drawn_amount=0.0)],
+                facilities=[make_facility(limit=0.0)],
+                contingents=[
+                    make_contingent(
+                        contingent_reference="CT_CCF8_SHIPPING_GUARANTEE",
+                        product_type="SHIPPING_GUARANTEE",
+                        risk_type="medium_low_risk",
+                        nominal_amount=500_000.0,
+                        is_short_term_trade_lc=False,
+                    )
+                ],
+            ),
+            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
+        )
+
+        crm_bundle = _run_pipeline(
+            hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
+        )
+        df = crm_bundle.exposures.collect()
+
+        cont_row = df.filter(pl.col("exposure_reference") == "CT_CCF8_SHIPPING_GUARANTEE")
+        assert cont_row.height == 1
+        assert cont_row["approach"][0] == ApproachType.FIRB.value
+        assert cont_row["ccf"][0] == pytest.approx(0.20)
+        assert cont_row["ead_from_ccf"][0] == pytest.approx(100_000.0)
+
+    def test_firb_mr_facility_undrawn_keeps_75_via_art_166_8d(
+        self, hierarchy_resolver, classifier, crm_processor, crr_firb_config
+    ):
+        """FIRB MR facility undrawn (commitment) keeps 75% per Art. 166(8)(d).
+
+        Sibling to CRR-D.CCF7 — confirms that the per-source-table default
+        keeps facility undrawn rows in the Art. 166(8)(d) bucket so
+        commitments aren't accidentally swept into the Art. 166(10) fallback.
+        """
+        bundle = _bundle_with_ratings(
+            make_raw_data_bundle(
+                counterparties=[make_counterparty(entity_type="corporate")],
+                loans=[make_loan(drawn_amount=200_000.0)],
+                facilities=[
+                    make_facility(
+                        facility_reference="FAC_CCF_COMMITMENT",
+                        limit=1_000_000.0,
+                        risk_type="medium_risk",
+                    )
+                ],
+            ),
+            ratings=[_make_internal_rating(counterparty_reference="CP001", pd=0.01)],
+            model_permissions=create_firb_only_model_permissions(),
+        )
+
+        crm_bundle = _run_pipeline(
+            hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
+        )
+        df = crm_bundle.exposures.collect()
+
+        undrawn_row = df.filter(pl.col("exposure_type") == "facility_undrawn")
+        assert undrawn_row.height >= 1
+        assert undrawn_row["approach"][0] == ApproachType.FIRB.value
+        assert undrawn_row["ccf"][0] == pytest.approx(0.75)
+
 
 # =============================================================================
 # Approach split correctness (3 tests)

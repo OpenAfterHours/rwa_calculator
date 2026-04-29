@@ -3,8 +3,14 @@ Credit Conversion Factor (CCF) calculator for off-balance sheet items.
 
 Calculates EAD for contingent exposures using regulatory CCFs:
 - SA: CRR Article 111 (0%, 20%, 50%, 100%)
-- F-IRB: CRR Article 166(8) (75% for undrawn commitments)
-- F-IRB Exception: CRR Article 166(9) (20% for short-term trade LCs)
+- F-IRB Art. 166(8): bespoke CCFs for the named commitment types -
+    (a) UCC credit lines -> 0%
+    (b) Short-term trade LCs (movement of goods) -> 20%
+    (c) Revolving purchased-receivables UCC -> 0%
+    (d) Other credit lines / NIFs / RUFs -> 75%
+- F-IRB Art. 166(10): residual fallback for items NOT covered by Art. 166(8) -
+    100% / 50% / 20% / 0% by Annex I risk category (FR / MR / MLR / LR).
+    Engine selects this branch when ``is_obs_commitment=False`` (issued OBS item).
 - A-IRB: Own-estimate CCFs with Basel 3.1 restrictions (Art. 166D)
 
 Art. 111(1)(c) commitment-to-issue lower-of rule:
@@ -125,32 +131,55 @@ def sa_ccf_expression(
 def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
     """Return CRR F-IRB CCF expression for a given risk_type column.
 
-    CRR Art. 166(8): 75% for commitments, with exceptions:
-    - FR/FRC = 100%
-    - LR = 0%
-    - OC = 75% (CRR: no separate category; maps to MR/MLR, both 75%)
-    - MLR with is_short_term_trade_lc = 20% (Art. 166(9))
-    - MR/MLR otherwise = 75%
+    Implements both F-IRB CCF clauses of CRR Article 166:
 
-    This is extracted as a helper so Art. 111(1)(c) can compute the F-IRB CCF
-    for both the commitment's own risk_type and the underlying OBS item.
+    Art. 166(8) bespoke CCFs (selected when ``is_obs_commitment=True`` and
+    matching the listed commitment type):
+        (a) UCC credit lines (LR risk_type) -> 0%
+        (b) Short-term trade LCs (MLR + is_short_term_trade_lc) -> 20%
+        (d) Other credit lines / NIFs / RUFs (MR/MLR/OC commitments) -> 75%
+
+    Art. 166(10) residual fallback (selected when ``is_obs_commitment=False``,
+    i.e. the row is an issued OBS item not in scope of Art. 166(8)):
+        (a) Full risk -> 100%; (b) Medium-risk -> 50%;
+        (c) Medium/low-risk -> 20%; (d) Low-risk -> 0%.
+
+    FR / FRC and LR converge to the same value under either path, so they are
+    handled before the commitment/issued split. The Art. 166(8)(b) trade-LC
+    carve-out also wins over the issued/commitment split (it is more specific
+    than either Art. 166(8)(d) or Art. 166(10)(c)).
+
+    This helper is reused by Art. 111(1)(c) commitment-to-issue lower-of via
+    ``underlying_risk_type``; in that path the underlying item is treated as
+    a commitment (the historical default) because no separate
+    ``underlying_is_obs_commitment`` column exists.
     """
     normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
+    is_commitment = pl.col("is_obs_commitment").fill_null(True)
+    is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
+    is_mlr = normalized.is_in(["mlr", "medium_low_risk"])
+    is_mr_or_oc = normalized.is_in(["mr", "medium_risk", "oc", "other_commit"])
     return (
+        # FR / FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
         pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
         .then(pl.lit(1.0))
+        # LR -> 0% under both Art. 166(8)(a) and Art. 166(10)(d)
         .when(normalized.is_in(["lr", "low_risk"]))
         .then(pl.lit(0.0))
-        .when(normalized.is_in(["oc", "other_commit"]))
+        # Art. 166(8)(b): short-term trade LC carve-out wins over both buckets
+        .when(is_mlr & is_trade_lc)
+        .then(pl.lit(0.2))
+        # Art. 166(8)(d): credit lines / NIFs / RUFs -> 75%
+        .when(is_commitment & (is_mr_or_oc | is_mlr))
         .then(pl.lit(0.75))
-        .when(
-            normalized.is_in(["mlr", "medium_low_risk"])
-            & pl.col("is_short_term_trade_lc").fill_null(False)
-        )
-        .then(pl.lit(0.2))  # Art. 166(9) exception
-        .when(normalized.is_in(["mr", "medium_risk", "mlr", "medium_low_risk"]))
-        .then(pl.lit(0.75))
-        .otherwise(pl.lit(0.75))  # Default to 75% for F-IRB
+        # Art. 166(10)(b): MR / OC issued items -> 50%
+        .when(is_mr_or_oc)
+        .then(pl.lit(0.5))
+        # Art. 166(10)(c): MLR issued items -> 20%
+        .when(is_mlr)
+        .then(pl.lit(0.2))
+        # Conservative MR-equivalent fallback for unrecognised risk_type values
+        .otherwise(pl.lit(0.5))
     )
 
 
@@ -160,8 +189,12 @@ class CCFCalculator:
 
     Implements CRR CCF rules:
     - SA (Art. 111): 0%, 20%, 50%, 100% by commitment type
-    - F-IRB (Art. 166(8)): 75% for undrawn commitments (except 0% for cancellable)
-    - F-IRB (Art. 166(9)): 20% for short-term trade LCs arising from goods movement
+    - F-IRB (Art. 166(8)(a)): 0% for unconditionally cancellable credit lines
+    - F-IRB (Art. 166(8)(b)): 20% for short-term trade LCs arising from goods movement
+    - F-IRB (Art. 166(8)(d)): 75% for other credit lines / NIFs / RUFs
+      (selected when ``is_obs_commitment=True``)
+    - F-IRB (Art. 166(10)): 100/50/20/0% fallback by Annex I category for issued
+      OBS items not covered by Art. 166(8) (selected when ``is_obs_commitment=False``)
     - A-IRB: own estimates under CRR; restricted to revolving under Basel 3.1
 
     Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D(1)(a)):
@@ -185,8 +218,11 @@ class CCFCalculator:
 
         CCF determination follows CRR Art. 111 categories based on risk_type:
         - SA: FR=100%, MR=50%, MLR=20%, LR=0%
-        - F-IRB: FR=100%, MR/MLR=75% (CRR Art. 166(8)), LR=0%
-        - F-IRB Exception: MLR with is_short_term_trade_lc=True retains 20% (Art. 166(9))
+        - F-IRB Art. 166(8)(d): MR/MLR/OC commitments (credit lines / NIFs / RUFs)
+          when ``is_obs_commitment=True`` -> 75%
+        - F-IRB Art. 166(10) fallback: issued OBS items (``is_obs_commitment=False``)
+          -> 100% FR / 50% MR / 20% MLR / 0% LR
+        - F-IRB Art. 166(8)(b): MLR with ``is_short_term_trade_lc=True`` -> 20%
         - A-IRB CRR: Uses ccf_modelled if provided, otherwise falls back to SA
         - A-IRB B31: Own CCF only for revolving (non-100% SA); else SA CCF (Art. 166D)
         - Art. 111(1)(c): When underlying_risk_type is specified, CCF is capped
@@ -244,6 +280,15 @@ class CCFCalculator:
                 "is_short_term_trade_lc",
                 pl.lit(False).alias("is_short_term_trade_lc"),
             ),
+            # CRR Art. 166(8)(d) vs Art. 166(10): default True (commitment / Art.
+            # 166(8)(d) bucket) when the column is absent — the hierarchy stage
+            # is the canonical source of the per-source-table default (False
+            # for contingents, True for facilities), so this only kicks in when
+            # callers (e.g. unit tests) construct exposures directly.
+            (
+                "is_obs_commitment",
+                pl.lit(True).alias("is_obs_commitment"),
+            ),
             ("interest", pl.lit(0.0).alias("interest")),
             ("is_revolving", pl.lit(False).alias("is_revolving")),
             ("ead_modelled", pl.lit(None).cast(pl.Float64).alias("ead_modelled")),
@@ -285,7 +330,9 @@ class CCFCalculator:
             # FR=100%, MR=50%, MLR=20%, LR(UCC)=10%
             firb_ccf = sa_ccf_expression(is_basel_3_1=True)
         else:
-            # CRR Art. 166(8): F-IRB = 75% for commitments, with exceptions
+            # CRR F-IRB: Art. 166(8)(d) -> 75% for credit lines / NIFs / RUFs
+            # (is_obs_commitment=True); Art. 166(10) -> 100/50/20/0% fallback for
+            # issued OBS items not in scope of paragraphs 1-8.
             firb_ccf = _firb_ccf_for_col("risk_type")
 
         exposures = exposures.with_columns(

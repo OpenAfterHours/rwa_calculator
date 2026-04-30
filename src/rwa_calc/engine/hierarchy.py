@@ -2542,58 +2542,30 @@ class HierarchyResolver:
                 ]
             )
 
-        # Multi-level linking: separate collateral by beneficiary_type
-        # 1. Direct/exposure-level collateral
-        direct_ltv = (
-            ltv_collateral.filter(
-                pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"])
-            )
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("direct_ref"),
-                    pl.col("property_ltv").alias("direct_ltv"),
-                    _prop_type.alias("direct_property_type"),
-                    _income_cover.alias("direct_income_cover"),
-                    _qualifying_re.alias("direct_qualifying_re"),
-                    _prior_charge_ltv.alias("direct_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["direct_ref"], keep="first")
+        # Multi-level linking: separate collateral by beneficiary_type, then
+        # coalesce direct -> facility -> counterparty so the most specific
+        # collateral wins.
+        common_cols = (_prop_type, _income_cover, _qualifying_re, _prior_charge_ltv)
+        direct_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"]),
+            prefix="direct",
+            common_cols=common_cols,
+        )
+        facility_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase() == "facility",
+            prefix="facility",
+            common_cols=common_cols,
+        )
+        counterparty_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase() == "counterparty",
+            prefix="cp",
+            common_cols=common_cols,
         )
 
-        # 2. Facility-level collateral
-        facility_ltv = (
-            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "facility")
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("facility_ref"),
-                    pl.col("property_ltv").alias("facility_ltv"),
-                    _prop_type.alias("facility_property_type"),
-                    _income_cover.alias("facility_income_cover"),
-                    _qualifying_re.alias("facility_qualifying_re"),
-                    _prior_charge_ltv.alias("facility_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["facility_ref"], keep="first")
-        )
-
-        # 3. Counterparty-level collateral
-        counterparty_ltv = (
-            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "counterparty")
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("cp_ref"),
-                    pl.col("property_ltv").alias("cp_ltv"),
-                    _prop_type.alias("cp_property_type"),
-                    _income_cover.alias("cp_income_cover"),
-                    _qualifying_re.alias("cp_qualifying_re"),
-                    _prior_charge_ltv.alias("cp_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["cp_ref"], keep="first")
-        )
-
-        # Join all three levels
+        # Join all three levels onto the exposures frame.
         exposures = (
             exposures.join(
                 direct_ltv,
@@ -2615,58 +2587,75 @@ class HierarchyResolver:
             )
         )
 
-        # Coalesce: prefer direct, then facility, then counterparty
-        exposures = exposures.with_columns(
-            [
-                pl.coalesce(
-                    pl.col("direct_ltv"),
-                    pl.col("facility_ltv"),
-                    pl.col("cp_ltv"),
-                ).alias("ltv"),
-                pl.coalesce(
-                    pl.col("direct_property_type"),
-                    pl.col("facility_property_type"),
-                    pl.col("cp_property_type"),
-                ).alias("property_type"),
-                pl.coalesce(
-                    pl.col("direct_income_cover"),
-                    pl.col("facility_income_cover"),
-                    pl.col("cp_income_cover"),
-                )
-                .fill_null(False)
-                .alias("has_income_cover"),
-                pl.coalesce(
-                    pl.col("direct_qualifying_re"),
-                    pl.col("facility_qualifying_re"),
-                    pl.col("cp_qualifying_re"),
-                ).alias("is_qualifying_re"),
-                pl.coalesce(
-                    pl.col("direct_prior_charge_ltv"),
-                    pl.col("facility_prior_charge_ltv"),
-                    pl.col("cp_prior_charge_ltv"),
-                ).alias("prior_charge_ltv"),
-            ]
-        ).drop(
-            [
-                "direct_ltv",
-                "facility_ltv",
-                "cp_ltv",
-                "direct_property_type",
-                "facility_property_type",
-                "cp_property_type",
-                "direct_income_cover",
-                "facility_income_cover",
-                "cp_income_cover",
-                "direct_qualifying_re",
-                "facility_qualifying_re",
-                "cp_qualifying_re",
-                "direct_prior_charge_ltv",
-                "facility_prior_charge_ltv",
-                "cp_prior_charge_ltv",
-            ]
+        return self._coalesce_ltv_levels(exposures, prefixes=("direct", "facility", "cp"))
+
+    def _level_ltv_lookup(
+        self,
+        ltv_collateral: pl.LazyFrame,
+        *,
+        filter_expr: pl.Expr,
+        prefix: str,
+        common_cols: tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr],
+    ) -> pl.LazyFrame:
+        """Build a single-level LTV lookup frame with prefixed columns.
+
+        Filters ``ltv_collateral`` to a single beneficiary level, then projects
+        ``beneficiary_reference`` and ``property_ltv`` plus the four optional
+        property columns (property_type, income_cover, qualifying_re,
+        prior_charge_ltv) all aliased with ``{prefix}_``. Deduplicated on the
+        prefixed reference so a beneficiary appearing twice in collateral does
+        not produce duplicate exposure rows after the join.
+        """
+        prop_type, income_cover, qualifying_re, prior_charge_ltv = common_cols
+        return (
+            ltv_collateral.filter(filter_expr)
+            .select(
+                [
+                    pl.col("beneficiary_reference").alias(f"{prefix}_ref"),
+                    pl.col("property_ltv").alias(f"{prefix}_ltv"),
+                    prop_type.alias(f"{prefix}_property_type"),
+                    income_cover.alias(f"{prefix}_income_cover"),
+                    qualifying_re.alias(f"{prefix}_qualifying_re"),
+                    prior_charge_ltv.alias(f"{prefix}_prior_charge_ltv"),
+                ]
+            )
+            .unique(subset=[f"{prefix}_ref"], keep="first")
         )
 
-        return exposures
+    def _coalesce_ltv_levels(
+        self,
+        exposures: pl.LazyFrame,
+        *,
+        prefixes: tuple[str, ...],
+    ) -> pl.LazyFrame:
+        """Collapse per-level LTV columns onto the unified exposure frame.
+
+        For each output column (ltv, property_type, has_income_cover,
+        is_qualifying_re, prior_charge_ltv), coalesce in declared ``prefixes``
+        order — earliest non-null wins. ``has_income_cover`` additionally
+        defaults to ``False`` when no level provided a value. All scratch
+        ``{prefix}_*`` columns are dropped at the end.
+        """
+        # (source_suffix, output_col, fill_null_default_or_sentinel)
+        _NO_DEFAULT: object = object()
+        coalesce_specs: list[tuple[str, str, object]] = [
+            ("ltv", "ltv", _NO_DEFAULT),
+            ("property_type", "property_type", _NO_DEFAULT),
+            ("income_cover", "has_income_cover", False),
+            ("qualifying_re", "is_qualifying_re", _NO_DEFAULT),
+            ("prior_charge_ltv", "prior_charge_ltv", _NO_DEFAULT),
+        ]
+
+        coalesces: list[pl.Expr] = []
+        drop_cols: list[str] = []
+        for source_suffix, output_col, default in coalesce_specs:
+            expr = pl.coalesce(*[pl.col(f"{p}_{source_suffix}") for p in prefixes])
+            if default is not _NO_DEFAULT:
+                expr = expr.fill_null(default)
+            coalesces.append(expr.alias(output_col))
+            drop_cols.extend(f"{p}_{source_suffix}" for p in prefixes)
+
+        return exposures.with_columns(coalesces).drop(drop_cols)
 
 
 def _resolve_to_root_facility(

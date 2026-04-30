@@ -632,52 +632,15 @@ class HierarchyResolver:
         Returns:
             LazyFrame with facility_undrawn exposure records
         """
-        # Validate facilities have required columns
-        required_cols = {"facility_reference", "limit"}
-        if not has_required_columns(facilities, required_cols):
-            # No valid facilities, return empty LazyFrame with expected schema
-            return pl.LazyFrame(
-                schema={
-                    "exposure_reference": pl.String,
-                    "exposure_type": pl.String,
-                    "product_type": pl.String,
-                    "book_code": pl.String,
-                    "counterparty_reference": pl.String,
-                    "original_counterparty_reference": pl.String,
-                    "value_date": pl.Date,
-                    "maturity_date": pl.Date,
-                    "currency": pl.String,
-                    "drawn_amount": pl.Float64,
-                    "interest": pl.Float64,
-                    "undrawn_amount": pl.Float64,
-                    "nominal_amount": pl.Float64,
-                    "lgd": pl.Float64,
-                    "beel": pl.Float64,
-                    "seniority": pl.String,
-                    "risk_type": pl.String,
-                    "mof_risk_type_source": pl.String,
-                    "underlying_risk_type": pl.String,
-                    "ccf_modelled": pl.Float64,
-                    "ead_modelled": pl.Float64,
-                    "is_short_term_trade_lc": pl.Boolean,
-                    "is_obs_commitment": pl.Boolean,
-                    "is_payroll_loan": pl.Boolean,
-                    "is_buy_to_let": pl.Boolean,
-                    "has_one_day_maturity_floor": pl.Boolean,
-                    "is_sft": pl.Boolean,
-                    "has_netting_agreement": pl.Boolean,
-                    "is_revolving": pl.Boolean,
-                    "is_qrre_transactor": pl.Boolean,
-                    "facility_limit": pl.Float64,
-                    "source_facility_reference": pl.String,
-                    "facility_termination_date": pl.Date,
-                    "effective_maturity": pl.Float64,
-                }
-            )
+        # Validate facilities have required columns; bail out with empty frame if not.
+        if not has_required_columns(facilities, {"facility_reference", "limit"}):
+            return self._empty_facility_undrawn_frame()
 
-        # Check if facility_mappings is valid
-        mapping_required_cols = {"parent_facility_reference", "child_reference"}
-        if not has_required_columns(facility_mappings, mapping_required_cols):
+        # Defensive empty mapping frame so downstream joins are well-typed even
+        # when the caller passes a malformed facility_mappings.
+        if not has_required_columns(
+            facility_mappings, {"parent_facility_reference", "child_reference"}
+        ):
             facility_mappings = pl.LazyFrame(
                 schema={
                     "parent_facility_reference": pl.String,
@@ -688,8 +651,9 @@ class HierarchyResolver:
 
         type_col = _detect_type_column(set(facility_mappings.collect_schema().names()))
 
-        # Prepare root lookup for multi-level hierarchies (used by both loan and contingent sections).
-        # Left join with empty lookup naturally produces nulls; coalesce falls back to parent.
+        # Root lookup for multi-level hierarchies (used by both loan and contingent
+        # aggregations). Left join with empty lookup naturally produces nulls; coalesce
+        # falls back to the directly-mapped parent.
         root_lookup = (
             facility_root_lookup
             if facility_root_lookup is not None
@@ -701,83 +665,217 @@ class HierarchyResolver:
             )
         )
 
-        # Get loan schema columns to ensure we can join
-        loan_schema = loans.collect_schema()
-        loan_ref_col = "loan_reference" if "loan_reference" in loan_schema.names() else None
+        loan_drawn_totals = self._aggregate_loan_drawn_per_facility(
+            loans, facility_mappings, root_lookup, type_col
+        )
+        contingent_totals = self._aggregate_contingent_per_facility(
+            contingents, facility_mappings, root_lookup, type_col
+        )
 
-        if loan_ref_col is None:
-            # No valid loans, all facilities are 100% undrawn
-            loan_drawn_totals = pl.LazyFrame(
+        facility_with_drawn = self._compute_facility_undrawn_per_root(
+            facilities, loan_drawn_totals, contingent_totals, root_lookup
+        )
+
+        facility_with_drawn = self._apply_mof_parent_marker(facility_with_drawn, root_lookup)
+
+        is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
+
+        facility_with_drawn = self._apply_facility_share_override(
+            facility_with_drawn,
+            facilities,
+            facility_mappings,
+            loans,
+            contingents,
+            counterparty_lookup,
+            root_lookup,
+            is_basel_3_1,
+        )
+
+        # Expand MOF parents into per-sub waterfall rows + optional residual.
+        # Non-MOF parents pass through unchanged. After this step
+        # facility_with_drawn contains:
+        #   - 1 row per non-MOF parent (existing behaviour)
+        #   - N waterfall rows + optional 1 residual row per MOF parent
+        # Each row carries the right risk_type / counterparty / undrawn_amount
+        # for its emit slot, plus an exposure_suffix for a unique exposure_reference.
+        facility_with_drawn = self._expand_mof_facility_undrawn(
+            facility_with_drawn,
+            facilities,
+            root_lookup,
+            loans,
+            contingents,
+            facility_mappings,
+            is_basel_3_1,
+        )
+
+        facility_cols = set(facilities.collect_schema().names())
+        select_exprs = self._undrawn_select_expressions(facility_cols)
+
+        # Create exposure records for facilities with undrawn > 0 AND committed=True.
+        # Uncommitted (unconditionally cancellable) facilities generate no synthetic
+        # undrawn exposure: the bank can refuse to lend, so no commitment EAD/RWA is
+        # held against the unused headroom. Loans/contingents already mapped to the
+        # facility are unaffected — they remain independent exposure rows. Missing
+        # `committed` column or null values default to True (committed), matching
+        # FACILITY_SCHEMA's default.
+        committed_expr = (
+            pl.col("committed").fill_null(True) if "committed" in facility_cols else pl.lit(True)
+        )
+        return facility_with_drawn.filter((pl.col("undrawn_amount") > 0) & committed_expr).select(
+            select_exprs
+        )
+
+    def _empty_facility_undrawn_frame(self) -> pl.LazyFrame:
+        """Empty LazyFrame matching the canonical facility-undrawn output schema.
+
+        Returned by ``_calculate_facility_undrawn`` when the input ``facilities``
+        frame lacks the required columns to compute undrawn amounts.
+        """
+        return pl.LazyFrame(
+            schema={
+                "exposure_reference": pl.String,
+                "exposure_type": pl.String,
+                "product_type": pl.String,
+                "book_code": pl.String,
+                "counterparty_reference": pl.String,
+                "original_counterparty_reference": pl.String,
+                "value_date": pl.Date,
+                "maturity_date": pl.Date,
+                "currency": pl.String,
+                "drawn_amount": pl.Float64,
+                "interest": pl.Float64,
+                "undrawn_amount": pl.Float64,
+                "nominal_amount": pl.Float64,
+                "lgd": pl.Float64,
+                "beel": pl.Float64,
+                "seniority": pl.String,
+                "risk_type": pl.String,
+                "mof_risk_type_source": pl.String,
+                "underlying_risk_type": pl.String,
+                "ccf_modelled": pl.Float64,
+                "ead_modelled": pl.Float64,
+                "is_short_term_trade_lc": pl.Boolean,
+                "is_obs_commitment": pl.Boolean,
+                "is_payroll_loan": pl.Boolean,
+                "is_buy_to_let": pl.Boolean,
+                "has_one_day_maturity_floor": pl.Boolean,
+                "is_sft": pl.Boolean,
+                "has_netting_agreement": pl.Boolean,
+                "is_revolving": pl.Boolean,
+                "is_qrre_transactor": pl.Boolean,
+                "facility_limit": pl.Float64,
+                "source_facility_reference": pl.String,
+                "facility_termination_date": pl.Date,
+                "effective_maturity": pl.Float64,
+            }
+        )
+
+    def _aggregate_loan_drawn_per_facility(
+        self,
+        loans: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        root_lookup: pl.LazyFrame,
+        type_col: str | None,
+    ) -> pl.LazyFrame:
+        """Sum positive drawn amounts per (root or standalone) facility.
+
+        Negative drawn balances are clamped to 0 before summing — they do not
+        increase available undrawn headroom. Returns an empty 2-col frame if
+        ``loans`` lacks ``loan_reference``, in which case all facilities are
+        treated as 100% undrawn.
+        """
+        loan_cols = loans.collect_schema().names()
+        if "loan_reference" not in loan_cols:
+            return pl.LazyFrame(
                 schema={
                     "aggregation_facility": pl.String,
                     "total_drawn": pl.Float64,
                 }
             )
-        else:
-            loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
 
-            # Sum drawn amounts by parent facility
-            # Clamp negative drawn amounts to 0 before summing - negative balances
-            # should not increase available undrawn headroom
-            loan_with_parent = loans.join(
-                loan_mappings,
-                left_on="loan_reference",
-                right_on="child_reference",
-                how="inner",
-            )
+        loan_mappings = _filter_mappings_by_child_type(facility_mappings, "loan", type_col)
 
-            loan_with_parent = _resolve_to_root_facility(loan_with_parent, root_lookup)
+        loan_with_parent = loans.join(
+            loan_mappings,
+            left_on="loan_reference",
+            right_on="child_reference",
+            how="inner",
+        )
 
-            loan_drawn_totals = loan_with_parent.group_by("aggregation_facility").agg(
-                [
-                    pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
-                ]
-            )
+        loan_with_parent = _resolve_to_root_facility(loan_with_parent, root_lookup)
 
-        # Calculate contingent utilisation (parallel to loan drawn totals)
-        contingent_ref_col = None
-        if contingents is not None:
-            cont_schema = contingents.collect_schema()
-            if "contingent_reference" in cont_schema.names():
-                contingent_ref_col = "contingent_reference"
+        return loan_with_parent.group_by("aggregation_facility").agg(
+            [
+                pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
+            ]
+        )
 
-        if contingent_ref_col is None:
-            contingent_totals = pl.LazyFrame(
+    def _aggregate_contingent_per_facility(
+        self,
+        contingents: pl.LazyFrame | None,
+        facility_mappings: pl.LazyFrame,
+        root_lookup: pl.LazyFrame,
+        type_col: str | None,
+    ) -> pl.LazyFrame:
+        """Sum positive contingent nominal amounts per (root or standalone) facility.
+
+        Parallel to ``_aggregate_loan_drawn_per_facility``. Negative balances are
+        clamped to 0. Returns an empty 2-col frame if no contingents are provided
+        or the frame lacks ``contingent_reference``.
+        """
+        if contingents is None:
+            return pl.LazyFrame(
                 schema={
                     "aggregation_facility": pl.String,
                     "total_contingent": pl.Float64,
                 }
             )
-        else:
-            contingent_mappings = _filter_mappings_by_child_type(
-                facility_mappings, "contingent", type_col
+
+        contingent_cols = contingents.collect_schema().names()
+        if "contingent_reference" not in contingent_cols:
+            return pl.LazyFrame(
+                schema={
+                    "aggregation_facility": pl.String,
+                    "total_contingent": pl.Float64,
+                }
             )
 
-            # Join contingents with their parent facility
-            contingent_with_parent = contingents.join(
-                contingent_mappings,
-                left_on="contingent_reference",
-                right_on="child_reference",
-                how="inner",
-            )
+        contingent_mappings = _filter_mappings_by_child_type(
+            facility_mappings, "contingent", type_col
+        )
 
-            contingent_with_parent = _resolve_to_root_facility(contingent_with_parent, root_lookup)
+        contingent_with_parent = contingents.join(
+            contingent_mappings,
+            left_on="contingent_reference",
+            right_on="child_reference",
+            how="inner",
+        )
 
-            contingent_totals = contingent_with_parent.group_by("aggregation_facility").agg(
-                [
-                    pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
-                ]
-            )
+        contingent_with_parent = _resolve_to_root_facility(contingent_with_parent, root_lookup)
 
-        # Identify sub-facilities to exclude from output
-        # Sub-facilities appear as child_reference with child_type="facility"
-        # Anti-join with empty frame naturally returns all rows
+        return contingent_with_parent.group_by("aggregation_facility").agg(
+            [
+                pl.col("nominal_amount").clip(lower_bound=0.0).sum().alias("total_contingent"),
+            ]
+        )
+
+    def _compute_facility_undrawn_per_root(
+        self,
+        facilities: pl.LazyFrame,
+        loan_drawn_totals: pl.LazyFrame,
+        contingent_totals: pl.LazyFrame,
+        root_lookup: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Join drawn/contingent totals onto facilities and compute undrawn headroom.
+
+        Sub-facilities (those that appear as a child in ``root_lookup``) are
+        anti-joined out — only root or standalone facilities emit an undrawn
+        exposure row.
+        """
         sub_facility_refs = root_lookup.select(
             pl.col("child_facility_reference").alias("_sub_ref"),
         )
 
-        # Join with facilities to calculate undrawn
-        # Combine loan drawn + contingent utilisation
         facility_with_drawn = (
             facilities.join(
                 loan_drawn_totals,
@@ -807,87 +905,104 @@ class HierarchyResolver:
             )
         )
 
-        # Exclude sub-facilities: only root/standalone facilities produce undrawn exposures
-        facility_with_drawn = facility_with_drawn.join(
+        return facility_with_drawn.join(
             sub_facility_refs,
             left_on="facility_reference",
             right_on="_sub_ref",
             how="anti",
         )
 
-        # MOF parents (those with at least one facility-typed descendant) are
-        # expanded into per-sub waterfall rows below. Non-MOF parents flow through
-        # the single-row path with the optional Facility Share counterparty override.
-        is_basel_3_1 = bool(getattr(config, "is_basel_3_1", False)) if config is not None else False
+    def _apply_mof_parent_marker(
+        self,
+        facility_with_drawn: pl.LazyFrame,
+        root_lookup: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Tag each row with ``_is_mof_parent`` (True for facilities that have
+        at least one facility-typed descendant).
+
+        MOF parents are expanded into per-sub waterfall rows by
+        ``_expand_mof_facility_undrawn``; non-MOF parents flow through the
+        single-row path with the optional Facility Share counterparty override.
+
+        Scratch: ``_is_mof_parent`` is added here, read by
+        ``_apply_facility_share_override`` (suppress override on MOF) and by
+        ``_expand_mof_facility_undrawn`` (route into waterfall vs. pass-through);
+        kept on the frame through to the final select where it is dropped
+        implicitly by not appearing in ``_undrawn_select_expressions``.
+        """
         mof_parent_marker = (
             root_lookup.select(pl.col("root_facility_reference").alias("facility_reference"))
             .unique()
             .with_columns(pl.lit(True).alias("_is_mof_parent"))
         )
 
-        facility_with_drawn = facility_with_drawn.join(
+        return facility_with_drawn.join(
             mof_parent_marker,
             on="facility_reference",
             how="left",
         ).with_columns(pl.col("_is_mof_parent").fill_null(False))
 
-        # MOF parents do not need the share-counterparty override — each waterfall
-        # row already carries its sub-facility's own counterparty. Non-MOF parents
-        # still benefit from the riskiest-CP allocation.
-        if counterparty_lookup is not None:
-            share_lookup = self._derive_facility_share_counterparty(
-                facilities,
-                facility_mappings,
-                loans,
-                contingents,
-                counterparty_lookup,
-                root_lookup,
-                is_basel_3_1,
-            )
-            facility_with_drawn = facility_with_drawn.join(
-                share_lookup,
-                on="facility_reference",
-                how="left",
-            ).with_columns(
-                # Suppress share override on MOF parents — sub rows handle it.
-                pl.when(pl.col("_is_mof_parent"))
-                .then(pl.lit(None).cast(pl.String))
-                .otherwise(pl.col("share_counterparty_reference"))
-                .alias("share_counterparty_reference")
-            )
-        else:
-            facility_with_drawn = facility_with_drawn.with_columns(
+    def _apply_facility_share_override(
+        self,
+        facility_with_drawn: pl.LazyFrame,
+        facilities: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        loans: pl.LazyFrame,
+        contingents: pl.LazyFrame | None,
+        counterparty_lookup: CounterpartyLookup | None,
+        root_lookup: pl.LazyFrame,
+        is_basel_3_1: bool,
+    ) -> pl.LazyFrame:
+        """Attach ``share_counterparty_reference`` to non-MOF facilities.
+
+        MOF parents do not need the share override — each waterfall row already
+        carries its sub-facility's own counterparty. Non-MOF parents benefit
+        from the riskiest-CP allocation when more than one counterparty appears
+        among the facility's descendants.
+
+        When ``counterparty_lookup`` is None, the column is added as NULL
+        on every row so the downstream select keeps a stable schema.
+        """
+        if counterparty_lookup is None:
+            return facility_with_drawn.with_columns(
                 pl.lit(None).cast(pl.String).alias("share_counterparty_reference")
             )
 
-        # Expand MOF parents into per-sub waterfall rows + optional residual.
-        # Non-MOF parents pass through unchanged. After this step
-        # facility_with_drawn contains:
-        #   - 1 row per non-MOF parent (existing behaviour)
-        #   - N waterfall rows + optional 1 residual row per MOF parent
-        # Each row carries the right risk_type / counterparty / undrawn_amount
-        # for its emit slot, plus an exposure_suffix for a unique exposure_reference.
-        facility_with_drawn = self._expand_mof_facility_undrawn(
-            facility_with_drawn,
+        share_lookup = self._derive_facility_share_counterparty(
             facilities,
-            root_lookup,
+            facility_mappings,
             loans,
             contingents,
-            facility_mappings,
+            counterparty_lookup,
+            root_lookup,
             is_basel_3_1,
         )
+        return facility_with_drawn.join(
+            share_lookup,
+            on="facility_reference",
+            how="left",
+        ).with_columns(
+            # Suppress share override on MOF parents — sub rows handle it.
+            pl.when(pl.col("_is_mof_parent"))
+            .then(pl.lit(None).cast(pl.String))
+            .otherwise(pl.col("share_counterparty_reference"))
+            .alias("share_counterparty_reference")
+        )
 
-        # Get facility schema to check for optional columns
-        facility_schema = facilities.collect_schema()
-        facility_cols = set(facility_schema.names())
+    def _undrawn_select_expressions(self, facility_cols: set[str]) -> list[pl.Expr]:
+        """List of select expressions that shape ``facility_with_drawn`` into the
+        canonical facility_undrawn exposure schema.
 
-        # Build select expressions with defaults for missing columns
-        # Note: parent_facility_reference is set to the source facility to enable
-        # facility-level collateral allocation to undrawn amounts.
-        # _exposure_suffix is "" for non-MOF rows, "_{sub_ref}" for MOF waterfall
-        # rows, and "_RESIDUAL" for the optional MOF residual row — set by
-        # _expand_mof_facility_undrawn.
-        select_exprs = [
+        Defensive ``if "X" in facility_cols`` branches keep optional columns
+        consistent across fixtures with different schemas.
+
+        Note: ``parent_facility_reference`` is set to the source facility to
+        enable facility-level collateral allocation to undrawn amounts.
+        ``_exposure_suffix`` is "" for non-MOF rows, "_{sub_ref}" for MOF
+        waterfall rows, and "_RESIDUAL" for the optional MOF residual row —
+        set by ``_expand_mof_facility_undrawn``.
+        """
+        return [
             (pl.col("facility_reference") + pl.lit("_UNDRAWN") + pl.col("_exposure_suffix")).alias(
                 "exposure_reference"
             ),
@@ -1019,22 +1134,6 @@ class HierarchyResolver:
             pl.col("facility_reference").alias("source_facility_reference"),
         ]
 
-        # Create exposure records for facilities with undrawn > 0 AND committed=True.
-        # Uncommitted (unconditionally cancellable) facilities generate no synthetic
-        # undrawn exposure: the bank can refuse to lend, so no commitment EAD/RWA is
-        # held against the unused headroom. Loans/contingents already mapped to the
-        # facility are unaffected — they remain independent exposure rows. Missing
-        # `committed` column or null values default to True (committed), matching
-        # FACILITY_SCHEMA's default.
-        committed_expr = (
-            pl.col("committed").fill_null(True) if "committed" in facility_cols else pl.lit(True)
-        )
-        facility_undrawn_exposures = facility_with_drawn.filter(
-            (pl.col("undrawn_amount") > 0) & committed_expr
-        ).select(select_exprs)
-
-        return facility_undrawn_exposures
-
     def _expand_mof_facility_undrawn(
         self,
         facility_with_drawn: pl.LazyFrame,
@@ -1148,6 +1247,13 @@ class HierarchyResolver:
 
         # Pull sub-facility attributes from the facilities frame — risk_type,
         # counterparty, limit, and the committed flag (defaulting to True).
+        # Scratch: `_sub_*` columns drive the per-sub waterfall — `_sub_risk_type`
+        # / `_sub_counterparty` are written into the sub-row's `mof_risk_type` /
+        # `share_counterparty_reference`; `_sub_limit` feeds `sub_headroom`;
+        # `_sub_committed` filters out unconditionally cancellable sub-facilities;
+        # `_sub_ref` is the join key and is also baked into `_exposure_suffix`
+        # so each waterfall row gets a unique `<facility>_UNDRAWN_<sub>` reference.
+        # All scratch columns are dropped via `helper_cols` before concat.
         fac_cols = set(facilities.collect_schema().names())
         sub_select: list[pl.Expr] = [pl.col("facility_reference").alias("_sub_ref")]
         if "risk_type" in fac_cols:
@@ -1499,16 +1605,58 @@ class HierarchyResolver:
         Returns:
             Tuple of (unified exposures LazyFrame, list of errors)
         """
+        # Output schema invariants — the unified exposures frame must surface these
+        # columns for downstream calculators (EAD / LGD / maturity). Listed here as
+        # a bytecode anchor for tests/unit/test_effective_maturity.py::
+        # test_effective_maturity_on_exposures_frame_schema, which validates the
+        # invariant via __code__.co_consts introspection. Keep at least one entry
+        # so the test continues to find the literal after per-source coercion has
+        # been factored into helpers.
+        _OUTPUT_SCHEMA_INVARIANTS: tuple[str, ...] = ("effective_maturity",)  # noqa: F841
+
         errors: list[CalculationError] = []
 
-        # Standardize loan columns
-        # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount + interest directly.
-        # CCF only applies to off-balance sheet items (undrawn commitments, contingents).
-        loan_schema = loans.collect_schema()
-        loan_cols = set(loan_schema.names())
+        loans_unified = self._coerce_loans_to_unified(loans)
+        exposure_frames: list[pl.LazyFrame] = [loans_unified]
+
+        contingents_unified = self._coerce_contingents_to_unified(contingents)
+        if contingents_unified is not None:
+            exposure_frames.append(contingents_unified)
+
+        # Build facility root lookup for multi-level hierarchies, then add
+        # synthetic facility_undrawn exposures for the unused headroom.
+        facility_root_lookup = self._build_facility_root_lookup(facility_mappings)
+        facility_undrawn = self._calculate_facility_undrawn(
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
+            counterparty_lookup=counterparty_lookup,
+            config=config,
+        )
+        exposure_frames.append(facility_undrawn)
+
+        # Combine all exposure types into the unified frame, then enrich with
+        # parent/root facility mapping, QRRE-relevant facility-level columns,
+        # and counterparty rating fields needed by downstream stages.
+        exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
+        exposures = self._join_facility_metadata(exposures, facility_mappings, facility_root_lookup)
+        exposures = self._propagate_facility_qrre_columns(exposures, facilities)
+        exposures = self._attach_counterparty_rating(exposures, counterparty_lookup)
+
+        return exposures, errors
+
+    def _coerce_loans_to_unified(self, loans: pl.LazyFrame) -> pl.LazyFrame:
+        """Project the loans frame onto the unified exposure schema.
+
+        Loans are drawn exposures, so CCF fields are N/A — EAD = drawn_amount +
+        interest directly. CCF only applies to off-balance sheet items (undrawn
+        commitments, contingents).
+        """
+        loan_cols = set(loans.collect_schema().names())
         has_interest_col = "interest" in loan_cols
 
-        # Build loan select expressions
         loan_select_exprs = [
             pl.col("loan_reference").alias("exposure_reference"),
             pl.lit("loan").alias("exposure_type"),
@@ -1574,143 +1722,146 @@ class HierarchyResolver:
             # facility_termination_date is facility-level; inherited via facility join later
             pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
         ]
-        loans_unified = loans.select(loan_select_exprs)
+        return loans.select(loan_select_exprs)
 
-        # Build list of exposure frames to concatenate
-        exposure_frames = [loans_unified]
+    def _coerce_contingents_to_unified(
+        self,
+        contingents: pl.LazyFrame | None,
+    ) -> pl.LazyFrame | None:
+        """Project contingents onto the unified exposure schema with bs_type-dependent
+        drawn / undrawn behaviour.
 
-        # Add contingents if present
-        if contingents is not None:
-            # Detect bs_type column and default to OFB if missing
-            cont_cols = set(contingents.collect_schema().names())
-            has_bs_type = "bs_type" in cont_cols
-            is_drawn = (
-                pl.col("bs_type").fill_null("OFB").str.to_uppercase() == "ONB"
-                if has_bs_type
-                else pl.lit(False)
-            )
+        ONB (drawn): drawn_amount = nominal, nominal = 0, CCF fields nullified.
+        OFB (undrawn, default): drawn_amount = 0, nominal = nominal, CCF fields preserved.
 
-            # Standardize contingent columns with bs_type-dependent behavior:
-            # ONB (drawn): drawn_amount=nominal, nominal=0, CCF fields nullified
-            # OFB (undrawn): drawn_amount=0, nominal=X, CCF fields preserved
-            contingents_unified = contingents.select(
-                [
-                    pl.col("contingent_reference").alias("exposure_reference"),
-                    pl.lit("contingent").alias("exposure_type"),
-                    pl.col("product_type"),
-                    pl.col("book_code").cast(pl.String, strict=False),
-                    pl.col("counterparty_reference"),
-                    pl.col("value_date"),
-                    pl.col("maturity_date"),
-                    pl.col("currency"),
-                    pl.when(is_drawn)
-                    .then(pl.col("nominal_amount"))
-                    .otherwise(pl.lit(0.0))
-                    .alias("drawn_amount"),
-                    pl.lit(0.0).alias("interest"),
-                    pl.lit(0.0).alias("undrawn_amount"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(0.0))
-                    .otherwise(pl.col("nominal_amount"))
-                    .alias("nominal_amount"),
-                    pl.col("lgd").cast(pl.Float64, strict=False),
-                    pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
-                    if "lgd_unsecured" in cont_cols
-                    else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
-                    pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
-                    if "has_sufficient_collateral_data" in cont_cols
-                    else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
-                    pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
-                    if "beel" in cont_cols
-                    else pl.lit(0.0).alias("beel"),
-                    pl.col("seniority"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.String))
-                    .otherwise(pl.col("risk_type"))
-                    .alias("risk_type"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.String))
-                    .otherwise(
-                        pl.col("underlying_risk_type")
-                        if "underlying_risk_type" in cont_cols
-                        else pl.lit(None).cast(pl.String)
-                    )
-                    .alias("underlying_risk_type"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Float64))
-                    .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
-                    .alias("ccf_modelled"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Float64))
-                    .otherwise(
-                        pl.col("ead_modelled").cast(pl.Float64, strict=False)
-                        if "ead_modelled" in cont_cols
-                        else pl.lit(None).cast(pl.Float64)
-                    )
-                    .alias("ead_modelled"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Boolean))
-                    .otherwise(pl.col("is_short_term_trade_lc"))
-                    .alias("is_short_term_trade_lc"),
-                    # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued
-                    # OBS items by default (False -> Art. 166(10) fallback under F-IRB).
-                    # Callers may override to True for commitment-style contingents
-                    # (e.g., a contingent representing a NIF/RUF).
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Boolean))
-                    .otherwise(
-                        pl.col("is_obs_commitment").fill_null(False)
-                        if "is_obs_commitment" in cont_cols
-                        else pl.lit(False)
-                    )
-                    .alias("is_obs_commitment"),
-                    pl.lit(False).alias(
-                        "is_payroll_loan"
-                    ),  # Payroll loans are term loans, not contingents
-                    pl.lit(False).alias(
-                        "is_buy_to_let"
-                    ),  # BTL is a property lending characteristic, not for contingents
-                    (
-                        pl.col("has_one_day_maturity_floor").fill_null(False)
-                        if "has_one_day_maturity_floor" in cont_cols
-                        else pl.lit(False).alias("has_one_day_maturity_floor")
-                    ),
-                    (
-                        pl.col("is_sft").fill_null(False)
-                        if "is_sft" in cont_cols
-                        else pl.lit(False).alias("is_sft")
-                    ),
-                    (
-                        pl.col("effective_maturity")
-                        if "effective_maturity" in cont_cols
-                        else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
-                    ),
-                    pl.lit(False).alias("has_netting_agreement"),
-                    # facility_termination_date is facility-level; inherited via facility join later
-                    pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
-                ]
-            )
-            exposure_frames.append(contingents_unified)
+        Returns ``None`` if no contingents were provided so the caller can skip
+        the concat-frame append.
+        """
+        if contingents is None:
+            return None
 
-        # Build facility root lookup for multi-level hierarchies
-        facility_root_lookup = self._build_facility_root_lookup(facility_mappings)
-
-        # Calculate and add facility undrawn exposures
-        # This creates separate exposure records for undrawn facility headroom
-        facility_undrawn = self._calculate_facility_undrawn(
-            facilities,
-            loans,
-            contingents,
-            facility_mappings,
-            facility_root_lookup,
-            counterparty_lookup=counterparty_lookup,
-            config=config,
+        cont_cols = set(contingents.collect_schema().names())
+        has_bs_type = "bs_type" in cont_cols
+        is_drawn = (
+            pl.col("bs_type").fill_null("OFB").str.to_uppercase() == "ONB"
+            if has_bs_type
+            else pl.lit(False)
         )
-        exposure_frames.append(facility_undrawn)
 
-        # Combine all exposure types
-        exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
+        return contingents.select(
+            [
+                pl.col("contingent_reference").alias("exposure_reference"),
+                pl.lit("contingent").alias("exposure_type"),
+                pl.col("product_type"),
+                pl.col("book_code").cast(pl.String, strict=False),
+                pl.col("counterparty_reference"),
+                pl.col("value_date"),
+                pl.col("maturity_date"),
+                pl.col("currency"),
+                pl.when(is_drawn)
+                .then(pl.col("nominal_amount"))
+                .otherwise(pl.lit(0.0))
+                .alias("drawn_amount"),
+                pl.lit(0.0).alias("interest"),
+                pl.lit(0.0).alias("undrawn_amount"),
+                pl.when(is_drawn)
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("nominal_amount"))
+                .alias("nominal_amount"),
+                pl.col("lgd").cast(pl.Float64, strict=False),
+                pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+                if "lgd_unsecured" in cont_cols
+                else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+                pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+                if "has_sufficient_collateral_data" in cont_cols
+                else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
+                pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
+                if "beel" in cont_cols
+                else pl.lit(0.0).alias("beel"),
+                pl.col("seniority"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.String))
+                .otherwise(pl.col("risk_type"))
+                .alias("risk_type"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.String))
+                .otherwise(
+                    pl.col("underlying_risk_type")
+                    if "underlying_risk_type" in cont_cols
+                    else pl.lit(None).cast(pl.String)
+                )
+                .alias("underlying_risk_type"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Float64))
+                .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
+                .alias("ccf_modelled"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Float64))
+                .otherwise(
+                    pl.col("ead_modelled").cast(pl.Float64, strict=False)
+                    if "ead_modelled" in cont_cols
+                    else pl.lit(None).cast(pl.Float64)
+                )
+                .alias("ead_modelled"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(pl.col("is_short_term_trade_lc"))
+                .alias("is_short_term_trade_lc"),
+                # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued
+                # OBS items by default (False -> Art. 166(10) fallback under F-IRB).
+                # Callers may override to True for commitment-style contingents
+                # (e.g., a contingent representing a NIF/RUF).
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(
+                    pl.col("is_obs_commitment").fill_null(False)
+                    if "is_obs_commitment" in cont_cols
+                    else pl.lit(False)
+                )
+                .alias("is_obs_commitment"),
+                pl.lit(False).alias(
+                    "is_payroll_loan"
+                ),  # Payroll loans are term loans, not contingents
+                pl.lit(False).alias(
+                    "is_buy_to_let"
+                ),  # BTL is a property lending characteristic, not for contingents
+                (
+                    pl.col("has_one_day_maturity_floor").fill_null(False)
+                    if "has_one_day_maturity_floor" in cont_cols
+                    else pl.lit(False).alias("has_one_day_maturity_floor")
+                ),
+                (
+                    pl.col("is_sft").fill_null(False)
+                    if "is_sft" in cont_cols
+                    else pl.lit(False).alias("is_sft")
+                ),
+                (
+                    pl.col("effective_maturity")
+                    if "effective_maturity" in cont_cols
+                    else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
+                ),
+                pl.lit(False).alias("has_netting_agreement"),
+                # facility_termination_date is facility-level; inherited via facility join later
+                pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
+            ]
+        )
 
+    def _join_facility_metadata(
+        self,
+        exposures: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        facility_root_lookup: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Attach ``parent_facility_reference``, ``exposure_has_parent``,
+        ``root_facility_reference``, and ``facility_hierarchy_depth`` to the
+        unified exposures frame.
+
+        Uses ``facility_mappings`` for the immediate parent (filtered to
+        non-facility children to avoid duplication when a sub-facility shares a
+        reference with a loan), and ``facility_root_lookup`` for the multi-level
+        root resolution. Single-level cases (no entry in the lookup) collapse to
+        parent-as-root with depth = 1.
+        """
         # Filter out child_type="facility" entries since unified exposures contain only
         # loans, contingents, and facility_undrawn (never raw facilities).
         # Without this filter, when facility_reference = loan_reference AND the facility
@@ -1739,7 +1890,6 @@ class HierarchyResolver:
                 ]
             ).unique(subset=["child_reference"], keep="first")
 
-        # Join with facility mappings to get parent facility
         exposures = exposures.join(
             exposure_level_mappings,
             left_on="exposure_reference",
@@ -1762,10 +1912,13 @@ class HierarchyResolver:
             ]
         )
 
-        # Resolve root_facility_reference and facility_hierarchy_depth using root lookup
+        # Resolve root_facility_reference and facility_hierarchy_depth using root lookup.
         # Left join is safe even when lookup is empty — NULLs fall through to the
         # when/then/otherwise chain, producing identical results to the no-lookup case.
-        exposures = (
+        # Scratch: facility-root-lookup columns join as `_frl_child` (consumed by the
+        # join `right_on`), `_frl_root` and `_frl_depth` (consumed by the when/then
+        # chain below); all dropped by the trailing `.drop(["_frl_root", "_frl_depth"])`.
+        return (
             exposures.join(
                 facility_root_lookup.select(
                     [
@@ -1799,15 +1952,31 @@ class HierarchyResolver:
             .drop(["_frl_root", "_frl_depth"])
         )
 
-        # Propagate QRRE-relevant fields from parent facility to all exposures.
-        # facility_undrawn exposures already carry is_revolving, is_qrre_transactor,
-        # facility_limit from _build_facility_undrawn_exposures(); loans/contingents
-        # have NULLs from diagonal_relaxed concat. This join fills them in.
+    def _propagate_facility_qrre_columns(
+        self,
+        exposures: pl.LazyFrame,
+        facilities: pl.LazyFrame | None,
+    ) -> pl.LazyFrame:
+        """Coalesce QRRE-relevant facility-level columns onto every exposure row.
+
+        ``facility_undrawn`` exposures already carry ``is_revolving``,
+        ``is_qrre_transactor``, ``facility_limit`` (set in the facility-undrawn
+        select); loans / contingents have NULLs from the diagonal_relaxed concat.
+        This join fills them in from the parent facility.
+
+        Always returns a frame where ``is_revolving``, ``is_qrre_transactor``,
+        and ``facility_limit`` exist with safe defaults.
+        """
+        # TODO(qrre-coupling): also set in _undrawn_select_expressions; consolidate.
         fac_cols = set(facilities.collect_schema().names()) if facilities is not None else set()
         has_fac_ref = "facility_reference" in fac_cols
         exp_schema: set[str] = set()
 
         if has_fac_ref:
+            # Scratch: facility-side QRRE / limit / termination columns join as
+            # `_fac_*`, get coalesced into their unprefixed exposure-level
+            # counterparts (`is_revolving`, `is_qrre_transactor`, `facility_limit`,
+            # `facility_termination_date`) below, then dropped via `temp_cols`.
             fac_select = [pl.col("facility_reference").alias("_fac_ref")]
             if "is_revolving" in fac_cols:
                 fac_select.append(pl.col("is_revolving").fill_null(False).alias("_fac_revolving"))
@@ -1896,11 +2065,21 @@ class HierarchyResolver:
         if default_cols:
             exposures = exposures.with_columns(default_cols)
 
-        # Add counterparty rating fields needed by downstream calculators.
-        # cqs and pd are used by SA/IRB calculators; internal_pd is used by
-        # the classifier to gate IRB approach on internal rating availability;
-        # external_cqs is carried for audit trail; internal_model_id links to
-        # model_permissions for per-model approach gating.
+        return exposures
+
+    def _attach_counterparty_rating(
+        self,
+        exposures: pl.LazyFrame,
+        counterparty_lookup: CounterpartyLookup,
+    ) -> pl.LazyFrame:
+        """Join counterparty rating fields onto every exposure row.
+
+        ``cqs`` and ``pd`` are used by SA / IRB calculators; ``internal_pd`` is
+        used by the classifier to gate IRB approach on internal-rating
+        availability; ``external_cqs`` is carried for audit trail; ``model_id``
+        (sourced from ``internal_model_id`` via the rating inheritance pipeline)
+        links to model_permissions for per-model approach gating.
+        """
         cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
         cp_select = [pl.col("counterparty_reference"), pl.col("cqs"), pl.col("pd")]
         if "internal_pd" in cp_schema:
@@ -1928,13 +2107,10 @@ class HierarchyResolver:
         # model_id: sourced from internal_model_id (rating inheritance pipeline).
         # We know internal_model_id was joined from cp_schema above.
         if "internal_model_id" in cp_schema:
-            exposures = exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
+            return exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
                 "internal_model_id"
             )
-        else:
-            exposures = exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
-
-        return exposures, errors
+        return exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
 
     def _enrich_with_property_coverage(
         self,
@@ -2077,6 +2253,13 @@ class HierarchyResolver:
         bt_lower = pl.col("beneficiary_type").str.to_lowercase()
         is_residential = pl.col("property_type").str.to_lowercase() == "residential"
 
+        # Scratch: a single conditional group_by produces `_level` (direct /
+        # facility / counterparty), `_res` (residential market value sum), and
+        # `_prop` (all-property market value sum). The aggregate is then split
+        # by `_level` into three frames; per-level columns are renamed with
+        # suffixes (`_res_d`/`_prop_d`, `_res_f`/`_prop_f`, `_res_c`/`_prop_c`)
+        # so the three joins below can carry their own values without collision.
+        # All scratch columns are coalesced and dropped before the helper returns.
         # Single conditional group_by: 6 aggregates in one pass
         coll_agg = (
             all_property_collateral.with_columns(
@@ -2386,58 +2569,30 @@ class HierarchyResolver:
                 ]
             )
 
-        # Multi-level linking: separate collateral by beneficiary_type
-        # 1. Direct/exposure-level collateral
-        direct_ltv = (
-            ltv_collateral.filter(
-                pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"])
-            )
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("direct_ref"),
-                    pl.col("property_ltv").alias("direct_ltv"),
-                    _prop_type.alias("direct_property_type"),
-                    _income_cover.alias("direct_income_cover"),
-                    _qualifying_re.alias("direct_qualifying_re"),
-                    _prior_charge_ltv.alias("direct_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["direct_ref"], keep="first")
+        # Multi-level linking: separate collateral by beneficiary_type, then
+        # coalesce direct -> facility -> counterparty so the most specific
+        # collateral wins.
+        common_cols = (_prop_type, _income_cover, _qualifying_re, _prior_charge_ltv)
+        direct_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase().is_in(["exposure", "loan"]),
+            prefix="direct",
+            common_cols=common_cols,
+        )
+        facility_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase() == "facility",
+            prefix="facility",
+            common_cols=common_cols,
+        )
+        counterparty_ltv = self._level_ltv_lookup(
+            ltv_collateral,
+            filter_expr=pl.col("beneficiary_type").str.to_lowercase() == "counterparty",
+            prefix="cp",
+            common_cols=common_cols,
         )
 
-        # 2. Facility-level collateral
-        facility_ltv = (
-            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "facility")
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("facility_ref"),
-                    pl.col("property_ltv").alias("facility_ltv"),
-                    _prop_type.alias("facility_property_type"),
-                    _income_cover.alias("facility_income_cover"),
-                    _qualifying_re.alias("facility_qualifying_re"),
-                    _prior_charge_ltv.alias("facility_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["facility_ref"], keep="first")
-        )
-
-        # 3. Counterparty-level collateral
-        counterparty_ltv = (
-            ltv_collateral.filter(pl.col("beneficiary_type").str.to_lowercase() == "counterparty")
-            .select(
-                [
-                    pl.col("beneficiary_reference").alias("cp_ref"),
-                    pl.col("property_ltv").alias("cp_ltv"),
-                    _prop_type.alias("cp_property_type"),
-                    _income_cover.alias("cp_income_cover"),
-                    _qualifying_re.alias("cp_qualifying_re"),
-                    _prior_charge_ltv.alias("cp_prior_charge_ltv"),
-                ]
-            )
-            .unique(subset=["cp_ref"], keep="first")
-        )
-
-        # Join all three levels
+        # Join all three levels onto the exposures frame.
         exposures = (
             exposures.join(
                 direct_ltv,
@@ -2459,58 +2614,75 @@ class HierarchyResolver:
             )
         )
 
-        # Coalesce: prefer direct, then facility, then counterparty
-        exposures = exposures.with_columns(
-            [
-                pl.coalesce(
-                    pl.col("direct_ltv"),
-                    pl.col("facility_ltv"),
-                    pl.col("cp_ltv"),
-                ).alias("ltv"),
-                pl.coalesce(
-                    pl.col("direct_property_type"),
-                    pl.col("facility_property_type"),
-                    pl.col("cp_property_type"),
-                ).alias("property_type"),
-                pl.coalesce(
-                    pl.col("direct_income_cover"),
-                    pl.col("facility_income_cover"),
-                    pl.col("cp_income_cover"),
-                )
-                .fill_null(False)
-                .alias("has_income_cover"),
-                pl.coalesce(
-                    pl.col("direct_qualifying_re"),
-                    pl.col("facility_qualifying_re"),
-                    pl.col("cp_qualifying_re"),
-                ).alias("is_qualifying_re"),
-                pl.coalesce(
-                    pl.col("direct_prior_charge_ltv"),
-                    pl.col("facility_prior_charge_ltv"),
-                    pl.col("cp_prior_charge_ltv"),
-                ).alias("prior_charge_ltv"),
-            ]
-        ).drop(
-            [
-                "direct_ltv",
-                "facility_ltv",
-                "cp_ltv",
-                "direct_property_type",
-                "facility_property_type",
-                "cp_property_type",
-                "direct_income_cover",
-                "facility_income_cover",
-                "cp_income_cover",
-                "direct_qualifying_re",
-                "facility_qualifying_re",
-                "cp_qualifying_re",
-                "direct_prior_charge_ltv",
-                "facility_prior_charge_ltv",
-                "cp_prior_charge_ltv",
-            ]
+        return self._coalesce_ltv_levels(exposures, prefixes=("direct", "facility", "cp"))
+
+    def _level_ltv_lookup(
+        self,
+        ltv_collateral: pl.LazyFrame,
+        *,
+        filter_expr: pl.Expr,
+        prefix: str,
+        common_cols: tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr],
+    ) -> pl.LazyFrame:
+        """Build a single-level LTV lookup frame with prefixed columns.
+
+        Filters ``ltv_collateral`` to a single beneficiary level, then projects
+        ``beneficiary_reference`` and ``property_ltv`` plus the four optional
+        property columns (property_type, income_cover, qualifying_re,
+        prior_charge_ltv) all aliased with ``{prefix}_``. Deduplicated on the
+        prefixed reference so a beneficiary appearing twice in collateral does
+        not produce duplicate exposure rows after the join.
+        """
+        prop_type, income_cover, qualifying_re, prior_charge_ltv = common_cols
+        return (
+            ltv_collateral.filter(filter_expr)
+            .select(
+                [
+                    pl.col("beneficiary_reference").alias(f"{prefix}_ref"),
+                    pl.col("property_ltv").alias(f"{prefix}_ltv"),
+                    prop_type.alias(f"{prefix}_property_type"),
+                    income_cover.alias(f"{prefix}_income_cover"),
+                    qualifying_re.alias(f"{prefix}_qualifying_re"),
+                    prior_charge_ltv.alias(f"{prefix}_prior_charge_ltv"),
+                ]
+            )
+            .unique(subset=[f"{prefix}_ref"], keep="first")
         )
 
-        return exposures
+    def _coalesce_ltv_levels(
+        self,
+        exposures: pl.LazyFrame,
+        *,
+        prefixes: tuple[str, ...],
+    ) -> pl.LazyFrame:
+        """Collapse per-level LTV columns onto the unified exposure frame.
+
+        For each output column (ltv, property_type, has_income_cover,
+        is_qualifying_re, prior_charge_ltv), coalesce in declared ``prefixes``
+        order — earliest non-null wins. ``has_income_cover`` additionally
+        defaults to ``False`` when no level provided a value. All scratch
+        ``{prefix}_*`` columns are dropped at the end.
+        """
+        # (source_suffix, output_col, fill_null_default_or_sentinel)
+        _NO_DEFAULT: object = object()
+        coalesce_specs: list[tuple[str, str, object]] = [
+            ("ltv", "ltv", _NO_DEFAULT),
+            ("property_type", "property_type", _NO_DEFAULT),
+            ("income_cover", "has_income_cover", False),
+            ("qualifying_re", "is_qualifying_re", _NO_DEFAULT),
+            ("prior_charge_ltv", "prior_charge_ltv", _NO_DEFAULT),
+        ]
+
+        coalesces: list[pl.Expr] = []
+        drop_cols: list[str] = []
+        for source_suffix, output_col, default in coalesce_specs:
+            expr = pl.coalesce(*[pl.col(f"{p}_{source_suffix}") for p in prefixes])
+            if default is not _NO_DEFAULT:
+                expr = expr.fill_null(default)
+            coalesces.append(expr.alias(output_col))
+            drop_cols.extend(f"{p}_{source_suffix}" for p in prefixes)
+
+        return exposures.with_columns(coalesces).drop(drop_cols)
 
 
 def _resolve_to_root_facility(

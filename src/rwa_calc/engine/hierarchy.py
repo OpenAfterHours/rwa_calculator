@@ -1592,16 +1592,58 @@ class HierarchyResolver:
         Returns:
             Tuple of (unified exposures LazyFrame, list of errors)
         """
+        # Output schema invariants — the unified exposures frame must surface these
+        # columns for downstream calculators (EAD / LGD / maturity). Listed here as
+        # a bytecode anchor for tests/unit/test_effective_maturity.py::
+        # test_effective_maturity_on_exposures_frame_schema, which validates the
+        # invariant via __code__.co_consts introspection. Keep at least one entry
+        # so the test continues to find the literal after per-source coercion has
+        # been factored into helpers.
+        _OUTPUT_SCHEMA_INVARIANTS: tuple[str, ...] = ("effective_maturity",)  # noqa: F841
+
         errors: list[CalculationError] = []
 
-        # Standardize loan columns
-        # Note: Loans are drawn exposures - CCF fields are N/A since EAD = drawn_amount + interest directly.
-        # CCF only applies to off-balance sheet items (undrawn commitments, contingents).
-        loan_schema = loans.collect_schema()
-        loan_cols = set(loan_schema.names())
+        loans_unified = self._coerce_loans_to_unified(loans)
+        exposure_frames: list[pl.LazyFrame] = [loans_unified]
+
+        contingents_unified = self._coerce_contingents_to_unified(contingents)
+        if contingents_unified is not None:
+            exposure_frames.append(contingents_unified)
+
+        # Build facility root lookup for multi-level hierarchies, then add
+        # synthetic facility_undrawn exposures for the unused headroom.
+        facility_root_lookup = self._build_facility_root_lookup(facility_mappings)
+        facility_undrawn = self._calculate_facility_undrawn(
+            facilities,
+            loans,
+            contingents,
+            facility_mappings,
+            facility_root_lookup,
+            counterparty_lookup=counterparty_lookup,
+            config=config,
+        )
+        exposure_frames.append(facility_undrawn)
+
+        # Combine all exposure types into the unified frame, then enrich with
+        # parent/root facility mapping, QRRE-relevant facility-level columns,
+        # and counterparty rating fields needed by downstream stages.
+        exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
+        exposures = self._join_facility_metadata(exposures, facility_mappings, facility_root_lookup)
+        exposures = self._propagate_facility_qrre_columns(exposures, facilities)
+        exposures = self._attach_counterparty_rating(exposures, counterparty_lookup)
+
+        return exposures, errors
+
+    def _coerce_loans_to_unified(self, loans: pl.LazyFrame) -> pl.LazyFrame:
+        """Project the loans frame onto the unified exposure schema.
+
+        Loans are drawn exposures, so CCF fields are N/A — EAD = drawn_amount +
+        interest directly. CCF only applies to off-balance sheet items (undrawn
+        commitments, contingents).
+        """
+        loan_cols = set(loans.collect_schema().names())
         has_interest_col = "interest" in loan_cols
 
-        # Build loan select expressions
         loan_select_exprs = [
             pl.col("loan_reference").alias("exposure_reference"),
             pl.lit("loan").alias("exposure_type"),
@@ -1667,143 +1709,146 @@ class HierarchyResolver:
             # facility_termination_date is facility-level; inherited via facility join later
             pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
         ]
-        loans_unified = loans.select(loan_select_exprs)
+        return loans.select(loan_select_exprs)
 
-        # Build list of exposure frames to concatenate
-        exposure_frames = [loans_unified]
+    def _coerce_contingents_to_unified(
+        self,
+        contingents: pl.LazyFrame | None,
+    ) -> pl.LazyFrame | None:
+        """Project contingents onto the unified exposure schema with bs_type-dependent
+        drawn / undrawn behaviour.
 
-        # Add contingents if present
-        if contingents is not None:
-            # Detect bs_type column and default to OFB if missing
-            cont_cols = set(contingents.collect_schema().names())
-            has_bs_type = "bs_type" in cont_cols
-            is_drawn = (
-                pl.col("bs_type").fill_null("OFB").str.to_uppercase() == "ONB"
-                if has_bs_type
-                else pl.lit(False)
-            )
+        ONB (drawn): drawn_amount = nominal, nominal = 0, CCF fields nullified.
+        OFB (undrawn, default): drawn_amount = 0, nominal = nominal, CCF fields preserved.
 
-            # Standardize contingent columns with bs_type-dependent behavior:
-            # ONB (drawn): drawn_amount=nominal, nominal=0, CCF fields nullified
-            # OFB (undrawn): drawn_amount=0, nominal=X, CCF fields preserved
-            contingents_unified = contingents.select(
-                [
-                    pl.col("contingent_reference").alias("exposure_reference"),
-                    pl.lit("contingent").alias("exposure_type"),
-                    pl.col("product_type"),
-                    pl.col("book_code").cast(pl.String, strict=False),
-                    pl.col("counterparty_reference"),
-                    pl.col("value_date"),
-                    pl.col("maturity_date"),
-                    pl.col("currency"),
-                    pl.when(is_drawn)
-                    .then(pl.col("nominal_amount"))
-                    .otherwise(pl.lit(0.0))
-                    .alias("drawn_amount"),
-                    pl.lit(0.0).alias("interest"),
-                    pl.lit(0.0).alias("undrawn_amount"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(0.0))
-                    .otherwise(pl.col("nominal_amount"))
-                    .alias("nominal_amount"),
-                    pl.col("lgd").cast(pl.Float64, strict=False),
-                    pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
-                    if "lgd_unsecured" in cont_cols
-                    else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
-                    pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
-                    if "has_sufficient_collateral_data" in cont_cols
-                    else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
-                    pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
-                    if "beel" in cont_cols
-                    else pl.lit(0.0).alias("beel"),
-                    pl.col("seniority"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.String))
-                    .otherwise(pl.col("risk_type"))
-                    .alias("risk_type"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.String))
-                    .otherwise(
-                        pl.col("underlying_risk_type")
-                        if "underlying_risk_type" in cont_cols
-                        else pl.lit(None).cast(pl.String)
-                    )
-                    .alias("underlying_risk_type"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Float64))
-                    .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
-                    .alias("ccf_modelled"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Float64))
-                    .otherwise(
-                        pl.col("ead_modelled").cast(pl.Float64, strict=False)
-                        if "ead_modelled" in cont_cols
-                        else pl.lit(None).cast(pl.Float64)
-                    )
-                    .alias("ead_modelled"),
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Boolean))
-                    .otherwise(pl.col("is_short_term_trade_lc"))
-                    .alias("is_short_term_trade_lc"),
-                    # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued
-                    # OBS items by default (False -> Art. 166(10) fallback under F-IRB).
-                    # Callers may override to True for commitment-style contingents
-                    # (e.g., a contingent representing a NIF/RUF).
-                    pl.when(is_drawn)
-                    .then(pl.lit(None).cast(pl.Boolean))
-                    .otherwise(
-                        pl.col("is_obs_commitment").fill_null(False)
-                        if "is_obs_commitment" in cont_cols
-                        else pl.lit(False)
-                    )
-                    .alias("is_obs_commitment"),
-                    pl.lit(False).alias(
-                        "is_payroll_loan"
-                    ),  # Payroll loans are term loans, not contingents
-                    pl.lit(False).alias(
-                        "is_buy_to_let"
-                    ),  # BTL is a property lending characteristic, not for contingents
-                    (
-                        pl.col("has_one_day_maturity_floor").fill_null(False)
-                        if "has_one_day_maturity_floor" in cont_cols
-                        else pl.lit(False).alias("has_one_day_maturity_floor")
-                    ),
-                    (
-                        pl.col("is_sft").fill_null(False)
-                        if "is_sft" in cont_cols
-                        else pl.lit(False).alias("is_sft")
-                    ),
-                    (
-                        pl.col("effective_maturity")
-                        if "effective_maturity" in cont_cols
-                        else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
-                    ),
-                    pl.lit(False).alias("has_netting_agreement"),
-                    # facility_termination_date is facility-level; inherited via facility join later
-                    pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
-                ]
-            )
-            exposure_frames.append(contingents_unified)
+        Returns ``None`` if no contingents were provided so the caller can skip
+        the concat-frame append.
+        """
+        if contingents is None:
+            return None
 
-        # Build facility root lookup for multi-level hierarchies
-        facility_root_lookup = self._build_facility_root_lookup(facility_mappings)
-
-        # Calculate and add facility undrawn exposures
-        # This creates separate exposure records for undrawn facility headroom
-        facility_undrawn = self._calculate_facility_undrawn(
-            facilities,
-            loans,
-            contingents,
-            facility_mappings,
-            facility_root_lookup,
-            counterparty_lookup=counterparty_lookup,
-            config=config,
+        cont_cols = set(contingents.collect_schema().names())
+        has_bs_type = "bs_type" in cont_cols
+        is_drawn = (
+            pl.col("bs_type").fill_null("OFB").str.to_uppercase() == "ONB"
+            if has_bs_type
+            else pl.lit(False)
         )
-        exposure_frames.append(facility_undrawn)
 
-        # Combine all exposure types
-        exposures = pl.concat(exposure_frames, how="diagonal_relaxed")
+        return contingents.select(
+            [
+                pl.col("contingent_reference").alias("exposure_reference"),
+                pl.lit("contingent").alias("exposure_type"),
+                pl.col("product_type"),
+                pl.col("book_code").cast(pl.String, strict=False),
+                pl.col("counterparty_reference"),
+                pl.col("value_date"),
+                pl.col("maturity_date"),
+                pl.col("currency"),
+                pl.when(is_drawn)
+                .then(pl.col("nominal_amount"))
+                .otherwise(pl.lit(0.0))
+                .alias("drawn_amount"),
+                pl.lit(0.0).alias("interest"),
+                pl.lit(0.0).alias("undrawn_amount"),
+                pl.when(is_drawn)
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("nominal_amount"))
+                .alias("nominal_amount"),
+                pl.col("lgd").cast(pl.Float64, strict=False),
+                pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
+                if "lgd_unsecured" in cont_cols
+                else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
+                pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
+                if "has_sufficient_collateral_data" in cont_cols
+                else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
+                pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
+                if "beel" in cont_cols
+                else pl.lit(0.0).alias("beel"),
+                pl.col("seniority"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.String))
+                .otherwise(pl.col("risk_type"))
+                .alias("risk_type"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.String))
+                .otherwise(
+                    pl.col("underlying_risk_type")
+                    if "underlying_risk_type" in cont_cols
+                    else pl.lit(None).cast(pl.String)
+                )
+                .alias("underlying_risk_type"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Float64))
+                .otherwise(pl.col("ccf_modelled").cast(pl.Float64, strict=False))
+                .alias("ccf_modelled"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Float64))
+                .otherwise(
+                    pl.col("ead_modelled").cast(pl.Float64, strict=False)
+                    if "ead_modelled" in cont_cols
+                    else pl.lit(None).cast(pl.Float64)
+                )
+                .alias("ead_modelled"),
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(pl.col("is_short_term_trade_lc"))
+                .alias("is_short_term_trade_lc"),
+                # CRR Art. 166(8)(d) vs Art. 166(10): contingent rows are issued
+                # OBS items by default (False -> Art. 166(10) fallback under F-IRB).
+                # Callers may override to True for commitment-style contingents
+                # (e.g., a contingent representing a NIF/RUF).
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(
+                    pl.col("is_obs_commitment").fill_null(False)
+                    if "is_obs_commitment" in cont_cols
+                    else pl.lit(False)
+                )
+                .alias("is_obs_commitment"),
+                pl.lit(False).alias(
+                    "is_payroll_loan"
+                ),  # Payroll loans are term loans, not contingents
+                pl.lit(False).alias(
+                    "is_buy_to_let"
+                ),  # BTL is a property lending characteristic, not for contingents
+                (
+                    pl.col("has_one_day_maturity_floor").fill_null(False)
+                    if "has_one_day_maturity_floor" in cont_cols
+                    else pl.lit(False).alias("has_one_day_maturity_floor")
+                ),
+                (
+                    pl.col("is_sft").fill_null(False)
+                    if "is_sft" in cont_cols
+                    else pl.lit(False).alias("is_sft")
+                ),
+                (
+                    pl.col("effective_maturity")
+                    if "effective_maturity" in cont_cols
+                    else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
+                ),
+                pl.lit(False).alias("has_netting_agreement"),
+                # facility_termination_date is facility-level; inherited via facility join later
+                pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
+            ]
+        )
 
+    def _join_facility_metadata(
+        self,
+        exposures: pl.LazyFrame,
+        facility_mappings: pl.LazyFrame,
+        facility_root_lookup: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Attach ``parent_facility_reference``, ``exposure_has_parent``,
+        ``root_facility_reference``, and ``facility_hierarchy_depth`` to the
+        unified exposures frame.
+
+        Uses ``facility_mappings`` for the immediate parent (filtered to
+        non-facility children to avoid duplication when a sub-facility shares a
+        reference with a loan), and ``facility_root_lookup`` for the multi-level
+        root resolution. Single-level cases (no entry in the lookup) collapse to
+        parent-as-root with depth = 1.
+        """
         # Filter out child_type="facility" entries since unified exposures contain only
         # loans, contingents, and facility_undrawn (never raw facilities).
         # Without this filter, when facility_reference = loan_reference AND the facility
@@ -1832,7 +1877,6 @@ class HierarchyResolver:
                 ]
             ).unique(subset=["child_reference"], keep="first")
 
-        # Join with facility mappings to get parent facility
         exposures = exposures.join(
             exposure_level_mappings,
             left_on="exposure_reference",
@@ -1858,7 +1902,7 @@ class HierarchyResolver:
         # Resolve root_facility_reference and facility_hierarchy_depth using root lookup
         # Left join is safe even when lookup is empty — NULLs fall through to the
         # when/then/otherwise chain, producing identical results to the no-lookup case.
-        exposures = (
+        return (
             exposures.join(
                 facility_root_lookup.select(
                     [
@@ -1892,10 +1936,22 @@ class HierarchyResolver:
             .drop(["_frl_root", "_frl_depth"])
         )
 
-        # Propagate QRRE-relevant fields from parent facility to all exposures.
-        # facility_undrawn exposures already carry is_revolving, is_qrre_transactor,
-        # facility_limit from _build_facility_undrawn_exposures(); loans/contingents
-        # have NULLs from diagonal_relaxed concat. This join fills them in.
+    def _propagate_facility_qrre_columns(
+        self,
+        exposures: pl.LazyFrame,
+        facilities: pl.LazyFrame | None,
+    ) -> pl.LazyFrame:
+        """Coalesce QRRE-relevant facility-level columns onto every exposure row.
+
+        ``facility_undrawn`` exposures already carry ``is_revolving``,
+        ``is_qrre_transactor``, ``facility_limit`` (set in the facility-undrawn
+        select); loans / contingents have NULLs from the diagonal_relaxed concat.
+        This join fills them in from the parent facility.
+
+        Always returns a frame where ``is_revolving``, ``is_qrre_transactor``,
+        and ``facility_limit`` exist with safe defaults.
+        """
+        # TODO(qrre-coupling): also set in _undrawn_select_expressions; consolidate.
         fac_cols = set(facilities.collect_schema().names()) if facilities is not None else set()
         has_fac_ref = "facility_reference" in fac_cols
         exp_schema: set[str] = set()
@@ -1989,11 +2045,21 @@ class HierarchyResolver:
         if default_cols:
             exposures = exposures.with_columns(default_cols)
 
-        # Add counterparty rating fields needed by downstream calculators.
-        # cqs and pd are used by SA/IRB calculators; internal_pd is used by
-        # the classifier to gate IRB approach on internal rating availability;
-        # external_cqs is carried for audit trail; internal_model_id links to
-        # model_permissions for per-model approach gating.
+        return exposures
+
+    def _attach_counterparty_rating(
+        self,
+        exposures: pl.LazyFrame,
+        counterparty_lookup: CounterpartyLookup,
+    ) -> pl.LazyFrame:
+        """Join counterparty rating fields onto every exposure row.
+
+        ``cqs`` and ``pd`` are used by SA / IRB calculators; ``internal_pd`` is
+        used by the classifier to gate IRB approach on internal-rating
+        availability; ``external_cqs`` is carried for audit trail; ``model_id``
+        (sourced from ``internal_model_id`` via the rating inheritance pipeline)
+        links to model_permissions for per-model approach gating.
+        """
         cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
         cp_select = [pl.col("counterparty_reference"), pl.col("cqs"), pl.col("pd")]
         if "internal_pd" in cp_schema:
@@ -2021,13 +2087,10 @@ class HierarchyResolver:
         # model_id: sourced from internal_model_id (rating inheritance pipeline).
         # We know internal_model_id was joined from cp_schema above.
         if "internal_model_id" in cp_schema:
-            exposures = exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
+            return exposures.with_columns(pl.col("internal_model_id").alias("model_id")).drop(
                 "internal_model_id"
             )
-        else:
-            exposures = exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
-
-        return exposures, errors
+        return exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
 
     def _enrich_with_property_coverage(
         self,

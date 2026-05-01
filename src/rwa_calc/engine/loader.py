@@ -30,33 +30,6 @@ from pathlib import Path
 
 import polars as pl
 
-UNSAFE_LOAD_ENV_VAR = "RWA_ALLOW_UNSAFE_LOAD"
-
-
-def _check_enforce_schemas_flag(enforce_schemas: bool, loader_name: str) -> None:
-    """Reject ``enforce_schemas=False`` unless the unsafe-load env var is set.
-
-    Skipping schema enforcement bypasses the regulatory column-default
-    fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor)
-    applied by ``apply_boolean_column_defaults``. A null cell in any of
-    those columns silently changes RWA — wrong-direction for committed
-    flags. This guard fails fast in production; legitimate test paths
-    that need the unsafe behaviour set ``RWA_ALLOW_UNSAFE_LOAD=1``
-    explicitly via ``monkeypatch.setenv`` and document why.
-    """
-    if enforce_schemas:
-        return
-    if os.environ.get(UNSAFE_LOAD_ENV_VAR) == "1":
-        return
-    raise ValueError(
-        f"{loader_name}(enforce_schemas=False) bypasses regulatory column-default "
-        f"fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor) "
-        f"and silently changes RWA. Set {UNSAFE_LOAD_ENV_VAR}=1 in the environment "
-        f"to authorise the unsafe path; this should only be used by tests that "
-        f"explicitly cover null-tolerant behaviour."
-    )
-
-
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.errors import CalculationError
@@ -86,6 +59,33 @@ from rwa_calc.data.schemas import (
 from rwa_calc.engine.utils import has_rows
 
 logger = logging.getLogger(__name__)
+
+UNSAFE_LOAD_ENV_VAR = "RWA_ALLOW_UNSAFE_LOAD"
+
+
+def _check_enforce_schemas_flag(enforce_schemas: bool, loader_name: str) -> None:
+    """Reject ``enforce_schemas=False`` unless the unsafe-load env var is set.
+
+    Skipping schema enforcement bypasses the regulatory column-default
+    fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor)
+    applied by ``apply_boolean_column_defaults``. A null cell in any of
+    those columns silently changes RWA — wrong-direction for committed
+    flags. This guard fails fast in production; legitimate test paths
+    that need the unsafe behaviour set ``RWA_ALLOW_UNSAFE_LOAD=1``
+    explicitly via ``monkeypatch.setenv`` and document why.
+    """
+    if enforce_schemas:
+        return
+    if os.environ.get(UNSAFE_LOAD_ENV_VAR) == "1":
+        return
+    raise ValueError(
+        f"{loader_name}(enforce_schemas=False) bypasses regulatory column-default "
+        f"fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor) "
+        f"and silently changes RWA. Set {UNSAFE_LOAD_ENV_VAR}=1 in the environment "
+        f"to authorise the unsafe path; this should only be used by tests that "
+        f"explicitly cover null-tolerant behaviour."
+    )
+
 
 type ScanFn = Callable[[Path], pl.LazyFrame]
 

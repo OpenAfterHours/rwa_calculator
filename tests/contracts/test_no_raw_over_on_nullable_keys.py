@@ -46,12 +46,12 @@ ALLOWLIST: frozenset[str] = frozenset(
 # justification comment naming the filter or invariant that makes the key
 # non-null at this site.
 LINE_ALLOWLIST: dict[str, frozenset[int]] = {
-    # _build_rating_inheritance_lazy: the L343-equivalent filter on
-    # `per_agency_latest` adds `counterparty_reference.is_not_null()` to the
-    # upstream filter, so these `.over("counterparty_reference")` calls
-    # operate on a frame with no null-keyed rows. See the comment block
-    # above the per_agency_latest filter in engine/hierarchy.py.
-    "src/rwa_calc/engine/hierarchy.py": frozenset({380, 381}),
+    # _build_rating_inheritance_lazy: the per_agency_latest filter adds
+    # `counterparty_reference.is_not_null()` to the upstream filter, so these
+    # `.over("counterparty_reference")` calls operate on a frame with no
+    # null-keyed rows. See the comment block above the per_agency_latest
+    # filter in engine/hierarchy.py.
+    "src/rwa_calc/engine/hierarchy.py": frozenset({384, 385}),
 }
 
 

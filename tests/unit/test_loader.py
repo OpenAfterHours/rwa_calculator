@@ -863,8 +863,15 @@ class TestSchemaEnforcementInLoaders:
         assert result["interest"].dtype == pl.Float64
         assert result["interest"][0] == 50.5
 
-    def test_parquet_loader_can_disable_schema_enforcement(self, tmp_path: Path) -> None:
-        """ParquetLoader should preserve original types when enforce_schemas=False."""
+    def test_parquet_loader_can_disable_schema_enforcement(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ParquetLoader should preserve original types when enforce_schemas=False.
+
+        Requires explicit ``RWA_ALLOW_UNSAFE_LOAD=1`` env var because
+        bypassing schema enforcement also bypasses regulatory column-default
+        fills.
+        """
         (tmp_path / "exposures").mkdir()
 
         # Create parquet with wrong types
@@ -876,6 +883,7 @@ class TestSchemaEnforcementInLoaders:
         )
         df.write_parquet(tmp_path / "exposures" / "loans.parquet")
 
+        monkeypatch.setenv("RWA_ALLOW_UNSAFE_LOAD", "1")
         loader = ParquetLoader(tmp_path, enforce_schemas=False)
         from rwa_calc.data.schemas import LOAN_SCHEMA
 
@@ -899,6 +907,54 @@ class TestSchemaEnforcementInLoaders:
 
         # book_code should be cast to String
         assert result["book_code"].dtype == pl.String
+
+
+class TestEnforceSchemasFalseEnvGate:
+    """Pin the env-gated guard against unsafe ``enforce_schemas=False``.
+
+    Bypassing schema enforcement also bypasses ``apply_boolean_column_defaults``,
+    so a parquet with null ``committed`` cells silently becomes RWA-impacting
+    data. The guard rejects ``enforce_schemas=False`` unless the caller has
+    explicitly opted in via ``RWA_ALLOW_UNSAFE_LOAD=1``.
+    """
+
+    def test_parquet_loader_rejects_unsafe_load_without_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without the env var, ParquetLoader(enforce_schemas=False) raises."""
+        monkeypatch.delenv("RWA_ALLOW_UNSAFE_LOAD", raising=False)
+        with pytest.raises(ValueError, match="RWA_ALLOW_UNSAFE_LOAD"):
+            ParquetLoader(tmp_path, enforce_schemas=False)
+
+    def test_csv_loader_rejects_unsafe_load_without_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without the env var, CSVLoader(enforce_schemas=False) raises."""
+        monkeypatch.delenv("RWA_ALLOW_UNSAFE_LOAD", raising=False)
+        with pytest.raises(ValueError, match="RWA_ALLOW_UNSAFE_LOAD"):
+            CSVLoader(tmp_path, enforce_schemas=False)
+
+    def test_parquet_loader_accepts_unsafe_load_with_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With ``RWA_ALLOW_UNSAFE_LOAD=1``, the unsafe path is permitted."""
+        monkeypatch.setenv("RWA_ALLOW_UNSAFE_LOAD", "1")
+        loader = ParquetLoader(tmp_path, enforce_schemas=False)
+        assert loader.enforce_schemas is False
+
+    def test_csv_loader_accepts_unsafe_load_with_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With ``RWA_ALLOW_UNSAFE_LOAD=1``, the unsafe path is permitted."""
+        monkeypatch.setenv("RWA_ALLOW_UNSAFE_LOAD", "1")
+        loader = CSVLoader(tmp_path, enforce_schemas=False)
+        assert loader.enforce_schemas is False
+
+    def test_default_enforce_schemas_true_unaffected(self, tmp_path: Path) -> None:
+        """The default path (``enforce_schemas=True``) is never gated."""
+        # No env var manipulation; should construct cleanly.
+        ParquetLoader(tmp_path)
+        CSVLoader(tmp_path)
 
 
 # =============================================================================
@@ -937,18 +993,21 @@ class TestEdgeCases:
             loader._load_parquet(loader.config.counterparties_file, COUNTERPARTY_SCHEMA)
 
     def test_corrupted_parquet_file_raises_error_at_collect_without_schema_enforcement(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Corrupted parquet file raises error at collect time when schema enforcement is off.
 
         With schema enforcement disabled, errors occur at collect time (lazy).
-        This is the original Polars behavior for lazy evaluation.
+        This is the original Polars behavior for lazy evaluation. Requires
+        explicit ``RWA_ALLOW_UNSAFE_LOAD=1`` env var since the unsafe path
+        bypasses regulatory column-default fills.
         """
         (tmp_path / "counterparty").mkdir()
 
         # Create a file that's not valid parquet
         (tmp_path / "counterparty" / "counterparties.parquet").write_text("not parquet data")
 
+        monkeypatch.setenv("RWA_ALLOW_UNSAFE_LOAD", "1")
         loader = ParquetLoader(tmp_path, enforce_schemas=False)
         # scan_parquet succeeds (lazy) when schema enforcement is off
         lf = loader._load_parquet("counterparty/counterparties.parquet")

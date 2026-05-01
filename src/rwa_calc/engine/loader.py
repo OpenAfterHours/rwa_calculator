@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -29,10 +30,41 @@ from pathlib import Path
 
 import polars as pl
 
+UNSAFE_LOAD_ENV_VAR = "RWA_ALLOW_UNSAFE_LOAD"
+
+
+def _check_enforce_schemas_flag(enforce_schemas: bool, loader_name: str) -> None:
+    """Reject ``enforce_schemas=False`` unless the unsafe-load env var is set.
+
+    Skipping schema enforcement bypasses the regulatory column-default
+    fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor)
+    applied by ``apply_boolean_column_defaults``. A null cell in any of
+    those columns silently changes RWA — wrong-direction for committed
+    flags. This guard fails fast in production; legitimate test paths
+    that need the unsafe behaviour set ``RWA_ALLOW_UNSAFE_LOAD=1``
+    explicitly via ``monkeypatch.setenv`` and document why.
+    """
+    if enforce_schemas:
+        return
+    if os.environ.get(UNSAFE_LOAD_ENV_VAR) == "1":
+        return
+    raise ValueError(
+        f"{loader_name}(enforce_schemas=False) bypasses regulatory column-default "
+        f"fills (committed, is_obs_commitment, is_revolving, is_qrre_transactor) "
+        f"and silently changes RWA. Set {UNSAFE_LOAD_ENV_VAR}=1 in the environment "
+        f"to authorise the unsafe path; this should only be used by tests that "
+        f"explicitly cover null-tolerant behaviour."
+    )
+
+
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.errors import CalculationError
-from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.column_spec import (
+    ColumnSpec,
+    apply_boolean_column_defaults,
+    ensure_columns,
+)
 from rwa_calc.data.schemas import (
     CIU_HOLDINGS_SCHEMA,
     COLLATERAL_SCHEMA,
@@ -96,10 +128,18 @@ def enforce_schema(
         if col_name in current_cols and current_schema[col_name] != _dtype(entry)
     ]
 
-    if not cast_exprs:
-        return lf
+    if cast_exprs:
+        lf = lf.with_columns(cast_exprs)
 
-    return lf.with_columns(cast_exprs)
+    # Apply Boolean-column null fills strictly AFTER cast — ordering is
+    # load-bearing. An inferred pl.Null column must be cast to pl.Boolean
+    # first so the subsequent fill_null can type-coerce its literal cleanly.
+    # Float/String defaults are intentionally excluded; see
+    # ``apply_boolean_column_defaults`` for rationale.
+    if is_column_spec_schema:
+        lf = apply_boolean_column_defaults(lf, schema)  # type: ignore[arg-type]
+
+    return lf
 
 
 def normalize_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
@@ -324,6 +364,7 @@ class ParquetLoader:
         config: DataSourceConfig | None = None,
         enforce_schemas: bool = True,
     ) -> None:
+        _check_enforce_schemas_flag(enforce_schemas, "ParquetLoader")
         self.base_path = Path(base_path)
         self.config = config or DataSourceConfig.from_registry(extension="parquet")
         self.enforce_schemas = enforce_schemas
@@ -374,6 +415,7 @@ class CSVLoader:
         config: DataSourceConfig | None = None,
         enforce_schemas: bool = True,
     ) -> None:
+        _check_enforce_schemas_flag(enforce_schemas, "CSVLoader")
         self.base_path = Path(base_path)
         self.config = config or DataSourceConfig.from_registry(extension="csv")
         self.enforce_schemas = enforce_schemas

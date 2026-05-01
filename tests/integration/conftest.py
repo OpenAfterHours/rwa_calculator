@@ -239,6 +239,12 @@ def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl
     ``schema`` may be a plain ``{name: dtype}`` dict or a ``{name: ColumnSpec}``
     schema from ``rwa_calc.data.schemas`` — ColumnSpec entries are unwrapped to
     their dtype before casting.
+
+    For ColumnSpec schemas, routes through ``loader.enforce_schema`` after the
+    initial cast so present-but-null Boolean columns receive their schema
+    defaults via ``apply_boolean_column_defaults`` — closing the loader-bypass
+    surface that previously left integration test bundles inconsistent with
+    production-loaded ones.
     """
     dtype_schema = dtypes_of(schema) if _is_column_spec_schema(schema) else schema
     if not rows:
@@ -250,7 +256,15 @@ def _rows_to_lazyframe(rows: list[dict[str, Any]], schema: dict[str, Any]) -> pl
             cast_exprs.append(pl.col(col_name).cast(col_type, strict=False))
         else:
             cast_exprs.append(pl.lit(None).cast(col_type).alias(col_name))
-    return df.lazy().select(cast_exprs)
+    lf = df.lazy().select(cast_exprs)
+
+    if _is_column_spec_schema(schema):
+        # Defer the import to avoid a hard dependency on the engine package
+        # at conftest collection time.
+        from rwa_calc.engine.loader import enforce_schema
+
+        lf = enforce_schema(lf, schema, strict=False)
+    return lf
 
 
 def _is_column_spec_schema(schema: dict[str, Any]) -> bool:

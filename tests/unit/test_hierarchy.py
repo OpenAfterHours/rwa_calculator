@@ -3598,8 +3598,16 @@ class TestDuplicateMappingBugFixes:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """facility_mappings with neither child_type nor node_type column
-        should still produce correct facility_undrawn rows (Bug 3 fallback).
+        """facility_mappings with neither child_type nor node_type column.
+
+        Post-normalisation contract: the resolver boundary synthesises a null
+        ``child_type`` column for legacy mappings via ``_normalise_facility_mappings``.
+        Null ``child_type`` is treated as "no children of any type", so loan
+        aggregation does not run and the facility's undrawn equals its full limit.
+
+        The right fix in production data is to emit ``child_type='loan'`` on
+        loan mappings — once specified, aggregation works (covered by
+        ``test_facility_undrawn_with_explicit_loan_type`` below).
         """
         facilities = pl.DataFrame(
             {
@@ -3632,7 +3640,8 @@ class TestDuplicateMappingBugFixes:
             }
         ).lazy()
 
-        # No child_type or node_type column at all
+        # No child_type column at all — post-normalisation, synthesised null
+        # blocks the loan aggregation path.
         mappings = pl.DataFrame(
             {
                 "parent_facility_reference": ["FAC_NOTYPE"],
@@ -3644,6 +3653,63 @@ class TestDuplicateMappingBugFixes:
         df = facility_undrawn.collect()
 
         fac = df.filter(pl.col("exposure_reference") == "FAC_NOTYPE_UNDRAWN")
+        assert len(fac) == 1
+        # Without explicit child_type='loan', loan is not aggregated; full limit is undrawn.
+        assert fac["undrawn_amount"][0] == pytest.approx(1000000.0)
+
+    def test_facility_undrawn_with_explicit_loan_type(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Same input as the no-type-column test, but with the canonical child_type='loan'.
+
+        Confirms that once the input shape matches the post-normalisation contract,
+        loan drawn amounts are aggregated against the facility's limit and the
+        undrawn equals limit minus drawn.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_TYPED"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_TYPED"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [1000000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_TYPED"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP_TYPED"],
+                "value_date": [date(2023, 6, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "drawn_amount": [300000.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+            }
+        ).lazy()
+
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_TYPED"],
+                "child_reference": ["LOAN_TYPED"],
+                "child_type": ["loan"],
+            }
+        ).lazy()
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        df = facility_undrawn.collect()
+
+        fac = df.filter(pl.col("exposure_reference") == "FAC_TYPED_UNDRAWN")
         assert len(fac) == 1
         assert fac["undrawn_amount"][0] == pytest.approx(700000.0)  # 1M - 300k
 
@@ -3880,7 +3946,13 @@ class TestBuildFacilityRootLookup:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """No child_type/node_type column → cannot detect sub-facilities, return empty."""
+        """No child_type column → cannot detect sub-facilities, return empty.
+
+        Post-normalisation, ``_normalise_facility_mappings`` synthesises a null
+        ``child_type``; the downstream filter (``== "facility"``) yields zero
+        rows, ``facility_edges`` is empty, and the empty-result short-circuit
+        fires.
+        """
         facility_mappings = pl.DataFrame(
             {
                 "parent_facility_reference": ["FAC_ROOT"],

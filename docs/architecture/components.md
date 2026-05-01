@@ -161,7 +161,7 @@ class HierarchyResolver:
 - Lending group aggregation with residential property exclusion (CRR Art. 123(c))
 - Multi-level collateral linking (direct, facility, counterparty) with pro-rata allocation
 - FX conversion of exposures and CRM data
-- Flexible type column detection (`child_type` / `node_type` / neither)
+- Facility-mapping schema normalised at the resolver boundary: legacy `node_type` is accepted as an input alias and renamed to `child_type`; missing column is synthesised as null. New producers MUST emit `child_type`.
 - Non-blocking error accumulation
 
 ## Classifier

@@ -132,6 +132,91 @@ while excess provisions provide T2 relief. Under SA, general credit risk adjustm
 relief directly. Without OF-ADJ, switching from IRB to SA in the floor comparison would change
 the own-funds base, making the TREA comparison inconsistent.
 
+### T2 Component Caps — Art. 62(c) and Art. 62(d)
+
+!!! info "Clarification, not a new mechanic"
+    The OF-ADJ formula above is unchanged. This subsection makes explicit the
+    pre-existing Tier 2 caps that govern the `IRB T2` and `SA T2` inputs
+    **before** they are substituted into the OF-ADJ expression. These caps live
+    in Own Funds (CRR) Part Art. 62(c) and (d) — the same provisions that
+    Art. 92(2A) names in its OF-ADJ definition — and are applied by the firm
+    upstream of the calculator, alongside the GCRA cap that is applied inside
+    `compute_of_adj()`.
+
+`IRB T2`, `SA T2`, and `GCRA` are each capped relative to a different RWA base.
+The three caps interact but never reduce a positive OF-ADJ below itself by a
+single combined ceiling — each input is capped independently before the formula
+is evaluated:
+
+| Input | Cap | Reference | Applied where |
+|-------|-----|-----------|---------------|
+| `IRB T2` (excess provisions) | **0.6% of IRB credit-risk RWA** | Own Funds (CRR) Part Art. 62(d) | Upstream of the engine — the firm passes the post-cap amount via `OutputFloorConfig.irb_t2_credit`. |
+| `SA T2` (general credit risk adjustments admitted as Tier 2) | **1.25% of SA credit-risk RWA** | Own Funds (CRR) Part Art. 62(c) | Upstream of the engine — the firm passes the post-cap amount via `OutputFloorConfig.sa_t2_credit`. |
+| `GCRA` (general credit risk adjustments) | **1.25% of S-TREA** | PRA PS1/26 Art. 92(2A) | Inside `compute_of_adj()` (`src/rwa_calc/engine/aggregator/_floor.py`) — callers pass the **uncapped** amount. |
+
+!!! quote "PRA PS1/26 Art. 92(2A) — verbatim definitions of the OF-ADJ T2 inputs (PS1/26 App 1, p. 13)"
+    "**IRB T2** = amounts calculated in accordance with point (d) of Own Funds
+    (CRR) Part Article 62;
+    [...]
+    **SA T2** = amounts calculated in accordance with point (c) of Own Funds
+    (CRR) Part Article 62."
+
+#### Distinguishing `GCRA` from `SA T2`
+
+`GCRA` and `SA T2` both capture general credit risk adjustments, but they enter
+OF-ADJ at different points and under different caps:
+
+- **`SA T2`** is the Art. 62(c) Tier 2 credit — GCRAs that the firm admits to
+  Tier 2 capital, capped at 1.25% of SA credit-risk RWA. It enters OF-ADJ
+  with a positive sign (adding to the Tier 2 base on the SA side of the
+  reconciliation).
+- **`GCRA`** is the same population of general credit risk adjustments
+  measured **gross of tax effects** and capped at 1.25% of S-TREA — the
+  output-floor reference base. It enters OF-ADJ with a negative sign
+  (subtracting the GCRA element that would otherwise be double-counted on
+  the SA side).
+
+The two caps reference different RWA bases (SA credit-risk RWA vs S-TREA),
+so the input figures `sa_t2_credit` and `gcra_amount` will not in general be
+equal even when they describe the same provisions.
+
+#### Worked illustration
+
+```
+Inputs (post Art. 62 caps applied upstream):
+  irb_t2_credit       = £20m   (already capped at 0.6% of IRB RWA per Art. 62(d))
+  irb_cet1_deduction  = £15m
+  gcra_amount         = £40m   (uncapped — engine applies 1.25% of S-TREA)
+  sa_t2_credit        = £30m   (already capped at 1.25% of SA RWA per Art. 62(c))
+  s_trea              = £2,400m
+
+Engine GCRA cap (Art. 92(2A)):
+  gcra_cap     = 1.25% × £2,400m = £30m
+  gcra_capped  = min(£40m, £30m) = £30m
+
+OF-ADJ:
+  = 12.5 × (irb_t2_credit − irb_cet1_deduction − gcra_capped + sa_t2_credit)
+  = 12.5 × (20 − 15 − 30 + 30)
+  = 12.5 × 5
+  = £62.5m
+```
+
+If the firm passed an `irb_t2_credit` or `sa_t2_credit` that exceeded the
+Art. 62(d) / Art. 62(c) caps, the engine would not detect or correct it —
+the post-cap discipline is institution-side. Reconciliation between the OF-ADJ
+inputs and the Tier 2 line items in the firm's COREP own funds template is the
+audit gate; see the
+[output reporting spec](../output-reporting.md#output-floor-adjustment-of-adj)
+for the OF 02.00 / OF 02.01 mapping that consumes these post-cap values.
+
+!!! note "CRR has no equivalent"
+    CRR (the framework that applies until 31 December 2026) has no output
+    floor and therefore no OF-ADJ. The Art. 62(c) / Art. 62(d) Tier 2 caps
+    themselves exist under both CRR and the PRA PS1/26 Own Funds (CRR) Part
+    — they are own-funds rules independent of the floor — but the
+    cross-link between those caps and the floor reconciliation is a
+    Basel 3.1 / PS1/26 construct only.
+
 !!! info "Full formula context"
     The complete output floor formula is `TREA = max{U-TREA; x × S-TREA + OF-ADJ}` — see the
     [Floor Calculation](#floor-calculation) section above and the

@@ -74,8 +74,10 @@ This page provides links to key regulatory documents and resources.
 | Art. 154 | Retail IRB |
 | Art. 161 | Supervisory LGD |
 | Art. 162 | Maturity |
-| Art. 178-180 | PD estimation |
-| Art. 181 | LGD estimation |
+| Art. 178 | Definition of default |
+| Art. 179-184 | Risk parameter estimation standards (PD, LGD, CCF/EAD, downturn, LGD-AM, purchased receivables) — see [IRB Approach Specification — Art. 179-184](../specifications/basel31/irb-approach.md#risk-parameter-estimation-standards-art-179184) |
+| Art. 181A-C | Economic downturn — nature, indicator set, 20-year time-span — see [IRB Approach Specification — Art. 181A-C](../specifications/basel31/irb-approach.md#art-181ac--economic-downturn-specification) |
+| Art. 185 | Validation of internal estimates |
 
 ### Credit Risk Mitigation
 

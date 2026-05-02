@@ -2312,6 +2312,71 @@ Secured portion retains collateral-based RW. RESI RE non-income exception: flat 
 
 ---
 
+## High-Risk Exposures (Art. 128)
+
+PRA PS1/26 **re-introduces** the high-risk exposure class that was previously omitted
+from UK onshored CRR. An institution shall assign a **150%** risk weight to exposures
+that are associated with particularly high risk (Art. 128(1)).
+
+**Regulatory Reference:** PRA PS1/26 Art. 128 (ps126app1.pdf p. 59)
+
+### Assessment Criteria (Art. 128(3))
+
+When assessing whether an exposure is associated with particularly high risk, an
+institution shall take into account the following risk characteristics:
+
+- **(a)** there is a high risk of loss as a result of a default of the obligor;
+- **(b)** it is impossible to assess adequately whether the exposure falls under
+  point (a).
+
+### Paragraph Status
+
+| Paragraph | Status under PS1/26 | Note |
+|-----------|---------------------|------|
+| Art. 128(1) | **Active** — 150% RW | Corresponds to CRR Art. 128(1) immediately before Treasury revocation |
+| Art. 128(2) | **Left blank** | The original EU CRR Art. 128(2) list of specific high-risk categories (e.g. venture capital, speculative immovable property financing) is **not carried forward** by PRA |
+| Art. 128(3) | **Active** — assessment criteria | Corresponds to CRR Art. 128(3) immediately before Treasury revocation |
+
+### Class Waterfall Position
+
+Under the Art. 112 Table A2 exposure class waterfall, high-risk items sit at
+**priority 4**, after securitisation positions (1), CIU units (2) and subordinated
+debt / equity / own funds instruments (3). Equity therefore takes precedence over
+high-risk treatment — venture capital and private equity exposures are classified
+as equity under [Art. 133](equity-approach.md), not as high-risk items under
+Art. 128, even though Art. 128(2) historically listed them.
+
+### CRR Comparison
+
+Under current UK CRR (pre-2027), Art. 128 was **omitted** by The Capital Requirements
+Regulation (Amendment) Regulations 2021 (SI 2021/1078), reg. 6(3)(a), effective
+1 January 2022. The high-risk exposure class is a **dead letter under current UK CRR**;
+exposures that would otherwise be classified as high-risk fall through to their
+counterparty's standard exposure class. PS1/26 reintroduces Art. 128 from
+1 January 2027 with paragraphs 1 and 3 only.
+
+See also: [CRR high-risk treatment](../crr/sa-risk-weights.md#high-risk-exposures-art-128).
+
+!!! note "Art. 131 left blank under PS1/26"
+    Article 131 of PS1/26 is titled **"Exposures to Institutions and Corporates with a
+    Short-Term Credit Assessment"** and carries the marker **"[Note: Provision left
+    blank]"** (ps126app1.pdf p. 62). The PS1/26 Art. 131 slot is therefore **dead
+    letter** under Basel 3.1.
+
+    Short-term ECAI assessments are no longer handled at Art. 131 under Basel 3.1 —
+    short-term treatments are now embedded directly in the class-specific articles:
+
+    - Institutions: [Art. 120(2B), Table 4A](#ecra-short-term-ecai-art-1202b-table-4a)
+    - Corporates: [Art. 122(3), Table 6A](#short-term-corporate-ecai-art-1223-table-6a)
+
+    This is a **structural simplification** vs CRR (where Art. 131 / Table 7 supplied a
+    cross-class short-term CQS mapping — see
+    [CRR Art. 131 short-term assessments](../crr/sa-risk-weights.md#short-term-assessments-crr-art-131-table-7)).
+    High-risk treatment under PS1/26 is driven **exclusively** by the reintroduced
+    Art. 128 above; it is not implied by, derived from, or routed through Art. 131.
+
+---
+
 ## CIU Exposures (Art. 132)
 
 Under Basel 3.1, CIU (Collective Investment Undertaking) exposures that cannot be looked
@@ -2356,6 +2421,8 @@ risk weights apply from **1 January 2030**:
 - **SA Specialised Lending** (Art. 122A–122B): Type-specific weights, incl. 80% high-quality PF — Done
 - **Currency mismatch** (Art. 123B): 1.5× multiplier, 150% cap — Done
 - **Defaulted provision-coverage** (Art. 127): 100%/150% split — Done
+- **High-risk re-introduced** (Art. 128): 150% RW reactivated by PS1/26 (paragraphs 1 & 3 only; para 2 left blank); reverses the SI 2021/1078 omission under UK CRR — Documented
+- **Art. 131 left blank** (Short-term ECAI for institutions/corporates): PS1/26 leaves Art. 131 blank; short-term treatment is now embedded in Art. 120(2B) Table 4A and Art. 122(3) Table 6A
 - **Retail threshold** (Art. 123): Changed to GBP 880,000 — Done
 - **CIU fallback** (Art. 132(2)): 1,250% for non-look-through CIUs — Documented
 - **Short-term ECAI** (Art. 120(2B), Art. 122(3)): New Tables 4A / 6A for short-term assessments — Schema gap

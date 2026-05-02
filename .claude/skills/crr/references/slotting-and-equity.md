@@ -28,6 +28,8 @@ Quick-reference for specialised lending slotting risk weights and equity treatme
 | Weak | 250% | 250% |
 | Default | 0% | 0% |
 
+> **Warning — UK CRR has no HVCRE concept.** The term "high volatility commercial real estate" does not appear anywhere in the UK onshored CRR. Art. 153(5) contains only Table 1; Table 2 below is reproduced from the original EU CRR for reference and has **no UK legal basis**. Do not apply these weights under the UK CRR framework. See `docs/specifications/crr/slotting-approach.md` for the carve-out rationale.
+
 ### HVCRE (Table 2)
 
 | Category | Maturity >= 2.5yr | Maturity < 2.5yr |

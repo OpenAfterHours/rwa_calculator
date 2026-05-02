@@ -45,7 +45,7 @@ Maturity bands expand from 3 to 5. Significant increases for equities and long-d
 | Corp bonds CQS 2-3 | 2% | 6% | 8% | **15%** | **15%** |
 | Main index equities | **20%** | — | — | — | — |
 | Other equities | **30%** | — | — | — | — |
-| Gold | 15% | — | — | — | — |
+| Gold | **20%** | — | — | — | — |
 | Cash | 0% | — | — | — | — |
 
 ### Key Haircut Increases
@@ -57,6 +57,7 @@ Maturity bands expand from 3 to 5. Significant increases for equities and long-d
 | Govt bonds CQS 2-3 (10y+) | 6% | 12% | +6pp |
 | Corp bonds CQS 1 (10y+) | 8% | 12% | +4pp |
 | Corp bonds CQS 2-3 (5-10y/10y+) | 12% | 15% | +3pp |
+| Gold | 15% | 20% | +5pp |
 
 ## Overcollateralisation
 

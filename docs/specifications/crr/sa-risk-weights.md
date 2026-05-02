@@ -989,22 +989,27 @@ Rated specialised lending exposures use the corporate CQS table (Art. 122A(3)).
 | Residual value of leased assets | 1/t × 100% (t = remaining lease years, min 1) | Art. 134(6) |
 | All other | 100% | Art. 134(2) |
 
-## ECA Consensus Risk Scores (CRR Art. 137 / Table 9)
+## Export Credit Agency Assessments (CRR Art. 137 / Table 9)
 
-Export Credit Agency (ECA) consensus risk scores are mapped to CQS for sovereign exposures when no ECAI rating is available:
+Where an Export Credit Agency (ECA) credit assessment is nominated under Art. 137(1) — either an OECD consensus risk score or a published assessment associated with one of the eight **minimum export insurance premiums (MEIPs)** — the exposure is assigned a risk weight directly from Art. 137(2) Table 9. Each MEIP score (0–7) maps **directly** to a risk weight; there is **no intermediate CQS step**.
 
-| ECA Risk Score | CQS Mapping | Risk Weight |
-|---------------|-------------|-------------|
-| 0-1 | CQS 1 | 0% |
-| 2 | CQS 2 | 20% |
-| 3 | CQS 3 | 50% |
-| 4-6 | CQS 4-6 | 100% |
-| 7 | CQS 6 | 150% |
+**Table 9 — MEIP risk weights (verbatim, Art. 137(2)):**
 
-This mapping is used for sovereign exposures (Art. 114) and for deriving institution risk weights from their sovereign's ECA score where the sovereign lacks an ECAI rating.
+| MEIP score | Risk weight |
+|------------|-------------|
+| 0 | 0% |
+| 1 | 0% |
+| 2 | 20% |
+| 3 | 50% |
+| 4 | 100% |
+| 5 | 100% |
+| 6 | 100% |
+| 7 | 150% |
+
+This mapping is used for sovereign exposures (Art. 114) where an ECA assessment is recognised, and — via the institution-from-sovereign rules — for deriving institution risk weights where the sovereign itself is rated only by an ECA.
 
 !!! note "Implementation Status"
-    ECA score lookup is not yet implemented. The calculator currently requires ECAI CQS for rated exposures. ECA-to-CQS mapping is a future enhancement.
+    MEIP score lookup is not yet implemented. The calculator currently requires ECAI CQS for rated exposures. Direct MEIP-to-risk-weight mapping per Art. 137(2) Table 9 is a future enhancement.
 
 ## Basel 3.1 Changes Summary
 
@@ -1033,7 +1038,7 @@ This mapping is used for sovereign exposures (Art. 114) and for deriving institu
 - **Other items** (Art. 134): Cash=0%, gold=0%, collection=20%, tangible=100% — Done
 - **Covered bonds** (Art. 129): CQS-based risk weights, eligibility criteria, unrated derivation, PRA deviation — Added
 - **RGLA/PSE/MDB/Int'l Org tables** (Art. 115-118): Missing from original spec — Added
-- **ECA consensus scores** (Art. 137 Table 9): ECA-to-CQS mapping for unrated sovereigns — Added
+- **ECA / MEIP scores** (Art. 137 Table 9): direct MEIP-score-to-risk-weight mapping (0–7 → 0%/0%/20%/50%/100%/100%/100%/150%) for sovereigns rated by an Export Credit Agency — Added
 - **Short-term assessments** (Art. 131 Table 7): Short-term ECAI CQS mapping — Added
 - **CIU treatment** (Art. 132/132a-132c): UK CRR omission noted, PRA Rulebook governs CIU — Added
 - **Unrated institution sovereign-derived** (Art. 121 Table 5): Full sovereign-derived table — Added

@@ -88,13 +88,20 @@ High-Volatility Commercial Real Estate receives elevated weights to reflect the 
 Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short maturity
 (< 2.5yr) may use column A (Strong) / C (Good) per Art. 153(5)(d).
 
-| Slotting Category | RW (>= 2.5yr, col B/D) | RW (< 2.5yr, col A/C) | EL (flat, no maturity split) |
-|-------------------|------------------------|------------------------|------------------------------|
-| Strong | 95% | 70% | 0.4% |
-| Good | 120% | 95% | 0.4% |
-| Satisfactory | 140% | 140% | 2.8% |
-| Weak | 250% | 250% | 8.0% |
-| Default | 0% | 0% | 50.0% |
+| Slotting Category | RW col A (Strong < 2.5yr) | RW col B (Strong default) | RW col C (Good < 2.5yr) | RW col D (Good default) | EL col A | EL col B | EL col C | EL col D |
+|-------------------|---------------------------|---------------------------|--------------------------|--------------------------|----------|----------|----------|----------|
+| Strong | 70% | 95% | — | — | 0.4% | 0.4% | — | — |
+| Good | — | — | 95% | 120% | — | — | 0.4% | 0.4% |
+| Satisfactory | 140% | 140% | 140% | 140% | 2.8% | 2.8% | 2.8% | 2.8% |
+| Weak | 250% | 250% | 250% | 250% | 8.0% | 8.0% | 8.0% | 8.0% |
+| Default | 0% | 0% | 0% | 0% | 50.0% | 50.0% | 50.0% | 50.0% |
+
+Read together with Table A (RW) and Table B (EL) verbatim from PS1/26 Appendix 1
+pp. 103 and 108: HVCRE risk weights split A/B for Strong (70%/95%) and C/D for Good
+(95%/120%), but HVCRE expected loss is flat at 0.4% across all four subgrade columns
+(A=B=C=D=0.4%). The subgrade structure is therefore present in RW but **collapses on
+the EL side** for HVCRE only — non-HVCRE retains the EL split (col A=0%/0.4%,
+col B=0.4%, col C=0.4%, col D=0.8%).
 
 !!! warning "Not Yet Implemented — HVCRE Short-Maturity Subgrades (Art. 153(5)(d))"
     HVCRE Table A has distinct short-maturity values in columns A and C (Strong A = 70%,
@@ -109,13 +116,25 @@ Default assignment uses column B (Strong) / D (Good) per Art. 153(5)(c). Short m
     [Subgrade Treatment](#subgrade-treatment-table-a-columns-abcd) below for the
     consolidated column A/C implementation gap covering both HVCRE and non-HVCRE.
 
+!!! quote "Art. 158(6) Table B — verbatim (PS1/26 Appendix 1 p. 108)"
+    Rating grades: Strong (A | B), Good (C | D), Satisfactory, Weak, Default
+
+    | Exposure | A | B | C | D | Satisfactory | Weak | Default |
+    |----------|---|---|---|---|--------------|------|---------|
+    | Object finance | 0% | 0.4% | 0.4% | 0.8% | 2.8% | 8% | 50% |
+    | Project finance | 0% | 0.4% | 0.4% | 0.8% | 2.8% | 8% | 50% |
+    | Commodities finance | 0% | 0.4% | 0.4% | 0.8% | 2.8% | 8% | 50% |
+    | IPRE | 0% | 0.4% | 0.4% | 0.8% | 2.8% | 8% | 50% |
+    | HVCRE | 0.4% | 0.4% | 0.4% | 0.4% | 2.8% | 8% | 50% |
+
 !!! note "HVCRE EL — No Maturity Split AND No Strong/Good Differentiation"
-    Unlike non-HVCRE, the HVCRE EL rates in PRA PS1/26 Art. 158(6) Table B are flat
+    Unlike non-HVCRE, the HVCRE EL row in PRA PS1/26 Art. 158(6) Table B is flat
     (no < 2.5yr / >= 2.5yr distinction) **and** Strong and Good both carry the same
-    0.4% rate. Reading the Table B HVCRE row directly (Appendix 1 p.108): the seven
-    columns A | B | C | D | Satisfactory | Weak | Default give 0.4% / 0.4% / 0.4% /
-    0.4% / 2.8% / 8% / 50% — the subgrade differentiation collapses on the EL side
-    even though risk weights still carry distinct subgrade values.
+    0.4% rate — see the verbatim quote above. The HVCRE row reads
+    0.4% / 0.4% / 0.4% / 0.4% / 2.8% / 8% / 50% across columns
+    A | B | C | D | Satisfactory | Weak | Default. The subgrade differentiation
+    collapses on the EL side even though risk weights (Table A) still carry distinct
+    subgrade values (col A = 70%, col B = 95%, col C = 95%, col D = 120%).
 
 !!! warning "Resolved 2026-04-18 (P1.150)"
     Prior versions of this table and the underlying constants used HVCRE Good = 0.8%,

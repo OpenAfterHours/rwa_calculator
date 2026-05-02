@@ -20,12 +20,12 @@ Quick-reference tables for all CRR SA risk weights by exposure class.
 
 ## Institution Exposures (Art. 120-121)
 
-**UK Deviation:** CQS 2 institutions receive **30%** (not 50% as in EU CRR).
+**Source:** CRR Art. 120 Table 3 (legislation.gov.uk). No PRA instrument modifies these weights for CQS 2.
 
-| CQS | Risk Weight (UK) |
+| CQS | Risk Weight |
 |-----|------------------|
 | 1 | 20% |
-| 2 | **30%** |
+| 2 | 50% |
 | 3 | 50% |
 | 4 | 100% |
 | 5 | 100% |

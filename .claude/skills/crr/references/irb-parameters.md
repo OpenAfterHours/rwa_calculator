@@ -18,6 +18,21 @@ Quick-reference for Foundation IRB and Advanced IRB parameters under CRR.
 | Commercial real estate | 35% |
 | Other physical | 40% |
 
+## Foundation Collateral Method LGDS (Art. 230 Table 5)
+
+When an F-IRB exposure is partly secured by eligible collateral via the Foundation
+Collateral Method, the secured portion's supervisory LGD is replaced by `LGDS` from
+the table below (subject to the overcollateralisation ratios).
+
+| Collateral Type | LGDS (Senior) | LGDS (Subordinated) |
+|----------------|---------------|---------------------|
+| Financial collateral | 0% | 0% |
+| Receivables | 35% | 65% |
+| Residential / commercial real estate | 35% | 65% |
+| Other physical collateral | 40% | 70% |
+
+Source: `docs/specifications/crr/credit-risk-mitigation.md` lines 188–206.
+
 ## PD Floor (Art. 163)
 
 **CRR:** Single floor of **0.03%** for all exposure classes.

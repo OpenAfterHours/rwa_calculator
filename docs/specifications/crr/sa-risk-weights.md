@@ -207,6 +207,41 @@ The following international organisations receive a **0%** risk weight:
 - European Financial Stability Facility (EFSF)
 - European Stability Mechanism (ESM)
 
+!!! warning "Art. 118(f) Omitted on UK Exit (SI 2018/1401)"
+    Art. 118(f) was **omitted from UK onshored CRR** by
+    *The Capital Requirements (Amendment) (EU Exit) Regulations 2018*
+    ([SI 2018/1401](https://www.legislation.gov.uk/uksi/2018/1401/contents)),
+    reg. 116, with effect from 31 December 2020 (IP completion day). The
+    original EU CRR text read:
+
+    > "(f) an international financial institution established by two or more
+    > Member States, which has the purpose to mobilise funding and provide
+    > financial assistance to the benefit of its members that are experiencing
+    > or threatened by severe financing problems."
+
+    *Source: CRR Art. 118 footnote F266; legislation.gov.uk "as adopted by EU"
+    text dated 28 June 2013.*
+
+    **Practical effect:** The Art. 118 0% list is **closed** under UK CRR — only
+    items (a) to (e) qualify. There is no residual catch-all for "international
+    financial institutions established by two or more Member States" any longer,
+    so any such body that is not separately named in Art. 117(2) (MDB list) or
+    Art. 118(a)–(e) must be risk-weighted as a corporate/institution under the
+    standard exposure-class waterfall. A separate UK-exit edit (SI 2019/1232,
+    reg. 35) also struck words from Art. 118(a) — leaving "the European Union"
+    as the sole referent.
+
+!!! note "Plan-item misattribution (D4.56)"
+    The audit item that prompted this subsection described Art. 118 as
+    "exposures to recognised exchanges" and the SI 2018/1401 deletion as
+    targeting "EU-regulated exchanges". Both are incorrect: Art. 118 has
+    always been the **international-organisations 0%** list, and SI 2018/1401
+    reg. 116 deleted **Art. 118(f)** — the residual "two-or-more-Member-States
+    international financial institution" catch-all quoted above. Recognised
+    exchanges are governed by **CRR Art. 107** (definition of "recognised
+    exchange") and Art. 197/198 (eligible collateral via main-index equities),
+    not Art. 118.
+
 ## Institution Exposures (CRR Art. 120-121)
 
 | CQS | Risk Weight |

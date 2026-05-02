@@ -825,12 +825,17 @@ class HierarchyResolver:
         facility_mappings: pl.LazyFrame,
         root_lookup: pl.LazyFrame,
     ) -> pl.LazyFrame:
-        """Sum positive drawn amounts per (root or standalone) facility.
+        """Sum drawn amounts per (root or standalone) facility, netting-aware.
 
-        Negative drawn balances are clamped to 0 before summing — they do not
-        increase available undrawn headroom. Returns an empty 2-col frame if
-        ``loans`` lacks ``loan_reference``, in which case all facilities are
-        treated as 100% undrawn.
+        Positive drawn balances always sum normally. Negative drawn balances
+        only contribute when the loan carries ``has_netting_agreement=True``
+        (CRR Art. 195 / 219, PS1/26 Art. 195 / 219) — these represent deposits
+        booked under an on-balance-sheet netting agreement and reduce facility
+        utilisation. Negative drawn amounts without a netting flag are clamped
+        to 0 (data-quality guard), preserving the historical behaviour.
+
+        Returns an empty 2-col frame if ``loans`` lacks ``loan_reference``, in
+        which case all facilities are treated as 100% undrawn.
         """
         loan_cols = loans.collect_schema().names()
         if "loan_reference" not in loan_cols:
@@ -852,9 +857,20 @@ class HierarchyResolver:
 
         loan_with_parent = _resolve_to_root_facility(loan_with_parent, root_lookup)
 
+        if "has_netting_agreement" in loan_cols:
+            drawn_expr = (
+                pl.when(
+                    (pl.col("drawn_amount") < 0) & ~pl.col("has_netting_agreement").fill_null(False)
+                )
+                .then(pl.lit(0.0))
+                .otherwise(pl.col("drawn_amount"))
+            )
+        else:
+            drawn_expr = pl.col("drawn_amount").clip(lower_bound=0.0)
+
         return loan_with_parent.group_by("aggregation_facility").agg(
             [
-                pl.col("drawn_amount").clip(lower_bound=0.0).sum().alias("total_drawn"),
+                drawn_expr.sum().alias("total_drawn"),
             ]
         )
 
@@ -1255,8 +1271,29 @@ class HierarchyResolver:
             if ref_col not in cols or amount_col not in cols:
                 return empty
             child_mappings = _filter_mappings_by_child_type(facility_mappings, child_type)
+            # Mirror the netting-aware aggregation used at root level: a negative
+            # drawn loan only offsets sub-facility utilisation when the loan is
+            # flagged with has_netting_agreement (CRR Art. 195/219). For
+            # contingents (no netting flag) the historical clip-at-0 applies.
+            select_cols = [pl.col(ref_col), pl.col(amount_col)]
+            has_netting_flag = (
+                child_type == "loan"
+                and amount_col == "drawn_amount"
+                and "has_netting_agreement" in cols
+            )
+            if has_netting_flag:
+                select_cols.append(pl.col("has_netting_agreement"))
+                amount_expr = (
+                    pl.when(
+                        (pl.col(amount_col) < 0) & ~pl.col("has_netting_agreement").fill_null(False)
+                    )
+                    .then(pl.lit(0.0))
+                    .otherwise(pl.col(amount_col))
+                )
+            else:
+                amount_expr = pl.col(amount_col).clip(lower_bound=0.0)
             return (
-                frame.select([pl.col(ref_col), pl.col(amount_col)])
+                frame.select(select_cols)
                 .join(
                     child_mappings.select(
                         [pl.col("child_reference"), pl.col("parent_facility_reference")]
@@ -1266,7 +1303,7 @@ class HierarchyResolver:
                     how="inner",
                 )
                 .group_by("parent_facility_reference")
-                .agg(pl.col(amount_col).clip(lower_bound=0.0).sum().alias(out_col))
+                .agg(amount_expr.sum().alias(out_col))
                 .rename({"parent_facility_reference": "_sub_ref"})
             )
 

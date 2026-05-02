@@ -217,6 +217,44 @@ From 1 January 2027, any guarantee-based RGLA/sovereign substitution for a PSE m
 
 PRA PS1/26 Art. 116(5) itself is marked `[Note: Provision not in PRA Rulebook]`, but PS1/26 Art. 116(3A) explicitly cross-refers to "Article 116(5) of CRR" to redirect the "UK public sector entities" references in paragraphs 1 and 2 to third-country PSEs when CRR Art. 116(5) applies. The Art. 112 class-mapping table (ps126app1.pdf p.34) likewise lists "Article 116 or Article 116(5) of CRR" as the basis for PSE class assignment. The CRR Art. 116(5) third-country equivalence gate (Treasury equivalence determination; otherwise flat 100%) therefore remains operative under Basel 3.1.
 
+### Art. 116(3A) — Third-Country PSE Sovereign-Derived Floor Mechanism
+
+PS1/26 Art. 116(3A) (ps126app1.pdf p. 38) is the redirection clause that activates third-country PSE treatment when CRR Art. 116(5) equivalence is met:
+
+!!! quote "PS1/26 Art. 116(3A) verbatim (ps126app1.pdf p. 38)"
+    "For the purpose of Article 116(5) of CRR, the references in paragraphs 1 and 2 to:
+
+    (a) the central government of the UK means the central government of the jurisdiction in which the third country public sector entity is based; and
+
+    (b) UK public sector entities means third country public sector entities."
+
+The mechanism therefore operates as a two-stage redirection rather than a single explicit "floor of 20%":
+
+1. **Equivalence gate (CRR Art. 116(5))** — the Treasury must have determined the third-country jurisdiction's supervisory and regulatory arrangements to be at least equivalent to those of the UK. If not, the exposure is risk-weighted at a flat **100%** and the redirection in Art. 116(3A) is never reached.
+2. **Sovereign-derived lookup (PS1/26 Art. 116(1)/(2) as redirected)** — once the equivalence gate is passed, the PSE is risk-weighted via Table 2 (unrated PSE, indexed on the third-country sovereign's CQS) or Table 2A (ECAI-rated PSE).
+
+#### How the 20% floor arises when the sovereign RW is 0%
+
+Sovereigns at the strongest credit-quality step receive a 0% risk weight under PS1/26 Art. 114 Table 1, but the same CQS 1 row in PSE Table 2 is **20%** — Table 2 is bounded below at 20%, not 0%:
+
+| Third-country sovereign CQS (Art. 114 Table 1) | Sovereign RW (Art. 114) | PSE RW via Art. 116(3A) -> Table 2 |
+|---|---|---|
+| 1 | **0%** | **20%** |
+| 2 | 20% | 50% |
+| 3 | 50% | 100% |
+| 4 | 100% | 100% |
+| 5 | 100% | 100% |
+| 6 | 150% | 150% |
+| Unrated | 100% | 100% |
+
+The trigger for the 20% PSE risk weight is therefore **"sovereign RW = 0%" (i.e. sovereign CQS 1)**, not a generic 20% floor: a third-country PSE whose sovereign would receive 0% under Art. 114 still attracts a 20% risk weight via the Table 2 lookup. This 20% floor matches the Art. 121(3) institution-grade-A short-term Table 5A entry (20% for SCRA Grade A institutions with original maturity <= 3 months) — i.e. once the sovereign linkage delivers the strongest credit-quality outcome, the PSE is treated no more favourably than an equivalent short-term Grade A institution exposure.
+
+!!! note "Why the floor matters"
+    The floor prevents a third-country PSE — even one whose sovereign attracts a 0% risk weight under Art. 114 — from inheriting the sovereign 0%. Without this floor, third-country PSEs in CQS 1 jurisdictions would be capital-free, materially undercutting the institution-grade-A Art. 121(3) 20% benchmark.
+
+!!! info "Framework delta vs CRR"
+    CRR Art. 116(5) (crr.pdf p. 115) already permitted third-country PSE treatment under paragraph 1 or 2 where competent-authority equivalence applied, with the same Table 2 sovereign-CQS structure (CQS 1 -> 20%). PS1/26 Art. 116(3A) is therefore a **clarification of the redirection mechanism** rather than a new floor: the 20%-when-sovereign-RW-is-0% outcome is structurally identical, but PS1/26 makes the cross-reference explicit by spelling out the substitution of "central government of the UK" -> "central government of the third country" and "UK public sector entities" -> "third country public sector entities". The CRR-side text is documented in the [CRR PSE spec — Sub-treatment 4](../crr/sa-risk-weights.md#sub-treatment-4-third-country-pse-equivalence-art-1165); do not edit it without re-reading CRR Art. 116(5) verbatim.
+
 !!! warning "Art. 116(4)/(5) Not Implemented"
     Neither the CRR Art. 116(4) guarantee-backed equivalence nor the CRR Art. 116(5) / PS1/26 Art. 116(3A) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A and the Art. 116(3) short-term preferential. Firms relying on guarantee-backed substitution or third-country equivalence must apply the determination upstream of the engine.
 

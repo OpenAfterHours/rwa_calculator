@@ -504,6 +504,108 @@ should compare the portfolio-weighted 100% against the portfolio-weighted
     [B31 SA spec](sa-risk-weights.md#output-floor-election-for-unrated-corporates-art-12278)
     for the full treatment including Art. 122(7) sound-processes obligation.
 
+## SA Specialised Lending in S-TREA (Art. 122A–122B, Art. 139(2B))
+
+**Art. 122A, Art. 122B, Art. 139(2B)**
+
+When an IRB firm computes the `S-TREA` leg of the output floor, exposures that
+the firm risk-weights via SL slotting under IRB (Art. 153(5)) must be re-mapped
+to the **SA specialised-lending regime** in Art. 122A–122B, because S-TREA is the
+SA-equivalent quantity (Art. 92(3A) excludes the IRB approach). This subsection
+records the rule that determines whether a given SL exposure picks up an
+ECAI-driven weight or the unrated SL ladder when it crosses into S-TREA.
+
+!!! warning "Plan-item misattribution corrected"
+    `DOCS_IMPLEMENTATION_PLAN.md` item D4.59 originally described an
+    "Art. 139(2B) SA specialised lending **exclusion** from the output floor"
+    in which IRB firms applying SA SL via Art. 122A "do not include those
+    exposures in the output floor SA-RWA calculation". **No such exclusion
+    exists in PS1/26 App 1.** Verbatim Art. 139(2B) reads (PS1/26 App 1 p. 71):
+
+    > "Paragraphs 2 and 2A do not apply for the purposes of Article 122B(1)."
+
+    Art. 139(2B) is therefore an **ECAI-rating routing rule** that constrains
+    which credit assessments can be used to invoke the rated-SL pathway in
+    Art. 122B(1); it is not a carve-out from the output floor and does not
+    remove SL exposures from the SA-RWA leg. SA SL exposures continue to enter
+    `S-TREA` in full — the only thing Art. 139(2B) governs is **which row of the
+    Art. 122A–122B table** they land on once they get there.
+
+### Mechanic
+
+Art. 122B(1) routes a rated SA SL exposure to the rated corporate ECAI table in
+Art. 122(2): "Where a relevant issue-specific credit assessment by a nominated
+ECAI is available for a specialised lending exposure, an institution shall apply
+the risk weight treatment set out in Article 122(2)" (PS1/26 App 1 p. 46). Under
+the general ECAI rules, Art. 139(2) and Art. 139(2A) would let the firm fall
+back to an issuer-level rating (or a rating on a different issue) where no
+directly applicable issue-specific rating exists. Art. 139(2B) **switches both
+fallbacks off** for the purposes of Art. 122B(1):
+
+- **Art. 139(2)** — issuer-level rating, or rating from a different issue, where
+  the exposure ranks pari passu / senior — **disapplied for SA SL**.
+- **Art. 139(2A)** — issuer-level rating that applies only to a limited class of
+  liabilities — **disapplied for SA SL**.
+- **Art. 122B(1)** therefore requires a **directly issue-specific credit
+  assessment** on the SL exposure itself before the rated corporate table is
+  used; otherwise the exposure falls to the unrated SL ladder in Art. 122B(2).
+
+### Numerical effect on S-TREA
+
+The practical consequence for IRB firms computing `S-TREA` is that more SL
+exposures end up on the **unrated SL ladder** than they would under the
+general ECAI rules:
+
+| Path | Without Art. 139(2B) (counterfactual) | With Art. 139(2B) (actual) |
+|------|----------------------------------------|-----------------------------|
+| SL exposure with issuer-level rating only, no issue-specific rating | Rated corporate table per Art. 122(2) (e.g. CQS 1 → 20%, CQS 3 → 75%) via 139(2) fallback | Unrated SL ladder per Art. 122B(2): OF/CF 100%, PF pre-op 130%, PF op 100%, high-quality op PF 80% |
+| SL exposure with directly issue-specific rating | Rated corporate table per Art. 122(2) | **Unchanged** — rated corporate table per Art. 122(2) (Art. 139(2B) does not bite) |
+| SL exposure with no rating at all | Unrated SL ladder per Art. 122B(2) | **Unchanged** — unrated SL ladder per Art. 122B(2) |
+
+Because Art. 122B(2) weights cluster at 100% (object/commodities finance and
+operational PF) and 130% (pre-operational PF), Art. 139(2B) is generally
+**conservative** — it prevents firms from using a low-CQS issuer rating to
+weight an unrated PF tranche at 20%–50% in S-TREA. The 80% high-quality
+operational PF weight under Art. 122B(4) remains available where the Art.
+122B(5) criteria are met, but it is not an ECAI fallback — it is a
+structural-quality test on the unrated path.
+
+The rule applies to both branches of the floor formula via S-TREA: it shapes
+the SA-equivalent input to `x × S-TREA + OF-ADJ` and is unaffected by the
+transitional `x` in Art. 92(5). U-TREA is computed using IRB SL slotting (Art.
+153(5)) and is not touched by Art. 139(2B).
+
+### Engine status
+
+The engine's S-TREA path runs the SA calculator over the IRB-permissioned
+population, so SL exposures classified under Art. 122A automatically pick up the
+Art. 122B(2)/(4) ladder when no rated SA path applies. The Art. 139(2B)
+constraint on the rated-SL fallback is **not currently encoded as a dedicated
+rating-eligibility check** — the engine treats the firm-supplied
+`external_cqs` as already reflecting Art. 138 / Art. 139 routing (consistent
+with how Art. 139(6) implicit-support handling is treated upstream — see
+[Art. 138(1)(g) / Art. 139(6) treatment in the SA spec](sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)).
+
+Firms must therefore either (i) pre-adjust `external_cqs` for SL exposures so
+that issuer-level / cross-issue ratings are suppressed before the S-TREA run,
+or (ii) model the SL population as unrated and rely on Art. 122B(2)/(4). This
+is a documentation gap in `IMPLEMENTATION_PLAN.md` (no dedicated code item
+filed at the time of writing) and should be tracked there as a follow-up if
+firms in scope of the output floor are observed to rely on Art. 139(2)/(2A)
+fallbacks for SL.
+
+!!! note "What this rule is not"
+    Art. 139(2B) does **not**:
+
+    - exclude SA SL exposures from S-TREA;
+    - reduce S-TREA by the SL RWA;
+    - introduce a separate add-on or carve-out term in the
+      `TREA = max{U-TREA; x × S-TREA + OF-ADJ}` formula;
+    - change the IRB slotting treatment that drives U-TREA.
+
+    It governs ECAI rating eligibility within the unchanged Art. 122B(1) entry
+    point only.
+
 ## Structural Invariants
 
 The output floor has two structural invariants verified by acceptance tests:

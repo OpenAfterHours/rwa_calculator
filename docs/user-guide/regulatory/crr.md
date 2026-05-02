@@ -143,10 +143,28 @@ CRR does not apply an output floor. IRB RWA can be significantly lower than SA e
 
 | Type | Risk Weight |
 |------|-------------|
-| Retail - Residential Mortgage (LTV ≤ 80%) | 35% |
-| Retail - Residential Mortgage (LTV > 80%) | Risk-weight varies |
 | Retail - QRRE | 75% |
 | Retail - Other | 75% |
+| Retail - Residential Mortgage (Art. 125) | Proportion-based split — see below |
+
+#### Residential Mortgage Mechanism (Art. 125)
+
+Art. 125 is a **proportion-based split**, not an LTV-band lookup. The 35% risk
+weight applies to the **part of the loan up to 80% of property value**; the
+remainder receives the counterparty's unsecured risk weight (75% for a retail
+borrower under Art. 123, or the applicable counterparty weight where the
+borrower is non-retail). Where the entire loan is within 80% of property value
+(LTV ≤ 80%), the residual is zero and 35% applies to the whole exposure.
+
+```
+secured_share = min(1.0, 0.80 / LTV)
+avg_RW = 0.35 × secured_share + counterparty_unsecured_RW × (1.0 - secured_share)
+```
+
+!!! tip "Full mechanism, qualifying conditions, and worked example"
+    See [SA Risk Weights — Residential Mortgage Exposures (CRR Art. 125)](../../specifications/crr/sa-risk-weights.md#residential-mortgage-exposures-crr-art-125)
+    for the verbatim Art. 125(2)(d) text, Art. 124(1) residual rule, the
+    Art. 125(2)(a)–(d) qualifying conditions, and a worked LTV > 80% example.
 
 ### Defaulted Exposures (SA)
 

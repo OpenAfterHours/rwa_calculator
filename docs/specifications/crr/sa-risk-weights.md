@@ -623,18 +623,67 @@ items under Art. 128.
 
 ## Residential Mortgage Exposures (CRR Art. 125)
 
-Risk weight depends on LTV ratio with a split at 80%:
+Art. 125(2)(d) applies a **proportion-based split** — the 35% risk weight is
+assigned only to the **part of the loan that does not exceed 80% of the market
+value** (or 80% of the mortgage lending value, where rigorous MLV criteria
+apply in the United Kingdom). The remainder of the loan falls back to the
+counterparty's **unsecured exposure risk weight** under Art. 124(1) (e.g. 75%
+for a retail counterparty under Art. 123, or the applicable corporate /
+institution / SME weight where the borrower is non-retail).
 
-| LTV | Treatment |
-|-----|-----------|
-| LTV ≤ 80% | 35% on whole exposure |
-| LTV > 80% | Split: 35% on portion up to 80% LTV, 75% on excess |
+!!! quote "Art. 125(2)(d) — verbatim (CRR p. 124)"
+    "unless otherwise determined under Article 124(2), the part of the loan to
+    which the 35 % risk weight is assigned does not exceed 80 % of the market
+    value of the property in question or 80 % of the mortgage lending value of
+    the property in question if rigorous criteria are in force at the time in
+    the United Kingdom for the assessment of the mortgage lending value."
 
-**Blended formula for LTV > 80%:**
+!!! quote "Art. 124(1) residual — verbatim (CRR p. 122)"
+    "The part of the exposure that exceeds the mortgage value of the immovable
+    property shall be assigned the risk weight applicable to the unsecured
+    exposures of the counterparty involved."
+
+**Mechanism — proportion-based split (mirrors Art. 126 CRE).** This is **not**
+an LTV-band table lookup: the regulation does not assign a single risk weight
+to the whole exposure based on which LTV band it falls into. Instead, the loan
+is partitioned into a *secured portion* (capped at 80% of property value) which
+receives 35%, and a *residual portion* which receives the counterparty's
+unsecured RW. Where the entire loan is within the secured portion (LTV ≤ 80%)
+the residual is zero and 35% applies to the whole exposure. The two cases below
+are therefore the same proportion-based mechanism — not two distinct bands.
+
+| Loan position vs property value | Treatment |
+|---------------------------------|-----------|
+| Entire loan ≤ 80% of property value (LTV ≤ 80%) | 35% on whole exposure (residual = 0) |
+| Loan exceeds 80% of property value (LTV > 80%) | 35% on the portion up to 80% of property value; counterparty unsecured RW on the excess |
+
+**Blended formula (general form):**
 
 ```
-avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
+secured_share = min(1.0, 0.80 / LTV)
+avg_RW = 0.35 × secured_share + counterparty_unsecured_RW × (1.0 - secured_share)
 ```
+
+For a retail mortgage borrower (counterparty unsecured RW = 75% per Art. 123),
+the formula reduces to:
+
+```
+avg_RW = 0.35 × (0.80 / LTV) + 0.75 × ((LTV - 0.80) / LTV)    (LTV > 0.80, retail counterparty)
+```
+
+**Worked example — retail residential mortgage at 90% LTV.** £200k loan
+secured on a property valued at £222.2k (LTV = 0.90). Apply the proportion-
+based split:
+
+- Secured portion = 80% × £222.2k = £177.8k → 35% RW.
+- Residual portion = £200k − £177.8k = £22.2k → 75% RW (Art. 123 retail
+  unsecured).
+- `secured_share = 0.80 / 0.90 = 0.889`.
+- `avg_RW = 0.35 × 0.889 + 0.75 × 0.111 = 0.311 + 0.0833 = 0.3944` → **39.4%**.
+- RWA = £200k × 39.4% = **£78,889**.
+
+A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
+£200k loan and produce £150k of RWA — almost twice the regulatory result.
 
 **Art. 125(2) qualifying conditions** for the 35% secured portion:
 
@@ -642,8 +691,10 @@ avg_RW = 0.35 x (0.80 / LTV) + 0.75 x ((LTV - 0.80) / LTV)
 - (b) Borrower risk does not materially depend on property/project performance —
   repayment capacity from other sources (i.e. not income-dependent)
 - (c) Art. 208 requirements and Art. 229(1) valuation rules are met
-- (d) The exposure is fully and completely secured by mortgages on residential
-  property which is or shall be occupied or let by the owner
+- (d) The 35% risk weight applies only to the part of the loan not exceeding
+  80% of market value (or 80% of MLV where the UK rigorous-MLV criteria apply).
+  The exposure must be fully and completely secured by mortgages on residential
+  property which is or shall be occupied or let by the owner (Art. 125(1)(a))
 
 !!! info "Counterparty scope (Art. 125 vs `RETAIL_MORTGAGE`)"
     Art. 125 is **not** restricted to retail individuals — any exposure secured

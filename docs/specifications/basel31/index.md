@@ -15,6 +15,7 @@ of the Basel III final reforms. Where rules are unchanged from CRR, the correspo
 | Specification | Description | Regulatory Reference | Test Group |
 |--------------|-------------|---------------------|------------|
 | [SA Risk Weights](sa-risk-weights.md) | Revised SA risk weights: ECRA/SCRA, corporate sub-categories, RE loan-splitting, SA specialised lending | Art. 112–134 | B31-A |
+| [IRB Approach (scope and roll-out classes)](irb-approach.md) | Art. 147 / 147A / 147B / 147C structure: eight roll-out classes, non-Retail AIRB Modelling category, exposure-class mapping | Art. 147–148 | — |
 | [Foundation IRB](firb-calculation.md) | Reduced senior LGD (40%), higher PD floor (0.05%), covered bond LGD, 1.06 removal | Art. 153–163 | B31-B |
 | [Advanced IRB](airb-calculation.md) | LGD floors, post-model adjustments, CCF floor, double default removal | Art. 153–154, 161, 164, 166D | B31-C |
 | [Credit Risk Mitigation](credit-risk-mitigation.md) | Revised 5-band haircut tables, equity haircuts, IRB parameter substitution | Art. 191A–241 | B31-D, B31-D7 |

@@ -262,20 +262,30 @@ Gross_RWA = £5,000,000
 # Benefit: 80% reduction
 ```
 
-### Maturity Mismatch
+### Maturity Mismatch (CRR Art. 237–239)
 
-When protection maturity < exposure maturity:
+When protection residual maturity < exposure residual maturity, the credit
+protection is either disallowed entirely (Art. 237 eligibility gates) or
+its value is scaled down by the Art. 239 adjustment factor.
 
 ```python
-# Minimum protection maturity: 3 months (0.25 years)
+# Maturity inputs (CRR Art. 238 — measurement of T and t):
+#   t = residual maturity of the credit protection (years)
+#   T = min(residual exposure maturity, 5)  # 5-year cap per Art. 238
+# The 5-year cap on T is the rule that distinguishes the maturity-mismatch
+# treatment from the IRB maturity adjustment in Art. 162.
 t = max(0.25, protection_residual_maturity)
-T = min(max(0.25, exposure_residual_maturity), 5.0)  # Capped at 5 years
+T = min(max(0.25, exposure_residual_maturity), 5.0)  # Art. 238: cap T at 5 years
 
-# Adjustment factor
+# Adjustment factor (CRR Art. 239(2) for funded, Art. 239(3) for unfunded):
+#   funded:    CVAM = CVA × (t − 0.25) / (T − 0.25)
+#   unfunded:  GA   = G*  × (t − 0.25) / (T − 0.25)
+# Note: the multiplier is identical between Art. 239(2) and (3); only the
+# protection input (CVA vs G*) differs.
 if t >= T:
     adjustment = 1.0
 elif t < 0.25:
-    adjustment = 0.0  # Below minimum — no protection
+    adjustment = 0.0  # Art. 237(1) — below 3-month floor, protection ineligible
 else:
     adjustment = (t - 0.25) / (T - 0.25)
 
@@ -284,14 +294,26 @@ Adjusted_Protection = Protection × adjustment
 ```
 
 **Example:**
-- Exposure maturity: 5 years
-- Guarantee maturity: 3 years
+- Exposure residual maturity: 5 years (so T = min(5, 5) = 5)
+- Guarantee residual maturity: 3 years (so t = 3)
 
 ```python
 adjustment = (3 - 0.25) / (5 - 0.25) = 2.75 / 4.75 = 0.579
 
-# £4m guarantee provides £2.32m effective protection
+# £4m guarantee provides £2.32m effective protection (Art. 239(3) GA)
 ```
+
+!!! info "Cap matters when exposure maturity > 5 years"
+    For an exposure with residual maturity of 7 years and a guarantee with
+    residual maturity of 5 years, `T` is capped at 5 (not 7), so
+    `adjustment = (5 − 0.25) / (5 − 0.25) = 1.0` — i.e. the guarantee is
+    treated as fully matched. Without the Art. 238 cap the same case
+    would scale the guarantee down to `(5 − 0.25) / (7 − 0.25) ≈ 0.704`.
+
+> **Spec:** see
+> [CRR CRM Specification — Maturity Mismatch (Art. 237–239)](../../specifications/crr/credit-risk-mitigation.md#maturity-mismatch-crr-art-237-239)
+> for the full eligibility gates, the Art. 238(1A) list of in-scope CRM
+> methods, and the Basel 3.1 (PS1/26) carry-forward note.
 
 ## On-Balance Sheet Netting (CRR Art. 195)
 
@@ -615,7 +637,7 @@ provision = {
 | Financial collateral | Art. 197-200 | CRE22.35-70 |
 | Haircuts | Art. 224-227 | CRE22.50-55 |
 | Guarantees | Art. 213-216 | CRE22.71-85 |
-| Maturity mismatch | Art. 238-239 | CRE22.90-95 |
+| Maturity mismatch | Art. 237–239 | CRE22.90-95 |
 | Physical collateral | Art. 199 | CRE22.100-120 |
 | Overcollateralisation | Art. 230 | CRE32.9-12 |
 

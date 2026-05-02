@@ -535,8 +535,141 @@ CCR exposures use IMM / SFT VaR / FCCM / FCSM (SA only).
   191A(3) consistency rule (same method across the same type of unfunded protection).
 
 **Part 4 — Unfunded CP covered by funded CP:**
-Where unfunded protection is itself collateralised, funded CRM is applied to the unfunded
-protection first, then the adjusted unfunded protection is applied to the original exposure.
+Where unfunded protection is itself collateralised, funded CRM may be applied to the
+unfunded protection first (the "look-through"), then the adjusted unfunded protection
+is applied to the original exposure. Detailed mechanics in
+[Look-Through for Unfunded Protection Backed by Funded Protection](#look-through-for-unfunded-protection-backed-by-funded-protection-art-191a2e-f)
+below.
+
+### Look-Through for Unfunded Protection Backed by Funded Protection (Art. 191A(2)(e), (f))
+
+PS1/26 Art. 191A(2)(e) introduces an **explicit "look-through" optionality** for the
+case where an institution's exposure is covered by **unfunded credit protection** (a
+guarantee or credit derivative) and that unfunded protection is **itself covered by
+funded credit protection** posted by the unfunded-protection provider — for example,
+a guarantor that has pledged collateral to the lending institution to back the
+guarantee it has written. Verified against `ps126app1.pdf` p.168 (Art. 191A(2)(e),
+(f), 1 January 2027 effective text).
+
+#### Verbatim Text — Art. 191A(2)(e) and (f)
+
+> **(e)** where an institution has an exposure that is covered by unfunded credit
+> protection that, in turn, is covered by funded credit protection and such
+> institution chooses to take into account either (i) only the funded credit
+> protection or (ii) both the unfunded credit protection and the funded credit
+> protection, then the institution shall take into account the applicable credit
+> protection or credit protections in an appropriate manner that is consistent
+> with the decision tree in Part 4 of Appendix 1 (and, to the extent referenced
+> therein, the decision trees in Parts 1 to 3 of Appendix 1), and in a way that
+> does not double count the effects of the credit protection. Notwithstanding
+> this point (e), such institution may choose to take into account only the
+> unfunded credit protection in accordance with point (c) and not the funded
+> credit protection; and
+>
+> **(f)** to the extent an institution chooses to take into account funded
+> credit protection under point (e), references to the 'borrower' or the
+> 'obligor' in this Part (in the context of unfunded credit protection which is
+> covered by funded credit protection) shall be deemed to refer to either:
+>
+>   - **(i)** only the provider of the unfunded protection;
+>   - **(ii)** one of the borrower/obligor or the provider of the unfunded
+>     credit protection; or
+>   - **(iii)** both the obligor and the provider of the unfunded credit
+>     protection,
+>
+> in each case where appropriate from a prudential point of view to reflect the
+> nature of the credit protection arrangement and the risks related to that
+> arrangement.
+
+#### Plain-English Reading
+
+The institution has a **choice** of three treatments for the
+exposure → guarantor → collateral chain (Art. 191A(2)(e), final sentence:
+*"may choose"*):
+
+| Election | What is recognised | Decision-tree route |
+|----------|--------------------|---------------------|
+| **(i) Funded only** | The collateral the guarantor has posted is treated as if it directly secured the obligor exposure; the guarantee is ignored. | Part 4 of Appendix 1, then Parts 1–2 (funded) |
+| **(ii) Unfunded + funded** | Both protections are recognised, with the funded protection treated as collateralising the unfunded protection (i.e. the guarantor's exposure is reduced by the collateral) before the unfunded protection is substituted onto the original exposure. | Part 4, then Parts 1–3 |
+| **Default fallback** | Treat only the unfunded protection per the ordinary Part 3 unfunded path; ignore the funded leg of the guarantor's collateral. | Part 3 only (no look-through) |
+
+The Art. 191A(2)(f) "borrower deeming" rule is a definitional clean-up:
+where the funded protection sits between the guarantor and the institution, the
+ordinary Part 2 funded-CRM articles (which speak of "obligor" / "borrower")
+have to be re-read with the **guarantor** standing in as the obligor of the
+funded leg — because the collateral is securing a claim against the guarantor,
+not directly against the original obligor. The (f)(i)–(iii) options give the
+firm flexibility to reflect either party (or both) as the relevant counterparty
+in eligibility tests (e.g. wrong-way-risk checks under Art. 194), depending on
+which assignment is "appropriate from a prudential point of view".
+
+#### CRR Comparison — Wholly New Under PS1/26
+
+CRR Art. 108 (the predecessor of Art. 191A) was a one-paragraph cross-reference
+to the CRM techniques in Chapter 4 of Title II of Part Three. It contained
+**no equivalent of (2)(e) / (2)(f)**: the look-through mechanic for
+unfunded-backed-by-funded protection is not enumerated as an explicit option
+anywhere in the CRR text. Under CRR a firm holding a guarantee secured by
+guarantor-posted collateral could in practice rely on the same economic
+substance, but the route was via the general "no double-counting" obligation
+(CRR Art. 193(2)) plus per-form CRM application — not a named optionality with
+the borrower-deeming flexibility set out in PS1/26 Art. 191A(2)(f).
+
+| Feature | CRR (pre-1 Jan 2027) | PS1/26 Art. 191A(2)(e), (f) |
+|---------|----------------------|------------------------------|
+| Explicit look-through option | No standalone provision | **Yes — Art. 191A(2)(e)** |
+| Recognise funded only (ignore guarantee) | Implicit; not a named election | **Explicit (Art. 191A(2)(e)(i))** |
+| Recognise unfunded + funded jointly | Implicit; subject to general no-double-count rule | **Explicit (Art. 191A(2)(e)(ii))** |
+| Borrower-deeming rule (i)–(iii) | None | **Yes — Art. 191A(2)(f)** |
+| Decision-tree anchor | None | Part 4 of Appendix 1 |
+
+This is a substantive widening of optionality: PS1/26 lets a firm reach the
+funded protection directly (skipping the guarantee), which under PSM (Art. 236)
+or RWSM (Art. 235) can be the more capital-efficient route when the guarantor's
+PD / risk weight is worse than the substituted CRM benefit from the underlying
+collateral.
+
+#### Cross-References
+
+- The funded leg, once "looked through", is run through the ordinary funded
+  CRM machinery: see [FCSM Under Basel 3.1 (Art. 222)](#fcsm-under-basel-31-art-222),
+  [FCCM E\* Formula (Art. 223(5))](#fccm-e-formula-art-2235), and the
+  Foundation Collateral Method documented under
+  [Supervisory LGD (Art. 161)](firb-calculation.md#supervisory-lgd-art-161) /
+  [Collateral-Type LGDS Values](firb-calculation.md#collateral-type-lgds-values-art-230-cre329-12).
+- The unfunded leg, where retained alongside the funded leg, follows
+  [IRB Parameter Substitution (B31-D7)](#irb-parameter-substitution-b31-d7)
+  (PSM, Art. 236) or the SA Risk-Weight Substitution Method (Art. 235), per
+  the [Method Selection by Approach](#method-selection-by-approach) table.
+- The no-double-counting obligation is anchored in Art. 191A(2)(d) /
+  Art. 193(2); see [Anti-Double-Counting and Consistency Rules](#anti-double-counting-and-consistency-rules)
+  immediately below.
+- Maturity-mismatch handling on each leg is governed by
+  [Art. 237–239](#maturity-mismatch-art-237-239) — the GA / CVAM
+  adjustment is computed per leg before the look-through composes the two.
+
+#### Implementation Status
+
+!!! warning "Not Yet Implemented"
+    The Art. 191A(2)(e) / (f) look-through is not modelled by the engine. The
+    CRM processor (`engine/crm/processor.py`) treats funded and unfunded
+    protection as covering distinct portions of the original exposure
+    (the no-double-counting rule of Art. 191A(2)(d)) and does not provide an
+    election to recognise guarantor-posted collateral *through* the guarantee
+    as if it secured the original exposure directly. Firms with collateralised
+    guarantees will currently get either the unfunded substitution
+    (Art. 235 / 236) **or** unrelated funded collateral on the obligor leg —
+    not the (e)(i) "funded only" or (e)(ii) "both" combinations. The
+    `borrower`-deeming flexibility of Art. 191A(2)(f) is also not surfaced.
+
+    This sits in the same family as IMPLEMENTATION_PLAN.md item **P1.30**
+    (CRM method selection decision tree under Art. 191A), which currently
+    enumerates sub-items (a)–(f) but does **not** carry a dedicated entry for
+    the (2)(e) / (2)(f) look-through option. The orchestrator should add this
+    as a **new P-coded item** referencing PS1/26 Art. 191A(2)(e), (f) and
+    Part 4 of Appendix 1; it is not the same gap as P1.30(e) (which is about
+    Art. 234 *tranched* coverage on a single exposure, not Art. 191A(2)(e)
+    look-through across two protection layers).
 
 ### Anti-Double-Counting and Consistency Rules
 

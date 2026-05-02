@@ -145,6 +145,9 @@ Under certain conditions, supervisory haircuts may be set to **0%** for repo-sty
 
 - Both the exposure and collateral are **cash or CQS 1 government bonds**
 - The transaction is subject to **daily margin maintenance** with a one-day margin period of risk
+- The close-out period from the last MTM to the liquidation of the collateral
+  following a re-margining failure is **no more than 4 business days** (Art. 227(2)(d) —
+  see [the verbatim text and FCSM cross-application](#art-2272d-4-business-day-close-out-window))
 - In the event of a counterparty failure to deliver margin, the transaction can be **terminated and collateral liquidated promptly**
 - Settlement is via a **delivery-versus-payment** or equivalent mechanism
 - The documentation is **standard market documentation** for the repo/SFT transaction type
@@ -717,6 +720,58 @@ meet the criteria in Art. 227, the collateralised portion receives:
 Art. 222(4) governs SFTs only — it does not extend to non-SFT transactions or to OTC
 derivative collateralisation (those fall under paragraphs 5 and 6 respectively).
 
+#### Art. 227(2)(a)–(h) — Preconditions for the FCSM SFT Carve-Out
+
+Art. 222(4) is gated by the eight conditions in Art. 227(2). All eight must be met
+for the 0% / 10% RW to apply; otherwise the SFT falls back to the Art. 222(3) 20%
+RW floor. The conditions cover (a) eligible cash / 0%-RW sovereign collateral, (b)
+single-currency exposure and collateral, (c) one-day maturity or daily MTM /
+re-margining, (d) the **4-business-day close-out window** detailed below, (e) a
+proven settlement system, (f) standard market documentation, (g) immediate
+terminability on default, and (h) core-market-participant counterparty status (the
+Art. 227(3) list — sovereigns/CBs eligible for 0% RW, institutions, investment
+firms, certain insurers, regulated CIUs, regulated pension funds, recognised
+clearing organisations).
+
+##### Art. 227(2)(d) — 4-business-day close-out window
+
+The close-out window in (d) is the operational tail risk gate. CRR
+Art. 227(2)(d) (verbatim, `docs/assets/crr.pdf` p. 226):
+
+!!! quote "CRR Art. 227(2)(d)"
+    *"the time between the last marking-to-market before a failure to re-margin by
+    the counterparty and the liquidation of the collateral is no more than four
+    business days;"*
+
+This is an **eligibility precondition** for the Art. 222(4) 0% / 10% RW — not a
+haircut-style adjustment. The four business days are measured from the last
+successful MTM (i.e., the last point at which the institution and counterparty
+agreed the value of the collateral) to the actual liquidation of the collateral
+following the counterparty's re-margining failure. If contractual or operational
+arrangements cannot demonstrate close-out within four business days, condition
+(d) fails, all of Art. 227(2) fails, and the SFT cannot use the FCSM SFT carve-out
+— it falls back to the Art. 222(3) 20% RW floor.
+
+The same Art. 227(2)(d) gate also governs the FCCM 0% volatility adjustment under
+Art. 227(1) (the title paragraph of Art. 227 is "Conditions for applying a 0%
+volatility adjustment under the Financial Collateral Comprehensive Method"). Both
+methods inherit the four-business-day test from the same paragraph; the difference
+is what the test gates — under FCSM it gates the RW substitution at Art. 222(4),
+under FCCM it gates the 0% volatility adjustment at Art. 227(1) replacing the
+Art. 224 haircuts.
+
+!!! info "B31 alignment — close-out window unchanged, condition list expanded"
+    PS1/26 Art. 227 (effective 1 January 2027) carries forward the four-business-day
+    close-out window unchanged at PS1/26 Art. 227(2)(d) (`docs/assets/ps126app1.pdf`
+    p. 207, identical wording: *"the time between the last marking-to-market before
+    a failure to re-margin by the counterparty and the liquidation of the collateral
+    is no more than four business days"*). PS1/26 expands the condition list from
+    (a)–(h) to (a)–(i) by adding a new (i) requiring an *"unfettered, enforceable
+    right immediately to seize and liquidate the collateral"* on default, and adds
+    a new paragraph 4 extending the 0% volatility adjustment treatment to master
+    netting agreements only when all transactions in the netting set meet
+    paragraph 2. The four-business-day test in (d) is untouched.
+
 ### Art. 222(6) — 0% Floor for Same-Currency Cash or 0%-RW Sovereign Debt (non-SFT, non-derivative)
 
 For **transactions other than those referred to in paragraphs 4 and 5**, institutions
@@ -797,6 +852,16 @@ path is reserved for firms that elect it under Art. 148(1) / Art. 150(1).
     See [B31 FCSM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222)
     for the corresponding paragraph structure (the Art. 222(3)/(4)/(6) three-tier
     split carries forward unchanged).
+
+!!! note "Change log — Art. 227(2)(d) 4-business-day close-out window documented (2026-05-02, D4.49)"
+    Added the
+    [Art. 227(2)(a)–(h) precondition list and the verbatim Art. 227(2)(d)
+    four-business-day close-out window](#art-2272ah-preconditions-for-the-fcsm-sft-carve-out)
+    that gates the Art. 222(4) FCSM SFT carve-out. The same paragraph governs the
+    FCCM 0% volatility adjustment under Art. 227(1). PS1/26 carries the test
+    forward unchanged at PS1/26 Art. 227(2)(d); the only PS1/26 change to Art. 227
+    is a new condition (i) (unfettered enforceable right to seize and liquidate)
+    and a new paragraph 4 covering master netting agreements.
 
 ## Financial Collateral Comprehensive Method — FCCM (Art. 223)
 

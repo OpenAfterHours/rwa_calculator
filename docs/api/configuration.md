@@ -80,6 +80,7 @@ class CalculationConfig:
         reporting_date: date,
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         eur_gbp_rate: Decimal = Decimal("0.8732"),
+        enable_double_default: bool = False,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
     ) -> CalculationConfig:
@@ -93,12 +94,16 @@ class CalculationConfig:
         - Infrastructure supporting factor (0.75)
         - No output floor
         - 1.06 scaling factor for IRB K
+        - Optional double-default treatment (Art. 153(3), 202)
 
         Args:
             reporting_date: As-of date for calculation.
             permission_mode: STANDARDISED (all SA) or IRB (model permissions
                 drive routing).
             eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
+            enable_double_default: Enable CRR Art. 153(3) double-default
+                treatment for IRB exposures with eligible unfunded credit
+                protection (Art. 202 / Art. 217). Default False.
             collect_engine: Polars collection engine.
             spill_dir: Directory for temp files during streaming (None = system temp).
 
@@ -362,6 +367,55 @@ class PermissionMode(StrEnum):
     AIRB, or slotting. Without it, the pipeline falls back to SA for all
     exposures and emits a warning. See
     [Input Schemas — Model Permissions](../data-model/input-schemas.md#model-permissions-schema).
+
+### `enable_double_default`
+
+| Field | Type | Default | Defined on |
+|-------|------|---------|-----------|
+| `enable_double_default` | `bool` | `False` | `CalculationConfig` (`contracts/config.py:832`) |
+
+Enables the CRR Art. 153(3) double-default risk-weight formula for IRB
+exposures covered by eligible unfunded credit protection. When `True`,
+the protected portion of an IRB exposure attracts the scaled
+double-default capital charge
+
+```
+K_dd = K_obligor × (0.15 + 160 × PD_guarantor)
+```
+
+instead of the standard guarantee-substitution treatment. Eligibility for
+the protection provider follows CRR Art. 202 (institutions, investment
+firms, insurance undertakings, export credit agencies meeting the CQS
+threshold) and the operational requirements of Art. 217.
+
+!!! warning "CRR-only — removed under Basel 3.1"
+    PRA PS1/26 blanks Art. 153(3), Art. 202, and Art. 217. Setting
+    `enable_double_default=True` only takes effect under the CRR
+    framework; under `CalculationConfig.basel_3_1(...)` the flag is
+    inert because the double-default treatment is removed. See the
+    [A-IRB Specification — double-default removal](../specifications/basel31/airb-calculation.md#double-default-removal).
+
+The factory method `CalculationConfig.crr()` accepts this knob directly:
+
+```python
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
+
+config = CalculationConfig.crr(
+    reporting_date=date(2026, 12, 31),
+    permission_mode=PermissionMode.IRB,
+    enable_double_default=True,  # Art. 153(3) double-default treatment
+)
+
+assert config.enable_double_default is True
+```
+
+For the regulatory derivation of the formula, eligibility criteria, and a
+worked example, see:
+
+- [User guide — CRM Double Default](../user-guide/methodology/crm.md#double-default-crr-only)
+- [CRR Specification — Credit Risk Mitigation](../specifications/crr/credit-risk-mitigation.md)
 
 ## Usage Examples
 

@@ -710,12 +710,34 @@ to the collateral instrument (Art. 222(3), first sub-paragraph), subject to a mi
 
 ### Art. 222(4) — 0% / 10% Floor for SFTs (Art. 227 Criteria)
 
+CRR Art. 222(4) verbatim (`docs/assets/crr.pdf` p. 217):
+
+!!! quote "CRR Art. 222(4)"
+    *"Institutions shall assign a risk weight of 0 % to the collateralised portion of
+    the exposure arising from repurchase transaction and securities lending or borrowing
+    transactions which fulfil the criteria in Article 227. Where the counterparty to the
+    transaction is not a core market participant, institutions shall assign a risk weight
+    of 10 %."*
+
 For **repurchase transactions and securities lending or borrowing transactions** that
 meet the criteria in Art. 227, the collateralised portion receives:
 
-- **0%** RW where the counterparty is a **core market participant** (as defined in
-  Art. 227);
-- **10%** RW where the counterparty is not a core market participant.
+- **0%** RW where the counterparty is a **core market participant** (as enumerated in
+  Art. 227(3) — sovereigns / central banks eligible for 0% RW under Art. 114, supervised
+  institutions and investment firms, certain insurance undertakings, regulated CIUs
+  subject to capital requirements, regulated pension funds, and recognised clearing
+  organisations);
+- **10%** RW where the counterparty is **not** a core market participant — that is, the
+  counterparty fails the Art. 227(3) enumeration even though all other Art. 227(2)
+  preconditions are met. The 10% reflects the higher counterparty-credit-risk tail under
+  a re-margining failure when the obligor sits outside the closed circle of regulated
+  market participants who underpin the 0% treatment.
+
+Art. 222(4) is a **risk-weight floor**, not a haircut. It substitutes for the obligor
+risk weight on the collateralised portion of the SFT — it does not modify the collateral's
+market value. Volatility haircuts are an FCCM mechanic (Art. 223–227) that does not exist
+under FCSM; FCSM uses the unadjusted market value of the collateral (Art. 222(2)) and
+expresses risk mitigation purely through the substituted RW.
 
 Art. 222(4) governs SFTs only — it does not extend to non-SFT transactions or to OTC
 derivative collateralisation (those fall under paragraphs 5 and 6 respectively).
@@ -862,6 +884,17 @@ path is reserved for firms that elect it under Art. 148(1) / Art. 150(1).
     forward unchanged at PS1/26 Art. 227(2)(d); the only PS1/26 change to Art. 227
     is a new condition (i) (unfettered enforceable right to seize and liquidate)
     and a new paragraph 4 covering master netting agreements.
+
+!!! note "Change log — Art. 222(4) verbatim text and 10% non-core-market rationale (2026-05-03, D4.54)"
+    Added the verbatim CRR Art. 222(4) quote and a clarifying note that Art. 222(4) is a
+    **risk-weight floor**, not a haircut. The 10% RW for non-core-market-participant SFT
+    counterparties was already stated in this section, but the plan item flagged it as
+    "haircut floor" terminology. FCSM has no haircut mechanic — collateral is taken at
+    unadjusted market value (Art. 222(2)) and risk mitigation is expressed through RW
+    substitution. The 10% reflects the residual counterparty tail risk when the obligor
+    sits outside the Art. 227(3) closed list of regulated market participants. PS1/26
+    carries Art. 222(4) forward unchanged — see the
+    [Basel 3.1 FCSM spec](../basel31/credit-risk-mitigation.md#fcsm-under-basel-31-art-222).
 
 ## Financial Collateral Comprehensive Method — FCCM (Art. 223)
 

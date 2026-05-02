@@ -56,7 +56,7 @@ This page documents the authoritative schemas for all input data files required 
 | `local_currency` | `String` | No | Counterparty's domestic currency — used in conjunction with `borrower_income_currency` for the currency-mismatch test |
 | `sovereign_cqs` | `Int32` | No | External CQS for the counterparty's sovereign — feeds the institution sovereign floor (CRR Art. 121(6) / Art. 119(2)) and SCRA derivations |
 | `institution_cqs` | `Int8` | No | External CQS for the counterparty when treated as an institution — used by ECRA institution risk weights (CRR Art. 120 Table 3 / PS1/26 Table 3) |
-| `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21) |
+| `scra_grade` | `String` | No | SCRA grade for unrated institutions: `"A"`, `"A_ENHANCED"`, `"B"`, `"C"` (Basel 3.1 CRE20.16-21 / PRA PS1/26 Art. 121). Use `"A_ENHANCED"` when the counterparty satisfies the Art. 121(5) quantitative thresholds (CET1 ratio &ge; 14% **and** leverage ratio &ge; 5%) — yields a 30% RW (>3m) vs the standard Grade A 40% (>3m) / 20% (&le;3m) weights. |
 | `is_investment_grade` | `Boolean` | No | Publicly traded + investment grade → 65% SA RW (Basel 3.1 CRE20.47) |
 
 ### Entity Type: The Single Source of Truth

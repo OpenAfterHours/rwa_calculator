@@ -35,8 +35,12 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.errors import CalculationError
-from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA
+from rwa_calc.data.column_spec import (
+    ColumnSpec,
+    apply_boolean_column_defaults,
+    ensure_columns,
+)
+from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, FACILITY_SCHEMA
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
@@ -670,6 +674,16 @@ class HierarchyResolver:
         if not has_required_columns(facilities, {"facility_reference", "limit"}):
             return self._empty_facility_undrawn_frame()
 
+        # Defensive idempotent normalisation: the loader path applies these via
+        # ``enforce_schema``; unit-test callers may invoke this method directly
+        # with hand-built frames missing optional Boolean columns. ``ensure_columns``
+        # synthesises any missing column with its schema default;
+        # ``apply_boolean_column_defaults`` then fills present-but-null Boolean
+        # cells. After this pair, ``committed`` / ``is_obs_commitment`` /
+        # ``is_revolving`` / ``is_qrre_transactor`` are guaranteed non-null.
+        facilities = ensure_columns(facilities, FACILITY_SCHEMA)
+        facilities = apply_boolean_column_defaults(facilities, FACILITY_SCHEMA)
+
         # Defensive empty mapping frame so downstream joins are well-typed even
         # when the caller passes a malformed facility_mappings.
         if not has_required_columns(
@@ -752,15 +766,13 @@ class HierarchyResolver:
         # Uncommitted (unconditionally cancellable) facilities generate no synthetic
         # undrawn exposure: the bank can refuse to lend, so no commitment EAD/RWA is
         # held against the unused headroom. Loans/contingents already mapped to the
-        # facility are unaffected — they remain independent exposure rows. Missing
-        # `committed` column or null values default to True (committed), matching
-        # FACILITY_SCHEMA's default.
-        committed_expr = (
-            pl.col("committed").fill_null(True) if "committed" in facility_cols else pl.lit(True)
-        )
-        return facility_with_drawn.filter((pl.col("undrawn_amount") > 0) & committed_expr).select(
-            select_exprs
-        )
+        # facility are unaffected — they remain independent exposure rows. The
+        # ``committed`` column is loader-defaulted to True via
+        # ``apply_boolean_column_defaults`` (data/column_spec.py), so we can read
+        # it directly without a defensive fill_null.
+        return facility_with_drawn.filter(
+            (pl.col("undrawn_amount") > 0) & pl.col("committed")
+        ).select(select_exprs)
 
     def _empty_facility_undrawn_frame(self) -> pl.LazyFrame:
         """Empty LazyFrame matching the canonical facility-undrawn output schema.
@@ -1108,12 +1120,10 @@ class HierarchyResolver:
             ),
             # CRR Art. 166(8)(d): facility undrawn is a credit line by construction,
             # so default True. An explicit False override flips the row to the
-            # Art. 166(10) issued-item bucket (50% MR / 20% MLR).
-            (
-                pl.col("is_obs_commitment").fill_null(True)
-                if "is_obs_commitment" in facility_cols
-                else pl.lit(True).alias("is_obs_commitment")
-            ),
+            # Art. 166(10) issued-item bucket (50% MR / 20% MLR). The column is
+            # synthesised to True and null-filled by the entry-point normalisation,
+            # so we can read it directly here.
+            pl.col("is_obs_commitment"),
             (
                 pl.col("is_payroll_loan").fill_null(False)
                 if "is_payroll_loan" in facility_cols
@@ -1140,17 +1150,11 @@ class HierarchyResolver:
                 else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
             ),
             pl.lit(False).alias("has_netting_agreement"),
-            # QRRE classification fields (CRR Art. 147(5), CRE30.55)
-            (
-                pl.col("is_revolving").fill_null(False)
-                if "is_revolving" in facility_cols
-                else pl.lit(False).alias("is_revolving")
-            ),
-            (
-                pl.col("is_qrre_transactor").fill_null(False)
-                if "is_qrre_transactor" in facility_cols
-                else pl.lit(False).alias("is_qrre_transactor")
-            ),
+            # QRRE classification fields (CRR Art. 147(5), CRE30.55).
+            # Both columns are synthesised to False and null-filled by the
+            # entry-point normalisation, so we can read them directly.
+            pl.col("is_revolving"),
+            pl.col("is_qrre_transactor"),
             (
                 pl.col("limit").alias("facility_limit")
                 if "limit" in facility_cols
@@ -1300,10 +1304,9 @@ class HierarchyResolver:
             sub_select.append(pl.col("limit").alias("_sub_limit"))
         else:
             sub_select.append(pl.lit(0.0).alias("_sub_limit"))
-        if "committed" in fac_cols:
-            sub_select.append(pl.col("committed").fill_null(True).alias("_sub_committed"))
-        else:
-            sub_select.append(pl.lit(True).alias("_sub_committed"))
+        # `committed` is synthesised+null-filled at the entry point of
+        # `_calculate_facility_undrawn`, so we can read it directly here.
+        sub_select.append(pl.col("committed").alias("_sub_committed"))
 
         sub_facilities = facilities.select(sub_select)
 

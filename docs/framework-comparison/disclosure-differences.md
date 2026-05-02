@@ -17,6 +17,8 @@ summarises the key differences. For complete column and row definitions, see the
 | **CR7** | UK CR7 | UKB CR7 | Credit derivatives effect on RWEA |
 | **CR7-A** | UK CR7-A | UKB CR7-A | Extent of CRM techniques (IRB) |
 | **CR8** | UK CR8 | UKB CR8 | RWEA flow statements (IRB) |
+| **CR9** | UK CR9 | UKB CR9 | IRB back-testing of PD per exposure class |
+| **CR9.1** | UK CR9.1 | UKB CR9.1 | IRB back-testing where Art. 180(1)(f) ECAI mapping applies |
 | **CR10** | UK CR10 | UKB CR10 | Slotting approach exposures |
 
 ---
@@ -217,6 +219,99 @@ paragraphs 3–6 and column-reference table, pp. 7–9.
 |--------|-------------|
 | **No structural changes** | Same 9-row flow statement (opening, 7 drivers, closing) |
 | **Changed** | RWEA no longer includes supporting factor adjustments |
+
+---
+
+## CR9 — IRB Back-Testing of PD per Exposure Class
+
+UKB CR9 discloses, per exposure class, the realised one-year default rates against
+the PDs assigned at the start of the period. The template is **fixed** (column
+structure unchanged from the legacy CRR template), but several column definitions
+now incorporate the new Basel 3.1 PD input floors and exposure-level RW floors.
+
+### General Reporting Rules
+
+- One template **per exposure class**, **per approach** (F-IRB and A-IRB disclosed
+  as two separate sets — Annex XXII para. 12).
+- F-IRB sub-templates: institutions; corporates (specialised lending; financial
+  corporates and large corporates; other general corporates SMEs; other general
+  corporates non-SMEs); total.
+- A-IRB sub-templates: corporates (SL; other general corporates SME/non-SME); retail
+  (residential RE SME/non-SME; commercial RE SME/non-SME; QRRE; other SME; other
+  non-SME); total.
+- **Excludes** counterparty credit risk exposures, securitisation positions, other
+  non-credit-obligation assets, and equity exposures (Annex XXII para. 15).
+- Defaulted exposures are placed in the **PD = 100%** bucket of the fixed PD range.
+
+### Column Definitions (UKB CR9, cols a–h)
+
+Definitions below are taken verbatim from PRA PS1/26 Annex XXII (Pillar III IRB
+disclosure instructions), pages 18–22.
+
+| Col | Column | Definition (UKB CR9) |
+|-----|--------|----------------------|
+| **a** | Exposure classes | Designation of the F-IRB / A-IRB exposure class or sub-class for which a separate template is being disclosed (corporates / SL / financial-and-large corporates / SME / non-SME, retail RE SME/non-SME, retail commercial RE, QRRE, other retail). Institutions disclose **one template per class** plus a "Total" row. |
+| **b** | PD range | **Fixed PD range** which shall not be altered. Exposures are allocated to a bucket based on the **PD estimated at the beginning of the disclosure period** for each obligor (without considering CRM substitution effects). All defaulted exposures fall into the PD = 100% bucket. |
+| **c** | Number of obligors at the end of the previous year | Number of separately rated legal entities or obligors allocated to each PD bucket at the **end of the previous year**, regardless of the number of loans or exposures granted. Joint obligors are treated the same as for PD calibration. Where different exposures to the same obligor are separately rated (e.g. retail with facility-level default per Art. 178(1) last sentence, or different obligor grades per Art. 172(1)(e) second sentence), they are counted **separately**. |
+| **d** | Of which: number of obligors that defaulted during the year | **Subset of column c** representing the number of obligors which defaulted during the year preceding the disclosure date. Default is determined per Art. 178 IRB. Each defaulted obligor is counted **only once** in the numerator and denominator of the one-year default rate, even if it defaulted more than once during the period. |
+| **e** | Observed average default rate (%) | **Arithmetic average of one-year default rates** (as defined in CRR Art. 4(1)(78)) observed within the available dataset. Denominator: number of non-defaulted obligors with any credit obligation observed at the **beginning of the one-year observation period** (on-BS principal/interest/fees plus off-BS items including issued guarantees). Numerator: those obligors that had **at least one default event** during the year. Institutions choose between **overlapping** and **non-overlapping** one-year time windows. |
+| **f** | Exposure-weighted average PD (%) | Same value as **column f of UKB CR6**. For all exposures in each PD bucket, the average PD estimate of each obligor weighted by the **exposure value post-CCF and CRM** (col e of UKB CR6). **PD input floors** per Art. 160(1) and 163(1) IRB **and exposure-level risk weight floors** per Art. 160(4) (referred to in Art. 161(3)) and Art. 163(4) (referred to in Art. 164(5)) **shall be taken into account**. |
+| **g** | Average PD at the disclosure date (%) | **Arithmetic average** of PD at the beginning of the disclosure period for the obligors falling within the bucket and counted in **column d** (i.e. weighted by **number of obligors**, not by exposure). **PD input floors shall be taken into account**. |
+| **h** | Average historical annual default rate (%) | **Simple average of the annual default rate of the five most recent years** (obligors at the beginning of each year that defaulted during that year ÷ total number of obligors at the beginning of the year). Institutions may use a **longer historical period** consistent with their actual risk management practices, in which case they shall explain and clarify this in the accompanying narrative. |
+
+Source: PRA PS1/26 Annex XXII — Credit Risk IRB Disclosure Instructions
+(`docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf`),
+paragraphs 12–15 and column-reference table, pp. 18–22.
+
+!!! warning "Floor application differs across columns f, g, h"
+
+    The three "average PD" columns are **not** computed on a single PD value — each
+    column applies (or omits) different regulatory floors and uses a different
+    weighting basis:
+
+    - **Col b (bucket assignment)** uses the **estimated PD at the beginning of
+      the period**, **without** CRM substitution effects. The plan-item
+      description that this is "pre-floor" is correct only in the sense that
+      bucket allocation is driven by the modelled PD before the CR6 column-a
+      pre-input-floor allocation logic is itself applied; PRA Annex XXII para.
+      "b" does not explicitly invoke Art. 160(1) / 163(1) floors at the bucket
+      step.
+    - **Col f (EWA PD)** is **post-input-floor** and additionally applies
+      **exposure-level RW floors** (Art. 160(4) / 163(4) — the residential RE
+      mortgage exposure-level floor referenced in Art. 161(3) / 164(5)). It
+      mirrors UKB CR6 col f exactly.
+    - **Col g (avg PD at disclosure date)** applies **PD input floors only** and
+      is weighted by **obligor count** (not exposure value), restricted to the
+      obligor population in **column d**.
+    - **Col h (5-year historical default rate)** is a **realised** rate; floors
+      do not apply, but the disclosing institution may extend the window beyond
+      five years if consistent with its risk-management practice (must be
+      narrated).
+
+    Mechanically backing out a single "model PD" from cols f, g and h is
+    therefore **not valid** — they answer different questions on different
+    populations.
+
+### CRR vs Basel 3.1 Deltas
+
+| Area | CRR (UK CR9) | Basel 3.1 (UKB CR9) |
+|------|--------------|---------------------|
+| **Column count** | 8 (a–h) | 8 (a–h) — same fixed structure |
+| **Col f PD floors** | Art. 160(1) / 163(1) PD floor of **0.03%** uniformly | **Differentiated PD floors** (Art. 160(1), 163(1)) — class-specific (0.05% retail, 0.10% corporate / institution / sovereign) plus **exposure-level RW floors** for residential RE per Art. 161(3) / 164(5) |
+| **Col d "of which defaulted"** | Per Art. 178 (CRR) | Per Art. 178 IRB — definition unchanged in substance |
+| **Sub-templates (rows)** | Corporates row (no SL split inside CR9 by approach) | F-IRB adds **financial corporates and large corporates** sub-row (Art. 147(2)(c)(ii)); A-IRB retail adds **commercial immovable property SME/non-SME** rows |
+| **CR9.1 ECAI variant** | Same scope | Unchanged — disclosed where Art. 180(1)(f) ECAI mapping is used; col b becomes internal-grade ranges and one column added per ECAI |
+
+### Relationship to COREP C 08.05 / OF 08.05
+
+UKB CR9 is the **Pillar III** (public disclosure) back-testing template. The
+**COREP** equivalent is **C 08.05 / OF 08.05** (PD back-testing for IRB), which
+has a **5-column structure** (average PD, number of obligors, of which defaulted,
+observed default rate, historical default rate) — narrower than UKB CR9's 8
+columns because COREP omits the PD-bucket-range column (b), the obligor-weighted
+PD-at-disclosure-date column (g), and the explicit exposure-class designator
+column (a). For the COREP C 08.05 / OF 08.05 column structure, see
+[Reporting Differences](reporting-differences.md).
 
 ---
 

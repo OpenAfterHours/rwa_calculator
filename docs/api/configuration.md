@@ -488,6 +488,128 @@ and worked examples, see:
 - [Basel 3.1 SA Risk Weights — Output-Floor Election for Unrated Corporates (Art. 122(7)–(8))](../specifications/basel31/sa-risk-weights.md#output-floor-election-for-unrated-corporates-art-12278)
 - [Blog — The Output Floor and Why Basel 3.1 Bites](../blog/2026-06-23-the-output-floor-and-why-basel-31-bites.md#the-art-1228-election)
 
+### `crm_collateral_method`
+
+| Field | Type | Default | Defined on |
+|-------|------|---------|-----------|
+| `crm_collateral_method` | `CRMCollateralMethod` | `CRMCollateralMethod.COMPREHENSIVE` | `CalculationConfig` (`contracts/config.py:838`) |
+
+Firm-wide election under **CRR Art. 191A / PRA PS1/26 Art. 191A** for how
+financial collateral is recognised under the **Standardised Approach**. The
+choice applies to all SA exposures and cannot be made on a per-exposure basis.
+IRB exposures always use the Foundation Collateral Method regardless of this
+flag.
+
+The enum lives in `rwa_calc.domain.enums`:
+
+```python
+class CRMCollateralMethod(StrEnum):
+    COMPREHENSIVE = "comprehensive"  # FCCM — Art. 223-224 (default)
+    SIMPLE = "simple"                # FCSM — Art. 222 (SA-only, 20% RW floor)
+```
+
+| Member | String value | Treatment | Regulatory basis |
+|--------|--------------|-----------|------------------|
+| `COMPREHENSIVE` | `"comprehensive"` | **Financial Collateral Comprehensive Method (FCCM).** Reduces EAD via supervisory haircuts (`H_c`, `H_fx`, maturity-mismatch). Applicable to both SA and IRB. | CRR Art. 223 (volatility adjustments), Art. 224 (own-estimate haircuts) |
+| `SIMPLE` | `"simple"` | **Financial Collateral Simple Method (FCSM).** SA-only. Substitutes the collateral's own SA risk weight on the secured portion, subject to a **20% floor**. EAD is **not** reduced. Special 0% RW for same-currency cash deposits and 0%-RW sovereign bonds. | CRR Art. 222 |
+
+**Defaults by factory method:**
+
+| Factory | Default value |
+|---------|---------------|
+| `CalculationConfig.crr(...)` | `CRMCollateralMethod.COMPREHENSIVE` (dataclass default) |
+| `CalculationConfig.basel_3_1(...)` | `CRMCollateralMethod.COMPREHENSIVE` (dataclass default) |
+
+Neither factory exposes this knob as a constructor argument — flip it by
+constructing the config from the factory and replacing the field, or by
+passing the enum directly when instantiating `CalculationConfig` for tests.
+
+```python
+from dataclasses import replace
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import CRMCollateralMethod
+
+config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+config = replace(config, crm_collateral_method=CRMCollateralMethod.SIMPLE)
+
+assert config.crm_collateral_method is CRMCollateralMethod.SIMPLE
+```
+
+!!! note "Election scope"
+    Art. 191A makes this a **firm-wide** election. The calculator treats the
+    config field accordingly: the same value is applied to every SA exposure
+    in the run. Switching mid-run requires constructing a new config.
+
+For the regulatory derivation and worked examples, see:
+
+- [CRR Specification — Credit Risk Mitigation](../specifications/crr/credit-risk-mitigation.md)
+- [User guide — CRM methodology](../user-guide/methodology/crm.md)
+
+### `airb_collateral_method`
+
+| Field | Type | Default | Defined on |
+|-------|------|---------|-----------|
+| `airb_collateral_method` | `AIRBCollateralMethod \| None` | `None` | `CalculationConfig` (`contracts/config.py:843`) |
+
+Election for how A-IRB firms recognise collateral in their LGD estimates under
+**Basel 3.1** (PRA PS1/26 Art. 169A / 169B). Under CRR, A-IRB collateral
+recognition is free-form (no method constraint), so this field is `None` and
+inert under `CalculationConfig.crr(...)`. Art. 191A Part 2 governs the choice
+under Basel 3.1.
+
+The enum lives in `rwa_calc.domain.enums`:
+
+```python
+class AIRBCollateralMethod(StrEnum):
+    LGD_MODELLING = "lgd_modelling"  # Art. 169A (default under B31)
+    FOUNDATION = "foundation"        # Art. 229-231 (supervisory LGDS/LGDU)
+```
+
+| Member | String value | Treatment | Regulatory basis |
+|--------|--------------|-----------|------------------|
+| `LGD_MODELLING` | `"lgd_modelling"` | **LGD Modelling Collateral Method.** Default for A-IRB under Basel 3.1. The firm models collateral effects directly in its own LGD estimates. Where data is sufficient (Art. 169A(1)(a)) the modelled LGD is kept; where data is insufficient (Art. 169B), the calculator falls back to the Foundation formula (Art. 230 / 231) using the firm's own unsecured LGD as `LGDU` instead of the supervisory value. | PRA PS1/26 Art. 169A, Art. 169B |
+| `FOUNDATION` | `"foundation"` | **Foundation Collateral Method.** A-IRB firm elects to use the same Foundation Collateral Method as F-IRB, with supervisory `LGDS` and supervisory `LGDU`. Same formula and parameters as F-IRB collateral recognition. | CRR Art. 229, Art. 230, Art. 231; PRA PS1/26 Art. 191A Part 2 |
+| `None` | — | Field unset. Used by `CalculationConfig.crr(...)` because A-IRB collateral recognition is free-form under CRR — no method constraint applies. | CRR (no equivalent of Art. 191A Part 2) |
+
+**Defaults by factory method:**
+
+| Factory | Default value |
+|---------|---------------|
+| `CalculationConfig.crr(...)` | `None` (dataclass default — A-IRB is free-form under CRR) |
+| `CalculationConfig.basel_3_1(...)` | `None` (dataclass default; firms electing A-IRB should set this explicitly) |
+
+Neither factory currently exposes this knob as a constructor argument. To
+elect a method on a Basel 3.1 config, replace the field after construction:
+
+```python
+from dataclasses import replace
+from datetime import date
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import AIRBCollateralMethod, PermissionMode
+
+config = CalculationConfig.basel_3_1(
+    reporting_date=date(2027, 6, 30),
+    permission_mode=PermissionMode.IRB,
+)
+config = replace(config, airb_collateral_method=AIRBCollateralMethod.LGD_MODELLING)
+
+assert config.airb_collateral_method is AIRBCollateralMethod.LGD_MODELLING
+```
+
+!!! warning "Basel 3.1 only — inert under CRR"
+    `airb_collateral_method` only takes effect under
+    `CalculationConfig.basel_3_1(...)`. Under CRR, A-IRB collateral
+    recognition has no statutory method constraint (Art. 181 / Art. 183
+    govern own-estimate LGD with no Art. 191A Part 2 overlay), so the
+    calculator ignores the field. Setting it on a CRR config is allowed
+    for round-tripping but has no calculation effect.
+
+For the regulatory derivation, fallback mechanics, and worked examples, see:
+
+- [Basel 3.1 A-IRB Specification](../specifications/basel31/airb-calculation.md)
+- [User guide — CRM methodology](../user-guide/methodology/crm.md)
+
 ## Usage Examples
 
 ### CRR Configuration

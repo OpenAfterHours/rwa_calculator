@@ -1972,6 +1972,130 @@ class TestFacilityUndrawnCalculation:
         assert len(fac) == 1
         assert fac["undrawn_amount"][0] == pytest.approx(1000000.0)
 
+    def test_netting_negative_drawn_offsets_facility_utilisation(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Netting-flagged negative drawn balances reduce facility utilisation.
+
+        Under an on-balance-sheet netting agreement (CRR Art. 195/219, PS1/26
+        Art. 195/219), a deposit booked as a negative-drawn loan is treated as
+        cash collateral against sibling positives. For facility-level
+        utilisation that means total_drawn nets the negative, and the facility
+        undrawn reflects the net headroom rather than the gross-positive sum.
+
+        Scenario: Fac_01 limit 100m, three sibling loans 60m + 60m + (-40m
+        netting deposit) → net drawn 80m → undrawn 20m.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_NETTING"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [100_000_000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_01", "LOAN_02", "LOAN_03"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN", "DEPOSIT"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["CP001", "CP001", "CP001"],
+                "value_date": [date(2023, 6, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP", "GBP", "GBP"],
+                "drawn_amount": [60_000_000.0, 60_000_000.0, -40_000_000.0],
+                "lgd": [0.45, 0.45, 0.45],
+                "seniority": ["senior", "senior", "senior"],
+                "has_netting_agreement": [False, False, True],
+            }
+        ).lazy()
+
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_NETTING"] * 3,
+                "child_reference": ["LOAN_01", "LOAN_02", "LOAN_03"],
+                "child_type": ["loan", "loan", "loan"],
+            }
+        ).lazy()
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        df = facility_undrawn.collect()
+
+        fac = df.filter(pl.col("exposure_reference") == "FAC_NETTING_UNDRAWN")
+        assert len(fac) == 1
+        # Net drawn = 60 + 60 - 40 = 80m. Undrawn = 100m - 80m = 20m.
+        assert fac["undrawn_amount"][0] == pytest.approx(20_000_000.0)
+
+    def test_negative_drawn_without_netting_flag_still_clipped(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """A negative drawn without has_netting_agreement is still clipped.
+
+        Regression guard: the netting-aware aggregation must not change the
+        historical treatment of accidental data-quality negatives. Without an
+        explicit netting flag, the negative loan contributes 0 to the facility
+        utilisation total and the undrawn reflects only the positive sum.
+        """
+        facilities = pl.DataFrame(
+            {
+                "facility_reference": ["FAC_NO_NET"],
+                "product_type": ["RCF"],
+                "book_code": ["CORP"],
+                "counterparty_reference": ["CP001"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["GBP"],
+                "limit": [100_000_000.0],
+                "committed": [True],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "risk_type": ["MR"],
+            }
+        ).lazy()
+
+        loans = pl.DataFrame(
+            {
+                "loan_reference": ["LOAN_01", "LOAN_02", "LOAN_03"],
+                "product_type": ["TERM_LOAN"] * 3,
+                "book_code": ["CORP"] * 3,
+                "counterparty_reference": ["CP001"] * 3,
+                "value_date": [date(2023, 6, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP"] * 3,
+                "drawn_amount": [60_000_000.0, 60_000_000.0, -40_000_000.0],
+                "lgd": [0.45, 0.45, 0.45],
+                "seniority": ["senior", "senior", "senior"],
+                "has_netting_agreement": [False, False, False],
+            }
+        ).lazy()
+
+        mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_NO_NET"] * 3,
+                "child_reference": ["LOAN_01", "LOAN_02", "LOAN_03"],
+                "child_type": ["loan", "loan", "loan"],
+            }
+        ).lazy()
+
+        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        df = facility_undrawn.collect()
+
+        # 60 + 60 = 120m drawn, undrawn = max(0, 100 - 120) = 0 → row suppressed
+        # (the unify path filters out 0-amount undrawn rows).
+        fac = df.filter(pl.col("exposure_reference") == "FAC_NO_NET_UNDRAWN")
+        assert len(fac) == 0
+
     def test_facility_lr_risk_type(
         self,
         resolver: HierarchyResolver,

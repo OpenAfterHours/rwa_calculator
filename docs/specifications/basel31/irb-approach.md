@@ -1,16 +1,24 @@
 # IRB Approach Specification (Basel 3.1)
 
-Basel 3.1 IRB Approach scope, roll-out classes, and approach-routing rules introduced
-by PRA PS1/26.
+Basel 3.1 IRB Approach scope, entry conditions, roll-out classes, and approach-routing
+rules introduced by PRA PS1/26.
 
-This page is the canonical home for the **Art. 147B roll-out class enumeration** that
-governs IRB scope-of-use reporting (COREP **OF 08.07**) and disclosure (Pillar 3
-**UKB CR6-A**). Other reporting/disclosure pages cross-reference this enumeration; do
-not duplicate the class list elsewhere.
+This page is the canonical home for two distinct topics:
 
-**Regulatory Reference:** PRA PS1/26 Art. 147, 147A, 147B, 147C, 148, 150 (Annex E,
-Credit Risk: Internal Ratings Based Approach (CRR) Part).
-**Source PDF:** `docs/assets/ps126app1.pdf`, pp. 88–94.
+1. **Art. 144 entry conditions** — the high-level minimum requirements an institution
+   must meet to obtain and retain IRB permission, including rating system coverage,
+   ongoing validation, documentation, and the third-party-vendor obligation under
+   Art. 144(1A).
+2. **Art. 147B roll-out class enumeration** — the eight roll-out classes plus the
+   non-Retail AIRB Modelling category that govern IRB scope-of-use reporting (COREP
+   **OF 08.07**) and disclosure (Pillar 3 **UKB CR6-A**).
+
+Other reporting/disclosure pages cross-reference these enumerations; do not duplicate
+the class list elsewhere.
+
+**Regulatory Reference:** PRA PS1/26 Art. 143–143E, 144, 145, 147, 147A, 147B, 147C,
+148, 150 (Annex E, Credit Risk: Internal Ratings Based Approach (CRR) Part).
+**Source PDF:** `docs/assets/ps126app1.pdf`, pp. 84–94.
 
 ---
 
@@ -32,6 +40,123 @@ structure (Art. 147(2)). Roll-out classes group exposures along the same boundar
 that drive approach permissions, but the regulatory basis is different — they exist
 specifically to support sequenced IRB roll-out and permanent partial use under
 Arts. 148–150.
+
+---
+
+## Art. 144 — High-Level Requirements for Using the IRB Approach (Entry Conditions)
+
+PRA PS1/26 Art. 144 (ps126app1.pdf p. 86–87) sets out the **minimum requirements** an
+institution must meet **before** the PRA grants IRB permission and **on an ongoing
+basis** for as long as the permission is exercised. Failure on any limb of Art. 144(1)
+calls into question the validity of the IRB permission and may force fallback to the
+Standardised Approach under the Art. 147A routing waterfall — see
+[Model Permissions](model-permissions.md).
+
+The CRR equivalent is Art. 144(1) of the pre-revocation CRR; the substantive content is
+preserved with PRA-specific drafting changes (notably the addition of (1A) for
+third-party vendor rating systems and the relocation of the change-notification regime
+to Arts. 143A–143E).
+
+### Art. 144(1)(a)–(h) — Rating System Coverage Requirements
+
+> An institution shall meet the following requirements when using the IRB Approach:
+
+The following table reproduces each sub-paragraph verbatim from PS1/26 p. 87 and
+identifies the operational obligation it imposes on the institution.
+
+| Point | Verbatim wording (PS1/26 Art. 144(1)) | Operational obligation |
+|-------|---------------------------------------|------------------------|
+| **(a)** | "each of the institution's rating systems shall provide for a meaningful assessment of obligor and transaction characteristics, a meaningful differentiation of risk and accurate and consistent quantitative estimates of risk" | Each rating system must produce risk-meaningful, differentiated, accurate quantitative output. |
+| **(b)** | "internal ratings and default and loss estimates used in the calculation of own funds requirements and associated systems and processes shall play an essential role in the risk management and decision-making process, and in the credit approval, internal capital allocation and corporate governance functions of the institution" | "Use test" — IRB ratings must drive credit approval, capital allocation and governance, not just regulatory reporting. |
+| **(c)** | "the institution has a credit risk control unit responsible for each rating system that is appropriately independent and free from undue influence" | Independent credit risk control unit per rating system. |
+| **(d)** | "the institution collects and stores all relevant data to provide effective support to its credit risk measurement and management process" | Data collection / retention sufficient to support the rating system. |
+| **(e)** | "the institution documents each rating system and the rationale for their design, and validates each rating system" | **Documentation standards** — each rating system documented, design rationale recorded, validated. |
+| **(f)** | "the institution has validated each rating system during an appropriate time period prior to the permission to use each rating system, has assessed during this time period whether each rating system is suited to the range of application of each rating system, and has made necessary changes to each rating system following its assessment" | **Pre-permission validation** — validation during a pre-permission window plus suitability assessment for the range of application, with corrective changes implemented. Reads alongside Art. 145 prior-experience (3 years). |
+| **(g)** | "the institution has calculated under the IRB Approach the own funds requirements resulting from its risk parameters estimates and is able to submit the reporting as required by Chapter 4 of Reporting (CRR) Part Article 430" | IRB own-funds calculation produced and reportable under Art. 430. |
+| **(h)** | "the institution has assigned and continues to assign each exposure in the range of application of a rating system to a rating grade or pool of each rating system" | Continuous, complete grade/pool assignment of every exposure within the range of application. |
+
+!!! info "Ongoing validation lives in Section 6, not Art. 144(1)(f)"
+    Art. 144(1)(f) addresses **pre-permission** validation (the time period prior to
+    grant). The **on-going validation** obligation — annual back-testing, benchmarking,
+    PD/LGD/CCF performance monitoring — sits in PS1/26 Section 6 (Arts. 174–191) and is
+    the regulatory hook for the COREP back-testing template **C 08.05 / OF 08.05**.
+    See [COREP Reporting — C 08.05 / OF 08.05](../../features/corep-reporting.md#c-0805-of-0805-cr-irb-pd-back-testing).
+
+!!! info "Documentation standards in Art. 144(1)(e)"
+    "Documents each rating system and the rationale for their design" is the
+    **single-rating-system** documentation hook. Documentation of **changes** to a
+    rating system is a separate regime under Art. 143E (see below). Documentation of
+    the institution's **overall risk management** sits in Art. 189.
+
+### Art. 144(1A) — Third-Party Vendor Rating Systems
+
+PS1/26 introduces an explicit obligation (no direct CRR equivalent) covering rating
+systems or models purchased from a third-party vendor:
+
+> Where the institution has implemented a rating system, or model used within a rating
+> system, that it has purchased from a third-party vendor, the institution shall
+> ensure that the rating system or model, as the case may be, and their use by the
+> institution, complies with this Part.
+
+This means **the institution remains responsible** for compliance of any vendor
+rating system or sub-model with the entire IRB Part — including all of Art. 144(1)(a)
+through (h), Section 6 estimation requirements, and the change-management regime in
+Arts. 143A–143E.
+
+### Art. 144(2) — Provision Left Blank
+
+> [Note: Provision left blank]
+
+PS1/26 has deliberately left Art. 144(2) blank. The pre-revocation CRR Art. 144(2)
+provided for the EBA/PRA to issue regulatory technical standards on the assessment
+methodology — that mandate has been replaced by the PRA's direct rule-making in
+Arts. 143A–143E (model change classification and notification) and Arts. 174–191
+(rating system minimum requirements in detail).
+
+### Art. 144(2)-style Notification on Significant Model Changes — Now in Arts. 143A–143E
+
+The **notification obligation on significant model changes** that historically sat
+under the Art. 144 RTS framework is, under PS1/26, distributed across the following
+articles (ps126app1.pdf pp. 84–86):
+
+| Article | Topic | Trigger |
+|---------|-------|---------|
+| **Art. 143A** | Categories of changes | Each change is classified as (a) **material** (PRA permission required) or (b) **other** (notification required). The other-change category further splits into "before implementation" and "after implementation". |
+| **Art. 143B** | Principles of classification | Most-recent data; representative sampling acceptable; no splitting one material change into smaller parts; assign to the highest potential materiality in case of doubt. |
+| **Art. 143C** | Material changes | A change is **material** (PRA permission required) if it (i) falls within Appendix 2, Part 1 Section 1 or Part 2 Section 1, or (ii) decreases consolidated/own RWA by **≥ 1.5%**, or (iii) decreases the rating system's range-of-application RWA by **≥ 15%**. |
+| **Art. 143D** | Non-material changes — notification | Changes within Appendix 2, Part 1 Section 2 / Part 2 Section 2, **or** changes that decrease range-of-application RWA by **≥ 5%**, must be notified at least **two months before implementation**. All other non-material changes must be notified **after implementation, at least annually**. |
+| **Art. 143E** | Documentation of changes | Permission applications and notifications must include (a) description / rationale, (b) implementation date, (c) scope, (d) technical/process documentation, (e) independent review or validation reports, (f) management body / Art. 189(1) committee approval evidence, (g) quantitative impact where applicable. |
+
+!!! warning "Materiality thresholds are mechanical"
+    The 1.5% (consolidated RWA), 15% (rating-system RWA) and 5% (range-of-application
+    RWA) thresholds in Arts. 143C/143D are **mechanical decreases** computed at the
+    same point in time on a constant exposure set (Art. 143C(2), 143D(2)). They are
+    **not** subject to materiality judgement — a change that breaches the threshold
+    requires the corresponding permission or notification regardless of the
+    institution's own view.
+
+### Relationship to Other Entry-Condition Articles
+
+Art. 144 is the high-level entry test. It interacts with the following adjacent
+articles (PS1/26 Art. 145, 146, 147A) — all of which must be satisfied for a valid
+IRB permission:
+
+| Article | Topic | Entry-condition role |
+|---------|-------|----------------------|
+| **Art. 145** | Prior experience | At least **three years** of broadly-IRB-compliant rating system use prior to qualification (and three years of own LGD / CCF / EAD estimation prior to AIRB qualification for non-retail). |
+| **Art. 146** | Measures to be taken when requirements are no longer met | If Art. 144 (or Sections 2–6) requirements are breached, the institution must present a remediation plan, accelerate it where appropriate, or accept SA fallback. |
+| **Art. 147A** | Approach restrictions | Even where Art. 144 is satisfied, IRB cannot be applied to populations excluded by Art. 147A — see [Model Permissions](model-permissions.md). |
+
+### Cross-References
+
+- **Roll-out scope (downstream of valid Art. 144 permission):** see the
+  **Art. 147B — IRB Roll-Out Classes and Categories** section below on this page.
+- **Approach restrictions (which exposures can use IRB at all):** see
+  [Model Permissions](model-permissions.md).
+- **Detailed rating system minimum requirements (Art. 174–191):** Section 6 of the
+  IRB Part — currently a forward reference; not yet fully expanded in this docs site.
+- **COREP back-testing of rating systems:** see
+  [C 08.05 / OF 08.05](../../features/corep-reporting.md#c-0805-of-0805-cr-irb-pd-back-testing).
 
 ---
 
@@ -222,6 +347,15 @@ under Art. 148(1A).
 
 | Reference | Page (ps126app1.pdf) | Topic |
 |-----------|----------------------|-------|
+| Art. 143A | p. 84 | Rating systems: categories of changes (material vs notification) |
+| Art. 143B | p. 84–85 | Rating systems: principles of classification of changes |
+| Art. 143C | p. 85 | Rating systems: material changes (1.5% / 15% thresholds) |
+| Art. 143D | p. 86 | Rating systems: non-material changes (5% threshold, notification timing) |
+| Art. 143E | p. 86 | Rating systems: documentation of changes |
+| **Art. 144(1)(a)–(h)** | **p. 86–87** | **High-level requirements for using the IRB Approach (entry conditions)** |
+| **Art. 144(1A)** | **p. 87** | **Third-party vendor rating systems compliance obligation** |
+| **Art. 144(2)** | **p. 87** | **Provision left blank** |
+| Art. 145 | p. 87 | Prior experience requirement (3 years) |
 | Art. 147(2) | p. 88 | Eight Art. 147(2) exposure classes / subclasses |
 | Art. 147(4B) | p. 89–90 | Specialised lending sub-categories (OF, PF, CF, IPRE, HVCRE) |
 | Art. 147A(1)(a)–(k) | p. 92–93 | Approach treatment by exposure class |

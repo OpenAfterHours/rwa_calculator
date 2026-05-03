@@ -577,6 +577,32 @@ The output-floor disclosure (Art. 92(5)) and the IRB equity opt-out notice
 (Rule 4.10) are unrelated notification regimes that operate on different
 triggers and are not within Art. 132's scope.
 
+!!! warning "D4.66 reconciliation: cited 'Art. 132(4A)' / 'GBP 2bn' do not exist"
+    `DOCS_IMPLEMENTATION_PLAN.md` item **D4.66** describes a "PS1/26 Art. 132(4A)"
+    notification trigger of "**GBP 2 billion** total RWA in relevant CIUs OR
+    **GBP 500 million** total exposure values in relevant CIUs". A search of the
+    PS1/26 Appendix 1 source PDF confirms:
+
+    - **No sub-paragraph "Art. 132(4A)" exists** anywhere in PS1/26 Appendix 1.
+      The only Art. 132 sub-paragraphs are 132(1)–132(8) plus the standalone
+      Articles 132A / 132B / 132C.
+    - **No "GBP 2 billion" figure appears** anywhere in PS1/26 Appendix 1 in
+      relation to Art. 132 (or anywhere else in the CIU notification regime).
+    - The actual thresholds in **Art. 132(8)(a)** are
+      (i) **0.5% of total credit-risk + dilution-risk RWA** and
+      (ii) **GBP 500 million exposure value**, with **either** limb sufficient
+      to trigger notification. The GBP 500m limb in D4.66 is correct; the
+      "GBP 2bn RWA" limb is fabricated and the relative limb is in fact
+      0.5% of credit-risk + dilution-risk RWA, not an absolute GBP figure.
+    - The annual-notification cadence and per-country listing requirement
+      cited in D4.66 are correctly captured in **Art. 132(8)(b)(ii)** and
+      **Art. 132(8)(d)** respectively (verbatim quoted above).
+
+    D4.66 is therefore **fully covered by the same Art. 132(8) coverage that
+    closed D4.58** — the canonical content lives in this single section, and
+    no new sub-section is warranted. D4.66 is ready to be ticked alongside the
+    misattribution note already recorded for D4.58.
+
 ### CRR Comparison
 
 !!! info "CRR Art. 132 omitted from UK CRR"

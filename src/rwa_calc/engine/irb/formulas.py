@@ -370,6 +370,11 @@ def apply_irb_formulas(
     # This is normally set by the classifier, default to False if not present
     if "requires_fi_scalar" not in schema_names:
         exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
+    # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd to
+    # suppress the 1y M floor for daily-margined SFTs/derivatives, margin lending,
+    # and short-term self-liquidating trade transactions.
+    if "has_one_day_maturity_floor" not in schema_names:
+        exposures = exposures.with_columns(pl.lit(False).alias("has_one_day_maturity_floor"))
 
     # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
     has_transactor = "is_qrre_transactor" in schema_names
@@ -674,12 +679,32 @@ def _maturity_adjustment_expr_from_pd(
     Retail exposures should have MA=1.0 applied externally (this function
     does not check exposure class).
 
+    Maturity is clipped to ``[maturity_floor, maturity_cap]`` (default
+    [1y, 5y] per CRR Art. 162(2)) except where the input column
+    ``has_one_day_maturity_floor`` is True. For carve-out rows the 1-year
+    floor is suppressed and the actual maturity (down to 1 day) flows
+    through to the formula. The 5-year cap is always applied.
+
+    Callers must ensure ``has_one_day_maturity_floor`` exists on the frame
+    (defaulting to False); the expression does no schema introspection.
+
+    References:
+        CRR Art. 153(1)(iii) — maturity adjustment formula
+        CRR Art. 162(2) — 1y floor / 5y cap
+        CRR Art. 162(3) — carve-out from the 1y floor for daily-margined SFTs
+            and derivatives, margin lending, and short-term self-liquidating
+            trade transactions
+        BCBS CRE32.46 / CRE32.50 — equivalent Basel 3.1 references
+
     Args:
         pd_expr: Polars expression for PD
-        maturity_floor: Minimum maturity in years (default 1.0)
-        maturity_cap: Maximum maturity in years (default 5.0)
+        maturity_floor: Minimum maturity in years (default 1.0). Suppressed
+            for rows with ``has_one_day_maturity_floor=True``.
+        maturity_cap: Maximum maturity in years (default 5.0). Always applied.
     """
-    m = pl.col("maturity").clip(maturity_floor, maturity_cap)
+    has_carve_out = pl.col("has_one_day_maturity_floor").fill_null(False)
+    m_capped = pl.col("maturity").clip(upper_bound=maturity_cap)
+    m = pl.when(has_carve_out).then(m_capped).otherwise(m_capped.clip(lower_bound=maturity_floor))
 
     # Safe PD for log calculation
     pd_safe = pd_expr.clip(lower_bound=1e-10)
@@ -986,6 +1011,7 @@ def calculate_k(pd: float, lgd: float, correlation: float) -> float:
 def calculate_maturity_adjustment(
     pd: float,
     maturity: float,
+    has_one_day_maturity_floor: bool = False,
     maturity_floor: float = 1.0,
     maturity_cap: float = 5.0,
 ) -> float:
@@ -997,20 +1023,22 @@ def calculate_maturity_adjustment(
     Args:
         pd: Probability of default (floored)
         maturity: Effective maturity in years
-        maturity_floor: Minimum maturity (default 1.0)
-        maturity_cap: Maximum maturity (default 5.0)
+        has_one_day_maturity_floor: If True, the 1-year M floor is suppressed
+            (CRR Art. 162(3) carve-out). The 5-year cap still applies.
+        maturity_floor: Minimum maturity (default 1.0). Suppressed when
+            ``has_one_day_maturity_floor=True``.
+        maturity_cap: Maximum maturity (default 5.0). Always applied.
 
     Returns:
         Maturity adjustment factor
     """
-    # Pre-apply floor/cap to match vectorized behavior
-    m = max(maturity_floor, min(maturity_cap, maturity))
     pd_safe = max(pd, 1e-10)
 
     return _run_scalar_via_vectorized(
         {
             "pd_floored": pd_safe,
-            "maturity": m,
+            "maturity": maturity,
+            "has_one_day_maturity_floor": has_one_day_maturity_floor,
         },
         "maturity_adjustment",
     )

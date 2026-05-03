@@ -860,16 +860,44 @@ class TestMaturityAdjustment:
         ma_5 = calculate_maturity_adjustment(0.01, 5.0)
         assert ma_1 < ma_2 < ma_3 < ma_5
 
-    def test_ma_below_floor_clipped(self) -> None:
-        """Maturity below 1 year is clipped to 1 year."""
+    def test_ma_below_floor_without_carve_out_clipped_to_one(self) -> None:
+        """Without the Art. 162(3) carve-out, M < 1 year is clipped to 1 year."""
         ma_floor = calculate_maturity_adjustment(0.01, 1.0)
         ma_below = calculate_maturity_adjustment(0.01, 0.5)
         assert ma_below == pytest.approx(ma_floor, abs=1e-10)
 
+    def test_ma_below_floor_with_carve_out_uses_input(self) -> None:
+        """With ``has_one_day_maturity_floor=True``, M < 1 year flows into the
+        formula (CRR Art. 162(3) carve-out for daily-margined SFTs/derivatives,
+        margin lending, short-term self-liquidating trade)."""
+        ma_floor = calculate_maturity_adjustment(0.01, 1.0)
+        ma_carve_out = calculate_maturity_adjustment(0.01, 0.5, has_one_day_maturity_floor=True)
+        assert ma_carve_out < ma_floor
+        # Manual: b = (0.11852 - 0.05478·ln(0.01))²; MA = (1+(0.5-2.5)·b)/(1-1.5·b)
+        b = (0.11852 - 0.05478 * math.log(0.01)) ** 2
+        expected = (1.0 + (0.5 - 2.5) * b) / (1.0 - 1.5 * b)
+        assert ma_carve_out == pytest.approx(expected, rel=1e-6)
+
+    def test_ma_at_one_day_with_carve_out(self) -> None:
+        """Art. 162(3) one-day floor → M = 1/365 flows through."""
+        one_day = 1.0 / 365.0
+        ma = calculate_maturity_adjustment(0.01, one_day, has_one_day_maturity_floor=True)
+        b = (0.11852 - 0.05478 * math.log(0.01)) ** 2
+        expected = (1.0 + (one_day - 2.5) * b) / (1.0 - 1.5 * b)
+        assert ma == pytest.approx(expected, rel=1e-6)
+        assert ma < 1.0  # significant capital relief vs. M = 1y
+
     def test_ma_above_cap_clipped(self) -> None:
-        """Maturity above 5 years is clipped to 5 years."""
+        """Maturity above 5 years is clipped to 5 years (cap is unconditional)."""
         ma_cap = calculate_maturity_adjustment(0.01, 5.0)
         ma_above = calculate_maturity_adjustment(0.01, 10.0)
+        assert ma_above == pytest.approx(ma_cap, abs=1e-10)
+
+    def test_ma_above_cap_clipped_even_with_carve_out(self) -> None:
+        """The 5y cap applies even when the Art. 162(3) carve-out is set
+        (Art. 162(2) cap has no carve-out)."""
+        ma_cap = calculate_maturity_adjustment(0.01, 5.0)
+        ma_above = calculate_maturity_adjustment(0.01, 10.0, has_one_day_maturity_floor=True)
         assert ma_above == pytest.approx(ma_cap, abs=1e-10)
 
     def test_ma_low_pd_higher_sensitivity(self) -> None:
@@ -895,18 +923,26 @@ class TestMaturityAdjustment:
 
     def test_ma_vectorized_matches_scalar(self) -> None:
         """Vectorized expression matches scalar wrapper."""
-        cases = [(0.01, 2.0), (0.05, 3.0), (0.001, 5.0)]
+        # (pd, maturity, has_carve_out)
+        cases = [
+            (0.01, 2.0, False),
+            (0.05, 3.0, False),
+            (0.001, 5.0, False),
+            (0.01, 0.5, True),  # Art. 162(3) carve-out: M < 1y honoured
+            (0.005, 1.0 / 365.0, True),  # one-day floor
+        ]
         lf = pl.LazyFrame(
             {
                 "pd_floored": [c[0] for c in cases],
                 "maturity": [c[1] for c in cases],
+                "has_one_day_maturity_floor": [c[2] for c in cases],
             }
         )
         from rwa_calc.engine.irb.formulas import _polars_maturity_adjustment_expr
 
         result = lf.with_columns(_polars_maturity_adjustment_expr().alias("ma")).collect()
-        for i, (pd, m) in enumerate(cases):
-            ma_scalar = calculate_maturity_adjustment(pd, m)
+        for i, (pd, m, carve_out) in enumerate(cases):
+            ma_scalar = calculate_maturity_adjustment(pd, m, has_one_day_maturity_floor=carve_out)
             assert result["ma"][i] == pytest.approx(ma_scalar, rel=1e-8)
 
 

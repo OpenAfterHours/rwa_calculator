@@ -306,6 +306,8 @@ def _apply_parameter_substitution(
             ensure_cols.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
         if "requires_fi_scalar" not in cols:
             ensure_cols.append(pl.lit(False).alias("requires_fi_scalar"))
+        if "has_one_day_maturity_floor" not in cols:
+            ensure_cols.append(pl.lit(False).alias("has_one_day_maturity_floor"))
         if ensure_cols:
             lf = lf.with_columns(ensure_cols)
 

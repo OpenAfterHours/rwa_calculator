@@ -334,6 +334,12 @@ class IRBLazyFrame:
         if "beel" not in names:
             exprs.append(pl.lit(0.0).alias("beel"))
 
+        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
+        # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
+        # lending, and short-term self-liquidating trade transactions.
+        if "has_one_day_maturity_floor" not in names:
+            exprs.append(pl.lit(False).alias("has_one_day_maturity_floor"))
+
         if exprs:
             return self._lf.with_columns(exprs)
         return self._lf
@@ -487,6 +493,9 @@ class IRBLazyFrame:
 
         Retail exposures get MA = 1.0.
 
+        Reads ``has_one_day_maturity_floor`` to gate the 1-year M floor
+        (CRR Art. 162(3) carve-out); defaulted to False if absent.
+
         Args:
             config: Calculation configuration
 
@@ -501,7 +510,13 @@ class IRBLazyFrame:
             .str.contains("RETAIL")
         )
 
-        return self._lf.with_columns(
+        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd.
+        lf = ensure_columns(
+            self._lf,
+            {"has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False)},
+        )
+
+        return lf.with_columns(
             pl.when(is_retail)
             .then(pl.lit(1.0))
             .otherwise(_polars_maturity_adjustment_expr())
@@ -643,6 +658,11 @@ class IRBLazyFrame:
             batch1.append(pl.lit(2.5).alias("maturity"))
         if "requires_fi_scalar" not in schema_names:
             batch1.append(pl.lit(False).alias("requires_fi_scalar"))
+        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
+        # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
+        # lending, and short-term self-liquidating trade transactions.
+        if "has_one_day_maturity_floor" not in schema_names:
+            batch1.append(pl.lit(False).alias("has_one_day_maturity_floor"))
 
         # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
         has_transactor = "is_qrre_transactor" in schema_names

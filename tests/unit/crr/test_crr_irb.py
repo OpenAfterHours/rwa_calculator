@@ -259,19 +259,37 @@ class TestMaturityAdjustment:
 
         assert ma_long > ma_short
 
-    def test_ma_floor_applied(self) -> None:
-        """Maturity should be floored at 1 year."""
+    def test_ma_floor_applied_without_carve_out(self) -> None:
+        """Without the Art. 162(3) carve-out, M < 1 year is floored at 1 year."""
         ma_below_floor = calculate_maturity_adjustment(pd=0.01, maturity=0.5)
         ma_at_floor = calculate_maturity_adjustment(pd=0.01, maturity=1.0)
 
         assert ma_below_floor == pytest.approx(ma_at_floor)
 
+    def test_ma_floor_suppressed_with_carve_out(self) -> None:
+        """CRR Art. 162(3) carve-out: with ``has_one_day_maturity_floor=True``
+        the 1-year floor is suppressed and M flows into the formula. Applies
+        to daily-margined SFTs/derivatives, margin lending, and short-term
+        self-liquidating trade transactions."""
+        ma_at_floor = calculate_maturity_adjustment(pd=0.01, maturity=1.0)
+        ma_carve_out = calculate_maturity_adjustment(
+            pd=0.01, maturity=0.5, has_one_day_maturity_floor=True
+        )
+
+        assert ma_carve_out < ma_at_floor
+
     def test_ma_cap_applied(self) -> None:
-        """Maturity should be capped at 5 years."""
+        """Maturity should be capped at 5 years (cap is unconditional, no
+        Art. 162 carve-out)."""
         ma_above_cap = calculate_maturity_adjustment(pd=0.01, maturity=10.0)
         ma_at_cap = calculate_maturity_adjustment(pd=0.01, maturity=5.0)
 
         assert ma_above_cap == pytest.approx(ma_at_cap)
+
+        ma_above_cap_carve_out = calculate_maturity_adjustment(
+            pd=0.01, maturity=10.0, has_one_day_maturity_floor=True
+        )
+        assert ma_above_cap_carve_out == pytest.approx(ma_at_cap)
 
     def test_ma_higher_for_low_pd(self) -> None:
         """MA effect should be larger for low PD exposures."""

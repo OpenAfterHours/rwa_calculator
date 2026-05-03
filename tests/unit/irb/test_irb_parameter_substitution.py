@@ -54,6 +54,7 @@ def _compute_expected_irb_rw(
             "turnover_m": [None],
             "maturity": [maturity],
             "requires_fi_scalar": [False],
+            "has_one_day_maturity_floor": [False],
         }
     )
     pd_expr = pl.lit(pd)

@@ -155,15 +155,11 @@ def _lgd_floor_expression(
         )
 
     if has_seniority:
-        # Fallback without exposure_class: conservative subordinated = 50%
-        is_subordinated = (
-            pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
-        )
-        return (
-            pl.when(is_subordinated)
-            .then(pl.lit(float(floors.subordinated_unsecured)))
-            .otherwise(pl.lit(float(floors.unsecured)))
-        )
+        # Fallback without exposure_class: corporate A-IRB applies a single 25%
+        # unsecured floor regardless of seniority (Art. 161(5)). The 50%
+        # subordinated_unsecured value is the F-IRB supervisory LGD per
+        # Art. 161(1)(b), not an A-IRB floor — do not branch on seniority here.
+        return pl.lit(float(floors.unsecured))
 
     # Default to unsecured floor (25%) — most conservative for senior
     return pl.lit(float(floors.unsecured))
@@ -211,15 +207,11 @@ def _lgd_floor_expression_with_collateral(
             .otherwise(pl.lit(float(floors.residential_real_estate)))  # 10% Art. 161(5)
         )
     elif has_seniority:
-        # Fallback without exposure_class: conservative subordinated = 50%
-        is_subordinated = (
-            pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
-        )
-        unsecured_floor = (
-            pl.when(is_subordinated)
-            .then(pl.lit(float(floors.subordinated_unsecured)))
-            .otherwise(pl.lit(float(floors.unsecured)))
-        )
+        # Fallback without exposure_class: corporate A-IRB applies a single 25%
+        # unsecured floor regardless of seniority (Art. 161(5)). The 50%
+        # subordinated_unsecured value is the F-IRB supervisory LGD per
+        # Art. 161(1)(b), not an A-IRB floor — do not branch on seniority here.
+        unsecured_floor = pl.lit(float(floors.unsecured))
         rre_floor = pl.lit(float(floors.residential_real_estate))
     else:
         unsecured_floor = pl.lit(float(floors.unsecured))

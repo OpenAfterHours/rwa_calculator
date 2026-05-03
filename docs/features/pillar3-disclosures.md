@@ -581,6 +581,25 @@ Single column — each row explains a driver of RWEA change.
 | 8 | Other (+/-) | Residual — must be explained in narrative |
 | 9 | RWEA at end of disclosure period | Closing balance |
 
+!!! warning "Sign convention — flow rows 2–8 are **signed**"
+    Flow-driver rows **2 through 8** report **signed** RWEA movements:
+
+    - **Increases** in RWEA are reported as **positive** values
+    - **Decreases** in RWEA are reported as **negative** values
+
+    Rows **1** and **9** (opening and closing RWEA balances) are reported as
+    non-negative absolute amounts.
+
+    For example, a £15m RWEA reduction from asset-quality improvement is
+    reported in row 3 as `-15` (in the firm's reporting unit), **not** `15`.
+    The closing balance in row 9 must equal `row 1 + sum(rows 2–8)` when the
+    signed convention is honoured.
+
+    Source: PRA PS1/26 Annex XXII §11. The convention is enumerated for all
+    Pillar III templates in
+    [Output Reporting — Sign Conventions in Pillar III](../specifications/output-reporting.md#pillar-iii-disclosure-templates)
+    (single source of truth).
+
 The structure is identical under CRR and Basel 3.1. The only difference is that
 Basel 3.1 RWEAs in rows 1 and 9 no longer include supporting factor adjustments
 (Art. 501, 501a removed).

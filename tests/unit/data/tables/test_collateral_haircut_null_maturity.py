@@ -20,10 +20,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
 from rwa_calc.data.tables.haircuts import lookup_collateral_haircut
-
 
 # =============================================================================
 # CRR — null maturity must fall into the longest band (5y+)
@@ -158,9 +155,7 @@ class TestBasel31NullMaturityFallback:
         )
 
         # Assert
-        assert result == Decimal("0.12"), (
-            f"Expected 0.12 (B31 10y+ band) but got {result}"
-        )
+        assert result == Decimal("0.12"), f"Expected 0.12 (B31 10y+ band) but got {result}"
 
     def test_corp_bond_cqs2_null_maturity_returns_10y_plus_haircut(self) -> None:
         """B31 corp bond CQS 2, null maturity → 10y+ band haircut = 20%.

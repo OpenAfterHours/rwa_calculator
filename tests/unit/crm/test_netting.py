@@ -395,10 +395,6 @@ class TestNettingSAEndToEnd:
         (8%). It tests FX haircut propagation through netting logic, not
         liquidation-period scaling. The new pipeline default is 20-day (11.314%).
         """
-        rows = [
-            _netting_exposure("NEG01", drawn=-1000.0, currency="EUR"),
-            _netting_exposure("POS01", drawn=1000.0, currency="GBP"),
-        ]
         # P1.186: pass pre-built netting collateral with liquidation_period_days=10
         # to pin the 10-day FX haircut (8%). The negative EUR loan (NEG01) nets
         # against the GBP positive loan (POS01), producing synthetic EUR cash collateral.

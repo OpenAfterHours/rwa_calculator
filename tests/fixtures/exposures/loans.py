@@ -1210,7 +1210,7 @@ def _b31_slotting_scenario_loans() -> list[Loan]:
     # 2031-06-30 → ~4.0yr residual  → is_short_maturity=False
     B31_VALUE_DATE = date(2027, 1, 1)
     B31_MATURITY_SHORT = date(2029, 6, 30)  # ≈2.0yr from reporting_date 2027-06-30
-    B31_MATURITY_LONG = date(2031, 6, 30)   # ≈4.0yr from reporting_date 2027-06-30
+    B31_MATURITY_LONG = date(2031, 6, 30)  # ≈4.0yr from reporting_date 2027-06-30
 
     return [
         # =========================================================================

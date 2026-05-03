@@ -26,9 +26,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.irb.formulas import _lgd_floor_expression
 from tests.fixtures.p1_98.p1_98 import (
     EFFECTIVE_MATURITY,
     EXPECTED_CORRELATION,
@@ -44,6 +41,8 @@ from tests.fixtures.p1_98.p1_98 import (
     PD_OWN,
 )
 
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.formulas import _lgd_floor_expression
 
 # =============================================================================
 # FIXTURES
@@ -87,7 +86,7 @@ class TestP198SubordinatedLGDFloor:
         # Arrange: synthetic frame with seniority only — no exposure_class column
         lf = pl.LazyFrame(
             {
-                "lgd": [LGD_OWN],            # 0.10 — below 25% floor, floor binds
+                "lgd": [LGD_OWN],  # 0.10 — below 25% floor, floor binds
                 "seniority": ["subordinated"],
             }
         )
@@ -115,7 +114,7 @@ class TestP198SubordinatedLGDFloor:
         # Arrange
         lf = pl.LazyFrame(
             {
-                "lgd": [LGD_OWN],            # 0.10 — below floor
+                "lgd": [LGD_OWN],  # 0.10 — below floor
                 "seniority": ["subordinated"],
             }
         )
@@ -160,9 +159,7 @@ class TestP198SubordinatedLGDFloor:
         # Assert: senior floor remains 25%
         assert result["lgd_floor"][0] == pytest.approx(0.25, abs=1e-9)
 
-    def test_p1_98_null_seniority_fallback_floor_25pct(
-        self, b31_config: CalculationConfig
-    ) -> None:
+    def test_p1_98_null_seniority_fallback_floor_25pct(self, b31_config: CalculationConfig) -> None:
         """Null seniority on fallback path defaults to senior → 25% floor.
 
         The fix must handle null seniority (fill_null("senior") path) correctly.
@@ -213,8 +210,8 @@ class TestP198FullHandCalc:
 
         lf = pl.LazyFrame(
             {
-                "pd": [PD_OWN],                    # 0.005
-                "lgd": [LGD_OWN],                  # 0.10 — below floor
+                "pd": [PD_OWN],  # 0.005
+                "lgd": [LGD_OWN],  # 0.10 — below floor
                 "ead_final": [1_000_000.0],
                 "exposure_class": ["corporate"],
                 "seniority": ["subordinated"],

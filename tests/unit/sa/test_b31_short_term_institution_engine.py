@@ -27,7 +27,6 @@ from tests.fixtures.single_exposure import calculate_single_sa_exposure
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa import SACalculator
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
@@ -85,8 +84,7 @@ class TestB31ECRAShortTermCQS4:
 
         # Assert
         assert float(result["risk_weight"]) == pytest.approx(0.50), (
-            f"CQS 4 short-term institution RW: expected 0.50 (50%), "
-            f"got {result['risk_weight']}"
+            f"CQS 4 short-term institution RW: expected 0.50 (50%), got {result['risk_weight']}"
         )
 
     def test_b31_ecra_cqs4_short_term_rwa(
@@ -139,8 +137,7 @@ class TestB31ECRAShortTermCQS4:
 
         # Assert
         assert float(result["risk_weight"]) == pytest.approx(0.50), (
-            f"CQS 4 at exactly 0.25y (3m boundary): expected 0.50, "
-            f"got {result['risk_weight']}"
+            f"CQS 4 at exactly 0.25y (3m boundary): expected 0.50, got {result['risk_weight']}"
         )
 
     def test_b31_ecra_cqs4_long_term_still_100pct(
@@ -206,8 +203,7 @@ class TestB31ECRAShortTermCQS5:
 
         # Assert
         assert float(result["risk_weight"]) == pytest.approx(0.50), (
-            f"CQS 5 short-term institution RW: expected 0.50 (50%), "
-            f"got {result['risk_weight']}"
+            f"CQS 5 short-term institution RW: expected 0.50 (50%), got {result['risk_weight']}"
         )
 
     def test_b31_ecra_cqs5_short_term_rwa(

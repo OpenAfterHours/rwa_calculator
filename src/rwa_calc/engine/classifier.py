@@ -1023,9 +1023,7 @@ class ExposureClassifier:
         )
 
         book_not_excluded = pl.col("mp_excluded_book_codes").is_null() | ~(
-            pl.col("mp_excluded_book_codes")
-            .str.contains(pl.col("book_code"))
-            .fill_null(False)
+            pl.col("mp_excluded_book_codes").str.contains(pl.col("book_code")).fill_null(False)
         )
 
         permission_valid = exposure_class_match & geo_passes & book_not_excluded

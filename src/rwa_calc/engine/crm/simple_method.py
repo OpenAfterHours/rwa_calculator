@@ -33,7 +33,7 @@ from rwa_calc.data.tables.crr_simple_method import (
     FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
 )
-from rwa_calc.domain.enums import ApproachType, CQS
+from rwa_calc.domain.enums import CQS, ApproachType
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

@@ -24,7 +24,6 @@ import pytest
 
 from rwa_calc.data.tables.b31_risk_weights import B31_ECRA_SHORT_TERM_RISK_WEIGHTS
 
-
 # =============================================================================
 # CQS 4 AND CQS 5 — MUST BE 50% (the bug)
 # =============================================================================
@@ -55,8 +54,7 @@ class TestB31ECRAShortTermRiskWeights:
 
         # Assert
         assert rw == Decimal("0.50"), (
-            f"Expected CQS 4 short-term RW = 0.50 (50%) per Art. 120(2) Table 4, "
-            f"got {rw}"
+            f"Expected CQS 4 short-term RW = 0.50 (50%) per Art. 120(2) Table 4, got {rw}"
         )
 
     # -------------------------------------------------------------------------
@@ -75,8 +73,7 @@ class TestB31ECRAShortTermRiskWeights:
 
         # Assert
         assert rw == Decimal("0.50"), (
-            f"Expected CQS 5 short-term RW = 0.50 (50%) per Art. 120(2) Table 4, "
-            f"got {rw}"
+            f"Expected CQS 5 short-term RW = 0.50 (50%) per Art. 120(2) Table 4, got {rw}"
         )
 
     # -------------------------------------------------------------------------
@@ -89,9 +86,7 @@ class TestB31ECRAShortTermRiskWeights:
         rw = B31_ECRA_SHORT_TERM_RISK_WEIGHTS[1]
 
         # Assert
-        assert rw == Decimal("0.20"), (
-            f"CQS 1 short-term RW must remain 0.20, got {rw}"
-        )
+        assert rw == Decimal("0.20"), f"CQS 1 short-term RW must remain 0.20, got {rw}"
 
     def test_b31_ecra_short_term_cqs6_risk_weight_is_150pct(self) -> None:
         """Art. 120(2) Table 4: CQS 6 short-term institution RW = 150% (regression pin)."""
@@ -99,9 +94,7 @@ class TestB31ECRAShortTermRiskWeights:
         rw = B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6]
 
         # Assert
-        assert rw == Decimal("1.50"), (
-            f"CQS 6 short-term RW must remain 1.50, got {rw}"
-        )
+        assert rw == Decimal("1.50"), f"CQS 6 short-term RW must remain 1.50, got {rw}"
 
     @pytest.mark.parametrize(
         ("cqs", "expected"),
@@ -115,9 +108,7 @@ class TestB31ECRAShortTermRiskWeights:
         ],
         ids=["cqs1_20pct", "cqs2_20pct", "cqs3_20pct", "cqs4_50pct", "cqs5_50pct", "cqs6_150pct"],
     )
-    def test_b31_ecra_short_term_full_table(
-        self, cqs: int, expected: Decimal
-    ) -> None:
+    def test_b31_ecra_short_term_full_table(self, cqs: int, expected: Decimal) -> None:
         """Art. 120(2) Table 4: complete CQS band check (three-way split).
 
         CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150%.
@@ -126,6 +117,4 @@ class TestB31ECRAShortTermRiskWeights:
         rw = B31_ECRA_SHORT_TERM_RISK_WEIGHTS[cqs]
 
         # Assert
-        assert rw == expected, (
-            f"CQS {cqs} short-term RW: expected {expected}, got {rw}"
-        )
+        assert rw == expected, f"CQS {cqs} short-term RW: expected {expected}, got {rw}"

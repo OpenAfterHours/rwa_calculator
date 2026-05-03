@@ -80,7 +80,6 @@ from rwa_calc.data.schemas import (
     RATINGS_SCHEMA,
 )
 
-
 # ---------------------------------------------------------------------------
 # Scenario constants
 # ---------------------------------------------------------------------------
@@ -97,21 +96,21 @@ MATURITY_DATE = date(2028, 7, 1)
 RATING_DATE = date(2026, 1, 2)
 
 # Scenario inputs (match the hand-calculation in the module docstring)
-PD_OWN = 0.0050        # 0.50% own PD estimate
-LGD_OWN = 0.10         # 10% own LGD — below 25% A-IRB floor (floor binds)
+PD_OWN = 0.0050  # 0.50% own PD estimate
+LGD_OWN = 0.10  # 10% own LGD — below 25% A-IRB floor (floor binds)
 DRAWN_AMOUNT = 1_000_000.0
 EFFECTIVE_MATURITY = 2.5
 
 # Expected outputs (for assertions in the acceptance test)
-EXPECTED_LGD_FLOOR = 0.25       # Art. 161(5) — primary assertion (bug: 0.50)
-EXPECTED_LGD_FLOORED = 0.25     # max(0.10, 0.25) = 0.25
-EXPECTED_PD_FLOORED = 0.0050    # max(0.0050, 0.0005) = 0.0050
+EXPECTED_LGD_FLOOR = 0.25  # Art. 161(5) — primary assertion (bug: 0.50)
+EXPECTED_LGD_FLOORED = 0.25  # max(0.10, 0.25) = 0.25
+EXPECTED_PD_FLOORED = 0.0050  # max(0.0050, 0.0005) = 0.0050
 EXPECTED_CORRELATION = 0.21345609396856858
-EXPECTED_K = 0.023166           # approximate
-EXPECTED_MA = 1.3345392         # approximate (M=2.5 → M-2.5=0, MA=1/(...))
+EXPECTED_K = 0.023166  # approximate
+EXPECTED_MA = 1.3345392  # approximate (M=2.5 → M-2.5=0, MA=1/(...))
 EXPECTED_RISK_WEIGHT = 0.38646  # approximate
-EXPECTED_RWA = 386_459.0        # approximate (1_000_000 × RW)
-EXPECTED_EL = 1_250.0           # exact: 0.0050 × 0.25 × 1_000_000
+EXPECTED_RWA = 386_459.0  # approximate (1_000_000 × RW)
+EXPECTED_EL = 1_250.0  # exact: 0.0050 × 0.25 × 1_000_000
 
 
 # ---------------------------------------------------------------------------
@@ -355,9 +354,7 @@ def create_p198_model_permission() -> pl.DataFrame:
             excluded_book_codes=None,
         )
     ]
-    return pl.DataFrame(
-        [r.to_dict() for r in rows], schema=dtypes_of(MODEL_PERMISSIONS_SCHEMA)
-    )
+    return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(MODEL_PERMISSIONS_SCHEMA))
 
 
 # ---------------------------------------------------------------------------
@@ -406,8 +403,8 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Scenario: subordinated corporate A-IRB, lgd_own=0.10")
     print("          seniority='subordinated', no collateral")
     print("          forces _lgd_floor_expression fallback path")
-    print(f"Bug path: floors.subordinated_unsecured=0.50 (wrong)")
-    print(f"Fix:      floors.unsecured=0.25 per Art. 161(5)")
+    print("Bug path: floors.subordinated_unsecured=0.50 (wrong)")
+    print("Fix:      floors.unsecured=0.25 per Art. 161(5)")
     print(f"Expected: lgd_floored={EXPECTED_LGD_FLOORED}, rwa~{EXPECTED_RWA:,.0f}")
 
 

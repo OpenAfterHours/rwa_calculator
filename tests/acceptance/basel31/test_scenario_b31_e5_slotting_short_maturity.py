@@ -30,7 +30,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
 from tests.acceptance.basel31.conftest import (
     assert_risk_weight_match,
     assert_rwa_within_tolerance,
@@ -130,9 +129,7 @@ def b31_e5_slotting_results_df() -> pl.DataFrame:
         }
     )
 
-    augmented_ratings = pl.concat(
-        [fixtures.ratings, inline_ratings], how="diagonal_relaxed"
-    )
+    augmented_ratings = pl.concat([fixtures.ratings, inline_ratings], how="diagonal_relaxed")
 
     # --- Model permissions: grant slotting for SPECIALISED_LENDING ---
     model_permissions = pl.LazyFrame(
@@ -169,7 +166,9 @@ def b31_e5_slotting_results_df() -> pl.DataFrame:
 
     if results.slotting_results is None:
         return pl.DataFrame()
-    return results.slotting_results.collect()
+    collected = results.slotting_results.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 class TestB31E5SlottingShortMaturityColumnA:

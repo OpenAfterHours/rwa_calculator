@@ -83,9 +83,7 @@ def p1_112_sa_result() -> dict:
 
     df = results.sa_results.collect()
     rows = df.filter(pl.col("exposure_reference") == "LN_PSE_DE_001").to_dicts()
-    assert len(rows) == 1, (
-        f"Expected exactly 1 row for LN_PSE_DE_001, got {len(rows)}"
-    )
+    assert len(rows) == 1, f"Expected exactly 1 row for LN_PSE_DE_001, got {len(rows)}"
     return rows[0]
 
 

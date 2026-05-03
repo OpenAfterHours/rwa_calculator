@@ -458,9 +458,7 @@ def lookup_collateral_haircut(
         if residual_maturity_years is None:
             maturity_band = "10y_plus" if is_basel_3_1 else "5y_plus"
         else:
-            maturity_band = get_maturity_band(
-                residual_maturity_years, is_basel_3_1=is_basel_3_1
-            )
+            maturity_band = get_maturity_band(residual_maturity_years, is_basel_3_1=is_basel_3_1)
 
         if cqs == 1:
             key = f"govt_bond_cqs1_{maturity_band}"
@@ -483,9 +481,7 @@ def lookup_collateral_haircut(
         if residual_maturity_years is None:
             maturity_band = "10y_plus" if is_basel_3_1 else "5y_plus"
         else:
-            maturity_band = get_maturity_band(
-                residual_maturity_years, is_basel_3_1=is_basel_3_1
-            )
+            maturity_band = get_maturity_band(residual_maturity_years, is_basel_3_1=is_basel_3_1)
 
         if cqs == 1:
             key = f"corp_bond_cqs1_{maturity_band}"

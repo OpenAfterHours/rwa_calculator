@@ -384,11 +384,7 @@ class TestModelPermissionsNullBookCode:
         result: ClassifiedExposuresBundle = classifier.classify(bundle, crr_irb_config)
 
         # Assert: no CLS006 errors should appear
-        cls006_errors = [
-            e
-            for e in result.classification_errors
-            if e.code == "CLS006"
-        ]
+        cls006_errors = [e for e in result.classification_errors if e.code == "CLS006"]
         assert cls006_errors == [], (
             f"Expected no CLS006 'filter_rejected' warning for null book_code exposure, "
             f"but got: {cls006_errors}. "

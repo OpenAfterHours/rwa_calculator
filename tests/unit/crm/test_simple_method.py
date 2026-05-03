@@ -255,18 +255,18 @@ class TestCollateralRWDerivation:
         # Arrange: institution bond, CQS 2, Basel 3.1 framework
         # Act: derive collateral risk weight using _derive_collateral_rw_expr
         # Assert: 30% (B31 ECRA) not 50% (CRR)
-        assert self._compute_rw(
-            "bond", "institution", 2, is_basel_3_1=True
-        ) == pytest.approx(0.30, abs=1e-10)
+        assert self._compute_rw("bond", "institution", 2, is_basel_3_1=True) == pytest.approx(
+            0.30, abs=1e-10
+        )
 
     def test_institution_cqs3_both_frameworks_fifty_pct(self):
         """Institution CQS 3 = 50% under both CRR and B31 ECRA (no divergence at CQS 3)."""
-        assert self._compute_rw(
-            "bond", "institution", 3, is_basel_3_1=False
-        ) == pytest.approx(0.50, abs=1e-10)
-        assert self._compute_rw(
-            "bond", "institution", 3, is_basel_3_1=True
-        ) == pytest.approx(0.50, abs=1e-10)
+        assert self._compute_rw("bond", "institution", 3, is_basel_3_1=False) == pytest.approx(
+            0.50, abs=1e-10
+        )
+        assert self._compute_rw("bond", "institution", 3, is_basel_3_1=True) == pytest.approx(
+            0.50, abs=1e-10
+        )
 
     def test_institution_unrated_hundred_pct(self):
         assert self._compute_rw("corporate_bond", "institution", None) == pytest.approx(

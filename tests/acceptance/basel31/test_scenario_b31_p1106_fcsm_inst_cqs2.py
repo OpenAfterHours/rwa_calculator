@@ -208,18 +208,14 @@ class TestB31FCSMInstCQS2:
         )
 
         # Act
-        result = exposures_with_fcsm.sa.apply_fcsm_rw_substitution(
-            b31_simple_config
-        ).collect()
+        result = exposures_with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config).collect()
 
         # Assert
         assert result["risk_weight"][0] == pytest.approx(0.65, abs=1e-6), (
             f"B31 blended RW should be 0.65 (0.30×0.50 + 1.00×0.50), got {result['risk_weight'][0]}"
         )
 
-    def test_b31_fcsm_institution_cqs2_rwa(
-        self, b31_simple_config: CalculationConfig
-    ) -> None:
+    def test_b31_fcsm_institution_cqs2_rwa(self, b31_simple_config: CalculationConfig) -> None:
         """
         RWA = EAD × blended_rw = 1,000,000 × 0.65 = 650,000 under Basel 3.1.
 
@@ -312,9 +308,7 @@ class TestCRRFCSMInstCQS2Regression:
             f"CRR fcsm_collateral_rw should be 0.50, got {result['fcsm_collateral_rw'][0]}"
         )
 
-    def test_crr_fcsm_institution_cqs2_rwa(
-        self, crr_simple_config: CalculationConfig
-    ) -> None:
+    def test_crr_fcsm_institution_cqs2_rwa(self, crr_simple_config: CalculationConfig) -> None:
         """
         CRR RWA = 1,000,000 × 0.75 = 750,000.
 

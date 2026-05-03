@@ -633,25 +633,49 @@ with one template per exposure class within each approach.
 
 ### Row Structure — Exposure Class Breakdown
 
+CR9 follows the **same F-IRB and A-IRB sub-class breakdown as CR6** —
+see [CR6 — Row Structure — Exposure Class Breakdown](#cr6-irb-exposures-by-exposure-class-and-pd-range)
+above. PS1/26 Annex XXII para 12 directs institutions to disclose two separate
+sets of templates (one for F-IRB, one for A-IRB) with one template per exposure
+class, using the same sub-class definitions referenced in Article 147(2)(b)–(d)
+of the IRB CRR Part. The verbatim row definitions for column `a` are reproduced
+below for convenience.
+
 === "Basel 3.1 (UKB CR9) — A-IRB"
 
-    Separate template per exposure class:
+    Separate template per exposure class (Annex XXII column `a (AIRB)`):
 
-    1. **Corporates**: specialised lending, other general corporates (SME/non-SME)
-    2. **Retail**: secured by residential immovable property (SME/non-SME),
-       secured by commercial immovable property (SME/non-SME),
-       qualifying revolving, other (SME/non-SME)
+    1. **Corporates** (Art. 147(2)(c))
+        - 1.1 Specialised lending (Art. 147(2)(c)(i))
+        - 1.2 Other general corporates — SMEs (Art. 147(2)(c)(iii))
+        - 1.3 Other general corporates — non-SMEs (Art. 147(2)(c)(iii), not under 1.2)
+    2. **Retail** (Art. 147(2)(d))
+        - 2.1 Secured by residential immovable property — SMEs (Art. 147(2)(d)(ii))
+        - 2.2 Secured by residential immovable property — non-SMEs (Art. 147(2)(d)(ii), not under 2.1)
+        - 2.3 Secured by commercial immovable property — SMEs
+        - 2.4 Secured by commercial immovable property — non-SMEs
+        - 2.5 Qualifying revolving retail exposures (Art. 147(2)(d)(i))
+        - 2.6 Other — SMEs (Art. 147(2)(d))
+        - 2.7 Other — non-SMEs (Art. 147(2)(d)(iii), not under 2.6)
     3. **Total**
 
 === "Basel 3.1 (UKB CR9) — F-IRB"
 
-    Separate template per exposure class:
+    Separate template per exposure class (Annex XXII column `a (FIRB)`):
 
-    1. **Institutions**
-    2. **Corporates**: specialised lending (including slotting),
-       financial corporates and large corporates,
-       other general corporates (SME/non-SME)
+    1. **Institutions** (Art. 147(2)(b))
+    2. **Corporates** (Art. 147(2)(c))
+        - 2.1 Specialised lending — including exposures subject to the slotting
+          approach (Art. 147(2)(c)(i))
+        - 2.2 **Financial corporates and large corporates** (Art. 147(2)(c)(ii))
+        - 2.3 Other general corporates — SMEs (Art. 147(2)(c)(iii))
+        - 2.4 Other general corporates — non-SMEs (Art. 147(2)(c)(iii), not under 2.3)
     3. **Total**
+
+    Sub-class 2.2 mirrors the CR6 F-IRB addition: under PS1/26, A-IRB is
+    restricted for financial corporates and large corporates (Art. 147A), so
+    these counterparties are reported as a discrete F-IRB sub-class rather than
+    being lumped into "other general corporates".
 
 ### Key Differences from CR6
 
@@ -672,7 +696,13 @@ with one template per exposure class within each approach.
 
 ### Reference Documents
 
-- Basel 3.1: `docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf` (paras 12-15)
+- Basel 3.1: `docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf`
+  — paras 12-15 (template scope and disclosure rules) on p.18; column `a` row
+  definitions for A-IRB and F-IRB on pp.19-20; column `b`-`h` instructions on
+  pp.20-22.
+- PRA PS1/26 Appendix 1: `docs/assets/ps126app1.pdf` — Art. 147(2)(b)-(d) for
+  IRB exposure-class definitions; Art. 147A for the A-IRB restriction that
+  drives the F-IRB "financial corporates and large corporates" sub-class.
 
 ---
 

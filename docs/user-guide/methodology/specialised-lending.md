@@ -129,6 +129,80 @@ See [Key Differences](../../framework-comparison/key-differences.md#slotting-sub
     distinction only applies under the **SA approach** (Art. 122B(2)(c): 130% pre-op,
     100% operational, 80% high-quality operational).
 
+## From Category to Risk Weight: the Subgrade Step
+
+The `SlottingCategory` enum exposed by the calculator is the **coarse five-bucket** grade
+— Strong, Good, Satisfactory, Weak, Default. Under PRA PS1/26 Art. 153(5) Table A
+(Basel 3.1) this maps onto a finer grid where **Strong** splits into columns A/B and
+**Good** splits into columns C/D — Satisfactory, Weak, and Default keep a single
+column each. The same A/B/C/D refinement governs the Art. 158(6) Table B expected-loss
+rates. Practitioners do **not** assign A/B/C/D directly; the calculator derives the
+column from a small set of input fields.
+
+### Inputs you set on the loader
+
+For every specialised-lending row, set:
+
+| Loader column | Type | Meaning | Driver of subgrade? |
+|---------------|------|---------|---------------------|
+| `slotting_category` | `str` (one of `"strong"`, `"good"`, `"satisfactory"`, `"weak"`, `"default"`) | The coarse five-bucket category. Must be set before the calculator can look up a risk weight. | Yes — selects the row of Table A. |
+| `is_hvcre` | `bool` (default `False`) | High-Volatility CRE flag. PRA PS1/26 introduces a separate, elevated table for HVCRE; under CRR this flag has no UK legal basis (see code divergence D3.22). | Yes — selects the HVCRE table vs. the standard Non-HVCRE table. |
+| `residual_maturity_years` | `float` | Years to maturity. The calculator derives `is_short_maturity = residual_maturity_years < 2.5` if not already set. | Yes (CRR only — see warning below). |
+| `is_short_maturity` | `bool` (optional, derived from `residual_maturity_years`) | Pre-computed maturity flag. A pre-existing value is never overwritten. | Yes (CRR only). |
+| `sl_type` | `str` (one of `"project_finance"`, `"object_finance"`, `"commodities_finance"`, `"ipre"`, `"hvcre"`) | Specialised-lending sub-type. Does not affect the slotting table directly except that PRA PS1/26 routes IPRE / HVCRE to slotting unconditionally. | No (does not change the column lookup). |
+
+There is **no** `slotting_subgrade` column. The A/B/C/D refinement is derived, not declared.
+
+### How the calculator picks the column
+
+```text
+slotting_category = STRONG | GOOD          ──┐
+is_hvcre          = True | False             │   →  Table A row + column → risk weight
+is_short_maturity = True | False  (CRR only) │
+```
+
+- **Strong, default column (B)** is used unless a concession applies.
+- **Strong, column A** is the short-maturity concession (Art. 153(5)(d), CRR Table 1
+  short-maturity column).
+- **Good, default column (D)** is used unless a concession applies.
+- **Good, column C** is the short-maturity concession.
+- **Satisfactory, Weak, Default** — single column, `is_short_maturity` is ignored.
+
+!!! warning "Basel 3.1 short-maturity concession is not yet implemented"
+    Under **Basel 3.1**, the calculator currently routes all slotting exposures to columns
+    B (Strong) / D (Good) regardless of `is_short_maturity` (`IMPLEMENTATION_PLAN.md`
+    items P1.97 non-HVCRE and P1.117 HVCRE). The Art. 153(5)(e) IPRE and Art. 153(5)(f)
+    PF enhanced-underwriting concessions are also unimplemented — there is no input
+    field to flag "meets enhanced-criteria threshold". Under **CRR** the maturity-based
+    columns A/C are fully implemented via separate short / long maturity tables.
+
+### Worked example: "I have a Strong CRE exposure" → RW
+
+1. Confirm the exposure is HVCRE or non-HVCRE — set `is_hvcre`. A standard income-producing
+   CRE deal is **non-HVCRE** (`is_hvcre=False`); speculative development or land-bank
+   deals meeting the HVCRE criteria are `is_hvcre=True`.
+2. Assign `slotting_category="strong"` based on the qualitative slotting criteria
+   (see [Assessment Criteria](#assessment-criteria) above).
+3. Set `residual_maturity_years` from the loan's contractual maturity. The calculator
+   derives `is_short_maturity = residual_maturity_years < 2.5` automatically.
+4. The calculator combines (Strong × HVCRE flag × maturity) → column → risk weight.
+
+For the **actual numerical risk weights** at each (category × subgrade × HVCRE)
+combination, do **not** rely on the summary tables on this page — they show only the
+default columns. The single source of truth is:
+
+- [Basel 3.1 Slotting spec — Subgrade Treatment (Table A columns A/B/C/D)](../../specifications/basel31/slotting-approach.md#subgrade-treatment-table-a-columns-abcd)
+  for the full risk-weight grid (PRA PS1/26 Art. 153(5)).
+- [Basel 3.1 EL rates — Table B](../../specifications/crr/slotting-approach.md#slotting-expected-loss-rates--table-b-pra-ps126-art-1586)
+  for the EL ladder (PRA PS1/26 Art. 158(6)). Note that HVCRE Table B collapses to a
+  flat 0.4% across columns A/B/C/D for both Strong and Good — a PRA quirk that does
+  **not** apply to risk weights.
+- [CRR Table 1](../../specifications/crr/slotting-approach.md#table-1-art-1535) for
+  the CRR pre-Basel-3.1 risk weights — a single table with a `< 2.5yr` / `≥ 2.5yr`
+  split rather than A/B/C/D columns.
+- [Glossary entry](../../specifications/glossary.md#slottingcategory-and-subgrades-abcd)
+  for a one-screen summary of how the enum maps onto the subgrade columns.
+
 ## Defaulted Exposures
 
 Defaulted specialised lending exposures receive a 0% risk weight (RWA = 0). Expected loss treatment is handled separately via the provisions and EL comparison framework (see [Provisions](../../specifications/crr/provisions.md)).

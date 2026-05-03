@@ -138,6 +138,7 @@ breakdown, risk weight breakdown, memorandum items).
 - Col 0252: Adjustment for post-model adjustments
 - Col 0253: Adjustment for mortgage RW floor
 - Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets
+- Col 0260: Risk-weighted exposure amount **after** adjustments — equals col 0251 adjusted for cols 0252 to 0254 (i.e. `0251 + 0252 + 0253 + 0254`). This is the post-adjustment RWEA that flows into OF 02.00 row 0010 as the IRB credit-risk RWEA contribution. Source: PS1/26 Annex II §3.3.1, p. 112.
 - Col 0265: Of which: exposure value for non-defaulted
 - Col 0275-0276: Non-modelled approaches exposure value and RWEA (for output floor)
 - Col 0281: Expected loss adjustment for post-model adjustments

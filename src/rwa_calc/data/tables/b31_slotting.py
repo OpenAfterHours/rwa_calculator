@@ -43,6 +43,17 @@ B31_SLOTTING_RISK_WEIGHTS: dict[SlottingCategory, Decimal] = {
     SlottingCategory.DEFAULT: Decimal("0.00"),
 }
 
+# Non-HVCRE, remaining maturity < 2.5 years — PRA PS1/26 Art. 153(5)(d), Table A
+# columns A (Strong) and C (Good). Satisfactory, Weak and Default have no
+# maturity differentiation under Table A.
+B31_SLOTTING_RISK_WEIGHTS_SHORT: dict[SlottingCategory, Decimal] = {
+    SlottingCategory.STRONG: Decimal("0.50"),  # Table A col A
+    SlottingCategory.GOOD: Decimal("0.70"),  # Table A col C
+    SlottingCategory.SATISFACTORY: Decimal("1.15"),
+    SlottingCategory.WEAK: Decimal("2.50"),
+    SlottingCategory.DEFAULT: Decimal("0.00"),
+}
+
 # Project finance pre-operational phase — PRA PS1/26 Art. 153(5) Table A
 # uses the SAME weights as operational PF. BCBS CRE33 had separate higher weights
 # (80/100/120/350%) but PRA did not adopt this distinction.

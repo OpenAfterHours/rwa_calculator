@@ -62,6 +62,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("P1.98 (subordinated corporate A-IRB LGD floor fallback)", "p1_98", _generate_p198),
         ("P1.99 (CRR Art. 120(2) Table 4 short-term rated institution RW)", "p1_99", _generate_p199),
         ("P1.117 (B31 HVCRE slotting short-maturity subgrades)", "p1_117", _generate_p1117),
+        ("P1.125 (classifier FSE-column-missing warning CLS007)", "p1_125", _generate_p1125),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -311,6 +312,49 @@ def _generate_p1117(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_117", None)
+
+
+def _generate_p1125(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P1.125 builder imports (no parquet output — Python-only builder).
+
+    P1.125 tests column-schema existence, which cannot be preserved through a
+    parquet round-trip (parquet writes include all declared columns regardless of
+    whether they appear in the input dict).  The fixture is a Python builder that
+    constructs in-memory LazyFrames with controlled schemas.  This function
+    exercises the import path and checks the three named scenario bundles can be
+    constructed without error.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_125 import (  # noqa: F401
+            make_scenario_a_bundle,
+            make_scenario_b_bundle,
+            make_scenario_c_bundle,
+        )
+
+        # Smoke-check: all three bundles must construct without raising.
+        bundle_a = make_scenario_a_bundle()
+        bundle_b = make_scenario_b_bundle()
+        bundle_c = make_scenario_c_bundle()
+
+        # Confirm the critical schema invariants.
+        cp_cols_a = bundle_a.counterparty_lookup.counterparties.collect_schema().names()
+        cp_cols_b = bundle_b.counterparty_lookup.counterparties.collect_schema().names()
+        cp_cols_c = bundle_c.counterparty_lookup.counterparties.collect_schema().names()
+
+        if "is_financial_sector_entity" in cp_cols_a:
+            raise AssertionError("Scenario A: is_financial_sector_entity must be absent")
+        if "is_financial_sector_entity" not in cp_cols_b:
+            raise AssertionError("Scenario B: is_financial_sector_entity must be present")
+        if "is_financial_sector_entity" in cp_cols_c:
+            raise AssertionError("Scenario C: is_financial_sector_entity must be absent")
+
+        # No parquet files written — report zero files, zero records.
+        return [("(python-only builder — no parquet)", 0)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_125", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

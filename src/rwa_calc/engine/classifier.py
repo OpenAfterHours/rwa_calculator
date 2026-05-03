@@ -42,6 +42,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.errors import (
+    ERROR_FSE_COLUMN_MISSING,
     ERROR_MODEL_PERMISSION_UNMATCHED,
     ERROR_QRRE_COLUMNS_MISSING,
     ERROR_RETAIL_POOL_MGMT_MISSING,
@@ -266,6 +267,28 @@ class ExposureClassifier:
                         "to qualifying status (75% RW) without verification."
                     ),
                     regulatory_reference="PRA PS1/26 Art. 123A(1)(b)(iii)",
+                )
+            )
+
+        # Art. 147A(1)(e): Under Basel 3.1, Financial Sector Entities (FSEs) are
+        # restricted to F-IRB (no A-IRB). When the is_financial_sector_entity
+        # column is absent from the ORIGINAL counterparty data, this restriction
+        # cannot be enforced and FSE exposures may receive A-IRB treatment in
+        # violation of the rule. Check the counterparty source schema directly.
+        cp_has_fse_flag = "is_financial_sector_entity" in set(
+            data.counterparty_lookup.counterparties.collect_schema().names()
+        )
+        if config.is_basel_3_1 and not cp_has_fse_flag:
+            classification_errors.append(
+                classification_warning(
+                    code=ERROR_FSE_COLUMN_MISSING,
+                    message=(
+                        "Art. 147A(1)(e) FSE A-IRB restriction cannot be enforced — "
+                        "'is_financial_sector_entity' column missing from counterparty "
+                        "data; FSE exposures may receive A-IRB treatment in violation "
+                        "of the restriction."
+                    ),
+                    regulatory_reference="PRA PS1/26 Art. 147A(1)(e)",
                 )
             )
 

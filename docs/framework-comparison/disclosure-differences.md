@@ -276,6 +276,26 @@ paragraphs 3–6 and column-reference table, pp. 7–9.
 | **Added** | o | Part of exposure covered by funded CP — slotting only (FCCM + netting) |
 | **Added** | p | Part of exposure covered by unfunded CP — slotting only |
 
+!!! warning "PDF labelling typo — Annex XXII p. 14"
+
+    PRA PS1/26 Annex XXII
+    (`docs/assets/ps1-26-annex-xxii-credit-risk-irb-disclosure-instructions.pdf`),
+    p. 14, contains a column-letter typo in the UKB CR7-A column reference
+    table. After defining col **(o)** as "Part of the exposure covered by
+    funded credit protection (FCP) — slotting", the PDF then defines the
+    next column — "Part of the exposure covered by unfunded credit
+    protection (UFCP) — slotting" — using the letter **(n)** a second
+    time. The intended label is **(p)**: col (n) is already used earlier
+    on the same page for "RWEA with substitution effects".
+
+    The corrected sequence is the **a–p (16 columns)** sequence shown in
+    the table above and in the
+    [Structural Summary](#structural-summary). Implementors should
+    follow the corrected **o/p** sequence in this documentation, not the
+    literal letter as printed in the PDF — populating a column keyed
+    "(n)" twice will silently overwrite the substitution-effects RWEA
+    cell with the slotting unfunded-CP percentage.
+
 ### Row Changes
 
 | Change | Description |

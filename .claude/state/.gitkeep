@@ -1,0 +1,5 @@
+Batch state files for /next-items live here. Format:
+  next-items-<batch-id>.json
+The orchestrator reads this directory at every turn during a live
+batch to recover its supervisor state. Files are deleted at end
+of Step 8.

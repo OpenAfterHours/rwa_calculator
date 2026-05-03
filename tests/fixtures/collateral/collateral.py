@@ -114,6 +114,7 @@ def create_collateral() -> pl.DataFrame:
         *_crr_d_scenario_collateral(),
         *_complex_scenario_collateral(),
         *_p1_158_null_maturity_haircut_collateral(),
+        *_p1_106_fcsm_institution_bond_collateral(),
     ]
 
     return pl.DataFrame([c.to_dict() for c in collateral], schema=dtypes_of(COLLATERAL_SCHEMA))
@@ -983,6 +984,63 @@ def _p1_158_null_maturity_haircut_collateral() -> list[Collateral]:
             is_adc=None,
             is_presold=None,
             liquidation_period_days=10,  # Standard 10-day liquidation period (no scaling)
+        ),
+    ]
+
+
+def _p1_106_fcsm_institution_bond_collateral() -> list[Collateral]:
+    """
+    Collateral for P1.106: FCSM institution-bond CQS 2 RW divergence (B31 vs CRR).
+
+    Scenario B31-FCSM-INST-CQS2 (primary) and CRR-FCSM-INST-CQS2 (contrastive).
+
+    Under CRR Art. 120 Table 3: institution CQS 2 = 50%.
+    Under B31 / PRA PS1/26 Art. 120 ECRA Table 3: institution CQS 2 = 30%.
+
+    The EUR currency (vs GBP loan exposure) means the same-currency carve-out
+    in Art. 222(4)/(6) does not fire — the 20% FCSM floor applies instead.
+
+    FCSM does not reduce EAD.  Secured share = 500,000 / 1,000,000 = 0.50.
+
+    Hand-calc (B31):   RW_blended = 0.30 × 0.50 + 1.00 × 0.50 = 0.65  → RWA = 650,000
+    Hand-calc (CRR):   RW_blended = 0.50 × 0.50 + 1.00 × 0.50 = 0.75  → RWA = 750,000
+
+    References:
+        - PRA PS1/26 Art. 120 ECRA Table 3 (docs/assets/ps126app1.pdf)
+        - CRR Art. 120 Table 3 (docs/assets/crr.pdf)
+        - CRR Art. 222(1) — FCSM secured-portion RW substitution, 20% floor
+        - Bug site: src/rwa_calc/engine/crm/simple_method.py — _derive_collateral_rw_expr()
+    """
+    return [
+        # =====================================================================
+        # COLL_INST_BOND_CQS2
+        # EUR 500k institution bond, CQS 2, 5yr residual maturity.
+        # Beneficiary: LOAN_FCSM_INST_CQS2 (GBP 1m).
+        # pledge_percentage = 1.0 (no haircut pledge shortfall).
+        # is_eligible_financial_collateral = True → routes through FCSM.
+        # =====================================================================
+        Collateral(
+            collateral_reference="COLL_INST_BOND_CQS2",
+            collateral_type="bond",
+            currency="EUR",  # EUR vs GBP exposure — same-ccy carve-out does not fire
+            maturity_date=date(2031, 1, 1),
+            market_value=500_000.0,
+            nominal_value=500_000.0,
+            beneficiary_type="loan",
+            beneficiary_reference="LOAN_FCSM_INST_CQS2",
+            issuer_cqs=2,  # CQS 2 — divergence point: 30% (B31) vs 50% (CRR)
+            issuer_type="institution",  # Triggers institution branch in _derive_collateral_rw_expr
+            residual_maturity_years=5.0,  # Long enough to bypass Art. 222(7) maturity check
+            is_eligible_financial_collateral=True,
+            is_eligible_irb_collateral=True,
+            valuation_date=VALUE_DATE,
+            valuation_type="market",
+            property_type=None,
+            property_ltv=None,
+            is_income_producing=None,
+            is_adc=None,
+            is_presold=None,
+            liquidation_period_days=None,
         ),
     ]
 

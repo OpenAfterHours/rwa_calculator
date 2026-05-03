@@ -1887,6 +1887,27 @@ def _dedicated_test_loans() -> list[Loan]:
             seniority="senior",
         ),
         # =============================================================================
+        # P1.106 / B31-FCSM-INST-CQS2 + CRR-FCSM-INST-CQS2
+        # GBP 1m loan under FAC_FCSM_INST_CQS2.  Half-collateralised with
+        # COLL_INST_BOND_CQS2 (EUR-denominated institution bond, issuer_cqs=2).
+        # B31 target: RWA = 650,000 (blended RW 65%).
+        # CRR contrastive: RWA = 750,000 (blended RW 75%).
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_FCSM_INST_CQS2",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CP_BORROWER_FCSM_INST",
+            value_date=VALUE_DATE,
+            maturity_date=date(2031, 1, 1),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
         # P1.158: Target for COLL_P1158_CORP_BOND_001
         # £1m corporate term loan (~6y maturity) to unrated corporate counterparty.
         # Collateral: £500k corp bond CQS 2, residual_maturity_years=None.

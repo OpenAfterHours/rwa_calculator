@@ -265,6 +265,20 @@ def _corporate_external_ratings() -> list[Rating]:
         Rating(
             "RTG_CORP_UK_005", "CORP_UK_005", "external", "S&P", "BB+", 4, None, RATING_DATE, True
         ),
+        # P1.106 / B31-FCSM-INST-CQS2: FCSM institution-bond collateral scenario borrower
+        # CQS 4 corporate = 100% RW under both CRR and B31, so framework divergence comes
+        # exclusively from the FCSM collateral branch (institution bond CQS 2).
+        Rating(
+            "RTG_CORP_FCSM_INST_001",
+            "CP_BORROWER_FCSM_INST",
+            "external",
+            "S&P",
+            "BB+",
+            4,
+            None,
+            RATING_DATE,
+            True,
+        ),
         # CQS 5/6 Corporates - 150% Risk Weight
         Rating(
             "RTG_CORP_XX_001", "CORP_XX_001", "external", "Fitch", "B-", 5, None, RATING_DATE, True

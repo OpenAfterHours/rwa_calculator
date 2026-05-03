@@ -25,11 +25,15 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.data.tables.crr_risk_weights import (
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
+)
 from rwa_calc.data.tables.crr_simple_method import (
     FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
 )
-from rwa_calc.domain.enums import ApproachType
+from rwa_calc.domain.enums import ApproachType, CQS
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -43,7 +47,8 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     collateral were itself an exposure.
 
     Args:
-        is_basel_3_1: Whether Basel 3.1 tables apply (affects corporate CQS 5).
+        is_basel_3_1: Whether Basel 3.1 tables apply (affects institution CQS 2
+            ECRA divergence and corporate CQS 5).
 
     Returns:
         Polars expression producing the collateral's own risk weight (float).
@@ -75,22 +80,30 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
         .otherwise(1.00)  # unrated sovereign → conservative 100%
     )
 
-    # Institution bonds → Art. 120 Table 3 (standard treatment)
+    # Institution bonds → Art. 120 Table 3 (CRR) / PRA PS1/26 Table 3 ECRA (B31).
+    # CQS 2 diverges: 50% under CRR, 30% under B31 ECRA. Risk weights are sourced
+    # from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA so the dicts remain the single
+    # source of truth.
     is_institution = (
         pl.col("issuer_type")
         .fill_null("")
         .str.to_lowercase()
         .is_in(["institution", "bank", "credit_institution"])
     )
+    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
     institution_rw = (
         pl.when(cqs == 1)
-        .then(0.20)
-        .when(cqs.is_in([2, 3]))
-        .then(0.50)
-        .when(cqs.is_in([4, 5]))
-        .then(1.00)
+        .then(float(inst_table[CQS.CQS1]))
+        .when(cqs == 2)
+        .then(float(inst_table[CQS.CQS2]))
+        .when(cqs == 3)
+        .then(float(inst_table[CQS.CQS3]))
+        .when(cqs == 4)
+        .then(float(inst_table[CQS.CQS4]))
+        .when(cqs == 5)
+        .then(float(inst_table[CQS.CQS5]))
         .when(cqs == 6)
-        .then(1.50)
+        .then(float(inst_table[CQS.CQS6]))
         .otherwise(1.00)  # unrated institution → conservative 100%
     )
 

@@ -220,6 +220,29 @@ def _corporate_facilities() -> list[Facility]:
             seniority="senior",
             risk_type="MR",  # Medium risk - committed undrawn
         ),
+        # =========================================================================
+        # P1.106 / B31-FCSM-INST-CQS2 + CRR-FCSM-INST-CQS2
+        # GBP 1m term facility to CQS 4 corporate borrower.
+        # Half-collateralised with EUR-denominated institution bond (CQS 2).
+        # B31 target: blended RW = 65% (0.30 × 0.50 + 1.00 × 0.50).
+        # CRR contrastive: blended RW = 75% (0.50 × 0.50 + 1.00 × 0.50).
+        # =========================================================================
+        Facility(
+            facility_reference="FAC_FCSM_INST_CQS2",
+            product_type="TERM_FACILITY",
+            book_code="CORP_LENDING",
+            counterparty_reference="CP_BORROWER_FCSM_INST",
+            value_date=VALUE_DATE,
+            maturity_date=date(2031, 1, 1),
+            currency="GBP",
+            limit=1_000_000.0,
+            committed=True,
+            lgd=0.45,
+            beel=0.0,
+            is_revolving=False,
+            seniority="senior",
+            risk_type="MR",
+        ),
     ]
 
 

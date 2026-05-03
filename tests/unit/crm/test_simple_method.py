@@ -235,10 +235,38 @@ class TestCollateralRWDerivation:
             0.20, abs=1e-10
         )
 
-    def test_institution_cqs2_fifty_pct(self):
-        assert self._compute_rw("corporate_bond", "institution", 2) == pytest.approx(
-            0.50, abs=1e-10
-        )
+    def test_institution_cqs2_crr_fifty_pct(self):
+        """CRR Art. 120 Table 3: institution CQS 2 = 50%."""
+        assert self._compute_rw(
+            "corporate_bond", "institution", 2, is_basel_3_1=False
+        ) == pytest.approx(0.50, abs=1e-10)
+
+    def test_institution_cqs2_b31_thirty_pct(self):
+        """B31 ECRA: PRA PS1/26 Art. 120 Table 3 institution CQS 2 = 30%.
+
+        Under Basel 3.1 ECRA (Art. 120 Table 3), CQS 2 institutions attract
+        30% risk weight, down from 50% under CRR. This is the FCSM collateral
+        risk weight used when the Simple Method is elected (Art. 222(1)).
+
+        References:
+            PRA PS1/26 Art. 120 Table 3 (ps126app1.pdf)
+            INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.CQS2] = Decimal("0.30")
+        """
+        # Arrange: institution bond, CQS 2, Basel 3.1 framework
+        # Act: derive collateral risk weight using _derive_collateral_rw_expr
+        # Assert: 30% (B31 ECRA) not 50% (CRR)
+        assert self._compute_rw(
+            "bond", "institution", 2, is_basel_3_1=True
+        ) == pytest.approx(0.30, abs=1e-10)
+
+    def test_institution_cqs3_both_frameworks_fifty_pct(self):
+        """Institution CQS 3 = 50% under both CRR and B31 ECRA (no divergence at CQS 3)."""
+        assert self._compute_rw(
+            "bond", "institution", 3, is_basel_3_1=False
+        ) == pytest.approx(0.50, abs=1e-10)
+        assert self._compute_rw(
+            "bond", "institution", 3, is_basel_3_1=True
+        ) == pytest.approx(0.50, abs=1e-10)
 
     def test_institution_unrated_hundred_pct(self):
         assert self._compute_rw("corporate_bond", "institution", None) == pytest.approx(

@@ -579,6 +579,25 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "is_managed_as_retail": False,
         },
         # =============================================================================
+        # P1.106 / B31-FCSM-INST-CQS2: FCSM institution-bond collateral scenario
+        # Corporate borrower, CQS 4 (100% RW under both CRR and B31 SA).
+        # Chosen so the unsecured RW is identical across frameworks — divergence comes
+        # solely from the FCSM institution-bond collateral branch (B31 Art. 120 ECRA
+        # Table 3: CQS 2 = 30% vs CRR Art. 120 Table 3: CQS 2 = 50%).
+        # =============================================================================
+        {
+            "counterparty_reference": "CP_BORROWER_FCSM_INST",
+            "counterparty_name": "FCSM Institution Bond Test Corp Ltd",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 100_000_000.0,  # Large corporate (unrated-style, CQS 4)
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "64.19",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # =============================================================================
         # CRR-A7: Commercial RE borrower (40% LTV, income cover)
         # =============================================================================
         {

@@ -1,18 +1,16 @@
 ---
-description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md, dispatch one item-lead agent per item to drive the four-wave pipeline inside its own git worktree, then squash-merge each item back into the current branch under a single global validation gate. Default N=3, capped at 5. Hard-excludes items that touch shared engine files.
+description: Pick top N non-conflicting items from IMPLEMENTATION_PLAN.md, drive the four-wave pipeline (scenario-architect → fixture-builder → test-writer → engine-implementer) per item inside dedicated git worktrees with N items in flight per wave, then squash-merge each item back into the current branch under a single global validation gate. Default N=3, capped at 5. Hard-excludes items that touch shared engine files.
 argument-hint: [N]
 ---
 
 You are draining `IMPLEMENTATION_PLAN.md` in batches. Each item runs
 in its **own git worktree**, on its own `batch/<batch-id>/<P-code>`
-branch, driven by an **`item-lead` agent** that owns the
+branch. The orchestrator (this session) drives the four-wave
 scenario-architect → fixture-builder → test-writer →
-engine-implementer chain for that item. The item-lead absorbs all
-four sub-agent reports in *its* context and returns a single
-condensed summary to you, so your context only carries N summaries
-instead of 4×N reports.
+engine-implementer chain directly, with N items in flight per wave —
+parallel within a wave, sequential between waves.
 
-After all item-leads return, you squash-merge each worktree branch
+After all four waves return, you squash-merge each worktree branch
 back into the **current branch** (the operator pre-creates a feature
 branch before invoking this command), run the global validation gate
 **once** on the merged tree, then tick the plan and clean up the
@@ -108,53 +106,102 @@ git worktree list
 
 Expect the main tree plus N sibling entries.
 
-## Step 4 — dispatch N item-leads in parallel
+## Step 4 — drive the four-wave pipeline
 
-For multi-item batches, the four-wave pipeline runs **inside an
-`item-lead` agent per item**, not flat-fanned-out from this session.
-Each item-lead drives its own scenario-architect → fixture-builder →
-test-writer → engine-implementer chain inside its worktree, absorbs
-all four sub-agent reports in *its* context, and returns one
-condensed summary to you. This keeps your context clean: you see N
-summaries, not 4×N reports.
+The orchestrator runs all four waves directly. Within each wave,
+dispatch one role-agent **per surviving item**, all in parallel
+(single message, multiple Agent tool calls). Wait for the wave to
+return, then proceed to the next wave. Sequential between waves;
+parallel within a wave. With N=3 and no drops, that's 12 Agent calls
+total spread across 4 messages — not 12 separate messages.
 
-In a single message, dispatch N `item-lead` Agent calls — one per
-batched item, all in parallel. Use this prompt template, with
-`<absolute worktree path>` and `<absolute main .venv path>`
-substituted from Step 3:
+### Worktree preamble
 
-> You are the item-lead for **<P-CODE>** (batch `<batch-id>`).
->
-> Worktree path: `<absolute worktree path>`
-> Main .venv path: `<absolute main .venv path>`
->
-> Drive the four-wave pipeline (scenario-architect →
-> fixture-builder → test-writer → engine-implementer) inside the
-> worktree per your system prompt, then return one condensed
-> summary. Do not commit. Do not run the global validation gate.
+Every Agent call to `fixture-builder`, `test-writer`, or
+`engine-implementer` must include this preamble verbatim, with the
+two paths substituted from Step 3:
+
+> Operate inside the worktree at `<absolute worktree path>` for this
+> task. Use absolute paths beginning with that prefix in all Read /
+> Edit / Write / Bash calls. Do **not** edit files in the main repo
+> tree. The repo's main virtual environment is shared via
+> `UV_PROJECT_ENVIRONMENT=<absolute main .venv path>` — prepend it
+> to any `uv run` command, e.g.
+> `UV_PROJECT_ENVIRONMENT=<...> uv run pytest <...>`.
+
+`scenario-architect` is read-only and does **not** receive this
+preamble — let it operate in the main tree.
+
+For single-stream / hard-excluded items running in the main tree
+(no worktree), omit the preamble entirely for all four waves.
+
+### Wave 1 — scenario-architect (parallel × N items)
+
+Dispatch one `scenario-architect` Agent call per item with the
+bullet inline:
+
+> Design the work needed for **<P-CODE>**. Read the bullet from
+> `IMPLEMENTATION_PLAN.md` below and the cited spec. Produce the
+> structured proposal per your system prompt.
 >
 > --- plan item ---
-> {{exact bullet text from IMPLEMENTATION_PLAN.md}}
+> {{exact bullet text}}
 
-Wait for all N item-leads to return. Each will report
-`merge-ready` or `dropped-<reason>` with files changed, the new
-test path, the targeted pytest result, and any concerns.
+Wait for all proposals. For any proposal that is unusable (missing
+fixture shape, no expected outputs, no citations), drop that item
+from the rest of the batch and surface the reason to the operator:
+"Dropped <P-code>: scenario-architect proposal incomplete
+(<what's missing>)". Its worktree is torn down in Step 8. Continue
+with the remaining items.
 
-### Single-stream / hard-excluded items
+### Wave 2 — fixture-builder (parallel × surviving items, skip if not needed)
 
-For an item that hit the hard-exclusion list in Step 1 (touches
-`pipeline.py` / `protocols.py` / `bundles.py` / `aggregator.py`),
-skip the item-lead. The item runs in the main tree as the old flow
-did: dispatch scenario-architect / fixture-builder / test-writer /
-engine-implementer directly from this session, in sequence, without
-worktree preambles. The implementer's targeted pytest is the only
-per-item validation; the global gate at Step 6 still runs once.
+For each surviving item whose proposal calls for new fixture rows or
+a new builder module, dispatch one `fixture-builder` Agent call with
+the proposal + (if worktree) the worktree preamble.
+
+For items whose proposal explicitly says "no new fixtures", skip
+the call entirely — they go straight to Wave 3 with an empty
+fixture report.
+
+Wait for all fixture-builder reports. Drop any item whose builder
+failed (error report or no usable parquet produced).
+
+### Wave 3 — test-writer (parallel × surviving items)
+
+Dispatch one `test-writer` Agent call per surviving item with the
+proposal + the fixture report (or "no new fixtures") + (if worktree)
+the worktree preamble.
+
+Wait for all test reports. The test-writer must leave the test
+failing for the right reason — verified inside the worktree (or main
+tree for hard-excluded items). Drop any item that returned without a
+clean failure mode.
+
+### Wave 4 — engine-implementer (parallel × surviving items)
+
+Dispatch one `engine-implementer` Agent call per surviving item with
+the proposal + the failing-test report + (if worktree) the worktree
+preamble. Append this scoping clause to every prompt:
+
+> Run only this item's targeted pytest target — **not** the global
+> validation gate. The parent orchestrator runs the global gate
+> once on the merged feature branch after all items return. Do not
+> run `ruff check src/`, `ty src/`, or `pytest tests/contracts/`
+> here — those are deferred. The targeted test you must verify
+> green is the path your test-writer reported.
+
+Wait for all implementation reports. Drop any item whose targeted
+pytest failed.
+
+After Wave 4 you have two lists: items that survived all four waves
+(carry forward to Step 5) and items dropped along the way (skip in
+Step 5; teardown in Step 8).
 
 ## Step 5 — squash-merge into the current branch
 
-Skip any item the item-lead returned as `dropped-<reason>` — its
-worktree branch has nothing to merge. Tear it down in Step 8 and
-keep going.
+Skip any item that was dropped during Waves 1–4 — its worktree
+branch has nothing to merge. Tear it down in Step 8 and keep going.
 
 Single-stream / hard-excluded items: this step is replaced by the
 old in-place commit sequence (`git add` the engine-implementer's
@@ -162,7 +209,7 @@ files, commit with `feat(<P-code>): <summary> [batch <batch-id>]`).
 Skip to Step 6.
 
 For multi-item batches, in **tier-priority order**, for every item
-the item-lead returned as `merge-ready`:
+that survived all four waves with its targeted pytest green:
 
 ```
 git checkout <merge-target-branch>
@@ -248,16 +295,18 @@ observable).
 
 - Cap N at 5 even if the user asks for more.
 - Never tick the plan if the global gate is red.
-- Do not run the global gate inside any item-lead or
-  engine-implementer — it runs once at Step 6 on the merged tree.
-- The call graph is exactly two levels deep: this orchestrator → an
-  `item-lead` → one of `scenario-architect` / `fixture-builder` /
-  `test-writer` / `engine-implementer`. Item-leads never spawn other
-  item-leads.
-- If an item-lead returns `dropped-<reason>`, surface the reason and
-  the implicated wave to the operator and continue. The dropped
-  item's worktree + branch are torn down in Step 8.
+- Do not run the global gate inside any role-agent — it runs once
+  at Step 6 on the merged tree.
+- The call graph is exactly one level deep: this orchestrator → one
+  of `scenario-architect` / `fixture-builder` / `test-writer` /
+  `engine-implementer`. The orchestrator drives the four waves
+  directly; sub-agents do not spawn other sub-agents.
+- If a wave drops an item (proposal incomplete / fixture failed /
+  test not failing cleanly / implementation failed), surface the
+  reason and the wave to the operator and continue with the
+  remaining items. The dropped item's worktree + branch are torn
+  down in Step 8.
 - Hard-excluded items never appear in a multi-item batch — they
   always run alone, in the main tree, with no worktree machinery
-  and no item-lead (Step 3 and Step 5's merge are both skipped, and
-  Step 4 falls back to direct sub-agent dispatch).
+  (Step 3 and Step 5's merge are both skipped). Step 4's per-wave
+  dispatch is unchanged except the worktree preamble is omitted.

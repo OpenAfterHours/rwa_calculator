@@ -204,29 +204,51 @@ flowchart LR
 
 ### Double Default (CRR Only)
 
-For qualifying guarantees under CRR, the double default treatment (Art. 153(3)) scales the
-obligor's IRB capital requirement by a factor that reflects the guarantor's creditworthiness:
+For qualifying guarantees under CRR, the double default treatment (Art. 153(3)) adjusts the
+risk-weighted exposure amount by a factor that reflects the guarantor's creditworthiness:
 
 ```
-K_dd = K_obligor × (0.15 + 160 × PD_guarantor)
+RWEA_dd = RW × exposure_value × (0.15 + 160 × PD_pp)
 ```
 
-Where `K_obligor` is the IRB capital requirement calculated using the obligor's PD and the
-guarantor's LGD (Art. 161(4)), and `PD_guarantor` is the protection provider's probability of
-default. The scaling factor `(0.15 + 160 × PD_guarantor)` is always less than 1 for investment-grade
-guarantors, providing significant capital relief.
+Where `RW` is calculated using the **obligor's PD** combined with the **LGD of a comparable
+direct exposure to the protection provider** (per Art. 161(4)), `PD_pp` is the protection
+provider's probability of default, and the maturity factor `b` is calculated using the lower
+of the guarantor and obligor PDs. The scaling factor `(0.15 + 160 × PD_pp)` is less than 1
+for investment-grade guarantors, providing meaningful capital relief.
 
-**Eligibility (Art. 202, Art. 217):**
+**Eligibility — protection provider (Art. 202):**
 
-- Underlying exposure must be corporate, RGLA, PSE, or SME retail
-- Protection provider must be an institution, investment firm, insurance undertaking, or export
-  credit agency with internal PD equivalent to CQS 2 or better (CQS 3 maintained threshold)
+- Must be an institution, investment firm, insurance/reinsurance undertaking, or export
+  credit agency
+- Must be regulated equivalently to the CRR, **or** had an ECAI assessment ≥ CQS 3 at the
+  time the protection was provided (Art. 202(b))
+- Must have had, at the time the protection was provided (or any period thereafter), an
+  internal rating with PD equivalent to **CQS 2 or better** (Art. 202(c))
+- Must currently have an internal rating with PD equivalent to **CQS 3 or better**
+  (Art. 202(d))
+- Export credit agency protection must not benefit from any explicit central government
+  counter-guarantee
+
+**Eligibility — exposure & operational (Art. 153(3), Art. 154(2), Art. 217):**
+
+- Underlying exposure must be corporate, institution, central government/central bank, or
+  retail SME (the latter via Art. 154(2) cross-reference to Art. 153(3))
 - Obligor and protection provider must not be in the same group
-- A-IRB permission required (the firm must model PD internally for the guarantor)
-- Risk weight must not already factor in any aspect of the credit protection
+- Risk weight on the underlying exposure must not already factor in any aspect of the
+  credit protection
+- The institution must hold **A-IRB own-LGD permission** for the relevant exposure class:
+  Art. 153(3) requires the LGD of a comparable direct exposure to the protection provider
+  (Art. 161(4)), which in turn presupposes the own-LGD recognition framework of Art. 161(3).
+  Foundation-IRB firms (supervisory LGD per Art. 161(1)) cannot use the double-default
+  formula and must fall back to Art. 235 risk weight substitution or Art. 236 parameter
+  substitution.
 
-The resulting risk-weighted amount is floored at the guarantor's own risk weight (Art. 153(3)
-paragraph 2).
+The general Art. 161(3) floor still applies: the adjusted risk weight from the double-default
+treatment must not be lower than that of a comparable direct exposure to the guarantor.
+
+> Formal definition and full eligibility text:
+> [CRR Credit Risk Mitigation Specification](../../specifications/crr/credit-risk-mitigation.md).
 
 !!! warning "Removed under Basel 3.1"
     PRA PS1/26 blanks Art. 153(3), Art. 202, and Art. 217 — the double default treatment is

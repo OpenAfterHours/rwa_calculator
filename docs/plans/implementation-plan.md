@@ -70,7 +70,7 @@ Each scenario defines **specific inputs** and **expected outputs** with hand-cal
 | CRR-D2 | Govt bond collateral | £1m exp, £600k gilts (5y) | Haircut applied | CRR Art. 224 |
 | CRR-D3 | Equity collateral (main index) | £1m exp, £400k listed equity | 15% haircut | CRR Art. 224 |
 | CRR-D4 | Guarantee substitution | £1m corp, £600k bank guarantee | Split RW | CRR Art. 213 |
-| CRR-D5 | Maturity mismatch | £1m exp 5y, £500k collateral 2y | Adjusted value | CRR Art. 238 |
+| CRR-D5 | Maturity mismatch | £1m exp 5y, £500k collateral 2y | Adjusted value | CRR Art. 239(2)/(3) (formula); Art. 238 (measurement) |
 | CRR-D6 | Currency mismatch | £1m GBP exp, €500k collateral | 8% FX haircut | CRR Art. 224 |
 
 ### Scenario Group CRR-E: Specialised Lending (Slotting)

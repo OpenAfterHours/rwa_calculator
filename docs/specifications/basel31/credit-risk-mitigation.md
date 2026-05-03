@@ -849,8 +849,11 @@ in the **same currency**, the floor drops to **0%** if either:
 ### Art. 222 — No Maturity Mismatch
 
 Under the FCSM, the collateral's residual maturity must be at least equal to the exposure's
-residual maturity. The Art. 238 maturity mismatch adjustment does **not** apply to the
-FCSM (Art. 239(1) excludes FCSM from the maturity-mismatch formula).
+residual maturity. The Art. 239(2) maturity mismatch adjustment formula
+(`CVAM = CVA × (t − 0.25) / (T − 0.25)`, with `t` and `T` measured per Art. 238) does **not**
+apply to the FCSM — Art. 239(1) excludes FCSM from the maturity-mismatch formula entirely:
+the collateral simply does not qualify as eligible funded credit protection where any
+mismatch exists.
 
 ---
 

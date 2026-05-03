@@ -553,7 +553,7 @@ When credit protection covers a specific tranche (first loss or mezzanine) rathe
 
 - **First loss tranche**: The protection covers losses up to a specified threshold. The firm bears losses above the threshold. The protected portion uses the protection provider's risk weight; the retained senior tranche uses the obligor's risk weight.
 - **Second loss / mezzanine tranche**: More complex — the firm bears first losses up to the attachment point, protection covers the mezzanine band. The first loss portion may attract higher risk weights (up to 1250% for securitisation-like treatment).
-- **Maturity mismatch**: Standard maturity mismatch adjustment (Art. 238) applies to the protected tranche.
+- **Maturity mismatch**: Standard maturity mismatch adjustment (Art. 239(2)/(3); Art. 238 governs maturity *measurement*) applies to the protected tranche.
 
 !!! note "Implementation Status"
     Proportional coverage is implemented. Tranched coverage (Art. 234) is not yet implemented — all guarantee coverage is treated as proportional. This is a future enhancement for structured credit protection.

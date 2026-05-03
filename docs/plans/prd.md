@@ -114,7 +114,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
 | FR-2.1 | Collateral recognition for 9 types: cash, government bonds, corporate bonds, covered bonds, listed equity, other equity, real estate, receivables, physical | P0 | Done |
-| FR-2.2 | Supervisory haircut application (CRR Art. 224) with maturity mismatch (Art. 238) and currency mismatch (+8%) | P0 | Done |
+| FR-2.2 | Supervisory haircut application (CRR Art. 224) with maturity mismatch (Art. 239(2)/(3); Art. 238 measurement) and currency mismatch (+8%) | P0 | Done |
 | FR-2.3 | Overcollateralisation ratios (CRR Art. 230): 1.0x financial, 1.25x receivables, 1.4x RE/physical | P0 | Done |
 | FR-2.4 | Multi-level collateral allocation: direct (loan), facility (pro-rata), counterparty (pro-rata) | P0 | Done |
 | FR-2.5 | Guarantee substitution: split RWA into covered (guarantor RW) and uncovered (original RW) portions | P0 | Done |
@@ -350,7 +350,8 @@ Input Data (Parquet/CSV/DataFrames)
 | Art. 213 | Guarantee substitution | Done |
 | Art. 224 | Supervisory haircut table | Done |
 | Art. 230 | Overcollateralisation ratios | Done |
-| Art. 238 | Maturity mismatch adjustment | Done |
+| Art. 238 | Measurement of credit-protection maturity (5-year cap, termination-option handling) | Done |
+| Art. 239(2)/(3) | Maturity mismatch adjustment formula (`CVAM` for funded, `GA` for unfunded) | Done |
 | Art. 501 | SME supporting factor (tiered) | Done |
 | Art. 501a | Infrastructure supporting factor | Done |
 

@@ -24,7 +24,8 @@
 | Art. 213–217 | Guarantee and credit derivative substitution | Done |
 | Art. 224 | Supervisory haircut table | Done |
 | Art. 230 | Overcollateralisation ratios (Foundation Collateral Method) | Done |
-| Art. 238 | Maturity mismatch adjustment | Done |
+| Art. 238 | Measurement of credit-protection maturity (5-year cap, termination-option handling) | Done |
+| Art. 239(2)/(3) | Maturity mismatch adjustment formula (`CVAM` for funded, `GA` for unfunded) | Done |
 | Art. 501 | SME supporting factor (tiered: 0.7619/0.85) | Done |
 | Art. 501a | Infrastructure supporting factor (0.75) | Done |
 

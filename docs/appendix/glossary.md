@@ -300,6 +300,6 @@ Losses above expected levels, covered by regulatory capital. UL = RWA × 8%.
 | **Expected Loss** | `PD x LGD x EAD` | PRA Rulebook Art. 158 (CRR Art. 158 omitted by SI 2021/1078) |
 | **EAD (off-BS)** | `Drawn + Undrawn x CCF` | CRR Art. 111, 166 |
 | **Effectively Secured** | `Adjusted Collateral Value / Overcollateralisation Ratio` | CRR Art. 230 |
-| **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 238 |
+| **Maturity Mismatch** | `(t - 0.25) / (T - 0.25)` | CRR Art. 239(2) (funded `CVAM`) / Art. 239(3) (unfunded `GA`); `t`, `T` measured per Art. 238 |
 | **Output Floor** | `max(RWA_IRB, floor% x RWA_SA)` | PRA PS1/26 |
 | **SME SF (Blended)** | `[min(E,T) x 0.7619 + max(E-T,0) x 0.85] / E` | CRR Art. 501 |

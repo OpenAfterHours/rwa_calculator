@@ -62,6 +62,7 @@ References:
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -116,6 +117,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     OTHER_ITEMS_CASH_RW,
     OTHER_ITEMS_COLLECTION_RW,
     OTHER_ITEMS_DEFAULT_RW,
+    PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
     QCCP_CLIENT_CLEARED_RW,
@@ -123,6 +125,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
+    RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
     build_institution_guarantor_rw_expr,
@@ -265,6 +268,39 @@ _SA_B31_RW: dict[str, float] = {
     "defaulted_low": float(B31_DEFAULTED_RW_LOW_PROVISION),
     "defaulted_resi_re_non_income": float(B31_DEFAULTED_RESI_RE_NON_INCOME_RW),
 }
+
+
+# ---------------------------------------------------------------------------
+# Sovereign-derived risk-weight helpers (PSE Art. 116(1) Table 2 /
+# RGLA Art. 115(1)(a) Table 1A)
+# ---------------------------------------------------------------------------
+
+
+def _sovereign_derived_rw_expr(
+    table: dict[CQS, Decimal],
+    unrated_default: float,
+) -> pl.Expr:
+    """Build Polars expression for sovereign-CQS-derived RW lookup.
+
+    Used for unrated PSEs (Art. 116(1) Table 2) and unrated non-domestic
+    RGLAs (Art. 115(1)(a) Table 1A). Both tables map sovereign CQS (1-6) to
+    a risk weight; when ``cp_sovereign_cqs`` is null/unknown, the
+    conservative ``unrated_default`` (100%) is applied.
+
+    References:
+        CRR Art. 116(1) Table 2 — sovereign-derived PSE risk weights
+        CRR Art. 115(1)(a) Table 1A — sovereign-derived RGLA risk weights
+        PRA PS1/26 Art. 116 / 115 (identical values)
+    """
+    cqs_order: list[CQS] = [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]
+    expr = pl.when(pl.col("cp_sovereign_cqs") == int(cqs_order[0])).then(
+        pl.lit(float(table[cqs_order[0]]))
+    )
+    for cqs_val in cqs_order[1:]:
+        expr = expr.when(pl.col("cp_sovereign_cqs") == int(cqs_val)).then(
+            pl.lit(float(table[cqs_val]))
+        )
+    return expr.otherwise(pl.lit(unrated_default))
 
 
 # ---------------------------------------------------------------------------
@@ -862,13 +898,15 @@ def _apply_b31_risk_weight_overrides(
             & (pl.col("original_maturity_years") <= 0.25)
         )
         .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
-        # PSE unrated: sovereign-derived (Art. 116(1), Table 2). UK
-        # sovereign CQS=1 -> 20%; non-UK falls back to conservative 100%.
+        # PSE unrated: sovereign-derived RW lookup (Art. 116(1), Table 2).
+        # Maps cp_sovereign_cqs -> RW; falls back to 100% when sovereign
+        # CQS is unknown.
         .when((uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            pl.when(pl.col("cp_country_code") == "GB")
-            .then(pl.lit(0.20))
-            .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
+            _sovereign_derived_rw_expr(
+                PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                _SA_SHARED_RW["pse_unrated"],
+            )
         )
         # RGLA UK devolved govt -> 0% (PRA designation).
         .when(
@@ -880,12 +918,15 @@ def _apply_b31_risk_weight_overrides(
         # RGLA domestic currency -> 20% (Art. 115(5)).
         .when((uc == "RGLA") & is_domestic_currency)
         .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
-        # RGLA unrated non-domestic: sovereign-derived (Table 1A).
+        # RGLA unrated non-domestic: sovereign-derived (Art. 115(1)(a)
+        # Table 1A). Maps cp_sovereign_cqs -> RW; falls back to 100% when
+        # sovereign CQS is unknown.
         .when((uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            pl.when(pl.col("cp_country_code") == "GB")
-            .then(pl.lit(0.20))
-            .otherwise(pl.lit(_SA_SHARED_RW["rgla_unrated"]))
+            _sovereign_derived_rw_expr(
+                RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                _SA_SHARED_RW["rgla_unrated"],
+            )
         )
         # Named MDB -> 0% (Art. 117(2)).
         .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
@@ -1048,12 +1089,15 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("original_maturity_years") <= 0.25)
         )
         .then(pl.lit(_SA_SHARED_RW["pse_short_term"]))
-        # PSE unrated: sovereign-derived (Art. 116(1), Table 2).
+        # PSE unrated: sovereign-derived RW lookup (Art. 116(1), Table 2).
+        # Maps cp_sovereign_cqs -> RW; falls back to 100% when sovereign
+        # CQS is unknown.
         .when((uc == "PSE") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            pl.when(pl.col("cp_country_code") == "GB")
-            .then(pl.lit(0.20))
-            .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
+            _sovereign_derived_rw_expr(
+                PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                _SA_SHARED_RW["pse_unrated"],
+            )
         )
         # RGLA UK devolved govt -> 0% (PRA designation).
         .when(
@@ -1065,12 +1109,15 @@ def _apply_crr_risk_weight_overrides(
         # RGLA domestic currency -> 20% (Art. 115(5)).
         .when((uc == "RGLA") & is_domestic_currency)
         .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
-        # RGLA unrated non-domestic: sovereign-derived (Table 1A).
+        # RGLA unrated non-domestic: sovereign-derived (Art. 115(1)(a)
+        # Table 1A). Maps cp_sovereign_cqs -> RW; falls back to 100% when
+        # sovereign CQS is unknown.
         .when((uc == "RGLA") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(
-            pl.when(pl.col("cp_country_code") == "GB")
-            .then(pl.lit(0.20))
-            .otherwise(pl.lit(_SA_SHARED_RW["rgla_unrated"]))
+            _sovereign_derived_rw_expr(
+                RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                _SA_SHARED_RW["rgla_unrated"],
+            )
         )
         # Named MDB -> 0% (Art. 117(2)).
         .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))

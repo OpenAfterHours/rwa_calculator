@@ -1297,8 +1297,52 @@ Where an Export Credit Agency (ECA) credit assessment is nominated under Art. 13
 
 This mapping is used for sovereign exposures (Art. 114) where an ECA assessment is recognised, and — via the institution-from-sovereign rules — for deriving institution risk weights where the sovereign itself is rated only by an ECA.
 
-!!! note "Implementation Status"
-    MEIP score lookup is not yet implemented. The calculator currently requires ECAI CQS for rated exposures. Direct MEIP-to-risk-weight mapping per Art. 137(2) Table 9 is a future enhancement.
+### Art. 136 vs Art. 137 — two distinct mappings
+
+CRR provides **two** routes by which an external assessment becomes a risk weight, and
+they must not be conflated:
+
+- **Art. 136 — ECAI mapping to CQS.** The PRA, by technical standard, maps each
+  nominated ECAI's credit assessments onto Credit Quality Steps 1–6. Articles 114, 120,
+  122, 129, 131 etc. then look the CQS up in their respective risk-weight tables
+  ("a risk weight in accordance with Table N which corresponds to the credit assessment
+  of the ECAI **in accordance with Article 136**" — verbatim from each of those
+  articles). Where a counterparty is rated only by an Export Credit Agency that has been
+  recognised as an ECAI, the ECA assessment flows through the **Art. 136 CQS pipeline**
+  in the normal way.
+- **Art. 137 — direct MEIP-to-RW.** Where an Export Credit Agency assessment is
+  nominated under Art. 137(1) — i.e. an OECD consensus risk score or a published
+  assessment associated with one of the eight Minimum Export Insurance Premiums — the
+  risk weight is read **directly** from Table 9 above. There is no intermediate CQS
+  step; MEIP score 0–7 maps straight to 0% / 0% / 20% / 50% / 100% / 100% / 100% / 150%.
+
+The two routes are alternatives, not a chain: an institution chooses which nominated
+assessment applies to a given Art. 114 sovereign exposure and uses the corresponding
+table.
+
+!!! warning "Implementation Status — Open Gap"
+    Neither Art. 137 direct MEIP lookup **nor** any ECA-score-to-CQS mapping under
+    Art. 136 is implemented in the engine. The calculator currently accepts
+    `credit_quality_step` (CQS 1–6) directly on the input row and applies the
+    Art. 114 / 120 / 122 / 129 / 131 tables to that CQS — it does not ingest raw
+    ECAI grade strings, OECD consensus scores, or MEIP integers and resolve them.
+
+    **What the regulation requires.** A complete implementation would need to:
+
+    1. Accept either an ECAI grade (mapped via Art. 136 PRA technical standard to a
+       CQS) or an Art. 137 MEIP score (0–7) on the input row.
+    2. For Art. 137, route the MEIP score directly to Table 9 (above) without going
+       through a CQS, applying it to sovereign exposures under Art. 114 and — via the
+       sovereign-derived rules of Art. 121 (Table 5) — to unrated institutions in the
+       same jurisdiction.
+    3. Honour the multi-assessment selection rules of Art. 138 (use the second-best
+       assessment where two or more apply, etc.) across both ECAI and ECA inputs.
+
+    **Tracked as an open implementation gap.** This is a documentation-side flag only;
+    the corresponding engine work (input schema field for MEIP score, lookup table in
+    `data/tables/`, classifier wiring for Art. 114/121 sovereign-derived flow) has not
+    been scheduled. Operator note: surface this to `IMPLEMENTATION_PLAN.md` so it can
+    be triaged against P1 / P2 priority.
 
 ## Basel 3.1 Changes Summary
 

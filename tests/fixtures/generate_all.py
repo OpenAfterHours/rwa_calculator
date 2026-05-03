@@ -60,6 +60,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("P1.114 (null book_code / null country_code)", "p1_114", _generate_p1114),
         ("P1.112 (non-UK unrated PSE sovereign-derived RW)", "p1_112", _generate_p1112),
         ("P1.98 (subordinated corporate A-IRB LGD floor fallback)", "p1_98", _generate_p198),
+        ("P1.99 (CRR Art. 120(2) Table 4 short-term rated institution RW)", "p1_99", _generate_p199),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -283,6 +284,19 @@ def _generate_p198(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_98", None)
+
+
+def _generate_p199(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.99 fixtures (CRR Art. 120(2) Table 4 short-term rated institution RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_99 import save_p199_fixtures
+
+        saved = save_p199_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_99", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

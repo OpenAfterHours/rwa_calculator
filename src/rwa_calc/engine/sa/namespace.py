@@ -523,8 +523,17 @@ def _crr_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
     residual_mty = pl.col("residual_maturity_years").fill_null(1.0)
     original_mty = pl.col("original_maturity_years").fill_null(1.0)
     return (
-        # Art. 120(2) Table 4: rated institution short-term (residual maturity <= 3m).
-        chain.when(is_institution & is_rated & (residual_mty <= 0.25))
+        # Art. 120(2) Table 4: rated institution short-term (residual maturity
+        # <= 3m). Also fires on derived ORIGINAL maturity when
+        # residual_maturity_years is not populated upstream — original is
+        # derived from (maturity_date - value_date) earlier in the SA pipeline,
+        # mirroring the B31 ECRA short-term gate so date-only fixtures still
+        # qualify for Table 4 preferential weights.
+        chain.when(
+            is_institution
+            & is_rated
+            & ((residual_mty <= 0.25) | (original_mty <= 0.25))
+        )
         .then(
             pl.when(pl.col("cqs") <= 3)
             .then(pl.lit(_SA_CRR_RW["inst_st_low"]))

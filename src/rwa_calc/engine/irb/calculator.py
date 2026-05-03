@@ -211,14 +211,19 @@ class IRBCalculator:
                 )
             )
 
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
+        # Ensure ead_final exists so output schema is stable regardless of input
+        # (mirrors engine/irb/namespace.py::prepare_columns).
+        if "ead_final" not in schema.names():
+            exposures = exposures.with_columns(pl.col("ead").alias("ead_final"))
 
         exposures = exposures.with_columns(
-            (pl.col("pd") * pl.col("lgd") * pl.col(ead_col)).alias("expected_loss"),
+            (pl.col("pd") * pl.col("lgd") * pl.col("ead_final")).alias("expected_loss"),
         )
 
         return LazyFrameResult(
-            frame=exposures.select("exposure_reference", "pd", "lgd", ead_col, "expected_loss"),
+            frame=exposures.select(
+                "exposure_reference", "pd", "lgd", "ead_final", "expected_loss"
+            ),
             errors=errors,
         )
 

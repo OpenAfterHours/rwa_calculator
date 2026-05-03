@@ -714,7 +714,9 @@ Covered bonds backed by eligible collateral pools receive preferential risk weig
 ### CRR Covered Bond Risk Weights — Unrated (Art. 129(5))
 
 Unrated eligible covered bonds are assigned a risk weight derived from the issuing
-institution's senior unsecured risk weight:
+institution's senior unsecured risk weight. Under CRR, Art. 129(5) contains exactly
+**four sub-paragraphs** (a)–(d), enumerating the only institution RW inputs that can
+arise from the CRR Art. 120 / Art. 121 paths:
 
 | Institution Senior Unsecured RW | Covered Bond RW | Art. 129(5) Sub-Para |
 |---------------------------------|-----------------|----------------------|
@@ -726,6 +728,52 @@ institution's senior unsecured risk weight:
 The institution RW is determined per Art. 120 (ECRA rated) or Art. 121 (sovereign-derived).
 If the issuing institution itself is unrated under CRR, the sovereign-derived approach
 (Art. 121, Table 5) provides the institution RW, which then maps through the table above.
+
+!!! quote "CRR Art. 129(5) — verbatim (CRR p. 129)"
+    "[CRR covered bonds] for which a credit assessment by a nominated ECAI is not
+    available shall be assigned a risk weight on the basis of the risk weight
+    assigned to senior unsecured exposures to the institution which issues them.
+    The following correspondence between risk weights shall apply:
+    (a) if the exposures to the institution are assigned a risk weight of 20 %,
+    the [CRR covered bonds] shall be assigned a risk weight of 10 %;
+    (b) if the exposures to the institution are assigned a risk weight of 50 %,
+    the [CRR covered bonds] shall be assigned a risk weight of 20 %;
+    (c) if the exposures to the institution are assigned a risk weight of 100 %,
+    the [CRR covered bonds] shall be assigned a risk weight of 50 %;
+    (d) if the exposures to the institution are assigned a risk weight of 150 %,
+    the [CRR covered bonds] shall be assigned a risk weight of 100 %."
+
+    *Source: CRR Art. 129(5), as onshored — see `docs/assets/crr.pdf` p.129.*
+
+!!! warning "Only Four CRR Institution RWs Can Drive Art. 129(5)"
+    The CRR institution risk-weight set is exhaustive and consists of exactly the
+    values **{20%, 50%, 100%, 150%}** — produced by Art. 120 Table 3 (ECRA, CQS-keyed)
+    and Art. 121 Table 5 (sovereign-derived for unrated institutions). The CRR
+    short-term path (Art. 120(2) Table 4 / Art. 121(3)) and the trade-finance path
+    (Art. 121(4)) reuse the same RW set or fix the result outside the derivation
+    chain (e.g. flat 20% / 50%); they introduce no new RW inputs into Art. 129(5).
+
+    Consequently, **only four CRR covered bond RWs can be produced under
+    Art. 129(5): 10%, 20%, 50%, 100%** (and the 100% fallback when the institution
+    sits at 150%). The 30% / 40% / 75% institution RWs that drive Art. 129(5)(aa) /
+    (ab) / (ba) under PRA PS1/26 — corresponding to ECRA CQS 2 (30%), SCRA Grade A
+    (40%), and SCRA Grade B (75%) respectively — **do not exist in CRR** and cannot
+    arise under any CRR-only calculation path. See
+    [Basel 3.1 Covered Bond Changes (Art. 129)](#basel-31-covered-bond-changes-art-129)
+    below for the expanded 7-entry PRA PS1/26 derivation table, and the Basel 3.1
+    spec at
+    [`basel31/sa-risk-weights.md` — Unrated Covered Bonds](../basel31/sa-risk-weights.md#unrated-covered-bonds-art-1295)
+    for the full B31 narrative.
+
+!!! info "Implementation Note — Shared `covered_bond_unrated_derivation` Dict"
+    The shared regulatory-data dict `COVERED_BOND_UNRATED_DERIVATION` in
+    `src/rwa_calc/data/tables/crr_risk_weights.py` is sized to the **larger** B31
+    domain (7 entries) so that both CRR and B31 calculation paths can index it with
+    a single lookup. Under CRR-only configuration the calculator never queries the
+    `30%`, `40%`, or `75%` keys: the upstream institution-RW computation cannot
+    produce those values without the B31 ECRA Table 3 / SCRA grade tables. The dict
+    name's "CRR Art. 129(5), PRA PS1/26 Art. 129" comment reflects shared storage,
+    not framework equivalence — the four CRR-applicable rows are (a)/(b)/(c)/(d) only.
 
 ### Eligibility Conditions (Art. 129(1)–(3), (7))
 

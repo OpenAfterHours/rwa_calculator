@@ -403,7 +403,12 @@ class TestPipelineArt227:
         assert result["value_after_haircut"][0] == pytest.approx(1_000_000.0)
 
     def test_fx_haircut_applied_without_flag_cross_currency(self, crr_config) -> None:
-        """Pipeline: without Art. 227, cross-currency cash gets 8% FX haircut."""
+        """Pipeline: without Art. 227, cross-currency cash gets 8% FX haircut.
+
+        P1.186: liquidation_period_days=10 is set explicitly here because this
+        test verifies the 10-day capital-market FX haircut lookup value (8%),
+        not the secured-lending period scaling. The new default is 20-day (11.314%).
+        """
         calc = HaircutCalculator(is_basel_3_1=False)
         coll = _make_collateral(
             collateral_type="cash",
@@ -411,6 +416,7 @@ class TestPipelineArt227:
             currency="EUR",
             exposure_currency="GBP",
             qualifies_for_zero_haircut=False,
+            liquidation_period_days=10,  # P1.186: explicit 10-day to pin 8% FX haircut
         )
         result = calc.apply_haircuts(coll, crr_config).collect()
         assert result["fx_haircut"][0] == pytest.approx(0.08)

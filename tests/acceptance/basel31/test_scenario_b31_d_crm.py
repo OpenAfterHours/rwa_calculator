@@ -206,13 +206,15 @@ class TestB31GroupD_CreditRiskMitigation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        B31-D6: Currency mismatch adds 8% FX haircut.
+        B31-D6: Currency mismatch adds 11.314% FX haircut (20-day secured lending).
 
         Input: £1M GBP exposure, €500k EUR cash collateral
-        Expected: 8% FX haircut, adj collateral = £460k, RWA = £540k
+        Expected: 11.314% FX haircut (20-day secured-lending), adj collateral = £443.43k, RWA = £556.57k
 
-        FX mismatch haircut (8%) is unchanged between CRR (Art. 224) and
-        Basel 3.1 (CRE22.54).
+        FX mismatch haircut mechanics are unchanged between CRR (Art. 224) and
+        Basel 3.1 (CRE22.54), but the default liquidation period for secured
+        lending is 20 days (Art. 224(2)(a)), not 10 days.
+        H_fx = 8% × sqrt(20/10) = 8% × sqrt(2) ≈ 11.314%.
         """
         expected = expected_outputs_dict["B31-D6"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["B31-D6"]
@@ -284,15 +286,16 @@ class TestB31GroupD_FrameworkDifferences:
         - D2: CQS 1 sovereign 6yr haircut 4% (5-10yr = old 5y+)
         - D4: Guarantee substitution (mechanism unchanged)
         - D5: Maturity mismatch formula (unchanged)
-        - D6: FX haircut 8% (unchanged)
+        - D6: FX haircut 11.314% (20-day secured-lending default — same under CRR and B31)
         """
         # CRR expected RWA values from CRR acceptance tests
+        # P1.186: D2 updated from 424_000.0 → 433_941.13 (20-day default, 4% × √2 = 5.657%)
         crr_expected_rwa = {
             "B31-D1": 500_000.0,
-            "B31-D2": 424_000.0,
+            "B31-D2": 433_941.1254968619,
             "B31-D4": 580_000.0,
             "B31-D5": 815_789.47,
-            "B31-D6": 540_000.0,
+            "B31-D6": 556_568.54,
         }
         for scenario_id, crr_rwa in crr_expected_rwa.items():
             b31_expected = expected_outputs_dict[scenario_id]

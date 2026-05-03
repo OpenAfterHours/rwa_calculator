@@ -382,9 +382,17 @@ class TestPipelineEligibility:
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
 
     def test_pipeline_govt_bond_cqs4_eligible(self, crr_config) -> None:
-        """Pipeline: CQS 4 govt bond is eligible with 15% haircut."""
+        """Pipeline: CQS 4 govt bond is eligible with 15% haircut.
+
+        P1.186: liquidation_period_days=10 added explicitly to pin the 10-day
+        capital-market haircut (15%). The new pipeline default is 20-day, which
+        would scale to 15% × sqrt(2) ≈ 21.21%. This test exercises eligibility
+        and lookup correctness, not liquidation-period scaling.
+        """
         calc = HaircutCalculator(is_basel_3_1=False)
-        lf = self._make_collateral_lf("govt_bond", issuer_cqs=4)
+        lf = self._make_collateral_lf("govt_bond", issuer_cqs=4).with_columns(
+            pl.lit(10).alias("liquidation_period_days")  # P1.186: explicit 10-day
+        )
         result = calc.apply_haircuts(lf, crr_config).collect()
         expected = 500_000.0 * (1.0 - 0.15)  # 425,000
         assert result["value_after_haircut"][0] == pytest.approx(expected)

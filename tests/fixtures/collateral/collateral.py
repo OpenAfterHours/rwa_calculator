@@ -610,7 +610,9 @@ def _crm_test_collateral() -> list[Collateral]:
         ),
         # =============================================================================
         # D6: Currency mismatch scenario
-        # €500k collateral against GBP exposure - 8% FX haircut
+        # €500k collateral against GBP exposure
+        # FX haircut = 8% × √(20/10) = 11.314% (20-day liquidation period, non-SFT)
+        # CRR Art. 224(2)(a) / Art. 226(2)
         # =============================================================================
         Collateral(
             collateral_reference="COLL_CCY_MISMATCH_001",
@@ -858,9 +860,10 @@ def _crr_d_scenario_collateral() -> list[Collateral]:
         # =============================================================================
         # D6: Currency mismatch - EUR collateral vs GBP exposure
         # €500k cash (market value in GBP = £500k) against £1m GBP exposure
-        # FX haircut = 8%
-        # Effective collateral = £500k * (1 - 0.08) = £460k
-        # EAD = £1m - £460k = £540k
+        # No liquidation_period_days override; is_sft=False → 20-day holding period
+        # FX haircut = 8% × √(20/10) = 8% × √2 = 11.314%  (CRR Art. 224(2)(a) / Art. 226(2))
+        # Value after haircut = £500k × (1 - 0.11314) = £443,431.46
+        # EAD = £1m - £443,431.46 = £556,568.54  |  RWA = £556,568.54 (100% RW, unrated corp)
         # =============================================================================
         Collateral(
             collateral_reference="COLL_CRM_D6",

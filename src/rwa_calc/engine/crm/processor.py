@@ -87,6 +87,7 @@ def _build_exposure_lookups(
 
     # Determine whether has_one_day_maturity_floor is available
     has_floor_col = "has_one_day_maturity_floor" in exp_schema.names()
+    has_sft_col = "is_sft" in exp_schema.names()
     has_pool_col = "_is_airb_pool" in exp_schema.names()
     pool_expr = pl.col("_is_airb_pool").fill_null(False) if has_pool_col else pl.lit(False)
 
@@ -119,6 +120,10 @@ def _build_exposure_lookups(
         )
     else:
         direct_cols.append(pl.lit(False).alias("_floor_direct"))
+    if has_sft_col:
+        direct_cols.append(pl.col("is_sft").fill_null(False).alias("_sft_direct"))
+    else:
+        direct_cols.append(pl.lit(False).alias("_sft_direct"))
     direct_lookup = exposures.select(direct_cols)
 
     # Facility: aggregated per parent_facility_reference
@@ -137,6 +142,11 @@ def _build_exposure_lookups(
             )
         else:
             facility_agg.append(pl.lit(False).alias("_floor_facility"))
+        if has_sft_col:
+            # Conservative: if ANY exposure in facility is_sft, flag whole facility
+            facility_agg.append(pl.col("is_sft").fill_null(False).max().alias("_sft_facility"))
+        else:
+            facility_agg.append(pl.lit(False).alias("_sft_facility"))
         facility_lookup = (
             exposures.filter(pl.col("parent_facility_reference").is_not_null())
             .group_by("parent_facility_reference")
@@ -156,6 +166,7 @@ def _build_exposure_lookups(
                 "_currency_facility": pl.String,
                 "_maturity_facility": pl.Date,
                 "_floor_facility": pl.Boolean,
+                "_sft_facility": pl.Boolean,
             }
         )
 
@@ -174,6 +185,11 @@ def _build_exposure_lookups(
         )
     else:
         cp_agg.append(pl.lit(False).alias("_floor_cp"))
+    if has_sft_col:
+        # Conservative: if ANY exposure for counterparty is_sft, flag whole group
+        cp_agg.append(pl.col("is_sft").fill_null(False).max().alias("_sft_cp"))
+    else:
+        cp_agg.append(pl.lit(False).alias("_sft_cp"))
     cp_lookup = (
         exposures.group_by("counterparty_reference")
         .agg(cp_agg)
@@ -211,6 +227,7 @@ def _join_collateral_to_lookups(
                 pl.col("_currency_direct").alias("exposure_currency"),
                 pl.col("_maturity_direct").alias("exposure_maturity"),
                 pl.col("_floor_direct").alias("exposure_has_one_day_maturity_floor"),
+                pl.col("_sft_direct").alias("exposure_is_sft"),
             ),
             left_on="beneficiary_reference",
             right_on="_ben_ref_direct",
@@ -277,6 +294,16 @@ def _join_collateral_to_lookups(
             .then(pl.col("_floor_cp"))
             .otherwise(pl.lit(False))
             .alias("exposure_has_one_day_maturity_floor"),
+            # Art. 224(2)(c) SFT flag — drives 5-day FX/collateral haircut default
+            # (P1.186). Resolved direct -> facility -> cp; defaults False.
+            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
+            .then(pl.col("_sft_direct"))
+            .when(bt_lower == "facility")
+            .then(pl.col("_sft_facility"))
+            .when(bt_lower == "counterparty")
+            .then(pl.col("_sft_cp"))
+            .otherwise(pl.lit(False))
+            .alias("exposure_is_sft"),
         ]
     ).drop(
         [
@@ -296,6 +323,9 @@ def _join_collateral_to_lookups(
             "_floor_direct",
             "_floor_facility",
             "_floor_cp",
+            "_sft_direct",
+            "_sft_facility",
+            "_sft_cp",
         ]
     )
 

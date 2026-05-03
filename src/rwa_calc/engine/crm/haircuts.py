@@ -36,6 +36,8 @@ from rwa_calc.data.schemas import (
 from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
 from rwa_calc.data.tables.haircuts import (
     FX_HAIRCUT,
+    LIQUIDATION_PERIOD_REPO,
+    LIQUIDATION_PERIOD_SECURED_LENDING,
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     get_haircut_table,
@@ -82,9 +84,15 @@ class HaircutCalculator:
     FX mismatch: 8% (10-day base, same under both frameworks).
 
     Liquidation period scaling (Art. 226(2)): H_m = H_10 × sqrt(T_m / 10)
-    - 5-day (repos): haircut × 0.7071
-    - 10-day (capital market): no scaling [default]
-    - 20-day (secured lending): haircut × 1.4142
+    - 5-day (repos / SFTs, Art. 224(2)(c)): haircut × 0.7071
+    - 10-day (other capital market, Art. 224(2)(b)): no scaling
+    - 20-day (secured lending, Art. 224(2)(a)): haircut × 1.4142 [default]
+
+    Liquidation-period default (P1.186):
+    - explicit ``liquidation_period_days`` column (non-null) takes precedence
+    - else ``exposure_is_sft=True`` → 5 days (Art. 224(2)(c))
+    - else → 20 days (Art. 224(2)(a) — secured lending is the regulatory default
+      for non-SFT exposures, not the 10-day capital-market period)
     """
 
     def __init__(self, is_basel_3_1: bool = False) -> None:
@@ -126,23 +134,35 @@ class HaircutCalculator:
 
         # Scale collateral haircut and FX haircut by liquidation period (Art. 226(2))
         # H_m = H_10 × sqrt(T_m / 10)
+        # P1.186: derive default liquidation period from exposure_is_sft when no
+        # explicit liquidation_period_days is supplied. Non-SFT secured lending
+        # defaults to 20 days (Art. 224(2)(a)), SFT/repo to 5 days (Art. 224(2)(c)).
         schema = collateral.collect_schema()
         has_liq_period = "liquidation_period_days" in schema.names()
+        has_sft_col = "exposure_is_sft" in schema.names()
+
+        if has_sft_col:
+            sft_default = (
+                pl.when(pl.col("exposure_is_sft").fill_null(False))
+                .then(pl.lit(LIQUIDATION_PERIOD_REPO))
+                .otherwise(pl.lit(LIQUIDATION_PERIOD_SECURED_LENDING))
+            )
+        else:
+            sft_default = pl.lit(LIQUIDATION_PERIOD_SECURED_LENDING)
 
         if has_liq_period:
-            liq = pl.col("liquidation_period_days").fill_null(10).cast(pl.Float64)
-            scaling_factor = (liq / 10.0).sqrt()
+            liq = pl.col("liquidation_period_days").fill_null(sft_default).cast(pl.Float64)
         else:
-            scaling_factor = pl.lit(1.0)
+            liq = sft_default.cast(pl.Float64)
+        scaling_factor = (liq / 10.0).sqrt()
 
         # Scale collateral haircut by liquidation period
         # Non-financial collateral (real_estate, receivables, other_physical) uses Art. 230
         # HC values, not Art. 224 — do not scale those. However, the table join already
         # returns the correct base value; scaling only affects financial collateral and gold.
-        if has_liq_period:
-            collateral = collateral.with_columns(
-                (pl.col("collateral_haircut") * scaling_factor).alias("collateral_haircut")
-            )
+        collateral = collateral.with_columns(
+            (pl.col("collateral_haircut") * scaling_factor).alias("collateral_haircut")
+        )
 
         # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4).
         # Compare pre-FX-conversion currencies: after `FXConverter.convert_*` has

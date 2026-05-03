@@ -103,6 +103,13 @@ def _create_bundle(
         "is_eligible_financial_collateral": [True] * coll_n,
         "value_after_maturity_adj": [None] * coll_n,
         "residual_maturity_years": [10.0] * coll_n,
+        # P1.186: 10-day liquidation period pinned here so sequential-fill tests
+        # continue to use 10-day base haircuts (40% for OP/receivables, 0% for RE).
+        # These tests exercise waterfall ordering and per-type threshold logic, not
+        # the liquidation-period scaling that changed with P1.186. Without this
+        # override the new 20-day default (√2 scaling) causes OP's VAH to fall
+        # below the 30% minimum threshold, producing different lgd_post_crm values.
+        "liquidation_period_days": [10] * coll_n,
     }
     for key, value in coll_defaults.items():
         if key not in collateral_data:

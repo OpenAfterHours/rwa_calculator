@@ -386,7 +386,12 @@ class TestCalculatorPipelineLiquidationPeriod:
         assert abs(hc - 0.20 * math.sqrt(2.0)) < 0.01
 
     def test_pipeline_no_liquidation_column_default_10day(self) -> None:
-        """Pipeline without liquidation_period_days column uses 10-day base."""
+        """Pipeline without liquidation_period_days column uses 20-day default (P1.186).
+
+        P1.186 fix: non-SFT secured lending uses 20-day liquidation period per
+        CRR Art. 224(2)(a). When no liquidation_period_days column is present,
+        the pipeline now defaults to 20 days (√2 scaling), not 10 days.
+        """
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
         df = pl.LazyFrame(
@@ -402,11 +407,16 @@ class TestCalculatorPipelineLiquidationPeriod:
         )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
-        # 20% (10-day base, no scaling)
-        assert abs(hc - 0.20) < 0.01
+        # B31 equity main-index 20% × sqrt(2) ≈ 28.28% (20-day default, P1.186)
+        assert abs(hc - 0.20 * math.sqrt(2.0)) < 0.01
 
     def test_pipeline_null_liquidation_defaults_10day(self) -> None:
-        """Null liquidation_period_days defaults to 10 (no scaling)."""
+        """Null liquidation_period_days defaults to 20-day (P1.186).
+
+        P1.186 fix: null liquidation_period_days now resolves to 20 (secured
+        lending default per CRR Art. 224(2)(a)), producing √2 scaling.
+        Test name preserved for traceability; the *default* changed to 20-day.
+        """
         config = self._make_config(is_b31=True)
         calc = HaircutCalculator(is_basel_3_1=True)
         df = pl.LazyFrame(
@@ -423,7 +433,8 @@ class TestCalculatorPipelineLiquidationPeriod:
         ).cast({"liquidation_period_days": pl.Int32})
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
-        assert abs(hc - 0.20) < 0.01
+        # B31 equity main-index 20% × sqrt(2) ≈ 28.28% (20-day default, P1.186)
+        assert abs(hc - 0.20 * math.sqrt(2.0)) < 0.01
 
     def test_pipeline_fx_mismatch_scaled_5day(self) -> None:
         """FX mismatch haircut scaled for 5-day liquidation."""
@@ -473,7 +484,13 @@ class TestCalculatorPipelineLiquidationPeriod:
         assert abs(hc_20 - 0.20 * math.sqrt(2.0)) < 0.005  # ~28.28%
 
     def test_pipeline_crr_gold_unchanged(self) -> None:
-        """CRR gold at 10-day remains 15% (not changed by B31 fix)."""
+        """CRR gold default now uses 20-day liquidation period (P1.186).
+
+        P1.186 fix: the pipeline default changed from 10-day to 20-day for
+        non-SFT secured lending (CRR Art. 224(2)(a)). CRR gold base haircut
+        remains 15%, but the 20-day default scales it: 15% × sqrt(2) ≈ 21.21%.
+        To get 15% unscaled, supply liquidation_period_days=10 explicitly.
+        """
         config = self._make_config(is_b31=False)
         calc = HaircutCalculator(is_basel_3_1=False)
         df = pl.LazyFrame(
@@ -489,4 +506,5 @@ class TestCalculatorPipelineLiquidationPeriod:
         )
         result = calc.apply_haircuts(df, config).collect()
         hc = result["collateral_haircut"][0]
-        assert abs(hc - 0.15) < 0.005
+        # CRR gold 15% × sqrt(2) ≈ 21.21% (20-day default, P1.186)
+        assert abs(hc - 0.15 * math.sqrt(2.0)) < 0.005

@@ -184,12 +184,14 @@ class TestCRRGroupD_CreditRiskMitigation:
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
         """
-        CRR-D6: Currency mismatch adds 8% additional haircut.
+        CRR-D6: Currency mismatch adds 11.314% FX haircut (20-day secured lending).
 
-        Input: GBP exposure, EUR collateral
-        Expected: 8% FX haircut applied
+        Input: GBP exposure, EUR collateral (secured lending, not SFT)
+        Expected: 11.314% FX haircut applied (20-day liquidation period per Art. 224(2)(a))
 
-        CRR Art. 224: Currency mismatch = 8% additional haircut
+        CRR Art. 224(2)(a): Secured lending liquidation period = 20 days
+        CRR Art. 226(2): H_m = H_10 × sqrt(T_m / 10) → 8% × sqrt(2) ≈ 11.314%
+        Hand-calc: adj_coll = 500k × (1 − 0.113137) = 443,431.46, EAD = 1M − 443,431.46 = 556,568.54
         """
         expected = expected_outputs_dict["CRR-D6"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-D6"]

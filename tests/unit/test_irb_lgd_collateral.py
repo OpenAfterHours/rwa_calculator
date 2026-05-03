@@ -95,6 +95,9 @@ def create_classified_bundle(
             "is_main_index": [False] * coll_n,
             "is_eligible_financial_collateral": [True] * coll_n,  # Assume eligible by default
             "value_after_maturity_adj": [None] * coll_n,
+            # P1.186: pin 10-day liquidation period so haircut lookup tests (which test
+            # CRR Art. 224 ratios, not Art. 224(2)(a) period scaling) remain stable.
+            "liquidation_period_days": [10] * coll_n,
         }
         for key, value in coll_defaults.items():
             if key not in collateral_data:

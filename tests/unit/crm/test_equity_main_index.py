@@ -105,7 +105,9 @@ def _build_equity_collateral(
         "is_presold": [None],
         "is_qualifying_re": [None],
         "prior_charge_ltv": [None],
-        "liquidation_period_days": [None],
+        # P1.186: 10 pinned explicitly so haircut tests assert 10-day base values
+        # (15%/25% CRR, 20%/30% B31). The pipeline default is now 20-day (√2 scaling).
+        "liquidation_period_days": [10],
         "qualifies_for_zero_haircut": [None],
         "insurer_risk_weight": [None],
         "credit_event_reduction": [None],
@@ -372,7 +374,9 @@ class TestMultipleEquityCollateral:
                 "is_presold": [None, None],
                 "is_qualifying_re": [None, None],
                 "prior_charge_ltv": [None, None],
-                "liquidation_period_days": [None, None],
+                # P1.186: 10 pinned explicitly — test verifies 15%/25% (CRR) base
+                # haircuts, not liquidation-period scaling (new default = 20-day).
+                "liquidation_period_days": [10, 10],
                 "qualifies_for_zero_haircut": [None, None],
                 "insurer_risk_weight": [None, None],
                 "credit_event_reduction": [None, None],
@@ -574,7 +578,9 @@ class TestOtherListedEquityPipeline:
                     "is_presold": [None],
                     "is_qualifying_re": [None],
                     "prior_charge_ltv": [None],
-                    "liquidation_period_days": [None],
+                    # P1.186: 10 pinned explicitly — test verifies 15%/25% EAD
+                    # values based on 10-day haircuts (575k/625k). New default is 20-day.
+                    "liquidation_period_days": [10],
                     "qualifies_for_zero_haircut": [None],
                     "insurer_risk_weight": [None],
                     "credit_event_reduction": [None],

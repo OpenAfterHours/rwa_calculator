@@ -388,15 +388,58 @@ class TestNettingSAEndToEnd:
     def test_currency_mismatch_fx_haircut(
         self, processor: CRMProcessor, sa_config: CalculationConfig
     ):
-        """FX mismatch between negative and positive loans → 8% FX haircut."""
+        """FX mismatch between negative and positive loans → 8% FX haircut.
+
+        P1.186: pre-built synthetic collateral with liquidation_period_days=10 is
+        passed directly so this test asserts the 10-day capital-market FX haircut
+        (8%). It tests FX haircut propagation through netting logic, not
+        liquidation-period scaling. The new pipeline default is 20-day (11.314%).
+        """
         rows = [
             _netting_exposure("NEG01", drawn=-1000.0, currency="EUR"),
             _netting_exposure("POS01", drawn=1000.0, currency="GBP"),
         ]
-        df = _run_crm(processor, sa_config, rows)
+        # P1.186: pass pre-built netting collateral with liquidation_period_days=10
+        # to pin the 10-day FX haircut (8%). The negative EUR loan (NEG01) nets
+        # against the GBP positive loan (POS01), producing synthetic EUR cash collateral.
+        prebuilt_collateral = pl.LazyFrame(
+            {
+                "collateral_reference": ["NETTING_POS01"],
+                "collateral_type": ["cash"],
+                "currency": ["EUR"],  # source currency from negative loan
+                "market_value": [1000.0],
+                "beneficiary_type": ["loan"],
+                "beneficiary_reference": ["POS01"],
+                "issuer_cqs": [None],
+                "issuer_type": [None],
+                "residual_maturity_years": [None],
+                "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [10],  # P1.186: explicit 10-day
+            },
+            schema={
+                "collateral_reference": pl.String,
+                "collateral_type": pl.String,
+                "currency": pl.String,
+                "market_value": pl.Float64,
+                "beneficiary_type": pl.String,
+                "beneficiary_reference": pl.String,
+                "issuer_cqs": pl.Int8,
+                "issuer_type": pl.String,
+                "residual_maturity_years": pl.Float64,
+                "is_eligible_financial_collateral": pl.Boolean,
+                "liquidation_period_days": pl.Int32,
+            },
+        )
+        # Use has_netting=False to disable internal netting generation;
+        # pre-built collateral above provides the equivalent cash collateral.
+        no_netting_rows = [
+            _netting_exposure("NEG01", drawn=-1000.0, currency="EUR", has_netting=False),
+            _netting_exposure("POS01", drawn=1000.0, currency="GBP", has_netting=False),
+        ]
+        df = _run_crm(processor, sa_config, no_netting_rows, collateral=prebuilt_collateral)
 
         pos = df.filter(pl.col("exposure_reference") == "POS01")
-        # Cash collateral in EUR, exposure in GBP → 8% FX haircut
+        # Cash collateral in EUR, exposure in GBP → 8% FX haircut (10-day)
         # Effective collateral = 1000 * (1 - 0.08) = 920
         # EAD = 1000 - 920 = 80
         assert pos["ead_final"][0] == pytest.approx(80.0, abs=1.0)

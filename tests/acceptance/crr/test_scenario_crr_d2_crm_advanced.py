@@ -335,7 +335,12 @@ def _collateral(
     issuer_type: str | None = None,
     residual_maturity_years: float | None = None,
     is_eligible_financial: bool = True,
+    liquidation_period_days: int | None = 10,
 ) -> dict:
+    # P1.186: default 10-day liquidation period for capital-markets collateral
+    # (gold, equity, bonds) consistent with CRR Art. 224 Table 4 haircut lookup tests.
+    # Non-SFT secured lending uses 20-day per Art. 224(2)(a); D-group scenarios here
+    # test the haircut lookup itself, not the period-scaling behaviour.
     return {
         "collateral_reference": ref,
         "collateral_type": collateral_type,
@@ -361,7 +366,7 @@ def _collateral(
         "is_presold": None,
         "is_qualifying_re": None,
         "prior_charge_ltv": None,
-        "liquidation_period_days": None,
+        "liquidation_period_days": liquidation_period_days,
         "qualifies_for_zero_haircut": None,
         "insurer_risk_weight": None,
         "credit_event_reduction": None,

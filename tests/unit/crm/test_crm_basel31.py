@@ -433,7 +433,12 @@ class TestHaircutCalculatorFrameworkBranching:
     def test_apply_haircuts_uses_config_framework(
         self, crr_config: CalculationConfig, b31_config: CalculationConfig
     ) -> None:
-        """apply_haircuts produces different maturity bands based on config."""
+        """apply_haircuts produces different maturity bands based on config.
+
+        P1.186: liquidation_period_days=10 is set explicitly because this test
+        verifies maturity-band selection and haircut-table lookup, not the
+        secured-lending period scaling. The new pipeline default is 20-day.
+        """
         collateral = pl.LazyFrame(
             {
                 "collateral_reference": ["C1"],
@@ -445,6 +450,7 @@ class TestHaircutCalculatorFrameworkBranching:
                 "issuer_cqs": [2],
                 "issuer_type": ["sovereign"],
                 "is_eligible_financial_collateral": [True],
+                "liquidation_period_days": [10],  # P1.186: explicit 10-day
             }
         )
 

@@ -178,6 +178,42 @@ def _cash_collateral(
     }
 
 
+def _run_crm_with_liq_period(
+    processor: CRMProcessor,
+    config: CalculationConfig,
+    exposure_rows: list[dict],
+    collateral_rows: list[dict],
+    liquidation_period_days: int = 10,
+) -> pl.DataFrame:
+    """Run CRM pipeline with an explicit liquidation period override.
+
+    P1.186: used by tests that pin a specific liquidation period to isolate
+    logic other than the secured-lending period default (which changed to 20).
+    """
+    exposures = pl.LazyFrame(exposure_rows)
+    collateral_schema = {
+        "collateral_reference": pl.String,
+        "beneficiary_reference": pl.String,
+        "beneficiary_type": pl.String,
+        "collateral_type": pl.String,
+        "market_value": pl.Float64,
+        "currency": pl.String,
+        "issuer_cqs": pl.Int64,
+        "issuer_type": pl.String,
+        "residual_maturity_years": pl.Float64,
+        "is_eligible_financial_collateral": pl.Boolean,
+        "pledge_percentage": pl.Float64,
+        "collateral_maturity_date": pl.Date,
+    }
+    collateral = pl.LazyFrame(collateral_rows, schema=collateral_schema).with_columns(
+        pl.lit(liquidation_period_days).alias("liquidation_period_days")
+    )
+    bundle = _make_bundle(exposures, collateral)
+    result = processor.get_crm_adjusted_bundle(bundle, config)
+    df: pl.DataFrame = result.exposures.collect()
+    return df
+
+
 def _run_crm(
     processor: CRMProcessor,
     config: CalculationConfig,
@@ -363,11 +399,18 @@ class TestFXHaircutMultiLevel:
     def test_facility_collateral_fx_haircut_applied(
         self, processor: CRMProcessor, sa_config: CalculationConfig
     ):
-        """FX haircut on facility-level collateral when currencies differ."""
-        # Exposure in GBP, collateral in USD → 8% FX haircut
+        """FX haircut on facility-level collateral when currencies differ.
+
+        P1.186: liquidation_period_days=10 is injected via with_columns to pin
+        the 10-day capital-market FX haircut (8%). This test verifies that the
+        FX haircut applies to facility-level collateral with a currency mismatch;
+        it is not testing liquidation-period scaling. The new pipeline default
+        is 20-day (11.314% FX haircut).
+        """
+        # Exposure in GBP, collateral in USD → 8% FX haircut (10-day explicit)
         # Cash has 0% collateral haircut, so adjusted = 400 * (1 - 0.0 - 0.08) = 368
         # EAD = 1000 - 368 = 632
-        result = _run_crm(
+        result = _run_crm_with_liq_period(
             processor,
             sa_config,
             [_sa_exposure("EXP001", drawn=1000.0, facility_ref="FAC001", currency="GBP")],
@@ -376,6 +419,7 @@ class TestFXHaircutMultiLevel:
                     "FAC001", market_value=400.0, beneficiary_type="facility", currency="USD"
                 )
             ],
+            liquidation_period_days=10,  # P1.186: explicit 10-day
         )
         row = result.filter(pl.col("exposure_reference") == "EXP001")
         ead_after = row["ead_after_collateral"][0]

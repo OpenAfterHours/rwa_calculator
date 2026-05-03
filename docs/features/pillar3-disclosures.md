@@ -126,7 +126,14 @@ across all risk categories. It is the top-level disclosure from which credit ris
     | 2 | Of which: standardised approach (SA) |
     | 3 | Of which: FIRB approach |
     | 4 | Of which: slotting approach |
+    | **4a** | **Total RWEAs (pre-floor)** — all risk categories before the output floor adjustment |
     | 5 | Of which: AIRB approach |
+    | **5a** | **CET1 capital ratio (%)** |
+    | **5b** | **CET1 capital ratio pre-floor (%)** |
+    | **6a** | **Tier 1 capital ratio (%)** |
+    | **6b** | **Tier 1 capital ratio pre-floor (%)** |
+    | **7a** | **Total capital ratio (%)** |
+    | **7b** | **Total capital ratio pre-floor (%)** |
     | **11** | **Equity positions under the IRB Transitional Approach** |
     | **12** | **Equity investments in funds — look-through approach** |
     | **13** | **Equity investments in funds — mandate-based approach** |
@@ -136,14 +143,32 @@ across all risk categories. It is the top-level disclosure from which credit ris
     | **27** | **Output floor adjustment** |
     | 29 | **Total** |
 
-    Key Basel 3.1 additions (bold): equity transitional rows (11-14), output floor
-    rows (26-27). Row UK 4a (equities under simple RW) is removed — equity goes to
+    Key Basel 3.1 additions (bold): pre-floor RWEA and capital ratio rows
+    (4a, 5a-b, 6a-b, 7a-b), equity transitional rows (11-14), output floor rows
+    (26-27). Row UK 4a (equities under simple RW) is removed — equity goes to
     rows 11-14 or SA (row 2).
+
+    See [Disclosure Differences — OV1 row changes](../framework-comparison/disclosure-differences.md#ov1-overview-of-rweas)
+    for the complete CRR-vs-Basel 3.1 row delta (lines 31, 33, 63-64).
+
+!!! warning "Mandatory for output-floor-active institutions"
+    The pre-floor rows (4a, 5a-b, 6a-b, 7a-b) are mandatory under PRA PS1/26
+    Annex XX (Disclosure (CRR) Part, Art. 2 / Art. 438(d)) for institutions whose
+    actual RWEA total reflects the output floor adjustment (Art. 92(5)). They
+    allow market participants to see the firm's pre-floor capital position
+    alongside the post-floor figures, making the magnitude of the output floor
+    constraint transparent. See [Output floor mechanics](../framework-comparison/key-differences.md#output-floor)
+    for how the floor adjustment in row 27 feeds into the post-floor ratios in
+    rows 5a, 6a, 7a.
 
 !!! note "Scope"
     OV1 covers all risk categories (credit, CCR, CVA, market, operational).
     Only the credit risk rows (1-5, 11-14, 24) are directly populated from the
-    RWA calculator output.
+    RWA calculator output. Rows 4a and 5a-b/6a-b/7a-b require own funds figures
+    and post-floor RWA totals from upstream capital-summary processes — the
+    calculator surfaces the credit-risk pre-floor RWEA component (col `pre_floor_rwa`
+    in the OF 02.01 / UKB CMS1 outputs) but does not compute consolidated
+    capital ratios.
 
 ### Reference Documents
 

@@ -453,8 +453,12 @@ def lookup_collateral_haircut(
         if not is_bond_eligible_as_financial_collateral("govt_bond", cqs):
             return None
 
-        maturity = residual_maturity_years or 5.0
-        maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
+        # When residual maturity is unknown, fall back to the longest / most
+        # conservative band per CRR Art. 224(3) / PRA PS1/26 Art. 224.
+        if residual_maturity_years is None:
+            maturity_band = "10y_plus" if is_basel_3_1 else "5y_plus"
+        else:
+            maturity_band = get_maturity_band(residual_maturity_years, is_basel_3_1=is_basel_3_1)
 
         if cqs == 1:
             key = f"govt_bond_cqs1_{maturity_band}"
@@ -472,8 +476,12 @@ def lookup_collateral_haircut(
         if not is_bond_eligible_as_financial_collateral("corp_bond", cqs):
             return None
 
-        maturity = residual_maturity_years or 5.0
-        maturity_band = get_maturity_band(maturity, is_basel_3_1=is_basel_3_1)
+        # When residual maturity is unknown, fall back to the longest / most
+        # conservative band per CRR Art. 224(3) / PRA PS1/26 Art. 224.
+        if residual_maturity_years is None:
+            maturity_band = "10y_plus" if is_basel_3_1 else "5y_plus"
+        else:
+            maturity_band = get_maturity_band(residual_maturity_years, is_basel_3_1=is_basel_3_1)
 
         if cqs == 1:
             key = f"corp_bond_cqs1_{maturity_band}"

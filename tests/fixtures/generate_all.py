@@ -57,6 +57,9 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("Provisions", "provision", _generate_provisions),
         ("FX Rates", "fx_rates", _generate_fx_rates),
         ("Model Permissions", "model_permissions", _generate_model_permissions),
+        ("P1.114 (null book_code / null country_code)", "p1_114", _generate_p1114),
+        ("P1.112 (non-UK unrated PSE sovereign-derived RW)", "p1_112", _generate_p1112),
+        ("P1.98 (subordinated corporate A-IRB LGD floor fallback)", "p1_98", _generate_p198),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -241,6 +244,45 @@ def _generate_model_permissions(output_dir: Path) -> list[tuple[str, int]]:
         return [("model_permissions.parquet", len(df))]
     finally:
         sys.path.remove(str(output_dir))
+
+
+def _generate_p1114(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.114 fixtures (null-propagation defect in model permissions filter)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_114 import save_p1114_fixtures
+
+        saved = save_p1114_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_114", None)
+
+
+def _generate_p1112(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.112 fixtures (non-UK unrated PSE sovereign-derived risk weight)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_112 import save_p1112_fixtures
+
+        saved = save_p1112_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_112", None)
+
+
+def _generate_p198(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.98 fixtures (subordinated corporate A-IRB LGD floor fallback path)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_98 import save_p198_fixtures
+
+        saved = save_p198_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_98", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

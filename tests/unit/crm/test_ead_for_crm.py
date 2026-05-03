@@ -127,7 +127,9 @@ def _run(
     config: CalculationConfig,
     bundle: ClassifiedExposuresBundle,
 ) -> pl.DataFrame:
-    return processor.get_crm_adjusted_bundle(bundle, config).exposures.collect()
+    collected = processor.get_crm_adjusted_bundle(bundle, config).exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
 
 
 # --------------------------------------------------------------------------- #

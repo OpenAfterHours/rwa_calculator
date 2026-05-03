@@ -1783,9 +1783,11 @@ class TestTableDataIntegrity:
         assert B31_SCRA_SHORT_TERM_RISK_WEIGHTS["C"] == Decimal("1.50")
 
     def test_ecra_short_term_risk_weight_values(self) -> None:
-        """ECRA short-term (≤3m, Table 4): CQS 1-5 = 20%, CQS 6 = 150%."""
-        for cqs_step in range(1, 6):
+        """ECRA short-term (≤3m, Table 4): CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150%."""
+        for cqs_step in (1, 2, 3):
             assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[cqs_step] == Decimal("0.20")
+        for cqs_step in (4, 5):
+            assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[cqs_step] == Decimal("0.50")
         assert B31_ECRA_SHORT_TERM_RISK_WEIGHTS[6] == Decimal("1.50")
 
     def test_ecra_short_term_table_has_6_entries(self) -> None:
@@ -2363,13 +2365,14 @@ class TestB31ECRAShortTermInstitution:
     """Basel 3.1 ECRA short-term risk weights for rated institutions.
 
     Under Basel 3.1, rated institution exposures with residual maturity ≤ 3
-    months receive preferential weights per Table 4: CQS 1-5 = 20%, CQS 6 =
-    150%. Trade finance exposures qualify up to 6 months (Art. 121(5)).
+    months receive preferential weights per Table 4: CQS 1-3 = 20%,
+    CQS 4-5 = 50%, CQS 6 = 150%. Trade finance exposures qualify up to 6
+    months (Art. 121(5)).
 
     Why this matters:
         Without the short-term ECRA table, a CQS 3 institution exposure at 2
         months maturity incorrectly receives 50% RW (the long-term ECRA weight)
-        instead of 20%. For CQS 4, the overstatement is 5x (100% vs 20%). This
+        instead of 20%. For CQS 4, the overstatement is 2x (100% vs 50%). This
         systematically overstates capital on short-term interbank lending, which
         is a large volume for most banks.
     """
@@ -2380,8 +2383,8 @@ class TestB31ECRAShortTermInstitution:
             (1, 0.20),
             (2, 0.20),
             (3, 0.20),
-            (4, 0.20),
-            (5, 0.20),
+            (4, 0.50),
+            (5, 0.50),
             (6, 1.50),
         ],
         ids=["CQS1", "CQS2", "CQS3", "CQS4", "CQS5", "CQS6"],
@@ -2393,7 +2396,7 @@ class TestB31ECRAShortTermInstitution:
         cqs: int,
         expected_rw: float,
     ) -> None:
-        """ECRA Table 4: CQS 1-5 all get 20%, CQS 6 gets 150% at ≤3m."""
+        """ECRA Table 4: CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150% at ≤3m."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2499,7 +2502,7 @@ class TestB31ECRAShortTermInstitution:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """CQS 4 short-term = 20% vs long-term = 100% — largest reduction."""
+        """CQS 4 short-term = 50% vs long-term = 100% (Art. 120(2) Table 4)."""
         short = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -2517,7 +2520,7 @@ class TestB31ECRAShortTermInstitution:
             config=b31_config,
         )
 
-        assert float(short["risk_weight"]) == pytest.approx(0.20)
+        assert float(short["risk_weight"]) == pytest.approx(0.50)
         assert float(long["risk_weight"]) == pytest.approx(1.00)
 
     def test_trade_finance_6m_qualifies(

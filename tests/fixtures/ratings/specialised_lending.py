@@ -171,6 +171,57 @@ def create_specialised_lending_data() -> pl.DataFrame:
             "slotting_category": "good",
             "is_hvcre": True,
         },
+        # --- B31-E5 Basel 3.1 non-HVCRE maturity differentiation scenarios ---
+        # Art. 153(5)(d) PRA PS1/26: column-A/C concession for residual maturity < 2.5yr
+        # Primary: PF Strong short maturity (<2.5yr) -> Table A col A = 50% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-STRONG-SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "strong",
+            "is_hvcre": False,
+        },
+        # Companion: PF Strong long maturity (>=2.5yr) -> Table A col B = 70% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-STRONG-LONG",
+            "sl_type": "project_finance",
+            "slotting_category": "strong",
+            "is_hvcre": False,
+        },
+        # Companion: PF Good short maturity (<2.5yr) -> Table A col C = 70% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-GOOD-SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "good",
+            "is_hvcre": False,
+        },
+        # Companion: PF Good long maturity (>=2.5yr) -> Table A col D = 90% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-GOOD-LONG",
+            "sl_type": "project_finance",
+            "slotting_category": "good",
+            "is_hvcre": False,
+        },
+        # Companion: PF Satisfactory short maturity (<2.5yr) -> 115% RW (no col differentiation)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-SAT-SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "satisfactory",
+            "is_hvcre": False,
+        },
+        # Companion: PF Weak short maturity (<2.5yr) -> 250% RW (no col differentiation)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-WEAK-SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "weak",
+            "is_hvcre": False,
+        },
+        # Companion: PF Default short maturity (<2.5yr) -> 0% RW (no col differentiation)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-DEFAULT-SHORT",
+            "sl_type": "project_finance",
+            "slotting_category": "default",
+            "is_hvcre": False,
+        },
     ]
 
     return pl.DataFrame(rows, schema=dtypes_of(SPECIALISED_LENDING_SCHEMA))

@@ -217,6 +217,7 @@ class TestCRRPSERiskWeights:
             exposure_class="pse",
             cqs=None,
             country_code="GB",
+            sovereign_cqs=1,
             config=crr_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
@@ -326,6 +327,7 @@ class TestB31PSERiskWeights:
             exposure_class="pse",
             cqs=None,
             country_code="GB",
+            sovereign_cqs=1,
             config=b31_config,
         )
         assert result["risk_weight"] == pytest.approx(0.20)

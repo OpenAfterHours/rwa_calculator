@@ -1009,12 +1009,21 @@ class ExposureClassifier:
         # 3. book code not excluded (excluded_book_codes is null OR book_code NOT in list)
         exposure_class_match = pl.col("exposure_class_irb") == pl.col("mp_exposure_class")
 
+        # Null-safe filter logic (P1.114):
+        # Polars `str.contains(<expr>)` propagates null when the needle is null,
+        # producing kleene-3-valued OR results (null | null = null) that silently
+        # block permission grants. Guard each branch:
+        #   - geo: a null cp_country_code cannot prove scope-in, so it fails the
+        #     filter when mp_country_codes is non-null (conservative).
+        #   - book: a null book_code cannot be in any exclusion list, so the
+        #     contains() result is coerced to False before negation.
         geo_passes = pl.col("mp_country_codes").is_null() | (
-            pl.col("mp_country_codes").str.contains(pl.col("cp_country_code"))
+            pl.col("cp_country_code").is_not_null()
+            & pl.col("mp_country_codes").str.contains(pl.col("cp_country_code"))
         )
 
         book_not_excluded = pl.col("mp_excluded_book_codes").is_null() | ~(
-            pl.col("mp_excluded_book_codes").str.contains(pl.col("book_code"))
+            pl.col("mp_excluded_book_codes").str.contains(pl.col("book_code")).fill_null(False)
         )
 
         permission_valid = exposure_class_match & geo_passes & book_not_excluded

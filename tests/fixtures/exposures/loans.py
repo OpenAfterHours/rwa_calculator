@@ -105,6 +105,7 @@ def create_loans() -> pl.DataFrame:
         *_defaulted_loans(),
         *_crm_scenario_loans(),
         *_slotting_scenario_loans(),
+        *_b31_slotting_scenario_loans(),
         *_supporting_factor_scenario_loans(),
         *_provision_scenario_loans(),
         *_complex_scenario_loans(),
@@ -216,6 +217,39 @@ def _institution_loans() -> list[Loan]:
             maturity_date=date(2027, 12, 31),
             currency="GBP",
             drawn_amount=10_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # P1.169 — B31 ECRA short-term institution, CQS 4, DE, EUR 1m
+        # EAD = 1_000_000; after bug-fix RW = 50%, RWA = 500_000.
+        # Linked to facility F-INST-ST-001 via facility_mapping.
+        Loan(
+            loan_reference="L-INST-ST-001",
+            product_type="INTERBANK_LOAN",
+            book_code="FI_LENDING",
+            counterparty_reference="CP-INST-CQS4-ST",
+            value_date=date(2027, 1, 1),
+            maturity_date=date(2027, 4, 1),
+            currency="EUR",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # P1.169 CQS-5 variant — same structure, different counterparty
+        # After bug-fix RW = 50% (same band), RWA = 500_000.
+        Loan(
+            loan_reference="L-INST-ST-002",
+            product_type="INTERBANK_LOAN",
+            book_code="FI_LENDING",
+            counterparty_reference="CP-INST-CQS5-ST",
+            value_date=date(2027, 1, 1),
+            maturity_date=date(2027, 4, 1),
+            currency="EUR",
+            drawn_amount=1_000_000.0,
             interest=0.0,
             lgd=0.45,
             beel=0.0,
@@ -1148,6 +1182,166 @@ def _slotting_scenario_loans() -> list[Loan]:
     ]
 
 
+def _b31_slotting_scenario_loans() -> list[Loan]:
+    """
+    Loans for B31-E5 Basel 3.1 non-HVCRE slotting maturity differentiation testing.
+
+    Tests Art. 153(5)(d) PRA PS1/26: column-A/C concession for residual maturity < 2.5yr.
+    Loans are designed for use with CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30)).
+
+    B31 non-HVCRE Table A risk weights (Art. 153(5)):
+        Strong col A (short):  50%   Strong col B (long):  70%
+        Good   col C (short):  70%   Good   col D (long):  90%
+        Satisfactory:         115%  (no maturity split)
+        Weak:                 250%  (no maturity split)
+        Default:                0%  (no maturity split)
+
+    Maturity design:
+        Short maturity loans: maturity_date=2029-06-30 (≈2.0yr from reporting_date 2027-06-30)
+        Long maturity loans:  maturity_date=2031-06-30 (≈4.0yr from reporting_date 2027-06-30)
+
+    References:
+        - PRA PS1/26 Appendix 1, Art. 153(5)(d) and Table A (p.103)
+        - docs/specifications/basel31/slotting-approach.md lines 191-200
+    """
+    # Reporting date is 2027-06-30 (set via CalculationConfig.basel_3_1).
+    # Short-maturity threshold: remaining_maturity_years < 2.5.
+    # 2029-06-30 → ~2.0yr residual  → is_short_maturity=True
+    # 2031-06-30 → ~4.0yr residual  → is_short_maturity=False
+    B31_VALUE_DATE = date(2027, 1, 1)
+    B31_MATURITY_SHORT = date(2029, 6, 30)  # ≈2.0yr from reporting_date 2027-06-30
+    B31_MATURITY_LONG = date(2031, 6, 30)  # ≈4.0yr from reporting_date 2027-06-30
+
+    return [
+        # =========================================================================
+        # B31-E5 primary: PF Strong, short maturity — Table A col A = 50% RW
+        # EAD=£1m → RWA=£500k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-STRONG-SHORT",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-STRONG-SHORT",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_SHORT,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,  # Not used for slotting; stored for completeness
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5b companion: PF Strong, long maturity — Table A col B = 70% RW
+        # EAD=£1m → RWA=£700k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-STRONG-LONG",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-STRONG-LONG",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_LONG,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5c companion: PF Good, short maturity — Table A col C = 70% RW
+        # EAD=£1m → RWA=£700k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-GOOD-SHORT",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-GOOD-SHORT",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_SHORT,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5d companion: PF Good, long maturity — Table A col D = 90% RW
+        # EAD=£1m → RWA=£900k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-GOOD-LONG",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-GOOD-LONG",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_LONG,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5e companion: PF Satisfactory, short maturity — 115% RW (no col split)
+        # EAD=£1m → RWA=£1,150k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-SAT-SHORT",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-SAT-SHORT",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_SHORT,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5f companion: PF Weak, short maturity — 250% RW (no col split)
+        # EAD=£1m → RWA=£2,500k
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-WEAK-SHORT",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-WEAK-SHORT",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_SHORT,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =========================================================================
+        # B31-E5g companion: PF Default, short maturity — 0% RW (no col split)
+        # EAD=£1m → RWA=£0
+        # =========================================================================
+        Loan(
+            loan_reference="LOAN-B31-SL-PF-DEFAULT-SHORT",
+            product_type="PROJECT_FINANCE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="CP-SLOT-B31-PROJFIN-DEFAULT-SHORT",
+            value_date=B31_VALUE_DATE,
+            maturity_date=B31_MATURITY_SHORT,
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+    ]
+
+
 def _supporting_factor_scenario_loans() -> list[Loan]:
     """
     Loans for CRR-F Supporting Factor scenario testing.
@@ -1506,6 +1700,7 @@ def _dedicated_test_loans() -> list[Loan]:
     - Collateral: COLL_CASH_001/002, COLL_GILT_001, COLL_EQ_001, COLL_REC_002
     - Guarantees: GUAR_SOV_001, GUAR_BANK_001/002, GUAR_CORP_003
     - Provisions: PROV_S1_CORP_001, PROV_S2_CORP_001, PROV_S2_SME_001
+    - P1.158: COLL_P1158_CORP_BOND_001 (null-maturity haircut conservative fallback)
     """
     return [
         # --- Collateral test loans ---
@@ -1688,6 +1883,47 @@ def _dedicated_test_loans() -> list[Loan]:
             drawn_amount=500_000.0,
             interest=0.0,
             lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # P1.106 / B31-FCSM-INST-CQS2 + CRR-FCSM-INST-CQS2
+        # GBP 1m loan under FAC_FCSM_INST_CQS2.  Half-collateralised with
+        # COLL_INST_BOND_CQS2 (EUR-denominated institution bond, issuer_cqs=2).
+        # B31 target: RWA = 650,000 (blended RW 65%).
+        # CRR contrastive: RWA = 750,000 (blended RW 75%).
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_FCSM_INST_CQS2",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CP_BORROWER_FCSM_INST",
+            value_date=VALUE_DATE,
+            maturity_date=date(2031, 1, 1),
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
+        # =============================================================================
+        # P1.158: Target for COLL_P1158_CORP_BOND_001
+        # £1m corporate term loan (~6y maturity) to unrated corporate counterparty.
+        # Collateral: £500k corp bond CQS 2, residual_maturity_years=None.
+        # Post-fix: E* = £560,000; SA RWA = £560,000 (100% RW, unrated corporate).
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_P1158_CORP_001",
+            product_type="TERM_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CORP_UR_001",  # Unrated corporate — 100% SA RW
+            value_date=VALUE_DATE,
+            maturity_date=date(2032, 1, 1),  # ~6y residual maturity
+            currency="GBP",
+            drawn_amount=1_000_000.0,
+            interest=0.0,
+            lgd=0.45,  # Not used under SA
             beel=0.0,
             seniority="senior",
         ),

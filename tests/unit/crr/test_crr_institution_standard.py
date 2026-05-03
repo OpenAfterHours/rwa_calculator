@@ -474,12 +474,12 @@ class TestCRRShortTermInstitutionSACalculator:
         )
         assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_b31_rated_short_term_unaffected_by_crr_change(
+    def test_b31_rated_short_term_cqs4_is_50pct(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """B31 uses Table 4 with CQS 1-5 all 20% — unaffected by CRR-specific fix."""
+        """B31 Art. 120(2) Table 4: CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150% (P1.169)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -489,5 +489,4 @@ class TestCRRShortTermInstitutionSACalculator:
             original_maturity_years=0.25,
             config=b31_config,
         )
-        # B31 Table 4: CQS 4 short-term = 20% (vs CRR 50%)
-        assert result["risk_weight"] == pytest.approx(0.20)
+        assert result["risk_weight"] == pytest.approx(0.50)

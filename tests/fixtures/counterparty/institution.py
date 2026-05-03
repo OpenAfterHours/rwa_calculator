@@ -202,6 +202,36 @@ def create_institution_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
+        # P1.169 — B31 ECRA short-term institution, CQS 4, DE (non-UK)
+        # Used to verify that ECRA short-term RW for CQS 4 = 50% (not 20% — the bug).
+        # Art. 120(2) Table 4: residual/original maturity ≤3 months, CQS 4 → 50%.
+        {
+            "counterparty_reference": "CP-INST-CQS4-ST",
+            "counterparty_name": "DE Institution CQS4 Short-Term",
+            "entity_type": "institution",
+            "country_code": "DE",
+            "annual_revenue": None,
+            "total_assets": 80_000_000_000.0,
+            "default_status": False,
+            "sector_code": "64.19",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # P1.169 — B31 ECRA short-term institution, CQS 5, DE (non-UK)
+        # Parametric variant: CQS 5 maps to same 50% band under Art. 120(2) Table 4.
+        # Both CQS 4 and CQS 5 share the bug (collapsed to 20% in B31_ECRA_SHORT_TERM_RW).
+        {
+            "counterparty_reference": "CP-INST-CQS5-ST",
+            "counterparty_name": "DE Institution CQS5 Short-Term",
+            "entity_type": "institution",
+            "country_code": "DE",
+            "annual_revenue": None,
+            "total_assets": 40_000_000_000.0,
+            "default_status": False,
+            "sector_code": "64.19",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
     ]
 
     return pl.DataFrame(institutions, schema=dtypes_of(COUNTERPARTY_SCHEMA))

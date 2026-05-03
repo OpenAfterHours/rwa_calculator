@@ -507,10 +507,15 @@ class TestLGDFloorsBasel31:
         result = apply_irb_formulas(lf, b31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25, abs=1e-4)
 
-    def test_b31_subordinated_fallback_50pct_without_exposure_class(
+    def test_b31_subordinated_fallback_25pct_without_exposure_class(
         self, b31_config: CalculationConfig
     ) -> None:
-        """Without exposure_class column, subordinated gets conservative 50% floor.
+        """Without exposure_class column, subordinated still gets the 25% A-IRB floor.
+
+        Per Art. 161(5), unsecured corporate A-IRB has a single 25% LGD floor
+        with no senior/subordinated distinction. The 50% subordinated_unsecured
+        value is the F-IRB supervisory LGD (Art. 161(1)(b)), not an A-IRB floor,
+        so the fallback path must not promote subordinated rows to 50%.
 
         Tests _lgd_floor_expression directly since apply_irb_formulas requires
         exposure_class for other steps (correlation, defaulted treatment).
@@ -520,11 +525,11 @@ class TestLGDFloorsBasel31:
         lgd_floor_expr = _lgd_floor_expression(
             b31_config, has_seniority=True, has_exposure_class=False
         )
-        lf = pl.LazyFrame({"lgd": [0.30], "seniority": ["subordinated"]})
+        lf = pl.LazyFrame({"lgd": [0.10], "seniority": ["subordinated"]})
         result = lf.with_columns(
             pl.max_horizontal(pl.col("lgd"), lgd_floor_expr).alias("lgd_floored")
         ).collect()
-        assert result["lgd_floored"][0] == pytest.approx(0.50, abs=1e-4)
+        assert result["lgd_floored"][0] == pytest.approx(0.25, abs=1e-4)
 
 
 # =============================================================================

@@ -79,6 +79,12 @@ def _corporate_facility_mappings() -> list[FacilityMapping]:
         FacilityMapping("FAC_CORP_002", "LOAN_FAC_CORP_002_A", "loan"),
         # FAC_CORP_SME_001 -> LOAN_FAC_SME_001_A
         FacilityMapping("FAC_CORP_SME_001", "LOAN_FAC_SME_001_A", "loan"),
+        # P1.169 — B31 ECRA short-term institution CQS 4 (F-INST-ST-001 -> L-INST-ST-001)
+        FacilityMapping("F-INST-ST-001", "L-INST-ST-001", "loan"),
+        # P1.169 — B31 ECRA short-term institution CQS 5 variant (F-INST-ST-002 -> L-INST-ST-002)
+        FacilityMapping("F-INST-ST-002", "L-INST-ST-002", "loan"),
+        # P1.106 — FCSM institution-bond CQS 2 scenario
+        FacilityMapping("FAC_FCSM_INST_CQS2", "LOAN_FCSM_INST_CQS2", "loan"),
     ]
 
 

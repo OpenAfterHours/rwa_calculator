@@ -217,6 +217,7 @@ class TestCRRRGLARiskWeights:
             exposure_class="rgla",
             config=crr_config,
             country_code="GB",
+            sovereign_cqs=1,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 
@@ -349,6 +350,7 @@ class TestB31RGLARiskWeights:
             exposure_class="rgla",
             config=b31_config,
             country_code="GB",
+            sovereign_cqs=1,
         )
         assert result["risk_weight"] == pytest.approx(0.20)
 

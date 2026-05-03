@@ -46,6 +46,7 @@ from rwa_calc.data.tables.b31_slotting import (
     B31_SLOTTING_RISK_WEIGHTS,
     B31_SLOTTING_RISK_WEIGHTS_HVCRE,
     B31_SLOTTING_RISK_WEIGHTS_PREOP,
+    B31_SLOTTING_RISK_WEIGHTS_SHORT,
 )
 from rwa_calc.data.tables.crr_slotting import (
     SLOTTING_EL_RATES,
@@ -86,6 +87,7 @@ _SLOTTING_WEIGHTS: dict[str, dict[str, dict[str, float]]] = {
     },
     "basel_3_1": {
         "base": _to_float_map(B31_SLOTTING_RISK_WEIGHTS),
+        "short": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_SHORT),
         "preop": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_PREOP),
         "hvcre": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_HVCRE),
     },
@@ -217,6 +219,7 @@ class SlottingLazyFrame:
             rw_expr = col("slotting_category").slotting.lookup_rw(
                 is_crr=False,
                 is_hvcre=col("is_hvcre"),
+                is_short=col("is_short_maturity"),
                 is_preop=col("is_pre_operational"),
             )
 
@@ -407,11 +410,16 @@ class SlottingExpr:
             )
         else:
             weights = _SLOTTING_WEIGHTS["basel_3_1"]
+            # PRA PS1/26 Art. 153(5)(d) Table A: non-HVCRE columns A/C apply
+            # when remaining maturity < 2.5 years. HVCRE column A/C is tracked
+            # separately (see P1.117) and not applied here.
             return (
                 pl.when(is_hvcre_expr)
                 .then(self._map_category(cat, weights["hvcre"]))
                 .when(is_preop_expr)
                 .then(self._map_category(cat, weights["preop"]))
+                .when(is_short_expr)
+                .then(self._map_category(cat, weights["short"]))
                 .otherwise(self._map_category(cat, weights["base"]))
             )
 

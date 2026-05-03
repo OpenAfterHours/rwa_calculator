@@ -65,6 +65,7 @@ class Collateral:
     is_income_producing: bool | None
     is_adc: bool | None
     is_presold: bool | None
+    liquidation_period_days: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -88,6 +89,7 @@ class Collateral:
             "is_income_producing": self.is_income_producing,
             "is_adc": self.is_adc,
             "is_presold": self.is_presold,
+            "liquidation_period_days": self.liquidation_period_days,
         }
 
 
@@ -111,6 +113,8 @@ def create_collateral() -> pl.DataFrame:
         *_crm_test_collateral(),
         *_crr_d_scenario_collateral(),
         *_complex_scenario_collateral(),
+        *_p1_158_null_maturity_haircut_collateral(),
+        *_p1_106_fcsm_institution_bond_collateral(),
     ]
 
     return pl.DataFrame([c.to_dict() for c in collateral], schema=dtypes_of(COLLATERAL_SCHEMA))
@@ -925,6 +929,118 @@ def _complex_scenario_collateral() -> list[Collateral]:
             is_income_producing=None,
             is_adc=None,
             is_presold=None,
+        ),
+    ]
+
+
+def _p1_158_null_maturity_haircut_collateral() -> list[Collateral]:
+    """
+    Collateral for P1.158: conservative fallback when residual_maturity_years is None.
+
+    The bug in data/tables/haircuts.py uses ``residual_maturity_years or 5.0`` which
+    lands the lookup in the 1_5y band instead of the conservative 5y_plus (CRR) /
+    10y_plus (B31) band when maturity is unknown (None).
+
+    This fixture exercises the engine-pipeline path:
+        - Loan: £1m GBP corporate term loan (~6y maturity) to unrated counterparty.
+        - Collateral: corp_bond CQS 2, residual_maturity_years=None, GBP, £500k market value,
+          liquidation_period_days=10.
+    Post-fix expected:
+        - collateral haircut = 0.12  (corp_bond_cqs2_3_5y_plus, CRR)
+        - C_adjusted = 500,000 × (1 − 0.12) = 440,000
+        - E* = max(0, 1,000,000 − 440,000) = 560,000
+        - RWA = 560,000  (unrated corporate SA RW = 100%)
+    Pre-fix (buggy) collateral haircut = 0.06 → C_adjusted = 470,000 → E* = 530,000.
+
+    References:
+        - CRR Art. 224(1) Table 1; Art. 224(3) conservative fallback
+        - src/rwa_calc/data/tables/haircuts.py:475 (defect line)
+    """
+    return [
+        # =============================================================================
+        # P1.158: corp_bond CQS 2, maturity unknown (None) — must use 5y_plus haircut
+        # £500k GBP corp bond collateral against £1m corporate loan
+        # Expected collateral_haircut = 0.12 (5y_plus band, CRR), 0.20 (10y_plus, B31)
+        # =============================================================================
+        Collateral(
+            collateral_reference="COLL_P1158_CORP_BOND_001",
+            collateral_type="bond",
+            currency="GBP",
+            maturity_date=None,  # Unknown maturity — triggers the conservative fallback
+            market_value=500_000.0,
+            nominal_value=500_000.0,
+            beneficiary_type="loan",
+            beneficiary_reference="LOAN_P1158_CORP_001",
+            issuer_cqs=2,  # CQS 2 → uses corp_bond_cqs2_3 bands
+            issuer_type="corporate",  # Non-sovereign → engine classifies as corp_bond
+            residual_maturity_years=None,  # The critical None that must land in 5y_plus
+            is_eligible_financial_collateral=True,
+            is_eligible_irb_collateral=True,
+            valuation_date=VALUE_DATE,
+            valuation_type="market",
+            property_type=None,
+            property_ltv=None,
+            is_income_producing=None,
+            is_adc=None,
+            is_presold=None,
+            liquidation_period_days=10,  # Standard 10-day liquidation period (no scaling)
+        ),
+    ]
+
+
+def _p1_106_fcsm_institution_bond_collateral() -> list[Collateral]:
+    """
+    Collateral for P1.106: FCSM institution-bond CQS 2 RW divergence (B31 vs CRR).
+
+    Scenario B31-FCSM-INST-CQS2 (primary) and CRR-FCSM-INST-CQS2 (contrastive).
+
+    Under CRR Art. 120 Table 3: institution CQS 2 = 50%.
+    Under B31 / PRA PS1/26 Art. 120 ECRA Table 3: institution CQS 2 = 30%.
+
+    The EUR currency (vs GBP loan exposure) means the same-currency carve-out
+    in Art. 222(4)/(6) does not fire — the 20% FCSM floor applies instead.
+
+    FCSM does not reduce EAD.  Secured share = 500,000 / 1,000,000 = 0.50.
+
+    Hand-calc (B31):   RW_blended = 0.30 × 0.50 + 1.00 × 0.50 = 0.65  → RWA = 650,000
+    Hand-calc (CRR):   RW_blended = 0.50 × 0.50 + 1.00 × 0.50 = 0.75  → RWA = 750,000
+
+    References:
+        - PRA PS1/26 Art. 120 ECRA Table 3 (docs/assets/ps126app1.pdf)
+        - CRR Art. 120 Table 3 (docs/assets/crr.pdf)
+        - CRR Art. 222(1) — FCSM secured-portion RW substitution, 20% floor
+        - Bug site: src/rwa_calc/engine/crm/simple_method.py — _derive_collateral_rw_expr()
+    """
+    return [
+        # =====================================================================
+        # COLL_INST_BOND_CQS2
+        # EUR 500k institution bond, CQS 2, 5yr residual maturity.
+        # Beneficiary: LOAN_FCSM_INST_CQS2 (GBP 1m).
+        # pledge_percentage = 1.0 (no haircut pledge shortfall).
+        # is_eligible_financial_collateral = True → routes through FCSM.
+        # =====================================================================
+        Collateral(
+            collateral_reference="COLL_INST_BOND_CQS2",
+            collateral_type="bond",
+            currency="EUR",  # EUR vs GBP exposure — same-ccy carve-out does not fire
+            maturity_date=date(2031, 1, 1),
+            market_value=500_000.0,
+            nominal_value=500_000.0,
+            beneficiary_type="loan",
+            beneficiary_reference="LOAN_FCSM_INST_CQS2",
+            issuer_cqs=2,  # CQS 2 — divergence point: 30% (B31) vs 50% (CRR)
+            issuer_type="institution",  # Triggers institution branch in _derive_collateral_rw_expr
+            residual_maturity_years=5.0,  # Long enough to bypass Art. 222(7) maturity check
+            is_eligible_financial_collateral=True,
+            is_eligible_irb_collateral=True,
+            valuation_date=VALUE_DATE,
+            valuation_type="market",
+            property_type=None,
+            property_ltv=None,
+            is_income_producing=None,
+            is_adc=None,
+            is_presold=None,
+            liquidation_period_days=None,
         ),
     ]
 

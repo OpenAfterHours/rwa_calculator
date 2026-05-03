@@ -31,6 +31,15 @@ Scenarios (fixtures use 5yr maturity, i.e. >=2.5yr):
     E2: Project finance Good - £10m = £9m RWA (90% RW)
     E3: IPRE Weak - £5m = £12.5m RWA (250% RW)
     E4: HVCRE Strong - £5m = £4.75m RWA (95% RW)
+
+B31-E5 Scenarios (Basel 3.1 non-HVCRE maturity differentiation, Art. 153(5)(d)):
+    B31-E5 primary: PF Strong short maturity — £1m = £500k RWA (50% RW, col A)
+    B31-E5b: PF Strong long maturity — £1m = £700k RWA (70% RW, col B)
+    B31-E5c: PF Good short maturity — £1m = £700k RWA (70% RW, col C)
+    B31-E5d: PF Good long maturity — £1m = £900k RWA (90% RW, col D)
+    B31-E5e: PF Satisfactory short — £1m = £1.15m RWA (115% RW, unchanged)
+    B31-E5f: PF Weak short — £1m = £2.5m RWA (250% RW, unchanged)
+    B31-E5g: PF Default short — £1m = £0 RWA (0% RW, unchanged)
 """
 
 from pathlib import Path
@@ -337,6 +346,102 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "total_assets": 80_000_000.0,
             "default_status": False,
             "sector_code": "41.10",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # =============================================================================
+        # B31-E5 Basel 3.1 Non-HVCRE Slotting Maturity Differentiation Scenarios
+        # Art. 153(5)(d) PRA PS1/26: column-A/C concession for residual maturity < 2.5yr
+        # Reporting date: 2027-06-30 (post-B31 effective)
+        # =============================================================================
+        # B31-E5 primary: PF Strong, short maturity (<2.5yr) — Table A col A = 50% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-STRONG-SHORT",
+            "counterparty_name": "Project Co. Ltd (short-dated PF) - B31-E5",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 500_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Strong, long maturity (>=2.5yr) — Table A col B = 70% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-STRONG-LONG",
+            "counterparty_name": "Project Co. Ltd (long-dated PF, Strong) - B31-E5b",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 500_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Good, short maturity (<2.5yr) — Table A col C = 70% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-GOOD-SHORT",
+            "counterparty_name": "Project Co. Ltd (short-dated PF, Good) - B31-E5c",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 400_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Good, long maturity (>=2.5yr) — Table A col D = 90% RW
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-GOOD-LONG",
+            "counterparty_name": "Project Co. Ltd (long-dated PF, Good) - B31-E5d",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 400_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Satisfactory, short maturity (<2.5yr) — 115% RW (unchanged)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-SAT-SHORT",
+            "counterparty_name": "Project Co. Ltd (short-dated PF, Satisfactory) - B31-E5e",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 200_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Weak, short maturity (<2.5yr) — 250% RW (unchanged)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-WEAK-SHORT",
+            "counterparty_name": "Project Co. Ltd (short-dated PF, Weak) - B31-E5f",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 100_000_000.0,
+            "default_status": False,
+            "sector_code": "42.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
+        # B31-E5 companion: PF Default, short maturity (<2.5yr) — 0% RW (unchanged)
+        {
+            "counterparty_reference": "CP-SLOT-B31-PROJFIN-DEFAULT-SHORT",
+            "counterparty_name": "Project Co. Ltd (short-dated PF, Default) - B31-E5g",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 30_000_000.0,
+            "default_status": True,
+            "sector_code": "42.99",
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },

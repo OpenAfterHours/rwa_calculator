@@ -801,14 +801,17 @@ class TestLGDFloors:
         ).collect()
         assert result["lgd_floor"][0] == pytest.approx(0.25)
 
-    def test_subordinated_unsecured_floor_50pct(
+    def test_subordinated_unsecured_floor_25pct_fallback(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1 (CRE30.41): Subordinated unsecured LGD floor is 50%.
+        """Basel 3.1 (Art. 161(5)): Unsecured corporate A-IRB LGD floor is 25%.
 
-        When seniority column is available and indicates subordinated debt,
-        the unsecured LGD floor increases from 25% to 50%.
+        On the seniority-only fallback path (no exposure_class), corporate A-IRB
+        applies a single 25% floor regardless of seniority. The 50%
+        subordinated_unsecured value is the F-IRB supervisory LGD per
+        Art. 161(1)(b), not an A-IRB floor — the fallback must not promote
+        subordinated rows to 50%.
         """
         lf = pl.LazyFrame(
             {
@@ -822,16 +825,15 @@ class TestLGDFloors:
                 "lgd_floor"
             )
         ).collect()
-        # Subordinated unsecured: 50% floor
-        assert result["lgd_floor"][0] == pytest.approx(0.50)
-        # Senior unsecured: 25% floor
+        # Both subordinated and senior unsecured: 25% floor (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
         assert result["lgd_floor"][1] == pytest.approx(0.25)
 
     def test_subordinated_unsecured_floor_no_collateral_col(
         self,
         basel31_config: CalculationConfig,
     ) -> None:
-        """Basel 3.1: Subordinated floor 50% via _lgd_floor_expression (no collateral col)."""
+        """Basel 3.1 Art. 161(5): single 25% floor via _lgd_floor_expression fallback."""
         lf = pl.LazyFrame(
             {
                 "lgd": [0.10, 0.10],
@@ -841,7 +843,8 @@ class TestLGDFloors:
         result = lf.with_columns(
             _lgd_floor_expression(basel31_config, has_seniority=True).alias("lgd_floor")
         ).collect()
-        assert result["lgd_floor"][0] == pytest.approx(0.50)
+        # Both subordinated and senior unsecured: 25% floor (Art. 161(5))
+        assert result["lgd_floor"][0] == pytest.approx(0.25)
         assert result["lgd_floor"][1] == pytest.approx(0.25)
 
     def test_subordinated_with_collateral_uses_collateral_floor(

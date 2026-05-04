@@ -251,9 +251,9 @@ class TestP1117HvcreStrongShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_risk_weight_match(
             result["risk_weight"],
             _RW_HVCRE_STRONG_SHORT,
@@ -280,9 +280,9 @@ class TestP1117HvcreStrongShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_rwa_within_tolerance(
             result["rwa"],
             _EAD_PRIMARY * _RW_HVCRE_STRONG_SHORT,
@@ -306,9 +306,9 @@ class TestP1117HvcreStrongShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert result["slotting_el_rate"] == pytest.approx(_EL_RATE_HVCRE, abs=1e-6), (
             f"P1.117: HVCRE Strong short EL rate should be {_EL_RATE_HVCRE}, "
             f"got {result['slotting_el_rate']}"
@@ -350,9 +350,9 @@ class TestP1117HvcreGoodShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_risk_weight_match(
             result["risk_weight"],
             _RW_HVCRE_GOOD_SHORT,
@@ -379,9 +379,9 @@ class TestP1117HvcreGoodShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_rwa_within_tolerance(
             result["rwa"],
             _EAD_REGRESSION * _RW_HVCRE_GOOD_SHORT,
@@ -404,9 +404,9 @@ class TestP1117HvcreGoodShort:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert result["slotting_el_rate"] == pytest.approx(_EL_RATE_HVCRE, abs=1e-6), (
             f"P1.117b: HVCRE Good short EL rate should be {_EL_RATE_HVCRE}, "
             f"got {result['slotting_el_rate']}"
@@ -447,9 +447,9 @@ class TestP1117HvcreLongMaturityRegressionGuards:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_risk_weight_match(
             result["risk_weight"],
             _RW_HVCRE_STRONG_LONG,
@@ -470,9 +470,9 @@ class TestP1117HvcreLongMaturityRegressionGuards:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_rwa_within_tolerance(
             result["rwa"],
             _EAD_REGRESSION * _RW_HVCRE_STRONG_LONG,
@@ -497,9 +497,9 @@ class TestP1117HvcreLongMaturityRegressionGuards:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_risk_weight_match(
             result["risk_weight"],
             _RW_HVCRE_GOOD_LONG,
@@ -520,9 +520,9 @@ class TestP1117HvcreLongMaturityRegressionGuards:
         result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
         # Assert
-        if result is None:
-            pytest.skip(f"P1.117 fixture not found in slotting results: {exposure_ref}")
-
+        assert result is not None, (
+            f"P1.117 fixture row missing from slotting results: {exposure_ref}"
+        )
         assert_rwa_within_tolerance(
             result["rwa"],
             _EAD_REGRESSION * _RW_HVCRE_GOOD_LONG,
@@ -545,9 +545,9 @@ class TestP1117HvcreLongMaturityRegressionGuards:
             result = get_result_for_exposure(p1117_hvcre_slotting_results_df, exposure_ref)
 
             # Assert
-            if result is None:
-                continue
-
+            assert result is not None, (
+                f"P1.117 regression: fixture row missing from slotting results: {exposure_ref}"
+            )
             assert result["slotting_el_rate"] == pytest.approx(_EL_RATE_HVCRE, abs=1e-6), (
                 f"P1.117 regression: {exposure_ref} EL rate should be {_EL_RATE_HVCRE}, "
                 f"got {result['slotting_el_rate']}"
@@ -587,9 +587,12 @@ class TestP1117HvcreMaturityDifferentiation:
         long_result = get_result_for_exposure(p1117_hvcre_slotting_results_df, long_ref)
 
         # Assert
-        if short_result is None or long_result is None:
-            pytest.skip("Missing slotting results for maturity comparison")
-
+        assert short_result is not None, (
+            f"P1.117 fixture row missing from slotting results: {short_ref}"
+        )
+        assert long_result is not None, (
+            f"P1.117 fixture row missing from slotting results: {long_ref}"
+        )
         assert short_result["risk_weight"] < long_result["risk_weight"], (
             f"P1.117: HVCRE Strong short ({short_result['risk_weight']:.4f}) should be "
             f"< HVCRE Strong long ({long_result['risk_weight']:.4f}). "
@@ -616,9 +619,12 @@ class TestP1117HvcreMaturityDifferentiation:
         long_result = get_result_for_exposure(p1117_hvcre_slotting_results_df, long_ref)
 
         # Assert
-        if short_result is None or long_result is None:
-            pytest.skip("Missing slotting results for maturity comparison")
-
+        assert short_result is not None, (
+            f"P1.117 fixture row missing from slotting results: {short_ref}"
+        )
+        assert long_result is not None, (
+            f"P1.117 fixture row missing from slotting results: {long_ref}"
+        )
         assert short_result["risk_weight"] < long_result["risk_weight"], (
             f"P1.117: HVCRE Good short ({short_result['risk_weight']:.4f}) should be "
             f"< HVCRE Good long ({long_result['risk_weight']:.4f}). "

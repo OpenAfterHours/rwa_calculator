@@ -65,6 +65,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("P1.125 (classifier FSE-column-missing warning CLS007)", "p1_125", _generate_p1125),
         ("P1.121 (CRR Art. 121(3) unrated institution short-term 20% RW)", "p1_121", _generate_p1121),
         ("P1.124 (CRR Art. 237(2)(a) guarantee maturity ineligibility)", "p1_124", _generate_p1124),
+        ("P1.126 (classifier null-revenue conservative-large default CLS008)", "p1_126", _generate_p1126),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -314,6 +315,88 @@ def _generate_p1117(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_117", None)
+
+
+def _generate_p1126(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P1.126 builder imports (no parquet output — Python-only builder).
+
+    P1.126 tests null vs. non-null annual_revenue values in the counterparty
+    LazyFrame to exercise the CLS008 conservative-large-corp warning under
+    Basel 3.1.  Like P1.125, this is a Python-only builder: parquet round-trips
+    preserve column presence but may alter null handling semantics in edge cases.
+    The fixture is exercised by constructing all three named scenario bundles and
+    checking schema invariants that matter to the CLS008 logic.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_126 import (  # noqa: F401
+            make_scenario_a_bundle,
+            make_scenario_b_bundle,
+            make_scenario_c_bundle,
+        )
+
+        # Smoke-check: all three bundles must construct without raising.
+        bundle_a = make_scenario_a_bundle()
+        bundle_b = make_scenario_b_bundle()
+        bundle_c = make_scenario_c_bundle()
+
+        # Invariant 1: annual_revenue column is present in all three scenarios
+        # (it is always present — null in A/C, non-null in B).
+        for label, bundle in [("A", bundle_a), ("B", bundle_b), ("C", bundle_c)]:
+            cp_cols = bundle.counterparty_lookup.counterparties.collect_schema().names()
+            if "annual_revenue" not in cp_cols:
+                raise AssertionError(f"Scenario {label}: annual_revenue column must be present")
+
+        # Invariant 2: Scenario A counterparty has null annual_revenue.
+        cp_a = bundle_a.counterparty_lookup.counterparties.collect()
+        if cp_a["annual_revenue"][0] is not None:
+            raise AssertionError("Scenario A: annual_revenue must be null")
+
+        # Invariant 3: Scenario B counterparty has non-null annual_revenue > 440m threshold.
+        cp_b = bundle_b.counterparty_lookup.counterparties.collect()
+        rev_b = cp_b["annual_revenue"][0]
+        if rev_b is None or rev_b <= 440_000_000.0:
+            raise AssertionError(
+                f"Scenario B: annual_revenue must be > GBP 440m (got {rev_b})"
+            )
+
+        # Invariant 4: Scenario C counterparty has null annual_revenue (same data as A).
+        cp_c = bundle_c.counterparty_lookup.counterparties.collect()
+        if cp_c["annual_revenue"][0] is not None:
+            raise AssertionError("Scenario C: annual_revenue must be null")
+
+        # Invariant 5: is_financial_sector_entity is present and False in all scenarios
+        # (so FSE restriction does not interfere with the CLS008 path).
+        for label, cp_df in [("A", cp_a), ("B", cp_b), ("C", cp_c)]:
+            if "is_financial_sector_entity" not in cp_df.columns:
+                raise AssertionError(
+                    f"Scenario {label}: is_financial_sector_entity must be present"
+                )
+            if cp_df["is_financial_sector_entity"][0] is not False:
+                raise AssertionError(
+                    f"Scenario {label}: is_financial_sector_entity must be False"
+                )
+
+        # Invariant 6: model_id is present on the exposure and matches M_CORP_AIRB.
+        from p1_126 import MODEL_ID  # noqa: PLC0415
+
+        for label, bundle in [("A", bundle_a), ("B", bundle_b), ("C", bundle_c)]:
+            exp_cols = bundle.exposures.collect_schema().names()
+            if "model_id" not in exp_cols:
+                raise AssertionError(f"Scenario {label}: model_id must be present on exposures")
+            exp_df = bundle.exposures.collect()
+            if exp_df["model_id"][0] != MODEL_ID:
+                raise AssertionError(
+                    f"Scenario {label}: model_id must be {MODEL_ID!r} "
+                    f"(got {exp_df['model_id'][0]!r})"
+                )
+
+        # No parquet files written — report zero files, zero records.
+        return [("(python-only builder — no parquet)", 0)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_126", None)
 
 
 def _generate_p1125(output_dir: Path) -> list[tuple[str, int]]:

@@ -53,6 +53,10 @@ from rwa_calc.contracts.errors import (
     classification_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
+from rwa_calc.data.schemas import (
+    B31_SOVEREIGN_LIKE_ENTITY_TYPES,
+    RGLA_PSE_ENTITY_TYPES,
+)
 from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -203,223 +207,136 @@ class ExposureClassifier:
         Returns:
             ClassifiedExposuresBundle with exposures split by approach
         """
-        # Step 1: Join counterparty attributes (1 node)
+        # Reads top-to-bottom as a recipe; each helper owns one regulatory
+        # concept. See section banners below for per-step regulatory references.
         exposures = self._add_counterparty_attributes(
             data.exposures,
             data.counterparty_lookup.counterparties,
         )
+        exposures = self._join_specialised_lending(exposures, data.specialised_lending)
 
-        # Step 1b: Join specialised lending metadata (by counterparty)
-        sl_data = data.specialised_lending
+        # Single schema snapshot — used by every downstream helper to gate
+        # schema-conditional expressions without re-scanning the LazyFrame.
+        schema_names = set(exposures.collect_schema().names())
+
+        classification_errors = self._collect_input_warnings(data, schema_names, config)
+
+        classified = self._derive_independent_flags(exposures, config, schema_names)
+        classified = self._classify_exposure_subtypes(classified, config, schema_names)
+        classified = self._reclassify_corporate_to_retail(classified, config, schema_names)
+        classified = self._flag_property_reclassification_candidates(
+            classified, config, schema_names
+        )
+        classified = self._sync_irb_exposure_class(classified)
+
+        classified, perm_diagnostics = self._resolve_model_permissions_if_present(
+            classified, data.model_permissions, schema_names
+        )
+        classification_errors.extend(perm_diagnostics)
+
+        classified = self._assign_approach(
+            classified,
+            config,
+            schema_names,
+            has_model_permissions=data.model_permissions is not None,
+        )
+
+        return self._build_bundle(classified, data, classification_errors)
+
+    @staticmethod
+    def _join_specialised_lending(
+        exposures: pl.LazyFrame,
+        sl_data: pl.LazyFrame | None,
+    ) -> pl.LazyFrame:
+        """Join specialised lending metadata onto exposures by counterparty.
+
+        Adds ``sl_type``, ``slotting_category``, ``is_hvcre``. When no SL
+        data is supplied, the columns are added as null literals so
+        downstream helpers can rely on their presence.
+        """
         if sl_data is not None:
-            exposures = exposures.join(
+            return exposures.join(
                 sl_data.select(
                     ["counterparty_reference", "sl_type", "slotting_category", "is_hvcre"]
                 ),
                 on="counterparty_reference",
                 how="left",
             )
-        else:
-            exposures = exposures.with_columns(
-                pl.lit(None).cast(pl.String).alias("sl_type"),
-                pl.lit(None).cast(pl.String).alias("slotting_category"),
-                pl.lit(None).cast(pl.Boolean).alias("is_hvcre"),
-            )
-
-        # Single schema check for conditional column logic
-        schema_names = set(exposures.collect_schema().names())
-
-        # Accumulate classification warnings/errors
-        classification_errors: list[CalculationError] = []
-
-        # Check for QRRE classification prerequisites — missing columns
-        # cause all revolving retail to silently become RETAIL_OTHER
-        missing_qrre_cols = [c for c in ("is_revolving", "facility_limit") if c not in schema_names]
-        if missing_qrre_cols:
-            classification_errors.append(
-                classification_warning(
-                    code=ERROR_QRRE_COLUMNS_MISSING,
-                    message=(
-                        f"QRRE classification disabled — column(s) "
-                        f"{', '.join(missing_qrre_cols)} missing from exposure data. "
-                        f"All qualifying revolving retail exposures will be classified "
-                        f"as RETAIL_OTHER instead of RETAIL_QRRE, which may affect "
-                        f"risk weights and IRB parameters."
-                    ),
-                    regulatory_reference="CRR Art. 147(5)",
-                )
-            )
-
-        # Art. 123A(1)(b)(iii): Under Basel 3.1, non-SME retail qualification
-        # requires pool management attestation (is_managed_as_retail).  When the
-        # column is absent from the ORIGINAL counterparty data, condition 3 cannot
-        # be enforced and all non-SME retail exposures default to qualifying.
-        # Check the counterparty source (not schema_names, which always has
-        # the column after Phase 1 adds a null default).
-        cp_has_managed_flag = "is_managed_as_retail" in set(
-            data.counterparty_lookup.counterparties.collect_schema().names()
-        )
-        if config.is_basel_3_1 and not cp_has_managed_flag:
-            classification_errors.append(
-                classification_warning(
-                    code=ERROR_RETAIL_POOL_MGMT_MISSING,
-                    message=(
-                        "Art. 123A(1)(b)(iii) pool management condition cannot be "
-                        "enforced — 'is_managed_as_retail' column missing from "
-                        "counterparty data. Non-SME retail exposures will default "
-                        "to qualifying status (75% RW) without verification."
-                    ),
-                    regulatory_reference="PRA PS1/26 Art. 123A(1)(b)(iii)",
-                )
-            )
-
-        # Art. 147A(1)(e): Under Basel 3.1, Financial Sector Entities (FSEs) are
-        # restricted to F-IRB (no A-IRB). When the is_financial_sector_entity
-        # column is absent from the ORIGINAL counterparty data, this restriction
-        # cannot be enforced and FSE exposures may receive A-IRB treatment in
-        # violation of the rule. Check the counterparty source schema directly.
-        cp_has_fse_flag = "is_financial_sector_entity" in set(
-            data.counterparty_lookup.counterparties.collect_schema().names()
-        )
-        if config.is_basel_3_1 and not cp_has_fse_flag:
-            classification_errors.append(
-                classification_warning(
-                    code=ERROR_FSE_COLUMN_MISSING,
-                    message=(
-                        "Art. 147A(1)(e) FSE A-IRB restriction cannot be enforced — "
-                        "'is_financial_sector_entity' column missing from counterparty "
-                        "data; FSE exposures may receive A-IRB treatment in violation "
-                        "of the restriction."
-                    ),
-                    regulatory_reference="PRA PS1/26 Art. 147A(1)(e)",
-                )
-            )
-
-        # Art. 147A(1)(d): Under Basel 3.1, large corporates (annual revenue >
-        # GBP 440m) are restricted to F-IRB (no A-IRB). When annual_revenue is
-        # null on any counterparty row, the engine cannot confirm that the
-        # counterparty falls below the threshold, so it conservatively assumes
-        # the counterparty IS large-corp (see _is_large_corp expression below)
-        # and applies the F-IRB restriction. CLS008 is emitted to flag that
-        # the restriction was applied without revenue confirmation.
-        cp_has_revenue_col = "annual_revenue" in set(
-            data.counterparty_lookup.counterparties.collect_schema().names()
-        )
-        if config.is_basel_3_1 and cp_has_revenue_col:
-            # Art. 147A(1)(d) is corporate-only — count null-revenue rows only
-            # among counterparties of entity_type == "corporate". This avoids
-            # spurious CLS008 warnings for specialised_lending / retail /
-            # sovereign / institution counterparties where annual_revenue is
-            # genuinely irrelevant.
-            null_revenue_count = (
-                data.counterparty_lookup.counterparties.filter(
-                    (pl.col("entity_type").fill_null("") == "corporate")
-                    & pl.col("annual_revenue").is_null()
-                )
-                .select(pl.len())
-                .collect()
-                .item()
-            )
-            if null_revenue_count > 0:
-                classification_errors.append(
-                    CalculationError(
-                        code=ERROR_LARGE_CORP_REVENUE_NULL,
-                        message=(
-                            f"Art. 147A(1)(d) large-corporate F-IRB restriction applied "
-                            f"conservatively for {null_revenue_count} corporate counterparty "
-                            f"row(s) with null annual_revenue — could not confirm revenue is "
-                            f"below the GBP 440m threshold."
-                        ),
-                        severity=ErrorSeverity.WARNING,
-                        category=ErrorCategory.CLASSIFICATION,
-                        regulatory_reference="PRA PS1/26 Art. 147A(1)(d)",
-                        field_name="annual_revenue",
-                    )
-                )
-
-        # Step 2: Derive all independent flags (1 .with_columns)
-        classified = self._derive_independent_flags(exposures, config, schema_names)
-
-        # Step 3: Exposure subtype classification (1 .with_columns)
-        classified = self._classify_exposure_subtypes(classified, config, schema_names)
-
-        # Step 4: Corporate → retail reclassification (1 .with_columns)
-        classified = self._reclassify_corporate_to_retail(
-            classified,
-            config,
-            schema_names,
+        return exposures.with_columns(
+            pl.lit(None).cast(pl.String).alias("sl_type"),
+            pl.lit(None).cast(pl.String).alias("slotting_category"),
+            pl.lit(None).cast(pl.Boolean).alias("is_hvcre"),
         )
 
-        # Step 4b: Flag RE loan-split candidates (CRR Art. 125/126,
-        # B3.1 Art. 124F/H). Adds re_split_* columns consumed by the
-        # downstream RealEstateSplitter stage. Runs for both regimes;
-        # the splitter itself is a no-op when no rows are flagged.
-        classified = self._flag_property_reclassification_candidates(
-            classified,
-            config,
-            schema_names,
-        )
+    @staticmethod
+    def _sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Sync exposure_class_irb with the (possibly mutated) exposure_class.
 
-        # Step 4a: Sync exposure_class_irb with the final exposure_class.
-        # Phases 3 and 4 may have updated exposure_class (SME, QRRE, retail
-        # reclassification) without touching exposure_class_irb, which was
-        # set once in _add_counterparty_attributes. Re-align them so that
-        # downstream IRB permission lookups and approach filters see the
-        # reclassified class. rgla_* / pse_* entity types are excluded
-        # because their SA and IRB classes are definitionally different
-        # (CRR Art. 147(3)/147(4)(b)) — exposure_class_irb already carries
-        # the correct CGCB / INSTITUTION value from ENTITY_TYPE_TO_IRB_CLASS.
-        classified = classified.with_columns(
-            pl.when(
-                pl.col("cp_entity_type").is_in(
-                    [
-                        "rgla_sovereign",
-                        "rgla_institution",
-                        "pse_sovereign",
-                        "pse_institution",
-                    ]
-                )
-            )
+        Subtype classification and corporate→retail reclassification mutate
+        ``exposure_class`` in place without touching ``exposure_class_irb``,
+        which was set once in ``_add_counterparty_attributes``. Re-align them
+        so downstream IRB permission lookups and approach filters see the
+        reclassified class.
+
+        rgla_* / pse_* entity types are excluded because their SA and IRB
+        classes are definitionally different (CRR Art. 147(3)/147(4)(b)) —
+        ``exposure_class_irb`` already carries the correct CGCB / INSTITUTION
+        value from ``ENTITY_TYPE_TO_IRB_CLASS`` and must not be overwritten.
+        """
+        return exposures.with_columns(
+            pl.when(pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES)))
             .then(pl.col("exposure_class_irb"))
             .otherwise(pl.col("exposure_class"))
             .alias("exposure_class_irb")
         )
 
-        # Step 4b: Model-level permission resolution (optional, 1 join + filter)
-        # When model_permissions data is present, resolve per-row AIRB/FIRB permissions.
-        # Otherwise, falls back to org-wide IRBPermissions in _assign_approach.
-        model_permissions = data.model_permissions
-        if model_permissions is not None:
-            classified = self._resolve_model_permissions(
-                classified, model_permissions, schema_names
-            )
-            # Diagnostic roll-up: count IRB-eligible exposures (internal_pd
-            # non-null) that failed to receive a model permission match,
-            # grouped by cause. One cheap .collect() over a narrow projection
-            # (3-element group_by on a String column). Surfaces CLS006 warnings
-            # so users can see WHY exposures silently routed to SA.
-            diagnostic_counts = (
-                classified.filter(pl.col("internal_pd").is_not_null())
-                .filter(pl.col("_model_permission_diagnostic").is_not_null())
-                .group_by("_model_permission_diagnostic")
-                .agg(pl.len().alias("n"))
-                .collect()
-            )
-            for row in diagnostic_counts.iter_rows(named=True):
-                classification_errors.append(
-                    _build_model_permission_warning(row["_model_permission_diagnostic"], row["n"])
-                )
-            classified = classified.drop("_model_permission_diagnostic")
+    def _resolve_model_permissions_if_present(
+        self,
+        exposures: pl.LazyFrame,
+        model_permissions: pl.LazyFrame | None,
+        schema_names: set[str],
+    ) -> tuple[pl.LazyFrame, list[CalculationError]]:
+        """Resolve per-row IRB permissions when ``model_permissions`` is supplied.
 
-        # Step 5: Approach assignment (1 .with_columns)
-        classified = self._assign_approach(
-            classified,
-            config,
-            schema_names,
-            has_model_permissions=model_permissions is not None,
+        When present, joins exposures with the permissions table, sets
+        ``model_airb_permitted`` / ``model_firb_permitted`` /
+        ``model_slotting_permitted`` columns, and emits CLS006 diagnostics
+        for IRB-eligible exposures that failed to match (grouped by cause:
+        ``null_model_id``, ``unmatched_model_id``, ``filter_rejected``).
+
+        Returns the (possibly augmented) frame plus the diagnostic warnings.
+        When ``model_permissions`` is None, returns the input unchanged with
+        an empty warning list — ``_assign_approach`` falls back to org-wide
+        permissions.
+        """
+        if model_permissions is None:
+            return exposures, []
+
+        exposures = self._resolve_model_permissions(exposures, model_permissions, schema_names)
+        # Diagnostic roll-up: count IRB-eligible exposures (internal_pd
+        # non-null) that failed to receive a model permission match, grouped
+        # by cause. One cheap ``.collect()`` over a narrow projection.
+        diagnostic_counts = (
+            exposures.filter(pl.col("internal_pd").is_not_null())
+            .filter(pl.col("_model_permission_diagnostic").is_not_null())
+            .group_by("_model_permission_diagnostic")
+            .agg(pl.len().alias("n"))
+            .collect()
         )
+        diagnostics = [
+            _build_model_permission_warning(row["_model_permission_diagnostic"], row["n"])
+            for row in diagnostic_counts.iter_rows(named=True)
+        ]
+        exposures = exposures.drop("_model_permission_diagnostic")
+        return exposures, diagnostics
 
-        # Step 6: Split by approach (filter/select — no depth added)
+    def _build_bundle(
+        self,
+        classified: pl.LazyFrame,
+        data: ResolvedHierarchyBundle,
+        classification_errors: list[CalculationError],
+    ) -> ClassifiedExposuresBundle:
+        """Split classified exposures by approach and assemble the output bundle."""
         sa_exposures = classified.filter(
             pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
         )
@@ -445,7 +362,7 @@ class ExposureClassifier:
         )
 
     # =========================================================================
-    # Phase 1: Counterparty join (retained unchanged)
+    # Counterparty attribute join
     # =========================================================================
 
     def _add_counterparty_attributes(
@@ -541,7 +458,141 @@ class ExposureClassifier:
         return joined
 
     # =========================================================================
-    # Phase 2: Independent flags (1 .with_columns — 11 expressions)
+    # Input-data warnings (non-blocking; collected as CalculationError list)
+    # =========================================================================
+
+    # Counterparty-data optional columns that gate B3.1 restrictions when
+    # absent. Each tuple drives one CLS warning emitted by
+    # ``_collect_input_warnings``: (cp_column, error_code, message, ref).
+    # The warning fires when the column is missing from the ORIGINAL
+    # counterparty schema AND the firm is on Basel 3.1.
+    _CP_B31_REQUIRED_COLUMNS: tuple[tuple[str, str, str, str], ...] = (
+        (
+            "is_managed_as_retail",
+            ERROR_RETAIL_POOL_MGMT_MISSING,
+            (
+                "Art. 123A(1)(b)(iii) pool management condition cannot be "
+                "enforced — 'is_managed_as_retail' column missing from "
+                "counterparty data. Non-SME retail exposures will default "
+                "to qualifying status (75% RW) without verification."
+            ),
+            "PRA PS1/26 Art. 123A(1)(b)(iii)",
+        ),
+        (
+            "is_financial_sector_entity",
+            ERROR_FSE_COLUMN_MISSING,
+            (
+                "Art. 147A(1)(e) FSE A-IRB restriction cannot be enforced — "
+                "'is_financial_sector_entity' column missing from counterparty "
+                "data; FSE exposures may receive A-IRB treatment in violation "
+                "of the restriction."
+            ),
+            "PRA PS1/26 Art. 147A(1)(e)",
+        ),
+    )
+
+    def _collect_input_warnings(
+        self,
+        data: ResolvedHierarchyBundle,
+        schema_names: set[str],
+        config: CalculationConfig,
+    ) -> list[CalculationError]:
+        """Collect non-blocking warnings for missing or null input data.
+
+        Three categories of warning fire here, all surfaced as
+        ``CalculationError`` entries with severity WARNING:
+
+        - **QRRE prerequisites** (CRR Art. 147(5)): when ``is_revolving`` or
+          ``facility_limit`` are absent from the exposure schema, qualifying
+          revolving retail silently routes to RETAIL_OTHER instead of
+          RETAIL_QRRE. Regime-agnostic.
+        - **B3.1 optional CP columns** (Art. 123A(1)(b)(iii) and 147A(1)(e)):
+          when ``is_managed_as_retail`` or ``is_financial_sector_entity`` is
+          missing from the *original* counterparty schema (not the
+          post-join exposures schema, which always carries the column after
+          ``_add_counterparty_attributes`` adds a null default), the
+          corresponding restriction cannot be enforced.
+        - **Large-corp F-IRB restriction conservatism** (Art. 147A(1)(d)):
+          when ``annual_revenue`` is null on any corporate counterparty,
+          the engine treats the row as large-corp by default (see
+          ``_is_large_corp`` in ``_assign_approach``) and emits CLS008.
+
+        The QRRE check reads the post-join exposures schema; the CP-side
+        checks read the original counterparty schema. The null-revenue
+        check materialises a count and is the only branch that triggers a
+        ``.collect()``.
+        """
+        errors: list[CalculationError] = []
+
+        # QRRE prerequisites — exposures-schema check, regime-agnostic.
+        # Missing columns cause all revolving retail to silently become
+        # RETAIL_OTHER.
+        missing_qrre_cols = [c for c in ("is_revolving", "facility_limit") if c not in schema_names]
+        if missing_qrre_cols:
+            errors.append(
+                classification_warning(
+                    code=ERROR_QRRE_COLUMNS_MISSING,
+                    message=(
+                        f"QRRE classification disabled — column(s) "
+                        f"{', '.join(missing_qrre_cols)} missing from exposure data. "
+                        f"All qualifying revolving retail exposures will be classified "
+                        f"as RETAIL_OTHER instead of RETAIL_QRRE, which may affect "
+                        f"risk weights and IRB parameters."
+                    ),
+                    regulatory_reference="CRR Art. 147(5)",
+                )
+            )
+
+        # B3.1 optional CP columns — fire when missing under B3.1 only.
+        # Reads the ORIGINAL CP schema, not schema_names (which always has
+        # the column after _add_counterparty_attributes adds a null default).
+        cp_columns = set(data.counterparty_lookup.counterparties.collect_schema().names())
+        if config.is_basel_3_1:
+            for column, code, message, ref in self._CP_B31_REQUIRED_COLUMNS:
+                if column not in cp_columns:
+                    errors.append(
+                        classification_warning(
+                            code=code,
+                            message=message,
+                            regulatory_reference=ref,
+                        )
+                    )
+
+        # Art. 147A(1)(d): null annual_revenue triggers the conservative
+        # large-corp F-IRB restriction — emit CLS008 to flag the conservatism.
+        # Corporate-only count to avoid spurious warnings for non-corporate
+        # entity types where annual_revenue is genuinely irrelevant.
+        if config.is_basel_3_1 and "annual_revenue" in cp_columns:
+            null_revenue_count = (
+                data.counterparty_lookup.counterparties.filter(
+                    (pl.col("entity_type").fill_null("") == "corporate")
+                    & pl.col("annual_revenue").is_null()
+                )
+                .select(pl.len())
+                .collect()
+                .item()
+            )
+            if null_revenue_count > 0:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_LARGE_CORP_REVENUE_NULL,
+                        message=(
+                            f"Art. 147A(1)(d) large-corporate F-IRB restriction applied "
+                            f"conservatively for {null_revenue_count} corporate counterparty "
+                            f"row(s) with null annual_revenue — could not confirm revenue is "
+                            f"below the GBP 440m threshold."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.CLASSIFICATION,
+                        regulatory_reference="PRA PS1/26 Art. 147A(1)(d)",
+                        field_name="annual_revenue",
+                    )
+                )
+
+        return errors
+
+    # =========================================================================
+    # Independent flags (1 .with_columns — 11 expressions)
     # =========================================================================
 
     def _derive_independent_flags(
@@ -596,7 +647,7 @@ class ExposureClassifier:
         # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type
         # (Art. 112(1)(g)), not a separate exposure class.  exposure_class_sa reflects
         # this by mapping SL → CORPORATE.  exposure_class retains SPECIALISED_LENDING
-        # because approach routing (Phase 5) needs it for slotting/AIRB selection.
+        # because approach routing needs it for slotting/AIRB selection.
         sl_sa_class = pl.lit(ExposureClass.CORPORATE.value)
 
         # Batch 2: Derive all flags from pre-computed intermediates.
@@ -647,7 +698,7 @@ class ExposureClassifier:
         ).drop(["_sa_class", "_irb_class", "_pt_upper"])
 
     # =========================================================================
-    # Phase 3: Exposure subtype classification (1 .with_columns — 5 expressions)
+    # Exposure subtype classification (1 .with_columns — 5 expressions)
     # =========================================================================
 
     def _classify_exposure_subtypes(
@@ -671,7 +722,7 @@ class ExposureClassifier:
         sme_threshold_gbp = float(config.thresholds.sme_turnover_threshold)
         qrre_max_limit = float(config.thresholds.qrre_max_limit)
 
-        # Conditions reused across expressions (reading Phase 2 columns)
+        # Conditions reused across expressions (reading the independent-flag columns)
         is_corporate_sme = (
             (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
             & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
@@ -686,8 +737,8 @@ class ExposureClassifier:
         # Specialised lending is a corporate sub-type (Art. 112(1)(g)) and
         # qualifies for the SME supporting factor (Art. 501) when the
         # counterparty meets the SME turnover threshold. The exposure_class
-        # must remain SPECIALISED_LENDING so Phase 5 routes it to the slotting
-        # calculator; only the is_sme flag is set.
+        # must remain SPECIALISED_LENDING so approach assignment routes it to
+        # the slotting calculator; only the is_sme flag is set.
         is_sl_sme = (
             (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
             & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
@@ -758,7 +809,7 @@ class ExposureClassifier:
         )
 
     # =========================================================================
-    # Phase 4: Corporate → retail reclassification (1 .with_columns)
+    # Corporate → retail reclassification (1 .with_columns)
     # =========================================================================
 
     def _reclassify_corporate_to_retail(
@@ -820,7 +871,7 @@ class ExposureClassifier:
         )
 
     # =========================================================================
-    # Phase 4c: Real estate loan-split candidate flagging
+    # Real estate loan-split candidate flagging
     # =========================================================================
 
     def _flag_property_reclassification_candidates(
@@ -876,23 +927,63 @@ class ExposureClassifier:
         CIU, subordinated, high-risk, and exposures already classified
         as RESIDENTIAL_MORTGAGE / RETAIL_MORTGAGE / COMMERCIAL_MORTGAGE.
         """
-        # Determine the property value source (set by the hierarchy
-        # resolver). Without these columns there is nothing to split.
+        # Without property_collateral_value (set by the hierarchy resolver),
+        # there is nothing to split — emit null/zero defaults so downstream
+        # consumers can rely on every re_split_* column being present.
         if "property_collateral_value" not in schema_names:
-            return exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.String).alias("re_split_target_class"),
-                    pl.lit(None).cast(pl.String).alias("re_split_mode"),
-                    pl.lit(None).cast(pl.String).alias("re_split_property_type"),
-                    pl.lit(0.0).cast(pl.Float64).alias("re_split_property_value"),
-                    pl.lit(0.0).cast(pl.Float64).alias("re_split_residential_value"),
-                    pl.lit(0.0).cast(pl.Float64).alias("re_split_commercial_value"),
-                    pl.lit(False).alias("re_split_residential_eligible"),
-                    pl.lit(False).alias("re_split_commercial_eligible"),
-                    pl.lit(False).alias("re_split_cre_rental_coverage_met"),
-                ]
-            )
+            return self._re_split_null_defaults(exposures)
 
+        primitives = self._re_split_property_primitives(schema_names)
+        gates = self._re_split_candidate_gates(schema_names, primitives)
+        eligibility = self._re_split_per_component_eligibility(primitives, gates, config)
+        legacy_outputs = self._re_split_legacy_outputs(primitives, gates, eligibility, config)
+        per_component_values = self._re_split_per_component_values(primitives, eligibility)
+
+        return exposures.with_columns(
+            [
+                legacy_outputs["re_split_target_class"].alias("re_split_target_class"),
+                legacy_outputs["re_split_mode"].alias("re_split_mode"),
+                legacy_outputs["re_split_property_type"].alias("re_split_property_type"),
+                legacy_outputs["re_split_property_value"].alias("re_split_property_value"),
+                per_component_values["re_split_residential_value"].alias(
+                    "re_split_residential_value"
+                ),
+                per_component_values["re_split_commercial_value"].alias(
+                    "re_split_commercial_value"
+                ),
+                eligibility["rre_eligible"].alias("re_split_residential_eligible"),
+                eligibility["cre_eligible"].alias("re_split_commercial_eligible"),
+                primitives["cre_rental_coverage_met"].alias("re_split_cre_rental_coverage_met"),
+            ]
+        )
+
+    @staticmethod
+    def _re_split_null_defaults(exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Emit null/zero re_split_* columns when property data is absent."""
+        return exposures.with_columns(
+            [
+                pl.lit(None).cast(pl.String).alias("re_split_target_class"),
+                pl.lit(None).cast(pl.String).alias("re_split_mode"),
+                pl.lit(None).cast(pl.String).alias("re_split_property_type"),
+                pl.lit(0.0).cast(pl.Float64).alias("re_split_property_value"),
+                pl.lit(0.0).cast(pl.Float64).alias("re_split_residential_value"),
+                pl.lit(0.0).cast(pl.Float64).alias("re_split_commercial_value"),
+                pl.lit(False).alias("re_split_residential_eligible"),
+                pl.lit(False).alias("re_split_commercial_eligible"),
+                pl.lit(False).alias("re_split_cre_rental_coverage_met"),
+            ]
+        )
+
+    @staticmethod
+    def _re_split_property_primitives(schema_names: set[str]) -> dict[str, pl.Expr]:
+        """Build the property-value primitives consumed by every later block.
+
+        Returns expressions for residential / commercial / total property
+        value, the corresponding ``has_*`` predicates, residential-dominance,
+        and the CRR CRE rental-coverage test (≥ 1.5× interest costs;
+        conservative default of False when ``rental_to_interest_ratio`` is
+        absent).
+        """
         residential_value = (
             pl.col("residential_collateral_value").fill_null(0.0)
             if "residential_collateral_value" in schema_names
@@ -900,37 +991,52 @@ class ExposureClassifier:
         )
         property_value = pl.col("property_collateral_value").fill_null(0.0)
         commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
-        has_property = property_value > 0.0
-        has_rre = residential_value > 0.0
-        has_cre = commercial_value > 0.0
-        is_residential_dominant = residential_value >= commercial_value
 
-        # CRR CRE rental coverage: optional input column propagated through
-        # hierarchy. Conservative default — absent value treated as failed.
         if "rental_to_interest_ratio" in schema_names:
             cre_rental_coverage_met = pl.col("rental_to_interest_ratio").fill_null(0.0) >= 1.5
         else:
             cre_rental_coverage_met = pl.lit(False)
 
-        # Already-classified RE rows are handled by the existing whole-loan
-        # path (CRR _apply_residential_mortgage_rw / B3.1 b31_residential_rw_expr).
-        # The mortgage class strings are not in the ExposureClass enum (only
-        # RETAIL_MORTGAGE is), but the SA calculator's RE branch keys on
-        # substring matches so we use the literal strings directly.
+        return {
+            "residential_value": residential_value,
+            "property_value": property_value,
+            "commercial_value": commercial_value,
+            "has_property": property_value > 0.0,
+            "has_rre": residential_value > 0.0,
+            "has_cre": commercial_value > 0.0,
+            "is_residential_dominant": residential_value >= commercial_value,
+            "cre_rental_coverage_met": cre_rental_coverage_met,
+        }
+
+    @staticmethod
+    def _re_split_candidate_gates(
+        schema_names: set[str],
+        primitives: dict[str, pl.Expr],
+    ) -> dict[str, pl.Expr]:
+        """Build the row-level eligibility predicates that gate the split.
+
+        - ``is_candidate``: row may be considered for splitting (eligible class,
+          has property collateral, not income-producing).
+        - ``is_npsme``: counterparty is natural-person OR SME — drives the
+          B3.1 Art. 124H(3) whole-loan path for pure-CRE non-NP/SME corporates.
+
+        Already-classified RE rows are excluded because they're handled by the
+        existing whole-loan path (CRR ``_apply_residential_mortgage_rw`` /
+        B3.1 ``b31_residential_rw_expr``). Higher-priority Art. 112 classes
+        (defaulted, equity, covered bond, high-risk) are also excluded — they
+        must never be downgraded.
+        """
         existing_re_classes = [
             _SECURED_TARGET_RESIDENTIAL,
             _SECURED_TARGET_COMMERCIAL,
             ExposureClass.RETAIL_MORTGAGE.value,
         ]
-
-        # Higher-priority classes per Art. 112 waterfall — never downgraded.
         excluded_classes = existing_re_classes + [
             ExposureClass.DEFAULTED.value,
             ExposureClass.EQUITY.value,
             ExposureClass.COVERED_BOND.value,
             ExposureClass.HIGH_RISK.value,
         ]
-
         is_eligible_class = ~pl.col("exposure_class").is_in(excluded_classes) & ~pl.col(
             "is_defaulted"
         )
@@ -943,61 +1049,98 @@ class ExposureClassifier:
             else pl.lit(False)
         )
 
-        is_candidate = is_eligible_class & has_property & ~is_income_producing
+        is_candidate = is_eligible_class & primitives["has_property"] & ~is_income_producing
 
-        # B3.1 CRE Art. 124H(3): non-natural-person, non-SME corporates use
-        # the whole-loan path — emit a single COMMERCIAL_MORTGAGE row so the
-        # existing b31_commercial_rw_expr Art. 124H(3) branch handles it.
         is_natural_person = (
             pl.col("cp_is_natural_person").fill_null(False)
             if "cp_is_natural_person" in schema_names
             else pl.lit(False)
         )
         is_sme_flag = pl.col("is_sme").fill_null(False)
-        is_npsme = is_natural_person | is_sme_flag
 
-        is_basel_3_1 = config.is_basel_3_1
+        return {
+            "is_candidate": is_candidate,
+            "is_npsme": is_natural_person | is_sme_flag,
+        }
 
-        # Per-component eligibility (PRA PS1/26 Art. 124(4) mixed-RE rule;
-        # CRR Art. 124(1) "any part of an exposure" wording). Each property
-        # component is evaluated against its own regime gate. The splitter
-        # then materialises one secured row per eligible component plus a
-        # single residual.
-        rre_eligible_expr = is_candidate & has_rre
-        if is_basel_3_1:
-            cre_eligible_expr = is_candidate & has_cre
+    @staticmethod
+    def _re_split_per_component_eligibility(
+        primitives: dict[str, pl.Expr],
+        gates: dict[str, pl.Expr],
+        config: CalculationConfig,
+    ) -> dict[str, pl.Expr]:
+        """Build per-component eligibility flags for the RE loan splitter.
+
+        Implements the PRA PS1/26 Art. 124(4) mixed-RE rule (and CRR Art.
+        124(1) "any part of an exposure" wording): each property component
+        is evaluated against its own regime gate. Under CRR, CRE additionally
+        requires the rental-coverage test. ``is_mixed`` flags rows where
+        both components are eligible — the splitter materialises one secured
+        row per eligible component plus a single residual.
+        """
+        rre_eligible = gates["is_candidate"] & primitives["has_rre"]
+        if config.is_basel_3_1:
+            cre_eligible = gates["is_candidate"] & primitives["has_cre"]
         else:
-            cre_eligible_expr = is_candidate & has_cre & cre_rental_coverage_met
+            cre_eligible = (
+                gates["is_candidate"]
+                & primitives["has_cre"]
+                & primitives["cre_rental_coverage_met"]
+            )
+        return {
+            "rre_eligible": rre_eligible,
+            "cre_eligible": cre_eligible,
+            "is_mixed": rre_eligible & cre_eligible,
+        }
 
-        is_mixed = rre_eligible_expr & cre_eligible_expr
+    @staticmethod
+    def _re_split_legacy_outputs(
+        primitives: dict[str, pl.Expr],
+        gates: dict[str, pl.Expr],
+        eligibility: dict[str, pl.Expr],
+        config: CalculationConfig,
+    ) -> dict[str, pl.Expr]:
+        """Build the legacy single-target output expressions.
 
-        # Resolve per-row split mode. "split" when at least one component
-        # is eligible; "whole" reserved for the B3.1 Art. 124H(3) pure-CRE
-        # non-NP/SME corporate path (existing behaviour preserved).
-        if is_basel_3_1:
-            cre_only_whole = (~rre_eligible_expr) & cre_eligible_expr & (~is_npsme)
-            re_split_mode_expr = (
+        These columns predate the per-component split and are kept populated
+        for audit and warning consumers. For mixed rows
+        ``re_split_property_type = "mixed"`` and
+        ``re_split_property_value = rre_v + cre_v``.
+
+        ``re_split_mode`` is regime-gated:
+        - **B3.1**: ``"whole"`` for the Art. 124H(3) pure-CRE non-NP/SME
+          corporate path (existing behaviour preserved); ``"split"`` for
+          NP/SME or any RRE-eligible row.
+        - **CRR**: ``"split"`` whenever any component is eligible (Art. 125
+          RRE / Art. 126 CRE).
+        """
+        is_candidate = gates["is_candidate"]
+        is_mixed = eligibility["is_mixed"]
+        is_residential_dominant = primitives["is_residential_dominant"]
+        rre_eligible = eligibility["rre_eligible"]
+        cre_eligible = eligibility["cre_eligible"]
+
+        if config.is_basel_3_1:
+            cre_only_whole = (~rre_eligible) & cre_eligible & (~gates["is_npsme"])
+            mode_expr = (
                 pl.when(~is_candidate)
                 .then(pl.lit(None, dtype=pl.String))
                 .when(cre_only_whole)
                 .then(pl.lit("whole"))  # B3.1 CRE Art. 124H(3) pure-CRE non-NP/SME
-                .when(rre_eligible_expr | cre_eligible_expr)
+                .when(rre_eligible | cre_eligible)
                 .then(pl.lit("split"))
                 .otherwise(pl.lit(None, dtype=pl.String))
             )
         else:
-            re_split_mode_expr = (
+            mode_expr = (
                 pl.when(~is_candidate)
                 .then(pl.lit(None, dtype=pl.String))
-                .when(rre_eligible_expr | cre_eligible_expr)
+                .when(rre_eligible | cre_eligible)
                 .then(pl.lit("split"))  # CRR Art. 125 / Art. 126 (per-component)
                 .otherwise(pl.lit(None, dtype=pl.String))
             )
 
-        # Legacy single-target columns. Mixed exposures emit "mixed"
-        # property type and the sum of eligible component values; the
-        # splitter does the per-component allocation downstream.
-        re_split_target_class_expr = (
+        target_class_expr = (
             pl.when(~is_candidate)
             .then(pl.lit(None, dtype=pl.String))
             .when(is_mixed)
@@ -1007,7 +1150,7 @@ class ExposureClassifier:
             .otherwise(pl.lit(_SECURED_TARGET_COMMERCIAL))
         )
 
-        re_split_property_type_expr = (
+        property_type_expr = (
             pl.when(~is_candidate)
             .then(pl.lit(None, dtype=pl.String))
             .when(is_mixed)
@@ -1017,40 +1160,47 @@ class ExposureClassifier:
             .otherwise(pl.lit("commercial"))
         )
 
-        re_split_property_value_expr = (
+        property_value_expr = (
             pl.when(is_mixed)
-            .then(residential_value + commercial_value)
+            .then(primitives["residential_value"] + primitives["commercial_value"])
             .when(is_residential_dominant)
-            .then(residential_value)
-            .otherwise(commercial_value)
+            .then(primitives["residential_value"])
+            .otherwise(primitives["commercial_value"])
         )
 
-        # Per-component values surfaced for the splitter. Always emitted
-        # so the splitter can rely on them; ineligible components carry
-        # zero so the allocation expressions naturally short-circuit.
-        re_split_residential_value_expr = (
-            pl.when(rre_eligible_expr).then(residential_value).otherwise(pl.lit(0.0))
-        )
-        re_split_commercial_value_expr = (
-            pl.when(cre_eligible_expr).then(commercial_value).otherwise(pl.lit(0.0))
-        )
+        return {
+            "re_split_target_class": target_class_expr,
+            "re_split_mode": mode_expr,
+            "re_split_property_type": property_type_expr,
+            "re_split_property_value": property_value_expr,
+        }
 
-        return exposures.with_columns(
-            [
-                re_split_target_class_expr.alias("re_split_target_class"),
-                re_split_mode_expr.alias("re_split_mode"),
-                re_split_property_type_expr.alias("re_split_property_type"),
-                re_split_property_value_expr.alias("re_split_property_value"),
-                re_split_residential_value_expr.alias("re_split_residential_value"),
-                re_split_commercial_value_expr.alias("re_split_commercial_value"),
-                rre_eligible_expr.alias("re_split_residential_eligible"),
-                cre_eligible_expr.alias("re_split_commercial_eligible"),
-                cre_rental_coverage_met.alias("re_split_cre_rental_coverage_met"),
-            ]
-        )
+    @staticmethod
+    def _re_split_per_component_values(
+        primitives: dict[str, pl.Expr],
+        eligibility: dict[str, pl.Expr],
+    ) -> dict[str, pl.Expr]:
+        """Build per-component property value expressions.
+
+        Always emitted so the splitter can rely on their presence;
+        ineligible components carry zero so allocation expressions
+        naturally short-circuit.
+        """
+        return {
+            "re_split_residential_value": (
+                pl.when(eligibility["rre_eligible"])
+                .then(primitives["residential_value"])
+                .otherwise(pl.lit(0.0))
+            ),
+            "re_split_commercial_value": (
+                pl.when(eligibility["cre_eligible"])
+                .then(primitives["commercial_value"])
+                .otherwise(pl.lit(0.0))
+            ),
+        }
 
     # =========================================================================
-    # Phase 4b: Model-level permission resolution (optional)
+    # Model-level permission resolution (optional)
     # =========================================================================
 
     def _resolve_model_permissions(
@@ -1220,7 +1370,7 @@ class ExposureClassifier:
         return result
 
     # =========================================================================
-    # Phase 5: Approach assignment (1 .with_columns)
+    # Approach assignment (1 .with_columns)
     # =========================================================================
 
     def _assign_approach(
@@ -1234,214 +1384,58 @@ class ExposureClassifier:
         """
         Determine calculation approach and finalize classification.
 
-        Single .with_columns() computing approach, LGD clearing for FIRB,
-        and the classification audit string. Permission checks are inlined
-        as pl.lit(bool) to avoid intermediate columns.
+        Reads as a recipe of four named steps:
+          1. Build permission expressions (model-level / org-wide / IRB-mode).
+          2. Apply Basel 3.1 Art. 147A approach restrictions (FSE, large corp,
+             institution AIRB block, sovereign-like SA-only).
+          3. Compose the ``pl.when`` decision ladder for ``approach``.
+          4. Apply post-decision LGD clearing and rgla/pse exposure_class
+             re-alignment.
 
-        When has_model_permissions=True, uses per-row model_airb_permitted /
-        model_firb_permitted columns (set by _resolve_model_permissions) instead
-        of org-wide pl.lit(bool) permission flags. AIRB additionally requires
-        lgd to be non-null (bank-modelled LGD).
-
-        Sets: approach, lgd (cleared for FIRB)
+        Sets: approach, lgd (cleared for FIRB), exposure_class (re-aligned
+        for IRB-routed rgla_* / pse_*).
         """
         # Ensure internal_pd exists (added by hierarchy resolver; may be absent
         # when classifier is invoked directly in tests without full pipeline)
         if "internal_pd" not in schema_names:
             exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
 
-        if has_model_permissions:
-            # Model-level SL permissions: per-row flags from _resolve_model_permissions
-            sl_airb = pl.col("model_airb_permitted")
-            sl_slotting = pl.col("model_slotting_permitted")
-        elif config.permission_mode == PermissionMode.IRB:
-            # IRB mode requires model_permissions to gate per-model approval.
-            # Without it, no exposure can be granted IRB — fall back to SA.
-            sl_airb = pl.lit(False)
-            sl_slotting = pl.lit(False)
-        else:
-            # SA-only mode: org-wide SL permissions from config
-            sl_airb = pl.lit(
-                config.irb_permissions.is_permitted(
-                    ExposureClass.SPECIALISED_LENDING,
-                    ApproachType.AIRB,
-                )
-            )
-            sl_slotting = pl.lit(
-                config.irb_permissions.is_permitted(
-                    ExposureClass.SPECIALISED_LENDING,
-                    ApproachType.SLOTTING,
-                )
-            )
-
-        # Managed-as-retail-without-LGD must use SA
-        managed_as_retail_without_lgd = (
-            (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
-            & (pl.col("qualifies_as_retail") == True)  # noqa: E712
-            & (pl.col("lgd").is_null())
-        )
-
         # IRB requires an internal rating (PD from the firm's IRB model).
         # Counterparties with only external ratings fall through to SA.
         has_internal_rating = pl.col("internal_pd").is_not_null()
         has_modelled_lgd = pl.col("lgd").is_not_null()
 
-        if has_model_permissions:
-            # --- Model-level permissions: per-row flags from _resolve_model_permissions ---
-            # model_airb_permitted / model_firb_permitted are boolean columns
-            # already filtered by exposure_class, geography, and book code.
-            # AIRB additionally requires modelled LGD (bank-estimated LGD).
-            airb_permitted_expr = (
-                pl.col("model_airb_permitted") & has_internal_rating & has_modelled_lgd
-            )
-            firb_permitted_expr = pl.col("model_firb_permitted") & has_internal_rating
-            firb_clear_expr = (
-                pl.col("model_firb_permitted")
-                & has_internal_rating
-                & ~(pl.col("model_airb_permitted") & has_modelled_lgd)
-            )
-        elif config.permission_mode == PermissionMode.IRB:
-            # IRB mode requires model_permissions to gate per-model approval.
-            # Without it, no exposure can be granted IRB — fall back to SA.
-            airb_permitted_expr = pl.lit(False)
-            firb_permitted_expr = pl.lit(False)
-            firb_clear_expr = pl.lit(False)
-        else:
-            # --- Org-wide permissions: pre-compute booleans Python-side ---
-            airb_permitted_expr, firb_permitted_expr, firb_clear_expr = (
-                self._build_orgwide_permission_exprs(config, has_internal_rating)
-            )
-
-        # Art. 114(3)/(4): EU domestic sovereign exposures must use SA
-        # to receive the 0% RW — forced to standardised regardless of IRB permissions.
-        # Use original (pre-FX) denomination — `currency` is overwritten by the
-        # FX converter with the reporting currency, which would otherwise reject
-        # legitimate Art. 114(4) treatment for any non-base-currency exposure.
-        _is_eu_domestic_sovereign = (
-            pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
-        ) & build_eu_domestic_currency_expr(
-            "cp_country_code", denomination_currency_expr(schema_names)
+        # Step 1: permission expressions
+        airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting = self._build_permission_exprs(
+            config,
+            has_internal_rating=has_internal_rating,
+            has_modelled_lgd=has_modelled_lgd,
+            has_model_permissions=has_model_permissions,
         )
 
-        # --- B31 Art. 147A classifier-level approach restrictions ---
-        # These supplement the permissions-level restrictions in full_irb_b31()
-        # with data-dependent checks that cannot be encoded in the permission map.
-        _b31_ipre_hvcre_forced_slotting = pl.lit(False)
-        if config.is_basel_3_1:
-            # Art. 147A(1)(c): IPRE/HVCRE → slotting only
-            _b31_ipre_hvcre_forced_slotting = (
-                pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
-            ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
-
-            # Art. 147A(1)(d)/(e): FSE and large corporates → F-IRB only (no A-IRB)
-            _is_fse = pl.lit(False)
-            if "cp_is_financial_sector_entity" in schema_names:
-                _is_fse = (
-                    (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
-                    .fill_null(False)
-                )
-            # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
-            # to counterparties of entity_type == "corporate". Non-corporate
-            # entity types (specialised_lending, retail, sovereign, institution,
-            # etc.) are governed by their own Art. 147A sub-clauses and must
-            # never trip this branch — even when their cp_annual_revenue is
-            # null/irrelevant. Within the corporate slice, null annual_revenue
-            # is treated conservatively (assumed large) so the F-IRB restriction
-            # is applied; CLS008 is emitted in parallel to flag the missing data.
-            _is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
-            _is_large_corp = _is_corporate_cp & (
-                pl.when(pl.col("cp_annual_revenue").is_null())
-                .then(pl.lit(True))
-                .otherwise(
-                    pl.col("cp_annual_revenue")
-                    > float(config.thresholds.large_corporate_revenue_threshold)
-                )
-            )
-
-            # Art. 147A(1)(b): Institution (including RGLAs/PSEs treated as
-            # institutions per Art. 147(4)(b)) → F-IRB only (no A-IRB).
-            # Key on exposure_class_irb so rgla_institution / pse_institution
-            # (whose SA class is RGLA / PSE but IRB class is INSTITUTION)
-            # inherit the restriction.
-            _b31_institution_no_airb = (
-                pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
-            )
-
-            _b31_airb_blocked = _is_fse | _is_large_corp | _b31_institution_no_airb
-
-            # Art. 147A(1)(a) read with Art. 147(3): sovereigns and
-            # quasi-sovereigns with 0% SA RW → SA only. Identify by entity
-            # type because the 0%-RW qualifier is a property of how the
-            # counterparty is treated (sovereign-derived), not of the SA
-            # exposure class label. rgla_institution / pse_institution are
-            # NOT in scope — they route to institution IRB per Art. 147A(1)(b).
-            _b31_sa_only = pl.col("cp_entity_type").is_in(
-                [
-                    "sovereign",
-                    "central_bank",
-                    "rgla_sovereign",
-                    "pse_sovereign",
-                    "mdb",
-                    "mdb_named",
-                    "international_org",
-                ]
-            )
-
-            # Remove AIRB eligibility for B31-restricted exposures and SA-only classes
-            airb_permitted_expr = airb_permitted_expr & ~_b31_airb_blocked & ~_b31_sa_only
-            # Expand FIRB LGD clearing to include exposures whose AIRB was blocked
-            firb_clear_expr = firb_clear_expr | (firb_permitted_expr & _b31_airb_blocked)
-            # Remove FIRB eligibility for SA-only classes
-            firb_permitted_expr = firb_permitted_expr & ~_b31_sa_only
-
-        # --- Approach expression ---
-        # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
-        is_ccp = pl.col("cp_entity_type") == "ccp"
-
-        approach_expr = (
-            pl.when(managed_as_retail_without_lgd)
-            .then(pl.lit(ApproachType.SA.value))
-            # Art. 114(4): EU CGCB in domestic currency → forced SA (0% RW)
-            .when(_is_eu_domestic_sovereign)
-            .then(pl.lit(ApproachType.SA.value))
-            # Qualifying CCP trade exposures — always SA with prescribed RW (CRE54.14-15)
-            .when(is_ccp)
-            .then(pl.lit(ApproachType.SA.value))
-            # B31 Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
-            .when(_b31_ipre_hvcre_forced_slotting)
-            .then(pl.lit(ApproachType.SLOTTING.value))
-            # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31)
-            # Requires both PD and modelled LGD — without LGD, fall through to slotting
-            # (CRR Art. 153(1)-(4) vs Art. 153(5))
-            .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-                & sl_airb
-                & has_internal_rating
-                & has_modelled_lgd
-            )
-            .then(pl.lit(ApproachType.AIRB.value))
-            # SL slotting fallback (slotting does not require internal rating)
-            .when(
-                (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value) & sl_slotting
-            )
-            .then(pl.lit(ApproachType.SLOTTING.value))
-            # A-IRB (model or org-wide, with B31 FSE/large-corp restriction applied)
-            .when(airb_permitted_expr)
-            .then(pl.lit(ApproachType.AIRB.value))
-            # F-IRB (model or org-wide)
-            .when(firb_permitted_expr)
-            .then(pl.lit(ApproachType.FIRB.value))
-            # Equity exposure class → EQUITY approach (routes to SA equity RW logic;
-            # full equity treatment requires the dedicated equity_exposures table)
-            .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
-            .then(pl.lit(ApproachType.EQUITY.value))
-            .otherwise(pl.lit(ApproachType.SA.value))
-            .alias("approach")
+        # Step 2: B3.1 Art. 147A restrictions (no-op under CRR)
+        airb_expr, firb_expr, firb_clear_expr = self._apply_b31_approach_restrictions(
+            airb_expr,
+            firb_expr,
+            firb_clear_expr,
+            config,
+            schema_names,
         )
 
-        # --- FIRB LGD clearing ---
-        # Clear LGD when FIRB approach is chosen (FIRB uses regulatory supervisory LGD).
-        # Must NOT clear for reclassified retail exposures.
+        # Step 3: approach decision ladder
+        approach_expr = self._build_approach_expr(
+            schema_names=schema_names,
+            config=config,
+            airb_expr=airb_expr,
+            firb_expr=firb_expr,
+            sl_airb=sl_airb,
+            sl_slotting=sl_slotting,
+            has_internal_rating=has_internal_rating,
+            has_modelled_lgd=has_modelled_lgd,
+        )
+
+        # FIRB LGD clearing — clear LGD when FIRB approach is chosen (FIRB uses
+        # regulatory supervisory LGD). Must NOT clear for reclassified retail.
         lgd_expr = (
             pl.when(firb_clear_expr & ~pl.col("reclassified_to_retail"))
             .then(pl.lit(None).cast(pl.Float64))
@@ -1449,37 +1443,240 @@ class ExposureClassifier:
             .alias("lgd")
         )
 
-        # For IRB-routed rgla_* / pse_* rows, align exposure_class with the
-        # IRB class so the IRB calculator (which reads exposure_class for
-        # correlation/LGD selection) sees CGCB / INSTITUTION rather than
-        # RGLA / PSE. Scoped to these entity types because later phases
-        # (retail reclassification, SME/QRRE) mutate exposure_class in place
-        # without updating exposure_class_irb — a blanket rewrite would
-        # revert those legitimate adjustments.
-        _needs_irb_class_alignment = pl.col("cp_entity_type").is_in(
-            [
-                "rgla_sovereign",
-                "rgla_institution",
-                "pse_sovereign",
-                "pse_institution",
-            ]
+        # Step 4: align exposure_class for IRB-routed rgla_* / pse_*
+        return self._align_irb_exposure_class(exposures.with_columns([approach_expr, lgd_expr]))
+
+    @staticmethod
+    def _build_permission_exprs(
+        config: CalculationConfig,
+        *,
+        has_internal_rating: pl.Expr,
+        has_modelled_lgd: pl.Expr,
+        has_model_permissions: bool,
+    ) -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+        """Build the five permission expressions consumed by the approach ladder.
+
+        Returns ``(airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting)``.
+
+        Three permission sources:
+        - **Model-level** (``has_model_permissions=True``): per-row flags set
+          by ``_resolve_model_permissions``, already filtered by exposure_class,
+          geography, and book code. AIRB additionally requires modelled LGD.
+        - **IRB mode without model_permissions**: no exposure can be granted
+          IRB — every flag is ``pl.lit(False)``, falling back to SA.
+        - **Org-wide** (default): booleans pre-computed from
+          ``config.irb_permissions``, lifted via ``pl.lit``.
+
+        ``firb_clear_expr`` identifies rows whose LGD should be cleared (FIRB
+        uses supervisory LGD). Under model-level permissions, this excludes
+        rows that also qualify for AIRB.
+        """
+        if has_model_permissions:
+            sl_airb = pl.col("model_airb_permitted")
+            sl_slotting = pl.col("model_slotting_permitted")
+            airb_expr = pl.col("model_airb_permitted") & has_internal_rating & has_modelled_lgd
+            firb_expr = pl.col("model_firb_permitted") & has_internal_rating
+            firb_clear_expr = (
+                pl.col("model_firb_permitted")
+                & has_internal_rating
+                & ~(pl.col("model_airb_permitted") & has_modelled_lgd)
+            )
+            return airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting
+
+        if config.permission_mode == PermissionMode.IRB:
+            # IRB mode requires model_permissions to gate per-model approval.
+            # Without it, no exposure can be granted IRB — fall back to SA.
+            false_expr = pl.lit(False)
+            return false_expr, false_expr, false_expr, false_expr, false_expr
+
+        # Org-wide SL permissions from config
+        sl_airb = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.AIRB,
+            )
         )
-        exposure_class_expr = (
+        sl_slotting = pl.lit(
+            config.irb_permissions.is_permitted(
+                ExposureClass.SPECIALISED_LENDING,
+                ApproachType.SLOTTING,
+            )
+        )
+        airb_expr, firb_expr, firb_clear_expr = ExposureClassifier._build_orgwide_permission_exprs(
+            config, has_internal_rating
+        )
+        return airb_expr, firb_expr, firb_clear_expr, sl_airb, sl_slotting
+
+    @staticmethod
+    def _apply_b31_approach_restrictions(
+        airb_expr: pl.Expr,
+        firb_expr: pl.Expr,
+        firb_clear_expr: pl.Expr,
+        config: CalculationConfig,
+        schema_names: set[str],
+    ) -> tuple[pl.Expr, pl.Expr, pl.Expr]:
+        """Apply Basel 3.1 Art. 147A approach restrictions.
+
+        Returns the inputs unchanged when ``not config.is_basel_3_1``.
+        Under Basel 3.1, removes A-IRB eligibility for FSE / large-corporate /
+        institution exposures (Art. 147A(1)(b)/(d)/(e)) and removes both A-IRB
+        and F-IRB for sovereign-like entity types (Art. 147A(1)(a)). Also
+        widens ``firb_clear_expr`` to include rows whose A-IRB was blocked but
+        which still receive F-IRB.
+
+        These supplement the permissions-level restrictions in
+        ``full_irb_b31()`` with data-dependent checks that cannot be encoded
+        in the permission map.
+        """
+        if not config.is_basel_3_1:
+            return airb_expr, firb_expr, firb_clear_expr
+
+        # Art. 147A(1)(d)/(e): FSE → no A-IRB
+        is_fse = pl.lit(False)
+        if "cp_is_financial_sector_entity" in schema_names:
+            is_fse = (
+                (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
+                .fill_null(False)
+            )
+        # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
+        # to counterparties of entity_type == "corporate". Non-corporate
+        # entity types are governed by their own Art. 147A sub-clauses and
+        # must never trip this branch. Within the corporate slice, null
+        # annual_revenue is treated conservatively (assumed large) so the
+        # F-IRB restriction is applied; CLS008 is emitted in parallel to
+        # flag the missing data.
+        is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
+        is_large_corp = is_corporate_cp & (
+            pl.when(pl.col("cp_annual_revenue").is_null())
+            .then(pl.lit(True))
+            .otherwise(
+                pl.col("cp_annual_revenue")
+                > float(config.thresholds.large_corporate_revenue_threshold)
+            )
+        )
+        # Art. 147A(1)(b): Institution (including RGLAs/PSEs treated as
+        # institutions per Art. 147(4)(b)) → F-IRB only. Key on
+        # exposure_class_irb so rgla_institution / pse_institution inherit
+        # the restriction.
+        b31_institution_no_airb = pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
+        b31_airb_blocked = is_fse | is_large_corp | b31_institution_no_airb
+
+        # Art. 147A(1)(a) read with Art. 147(3): sovereigns and
+        # quasi-sovereigns with 0% SA RW → SA only. See
+        # ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
+        b31_sa_only = pl.col("cp_entity_type").is_in(list(B31_SOVEREIGN_LIKE_ENTITY_TYPES))
+
+        new_airb = airb_expr & ~b31_airb_blocked & ~b31_sa_only
+        new_firb_clear = firb_clear_expr | (firb_expr & b31_airb_blocked)
+        new_firb = firb_expr & ~b31_sa_only
+        return new_airb, new_firb, new_firb_clear
+
+    @staticmethod
+    def _build_approach_expr(
+        *,
+        schema_names: set[str],
+        config: CalculationConfig,
+        airb_expr: pl.Expr,
+        firb_expr: pl.Expr,
+        sl_airb: pl.Expr,
+        sl_slotting: pl.Expr,
+        has_internal_rating: pl.Expr,
+        has_modelled_lgd: pl.Expr,
+    ) -> pl.Expr:
+        """Compose the ``pl.when`` decision ladder for ``approach``.
+
+        Branch order (top wins):
+        1. Managed-as-retail without LGD → SA
+        2. Art. 114(4) EU domestic sovereign → SA (forced 0% RW)
+        3. CCP trade exposures → SA (CRE54.14-15)
+        4. Basel 3.1 Art. 147A(1)(c) IPRE/HVCRE → slotting
+        5. SL A-IRB (PD + modelled LGD required, CRR Art. 153(1)-(4))
+        6. SL slotting fallback (no internal rating required)
+        7. A-IRB (model or org-wide, with B3.1 FSE/large-corp restriction applied)
+        8. F-IRB (model or org-wide)
+        9. Equity → EQUITY approach
+        10. Otherwise → SA
+        """
+        managed_as_retail_without_lgd = (
+            (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
+            & (pl.col("qualifies_as_retail") == True)  # noqa: E712
+            & (pl.col("lgd").is_null())
+        )
+
+        # Art. 114(3)/(4): EU domestic sovereign → SA. Use original
+        # (pre-FX) denomination — `currency` is overwritten by the FX
+        # converter with the reporting currency, which would otherwise
+        # reject legitimate Art. 114(4) treatment for any non-base-currency
+        # exposure.
+        is_eu_domestic_sovereign = (
+            pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+        ) & build_eu_domestic_currency_expr(
+            "cp_country_code", denomination_currency_expr(schema_names)
+        )
+
+        # Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)
+        b31_ipre_hvcre_forced_slotting = pl.lit(False)
+        if config.is_basel_3_1:
+            b31_ipre_hvcre_forced_slotting = (
+                pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+            ) & pl.col("sl_type").is_in(list(_B31_SLOTTING_ONLY_SL_TYPES))
+
+        # CCP exposures must always use SA (CRR Art. 300-311, CRE54)
+        is_ccp = pl.col("cp_entity_type") == "ccp"
+
+        is_sl = pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+
+        return (
+            pl.when(managed_as_retail_without_lgd)
+            .then(pl.lit(ApproachType.SA.value))
+            .when(is_eu_domestic_sovereign)
+            .then(pl.lit(ApproachType.SA.value))
+            .when(is_ccp)
+            .then(pl.lit(ApproachType.SA.value))
+            .when(b31_ipre_hvcre_forced_slotting)
+            .then(pl.lit(ApproachType.SLOTTING.value))
+            # SL A-IRB takes precedence over slotting (non-IPRE/HVCRE under B31).
+            # Requires both PD and modelled LGD — without LGD, fall through to
+            # slotting (CRR Art. 153(1)-(4) vs Art. 153(5)).
+            .when(is_sl & sl_airb & has_internal_rating & has_modelled_lgd)
+            .then(pl.lit(ApproachType.AIRB.value))
+            # SL slotting fallback (slotting does not require internal rating)
+            .when(is_sl & sl_slotting)
+            .then(pl.lit(ApproachType.SLOTTING.value))
+            .when(airb_expr)
+            .then(pl.lit(ApproachType.AIRB.value))
+            .when(firb_expr)
+            .then(pl.lit(ApproachType.FIRB.value))
+            # Equity exposure class → EQUITY approach (routes to SA equity RW
+            # logic; full equity treatment requires the dedicated
+            # equity_exposures table).
+            .when(pl.col("exposure_class") == ExposureClass.EQUITY.value)
+            .then(pl.lit(ApproachType.EQUITY.value))
+            .otherwise(pl.lit(ApproachType.SA.value))
+            .alias("approach")
+        )
+
+    @staticmethod
+    def _align_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Align exposure_class with exposure_class_irb for rgla/pse rows.
+
+        For IRB-routed rgla_* / pse_* rows, the IRB calculator (which reads
+        exposure_class for correlation/LGD selection) needs CGCB / INSTITUTION
+        rather than the SA labels RGLA / PSE. Scoped to these entity types
+        because later phases (retail reclassification, SME/QRRE) mutate
+        exposure_class in place without updating exposure_class_irb — a
+        blanket rewrite would revert those legitimate adjustments.
+        """
+        needs_alignment = pl.col("cp_entity_type").is_in(list(RGLA_PSE_ENTITY_TYPES))
+        return exposures.with_columns(
             pl.when(
                 pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
-                & _needs_irb_class_alignment
+                & needs_alignment
             )
             .then(pl.col("exposure_class_irb"))
             .otherwise(pl.col("exposure_class"))
             .alias("exposure_class")
         )
-
-        return exposures.with_columns(
-            [
-                approach_expr,
-                lgd_expr,
-            ]
-        ).with_columns(exposure_class_expr)
 
     @staticmethod
     def _build_orgwide_permission_exprs(

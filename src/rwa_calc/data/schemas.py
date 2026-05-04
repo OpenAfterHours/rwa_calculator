@@ -517,6 +517,37 @@ VALID_ENTITY_TYPES = {
 
 VALID_SENIORITY = {"senior", "subordinated"}
 
+# RGLA / PSE entity types whose SA exposure class differs from their IRB
+# exposure class (CRR Art. 147(3)/147(4)(b)). Used by the classifier's
+# IRB-class sync (these are excluded from the SA-class sync because their
+# IRB class is already correct) and by the post-approach exposure_class
+# alignment (rewrites their post-approach ``exposure_class`` to the IRB
+# class so the IRB calculator sees CGCB / INSTITUTION rather than RGLA /
+# PSE).
+RGLA_PSE_ENTITY_TYPES: tuple[str, ...] = (
+    "rgla_sovereign",
+    "rgla_institution",
+    "pse_sovereign",
+    "pse_institution",
+)
+
+# Entity types treated as sovereign-like under Basel 3.1 Art. 147A(1)(a)
+# read with Art. 147(3): when the counterparty qualifies for 0% SA RW it
+# is restricted to SA only (no IRB). Identified by entity type because
+# the 0%-RW qualifier is a property of how the counterparty is treated
+# (sovereign-derived), not of the SA exposure class label.
+# rgla_institution / pse_institution are NOT in scope — they route to
+# institution IRB per Art. 147A(1)(b).
+B31_SOVEREIGN_LIKE_ENTITY_TYPES: tuple[str, ...] = (
+    "sovereign",
+    "central_bank",
+    "rgla_sovereign",
+    "pse_sovereign",
+    "mdb",
+    "mdb_named",
+    "international_org",
+)
+
 VALID_COLLATERAL_TYPES = {
     "cash",
     "gold",

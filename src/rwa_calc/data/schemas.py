@@ -268,6 +268,11 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     "beneficiary_reference": ColumnSpec(pl.String),
     "protection_type": ColumnSpec(pl.String, default="guarantee", required=False),
     "includes_restructuring": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 237(2)(a): original maturity of unfunded credit protection.
+    # A guarantee with original_maturity_years < 1.0 is ineligible. Null is
+    # treated permissively (defaulted to >= 1y) — mirrors the collateral
+    # original_maturity_years fallback in engine/crm/haircuts.py.
+    "original_maturity_years": ColumnSpec(pl.Float64, required=False),
 }
 
 PROVISION_SCHEMA: dict[str, ColumnSpec] = {

@@ -73,6 +73,19 @@ def apply_guarantees(
         pl.col("protection_type").fill_null("guarantee").alias("protection_type"),
     )
 
+    # CRR Art. 237(2)(a): unfunded credit protection with original maturity
+    # < 1 year is ineligible. Drop ineligible guarantee rows here so the
+    # downstream pipeline treats the exposure as un-guaranteed. Null is
+    # treated permissively (>= 1y) — mirrors the collateral fallback in
+    # engine/crm/haircuts.py:478-484.
+    guarantees = ensure_columns(
+        guarantees,
+        {"original_maturity_years": ColumnSpec(pl.Float64, required=False)},
+    )
+    guarantees = guarantees.filter(
+        pl.col("original_maturity_years").fill_null(10.0) >= 1.0
+    )
+
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 
     # Apply haircuts to guarantee amounts BEFORE splitting (Art. 233).

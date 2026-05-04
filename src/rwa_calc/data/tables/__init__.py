@@ -14,6 +14,7 @@ Modules:
     firb_lgd: F-IRB supervisory LGD values (CRR Art. 161 and PRA PS1/26 Art. 161)
     crr_equity_rw: CRR equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
     b31_equity_rw: Basel 3.1 equity risk weights (PRA PS1/26 Art. 133)
+    entity_class_mapping: entity_type → SA/IRB exposure class lookup
 """
 
 from .b31_equity_rw import (
@@ -69,6 +70,11 @@ from .crr_slotting import (
     SLOTTING_RISK_WEIGHTS_SHORT,
     calculate_slotting_rwa,
     lookup_slotting_rw,
+)
+from .entity_class_mapping import (
+    ENTITY_TYPE_TO_IRB_CLASS,
+    ENTITY_TYPE_TO_SA_CLASS,
+    ENTITY_TYPES_BY_SA_CLASS,
 )
 from .eu_sovereign import (
     EU_COUNTRY_DOMESTIC_CURRENCY,
@@ -172,6 +178,10 @@ __all__ = [
     "EU_MEMBER_STATES",
     "EU_COUNTRY_DOMESTIC_CURRENCY",
     "build_eu_domestic_currency_expr",
+    # Entity-type to exposure-class mappings
+    "ENTITY_TYPE_TO_SA_CLASS",
+    "ENTITY_TYPE_TO_IRB_CLASS",
+    "ENTITY_TYPES_BY_SA_CLASS",
     # Equity risk weights — CRR
     "SA_EQUITY_RISK_WEIGHTS",
     "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",

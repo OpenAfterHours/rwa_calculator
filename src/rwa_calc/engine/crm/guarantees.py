@@ -23,6 +23,7 @@ import polars as pl
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
+from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
 from rwa_calc.data.tables.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
@@ -35,7 +36,6 @@ from rwa_calc.engine.ccf import (
     on_balance_ead,
     sa_ccf_expression,
 )
-from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

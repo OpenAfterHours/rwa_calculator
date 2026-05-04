@@ -290,7 +290,7 @@ class TestClassifierEquityApproach:
 
     def test_equity_class_gets_equity_approach(self) -> None:
         """Equity-class rows from entity_type mapping get EQUITY approach."""
-        from rwa_calc.engine.classifier import ENTITY_TYPE_TO_SA_CLASS
+        from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
 
         assert ENTITY_TYPE_TO_SA_CLASS["equity"] == ExposureClass.EQUITY.value
 

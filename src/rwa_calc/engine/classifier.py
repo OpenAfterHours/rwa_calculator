@@ -57,6 +57,10 @@ from rwa_calc.data.schemas import (
     B31_SOVEREIGN_LIKE_ENTITY_TYPES,
     RGLA_PSE_ENTITY_TYPES,
 )
+from rwa_calc.data.tables.entity_class_mapping import (
+    ENTITY_TYPE_TO_IRB_CLASS,
+    ENTITY_TYPE_TO_SA_CLASS,
+)
 from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -74,91 +78,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# ENTITY TYPE TO EXPOSURE CLASS MAPPINGS
-# =============================================================================
-
-# entity_type → SA exposure class (for risk weight lookup)
-ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
-    "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "rgla_sovereign": ExposureClass.RGLA.value,
-    "rgla_institution": ExposureClass.RGLA.value,
-    "pse_sovereign": ExposureClass.PSE.value,
-    "pse_institution": ExposureClass.PSE.value,
-    "mdb": ExposureClass.MDB.value,
-    "mdb_named": ExposureClass.MDB.value,
-    "international_org": ExposureClass.MDB.value,
-    "institution": ExposureClass.INSTITUTION.value,
-    "bank": ExposureClass.INSTITUTION.value,
-    "ccp": ExposureClass.INSTITUTION.value,
-    "financial_institution": ExposureClass.INSTITUTION.value,
-    "corporate": ExposureClass.CORPORATE.value,
-    "company": ExposureClass.CORPORATE.value,
-    "individual": ExposureClass.RETAIL_OTHER.value,
-    "retail": ExposureClass.RETAIL_OTHER.value,
-    # Art. 112(1)(g): SL is a corporate sub-type under SA, not a separate class.
-    # The sl_type column (from the specialised_lending join) drives SL-specific
-    # risk weight lookup; the exposure_class_sa column is CORPORATE.
-    "specialised_lending": ExposureClass.CORPORATE.value,
-    "equity": ExposureClass.EQUITY.value,
-    "covered_bond": ExposureClass.COVERED_BOND.value,
-    "other_cash": ExposureClass.OTHER.value,
-    "other_gold": ExposureClass.OTHER.value,
-    "other_items_in_collection": ExposureClass.OTHER.value,
-    "other_tangible": ExposureClass.OTHER.value,
-    "other_residual_lease": ExposureClass.OTHER.value,
-    # High-risk items (CRR Art. 128): 150% unconditional
-    "high_risk": ExposureClass.HIGH_RISK.value,
-    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
-    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
-    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
-}
-
-# entity_type → IRB exposure class (for IRB formula selection)
-# Other Items (Art. 134) are SA-only — no IRB class exists for these.
-# High-risk items (Art. 128) are SA-only — they map to HIGH_RISK for SA treatment.
-ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
-    "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "rgla_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "rgla_institution": ExposureClass.INSTITUTION.value,
-    "pse_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "pse_institution": ExposureClass.INSTITUTION.value,
-    "mdb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "mdb_named": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "international_org": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
-    "institution": ExposureClass.INSTITUTION.value,
-    "bank": ExposureClass.INSTITUTION.value,
-    "ccp": ExposureClass.INSTITUTION.value,
-    "financial_institution": ExposureClass.INSTITUTION.value,
-    "corporate": ExposureClass.CORPORATE.value,
-    "company": ExposureClass.CORPORATE.value,
-    "individual": ExposureClass.RETAIL_OTHER.value,
-    "retail": ExposureClass.RETAIL_OTHER.value,
-    "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
-    "equity": ExposureClass.EQUITY.value,
-    "covered_bond": ExposureClass.COVERED_BOND.value,
-    "other_cash": ExposureClass.OTHER.value,
-    "other_gold": ExposureClass.OTHER.value,
-    "other_items_in_collection": ExposureClass.OTHER.value,
-    "other_tangible": ExposureClass.OTHER.value,
-    "other_residual_lease": ExposureClass.OTHER.value,
-    # High-risk items (Art. 128) are SA-only — they map to OTHER for IRB
-    # (no separate IRB treatment; HIGH_RISK is an SA exposure class).
-    "high_risk": ExposureClass.HIGH_RISK.value,
-    "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
-    "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
-    "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
-}
-
-# Inverse of ENTITY_TYPE_TO_SA_CLASS: SA exposure class → tuple of entity_types.
-# Derived at module load so any addition to ENTITY_TYPE_TO_SA_CLASS automatically
-# flows through to consumers (e.g. the SA RW preview in engine/hierarchy.py).
-ENTITY_TYPES_BY_SA_CLASS: dict[str, tuple[str, ...]] = {
-    sa_class: tuple(et for et, c in ENTITY_TYPE_TO_SA_CLASS.items() if c == sa_class)
-    for sa_class in dict.fromkeys(ENTITY_TYPE_TO_SA_CLASS.values())
-}
+# Entity-type → exposure-class mappings live in ``data/tables/entity_class_mapping``.
+# Re-exported here because ``rwa_calc.engine.classifier`` is the long-standing
+# public-import location for ``ENTITY_TYPE_TO_SA_CLASS`` and
+# ``ENTITY_TYPE_TO_IRB_CLASS``; downstream tests, notebooks, and the engine's
+# own SA / IRB / CRM guarantee branches import them via this module.
+# ``ENTITY_TYPES_BY_SA_CLASS`` is consumed only by ``engine/hierarchy.py``,
+# which imports it directly from ``data.tables.entity_class_mapping``.
 
 # SL types restricted to slotting-only under B31 Art. 147A(1)(c)
 _B31_SLOTTING_ONLY_SL_TYPES = {

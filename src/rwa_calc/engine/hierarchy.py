@@ -50,8 +50,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     MDB_RISK_WEIGHTS_TABLE_2B,
     RETAIL_RISK_WEIGHT,
 )
+from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.domain.enums import CQS, ExposureClass
-from rwa_calc.engine.classifier import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
 

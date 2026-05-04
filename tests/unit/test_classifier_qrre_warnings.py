@@ -300,13 +300,21 @@ class TestQRREMissingColumnWarnings:
         classifier: ExposureClassifier,
         b31_config: CalculationConfig,
     ) -> None:
-        """QRRE column warning fires under Basel 3.1 as well as CRR."""
+        """QRRE column warning fires under Basel 3.1 as well as CRR.
+
+        Filter by code rather than total count: under Basel 3.1 the bundle's
+        minimal counterparty schema (no `is_financial_sector_entity`) also
+        triggers CLS007 (Art. 147A(1)(e) FSE column-missing warning). The
+        QRRE-specific assertion is that exactly one CLS004 fires here.
+        """
         exposures = _retail_exposures()
         bundle = _make_bundle(exposures, _retail_counterparties())
         result = classifier.classify(bundle, b31_config)
 
-        assert len(result.classification_errors) == 1
-        assert result.classification_errors[0].code == ERROR_QRRE_COLUMNS_MISSING
+        qrre_warnings = [
+            e for e in result.classification_errors if e.code == ERROR_QRRE_COLUMNS_MISSING
+        ]
+        assert len(qrre_warnings) == 1
 
 
 # =============================================================================

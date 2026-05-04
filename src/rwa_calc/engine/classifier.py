@@ -306,8 +306,16 @@ class ExposureClassifier:
             data.counterparty_lookup.counterparties.collect_schema().names()
         )
         if config.is_basel_3_1 and cp_has_revenue_col:
+            # Art. 147A(1)(d) is corporate-only — count null-revenue rows only
+            # among counterparties of entity_type == "corporate". This avoids
+            # spurious CLS008 warnings for specialised_lending / retail /
+            # sovereign / institution counterparties where annual_revenue is
+            # genuinely irrelevant.
             null_revenue_count = (
-                data.counterparty_lookup.counterparties.filter(pl.col("annual_revenue").is_null())
+                data.counterparty_lookup.counterparties.filter(
+                    (pl.col("entity_type").fill_null("") == "corporate")
+                    & pl.col("annual_revenue").is_null()
+                )
                 .select(pl.len())
                 .collect()
                 .item()
@@ -318,9 +326,9 @@ class ExposureClassifier:
                         code=ERROR_LARGE_CORP_REVENUE_NULL,
                         message=(
                             f"Art. 147A(1)(d) large-corporate F-IRB restriction applied "
-                            f"conservatively for {null_revenue_count} counterparty row(s) with "
-                            f"null annual_revenue — could not confirm revenue is below the "
-                            f"GBP 440m threshold."
+                            f"conservatively for {null_revenue_count} corporate counterparty "
+                            f"row(s) with null annual_revenue — could not confirm revenue is "
+                            f"below the GBP 440m threshold."
                         ),
                         severity=ErrorSeverity.WARNING,
                         category=ErrorCategory.CLASSIFICATION,
@@ -1274,11 +1282,16 @@ class ExposureClassifier:
                     (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
                     .fill_null(False)
                 )
-            # Art. 147A(1)(d): null annual_revenue → conservative large-corp default.
-            # Without confirmation that revenue is below the GBP 440m threshold,
-            # treat the counterparty AS IF large to apply the F-IRB restriction.
-            # CLS008 is emitted in parallel to flag the missing data.
-            _is_large_corp = (
+            # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
+            # to counterparties of entity_type == "corporate". Non-corporate
+            # entity types (specialised_lending, retail, sovereign, institution,
+            # etc.) are governed by their own Art. 147A sub-clauses and must
+            # never trip this branch — even when their cp_annual_revenue is
+            # null/irrelevant. Within the corporate slice, null annual_revenue
+            # is treated conservatively (assumed large) so the F-IRB restriction
+            # is applied; CLS008 is emitted in parallel to flag the missing data.
+            _is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
+            _is_large_corp = _is_corporate_cp & (
                 pl.when(pl.col("cp_annual_revenue").is_null())
                 .then(pl.lit(True))
                 .otherwise(

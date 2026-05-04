@@ -82,9 +82,7 @@ def apply_guarantees(
         guarantees,
         {"original_maturity_years": ColumnSpec(pl.Float64, required=False)},
     )
-    guarantees = guarantees.filter(
-        pl.col("original_maturity_years").fill_null(10.0) >= 1.0
-    )
+    guarantees = guarantees.filter(pl.col("original_maturity_years").fill_null(10.0) >= 1.0)
 
     guarantees = _resolve_guarantees_multi_level(guarantees, exposures)
 

@@ -38,14 +38,7 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
 from tests.fixtures.p1_156.p1_156 import (
-    EXPECTED_FSE_MULTIPLIER,
-    EXPECTED_LGD_SENIOR,
-    EXPECTED_LGD_SUBORDINATED,
     GUAR_SR_FSE_REF,
     GUAR_SR_NONFSE_REF,
     GUAR_SUB_REF,
@@ -55,6 +48,10 @@ from tests.fixtures.p1_156.p1_156 import (
     PD_BORROWER,
     PD_GUARANTOR,
 )
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
 
 # =============================================================================
 # CONSTANTS

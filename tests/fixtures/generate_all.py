@@ -60,14 +60,30 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("P1.114 (null book_code / null country_code)", "p1_114", _generate_p1114),
         ("P1.112 (non-UK unrated PSE sovereign-derived RW)", "p1_112", _generate_p1112),
         ("P1.98 (subordinated corporate A-IRB LGD floor fallback)", "p1_98", _generate_p198),
-        ("P1.99 (CRR Art. 120(2) Table 4 short-term rated institution RW)", "p1_99", _generate_p199),
+        (
+            "P1.99 (CRR Art. 120(2) Table 4 short-term rated institution RW)",
+            "p1_99",
+            _generate_p199,
+        ),
         ("P1.117 (B31 HVCRE slotting short-maturity subgrades)", "p1_117", _generate_p1117),
         ("P1.125 (classifier FSE-column-missing warning CLS007)", "p1_125", _generate_p1125),
-        ("P1.121 (CRR Art. 121(3) unrated institution short-term 20% RW)", "p1_121", _generate_p1121),
+        (
+            "P1.121 (CRR Art. 121(3) unrated institution short-term 20% RW)",
+            "p1_121",
+            _generate_p1121,
+        ),
         ("P1.124 (CRR Art. 237(2)(a) guarantee maturity ineligibility)", "p1_124", _generate_p1124),
-        ("P1.126 (classifier null-revenue conservative-large default CLS008)", "p1_126", _generate_p1126),
+        (
+            "P1.126 (classifier null-revenue conservative-large default CLS008)",
+            "p1_126",
+            _generate_p1126,
+        ),
         ("P1.156 (PSM guarantor LGD seniority/FSE-aware Art. 236/161)", "p1_156", _generate_p1156),
-        ("P1.182 (long-established PE/VC 250% vs 400% business-age split)", "p1_182", _generate_p1182),
+        (
+            "P1.182 (long-established PE/VC 250% vs 400% business-age split)",
+            "p1_182",
+            _generate_p1182,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -359,9 +375,7 @@ def _generate_p1126(output_dir: Path) -> list[tuple[str, int]]:
         cp_b = bundle_b.counterparty_lookup.counterparties.collect()
         rev_b = cp_b["annual_revenue"][0]
         if rev_b is None or rev_b <= 440_000_000.0:
-            raise AssertionError(
-                f"Scenario B: annual_revenue must be > GBP 440m (got {rev_b})"
-            )
+            raise AssertionError(f"Scenario B: annual_revenue must be > GBP 440m (got {rev_b})")
 
         # Invariant 4: Scenario C counterparty has null annual_revenue (same data as A).
         cp_c = bundle_c.counterparty_lookup.counterparties.collect()
@@ -376,9 +390,7 @@ def _generate_p1126(output_dir: Path) -> list[tuple[str, int]]:
                     f"Scenario {label}: is_financial_sector_entity must be present"
                 )
             if cp_df["is_financial_sector_entity"][0] is not False:
-                raise AssertionError(
-                    f"Scenario {label}: is_financial_sector_entity must be False"
-                )
+                raise AssertionError(f"Scenario {label}: is_financial_sector_entity must be False")
 
         # Invariant 6: model_id is present on the exposure and matches M_CORP_AIRB.
         from p1_126 import MODEL_ID  # noqa: PLC0415

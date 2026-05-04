@@ -540,8 +540,10 @@ class EquityCalculator:
         # _prepare_columns (older direct-invocation unit tests) get the prior
         # "always higher-risk" routing for unlisted PE.
         schema_names = exposures.collect_schema().names()
-        is_pe_or_pe_div = pl.col("equity_type").str.to_lowercase().is_in(
-            ["private_equity", "private_equity_diversified"]
+        is_pe_or_pe_div = (
+            pl.col("equity_type")
+            .str.to_lowercase()
+            .is_in(["private_equity", "private_equity_diversified"])
         )
         is_unlisted = (
             ~pl.col("is_exchange_traded").fill_null(False)

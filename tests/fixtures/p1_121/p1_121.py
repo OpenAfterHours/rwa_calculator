@@ -338,8 +338,12 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"          value_date={VALUE_DATE}, maturity_date={MATURITY_DATE} (85 days)")
     print("          residual_maturity ≈ 0.2329y ≤ 0.25y → Art. 121(3) gate fires")
     print("")
-    print(f"  Long-term (Art. 121(1) Table 5, sovereign_cqs={SOVEREIGN_CQS}): RW={LONG_TERM_RISK_WEIGHT:.0%}")
-    print(f"  Short-term override (Art. 121(3)):                               RW={EXPECTED_RISK_WEIGHT:.0%}")
+    print(
+        f"  Long-term (Art. 121(1) Table 5, sovereign_cqs={SOVEREIGN_CQS}): RW={LONG_TERM_RISK_WEIGHT:.0%}"
+    )
+    print(
+        f"  Short-term override (Art. 121(3)):                               RW={EXPECTED_RISK_WEIGHT:.0%}"
+    )
     print(f"  EAD = {EAD:,.0f}  |  Expected RWA = {EXPECTED_RWA:,.0f}")
 
 

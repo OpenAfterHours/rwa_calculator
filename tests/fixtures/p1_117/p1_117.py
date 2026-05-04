@@ -485,9 +485,15 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Fix: add hvcre_short branch to lookup_rw() B31 path")
     print()
     print("Regression rows:")
-    print(f"  HVCRE Good short  → RW={EXPECTED_RW_HVCRE_GOOD_SHORT:.2%}, RWA={EXPECTED_RWA_GOOD_SHORT:,.0f}")
-    print(f"  HVCRE Strong long → RW={EXPECTED_RW_HVCRE_STRONG_LONG:.2%}, RWA={EXPECTED_RWA_STRONG_LONG:,.0f}")
-    print(f"  HVCRE Good long   → RW={EXPECTED_RW_HVCRE_GOOD_LONG:.2%}, RWA={EXPECTED_RWA_GOOD_LONG:,.0f}")
+    print(
+        f"  HVCRE Good short  → RW={EXPECTED_RW_HVCRE_GOOD_SHORT:.2%}, RWA={EXPECTED_RWA_GOOD_SHORT:,.0f}"
+    )
+    print(
+        f"  HVCRE Strong long → RW={EXPECTED_RW_HVCRE_STRONG_LONG:.2%}, RWA={EXPECTED_RWA_STRONG_LONG:,.0f}"
+    )
+    print(
+        f"  HVCRE Good long   → RW={EXPECTED_RW_HVCRE_GOOD_LONG:.2%}, RWA={EXPECTED_RWA_GOOD_LONG:,.0f}"
+    )
 
 
 def main() -> None:

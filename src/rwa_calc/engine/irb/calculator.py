@@ -221,9 +221,7 @@ class IRBCalculator:
         )
 
         return LazyFrameResult(
-            frame=exposures.select(
-                "exposure_reference", "pd", "lgd", "ead_final", "expected_loss"
-            ),
+            frame=exposures.select("exposure_reference", "pd", "lgd", "ead_final", "expected_loss"),
             errors=errors,
         )
 

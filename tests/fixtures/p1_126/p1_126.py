@@ -80,7 +80,9 @@ DRAWN_AMOUNT: float = 1_000_000.0
 # ---------------------------------------------------------------------------
 
 
-def make_counterparty_null_revenue(counterparty_reference: str = COUNTERPARTY_REF_NULL_REV) -> pl.LazyFrame:
+def make_counterparty_null_revenue(
+    counterparty_reference: str = COUNTERPARTY_REF_NULL_REV,
+) -> pl.LazyFrame:
     """
     Return a corporate counterparty LazyFrame with annual_revenue=null.
 
@@ -121,7 +123,9 @@ def make_counterparty_null_revenue(counterparty_reference: str = COUNTERPARTY_RE
     )
 
 
-def make_counterparty_large_revenue(counterparty_reference: str = COUNTERPARTY_REF_LARGE) -> pl.LazyFrame:
+def make_counterparty_large_revenue(
+    counterparty_reference: str = COUNTERPARTY_REF_LARGE,
+) -> pl.LazyFrame:
     """
     Return a corporate counterparty LazyFrame with annual_revenue=GBP 500m.
 
@@ -164,7 +168,9 @@ def make_counterparty_large_revenue(counterparty_reference: str = COUNTERPARTY_R
 # ---------------------------------------------------------------------------
 
 
-def make_corporate_exposure(counterparty_reference: str = COUNTERPARTY_REF_NULL_REV) -> pl.LazyFrame:
+def make_corporate_exposure(
+    counterparty_reference: str = COUNTERPARTY_REF_NULL_REV,
+) -> pl.LazyFrame:
     """
     Return a single corporate loan exposure for P1.126.
 
@@ -283,7 +289,9 @@ def make_corporate_airb_model_permissions() -> pl.LazyFrame:
 # ---------------------------------------------------------------------------
 
 
-def make_rating_inheritance(counterparty_reference: str = COUNTERPARTY_REF_NULL_REV) -> pl.LazyFrame:
+def make_rating_inheritance(
+    counterparty_reference: str = COUNTERPARTY_REF_NULL_REV,
+) -> pl.LazyFrame:
     """
     Return a rating_inheritance LazyFrame for P1.126.
 

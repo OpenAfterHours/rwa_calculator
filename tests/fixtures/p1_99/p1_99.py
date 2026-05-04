@@ -77,12 +77,12 @@ RATING_DATE = date(2027, 1, 2)  # one day after value_date — current at origin
 
 # CQS → S&P rating value mapping (representative mid-band values per CQS)
 _CQS_RATING_VALUE: dict[int, str] = {
-    1: "AA",    # CQS 1: AAA to AA-  → use AA (mid-band)
-    2: "A",     # CQS 2: A+ to A-    → use A  (mid-band)
-    3: "BBB",   # CQS 3: BBB+ to BBB-→ use BBB
-    4: "BB",    # CQS 4: BB+ to BB-  → use BB
-    5: "B",     # CQS 5: B+ to B-    → use B
-    6: "CCC",   # CQS 6: CCC+ and below → use CCC
+    1: "AA",  # CQS 1: AAA to AA-  → use AA (mid-band)
+    2: "A",  # CQS 2: A+ to A-    → use A  (mid-band)
+    3: "BBB",  # CQS 3: BBB+ to BBB-→ use BBB
+    4: "BB",  # CQS 4: BB+ to BB-  → use BB
+    5: "B",  # CQS 5: B+ to B-    → use B
+    6: "CCC",  # CQS 6: CCC+ and below → use CCC
 }
 
 # Art. 120(2) Table 4 expected risk weights — authoritative source:

@@ -288,8 +288,7 @@ class TestCRRFCSMCorpCQS3Regression:
 
         # Assert
         assert result["collateral_rw"][0] == pytest.approx(1.00, abs=1e-10), (
-            f"CRR: corporate CQS 3 collateral RW should be 1.00, "
-            f"got {result['collateral_rw'][0]}"
+            f"CRR: corporate CQS 3 collateral RW should be 1.00, got {result['collateral_rw'][0]}"
         )
 
     def test_crr_fcsm_corporate_cqs3_fcsm_columns(

@@ -98,7 +98,7 @@ GUARANTOR_REF = "CP_GUARANTOR_P1124"
 LOAN_REF = "LOAN_001_P1124"
 
 # Guarantee references
-GUAR_SHORT_REF = "GUAR_SHORT_P1124"   # ineligible: 9m residual < 1y
+GUAR_SHORT_REF = "GUAR_SHORT_P1124"  # ineligible: 9m residual < 1y
 GUAR_ELIGIBLE_REF = "GUAR_ELIGIBLE_P1124"  # eligible: 2y residual >= 1y
 
 # Loan dates
@@ -121,20 +121,20 @@ LOAN_INTEREST = 0.0
 LOAN_EAD = LOAN_DRAWN_AMOUNT + LOAN_INTEREST  # 1,000,000 GBP
 
 # Risk weights (CRR, external rating)
-BORROWER_CQS = 4      # corporate CQS 4 → 100% RW
-GUARANTOR_CQS = 1     # institution CQS 1 → 20% RW
+BORROWER_CQS = 4  # corporate CQS 4 → 100% RW
+GUARANTOR_CQS = 1  # institution CQS 1 → 20% RW
 
 # Expected outputs
-EXPECTED_RW_NO_CRM: float = 1.00    # borrower CQS 4 corporate → 100%
+EXPECTED_RW_NO_CRM: float = 1.00  # borrower CQS 4 corporate → 100%
 EXPECTED_RW_WITH_CRM: float = 0.20  # guarantor CQS 1 institution → 20%
 
-EXPECTED_RWA_INELIGIBLE: float = LOAN_EAD * EXPECTED_RW_NO_CRM   # 1,000,000
-EXPECTED_RWA_ELIGIBLE: float = LOAN_EAD * EXPECTED_RW_WITH_CRM   # 200,000
+EXPECTED_RWA_INELIGIBLE: float = LOAN_EAD * EXPECTED_RW_NO_CRM  # 1,000,000
+EXPECTED_RWA_ELIGIBLE: float = LOAN_EAD * EXPECTED_RW_WITH_CRM  # 200,000
 
 # CQS-to-rating mapping (S&P scale, representative mid-band)
 _CQS_RATING_VALUE: dict[int, str] = {
-    1: "AA",   # CQS 1: AAA to AA-  → use AA
-    4: "BB",   # CQS 4: BB+ to BB-  → use BB
+    1: "AA",  # CQS 1: AAA to AA-  → use AA
+    4: "BB",  # CQS 4: BB+ to BB-  → use BB
 }
 
 RATING_AGENCY = "S&P"
@@ -462,8 +462,12 @@ def print_summary(saved: dict[str, Path]) -> None:
         print(f"  {name:<20} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
     print("Scenario: CRR Art. 237(2)(a) guarantee maturity ineligibility")
-    print(f"  Borrower:  {BORROWER_REF} (corporate, CQS {BORROWER_CQS}, {EXPECTED_RW_NO_CRM:.0%} RW)")
-    print(f"  Guarantor: {GUARANTOR_REF} (institution, CQS {GUARANTOR_CQS}, {EXPECTED_RW_WITH_CRM:.0%} RW)")
+    print(
+        f"  Borrower:  {BORROWER_REF} (corporate, CQS {BORROWER_CQS}, {EXPECTED_RW_NO_CRM:.0%} RW)"
+    )
+    print(
+        f"  Guarantor: {GUARANTOR_REF} (institution, CQS {GUARANTOR_CQS}, {EXPECTED_RW_WITH_CRM:.0%} RW)"
+    )
     print(f"  Loan:      {LOAN_REF}  GBP {LOAN_DRAWN_AMOUNT:,.0f}")
     print()
     print("  GUAR_SHORT_P1124:    maturity=2026-10-01, original_maturity_years=0.75")
@@ -473,7 +477,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("    residual = 2.0y >= 1.0y → ELIGIBLE   → RWA = 200,000 (pre-maturity-adj)")
     print()
     print("  Schema note: original_maturity_years is an extra column beyond GUARANTEE_SCHEMA.")
-    print("  Engine-implementer must add ColumnSpec(pl.Float64, required=False) to GUARANTEE_SCHEMA.")
+    print(
+        "  Engine-implementer must add ColumnSpec(pl.Float64, required=False) to GUARANTEE_SCHEMA."
+    )
 
 
 def main() -> None:

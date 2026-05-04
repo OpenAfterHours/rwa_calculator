@@ -54,20 +54,20 @@ from tests.acceptance.basel31.conftest import (
 # Long  maturity_date: 2030-06-30 → residual = 3.0yr → is_short_maturity=False
 # ---------------------------------------------------------------------------
 
-_HVCRE_STRONG_SHORT = "EXP_B31_HVCRE_SHORT_001"      # primary — £10m
-_HVCRE_GOOD_SHORT = "EXP_B31_HVCRE_GOOD_SHORT_001"   # regression — £1m
+_HVCRE_STRONG_SHORT = "EXP_B31_HVCRE_SHORT_001"  # primary — £10m
+_HVCRE_GOOD_SHORT = "EXP_B31_HVCRE_GOOD_SHORT_001"  # regression — £1m
 _HVCRE_STRONG_LONG = "EXP_B31_HVCRE_STRONG_LONG_001"  # regression guard — £1m
-_HVCRE_GOOD_LONG = "EXP_B31_HVCRE_GOOD_LONG_001"     # regression guard — £1m
+_HVCRE_GOOD_LONG = "EXP_B31_HVCRE_GOOD_LONG_001"  # regression guard — £1m
 
 # EAD from fixtures
 _EAD_PRIMARY = 10_000_000.0
 _EAD_REGRESSION = 1_000_000.0
 
 # Art. 153(5) Table A HVCRE risk weights — from b31_slotting.py
-_RW_HVCRE_STRONG_SHORT = 0.70   # col A — PRIMARY assertion (bug returns 0.95)
-_RW_HVCRE_GOOD_SHORT = 0.95     # col C  — WILL FAIL today (bug returns 1.20)
-_RW_HVCRE_STRONG_LONG = 0.95    # col B  — regression guard (already correct)
-_RW_HVCRE_GOOD_LONG = 1.20      # col D  — regression guard (already correct)
+_RW_HVCRE_STRONG_SHORT = 0.70  # col A — PRIMARY assertion (bug returns 0.95)
+_RW_HVCRE_GOOD_SHORT = 0.95  # col C  — WILL FAIL today (bug returns 1.20)
+_RW_HVCRE_STRONG_LONG = 0.95  # col B  — regression guard (already correct)
+_RW_HVCRE_GOOD_LONG = 1.20  # col D  — regression guard (already correct)
 
 # HVCRE EL rate — flat 0.4% for Strong and Good (Art. 158(6) Table B)
 _EL_RATE_HVCRE = 0.004

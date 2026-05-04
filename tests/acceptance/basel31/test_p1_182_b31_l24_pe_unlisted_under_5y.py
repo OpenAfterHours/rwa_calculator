@@ -41,7 +41,6 @@ Regulatory references:
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -60,18 +59,18 @@ _EAD = 1_000_000.0  # fair_value = 1,000,000 GBP for all three rows
 # B31-L24 primary: long-established PE (12 yr >= 5 yr threshold) → 250%
 _EXPOSURE_LEGACY = "EQ_PE_LEGACY_001"
 _BUSINESS_AGE_LEGACY = 12.0
-_EXPECTED_RW_LEGACY = 2.50   # Art. 133(3) standard equity
+_EXPECTED_RW_LEGACY = 2.50  # Art. 133(3) standard equity
 _EXPECTED_RWA_LEGACY = 2_500_000.0
 
 # Regression 1: young PE (2 yr < 5 yr threshold) → 400%
 _EXPOSURE_BUG = "EQ_PE_BUG_001"
 _BUSINESS_AGE_YOUNG = 2.0
-_EXPECTED_RW_YOUNG = 4.00   # Art. 133(4) higher-risk
+_EXPECTED_RW_YOUNG = 4.00  # Art. 133(4) higher-risk
 _EXPECTED_RWA_YOUNG = 4_000_000.0
 
 # Regression 2: diversified PE, null age → conservative 400%
 _EXPOSURE_DIVERSIFIED = "EQ_PE_DIVERSIFIED_001"
-_EXPECTED_RW_DIVERSIFIED = 4.00   # null treated as <5y → Art. 133(4)
+_EXPECTED_RW_DIVERSIFIED = 4.00  # null treated as <5y → Art. 133(4)
 _EXPECTED_RWA_DIVERSIFIED = 4_000_000.0
 
 

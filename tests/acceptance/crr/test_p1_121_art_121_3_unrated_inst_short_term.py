@@ -64,9 +64,9 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_121"
 
 _LOAN_REF = "LN_CRR_A14_001"
 _EAD = 1_000_000.0
-_EXPECTED_RW = 0.20           # Art. 121(3) short-term unrated institution
-_EXPECTED_RWA = 200_000.0     # 0.20 × 1,000,000
-_LONG_TERM_RW = 1.00          # Art. 121(1) Table 5, sovereign_cqs=4 — what breaks if gate missing
+_EXPECTED_RW = 0.20  # Art. 121(3) short-term unrated institution
+_EXPECTED_RWA = 200_000.0  # 0.20 × 1,000,000
+_LONG_TERM_RW = 1.00  # Art. 121(1) Table 5, sovereign_cqs=4 — what breaks if gate missing
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +134,7 @@ def p1_121_sa_result() -> dict:
     df = results.sa_results.collect()
 
     rows = df.filter(pl.col("exposure_reference") == _LOAN_REF).to_dicts()
-    assert len(rows) == 1, (
-        f"P1.121: expected exactly 1 SA row for {_LOAN_REF}, got {len(rows)}"
-    )
+    assert len(rows) == 1, f"P1.121: expected exactly 1 SA row for {_LOAN_REF}, got {len(rows)}"
     return rows[0]
 
 
@@ -196,9 +194,7 @@ class TestP1121CRRArt1213UnratedInstShortTerm:
             f"P1.121: expected approach_applied='standardised', got {row['approach_applied']!r}"
         )
 
-    def test_p1_121_art_121_3_unrated_inst_short_term_ead(
-        self, p1_121_sa_result: dict
-    ) -> None:
+    def test_p1_121_art_121_3_unrated_inst_short_term_ead(self, p1_121_sa_result: dict) -> None:
         """
         EAD = drawn_amount = 1,000,000 (no CCF, no CRM, interest=0).
 
@@ -238,9 +234,7 @@ class TestP1121CRRArt1213UnratedInstShortTerm:
             f"if 1.00 the Art. 121(3) gate is not firing (Art. 121(1) Table 5 fallback)"
         )
 
-    def test_p1_121_art_121_3_unrated_inst_short_term_rwa(
-        self, p1_121_sa_result: dict
-    ) -> None:
+    def test_p1_121_art_121_3_unrated_inst_short_term_rwa(self, p1_121_sa_result: dict) -> None:
         """
         RWA = EAD × RW = 1,000,000 × 0.20 = 200,000 (Art. 121(3)).
 

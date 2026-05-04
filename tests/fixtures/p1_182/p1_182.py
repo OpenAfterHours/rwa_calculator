@@ -386,7 +386,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Fix: add business_age_years >= 5.0 check in _apply_b31_equity_weights_sa()")
     print()
     print("Regression rows:")
-    print(f"  EQ_PE_BUG_001       PE 2y (<5y)   → RW={EXPECTED_RW_YOUNG:.2%}, RWA={EXPECTED_RWA_YOUNG:,.0f}")
+    print(
+        f"  EQ_PE_BUG_001       PE 2y (<5y)   → RW={EXPECTED_RW_YOUNG:.2%}, RWA={EXPECTED_RWA_YOUNG:,.0f}"
+    )
     print(
         f"  EQ_PE_DIVERSIFIED_001 PE-div null   → RW={EXPECTED_RW_DIVERSIFIED:.2%},"
         f" RWA={EXPECTED_RWA_DIVERSIFIED:,.0f}"

@@ -31,16 +31,16 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.irb.calculator import IRBCalculator
 from tests.fixtures.p1_144.p1_144 import (
     EXPECTED_EL_NO_EAD_FINAL,
     EXPECTED_EL_WITH_EAD_FINAL,
     build_irb_exposures_with_ead_final,
     build_irb_exposures_without_ead_final,
 )
+
+from rwa_calc.contracts.bundles import CRMAdjustedBundle
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.calculator import IRBCalculator
 
 _REPORTING_DATE = date(2026, 1, 1)
 

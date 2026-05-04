@@ -61,7 +61,7 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_99"
 # Expected values (single source of truth from the fixture builder)
 # ---------------------------------------------------------------------------
 
-from tests.fixtures.p1_99.p1_99 import EXPECTED_RISK_WEIGHTS, EXPECTED_RWA, EAD  # noqa: E402
+from tests.fixtures.p1_99.p1_99 import EAD, EXPECTED_RISK_WEIGHTS, EXPECTED_RWA  # noqa: E402
 
 _CQS_LOAN_REFS = {cqs: f"LN-P199-INST-CQS{cqs}" for cqs in range(1, 7)}
 
@@ -104,7 +104,9 @@ def p1_99_sa_results() -> dict[int, dict]:
     )
 
     bundle = RawDataBundle(
-        facilities=pl.LazyFrame(schema={"facility_reference": pl.String, "counterparty_reference": pl.String}),
+        facilities=pl.LazyFrame(
+            schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
+        ),
         loans=loans,
         counterparties=counterparties,
         facility_mappings=pl.LazyFrame(
@@ -239,6 +241,5 @@ class TestP199CRRInstitutionShortTerm:
 
         # Assert
         assert row["exposure_class"].lower() == "institution", (
-            f"P1.99 CQS {cqs}: expected exposure_class='institution', "
-            f"got {row['exposure_class']!r}"
+            f"P1.99 CQS {cqs}: expected exposure_class='institution', got {row['exposure_class']!r}"
         )

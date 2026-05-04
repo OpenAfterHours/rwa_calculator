@@ -80,14 +80,14 @@ from rwa_calc.data.schemas import (
 BORROWER_REF = "BORR-001"
 
 # Guarantors (one per sub-case)
-GUAR_SR_NONFSE_REF = "GUAR-SR-NONFSE-001"   # sub-case (a): senior + non-FSE
-GUAR_SR_FSE_REF = "GUAR-SR-FSE-001"          # sub-case (b): senior + FSE
-GUAR_SUB_REF = "GUAR-SUB-001"                # sub-case (c): subordinated
+GUAR_SR_NONFSE_REF = "GUAR-SR-NONFSE-001"  # sub-case (a): senior + non-FSE
+GUAR_SR_FSE_REF = "GUAR-SR-FSE-001"  # sub-case (b): senior + FSE
+GUAR_SUB_REF = "GUAR-SUB-001"  # sub-case (c): subordinated
 
 # Loans (one per sub-case to avoid duplicate-aggregation issues)
-LOAN_A_REF = "LOAN-P1156-A"   # sub-case (a): senior + non-FSE guarantor
-LOAN_B_REF = "LOAN-P1156-B"   # sub-case (b): senior + FSE guarantor
-LOAN_C_REF = "LOAN-P1156-C"   # sub-case (c): subordinated guarantor
+LOAN_A_REF = "LOAN-P1156-A"  # sub-case (a): senior + non-FSE guarantor
+LOAN_B_REF = "LOAN-P1156-B"  # sub-case (b): senior + FSE guarantor
+LOAN_C_REF = "LOAN-P1156-C"  # sub-case (c): subordinated guarantor
 
 # Guarantee references
 GUAR_A_REF = "GUAR-P1156-A"
@@ -105,12 +105,12 @@ MODEL_ID = "M_CORP_FIRB"
 
 # Dates
 VALUE_DATE = date(2026, 1, 1)
-MATURITY_DATE = date(2028, 7, 1)   # ~2.5 years from VALUE_DATE → effective_maturity=2.5
+MATURITY_DATE = date(2028, 7, 1)  # ~2.5 years from VALUE_DATE → effective_maturity=2.5
 RATING_DATE = date(2026, 1, 2)
 
 # Borrower IRB inputs
-PD_BORROWER = 0.02    # 2% own PD
-LGD_BORROWER = 0.40   # 40% own LGD (A-IRB estimate for borrower)
+PD_BORROWER = 0.02  # 2% own PD
+LGD_BORROWER = 0.40  # 40% own LGD (A-IRB estimate for borrower)
 DRAWN_AMOUNT = 1_000_000.0
 EFFECTIVE_MATURITY = 2.5
 
@@ -118,9 +118,9 @@ EFFECTIVE_MATURITY = 2.5
 PD_GUARANTOR = 0.005  # 0.5% own PD (better credit than borrower)
 
 # Expected guarantor LGD outputs (for acceptance test assertions)
-EXPECTED_LGD_SENIOR = 0.45      # Art. 161(1)(a): F-IRB senior unsecured
+EXPECTED_LGD_SENIOR = 0.45  # Art. 161(1)(a): F-IRB senior unsecured
 EXPECTED_LGD_SUBORDINATED = 0.75  # Art. 161(1)(b): F-IRB subordinated unsecured
-EXPECTED_FSE_MULTIPLIER = 1.25   # Art. 153(4): FSE correlation multiplier
+EXPECTED_FSE_MULTIPLIER = 1.25  # Art. 153(4): FSE correlation multiplier
 
 
 # ---------------------------------------------------------------------------
@@ -368,9 +368,9 @@ def create_p1156_loans() -> pl.DataFrame:
     effective_maturity=2.5 → M=2.5 in the IRB formula (M-2.5=0 simplifies MA).
     """
     loan_specs = [
-        (LOAN_A_REF, BORROWER_REF),   # sub-case (a)
-        (LOAN_B_REF, BORROWER_REF),   # sub-case (b)
-        (LOAN_C_REF, BORROWER_REF),   # sub-case (c)
+        (LOAN_A_REF, BORROWER_REF),  # sub-case (a)
+        (LOAN_B_REF, BORROWER_REF),  # sub-case (b)
+        (LOAN_C_REF, BORROWER_REF),  # sub-case (c)
     ]
     rows = [
         _Loan(
@@ -416,7 +416,7 @@ def create_p1156_guarantees() -> pl.DataFrame:
             guarantee_type="corporate_guarantee",
             guarantor=GUAR_SR_NONFSE_REF,
             currency="GBP",
-            maturity_date=date(2029, 1, 1),   # > loan maturity 2028-07-01 → no maturity mismatch
+            maturity_date=date(2029, 1, 1),  # > loan maturity 2028-07-01 → no maturity mismatch
             amount_covered=DRAWN_AMOUNT,
             percentage_covered=1.0,
             beneficiary_type="loan",

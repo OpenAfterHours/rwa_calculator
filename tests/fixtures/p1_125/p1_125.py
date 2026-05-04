@@ -100,7 +100,9 @@ def make_counterparty_without_fse_column() -> pl.LazyFrame:
     )
 
 
-def make_counterparty_with_fse_column(is_financial_sector_entity: bool | None = False) -> pl.LazyFrame:
+def make_counterparty_with_fse_column(
+    is_financial_sector_entity: bool | None = False,
+) -> pl.LazyFrame:
     """
     Return a corporate counterparty LazyFrame with is_financial_sector_entity present.
 

@@ -22,16 +22,16 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ApproachType, ErrorCategory, ErrorSeverity
-from rwa_calc.engine.classifier import ExposureClassifier
 from tests.fixtures.p1_126.p1_126 import (
     make_scenario_a_bundle,
     make_scenario_b_bundle,
     make_scenario_c_bundle,
 )
+
+from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, ErrorCategory, ErrorSeverity
+from rwa_calc.engine.classifier import ExposureClassifier
 
 # =============================================================================
 # Helpers
@@ -52,10 +52,9 @@ def _add_internal_pd_to_bundle(
     The fixture's exposures do not carry internal_pd; we add it here in the
     Arrange phase before passing to the Act step.
     """
-    enriched_exposures = bundle.exposures.with_columns(
-        pl.lit(internal_pd).alias("internal_pd")
-    )
+    enriched_exposures = bundle.exposures.with_columns(pl.lit(internal_pd).alias("internal_pd"))
     return replace(bundle, exposures=enriched_exposures)
+
 
 # =============================================================================
 # Fixtures

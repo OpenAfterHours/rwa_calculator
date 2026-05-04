@@ -529,11 +529,7 @@ def _crr_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
         # derived from (maturity_date - value_date) earlier in the SA pipeline,
         # mirroring the B31 ECRA short-term gate so date-only fixtures still
         # qualify for Table 4 preferential weights.
-        chain.when(
-            is_institution
-            & is_rated
-            & ((residual_mty <= 0.25) | (original_mty <= 0.25))
-        )
+        chain.when(is_institution & is_rated & ((residual_mty <= 0.25) | (original_mty <= 0.25)))
         .then(
             pl.when(pl.col("cqs") <= 3)
             .then(pl.lit(_SA_CRR_RW["inst_st_low"]))

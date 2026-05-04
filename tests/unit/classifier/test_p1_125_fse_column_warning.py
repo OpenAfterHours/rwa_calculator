@@ -20,16 +20,16 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.p1_125.p1_125 import (
+    make_corporate_exposure,
+    make_counterparty_with_fse_column,
+    make_counterparty_without_fse_column,
+)
 
 from rwa_calc.contracts.bundles import CounterpartyLookup, ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.classifier import ExposureClassifier
-from tests.fixtures.p1_125.p1_125 import (
-    make_counterparty_with_fse_column,
-    make_counterparty_without_fse_column,
-    make_corporate_exposure,
-)
 
 # =============================================================================
 # Fixtures

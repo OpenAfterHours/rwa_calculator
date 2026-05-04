@@ -64,12 +64,9 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_124"
 # ---------------------------------------------------------------------------
 
 from tests.fixtures.p1_124.p1_124 import (  # noqa: E402
-    BORROWER_REF,
-    EXPECTED_RWA_ELIGIBLE,
     EXPECTED_RWA_INELIGIBLE,
     GUAR_ELIGIBLE_REF,
     GUAR_SHORT_REF,
-    GUARANTOR_REF,
     LOAN_EAD,
     LOAN_REF,
 )

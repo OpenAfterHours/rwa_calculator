@@ -27,10 +27,13 @@ import polars as pl
 
 from rwa_calc.data.tables.b31_risk_weights import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.data.tables.crr_risk_weights import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
 )
 from rwa_calc.data.tables.crr_simple_method import (
+    FCSM_EQUITY_COLLATERAL_RW,
     FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
 )
@@ -60,25 +63,30 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     # Cash, deposits, gold → 0% (Art. 134(1)/(4))
     is_cash_or_gold = ctype.is_in(["cash", "deposit", "gold"])
 
-    # Sovereign/central government bonds → Art. 114 Table 1
+    # Sovereign/central government bonds → Art. 114 Table 1.
+    # Values sourced from CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS so that table
+    # remains the single source of truth.
     is_sovereign = (
         pl.col("issuer_type")
         .fill_null("")
         .str.to_lowercase()
         .is_in(["sovereign", "central_government", "central_bank"])
     )
+    sov_table = CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS
     sovereign_rw = (
         pl.when(cqs == 1)
-        .then(0.0)
+        .then(float(sov_table[CQS.CQS1]))
         .when(cqs == 2)
-        .then(0.20)
+        .then(float(sov_table[CQS.CQS2]))
         .when(cqs == 3)
-        .then(0.50)
-        .when(cqs.is_in([4, 5]))
-        .then(1.00)
+        .then(float(sov_table[CQS.CQS3]))
+        .when(cqs == 4)
+        .then(float(sov_table[CQS.CQS4]))
+        .when(cqs == 5)
+        .then(float(sov_table[CQS.CQS5]))
         .when(cqs == 6)
-        .then(1.50)
-        .otherwise(1.00)  # unrated sovereign → conservative 100%
+        .then(float(sov_table[CQS.CQS6]))
+        .otherwise(float(sov_table[CQS.UNRATED]))  # unrated sovereign → conservative 100%
     )
 
     # Institution bonds → Art. 120 Table 3 (CRR) / PRA PS1/26 Table 3 ECRA (B31).
@@ -105,34 +113,47 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
         .then(float(inst_table[CQS.CQS5]))
         .when(cqs == 6)
         .then(float(inst_table[CQS.CQS6]))
-        .otherwise(1.00)  # unrated institution → conservative 100%
+        .otherwise(float(inst_table[CQS.UNRATED]))
     )
 
-    # Equity → 100% under CRR (Art. 133(2)), 250% under B31 (Art. 133(3))
-    # For FCSM purposes, use CRR 100% (collateral is financial instrument, not equity exposure)
+    # Equity → FCSM Art. 222(1) prescribes 100% under both frameworks (collateral
+    # is treated by financial-instrument character, not equity-exposure character
+    # — so B31 Art. 133(3)'s 250% does NOT apply when equity is FCSM collateral).
+    # Single source of truth: FCSM_EQUITY_COLLATERAL_RW.
     is_equity = ctype.is_in(["equity", "equity_main_index", "equity_other"])
 
-    # Corporate bonds → Art. 122 Table 5 (CRR) / Table 6 (B31).
-    # B31 diverges at CQS 3 (0.75 vs 1.00 — PRA PS1/26 Art. 122(2) Table 6) and
-    # CQS 5 (1.50 vs 1.00 — PRA retains 150%, BCBS reduced to 100%). The B31
-    # values are sourced from B31_CORPORATE_RISK_WEIGHTS so that table remains
-    # the single source of truth for the Basel 3.1 framework.
-    corp_cqs3_rw = float(B31_CORPORATE_RISK_WEIGHTS[3]) if is_basel_3_1 else 1.00
-    corp_cqs5_rw = float(B31_CORPORATE_RISK_WEIGHTS[5]) if is_basel_3_1 else 1.00
+    # Corporate bonds → Art. 122 Table 5 (CRR) / Table 6 (B31). B31 diverges at
+    # CQS 3 (0.75 vs 1.00 per PRA PS1/26 Art. 122(2)). Risk weights sourced from
+    # CORPORATE_RISK_WEIGHTS (CRR) / B31_CORPORATE_RISK_WEIGHTS (B31) so each
+    # table remains the single source of truth for its framework. Note: the two
+    # dicts use different key types (CQS enum vs raw int), so build a uniform
+    # int-keyed map of floats here for the per-CQS lookup.
+    if is_basel_3_1:
+        corp = {k: float(v) for k, v in B31_CORPORATE_RISK_WEIGHTS.items()}
+    else:
+        corp = {
+            1: float(CORPORATE_RISK_WEIGHTS[CQS.CQS1]),
+            2: float(CORPORATE_RISK_WEIGHTS[CQS.CQS2]),
+            3: float(CORPORATE_RISK_WEIGHTS[CQS.CQS3]),
+            4: float(CORPORATE_RISK_WEIGHTS[CQS.CQS4]),
+            5: float(CORPORATE_RISK_WEIGHTS[CQS.CQS5]),
+            6: float(CORPORATE_RISK_WEIGHTS[CQS.CQS6]),
+            None: float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED]),
+        }
     corporate_rw = (
         pl.when(cqs == 1)
-        .then(0.20)
+        .then(corp[1])
         .when(cqs == 2)
-        .then(0.50)
+        .then(corp[2])
         .when(cqs == 3)
-        .then(corp_cqs3_rw)
+        .then(corp[3])
         .when(cqs == 4)
-        .then(1.00)
+        .then(corp[4])
         .when(cqs == 5)
-        .then(corp_cqs5_rw)
+        .then(corp[5])
         .when(cqs == 6)
-        .then(1.50)
-        .otherwise(1.00)  # unrated corporate → 100%
+        .then(corp[6])
+        .otherwise(corp[None])  # unrated corporate
     )
 
     return (
@@ -143,7 +164,7 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
         .when(is_institution)
         .then(institution_rw)
         .when(is_equity)
-        .then(pl.lit(1.00))
+        .then(pl.lit(float(FCSM_EQUITY_COLLATERAL_RW)))
         .otherwise(corporate_rw)  # default: treat as corporate bond
     )
 

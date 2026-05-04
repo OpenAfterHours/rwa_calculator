@@ -282,11 +282,18 @@ class TestCollateralRWDerivation:
     def test_corporate_cqs3_hundred_pct(self):
         assert self._compute_rw("corporate_bond", "corporate", 3) == pytest.approx(1.00, abs=1e-10)
 
-    def test_corporate_cqs5_crr_hundred_pct(self):
-        """CRR Art. 122 Table 5: CQS 5 = 100%."""
+    def test_corporate_cqs5_crr_one_fifty_pct(self):
+        """CRR Art. 122 Table 5: CQS 5 = 150%.
+
+        Prior to v0.2.7 this test wrongly pinned the engine literal `1.00`,
+        masking a CRR FCSM capital understatement. Per Art. 222(1) the SA RW
+        prescribed for the type of collateral applies — Art. 122 Table 5 gives
+        CQS 5 corporate = 150%. Source: CORPORATE_RISK_WEIGHTS[CQS.CQS5] in
+        data/tables/crr_risk_weights.py. See P1.187.
+        """
         assert self._compute_rw(
             "corporate_bond", "corporate", 5, is_basel_3_1=False
-        ) == pytest.approx(1.00, abs=1e-10)
+        ) == pytest.approx(1.50, abs=1e-10)
 
     def test_corporate_cqs5_b31_one_fifty_pct(self):
         """B31 Art. 122(2) Table 6: CQS 5 = 150%."""

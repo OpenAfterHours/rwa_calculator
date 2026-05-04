@@ -788,13 +788,22 @@ CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "re_split_mode": ColumnSpec(pl.String, required=False),
     "re_split_property_type": ColumnSpec(pl.String, required=False),
     "re_split_property_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "re_split_residential_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "re_split_commercial_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "re_split_residential_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
+    "re_split_commercial_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     "re_split_cre_rental_coverage_met": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 
 # Columns produced by the RealEstateSplitter stage. Both rows of a split share
-# `split_parent_id`; `re_split_role` is one of "secured" / "residual" / "whole"
-# (or null for unaffected rows).
+# `split_parent_id`; `re_split_role` is one of "secured" / "secured_rre" /
+# "secured_cre" / "residual" / "whole" (or null for unaffected rows).
+# - "secured" — single-component (pure RRE or pure CRE) preferential row
+# - "secured_rre" / "secured_cre" — emitted in pairs for mixed RRE+CRE exposures
+#   (PRA PS1/26 Art. 124(4); CRR Art. 124(1) "any part of an exposure")
+# - "residual" — uncollateralised remainder, original counterparty class
+# - "whole" — B3.1 Art. 124H(3) non-NP/SME corporate CRE-only reclassification
 RE_SPLITTER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "split_parent_id": ColumnSpec(pl.String, required=False),
     "re_split_role": ColumnSpec(pl.String, required=False),

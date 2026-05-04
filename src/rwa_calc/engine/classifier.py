@@ -857,6 +857,20 @@ class ExposureClassifier:
           ``b31_commercial_rw_expr`` Art. 124H(3) branch
           (max(60%, min(cp_rw, Art. 124I RW))) handles it.
 
+        **Mixed RRE+CRE collateral (PRA PS1/26 Art. 124(4) and CRR Art.
+        124(1) "any part" wording):** when an exposure carries both
+        residential and commercial property collateral, the per-component
+        columns ``re_split_residential_value`` /
+        ``re_split_commercial_value`` and the per-component eligibility
+        flags ``re_split_residential_eligible`` /
+        ``re_split_commercial_eligible`` are emitted so the splitter can
+        materialise a secured row per property type plus a single residual.
+        The legacy ``re_split_target_class`` /
+        ``re_split_property_type`` / ``re_split_property_value`` columns
+        are kept populated for audit and warning consumers — for mixed
+        rows ``re_split_property_type = "mixed"`` and
+        ``re_split_property_value = rre_v + cre_v``.
+
         Exclusions (higher-priority Art. 112 classes must not be
         downgraded): defaulted, securitisation, covered bond, equity,
         CIU, subordinated, high-risk, and exposures already classified
@@ -871,6 +885,10 @@ class ExposureClassifier:
                     pl.lit(None).cast(pl.String).alias("re_split_mode"),
                     pl.lit(None).cast(pl.String).alias("re_split_property_type"),
                     pl.lit(0.0).cast(pl.Float64).alias("re_split_property_value"),
+                    pl.lit(0.0).cast(pl.Float64).alias("re_split_residential_value"),
+                    pl.lit(0.0).cast(pl.Float64).alias("re_split_commercial_value"),
+                    pl.lit(False).alias("re_split_residential_eligible"),
+                    pl.lit(False).alias("re_split_commercial_eligible"),
                     pl.lit(False).alias("re_split_cre_rental_coverage_met"),
                 ]
             )
@@ -883,6 +901,8 @@ class ExposureClassifier:
         property_value = pl.col("property_collateral_value").fill_null(0.0)
         commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
         has_property = property_value > 0.0
+        has_rre = residential_value > 0.0
+        has_cre = commercial_value > 0.0
         is_residential_dominant = residential_value >= commercial_value
 
         # CRR CRE rental coverage: optional input column propagated through
@@ -936,33 +956,51 @@ class ExposureClassifier:
         is_sme_flag = pl.col("is_sme").fill_null(False)
         is_npsme = is_natural_person | is_sme_flag
 
-        cre_split_blocked_under_crr = ~cre_rental_coverage_met
         is_basel_3_1 = config.is_basel_3_1
 
-        # Resolve per-row split mode and target class.
+        # Per-component eligibility (PRA PS1/26 Art. 124(4) mixed-RE rule;
+        # CRR Art. 124(1) "any part of an exposure" wording). Each property
+        # component is evaluated against its own regime gate. The splitter
+        # then materialises one secured row per eligible component plus a
+        # single residual.
+        rre_eligible_expr = is_candidate & has_rre
         if is_basel_3_1:
+            cre_eligible_expr = is_candidate & has_cre
+        else:
+            cre_eligible_expr = is_candidate & has_cre & cre_rental_coverage_met
+
+        is_mixed = rre_eligible_expr & cre_eligible_expr
+
+        # Resolve per-row split mode. "split" when at least one component
+        # is eligible; "whole" reserved for the B3.1 Art. 124H(3) pure-CRE
+        # non-NP/SME corporate path (existing behaviour preserved).
+        if is_basel_3_1:
+            cre_only_whole = (~rre_eligible_expr) & cre_eligible_expr & (~is_npsme)
             re_split_mode_expr = (
                 pl.when(~is_candidate)
                 .then(pl.lit(None, dtype=pl.String))
-                .when(is_residential_dominant)
-                .then(pl.lit("split"))  # B3.1 RRE Art. 124F
-                .when(is_npsme)
-                .then(pl.lit("split"))  # B3.1 CRE Art. 124H(1)-(2)
-                .otherwise(pl.lit("whole"))  # B3.1 CRE Art. 124H(3)
+                .when(cre_only_whole)
+                .then(pl.lit("whole"))  # B3.1 CRE Art. 124H(3) pure-CRE non-NP/SME
+                .when(rre_eligible_expr | cre_eligible_expr)
+                .then(pl.lit("split"))
+                .otherwise(pl.lit(None, dtype=pl.String))
             )
         else:
             re_split_mode_expr = (
                 pl.when(~is_candidate)
                 .then(pl.lit(None, dtype=pl.String))
-                .when(is_residential_dominant)
-                .then(pl.lit("split"))  # CRR RRE Art. 125
-                .when(cre_split_blocked_under_crr)
-                .then(pl.lit(None, dtype=pl.String))  # CRR CRE rental cov failed
-                .otherwise(pl.lit("split"))  # CRR CRE Art. 126 with rental cover
+                .when(rre_eligible_expr | cre_eligible_expr)
+                .then(pl.lit("split"))  # CRR Art. 125 / Art. 126 (per-component)
+                .otherwise(pl.lit(None, dtype=pl.String))
             )
 
+        # Legacy single-target columns. Mixed exposures emit "mixed"
+        # property type and the sum of eligible component values; the
+        # splitter does the per-component allocation downstream.
         re_split_target_class_expr = (
             pl.when(~is_candidate)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(is_mixed)
             .then(pl.lit(None, dtype=pl.String))
             .when(is_residential_dominant)
             .then(pl.lit(_SECURED_TARGET_RESIDENTIAL))
@@ -972,13 +1010,29 @@ class ExposureClassifier:
         re_split_property_type_expr = (
             pl.when(~is_candidate)
             .then(pl.lit(None, dtype=pl.String))
+            .when(is_mixed)
+            .then(pl.lit("mixed"))
             .when(is_residential_dominant)
             .then(pl.lit("residential"))
             .otherwise(pl.lit("commercial"))
         )
 
         re_split_property_value_expr = (
-            pl.when(is_residential_dominant).then(residential_value).otherwise(commercial_value)
+            pl.when(is_mixed)
+            .then(residential_value + commercial_value)
+            .when(is_residential_dominant)
+            .then(residential_value)
+            .otherwise(commercial_value)
+        )
+
+        # Per-component values surfaced for the splitter. Always emitted
+        # so the splitter can rely on them; ineligible components carry
+        # zero so the allocation expressions naturally short-circuit.
+        re_split_residential_value_expr = (
+            pl.when(rre_eligible_expr).then(residential_value).otherwise(pl.lit(0.0))
+        )
+        re_split_commercial_value_expr = (
+            pl.when(cre_eligible_expr).then(commercial_value).otherwise(pl.lit(0.0))
         )
 
         return exposures.with_columns(
@@ -987,6 +1041,10 @@ class ExposureClassifier:
                 re_split_mode_expr.alias("re_split_mode"),
                 re_split_property_type_expr.alias("re_split_property_type"),
                 re_split_property_value_expr.alias("re_split_property_value"),
+                re_split_residential_value_expr.alias("re_split_residential_value"),
+                re_split_commercial_value_expr.alias("re_split_commercial_value"),
+                rre_eligible_expr.alias("re_split_residential_eligible"),
+                cre_eligible_expr.alias("re_split_commercial_eligible"),
                 cre_rental_coverage_met.alias("re_split_cre_rental_coverage_met"),
             ]
         )

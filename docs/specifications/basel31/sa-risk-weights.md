@@ -1313,12 +1313,23 @@ If either component instead failed Art. 124A (e.g., the retail unit's income bec
 
 ### Implementation Status
 
-!!! warning "Mixed RE split not yet implemented — input-schema gap"
-    The current input schema exposes a single `property_value` and `property_type` per exposure row, with no mechanism to declare that a single exposure is secured by both residential and commercial property. The B31 SA calculator branch therefore routes each row exclusively through either the residential (Art. 124F–124G) or commercial (Art. 124H–124I) chain based on the single `property_type` flag, and the Art. 124(4) proportional split is **not applied**.
+The Art. 124(4) pro-rata split is **automatically applied** by the post-CRM `RealEstateSplitter` stage. Firms supply real-estate collateral as separate rows in the `collateral` input table (`property_type = "residential"` or `"commercial"`); the hierarchy resolver aggregates them into per-exposure `residential_collateral_value` and `property_collateral_value` (RRE+CRE total), and the classifier emits per-component eligibility flags consumed by the splitter.
 
-    Firms with genuinely mixed-use collateral must pre-split the exposure into two separate input rows at the loader boundary — one with `property_type = "residential"` and its `property_value` = V_RESI, one with `property_type = "commercial"` and its `property_value` = V_CRE — each with `EAD = total_EAD × (V_part / V_total)` and `is_qualifying_re` reflecting that part's own Art. 124A status. This matches the regulation's outcome but places the split-logic obligation on the firm.
+For each mixed exposure the splitter emits:
 
-    Code-side gap logged as **D3.59** in `DOCS_IMPLEMENTATION_PLAN.md`: input schema needs `residential_property_value` / `commercial_property_value` fields (or a repeated-collateral structure) and a dedicated `is_mixed_re` path in `engine/sa/namespace.py` to apply Art. 124(4) automatically.
+- one `secured_rre` row reclassified to `RESIDENTIAL_MORTGAGE`, EAD = `min(EAD × rre_share, 0.55 × rre_v − prior_charge_ltv × rre_v)`,
+- one `secured_cre` row reclassified to `COMMERCIAL_MORTGAGE`, EAD = `min(EAD × cre_share, 0.55 × cre_v − prior_charge_ltv × cre_v)`,
+- one `residual` row that keeps the parent counterparty class (Art. 124L applies via the unsecured RW chain),
+
+all three sharing a `split_parent_id` for COREP reconciliation. The audit lazyframe `re_split_audit` carries the per-component breakdown (`rre_secured_ead`, `cre_secured_ead`, `residual_ead`, `is_mixed`).
+
+Single-component splits (pure RRE or pure CRE) keep the legacy `secured` role (one secured + one residual row per parent) for backward compatibility — only mixed exposures use the `secured_rre` / `secured_cre` role pair.
+
+!!! note "Known limitation: single `prior_charge_ltv` column"
+    The input schema currently exposes a single `prior_charge_ltv` per exposure. v1 applies that value to **both** the RRE and CRE caps (most conservative — it reduces both `0.55` thresholds equally). Firms with materially different prior charges per property type can fork the input into two collateral rows with their own `prior_charge_ltv` values; a future schema iteration may split the column into `prior_charge_residential` / `prior_charge_commercial`. Tracked as a follow-up if customer demand warrants it.
+
+!!! note "Known limitation: Art. 124(4) all-or-nothing fallback to Art. 124J not implemented"
+    Art. 124(4) makes Art. 124J the default for mixed RE exposures — preferential Art. 124F-124I treatment applies only if **both** residential and commercial parts separately qualify under Art. 124A. v1 routes each component through the standard Art. 124F-124I path independently of `is_qualifying_re`; firms whose mixed collateral fails Art. 124A on either side should pre-mark the exposure with `is_qualifying_re = False` (which the splitter then classifies as a non-qualifying RE row at exposure level, taking the Art. 124J chain).
 
 ### CRR Comparison
 

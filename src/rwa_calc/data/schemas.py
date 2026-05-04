@@ -334,6 +334,11 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "ciu_third_party_calc": ColumnSpec(pl.Boolean, default=False, required=False),
     "fund_reference": ColumnSpec(pl.String, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
+    # Number of years the underlying business has existed.
+    # Used by Basel 3.1 PE/VC higher-risk test (PRA PS1/26 Glossary p.5,
+    # Art. 133(4)): unlisted PE with business_age_years < 5.0 (or null,
+    # treated conservatively) routes to 400%; >= 5.0 routes to standard 250%.
+    "business_age_years": ColumnSpec(pl.Float64, required=False),
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 

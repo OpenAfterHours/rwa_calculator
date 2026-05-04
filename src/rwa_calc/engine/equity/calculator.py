@@ -89,6 +89,9 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "fund_reference": ColumnSpec(pl.String, required=False),
     "ciu_look_through_rw": ColumnSpec(pl.Float64, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
+    # Years the underlying PE/VC business has existed; used by the B31
+    # Art. 133(4) higher-risk test (PRA PS1/26 Glossary p.5).
+    "business_age_years": ColumnSpec(pl.Float64, required=False),
 }
 
 # Sentinel for null CQS in join operations (data processing convention)
@@ -516,15 +519,42 @@ class EquityCalculator:
         1. Central bank: 0%  (sovereign treatment)
         2. Subordinated debt / non-equity own funds: 150%  (Art. 133(5))
         3. Speculative / higher risk: 400%  (Art. 133(4))
-        4. PE / VC (always higher risk): 400%  (Art. 133(4))
+        4. PE / VC higher-risk test (Art. 133(4) + Glossary p.5):
+           - unlisted (NOT is_exchange_traded) AND business_age_years < 5.0
+             (or null, treated conservatively) -> 400% (higher-risk)
+           - otherwise -> falls through to standard 250% (Art. 133(3))
         5. CIU: approach-dependent  (Art. 132-132C)
            - CIU fallback: 1,250%  (Art. 132(2))
-        6. All other standard equity (incl. government-supported): 250%  (Art. 133(3))
+        6. All other standard equity (incl. government-supported, and
+           long-established/exchange-traded PE/VC): 250%  (Art. 133(3))
 
         Note: B31 Art. 133(6) is an exclusion clause (own funds deductions,
         Art. 89(3), Art. 48(4)) — NOT a risk weight assignment. CRR's 100%
         legislative equity (Art. 133(3)(c)) has no equivalent in B31.
         """
+        # Glossary p.5 / Art. 133(4) higher-risk PE/VC test:
+        #   unlisted AND (business_age_years < 5.0 OR business_age_years is null)
+        # Null age is treated conservatively as <5y (firm cannot claim the
+        # long-established carve-out without evidence of business age >= 5).
+        # Missing columns are treated conservatively too: callers that bypass
+        # _prepare_columns (older direct-invocation unit tests) get the prior
+        # "always higher-risk" routing for unlisted PE.
+        schema_names = exposures.collect_schema().names()
+        is_pe_or_pe_div = pl.col("equity_type").str.to_lowercase().is_in(
+            ["private_equity", "private_equity_diversified"]
+        )
+        is_unlisted = (
+            ~pl.col("is_exchange_traded").fill_null(False)
+            if "is_exchange_traded" in schema_names
+            else pl.lit(True)
+        )
+        is_young_or_unknown = (
+            pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
+            if "business_age_years" in schema_names
+            else pl.lit(True)
+        )
+        is_higher_risk_pe = is_pe_or_pe_div & is_unlisted & is_young_or_unknown
+
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
@@ -536,11 +566,11 @@ class EquityCalculator:
                 .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
                 .when(pl.col("equity_type").str.to_lowercase() == "speculative")
                 .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
-                # Art. 133(4): PE/VC is always higher risk (400%)
-                .when(pl.col("equity_type").str.to_lowercase() == "private_equity")
+                # Art. 133(4) + Glossary p.5: unlisted PE/VC with business age
+                # < 5y (or unknown) is higher-risk (400%); long-established or
+                # exchange-traded PE/VC falls through to standard 250%.
+                .when(is_higher_risk_pe)
                 .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY]))
-                .when(pl.col("equity_type").str.to_lowercase() == "private_equity_diversified")
-                .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
                 .otherwise(pl.lit(_B31_SA_RW[EquityType.OTHER]))
@@ -620,11 +650,24 @@ class EquityCalculator:
             if "is_speculative" in schema.names()
             else pl.lit(False)
         )
-        # PE/VC is always higher-risk under Art. 133(4)
+        # PE/VC is higher-risk under Art. 133(4) only when unlisted AND business
+        # age < 5y (or unknown — null treated conservatively per Glossary p.5).
+        # Long-established / exchange-traded PE/VC is standard equity (250%).
         eq_type_for_hr = pl.col("equity_type").str.to_lowercase()
-        is_hr_pe = (eq_type_for_hr == "private_equity") | (
+        is_pe_or_pe_div_hr = (eq_type_for_hr == "private_equity") | (
             eq_type_for_hr == "private_equity_diversified"
         )
+        is_unlisted_hr = (
+            ~pl.col("is_exchange_traded").fill_null(False)
+            if "is_exchange_traded" in schema.names()
+            else pl.lit(True)
+        )
+        is_young_or_unknown_hr = (
+            pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
+            if "business_age_years" in schema.names()
+            else pl.lit(True)
+        )
+        is_hr_pe = is_pe_or_pe_div_hr & is_unlisted_hr & is_young_or_unknown_hr
         is_hr = is_hr_speculative | is_hr_pe
 
         # PRA Rule 4.2/4.3: transitional does NOT apply to exposures within

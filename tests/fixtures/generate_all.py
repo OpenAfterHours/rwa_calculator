@@ -67,6 +67,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
         ("P1.124 (CRR Art. 237(2)(a) guarantee maturity ineligibility)", "p1_124", _generate_p1124),
         ("P1.126 (classifier null-revenue conservative-large default CLS008)", "p1_126", _generate_p1126),
         ("P1.156 (PSM guarantor LGD seniority/FSE-aware Art. 236/161)", "p1_156", _generate_p1156),
+        ("P1.182 (long-established PE/VC 250% vs 400% business-age split)", "p1_182", _generate_p1182),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -480,6 +481,19 @@ def _generate_p1156(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_156", None)
+
+
+def _generate_p1182(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.182 fixtures (long-established PE/VC 250% vs 400% business-age split)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_182 import save_p1182_fixtures
+
+        saved = save_p1182_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_182", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

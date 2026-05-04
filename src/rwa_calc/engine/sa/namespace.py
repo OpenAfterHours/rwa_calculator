@@ -393,38 +393,46 @@ def _b31_unrated_cb_rw_expr() -> pl.Expr:
 # ---------------------------------------------------------------------------
 
 
-def _b31_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
-    """Append Basel 3.1 real-estate branches (ADC / other-RE / resi / CRE)."""
-    is_re_class = (
-        uc.str.contains("MORTGAGE", literal=True)
-        | uc.str.contains("RESIDENTIAL", literal=True)
-        | uc.str.contains("COMMERCIAL", literal=True)
+def _is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
+    """Match commercial real-estate exposures by class string or property_type.
+
+    Used by the SA RE dispatchers and the Art. 127(3) defaulted-RESI rule
+    to route ahead of the residential branch — ``COMMERCIAL_MORTGAGE``
+    contains the ``MORTGAGE`` substring, so the residential dispatch
+    would otherwise grab it.
+    """
+    return (
+        uc.str.contains("COMMERCIAL", literal=True)
         | uc.str.contains("CRE", literal=True)
+        | (pl.col("property_type").fill_null("") == "commercial")
+    )
+
+
+def _is_residential_re_class(uc: pl.Expr) -> pl.Expr:
+    """Match residential RE — relies on commercial being routed first."""
+    return uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
+
+
+def _b31_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+    """Append Basel 3.1 real-estate branches (ADC / other-RE / CRE / resi)."""
+    is_re_class = (
+        _is_commercial_re_class(uc)
+        | _is_residential_re_class(uc)
         | (pl.col("property_type").fill_null("").is_in(["residential", "commercial"]))
     )
     is_non_qualifying = pl.col("is_qualifying_re").fill_null(True) == False  # noqa: E712
     return (
-        # ADC: 150% or 100% pre-sold (CRE20.87-88)
         chain.when(pl.col("is_adc").fill_null(False))
         .then(b31_adc_rw_expr())
-        # Other RE (Art. 124J): non-qualifying RE that fails Art. 124A criteria.
-        # Routes before qualifying RE branches so non-qualifying exposures get
-        # 150% (income) / cp RW (resi) / max(60%,cp) (cre). Null is_qualifying_re
-        # defaults to qualifying — backward compatible with existing data.
+        # Art. 124J: non-qualifying RE that fails Art. 124A criteria.
+        # Null is_qualifying_re defaults to qualifying — backward compatible.
         .when(is_non_qualifying & is_re_class)
         .then(b31_other_re_rw_expr("_cqs_risk_weight"))
-        # Residential mortgage: loan-split (Art. 124F) / LTV-band (Art. 124G)
-        .when(
-            uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
-        )
-        .then(b31_residential_rw_expr("_cqs_risk_weight"))
-        # Commercial RE: LTV-band or min() (CRE20.85/86)
-        .when(
-            uc.str.contains("COMMERCIAL", literal=True)
-            | uc.str.contains("CRE", literal=True)
-            | (pl.col("property_type").fill_null("") == "commercial")
-        )
+        # Commercial RE must precede residential — see _is_commercial_re_class.
+        .when(_is_commercial_re_class(uc))
         .then(b31_commercial_rw_expr("_cqs_risk_weight"))
+        .when(_is_residential_re_class(uc))
+        .then(b31_residential_rw_expr("_cqs_risk_weight"))
     )
 
 
@@ -481,13 +489,22 @@ def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
 
 
 def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
-    """Append CRR residential LTV-split and commercial RE branches (Art. 125-126)."""
+    """Append CRR commercial-then-residential RE branches (Art. 125-126)."""
     ltv_safe = pl.col("ltv").fill_null(1.0)
     return (
-        # Residential mortgage: LTV split (CRR Art. 125)
-        chain.when(
-            uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
+        # Commercial RE must precede residential — see _is_commercial_re_class.
+        # CRR Art. 126: LTV + income cover.
+        chain.when(_is_commercial_re_class(uc))
+        .then(
+            pl.when(
+                (ltv_safe <= _SA_CRR_RW["cre_ltv_threshold"])
+                & pl.col("has_income_cover").fill_null(False)
+            )
+            .then(pl.lit(_SA_CRR_RW["cre_rw_low"]))
+            .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
         )
+        # CRR Art. 125 LTV split.
+        .when(_is_residential_re_class(uc))
         .then(
             pl.when(pl.col("ltv").fill_null(0.0) <= _SA_CRR_RW["resi_ltv_threshold"])
             .then(pl.lit(_SA_CRR_RW["resi_rw_low"]))
@@ -497,20 +514,6 @@ def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
                 * (ltv_safe - _SA_CRR_RW["resi_ltv_threshold"])
                 / ltv_safe
             )
-        )
-        # Commercial RE: LTV + income cover (CRR Art. 126)
-        .when(
-            uc.str.contains("COMMERCIAL", literal=True)
-            | uc.str.contains("CRE", literal=True)
-            | (pl.col("property_type").fill_null("") == "commercial")
-        )
-        .then(
-            pl.when(
-                (ltv_safe <= _SA_CRR_RW["cre_ltv_threshold"])
-                & pl.col("has_income_cover").fill_null(False)
-            )
-            .then(pl.lit(_SA_CRR_RW["cre_rw_low"]))
-            .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
         )
     )
 
@@ -1291,11 +1294,12 @@ def _apply_defaulted_risk_weight(
     ead = pl.col(ead_col)
 
     if config.is_basel_3_1:
-        # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88)
+        # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
         is_resi_re_non_income = (
-            _uc.str.contains("MORTGAGE", literal=True)
-            | _uc.str.contains("RESIDENTIAL", literal=True)
-        ) & ~pl.col("has_income_cover").fill_null(False)
+            _is_residential_re_class(_uc)
+            & ~_is_commercial_re_class(_uc)
+            & ~pl.col("has_income_cover").fill_null(False)
+        )
 
         # PS1/26 Art. 127(1): denominator is the outstanding amount of the
         # item or facility — ead_final post-CRM reduction.

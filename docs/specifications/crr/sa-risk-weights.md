@@ -1478,9 +1478,19 @@ branch.
 (or absent) the exposure stays in its original class and an `RE004`
 informational warning is emitted.
 
+**Mixed RRE+CRE collateral on a single exposure.** When a single exposure carries both residential and commercial property collateral, the splitter materialises **three** child rows (`secured_rre` + `secured_cre` + `residual`) sharing one `split_parent_id`, with per-regime allocation:
+
+- **CRR Art. 124(1) "any part of an exposure" — RRE-first sequential.** RRE consumes EAD up to its 80% LTV cap (Art. 125), then CRE picks up the remainder up to its 50% LTV cap (Art. 126, requires rental coverage). The CRR has no explicit "mixed RE" article, but the "any part of an exposure fully and completely secured by mortgages" wording in Art. 124(1) / 125(1)(a) / 126(1)(a) supports treating each preferential charge on its respective pledged portion. Allocating the lower-RW residential bucket first is bank-favourable and matches industry practice.
+- **PRA PS1/26 Art. 124(4) — pro-rata by collateral value (mandatory).** `rre_share = rre_v / (rre_v + cre_v)`; `cre_share = 1 − rre_share`. Each component's secured EAD is `min(EAD × component_share, 0.55 × component_value − prior_charge_ltv × component_value)`. Single `prior_charge_ltv` applied to both caps as a v1 simplification (see [B3.1 SA spec](../basel31/sa-risk-weights.md#mixed-real-estate-split-art-1244)).
+
+The child references are suffixed `_rre` / `_cre` / `_res` and the role is `"secured_rre"` / `"secured_cre"` / `"residual"`. Single-component splits keep the legacy `_sec` suffix and `"secured"` role for backward compatibility.
+
+A new `RE003` informational warning is emitted with the per-batch count of mixed splits and the regime-specific allocation rule.
+
 **Audit & lineage:** Both child rows share a `split_parent_id` equal to the
-parent `exposure_reference`; the child references are suffixed with `_sec`
-and `_res` (or kept unchanged for the Art. 124H(3) whole-loan path).
-`CRMAdjustedBundle.re_split_audit` captures one row per parent (parent EAD,
-secured / residual EAD, effective cap, target class, regime). The sum of
-child EADs reconciles exactly to the parent EAD.
+parent `exposure_reference`; the child references are suffixed with `_sec`,
+`_rre`, `_cre`, or `_res` (or kept unchanged for the Art. 124H(3) whole-loan
+path). `CRMAdjustedBundle.re_split_audit` captures one row per parent
+(parent EAD, per-component secured EAD, residual EAD, per-component
+property values, effective cap, target class, `is_mixed`, regime). The sum
+of child EADs reconciles exactly to the parent EAD.

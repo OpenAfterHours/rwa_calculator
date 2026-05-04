@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 
@@ -33,6 +33,7 @@ import polars as pl
 from rwa_calc.config.data_sources import DataSourceRegistry
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.contracts.protocols import LoaderProtocol
 from rwa_calc.data.column_spec import (
     ColumnSpec,
     apply_boolean_column_defaults,
@@ -318,28 +319,7 @@ def _build_bundle(
         model_permissions=load_optional(config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA),
     )
     errors = _run_bundle_validation(bundle)
-    if not errors:
-        return bundle
-    # Frozen dataclass — reconstruct with errors attached
-    return RawDataBundle(
-        facilities=bundle.facilities,
-        loans=bundle.loans,
-        counterparties=bundle.counterparties,
-        facility_mappings=bundle.facility_mappings,
-        lending_mappings=bundle.lending_mappings,
-        org_mappings=bundle.org_mappings,
-        contingents=bundle.contingents,
-        collateral=bundle.collateral,
-        guarantees=bundle.guarantees,
-        provisions=bundle.provisions,
-        ratings=bundle.ratings,
-        specialised_lending=bundle.specialised_lending,
-        equity_exposures=bundle.equity_exposures,
-        ciu_holdings=bundle.ciu_holdings,
-        fx_rates=bundle.fx_rates,
-        model_permissions=bundle.model_permissions,
-        errors=errors,
-    )
+    return replace(bundle, errors=errors) if errors else bundle
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +327,7 @@ def _build_bundle(
 # ---------------------------------------------------------------------------
 
 
-class ParquetLoader:
+class ParquetLoader(LoaderProtocol):
     """
     Load data from Parquet files.
 
@@ -399,7 +379,7 @@ class ParquetLoader:
         return _build_bundle(load, load_opt, self.config)
 
 
-class CSVLoader:
+class CSVLoader(LoaderProtocol):
     """
     Load data from CSV files.
 

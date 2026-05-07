@@ -298,6 +298,13 @@ def _apply_parameter_substitution(
     - subordinated guarantor       -> 0.75  (Art. 161(1)(b), both frameworks)
     - senior + FSE guarantor (B31) -> 0.45  (Art. 161(1)(a))
     - senior + non-FSE guarantor   -> 0.40 B31 / 0.45 CRR (Art. 161(1)(aa)/(a))
+
+    Also enforces the "no better than direct" output floor (Art. 160(4)):
+    after computing ``guarantor_rw_irb`` from PSM, derive ``RW_direct`` —
+    the IRB risk weight the guarantor would attract as a *direct* borrower
+    (using the guarantor's own exposure class, floored PD, and F-IRB LGD)
+    — and expose ``guarantor_rw_post_nbd = max(guarantor_rw_irb, RW_direct)``.
+    The downstream beneficial-gate uses ``guarantor_rw_post_nbd``.
     """
     if use_parameter_substitution:
         from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
@@ -359,8 +366,28 @@ def _apply_parameter_substitution(
             sme_turnover_threshold_m=sme_turnover_m,
         )
 
+        # Materialise guarantor_rw_irb so the "no better than direct" pass can
+        # read it back as a column without re-doing the substitution maths.
+        lf = lf.with_columns(guarantor_rw_irb.alias("guarantor_rw_irb"))
+
+        # Compute RW_direct (Art. 160(4) "no better than direct" floor):
+        # the IRB risk weight that would apply to the guarantor as a DIRECT
+        # borrower, using the guarantor's own exposure class for the
+        # correlation curve and maturity adjustment, with the same floored
+        # PD and F-IRB supervisory LGD as the substitution.
+        lf = _apply_no_better_than_direct_floor(
+            lf,
+            guarantor_pd_floored=guarantor_pd_floored,
+            guarantor_lgd_expr=guarantor_lgd_expr,
+            scaling_factor=scaling_factor,
+            eur_gbp_rate=eur_gbp_rate,
+            is_b31=config.is_basel_3_1,
+            sme_turnover_threshold_m=sme_turnover_m,
+        )
+
         # Select method: IRB guarantor under Basel 3.1 -> parameter substitution,
-        # SA guarantor -> SA RW substitution
+        # SA guarantor -> SA RW substitution. The "no better than direct" floor
+        # applies to the IRB-substituted RW only.
         is_irb_guarantor = (pl.col("guarantor_approach").fill_null("") == "irb") & pl.col(
             "guarantor_pd"
         ).is_not_null()
@@ -368,7 +395,7 @@ def _apply_parameter_substitution(
         return lf.with_columns(
             [
                 pl.when(is_irb_guarantor)
-                .then(guarantor_rw_irb)
+                .then(pl.col("guarantor_rw_post_nbd"))
                 .otherwise(pl.col("guarantor_rw_sa"))
                 .alias("guarantor_rw"),
                 # Track which method is being used per-row
@@ -385,6 +412,99 @@ def _apply_parameter_substitution(
             pl.col("guarantor_rw_sa").alias("guarantor_rw"),
             pl.lit(False).alias("_is_pd_substitution"),
         ]
+    )
+
+
+def _apply_no_better_than_direct_floor(
+    lf: pl.LazyFrame,
+    *,
+    guarantor_pd_floored: pl.Expr,
+    guarantor_lgd_expr: pl.Expr,
+    scaling_factor: float,
+    eur_gbp_rate: float,
+    is_b31: bool,
+    sme_turnover_threshold_m: float,
+) -> pl.LazyFrame:
+    """Compute ``RW_direct`` and ``guarantor_rw_post_nbd`` per Art. 160(4).
+
+    ``_parametric_irb_risk_weight_expr`` reads the borrower's exposure-class
+    and correlation-driving columns (``exposure_class``, ``turnover_m``,
+    ``requires_fi_scalar``, ``is_qrre_transactor``) from the LazyFrame. To
+    compute the *direct-to-guarantor* risk weight we temporarily swap those
+    columns to guarantor-specific values, evaluate the expression, then
+    restore the borrower's originals.
+
+    Adds two columns:
+    - ``rw_direct``: IRB RW the guarantor would attract as a direct borrower.
+    - ``guarantor_rw_post_nbd``: max(guarantor_rw_irb, rw_direct).
+    """
+    schema_names = lf.collect_schema().names()
+
+    # Stash the borrower's class-driving columns so we can restore them after
+    # computing the guarantor-direct RW. The maturity column is left as-is —
+    # the parametric formula caps M at 5y and floors at 1y; using the
+    # borrower's M is conservative for the direct-to-guarantor RW.
+    stash_cols = [
+        pl.col("exposure_class").alias("_nbd_borrower_exposure_class"),
+        pl.col("turnover_m").alias("_nbd_borrower_turnover_m"),
+        pl.col("requires_fi_scalar").alias("_nbd_borrower_requires_fi_scalar"),
+    ]
+    if "is_qrre_transactor" in schema_names:
+        stash_cols.append(pl.col("is_qrre_transactor").alias("_nbd_borrower_is_qrre_transactor"))
+
+    lf = lf.with_columns(stash_cols)
+
+    # Swap in guarantor-driving values. Guarantor-specific turnover is not
+    # carried through CRM today, so disable the SME correlation adjustment
+    # by setting turnover_m to NULL. Ditto requires_fi_scalar (no FI scalar
+    # uplift for the guarantor's direct curve unless explicitly modelled).
+    swap_cols = [
+        pl.col("guarantor_exposure_class").alias("exposure_class"),
+        pl.lit(None).cast(pl.Float64).alias("turnover_m"),
+        pl.lit(False).alias("requires_fi_scalar"),
+    ]
+    if "is_qrre_transactor" in schema_names:
+        swap_cols.append(pl.lit(False).alias("is_qrre_transactor"))
+
+    lf = lf.with_columns(swap_cols)
+
+    # Evaluate the parametric IRB RW with the guarantor's class context.
+    rw_direct_expr = _parametric_irb_risk_weight_expr(
+        pd_expr=guarantor_pd_floored,
+        lgd=guarantor_lgd_expr,
+        scaling_factor=scaling_factor,
+        eur_gbp_rate=eur_gbp_rate,
+        is_b31=is_b31,
+        sme_turnover_threshold_m=sme_turnover_threshold_m,
+    )
+    lf = lf.with_columns(rw_direct_expr.alias("rw_direct"))
+
+    # Restore the borrower's original class-driving columns.
+    restore_cols = [
+        pl.col("_nbd_borrower_exposure_class").alias("exposure_class"),
+        pl.col("_nbd_borrower_turnover_m").alias("turnover_m"),
+        pl.col("_nbd_borrower_requires_fi_scalar").alias("requires_fi_scalar"),
+    ]
+    if "is_qrre_transactor" in schema_names:
+        restore_cols.append(
+            pl.col("_nbd_borrower_is_qrre_transactor").alias("is_qrre_transactor"),
+        )
+    lf = lf.with_columns(restore_cols)
+
+    # Drop the stash columns and emit the NBD-floored guarantor RW.
+    drop_cols = [
+        "_nbd_borrower_exposure_class",
+        "_nbd_borrower_turnover_m",
+        "_nbd_borrower_requires_fi_scalar",
+    ]
+    if "is_qrre_transactor" in schema_names:
+        drop_cols.append("_nbd_borrower_is_qrre_transactor")
+    lf = lf.drop(drop_cols)
+
+    return lf.with_columns(
+        pl.max_horizontal(pl.col("guarantor_rw_irb"), pl.col("rw_direct")).alias(
+            "guarantor_rw_post_nbd"
+        ),
     )
 
 

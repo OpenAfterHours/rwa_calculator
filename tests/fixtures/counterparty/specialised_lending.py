@@ -447,7 +447,12 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(specialised_lending, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+    df = pl.DataFrame(specialised_lending, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+    # eca_score: null for all specialised lending rows — ECA scores apply only to
+    # sovereigns (CRR Art. 137(1)).  Column added here until engine-implementer
+    # registers it in COUNTERPARTY_SCHEMA so pl.concat in generate_all.py sees
+    # consistent schemas.
+    return df.with_columns(pl.lit(None).cast(pl.Int8).alias("eca_score"))
 
 
 def save_specialised_lending_counterparties(output_dir: Path | None = None) -> Path:

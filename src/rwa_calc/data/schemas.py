@@ -210,6 +210,10 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "sovereign_cqs": ColumnSpec(pl.Int32, required=False),
     "local_currency": ColumnSpec(pl.String, required=False),
     "institution_cqs": ColumnSpec(pl.Int8, required=False),
+    # CRR Art. 137(1)-(2) Table 9: nominated ECA's minimum export insurance
+    # premium (MEIP) score 0-7 used as a direct sovereign risk-weight input
+    # when no ECAI rating is available. Null when ECA path is not used.
+    "eca_score": ColumnSpec(pl.Int8, required=False),
 }
 
 COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
@@ -790,6 +794,8 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),
     "cp_local_currency": ColumnSpec(pl.String, required=False),
     "cp_institution_cqs": ColumnSpec(pl.Int8, required=False),
+    # CRR Art. 137(1)-(2) Table 9 — nominated ECA MEIP score (0-7).
+    "cp_eca_score": ColumnSpec(pl.Int8, required=False),
 }
 
 # Columns produced by the CRM stage: collateral value buckets and provision

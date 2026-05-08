@@ -147,9 +147,30 @@ def create_sovereign_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
+        # ECA-scored Sovereign - CRR Art. 137(1)-(2) path (P1.100)
+        # Kazakhstan has no ECAI rating; ECA score 2 maps to MEIP Table 9 RW 20%.
+        {
+            "counterparty_reference": "SOV_KZ_001",
+            "counterparty_name": "Republic of Kazakhstan (Unrated, ECA-scored)",
+            "entity_type": "sovereign",
+            "country_code": "KZ",
+            "annual_revenue": None,
+            "total_assets": None,
+            "default_status": False,
+            "sector_code": "84.11",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
     ]
 
-    return pl.DataFrame(sovereigns, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+    df = pl.DataFrame(sovereigns, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+
+    # eca_score: CRR Art. 137(1) ECA minimum export insurance premium score (1-7).
+    # Added here as a pre-schema column until the engine-implementer registers it
+    # in COUNTERPARTY_SCHEMA.  All existing rows receive null (no ECA score);
+    # SOV_KZ_001 receives 2 (MEIP Table 9 row → 20% RW).
+    eca_scores = [None] * (len(df) - 1) + [2]
+    return df.with_columns(pl.Series("eca_score", eca_scores, dtype=pl.Int8))
 
 
 def save_sovereign_counterparties(output_dir: Path | None = None) -> Path:

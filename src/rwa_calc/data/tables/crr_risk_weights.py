@@ -112,6 +112,38 @@ def _create_cgcb_df() -> pl.DataFrame:
 
 
 # =============================================================================
+# ECA / MEIP DIRECT SOVEREIGN RISK WEIGHTS (CRR Art. 137(1)-(2) Table 9)
+# =============================================================================
+#
+# When a firm nominates an Export Credit Agency (ECA) under Art. 137(1) the
+# ECA's minimum export insurance premium (MEIP) score is mapped directly to a
+# sovereign risk weight via Table 9 — there is no intermediate CQS step. The
+# table is consulted only when the sovereign has no ECAI rating; the ECA path
+# overrides the Art. 114 unrated 100% fallback.
+#
+# Table 9 — MEIP score → risk weight:
+#     0 →   0%
+#     1 →   0%
+#     2 →  20%
+#     3 →  50%
+#     4 → 100%
+#     5 → 100%
+#     6 → 100%
+#     7 → 150%
+
+ECA_MEIP_RISK_WEIGHTS: dict[int, Decimal] = {
+    0: Decimal("0.00"),
+    1: Decimal("0.00"),
+    2: Decimal("0.20"),
+    3: Decimal("0.50"),
+    4: Decimal("1.00"),
+    5: Decimal("1.00"),
+    6: Decimal("1.00"),
+    7: Decimal("1.50"),
+}
+
+
+# =============================================================================
 # INSTITUTION RISK WEIGHTS (CRR Art. 120 Table 3 / PRA PS1/26 Art. 120 ECRA)
 # =============================================================================
 

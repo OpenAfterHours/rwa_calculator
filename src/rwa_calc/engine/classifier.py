@@ -362,6 +362,10 @@ class ExposureClassifier:
         if "local_currency" in cp_col_names:
             select_cols.append(pl.col("local_currency").alias("cp_local_currency"))
 
+        # ECA / MEIP score for unrated sovereign Art. 137(1)-(2) Table 9 path.
+        if "eca_score" in cp_col_names:
+            select_cols.append(pl.col("eca_score").alias("cp_eca_score"))
+
         # Covered bond issuer institution CQS (Art. 129(5) derivation)
         if "institution_cqs" in cp_col_names:
             select_cols.append(pl.col("institution_cqs").alias("cp_institution_cqs"))

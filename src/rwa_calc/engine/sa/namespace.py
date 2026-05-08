@@ -117,6 +117,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     CRR_NON_REGULATORY_RETAIL_RW,
+    ECA_MEIP_RISK_WEIGHTS,
     HIGH_RISK_RW,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
@@ -351,6 +352,26 @@ def _cqs_table_lookup_expr(
     if isinstance(unrated_default, pl.Expr):
         return expr.otherwise(unrated_default)
     return expr.otherwise(pl.lit(unrated_default))
+
+
+# ---------------------------------------------------------------------------
+# ECA / MEIP direct sovereign RW (CRR Art. 137(1)-(2) Table 9)
+# ---------------------------------------------------------------------------
+
+
+def _eca_meip_rw_expr() -> pl.Expr:
+    """Build Polars expression mapping ``cp_eca_score`` (0-7) to sovereign RW.
+
+    Maps directly to ``ECA_MEIP_RISK_WEIGHTS`` per CRR Art. 137(2) Table 9 —
+    no intermediate CQS step. When ``cp_eca_score`` is null or out of range
+    the expression returns null so callers can defer to the standard
+    Art. 114 unrated fallback.
+    """
+    col = pl.col("cp_eca_score")
+    expr = pl.when(col == 0).then(pl.lit(float(ECA_MEIP_RISK_WEIGHTS[0])))
+    for score in range(1, 8):
+        expr = expr.when(col == score).then(pl.lit(float(ECA_MEIP_RISK_WEIGHTS[score])))
+    return expr.otherwise(pl.lit(None, dtype=pl.Float64))
 
 
 # ---------------------------------------------------------------------------
@@ -1092,6 +1113,15 @@ def _apply_crr_risk_weight_overrides(
         # Art. 114(3)/(4): Domestic CGCB -> 0% RW (overrides all CQS).
         pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
+        # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
+        # RW when no ECAI rating is present. Takes precedence over the Art. 114
+        # unrated 100% fallback but not over the Art. 114(3)/(4) domestic 0%.
+        .when(
+            uc.str.contains("CENTRAL_GOVT", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+            & pl.col("cp_eca_score").is_not_null()
+        )
+        .then(_eca_meip_rw_expr())
         # QCCP trade exposures (CRR Art. 306, CRE54.14-15).
         .when(pl.col("cp_entity_type") == "ccp")
         .then(

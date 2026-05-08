@@ -436,7 +436,11 @@ def create_retail_counterparties() -> pl.DataFrame:
         },
     ]
 
-    return pl.DataFrame(retail, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+    df = pl.DataFrame(retail, schema=dtypes_of(COUNTERPARTY_SCHEMA))
+    # eca_score: null for all retail rows — ECA scores apply only to sovereigns
+    # (CRR Art. 137(1)).  Column added here until engine-implementer registers it
+    # in COUNTERPARTY_SCHEMA so pl.concat in generate_all.py sees consistent schemas.
+    return df.with_columns(pl.lit(None).cast(pl.Int8).alias("eca_score"))
 
 
 def save_retail_counterparties(output_dir: Path | None = None) -> Path:

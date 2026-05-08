@@ -89,6 +89,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_182",
             _generate_p1182,
         ),
+        (
+            "P1.100 (CRR Art. 137 ECA MEIP score 2 → 20% sovereign RW)",
+            "p1_100",
+            _generate_p1100,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -524,6 +529,19 @@ def _generate_p1182(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_182", None)
+
+
+def _generate_p1100(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.100 fixtures (CRR Art. 137 ECA MEIP score 2 → 20% sovereign RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_100 import save_p1100_fixtures
+
+        saved = save_p1100_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_100", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

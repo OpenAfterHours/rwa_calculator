@@ -52,6 +52,8 @@ def _pd_floor_expression(
     config: CalculationConfig,
     *,
     has_transactor_col: bool = True,
+    exposure_class_col: str = "exposure_class",
+    transactor_col: str = "is_qrre_transactor",
 ) -> pl.Expr:
     """
     Build Polars expression for per-exposure-class PD floor.
@@ -65,9 +67,19 @@ def _pd_floor_expression(
 
     Args:
         config: Calculation configuration
-        has_transactor_col: Whether the LazyFrame has an is_qrre_transactor column.
+        has_transactor_col: Whether the LazyFrame has the transactor column.
             When True (pipeline path), uses per-row transactor/revolver distinction.
             When False (isolated expressions), defaults to conservative revolver floor.
+        exposure_class_col: Name of the column to read the exposure class from.
+            Defaults to ``exposure_class`` (the borrower's class). For guarantor
+            PD substitution (CRR Art. 161(3) / B31 CRE22.70-85, Art. 160(4)),
+            pass ``guarantor_exposure_class`` so the floor reads the guarantor's
+            own class — the guaranteed portion is treated as a direct exposure
+            to the guarantor, so the guarantor's class floor governs.
+        transactor_col: Name of the QRRE transactor flag column. For guarantor
+            PD floors this is normally not relevant (guarantors are typically
+            not QRRE), but the parameter is exposed for symmetry with
+            ``exposure_class_col``.
 
     Returns a Polars expression evaluating to the per-row PD floor value.
     """
@@ -86,14 +98,14 @@ def _pd_floor_expression(
         return pl.lit(float(all_values.pop()))
 
     # Basel 3.1: differentiated floors by exposure class
-    exp_class = pl.col("exposure_class").cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
+    exp_class = pl.col(exposure_class_col).cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
 
     # QRRE transactor/revolver distinction (CRE30.55):
     # Transactors (repay in full each period) get 0.03% floor;
     # revolvers (carry balance) get 0.10% floor.
     if has_transactor_col:
         qrre_floor = (
-            pl.when(pl.col("is_qrre_transactor").fill_null(False))
+            pl.when(pl.col(transactor_col).fill_null(False))
             .then(pl.lit(float(floors.retail_qrre_transactor)))
             .otherwise(pl.lit(float(floors.retail_qrre_revolver)))
         )

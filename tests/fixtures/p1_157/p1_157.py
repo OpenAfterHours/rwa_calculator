@@ -5,59 +5,64 @@ Pipeline position:
     fixture-builder output -> test-writer -> engine-implementer (crm/guarantee.py)
 
 Key responsibilities:
-- Produce one borrower counterparty: individual QRRE-transactor, GB.
+- Produce one borrower counterparty: individual, GB, is_managed_as_retail=True.
 - Produce one guarantor counterparty: large corporate, non-FSE, GB,
-  annual_revenue=750,000,000 (above B31 large-corp 440m threshold intentionally
-  but does not affect PSM routing — PSM uses F-IRB corporate formula regardless).
-- Produce one facility row for the borrower: RETAIL_QRRE, is_qrre_transactor=True,
-  lgd=0.50, effective_maturity=2.5, ead=1,000,000, currency=GBP.
-  (Facility is used because FACILITY_SCHEMA carries is_qrre_transactor; the
-  hierarchy resolver propagates the flag to any linked loan rows.)
+  annual_revenue=750,000,000 (above B31 large-corp 440m threshold).
+- Produce one facility row for the QRRE revolver borrower: RETAIL_CARDS book,
+  product_type=CREDIT_CARD, is_qrre_transactor=False (revolver, not transactor),
+  lgd=0.50, effective_maturity=2.5, limit=1,000,000 GBP.
 - Produce one guarantee row: GTE_P1157, covers 600,000 GBP (60%), senior,
-  protection_type="guarantee", guarantor_seniority="senior",
-  original_maturity_years=5.0.
-- Produce one rating row for the borrower: PD=0.0050, model_id=RTL_AIRB_P1157.
+  guarantor_seniority="senior", original_maturity_years=5.0.
+- Produce one rating row for the borrower: PD=0.0200 (2%), CQS=5, model_id=RTL_AIRB_P1157.
 - Produce one rating row for the guarantor: PD=0.0004 — intentionally below the
-  Basel 3.1 corporate PD floor of 0.0005 (0.05%) so the engine must floor it to
-  0.0005 to satisfy the "no better than direct" constraint.
+  Basel 3.1 corporate PD floor of 0.0005 (0.05%) so the engine floors it for the
+  NBD direct-curve calculation.
 - Produce model permission rows: AIRB for retail_qrre (borrower), FIRB for
   corporate (guarantor PSM path).
 
 Scenario design:
-    The "no better than direct" floor (Art. 160(4)) requires that when PSM
-    substitutes the guarantor's PD for the guaranteed portion, the guarantor's
-    PD is floored at the PD floor applicable to the guarantor's exposure class
-    as a direct borrower — not the borrower's class floor.
+    This fixture exercises the "no better than direct" (NBD) floor under Art. 160(4).
+    The NBD floor is BINDING here because:
 
-    Guarantor PD = 0.0004 (0.04%) is below the Basel 3.1 corporate PD floor
-    of 0.0005 (0.05%) per Art. 163(1)(a). The engine must therefore use
-    PD_guarantor_floored = 0.0005 when computing the PSM risk weight for the
-    guaranteed portion.
+    - guarantor_rw_irb is computed in the BORROWER's context (retail QRRE, R=0.04,
+      MA=1.0), giving a very low risk weight (~1.35%) due to low R and PD=0.0005.
+    - RW_direct is computed in the GUARANTOR's corporate context (R~0.237, MA~1.75
+      at M=2.5), giving a much higher risk weight (~17.49%).
+    - NBD floor: guarantor_rw_post_nbd = max(0.01346, 0.17489) = 0.17489
 
-    Borrower (QRRE transactor):
-        exposure_class: RETAIL_QRRE, is_qrre_transactor=True
-        PD_borrower = 0.0050, LGD_borrower = 0.50
-        EAD = 1,000,000 GBP, M = 2.5y
+    Because RW_direct (0.17489) >> guarantor_rw_irb (0.01346), the NBD floor is
+    load-bearing and results in a materially higher blended RWA (233,494 vs 136,636
+    without the floor — a 71% increase).
+
+    Borrower (QRRE revolver, A-IRB):
+        exposure_class: RETAIL_QRRE, is_qrre_transactor=False
+        PD_borrower = 0.0200, LGD_borrower = 0.50
+        EAD = 1,000,000 GBP, R = 0.04 (retail QRRE), MA = 1.0
 
     Guarantor (corporate, F-IRB via PSM):
         PD_guarantor_raw   = 0.0004  (below corporate B31 floor 0.0005)
-        PD_guarantor_floored = 0.0005  (floor applied per Art. 160(4))
+        PD_guarantor_floored = 0.0005  (floor per Art. 163(1)(a))
         F-IRB supervisory LGD (senior, non-FSE, B31) = 0.40 (Art. 161(1)(aa))
 
     Guarantee:
         amount_covered = 600,000 GBP (60% of EAD)
         guarantor_seniority = "senior"
 
-Expected intermediate (floored guarantor PD):
-    PD_guarantor_floored = max(0.0004, 0.0005) = 0.0005
+Expected intermediate values (for test assertions):
+    PD_guarantor_floored    = 0.0005
+    guarantor_rw_irb        = 0.01346  (PSM in borrower's QRRE context)
+    RW_direct               = 0.17489  (NBD: direct corporate curve, M=2.5)
+    guarantor_rw_post_nbd   = 0.17489  (NBD floor binds)
+    RWA_blended             = 233,494
+    EL_blended              = 4,120
 
 References:
-    - CRR Art. 160(4): PSM "no better than direct" PD floor.
+    - PRA PS1/26 Art. 160(4): NBD floor on PSM risk weight.
     - PRA PS1/26 Art. 163(1)(a): Corporate PD floor 0.05%.
-    - PRA PS1/26 Art. 163(1)(c): QRRE transactor PD floor 0.05%.
-    - CRE22.70-85: Parameter substitution method.
-    - CRR Art. 161(1)(aa): B31 F-IRB supervisory LGD 40% (senior, non-FSE corp).
-    - Bug site: src/rwa_calc/engine/irb/guarantee.py line 333.
+    - PRA PS1/26 Art. 161(1)(aa): B31 F-IRB supervisory LGD 40% (senior, non-FSE corp).
+    - CRR Art. 154: Retail QRRE correlation R=0.04.
+    - CRR Art. 153: Corporate correlation formula.
+    - Code: src/rwa_calc/engine/irb/guarantee.py:418-508 (_apply_no_better_than_direct_floor)
 
 Usage:
     uv run python tests/fixtures/p1_157/p1_157.py
@@ -84,12 +89,12 @@ from rwa_calc.data.schemas import (
 # Scenario constants
 # ---------------------------------------------------------------------------
 
-# Counterparty references
-BORROWER_REF = "CPTY_BORROWER_QRRE_TXN_P1157"
-GUARANTOR_REF = "GTR_CORP_NONFSE_P1157"
+# Counterparty references (as specified in proposal)
+BORROWER_REF = "CPTY_BORR_P1157"
+GUARANTOR_REF = "CPTY_GTR_CORP_P1157"
 
-# Exposure reference (facility — carries is_qrre_transactor)
-FACILITY_REF = "FAC_QRRE_TXN_P1157"
+# Exposure reference — QRRE revolver facility
+FACILITY_REF = "FAC_QRRE_REV_P1157"
 
 # Guarantee reference
 GUARANTEE_REF = "GTE_P1157"
@@ -104,23 +109,26 @@ MODEL_ID_CORP_FIRB = "CORP_FIRB_P1157"    # FIRB for corporate (guarantor PSM pa
 
 # Dates
 VALUE_DATE = date(2026, 1, 1)
-# Facility maturity ~2.5 years from VALUE_DATE → effective_maturity=2.5
+# Facility maturity → effective_maturity=2.5y (load-bearing for corporate MA in NBD path)
 MATURITY_DATE = date(2028, 7, 1)
 GUARANTEE_MATURITY_DATE = date(2031, 1, 1)  # > facility maturity → no maturity mismatch
 RATING_DATE = date(2026, 1, 2)
 
-# Borrower IRB inputs (A-IRB retail QRRE-transactor)
-PD_BORROWER = 0.0050           # 0.50% own PD
+# Borrower IRB inputs (A-IRB retail QRRE revolver, NOT transactor)
+# PD=0.02 → high borrower risk weight (~32%), making the guarantee beneficial.
+# is_qrre_transactor=False (revolvers have higher PD floors than transactors).
+PD_BORROWER = 0.0200           # 2.0% own PD (retail revolver)
 LGD_BORROWER = 0.50            # 50% own LGD (A-IRB unsecured retail QRRE)
 EAD_FACILITY = 1_000_000.0     # GBP 1,000,000 facility limit (fully utilised)
-EFFECTIVE_MATURITY = 2.5       # M = 2.5y (overrides date-derived M)
+EFFECTIVE_MATURITY = 2.5       # M = 2.5y — distinguishes corporate MA from retail flat MA=1.0
 
 # Guarantor IRB inputs (corporate, F-IRB via PSM)
 # Raw PD = 0.0004 is intentionally below the Basel 3.1 corporate PD floor of
-# 0.0005 (0.05%, Art. 163(1)(a)).  The engine must floor it to 0.0005 per
-# Art. 160(4) "no better than direct" constraint.
-PD_GUARANTOR_RAW = 0.0004       # 0.04% — below corporate B31 floor
-PD_GUARANTOR_FLOORED = 0.0005   # 0.05% — after Art. 160(4) floor (expected engine output)
+# 0.0005 (0.05%, Art. 163(1)(a)).
+# The NBD floor triggers because RW_direct (corporate R~0.237, M=2.5) >> guarantor_rw_irb
+# (borrower QRRE context R=0.04, M=1.0).
+PD_GUARANTOR_RAW = 0.0004       # 0.04% — below corporate B31 floor 0.0005
+PD_GUARANTOR_FLOORED = 0.0005   # 0.05% — after Art. 163(1)(a) floor (expected engine output)
 
 # Guarantee coverage
 AMOUNT_COVERED = 600_000.0      # GBP 600,000 (60% of EAD)
@@ -128,8 +136,8 @@ PERCENTAGE_COVERED = 0.60
 ORIGINAL_MATURITY_YEARS = 5.0   # > 1y → satisfies Art. 237(2)(a) eligibility
 
 # Guarantor revenue — above B31 large-corp 440m threshold
-# (large-corp restriction applies to A-IRB; PSM is F-IRB and is unrestricted)
 GUARANTOR_ANNUAL_REVENUE = 750_000_000.0
+GUARANTOR_TOTAL_ASSETS = 1_000_000_000.0
 
 
 # ---------------------------------------------------------------------------
@@ -172,8 +180,10 @@ class _Facility:
     """
     Facility row for P1.157 borrower.
 
-    Uses FACILITY_SCHEMA because is_qrre_transactor lives there.  The hierarchy
-    resolver propagates the flag to any child loan rows during pipeline execution.
+    Uses FACILITY_SCHEMA because is_qrre_transactor lives there. The facility
+    is a QRRE revolver (is_qrre_transactor=False), not a transactor.
+    effective_maturity=2.5 overrides date-derived M — load-bearing because
+    it produces MA~1.75 in the corporate NBD direct curve calculation.
     """
 
     facility_reference: str
@@ -216,11 +226,7 @@ class _Facility:
 
 @dataclass(frozen=True)
 class _Guarantee:
-    """
-    Guarantee row for P1.157.
-
-    guarantor_seniority is in GUARANTEE_SCHEMA (added by P1.156 engine work).
-    """
+    """Guarantee row for P1.157."""
 
     guarantee_reference: str
     guarantee_type: str
@@ -314,22 +320,23 @@ def create_p1157_counterparties() -> pl.DataFrame:
     Return all P1.157 counterparties as a DataFrame.
 
     Two rows:
-    - Borrower: individual QRRE-transactor, GB, no revenue (retail individual).
+    - Borrower: individual, GB, is_managed_as_retail=True (qualifies for retail IRB),
+      apply_fi_scalar=False, is_financial_sector_entity=False, no revenue (individual).
     - Guarantor: large corporate, non-FSE, GB, annual_revenue=750m (above 440m
       large-corp threshold); is_financial_sector_entity=False so the standard
-      non-FSE supervisory LGD applies (Art. 161(1)(aa): 40% B31).
+      non-FSE B31 F-IRB LGD 40% applies (Art. 161(1)(aa)).
     """
     rows = [
         _Counterparty(
             counterparty_reference=BORROWER_REF,
-            counterparty_name="P1.157 QRRE Transactor Borrower",
+            counterparty_name="P1.157 QRRE Revolver Borrower",
             entity_type="individual",
             country_code="GB",
             annual_revenue=None,        # Individual — no revenue
             total_assets=None,
             default_status=False,
             apply_fi_scalar=False,
-            is_managed_as_retail=False,
+            is_managed_as_retail=True,  # Managed as retail → retail IRB treatment
             is_financial_sector_entity=False,
         ),
         _Counterparty(
@@ -338,7 +345,7 @@ def create_p1157_counterparties() -> pl.DataFrame:
             entity_type="corporate",
             country_code="GB",
             annual_revenue=GUARANTOR_ANNUAL_REVENUE,   # GBP 750m — above 440m large-corp
-            total_assets=1_000_000_000.0,
+            total_assets=GUARANTOR_TOTAL_ASSETS,
             default_status=False,
             apply_fi_scalar=False,
             is_managed_as_retail=False,
@@ -352,13 +359,14 @@ def create_p1157_facilities() -> pl.DataFrame:
     """
     Return the P1.157 borrower facility as a DataFrame.
 
-    One row — a revolving QRRE-transactor credit facility:
-    - is_qrre_transactor=True: flags the QRRE transactor sub-class so the
-      PD floor expression selects the correct floor (0.05% B31) for the
-      borrower's own PD calculation.
-    - lgd=0.50: A-IRB unsecured retail QRRE LGD estimate (above the 50% A-IRB
-      floor per Art. 164(4) for QRRE — floor is not binding here, floor = EAD).
-    - effective_maturity=2.5: overrides date-derived M for unambiguous M=2.5.
+    One row — a revolving QRRE credit card facility:
+    - is_qrre_transactor=False: this is a REVOLVER, not a transactor. Revolvers
+      carry higher PD floors under Basel 3.1. The distinction between revolver and
+      transactor affects the borrower's PD floor but NOT the PSM correlation —
+      both use R=0.04 for the guarantor_rw_irb calculation.
+    - lgd=0.50: A-IRB unsecured retail QRRE LGD estimate.
+    - effective_maturity=2.5: load-bearing — produces MA~1.75 in the corporate
+      NBD direct curve so RW_direct >> guarantor_rw_irb and the NBD floor binds.
     - risk_type="FR": fully revolving — 75% CCF under F-IRB (Art. 166(8)(d)).
     """
     facility = _Facility(
@@ -374,7 +382,7 @@ def create_p1157_facilities() -> pl.DataFrame:
         lgd=LGD_BORROWER,
         beel=0.0,
         is_revolving=True,
-        is_qrre_transactor=True,        # Transactor sub-class (repays in full each period)
+        is_qrre_transactor=False,       # Revolver — NOT a transactor
         seniority="senior",
         risk_type="FR",                 # Fully revolving
         effective_maturity=EFFECTIVE_MATURITY,
@@ -391,13 +399,15 @@ def create_p1157_guarantees() -> pl.DataFrame:
       PSM to 40% (non-FSE, B31, Art. 161(1)(aa)).
     - original_maturity_years=5.0: satisfies Art. 237(2)(a) (>= 1.0 year).
     - protection_type="guarantee": unfunded credit protection.
+    - maturity_date=2031-01-01: beyond facility maturity → no maturity mismatch.
+    - includes_restructuring=True: covers restructuring events.
     """
     guarantee = _Guarantee(
         guarantee_reference=GUARANTEE_REF,
         guarantee_type="corporate_guarantee",
         guarantor=GUARANTOR_REF,
         currency="GBP",
-        maturity_date=GUARANTEE_MATURITY_DATE,  # > facility maturity — no maturity mismatch
+        maturity_date=GUARANTEE_MATURITY_DATE,  # 2031-01-01 > facility 2028-07-01 → no mismatch
         amount_covered=AMOUNT_COVERED,
         percentage_covered=PERCENTAGE_COVERED,
         beneficiary_type="facility",
@@ -417,9 +427,13 @@ def create_p1157_ratings() -> pl.DataFrame:
     Return all P1.157 internal ratings as a DataFrame.
 
     Two rows:
-    - Borrower: PD=0.0050 (above QRRE transactor B31 floor 0.0005), model_id=RTL_AIRB_P1157.
-    - Guarantor: PD=0.0004 (BELOW corporate B31 floor 0.0005 — floor must bind in
-      engine via Art. 160(4) "no better than direct" check), model_id=CORP_FIRB_P1157.
+    - Borrower: PD=0.0200 (2%), CQS=5, model_id=RTL_AIRB_P1157.
+      High PD drives a high borrower RW (~32%) making the guarantee beneficial
+      (guarantor_rw_post_nbd=0.17489 < borrower_rw=0.32140).
+    - Guarantor: PD=0.0004 (BELOW corporate B31 floor 0.0005 — Art. 163(1)(a)),
+      CQS=1, model_id=CORP_FIRB_P1157.
+      Low raw PD triggers both the PD floor in the PSM calculation and amplifies
+      the NBD effect (corporate MA is large at M=2.5 when PD is small).
     """
     rows = [
         _Rating(
@@ -427,8 +441,8 @@ def create_p1157_ratings() -> pl.DataFrame:
             counterparty_reference=BORROWER_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="3B",       # Indicative QRRE band (PD ~0.50%)
-            cqs=4,
+            rating_value="5B",       # Indicative retail revolver band (PD ~2%)
+            cqs=5,
             pd=PD_BORROWER,
             rating_date=RATING_DATE,
             is_solicited=False,
@@ -440,7 +454,7 @@ def create_p1157_ratings() -> pl.DataFrame:
             rating_type="internal",
             rating_agency="internal",
             rating_value="1A",       # High-quality corporate (PD ~0.04% raw)
-            cqs=2,
+            cqs=1,
             pd=PD_GUARANTOR_RAW,    # 0.0004 — below B31 corporate floor 0.0005
             rating_date=RATING_DATE,
             is_solicited=False,
@@ -455,9 +469,9 @@ def create_p1157_model_permissions() -> pl.DataFrame:
     Return the P1.157 model permissions as a DataFrame.
 
     Two rows:
-    - RTL_AIRB_P1157: advanced_irb for retail_qrre (borrower A-IRB).
+    - RTL_AIRB_P1157: advanced_irb for retail_qrre (borrower A-IRB), GB.
     - CORP_FIRB_P1157: foundation_irb for corporate (guarantor PSM path — F-IRB
-      supervisory LGDs apply to PSM regardless of borrower's A-IRB permission).
+      supervisory LGDs apply to PSM regardless of borrower's A-IRB permission), GB.
     """
     rows = [
         _ModelPermission(
@@ -521,12 +535,16 @@ def print_summary(saved: dict[str, Path]) -> None:
         df = pl.read_parquet(path)
         print(f"  {name:<20} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
-    print("Scenario: PSM 'no better than direct' PD floor (Art. 160(4))")
-    print("  Borrower:  QRRE transactor A-IRB, PD=0.0050, LGD=0.50, EAD=1,000,000 GBP")
+    print("Scenario: PSM 'no better than direct' PD floor (Art. 160(4)) — BINDING")
+    print("  Borrower:  QRRE revolver A-IRB, PD=0.0200, LGD=0.50, EAD=1,000,000 GBP")
     print("  Guarantor: corporate non-FSE F-IRB, PD_raw=0.0004 (below B31 floor 0.0005)")
     print("  Guarantee: 60% covered (GBP 600,000), senior, original_maturity=5.0y")
-    print(f"  PD_guarantor_raw    = {PD_GUARANTOR_RAW}")
-    print(f"  PD_guarantor_floored = {PD_GUARANTOR_FLOORED}  (Art. 160(4) floor binds)")
+    print(f"  PD_guarantor_raw     = {PD_GUARANTOR_RAW}")
+    print(f"  PD_guarantor_floored = {PD_GUARANTOR_FLOORED}  (Art. 163(1)(a) floor)")
+    print("  guarantor_rw_irb   ~= 0.01346  (borrower QRRE context, R=0.04, MA=1.0)")
+    print("  RW_direct          ~= 0.17489  (corporate context, R~0.237, MA~1.75)")
+    print("  guarantor_rw_post_nbd = 0.17489  (NBD floor BINDS — RW_direct wins)")
+    print("  RWA_blended        ~= 233,494  (vs 136,636 without NBD — +71%)")
 
 
 def main() -> None:

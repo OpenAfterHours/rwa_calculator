@@ -335,9 +335,18 @@ def _apply_parameter_substitution(
         if ensure_cols:
             lf = lf.with_columns(ensure_cols)
 
-        # Floor the guarantor's PD using same floor rules as borrower
-        has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
-        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+        # Floor the guarantor's PD using the GUARANTOR's exposure class context
+        # (Art. 160(4) / 163(1)): the guaranteed portion is economically
+        # equivalent to a direct exposure to the guarantor, so the guarantor's
+        # class floor governs. For a corporate guarantor under B31 the floor is
+        # 0.0005 (Art. 163(1)(a)) — not the borrower's QRRE-revolver floor of
+        # 0.0010. Guarantors are not QRRE in our model, so the transactor flag
+        # is intentionally disabled for the guarantor floor.
+        pd_floor_expr = _pd_floor_expression(
+            config,
+            has_transactor_col=False,
+            exposure_class_col="guarantor_exposure_class",
+        )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
         scaling_factor = 1.06 if config.is_crr else 1.0
@@ -556,8 +565,12 @@ def _apply_double_default(
         & _is_airb
     )
 
-    # Floor guarantor PD
-    pd_floor_expr_dd = _pd_floor_expression(config, has_transactor_col=False)
+    # Floor guarantor PD using the guarantor's own class floor (Art. 163(1)).
+    pd_floor_expr_dd = _pd_floor_expression(
+        config,
+        has_transactor_col=False,
+        exposure_class_col="guarantor_exposure_class",
+    )
     guarantor_pd_floored_dd = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr_dd)
 
     # Double default multiplier: (0.15 + 160 x PD_g)
@@ -631,8 +644,13 @@ def _adjust_expected_loss(
         )
         firb_lgd_subordinated = float(firb_lgd_table["subordinated"])
 
-        has_transactor = "is_qrre_transactor" in lf.collect_schema().names()
-        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+        # Mirror the guarantor-context PD floor used in _apply_parameter_substitution
+        # so EL is computed against the same floored guarantor PD as RW.
+        pd_floor_expr = _pd_floor_expression(
+            config,
+            has_transactor_col=False,
+            exposure_class_col="guarantor_exposure_class",
+        )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
         _is_irb_non_dd = pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")

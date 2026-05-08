@@ -323,19 +323,24 @@ class TestIRBSimpleEquityRiskWeights:
         )
         assert result["risk_weight"] == pytest.approx(3.70)
 
-    def test_government_supported_190_percent(
+    def test_government_supported_370_percent(
         self,
         equity_calculator: EquityCalculator,
         irb_config: CalculationConfig,
     ):
-        """Government-supported gets 190% RW under IRB Simple (treated as PE diversified)."""
+        """Government-supported gets 370% RW under IRB Simple (Art. 155(2)(c) all other equity).
+
+        government_supported is not exchange-traded (Art. 155(2)(a)) and is not a diversified
+        private equity portfolio (Art. 155(2)(b)). It therefore falls into the residual
+        "all other equity" bucket at 370% per Art. 155(2)(c).
+        """
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="government_supported",
             config=irb_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.90)
+        assert result["risk_weight"] == pytest.approx(3.70)
 
     def test_non_diversified_private_equity_370_percent(
         self,

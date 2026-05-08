@@ -61,7 +61,11 @@ IRB_SIMPLE_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
     EquityType.PRIVATE_EQUITY: Decimal("3.70"),
     EquityType.EXCHANGE_TRADED: Decimal("2.90"),
     EquityType.LISTED: Decimal("2.90"),
-    EquityType.GOVERNMENT_SUPPORTED: Decimal("1.90"),
+    # CRR Art. 155(2)(c): "all other equity" 370%. There is no Art. 155 basis
+    # for treating government-supported equity as PE-diversified (190%); the
+    # 190% rate applies only to sufficiently diversified private equity
+    # portfolios under Art. 155(2)(b).
+    EquityType.GOVERNMENT_SUPPORTED: Decimal("3.70"),
     EquityType.UNLISTED: Decimal("3.70"),
     EquityType.SPECULATIVE: Decimal("3.70"),
     EquityType.CIU: Decimal("3.70"),

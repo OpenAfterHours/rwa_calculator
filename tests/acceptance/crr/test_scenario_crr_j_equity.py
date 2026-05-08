@@ -400,7 +400,7 @@ class TestCRRJ14_GovernmentSupportedEquityIRBSimple:
     """
     CRR-J14: Government-supported equity under IRB Simple.
     Input: equity_type=government_supported, is_government_supported=True, EAD=£300,000
-    Expected: Art. 155 — treated as diversified PE 190% → RWA = £570,000
+    Expected: Art. 155(2)(c) "all other equity" 370% → RWA = £1,110,000
     """
 
     def test_crr_j14_risk_weight(self, equity_calculator, crr_irb_config):
@@ -411,7 +411,7 @@ class TestCRRJ14_GovernmentSupportedEquityIRBSimple:
             is_government_supported=True,
             config=crr_irb_config,
         )
-        assert result["risk_weight"] == pytest.approx(1.90, abs=1e-4)
+        assert result["risk_weight"] == pytest.approx(3.70, abs=1e-4)
 
     def test_crr_j14_rwa(self, equity_calculator, crr_irb_config):
         result = calculate_single_equity_exposure(
@@ -421,7 +421,7 @@ class TestCRRJ14_GovernmentSupportedEquityIRBSimple:
             is_government_supported=True,
             config=crr_irb_config,
         )
-        assert result["rwa"] == pytest.approx(570_000.0, rel=1e-4)
+        assert result["rwa"] == pytest.approx(1_110_000.0, rel=1e-4)
 
 
 # =============================================================================

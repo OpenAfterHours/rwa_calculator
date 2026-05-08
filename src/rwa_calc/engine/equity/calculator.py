@@ -606,16 +606,14 @@ class EquityCalculator:
                     )
                 )
                 .then(pl.lit(_IRB_RW[EquityType.PRIVATE_EQUITY_DIVERSIFIED]))
-                .when(pl.col("is_government_supported") == True)  # noqa: E712
-                .then(pl.lit(_IRB_RW[EquityType.GOVERNMENT_SUPPORTED]))
-                .when(pl.col("equity_type").str.to_lowercase() == "government_supported")
-                .then(pl.lit(_IRB_RW[EquityType.GOVERNMENT_SUPPORTED]))
                 .when(pl.col("is_exchange_traded") == True)  # noqa: E712
                 .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
                 .when(pl.col("equity_type").str.to_lowercase() == "listed")
                 .then(pl.lit(_IRB_RW[EquityType.LISTED]))
                 .when(pl.col("equity_type").str.to_lowercase() == "exchange_traded")
                 .then(pl.lit(_IRB_RW[EquityType.EXCHANGE_TRADED]))
+                # CRR Art. 155(2)(c): "all other equity" 370% — including
+                # government_supported, which has no Art. 155 carve-out.
                 .otherwise(pl.lit(_IRB_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
             ]

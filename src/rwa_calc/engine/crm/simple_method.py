@@ -247,13 +247,20 @@ def compute_fcsm_columns(
     facility_col = "parent_facility_reference"
     cp_col = "counterparty_reference"
 
-    # Direct-level lookup
+    # Direct-level lookup. Also carry residual_maturity_years for the
+    # CRR Art. 239(1) FCSM eligibility gate (collateral residual maturity
+    # must be >= exposure residual maturity — strictly binary, no Art. 239(2)
+    # partial adjustment for FCSM).
+    has_exp_maturity = "residual_maturity_years" in schema.names()
     exp_lookup = exposures.select(
         pl.col(exp_ref_col).alias("_exp_ref"),
         pl.col("currency").alias("_exp_currency")
         if "currency" in schema.names()
         else pl.lit("GBP").alias("_exp_currency"),
         pl.col(ead_col).alias("_exp_ead"),
+        pl.col("residual_maturity_years").alias("_exp_residual_maturity_years")
+        if has_exp_maturity
+        else pl.lit(None).cast(pl.Float64).alias("_exp_residual_maturity_years"),
     ).unique(subset=["_exp_ref"])
 
     # Join collateral items to exposure-level data based on beneficiary_reference
@@ -266,13 +273,19 @@ def compute_fcsm_columns(
         how="left",
     )
 
-    # For facility-level collateral, build a facility lookup
+    # For facility-level collateral, build a facility lookup. Use the
+    # MAX residual_maturity_years across the facility's exposures so the
+    # Art. 239(1) gate is conservative — the collateral must cover the
+    # longest-dated exposure in the pool to be eligible at the pool level.
     if facility_col in schema.names():
         fac_lookup = exposures.group_by(facility_col).agg(
             pl.col("currency").first().alias("_fac_currency")
             if "currency" in schema.names()
             else pl.lit("GBP").alias("_fac_currency"),
             pl.col(ead_col).sum().alias("_fac_total_ead"),
+            pl.col("residual_maturity_years").max().alias("_fac_residual_maturity_years")
+            if has_exp_maturity
+            else pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
         )
         coll_with_exp = coll_with_exp.join(
             fac_lookup,
@@ -285,6 +298,7 @@ def compute_fcsm_columns(
         coll_with_exp = coll_with_exp.with_columns(
             pl.lit(None).cast(pl.Utf8).alias("_fac_currency"),
             pl.lit(None).cast(pl.Float64).alias("_fac_total_ead"),
+            pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
         )
 
     # For counterparty-level collateral
@@ -294,6 +308,9 @@ def compute_fcsm_columns(
             if "currency" in schema.names()
             else pl.lit("GBP").alias("_cp_currency"),
             pl.col(ead_col).sum().alias("_cp_total_ead"),
+            pl.col("residual_maturity_years").max().alias("_cp_residual_maturity_years")
+            if has_exp_maturity
+            else pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
         )
         coll_with_exp = coll_with_exp.join(
             cp_lookup,
@@ -306,6 +323,7 @@ def compute_fcsm_columns(
         coll_with_exp = coll_with_exp.with_columns(
             pl.lit(None).cast(pl.Utf8).alias("_cp_currency"),
             pl.lit(None).cast(pl.Float64).alias("_cp_total_ead"),
+            pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
         )
 
     # Determine exposure currency via coalesce (direct → facility → counterparty)
@@ -313,6 +331,11 @@ def compute_fcsm_columns(
         pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency").alias(
             "_resolved_exp_currency"
         ),
+        pl.coalesce(
+            "_exp_residual_maturity_years",
+            "_fac_residual_maturity_years",
+            "_cp_residual_maturity_years",
+        ).alias("_resolved_exp_residual_maturity_years"),
     )
 
     # 4. Same-currency check for Art. 222(4)
@@ -352,6 +375,34 @@ def compute_fcsm_columns(
         .otherwise(pl.max_horizontal(pl.col("_fcsm_item_rw"), pl.lit(float(FCSM_RW_FLOOR))))
         .alias("_fcsm_effective_rw"),
     )
+
+    # 6b. CRR Art. 239(1) FCSM maturity-mismatch eligibility gate. Collateral
+    # whose residual maturity is strictly less than the secured exposure's
+    # residual maturity is INELIGIBLE — Art. 239(1) is binary (the Art. 239(2)
+    # (t-0.25)/(T-0.25) partial adjustment formula applies to FCCM/IRB only,
+    # not FCSM). Zero-suppress the contribution at the per-item level so the
+    # downstream weighted aggregation drops the row entirely. Only enforced
+    # when both maturities are populated; missing data on either side
+    # preserves the pre-existing (permissive) behaviour.
+    coll_schema_names = coll_with_exp.collect_schema().names()
+    if "residual_maturity_years" in coll_schema_names:
+        coll_residual = pl.col("residual_maturity_years")
+        exp_residual = pl.col("_resolved_exp_residual_maturity_years")
+        is_maturity_ineligible = (
+            coll_residual.is_not_null()
+            & exp_residual.is_not_null()
+            & (coll_residual < exp_residual)
+        )
+        coll_with_exp = coll_with_exp.with_columns(
+            pl.when(is_maturity_ineligible)
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("_fcsm_effective_value"))
+            .alias("_fcsm_effective_value"),
+            pl.when(is_maturity_ineligible)
+            .then(pl.lit(0.0))
+            .otherwise(pl.col("_fcsm_effective_rw"))
+            .alias("_fcsm_effective_rw"),
+        )
 
     # 7. Aggregate per beneficiary_reference: total value and weighted-avg RW
     agg = (

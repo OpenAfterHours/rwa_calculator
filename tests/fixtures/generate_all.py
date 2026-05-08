@@ -99,6 +99,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_101",
             _generate_p1101,
         ),
+        (
+            "P1.104 (CRR Art. 239(1) FCSM binary maturity-mismatch eligibility)",
+            "p1_104_art_239_1_fcsm_maturity",
+            _generate_p1104,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -560,6 +565,19 @@ def _generate_p1101(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_101", None)
+
+
+def _generate_p1104(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.104 fixtures (CRR Art. 239(1) FCSM binary maturity-mismatch eligibility)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_104 import save_p1104_fixtures
+
+        saved = save_p1104_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_104", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

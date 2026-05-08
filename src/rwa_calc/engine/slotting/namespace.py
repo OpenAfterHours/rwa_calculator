@@ -400,15 +400,15 @@ class SlottingExpr:
         is_preop_expr = lit(is_preop) if isinstance(is_preop, bool) else is_preop
 
         if is_crr:
+            # UK CRR Art. 153(5) has a single slotting weight table — the EU
+            # CRR HVCRE Table 2 was not onshored. is_hvcre is preserved on the
+            # row for audit but ignored for risk-weight lookup; all SL picks
+            # the Table 1 weight, with the only split being maturity (<2.5yr).
             weights = _SLOTTING_WEIGHTS["crr"]
             return (
-                pl.when(is_hvcre_expr.not_() & is_short_expr.not_())
-                .then(self._map_category(cat, weights["base"]))
-                .when(is_hvcre_expr.not_() & is_short_expr)
+                pl.when(is_short_expr)
                 .then(self._map_category(cat, weights["short"]))
-                .when(is_hvcre_expr & is_short_expr.not_())
-                .then(self._map_category(cat, weights["hvcre"]))
-                .otherwise(self._map_category(cat, weights["hvcre_short"]))
+                .otherwise(self._map_category(cat, weights["base"]))
             )
         else:
             weights = _SLOTTING_WEIGHTS["basel_3_1"]
@@ -436,17 +436,26 @@ class SlottingExpr:
     ) -> pl.Expr:
         """Look up expected loss rate per Art. 158(6) Table B.
 
-        EL rates are always maturity-dependent for non-HVCRE (both CRR and B31).
-        HVCRE EL rates are flat (same for both maturities).
+        Under UK CRR Art. 158(6) Table B has a single specialised-lending
+        column — the EU HVCRE row was not onshored, so ``is_hvcre`` is
+        ignored on the CRR branch. Under Basel 3.1, HVCRE EL rates are flat
+        (same value for both maturities) while non-HVCRE is maturity-split.
         """
         cat = self._expr.str.to_lowercase()
 
         is_hvcre_expr = lit(is_hvcre) if isinstance(is_hvcre, bool) else is_hvcre
         is_short_expr = lit(is_short) if isinstance(is_short, bool) else is_short
 
-        fw_key = "crr" if is_crr else "basel_3_1"
-        rates = _SLOTTING_EL_RATES[fw_key]
+        if is_crr:
+            # UK CRR: ignore is_hvcre — single Table B column, maturity-split only.
+            rates = _SLOTTING_EL_RATES["crr"]
+            return (
+                pl.when(is_short_expr)
+                .then(self._map_category(cat, rates["short"]))
+                .otherwise(self._map_category(cat, rates["base"]))
+            )
 
+        rates = _SLOTTING_EL_RATES["basel_3_1"]
         return (
             pl.when(is_hvcre_expr.not_() & is_short_expr.not_())
             .then(self._map_category(cat, rates["base"]))

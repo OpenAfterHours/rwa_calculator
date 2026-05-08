@@ -171,6 +171,14 @@ def create_specialised_lending_data() -> pl.DataFrame:
             "slotting_category": "good",
             "is_hvcre": True,
         },
+        # E9: HVCRE Strong >=2.5yr — UK CRR Table 1 fix -> 70% RW (post-fix)
+        # is_hvcre=True preserved in audit trail; engine must use Table 1 weights.
+        {
+            "counterparty_reference": "SL_HVCRE_TABLE1_FIX",
+            "sl_type": "hvcre",
+            "slotting_category": "strong",
+            "is_hvcre": True,
+        },
         # --- B31-E5 Basel 3.1 non-HVCRE maturity differentiation scenarios ---
         # Art. 153(5)(d) PRA PS1/26: column-A/C concession for residual maturity < 2.5yr
         # Primary: PF Strong short maturity (<2.5yr) -> Table A col A = 50% RW

@@ -3,7 +3,7 @@
 Tests cover:
 - Namespace registration and availability
 - Column preparation
-- CRR slotting weights (non-HVCRE and HVCRE, maturity-based)
+- CRR slotting weights (all SL via Table 1, is_hvcre ignored — P1.177)
 - Basel 3.1 slotting weights (non-HVCRE, HVCRE, PF pre-operational)
 - RWA calculation
 - Full pipeline (apply_all)
@@ -11,7 +11,7 @@ Tests cover:
 - Expression namespace methods
 
 References:
-- CRR Art. 153(5): Supervisory slotting approach (Tables 1 & 2)
+- CRR Art. 153(5): Supervisory slotting approach (Table 1 only under UK CRR)
 - BCBS CRE33: Basel 3.1 specialised lending slotting
 """
 
@@ -417,11 +417,16 @@ class TestCRRSlottingWeightsShortMaturity:
 # =============================================================================
 
 
-class TestCRRSlottingWeightsHVCRE:
-    """Tests for CRR HVCRE slotting weights (different from non-HVCRE)."""
+class TestCRRSlottingHVCREIgnored:
+    """Under UK CRR, is_hvcre=True returns the SAME RW as is_hvcre=False.
 
-    def test_crr_hvcre_strong_95_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE Strong (>=2.5yr) should get 95% risk weight."""
+    P1.177 / CRR Art. 153(5): UK CRR onshoring retained only Table 1. The EU
+    HVCRE Table 2 uplift (95%/120%/140% for Strong/Good/Satisfactory) was not
+    adopted. All SL — regardless of is_hvcre — uses Table 1 values.
+    """
+
+    def test_crr_hvcre_strong_seventy_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Strong (>=2.5yr) = 70% (Table 1, same as non-HVCRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -433,10 +438,10 @@ class TestCRRSlottingWeightsHVCRE:
             }
         )
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.95)
+        assert result["risk_weight"][0] == pytest.approx(0.70)
 
-    def test_crr_hvcre_good_120_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE Good (>=2.5yr) should get 120% risk weight."""
+    def test_crr_hvcre_good_ninety_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Good (>=2.5yr) = 90% (Table 1, same as non-HVCRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -448,10 +453,12 @@ class TestCRRSlottingWeightsHVCRE:
             }
         )
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(1.20)
+        assert result["risk_weight"][0] == pytest.approx(0.90)
 
-    def test_crr_hvcre_satisfactory_140_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE Satisfactory (>=2.5yr) should get 140% risk weight."""
+    def test_crr_hvcre_satisfactory_one_fifteen_percent(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """CRR HVCRE Satisfactory (>=2.5yr) = 115% (Table 1, same as non-HVCRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -463,10 +470,10 @@ class TestCRRSlottingWeightsHVCRE:
             }
         )
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(1.40)
+        assert result["risk_weight"][0] == pytest.approx(1.15)
 
-    def test_crr_hvcre_short_strong_70_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE Strong (<2.5yr) should get 70% risk weight."""
+    def test_crr_hvcre_short_strong_fifty_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Strong (<2.5yr) = 50% (Table 1 short-maturity, same as non-HVCRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -478,10 +485,10 @@ class TestCRRSlottingWeightsHVCRE:
             }
         )
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.70)
+        assert result["risk_weight"][0] == pytest.approx(0.50)
 
-    def test_crr_hvcre_short_good_95_percent(self, crr_config: CalculationConfig) -> None:
-        """CRR HVCRE Good (<2.5yr) should get 95% risk weight."""
+    def test_crr_hvcre_short_good_seventy_percent(self, crr_config: CalculationConfig) -> None:
+        """CRR HVCRE Good (<2.5yr) = 70% (Table 1 short-maturity, same as non-HVCRE)."""
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["SL001"],
@@ -493,7 +500,7 @@ class TestCRRSlottingWeightsHVCRE:
             }
         )
         result = lf.slotting.apply_slotting_weights(crr_config).collect()
-        assert result["risk_weight"][0] == pytest.approx(0.95)
+        assert result["risk_weight"][0] == pytest.approx(0.70)
 
 
 # =============================================================================
@@ -866,15 +873,19 @@ class TestExprNamespace:
         assert result["risk_weight"][4] == pytest.approx(0.00)  # default
 
     def test_lookup_rw_crr_hvcre(self) -> None:
-        """lookup_rw should return correct CRR HVCRE weights."""
+        """CRR is_hvcre=True returns Table 1 weights (same as is_hvcre=False).
+
+        P1.177 / CRR Art. 153(5): UK CRR ignores the HVCRE flag for
+        risk-weight lookup. Strong=70%, Good=90%, Satisfactory=115%.
+        """
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory"]})
         result = df.with_columns(
             pl.col("category").slotting.lookup_rw(is_crr=True, is_hvcre=True).alias("risk_weight")
         )
 
-        assert result["risk_weight"][0] == pytest.approx(0.95)  # strong
-        assert result["risk_weight"][1] == pytest.approx(1.20)  # good
-        assert result["risk_weight"][2] == pytest.approx(1.40)  # satisfactory
+        assert result["risk_weight"][0] == pytest.approx(0.70)  # strong — Table 1
+        assert result["risk_weight"][1] == pytest.approx(0.90)  # good — Table 1
+        assert result["risk_weight"][2] == pytest.approx(1.15)  # satisfactory — Table 1
 
     def test_lookup_rw_basel31_non_hvcre(self) -> None:
         """lookup_rw should return correct Basel 3.1 non-HVCRE weights."""

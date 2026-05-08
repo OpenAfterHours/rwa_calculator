@@ -146,11 +146,19 @@ class TestCRRSlottingELRateLookup:
     def test_hvcre_strong(self) -> None:
         assert lookup_slotting_el_rate("strong", is_hvcre=True) == Decimal("0.004")
 
-    def test_hvcre_ignores_maturity(self) -> None:
-        """HVCRE EL rates are flat — short and long maturity give same result."""
-        assert lookup_slotting_el_rate(
-            "good", is_hvcre=True, is_short_maturity=True
-        ) == lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=False)
+    def test_hvcre_follows_non_hvcre_maturity_split(self) -> None:
+        """Under UK CRR, HVCRE EL rates follow the non-HVCRE maturity split.
+
+        P1.177 / CRR Art. 158(6): UK CRR onshoring did not retain the EU HVCRE
+        EL-rate row. lookup_slotting_el_rate ignores is_hvcre and applies the
+        same maturity-split as non-HVCRE:
+          Good >=2.5yr = 0.008; Good <2.5yr = 0.004.
+        """
+        long_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=False)
+        short_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=True)
+        assert long_maturity == Decimal("0.008")   # same as non-HVCRE long Good
+        assert short_maturity == Decimal("0.004")  # same as non-HVCRE short Good
+        assert long_maturity != short_maturity      # maturity split still applies
 
     def test_unknown_category_defaults_to_satisfactory(self) -> None:
         assert lookup_slotting_el_rate("unknown") == Decimal("0.028")
@@ -299,8 +307,14 @@ class TestSlottingNamespaceELRateLookup:
         el_rates = result["slotting_el_rate"].to_list()
         assert el_rates == pytest.approx([0.0, 0.004])
 
-    def test_crr_hvcre_el_rates_flat(self, crr_config: CalculationConfig) -> None:
-        """HVCRE EL rates are flat (same for short and long maturity)."""
+    def test_crr_hvcre_el_rates_use_non_hvcre_maturity_split(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        """Under UK CRR, HVCRE EL rates follow the non-HVCRE maturity split.
+
+        P1.177: is_hvcre is ignored for EL-rate lookup. Strong >=2.5yr = 0.4%;
+        Strong <2.5yr = 0.0%. Same as non-HVCRE.
+        """
         lf = pl.LazyFrame(
             {
                 "slotting_category": ["strong", "strong"],
@@ -318,8 +332,8 @@ class TestSlottingNamespaceELRateLookup:
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
-        assert el_rates[0] == pytest.approx(el_rates[1])  # flat
-        assert el_rates[0] == pytest.approx(0.004)
+        assert el_rates[0] == pytest.approx(0.004)  # HVCRE Strong long = non-HVCRE long = 0.4%
+        assert el_rates[1] == pytest.approx(0.0)    # HVCRE Strong short = non-HVCRE short = 0.0%
 
     def test_b31_el_rates_are_maturity_dependent(self, b31_config: CalculationConfig) -> None:
         """B31 EL rates vary by maturity even though B31 risk weights do not."""
@@ -659,12 +673,14 @@ class TestSlottingELAggregatorIntegration:
     [
         ("strong", False, False, 0.004),
         ("strong", False, True, 0.0),
-        ("strong", True, False, 0.004),
-        ("strong", True, True, 0.004),  # HVCRE flat
+        ("strong", True, False, 0.004),  # HVCRE follows non-HVCRE long = 0.4%
+        # P1.177: UK CRR HVCRE Strong short = non-HVCRE short = 0.0% (was 0.004 EU HVCRE flat)
+        ("strong", True, True, 0.0),
         ("good", False, False, 0.008),
         ("good", False, True, 0.004),
-        ("good", True, False, 0.004),  # HVCRE Good flat 0.4% (not 0.8% non-HVCRE long)
-        ("good", True, True, 0.004),  # HVCRE Good flat — short-maturity no-op
+        # P1.177: UK CRR HVCRE Good long = non-HVCRE Good long = 0.8% (was 0.004 EU HVCRE flat)
+        ("good", True, False, 0.008),
+        ("good", True, True, 0.004),  # HVCRE Good short = non-HVCRE short = 0.4%
         ("satisfactory", False, False, 0.028),
         ("satisfactory", False, True, 0.028),
         ("weak", False, False, 0.08),

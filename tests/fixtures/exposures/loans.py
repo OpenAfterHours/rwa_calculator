@@ -1223,6 +1223,26 @@ def _slotting_scenario_loans() -> list[Loan]:
             beel=0.0,
             seniority="senior",
         ),
+        # =============================================================================
+        # CRR-E9: HVCRE - Strong, long maturity (>=2.5yr) — UK CRR Table 1 fix
+        # £5m HVCRE, Strong = 70% RW (CRR Art. 153(5) Table 1, >=2.5yr)
+        # UK CRR has no HVCRE sub-class; is_hvcre=True exposes must use Table 1 weights.
+        # Post-fix: engine routes HVCRE exposures to Table 1 (not EU Table 2).
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SL_HVCRE_TABLE1_FIX",
+            product_type="HVCRE",
+            book_code="SPECIALISED_LENDING",
+            counterparty_reference="SL_HVCRE_TABLE1_FIX",
+            value_date=VALUE_DATE,
+            maturity_date=date(2031, 1, 1),  # 5yr maturity (>=2.5yr)
+            currency="GBP",
+            drawn_amount=5_000_000.0,
+            interest=0.0,
+            lgd=0.45,  # Not used for slotting
+            beel=0.0,
+            seniority="senior",
+        ),
     ]
 
 

@@ -146,8 +146,9 @@ class TestSlottingInfrastructureSupportingFactor:
     ) -> None:
         """Infrastructure HVCRE also gets 0.75 factor.
 
-        Strong HVCRE >= 2.5yr: RW = 95%
-        RWA_pre = 10m × 0.95 = 9.5m, RWA_post = 9.5m × 0.75 = 7.125m
+        P1.177 / CRR Art. 153(5): UK CRR ignores is_hvcre for RW lookup.
+        Strong HVCRE >= 2.5yr: RW = 70% (Table 1, same as non-HVCRE Strong)
+        RWA_pre = 10m × 0.70 = 7m, RWA_post = 7m × 0.75 = 5.25m
         """
         result = calculate_single_slotting_exposure(
             slotting_calculator,
@@ -158,7 +159,7 @@ class TestSlottingInfrastructureSupportingFactor:
             config=crr_config,
         )
         assert result["supporting_factor"] == pytest.approx(0.75)
-        assert result["rwa"] == pytest.approx(10_000_000.0 * 0.95 * 0.75)
+        assert result["rwa"] == pytest.approx(10_000_000.0 * 0.70 * 0.75)
 
     def test_infrastructure_weak_category(
         self,

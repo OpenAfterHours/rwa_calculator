@@ -61,9 +61,10 @@ class SlottingCalculator:
 
     The slotting approach maps exposures to five categories with framework-specific weights:
 
-    CRR (Art. 153(5)) — weights depend on maturity (>=2.5yr shown):
-    - Non-HVCRE: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
-    - HVCRE: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
+    UK CRR (Art. 153(5)) — single table, weights depend on maturity (>=2.5yr shown):
+    - All SL (HVCRE flag ignored): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+    Note: The EU CRR HVCRE Table 2 was not onshored into UK CRR, so is_hvcre
+    is preserved for audit but does not change the risk weight under CRR.
 
     Basel 3.1 (PRA PS1/26 Art. 153(5) Table A):
     - All SL (incl. PF pre-op): Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%

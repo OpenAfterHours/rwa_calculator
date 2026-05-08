@@ -349,6 +349,20 @@ def create_specialised_lending_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
+        # CRR-E9: HVCRE Strong >=2.5yr — UK CRR Table 1 fix (70% RW post-fix)
+        # UK CRR has no HVCRE sub-class; is_hvcre=True must route to Table 1.
+        {
+            "counterparty_reference": "SL_HVCRE_TABLE1_FIX",
+            "counterparty_name": "HVCRE SPV CRR Table 1 Fix - CRR-E9",
+            "entity_type": "specialised_lending",
+            "country_code": "GB",
+            "annual_revenue": None,
+            "total_assets": 80_000_000.0,
+            "default_status": False,
+            "sector_code": "41.10",
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
         # =============================================================================
         # B31-E5 Basel 3.1 Non-HVCRE Slotting Maturity Differentiation Scenarios
         # Art. 153(5)(d) PRA PS1/26: column-A/C concession for residual maturity < 2.5yr

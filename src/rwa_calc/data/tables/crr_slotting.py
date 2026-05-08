@@ -109,19 +109,30 @@ def lookup_slotting_rw(
     is_short_maturity: bool = False,
 ) -> Decimal:
     """
-    Look up slotting risk weight.
+    Look up slotting risk weight under UK CRR Art. 153(5).
+
+    UK CRR Art. 153(5) defines a single slotting weight table — Table 1. The
+    EU CRR HVCRE sub-class (Table 2) was not onshored into UK CRR, so the
+    ``is_hvcre`` flag is preserved on the audit trail but ignored for
+    risk-weight lookup: all specialised lending exposures, HVCRE or not,
+    pick the Table 1 weight.
+
+    Basel 3.1 retains a separate HVCRE table — see
+    ``rwa_calc.data.tables.b31_slotting.lookup_b31_slotting_rw`` for that path.
 
     This is a convenience function for single lookups. For bulk processing,
     use the DataFrame tables with joins.
 
     Args:
         category: Slotting category (strong, good, satisfactory, weak, default)
-        is_hvcre: Whether this is high-volatility commercial real estate
+        is_hvcre: Audit-only flag — ignored for UK CRR risk-weight lookup.
         is_short_maturity: Whether remaining maturity < 2.5 years
 
     Returns:
         Risk weight as Decimal
     """
+    del is_hvcre  # UK CRR has no HVCRE Table 2 — flag is audit-only here.
+
     # Normalize category to SlottingCategory enum
     if isinstance(category, str):
         try:
@@ -131,13 +142,8 @@ def lookup_slotting_rw(
     else:
         cat_enum = category
 
-    # Select appropriate weight table
-    if is_hvcre:
-        table = (
-            SLOTTING_RISK_WEIGHTS_HVCRE_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS_HVCRE
-        )
-    else:
-        table = SLOTTING_RISK_WEIGHTS_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS
+    # Select Table 1 weights based on remaining maturity only
+    table = SLOTTING_RISK_WEIGHTS_SHORT if is_short_maturity else SLOTTING_RISK_WEIGHTS
 
     return table.get(cat_enum, Decimal("1.15"))
 
@@ -177,16 +183,22 @@ def lookup_slotting_el_rate(
     is_short_maturity: bool = False,
 ) -> Decimal:
     """
-    Look up slotting expected loss rate per CRR Art. 158(6), Table B.
+    Look up slotting expected loss rate per UK CRR Art. 158(6), Table B.
+
+    UK CRR Art. 158(6) Table B has a single (non-HVCRE) EL-rate column for
+    specialised lending — the EU HVCRE row was not onshored. ``is_hvcre`` is
+    therefore preserved on the audit trail but ignored for EL-rate lookup.
 
     Args:
         category: Slotting category (strong, good, satisfactory, weak, default)
-        is_hvcre: Whether this is high-volatility commercial real estate
+        is_hvcre: Audit-only flag — ignored for UK CRR EL-rate lookup.
         is_short_maturity: Whether remaining maturity < 2.5 years
 
     Returns:
         Expected loss rate as Decimal (e.g. 0.004 for 0.4%)
     """
+    del is_hvcre  # UK CRR Art. 158(6) Table B has no HVCRE column.
+
     if isinstance(category, str):
         try:
             cat_enum = SlottingCategory(category.lower())
@@ -195,10 +207,6 @@ def lookup_slotting_el_rate(
     else:
         cat_enum = category
 
-    if is_hvcre:
-        # HVCRE has flat EL rates (no maturity split)
-        table = SLOTTING_EL_RATES_HVCRE
-    else:
-        table = SLOTTING_EL_RATES_SHORT if is_short_maturity else SLOTTING_EL_RATES
+    table = SLOTTING_EL_RATES_SHORT if is_short_maturity else SLOTTING_EL_RATES
 
     return table.get(cat_enum, Decimal("0.028"))

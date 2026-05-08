@@ -419,10 +419,15 @@ class TestSlottingShortMaturityWeights:
         assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.SATISFACTORY] == Decimal("1.40")
 
     def test_short_maturity_lookup(self) -> None:
-        """Test lookup function with short maturity flag."""
+        """Test lookup function with short maturity flag.
+
+        P1.177 / CRR Art. 153(5): UK CRR ignores is_hvcre — all SL uses Table 1.
+        HVCRE Strong <2.5yr = Table 1 Short Strong = 50% (not EU Table 2's 70%).
+        """
         assert lookup_slotting_rw("strong", is_short_maturity=True) == Decimal("0.50")
+        # UK CRR: is_hvcre=True still routes through Table 1 short-maturity
         assert lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal(
-            "0.70"
+            "0.50"
         )
 
 

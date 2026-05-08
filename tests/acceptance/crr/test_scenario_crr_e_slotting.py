@@ -7,6 +7,12 @@ the slotting approach for specialised lending exposures.
 Regulatory References:
 - CRR Art. 153(5): Slotting approach for specialised lending
 - CRR Art. 147(8): Specialised lending sub-classes
+
+UK CRR Slotting Note (P1.177 / CRR Art. 153(5)):
+    UK CRR retains only ONE slotting table (Table 1). The EU CRR Table 2
+    HVCRE uplift (Strong=95%, Good=120%, Satisfactory=140%) was not onshored.
+    All SL exposures — including those flagged is_hvcre=True — use Table 1.
+    Basel 3.1 (PRA PS1/26) does preserve the HVCRE differential.
 """
 
 from typing import Any
@@ -39,16 +45,14 @@ class TestCRRGroupE_SlottingApproach:
     Each test loads fixture data, runs it through the production calculator,
     and compares the output against pre-calculated expected values.
 
-    CRR Art. 153(5) has TWO weight tables with maturity splits:
-    - Non-HVCRE Table 1:
+    UK CRR Art. 153(5) has ONE weight table (Table 1) with maturity splits.
+    The is_hvcre flag is preserved in the audit trail but does NOT alter the
+    risk weight under UK CRR (P1.177 fix):
       >=2.5yr: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
       <2.5yr:  Strong=50%, Good=70%, Satisfactory=115%, Weak=250%, Default=0%
-    - HVCRE Table 2:
-      >=2.5yr: Strong=95%, Good=120%, Satisfactory=140%, Weak=250%, Default=0%
-      <2.5yr:  Strong=70%, Good=95%,  Satisfactory=140%, Weak=250%, Default=0%
 
-    Test fixtures use 5yr maturity (>=2.5yr), so the higher weight set applies.
-    Basel 3.1 uses different tables (operational/PF pre-op/HVCRE).
+    Test fixtures use 5yr maturity (>=2.5yr), so the >=2.5yr weight set applies.
+    Basel 3.1 (PRA PS1/26) has separate HVCRE weights; UK CRR does not.
     """
 
     def test_crr_e1_project_finance_strong(
@@ -141,9 +145,8 @@ class TestCRRGroupE_SlottingApproach:
         CRR-E4: HVCRE with Strong slotting category.
 
         Input: HVCRE, Strong category, 5yr maturity (>=2.5yr)
-        Expected: 95% RW (CRR Art. 153(5) Table 2, HVCRE >=2.5yr)
-        Note: Would be 70% if remaining maturity < 2.5 years.
-        Higher than non-HVCRE Strong (70%).
+        Expected: 70% RW (CRR Art. 153(5) Table 1 — UK CRR has no HVCRE Table 2)
+        P1.177: is_hvcre=True does NOT change the RW under UK CRR.
         """
         expected = expected_outputs_dict["CRR-E4"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E4"]
@@ -164,11 +167,10 @@ class TestCRRGroupE_ShortMaturitySlotting:
     """
     CRR Slotting acceptance tests for short maturity (<2.5yr).
 
-    CRR Art. 153(5) assigns reduced risk weights when remaining maturity < 2.5 years:
-    - Non-HVCRE Strong: 50% (vs 70% for >=2.5yr)
-    - Non-HVCRE Good: 70% (vs 90% for >=2.5yr)
-    - HVCRE Strong: 70% (vs 95% for >=2.5yr)
-    - HVCRE Good: 95% (vs 120% for >=2.5yr)
+    CRR Art. 153(5) assigns reduced risk weights when remaining maturity < 2.5 years.
+    UK CRR uses Table 1 only (P1.177 — no HVCRE differential):
+    - Strong: 50% (vs 70% for >=2.5yr), regardless of is_hvcre
+    - Good: 70% (vs 90% for >=2.5yr), regardless of is_hvcre
     """
 
     def test_crr_e5_pf_strong_short_maturity(
@@ -232,7 +234,8 @@ class TestCRRGroupE_ShortMaturitySlotting:
         """
         CRR-E7: HVCRE Strong with <2.5yr remaining maturity.
 
-        Expected: 70% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        Expected: 50% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        P1.177: UK CRR ignores is_hvcre — Table 1 applies, so same as non-HVCRE Strong <2.5yr.
         """
         expected = expected_outputs_dict["CRR-E7"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E7"]
@@ -256,7 +259,8 @@ class TestCRRGroupE_ShortMaturitySlotting:
         """
         CRR-E8: HVCRE Good with <2.5yr remaining maturity.
 
-        Expected: 95% RW (CRR Art. 153(5) Table 2, <2.5yr)
+        Expected: 70% RW (CRR Art. 153(5) Table 1, <2.5yr)
+        P1.177: UK CRR ignores is_hvcre — Table 1 applies, so same as non-HVCRE Good <2.5yr.
         """
         expected = expected_outputs_dict["CRR-E8"]
         exposure_ref = SCENARIO_EXPOSURE_MAP["CRR-E8"]
@@ -306,9 +310,15 @@ class TestCRRGroupE_ParameterizedValidation:
         crr_e_scenarios: list[dict[str, Any]],
         crr_slotting_rw: dict,
     ) -> None:
-        """Verify slotting scenarios use valid CRR risk weights."""
-        # Non-HVCRE (>=2.5yr): 70/90/115/250/0; HVCRE (>=2.5yr): 95/120/140/250/0
-        valid_rws = [0.50, 0.70, 0.90, 0.95, 1.15, 1.20, 1.40, 2.50, 0.00]
+        """Verify slotting scenarios use valid CRR risk weights.
+
+        Under UK CRR Art. 153(5) Table 1 only (P1.177):
+        >=2.5yr: Strong=70%, Good=90%, Satisfactory=115%, Weak=250%, Default=0%
+        <2.5yr:  Strong=50%, Good=70%, Satisfactory=115%, Weak=250%, Default=0%
+        HVCRE exposures use the same Table 1 values — 0.95, 1.20, 1.40 are EU Table 2
+        values that do NOT apply under UK CRR.
+        """
+        valid_rws = [0.50, 0.70, 0.90, 1.15, 2.50, 0.00]
         for scenario in crr_e_scenarios:
             rw = scenario["risk_weight"]
             assert any(rw == pytest.approx(v, rel=0.01) for v in valid_rws), (
@@ -325,12 +335,17 @@ class TestCRRGroupE_ParameterizedValidation:
         assert strong["risk_weight"] == pytest.approx(0.70)
         assert good["risk_weight"] == pytest.approx(0.90)
 
-    def test_crr_e_hvcre_higher_than_non_hvcre(
+    def test_crr_e_hvcre_same_as_non_hvcre(
         self,
         expected_outputs_dict: dict[str, dict[str, Any]],
     ) -> None:
-        """Verify HVCRE uses higher weights than non-HVCRE under CRR Art. 153(5)."""
+        """Under UK CRR, HVCRE uses the SAME weights as non-HVCRE (Table 1 only).
+
+        P1.177 / CRR Art. 153(5): UK CRR onshoring did not retain the EU HVCRE
+        Table 2 uplift. Both PF Strong (CRR-E1) and HVCRE Strong (CRR-E4) are 70%.
+        """
         pf_strong = expected_outputs_dict["CRR-E1"]  # Non-HVCRE Strong = 70%
-        hvcre_strong = expected_outputs_dict["CRR-E4"]  # HVCRE Strong = 95%
+        hvcre_strong = expected_outputs_dict["CRR-E4"]  # HVCRE Strong = 70% (Table 1)
         assert pf_strong["risk_weight"] == pytest.approx(0.70)
-        assert hvcre_strong["risk_weight"] == pytest.approx(0.95)
+        assert hvcre_strong["risk_weight"] == pytest.approx(0.70)
+        assert pf_strong["risk_weight"] == pytest.approx(hvcre_strong["risk_weight"])

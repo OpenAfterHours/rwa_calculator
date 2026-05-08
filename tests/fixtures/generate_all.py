@@ -104,6 +104,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_104_art_239_1_fcsm_maturity",
             _generate_p1104,
         ),
+        (
+            "P1.181 (CRR Art. 126(2)(d) commercial RE proportion split)",
+            "p1_181",
+            _generate_p1181,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -578,6 +583,19 @@ def _generate_p1104(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_104", None)
+
+
+def _generate_p1181(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.181 fixtures (CRR Art. 126(2)(d) commercial RE proportion split)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_181 import save_p1181_fixtures
+
+        saved = save_p1181_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_181", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

@@ -1790,6 +1790,22 @@ class HierarchyResolver:
             # facility_termination_date is facility-level; inherited via facility join later
             pl.lit(None).cast(pl.Date).alias("facility_termination_date"),
         ]
+        # Optional CLASSIFIER_OUTPUT_SCHEMA pass-through columns. CRE / RRE
+        # acceptance fixtures (e.g. P1.181 Art. 126(2)(d) proportion split)
+        # carry these on the loan row instead of a separate collateral row;
+        # without explicit pass-through ``select`` would drop them and the
+        # downstream SA real-estate branch would mis-route the exposure.
+        for col_name, col_dtype in (
+            ("ltv", pl.Float64),
+            ("property_type", pl.String),
+            ("has_income_cover", pl.Boolean),
+            ("is_qualifying_re", pl.Boolean),
+            ("prior_charge_ltv", pl.Float64),
+            ("is_defaulted", pl.Boolean),
+            ("qualifies_as_retail", pl.Boolean),
+        ):
+            if col_name in loan_cols:
+                loan_select_exprs.append(pl.col(col_name).cast(col_dtype, strict=False))
         return loans.select(loan_select_exprs)
 
     def _coerce_contingents_to_unified(
@@ -2568,16 +2584,28 @@ class HierarchyResolver:
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
         if not has_required_columns(collateral, required_cols):
-            # No valid LTV data available, add null columns
-            return exposures.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("ltv"),
-                    pl.lit(None).cast(pl.Utf8).alias("property_type"),
-                    pl.lit(False).alias("has_income_cover"),
-                    pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"),
-                    pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv"),
-                ]
-            )
+            # No valid LTV data available, add null columns — but only for
+            # columns the caller has not already populated on the exposure
+            # row. Loan / contingent fixtures may carry exposure-level
+            # ``ltv`` / ``property_type`` / ``has_income_cover`` /
+            # ``is_qualifying_re`` / ``prior_charge_ltv`` values
+            # (e.g. CRE Art. 126(2)(d) scenarios where the LTV and income-
+            # cover flags live on the loan rather than a collateral row);
+            # overwriting them here would silently break the SA real-estate
+            # branch downstream.
+            existing = set(exposures.collect_schema().names())
+            defaults: list[pl.Expr] = []
+            if "ltv" not in existing:
+                defaults.append(pl.lit(None).cast(pl.Float64).alias("ltv"))
+            if "property_type" not in existing:
+                defaults.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
+            if "has_income_cover" not in existing:
+                defaults.append(pl.lit(False).alias("has_income_cover"))
+            if "is_qualifying_re" not in existing:
+                defaults.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
+            if "prior_charge_ltv" not in existing:
+                defaults.append(pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv"))
+            return exposures.with_columns(defaults) if defaults else exposures
 
         # Check which optional columns exist on collateral
         collateral_schema = collateral.collect_schema()

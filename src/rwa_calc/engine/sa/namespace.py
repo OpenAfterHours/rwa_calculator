@@ -564,13 +564,25 @@ def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
     ltv_safe = pl.col("ltv").fill_null(1.0)
     # CRR Art. 126(2)(d) proportion split for CRE with income cover and LTV > 50%:
     #   secured_share   = min(1.0, 50% / LTV)  -> portion attracting 50% RW
-    #   residual_share  = 1.0 - secured_share  -> portion attracting standard RW
+    #   residual_share  = 1.0 - secured_share  -> portion attracting unsecured
+    #                     counterparty RW (Art. 124(1) -> Art. 122 corporate CQS)
     # When LTV <= 50% the clamp drives secured_share = 1.0 so the average collapses
     # to the preferential 50% RW, matching the pre-split behaviour.
     cre_secured_share = pl.min_horizontal(
         pl.lit(1.0), _SA_CRR_RW["cre_ltv_threshold"] / ltv_safe
     )
     cre_residual_share = pl.lit(1.0) - cre_secured_share
+    # CRR Art. 124(1): the residual leg attracts the counterparty's UNSECURED
+    # risk weight, i.e. the Art. 122 corporate CQS lookup — NOT a fixed 100%.
+    # Look up counterparty CQS against CORPORATE_RISK_WEIGHTS directly (rather
+    # than via the join-derived ``risk_weight``) so the rule still fires when
+    # the upstream class lookup did not resolve to CORPORATE (e.g. exposures
+    # reclassified to COMMERCIAL_MORTGAGE by the real-estate splitter).
+    cre_residual_rw = _cqs_table_lookup_expr(
+        "cqs",
+        CORPORATE_RISK_WEIGHTS,
+        pl.lit(float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])),
+    )
     return (
         # Commercial RE must precede residential — see _is_commercial_re_class.
         # CRR Art. 126: LTV + income cover.
@@ -579,7 +591,7 @@ def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
             pl.when(pl.col("has_income_cover").fill_null(False))
             .then(
                 _SA_CRR_RW["cre_rw_low"] * cre_secured_share
-                + _SA_CRR_RW["cre_rw_standard"] * cre_residual_share
+                + cre_residual_rw * cre_residual_share
             )
             .otherwise(pl.lit(_SA_CRR_RW["cre_rw_standard"]))
         )

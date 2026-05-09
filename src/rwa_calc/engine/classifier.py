@@ -1561,9 +1561,16 @@ class ExposureClassifier:
         # ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` for the full list.
         b31_sa_only = pl.col("cp_entity_type").is_in(list(B31_SOVEREIGN_LIKE_ENTITY_TYPES))
 
-        new_airb = airb_expr & ~b31_airb_blocked & ~b31_sa_only
+        # Art. 155 / CRE60 / PRA PS1/26: equity exposures are SA-only under
+        # Basel 3.1 (IRB equity approaches withdrawn from 1 Jan 2027). Block
+        # both A-IRB and F-IRB so the decision ladder falls through to the
+        # equity branch in ``_build_approach_expr``.
+        b31_equity_sa_only = pl.col("exposure_class_irb") == ExposureClass.EQUITY.value
+        b31_sa_only_combined = b31_sa_only | b31_equity_sa_only
+
+        new_airb = airb_expr & ~b31_airb_blocked & ~b31_sa_only_combined
         new_firb_clear = firb_clear_expr | (firb_expr & b31_airb_blocked)
-        new_firb = firb_expr & ~b31_sa_only
+        new_firb = firb_expr & ~b31_sa_only_combined
         return new_airb, new_firb, new_firb_clear
 
     @staticmethod

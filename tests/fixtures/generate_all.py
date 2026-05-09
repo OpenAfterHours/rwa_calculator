@@ -199,6 +199,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "api_validation",
             _generate_p1147,
         ),
+        (
+            "P2.39 (equity SA-only enforcement — Art. 147A classifier guard)",
+            "p2_39",
+            _generate_p239,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -960,6 +965,117 @@ def _generate_p1147(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("build_mandatory_only", None)
+
+
+def _generate_p239(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P2.39 builder imports (no parquet output — Python-only builder).
+
+    P2.39 tests classifier routing for the equity SA-only guard: the classifier
+    must enforce SA-only for equity exposures regardless of IRBPermissions
+    configuration.  Like P1.125 and P1.126, this is a Python-only builder that
+    constructs in-memory LazyFrames.  This function smoke-checks both named
+    scenario bundles and verifies the critical schema invariants.
+
+    The equity exposure EX_EQ_147A_H sits on bundle.exposures (the main
+    LazyFrame), NOT on bundle.equity_exposures.  This routes it through
+    _build_approach_expr() in classifier.py — the unit under test.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_39 import (  # noqa: F401
+            COUNTERPARTY_REF,
+            EQUITY_EXPOSURE_REF,
+            make_scenario_b31_bundle,
+            make_scenario_crr_bundle,
+        )
+
+        # Smoke-check: both bundles must construct without raising.
+        bundle_b31 = make_scenario_b31_bundle()
+        bundle_crr = make_scenario_crr_bundle()
+
+        # Invariant 1: equity_exposures must be None on both bundles — the equity
+        # row lives on bundle.exposures, not on the equity_exposures path.
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            if bundle.equity_exposures is not None:
+                raise AssertionError(
+                    f"Scenario {label}: equity_exposures must be None "
+                    "(equity row must be on main exposures LazyFrame)"
+                )
+
+        # Invariant 2: EX_EQ_147A_H must appear in bundle.exposures (main frame).
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            exp_df = bundle.exposures.collect()
+            refs = exp_df["exposure_reference"].to_list()
+            if EQUITY_EXPOSURE_REF not in refs:
+                raise AssertionError(
+                    f"Scenario {label}: bundle.exposures must contain {EQUITY_EXPOSURE_REF!r}"
+                )
+
+        # Invariant 3: EX_EQ_147A_H row must have exposure_class="equity" and
+        # exposure_class_irb="equity" on the main exposures frame.
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            exp_df = bundle.exposures.collect()
+            eq_row = exp_df.filter(pl.col("exposure_reference") == EQUITY_EXPOSURE_REF)
+            if "exposure_class" in eq_row.columns:
+                ec = eq_row["exposure_class"][0]
+                if ec != "equity":
+                    raise AssertionError(
+                        f"Scenario {label}: EX_EQ_147A_H exposure_class must be 'equity' "
+                        f"(got {ec!r})"
+                    )
+            if "exposure_class_irb" in eq_row.columns:
+                ec_irb = eq_row["exposure_class_irb"][0]
+                if ec_irb != "equity":
+                    raise AssertionError(
+                        f"Scenario {label}: EX_EQ_147A_H exposure_class_irb must be 'equity' "
+                        f"(got {ec_irb!r})"
+                    )
+
+        # Invariant 4: counterparty must be present and reference CP_EQ_147A_H.
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            cp_df = bundle.counterparty_lookup.counterparties.collect()
+            cp_refs = cp_df["counterparty_reference"].to_list()
+            if COUNTERPARTY_REF not in cp_refs:
+                raise AssertionError(
+                    f"Scenario {label}: counterparties must contain {COUNTERPARTY_REF!r}"
+                )
+
+        # Invariant 5: counterparty entity_type must be "equity" (drives classifier
+        # to derive exposure_class="equity" via ENTITY_TYPE_TO_SA_CLASS mapping).
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            cp_df = bundle.counterparty_lookup.counterparties.collect()
+            et = cp_df["entity_type"][0]
+            if et != "equity":
+                raise AssertionError(
+                    f"Scenario {label}: counterparty entity_type must be 'equity' (got {et!r})"
+                )
+
+        # Invariant 6: is_financial_sector_entity must be False (avoids FSE branch).
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            cp_df = bundle.counterparty_lookup.counterparties.collect()
+            if "is_financial_sector_entity" not in cp_df.columns:
+                raise AssertionError(
+                    f"Scenario {label}: is_financial_sector_entity must be present"
+                )
+            if cp_df["is_financial_sector_entity"][0] is not False:
+                raise AssertionError(
+                    f"Scenario {label}: is_financial_sector_entity must be False"
+                )
+
+        # Invariant 7: model_permissions must be None on both bundles (config-side permissions only).
+        for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
+            if bundle.model_permissions is not None:
+                raise AssertionError(
+                    f"Scenario {label}: model_permissions must be None on the bundle "
+                    "(IRBPermissions are config-side for this scenario)"
+                )
+
+        # No parquet files written — report zero files, zero records.
+        return [("(python-only builder — no parquet)", 0)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_39", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

@@ -179,6 +179,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_109",
             _generate_p1109,
         ),
+        (
+            "P1.160 (PSM LGD routing by guarantor_seniority — subordinated Art. 161(1)(b))",
+            "p1_160",
+            _generate_p1160,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -849,6 +854,19 @@ def _generate_p1109(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_109", None)
+
+
+def _generate_p1160(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.160 fixtures (PSM LGD routing by guarantor_seniority — subordinated case)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_160 import save_p1160_fixtures
+
+        saved = save_p1160_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_160", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

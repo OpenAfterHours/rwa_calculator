@@ -713,9 +713,8 @@ def _adjust_expected_loss(
 
 def _add_guarantee_status_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
     """Add guarantee status and method tracking columns for reporting."""
-    is_beneficial_guaranteed = (pl.col("guaranteed_portion").fill_null(0) > 0) & (
-        pl.col("is_guarantee_beneficial")
-    )
+    has_guaranteed_portion = pl.col("guaranteed_portion").fill_null(0) > 0
+    is_beneficial_guaranteed = has_guaranteed_portion & pl.col("is_guarantee_beneficial")
 
     return lf.with_columns(
         [
@@ -729,9 +728,15 @@ def _add_guarantee_status_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
             .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
             .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
             .alias("guarantee_status"),
+            # guarantee_method_used reports the substitution PATH taken: PSM is
+            # recorded whenever the parameter-substitution route was followed
+            # (IRB guarantor with internal PD), independent of the beneficial
+            # gate. The GUARANTEE_NOT_APPLIED_NON_BENEFICIAL signal lives on
+            # ``guarantee_status``. PRA PS1/26 Art. 236(1)(a): an IRB guarantor
+            # always traverses parameter substitution.
             pl.when(is_beneficial_guaranteed & pl.col("_is_dd_applied"))
             .then(pl.lit("DOUBLE_DEFAULT"))
-            .when(is_beneficial_guaranteed & pl.col("_is_pd_substitution"))
+            .when(has_guaranteed_portion & pl.col("_is_pd_substitution"))
             .then(pl.lit("PD_PARAMETER_SUBSTITUTION"))
             .when(is_beneficial_guaranteed)
             .then(pl.lit("SA_RW_SUBSTITUTION"))

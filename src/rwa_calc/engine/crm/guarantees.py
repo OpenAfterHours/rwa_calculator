@@ -411,6 +411,11 @@ def _apply_guarantee_splits(
     # Preserve includes_restructuring for CDS restructuring exclusion haircut (Art. 233(2)).
     if "includes_restructuring" in guar_cols:
         agg_exprs.append(pl.col("includes_restructuring").first().alias("includes_restructuring"))
+    # Preserve guarantor_seniority for IRB PSM F-IRB LGD routing (PRA PS1/26
+    # Art. 161(1)(aa)/(b)/(d)). Drives per-row LGD selection in
+    # engine/irb/guarantee.py::_apply_parameter_substitution.
+    if "guarantor_seniority" in guar_cols:
+        agg_exprs.append(pl.col("guarantor_seniority").first().alias("guarantor_seniority"))
     # Preserve haircut columns (applied before split in apply_guarantees pipeline)
     if "guarantee_fx_haircut" in guar_cols:
         agg_exprs.append(pl.col("guarantee_fx_haircut").first().alias("guarantee_fx_haircut"))
@@ -439,6 +444,8 @@ def _apply_guarantee_splits(
         guar_select.append("guarantee_currency")
     if "includes_restructuring" in guar_cols:
         guar_select.append("includes_restructuring")
+    if "guarantor_seniority" in guar_cols:
+        guar_select.append("guarantor_seniority")
     if "guarantee_fx_haircut" in guar_cols:
         guar_select.append("guarantee_fx_haircut")
     if "guarantee_restructuring_haircut" in guar_cols:
@@ -467,6 +474,7 @@ def _apply_guarantee_splits(
             "protection_type",
             "guarantee_currency",
             "includes_restructuring",
+            "guarantor_seniority",
             "guarantee_fx_haircut",
             "guarantee_restructuring_haircut",
             "guarantee_amount",
@@ -489,6 +497,7 @@ def _apply_guarantee_splits(
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
         pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
+        pl.lit(None).cast(pl.String).alias("guarantor_seniority"),
         pl.lit(0.0).alias("guarantee_fx_haircut"),
         pl.lit(0.0).alias("guarantee_restructuring_haircut"),
     )
@@ -590,6 +599,7 @@ def _apply_guarantee_splits(
         pl.lit(None).cast(pl.String).alias("protection_type"),
         pl.lit(None).cast(pl.String).alias("guarantee_currency"),
         pl.lit(None).cast(pl.Boolean).alias("includes_restructuring"),
+        pl.lit(None).cast(pl.String).alias("guarantor_seniority"),
         pl.lit(0.0).alias("guarantee_fx_haircut"),
         pl.lit(0.0).alias("guarantee_restructuring_haircut"),
         pl.concat_str(

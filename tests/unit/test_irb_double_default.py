@@ -290,13 +290,17 @@ class TestDoubleDefaultRWA:
             risk_weight=0.50,
         )
         result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
-        # With high guarantor PD, DD multiplier is 1.75, so DD RW > obligor RW
-        # DD should not be applied (not beneficial via DD route)
-        # The guarantee_method should fall back to SA_RW_SUBSTITUTION
+        # With high guarantor PD, DD multiplier is 1.75, so DD RW > obligor RW.
+        # DD is not beneficial; the engine reports the substitution path that was
+        # evaluated. After P1.160, an IRB guarantor on the PSM path emits
+        # PD_PARAMETER_SUBSTITUTION even when the beneficial gate retained the
+        # borrower RWA (the GUARANTEE_NOT_APPLIED_NON_BENEFICIAL signal lives on
+        # guarantee_status, not on guarantee_method_used).
         assert result["guarantee_method_used"][0] in (
             "SA_RW_SUBSTITUTION",
             "DOUBLE_DEFAULT",
             "NO_SUBSTITUTION",
+            "PD_PARAMETER_SUBSTITUTION",
         )
 
 

@@ -255,12 +255,13 @@ class TestCoveredBondSACRR:
         [
             # CRR Art. 129(5) derivation chain:
             # Institution CQS → institution RW (Table 3) → CB RW (derivation table)
-            (1, 0.10),  # inst 20% → CB 10%
-            (2, 0.25),  # inst 50% (CRR Table 3) → CB 25%
-            (3, 0.25),  # inst 50% → CB 25%
-            (4, 0.50),  # inst 100% → CB 50%
-            (5, 0.50),  # inst 100% → CB 50%
-            (6, 1.00),  # inst 150% → CB 100%
+            # Note: CRR Art. 129(5)(b) maps 0.50 → 0.20 (NOT the B31 value 0.25). See P1.180.
+            (1, 0.10),  # inst 20% → CB 10% (Art. 129(5)(a))
+            (2, 0.20),  # inst 50% (CRR Table 3) → CB 20% (Art. 129(5)(b))
+            (3, 0.20),  # inst 50% → CB 20% (Art. 129(5)(b))
+            (4, 0.50),  # inst 100% → CB 50% (Art. 129(5)(c))
+            (5, 0.50),  # inst 100% → CB 50% (Art. 129(5)(c))
+            (6, 1.00),  # inst 150% → CB 100% (Art. 129(5)(d))
         ],
     )
     def test_unrated_covered_bond_crr_by_institution_cqs(

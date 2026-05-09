@@ -591,17 +591,41 @@ COVERED_BOND_RISK_WEIGHTS: dict[CQS, Decimal] = {
     CQS.CQS6: Decimal("1.00"),  # CCC+ and below
 }
 
-# Unrated covered bond derivation from issuer institution risk weight
-# (CRR Art. 129(5), PRA PS1/26 Art. 129)
-COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = {
-    Decimal("0.20"): Decimal("0.10"),
-    Decimal("0.30"): Decimal("0.15"),
-    Decimal("0.40"): Decimal("0.20"),
-    Decimal("0.50"): Decimal("0.25"),
-    Decimal("0.75"): Decimal("0.35"),
-    Decimal("1.00"): Decimal("0.50"),
-    Decimal("1.50"): Decimal("1.00"),
+# Unrated covered bond derivation from issuer institution risk weight.
+#
+# CRR Art. 129(5)(a)-(d) enumerates exactly four sub-paragraphs and therefore
+# admits only four institution-RW inputs {0.20, 0.50, 1.00, 1.50}. Crucially,
+# CRR Art. 129(5)(b) maps 0.50 -> 0.20 — NOT 0.25 (the latter is the PRA
+# PS1/26 value).
+#
+# PRA PS1/26 Art. 129(5)(a)/(aa)/(ab)/(b)/(ba)/(c)/(d) extends the table to
+# seven inputs, adding 0.30 (ECRA CQS2), 0.40 (SCRA Grade A) and 0.75
+# (SCRA Grade B), and changes (b) to 0.50 -> 0.25.
+#
+# The two regimes are stored as separate dicts so callers cannot accidentally
+# pick up a B31-only key (or the wrong (b) value) under CRR.
+# COVERED_BOND_UNRATED_DERIVATION remains as a backward-compatible alias of
+# the B31 super-set dict.
+COVERED_BOND_UNRATED_DERIVATION_CRR: dict[Decimal, Decimal] = {
+    Decimal("0.20"): Decimal("0.10"),  # CRR Art. 129(5)(a)
+    Decimal("0.50"): Decimal("0.20"),  # CRR Art. 129(5)(b) — note: NOT 0.25 (B31 value)
+    Decimal("1.00"): Decimal("0.50"),  # CRR Art. 129(5)(c)
+    Decimal("1.50"): Decimal("1.00"),  # CRR Art. 129(5)(d)
 }
+
+COVERED_BOND_UNRATED_DERIVATION_B31: dict[Decimal, Decimal] = {
+    Decimal("0.20"): Decimal("0.10"),  # PS1/26 Art. 129(5)(a)
+    Decimal("0.30"): Decimal("0.15"),  # PS1/26 Art. 129(5)(aa) — ECRA CQS2
+    Decimal("0.40"): Decimal("0.20"),  # PS1/26 Art. 129(5)(ab) — SCRA Grade A
+    Decimal("0.50"): Decimal("0.25"),  # PS1/26 Art. 129(5)(b)
+    Decimal("0.75"): Decimal("0.35"),  # PS1/26 Art. 129(5)(ba) — SCRA Grade B
+    Decimal("1.00"): Decimal("0.50"),  # PS1/26 Art. 129(5)(c)
+    Decimal("1.50"): Decimal("1.00"),  # PS1/26 Art. 129(5)(d)
+}
+
+# Backward-compatible alias — points at the B31 super-set dict so existing
+# callers (e.g. the B31 ECRA path in _b31_unrated_cb_rw_expr) keep working.
+COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = COVERED_BOND_UNRATED_DERIVATION_B31
 
 
 def _create_covered_bond_df() -> pl.DataFrame:

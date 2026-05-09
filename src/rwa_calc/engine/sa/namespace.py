@@ -115,6 +115,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     COMMERCIAL_RE_PARAMS,
     CORPORATE_RISK_WEIGHTS,
     COVERED_BOND_UNRATED_DERIVATION,
+    COVERED_BOND_UNRATED_DERIVATION_CRR,
     CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
@@ -412,16 +413,18 @@ def _crr_unrated_cb_rw_expr() -> pl.Expr:
     """
     inst_table = INSTITUTION_RISK_WEIGHTS_CRR
 
-    # Pre-compute CQS → CB RW by chaining institution RW through the derivation table
+    # Pre-compute CQS → CB RW by chaining institution RW through the derivation table.
+    # CRR Art. 129(5) admits only four sub-paragraphs (a)-(d); use the CRR-specific
+    # 4-key dict so (b) maps 0.50 -> 0.20, not the B31 value 0.25.
     cqs_to_cb_rw: dict[int, float] = {}
     for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
         inst_rw = inst_table[cqs_val]
-        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION_CRR[inst_rw]
         cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
 
     # Unrated institution: sovereign-derived
     unrated_inst_rw = inst_table[CQS.UNRATED]
-    unrated_cb_rw = float(COVERED_BOND_UNRATED_DERIVATION[unrated_inst_rw])
+    unrated_cb_rw = float(COVERED_BOND_UNRATED_DERIVATION_CRR[unrated_inst_rw])
 
     # Build when/then chain from cp_institution_cqs
     expr = pl.when(pl.col("cp_institution_cqs") == 1).then(pl.lit(cqs_to_cb_rw[1]))

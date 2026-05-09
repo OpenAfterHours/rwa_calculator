@@ -1803,6 +1803,8 @@ class HierarchyResolver:
             ("prior_charge_ltv", pl.Float64),
             ("is_defaulted", pl.Boolean),
             ("qualifies_as_retail", pl.Boolean),
+            # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype.
+            ("purchased_receivables_subtype", pl.String),
         ):
             if col_name in loan_cols:
                 loan_select_exprs.append(pl.col(col_name).cast(col_dtype, strict=False))

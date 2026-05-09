@@ -141,6 +141,7 @@ class IRBLazyFrame:
         schema_names = schema.names()
         has_seniority = "seniority" in schema_names
         has_lgd_post_crm = "lgd_post_crm" in schema_names
+        has_pr_subtype = "purchased_receivables_subtype" in schema_names
 
         lf = self._lf
         if "lgd" not in schema_names:
@@ -162,6 +163,12 @@ class IRBLazyFrame:
         default_lgd = float(lgd_table["unsecured_senior"])
         sub_lgd = float(lgd_table["subordinated"])
 
+        # PRA PS1/26 / CRR Art. 161(1)(e)/(f)/(g): purchased-receivables sub-type LGDs.
+        # Takes precedence over the seniority-based selector when populated.
+        pr_senior_lgd = float(lgd_table["purchased_receivables_senior"])
+        pr_sub_lgd = float(lgd_table["purchased_receivables_subordinated"])
+        pr_dilution_lgd = float(lgd_table["dilution_risk"])
+
         # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
         # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
         has_fse_col = config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
@@ -175,36 +182,74 @@ class IRBLazyFrame:
         else:
             default_lgd_expr = pl.lit(default_lgd)
 
+        # Build the seniority-based supervisory LGD expression (used both as the
+        # F-IRB fallback for null lgd and as the override base for purchased
+        # receivables routing below).
+        seniority_based_lgd_expr = (
+            pl.when(
+                has_seniority
+                and pl.col("seniority")
+                .fill_null("senior")
+                .str.to_lowercase()
+                .str.contains("sub")
+            )
+            .then(pl.lit(sub_lgd))
+            .otherwise(default_lgd_expr)
+        )
+
+        # Art. 161(1)(e)/(f)/(g) routing: when purchased_receivables_subtype is set
+        # the engine MUST dispatch via the subtype (not via seniority), because
+        # subordinated purchased receivables (100%) and dilution risk (100% B3.1
+        # / 75% CRR) deviate from the standard subordinated (75%) and senior
+        # (40%/45%) supervisory LGDs respectively.
+        if has_pr_subtype:
+            pr_subtype = pl.col("purchased_receivables_subtype")
+            firb_lgd_expr = (
+                pl.when(pr_subtype == "senior")
+                .then(pl.lit(pr_senior_lgd))
+                .when(pr_subtype == "subordinated")
+                .then(pl.lit(pr_sub_lgd))
+                .when(pr_subtype == "dilution_risk")
+                .then(pl.lit(pr_dilution_lgd))
+                .otherwise(seniority_based_lgd_expr)
+            )
+        else:
+            firb_lgd_expr = seniority_based_lgd_expr
+
         lf = lf.with_columns(
             [
                 pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("lgd").is_null())
-                .then(
-                    pl.when(
-                        has_seniority
-                        and pl.col("seniority")
-                        .fill_null("senior")
-                        .str.to_lowercase()
-                        .str.contains("sub")
-                    )
-                    .then(pl.lit(sub_lgd))
-                    .otherwise(default_lgd_expr)
-                )
+                .then(firb_lgd_expr)
                 .otherwise(pl.col("lgd").fill_null(default_lgd))
                 .alias("lgd"),
             ]
         )
 
         # For lgd_input, use lgd_post_crm (from CRM processor) if available
-        # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation
+        # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation.
+        # Purchased-receivables sub-type LGDs (Art. 161(1)(e)/(f)/(g)) override the
+        # CRM-derived lgd_post_crm because they are unsecured supervisory rates that
+        # do not benefit from generic seniority/collateral adjustments.
         if has_lgd_post_crm:
-            return lf.with_columns(
-                [
+            if has_pr_subtype:
+                pr_subtype = pl.col("purchased_receivables_subtype")
+                lgd_input_expr = (
+                    pl.when(
+                        (pl.col("approach") == ApproachType.FIRB.value)
+                        & pr_subtype.is_not_null()
+                    )
+                    .then(pl.col("lgd"))
+                    .when(pl.col("approach") == ApproachType.FIRB.value)
+                    .then(pl.col("lgd_post_crm"))
+                    .otherwise(pl.col("lgd"))
+                )
+            else:
+                lgd_input_expr = (
                     pl.when(pl.col("approach") == ApproachType.FIRB.value)
                     .then(pl.col("lgd_post_crm"))
                     .otherwise(pl.col("lgd"))
-                    .alias("lgd_input"),
-                ]
-            )
+                )
+            return lf.with_columns([lgd_input_expr.alias("lgd_input")])
         else:
             return lf.with_columns(
                 [

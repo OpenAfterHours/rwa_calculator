@@ -97,6 +97,13 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # supersedes the maturity_date-derived M and bypasses the 1-year floor —
     # firm-owned judgement for short-term carve-outs.
     "effective_maturity": ColumnSpec(pl.Float64, required=False),
+    # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
+    # Null for non-purchased-receivables exposures (default). When set, takes
+    # precedence over the seniority-based LGD selector:
+    #   "senior"        -> Art. 161(1)(e) LGD = 40% (B3.1) / 45% (CRR)
+    #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
+    #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
+    "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
 }
 
 LOAN_SCHEMA: dict[str, ColumnSpec] = {
@@ -123,6 +130,13 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "netting_facility_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+    # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
+    # Null for non-purchased-receivables exposures (default). When set, takes
+    # precedence over the seniority-based LGD selector:
+    #   "senior"        -> Art. 161(1)(e) LGD = 40% (B3.1) / 45% (CRR)
+    #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
+    #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
+    "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -158,6 +172,13 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "bs_type": ColumnSpec(pl.String, default="OFB", required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+    # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
+    # Null for non-purchased-receivables exposures (default). When set, takes
+    # precedence over the seniority-based LGD selector:
+    #   "senior"        -> Art. 161(1)(e) LGD = 40% (B3.1) / 45% (CRR)
+    #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
+    #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
+    "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
 }
 
 COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
@@ -531,6 +552,9 @@ VALID_ENTITY_TYPES = {
 
 VALID_SENIORITY = {"senior", "subordinated"}
 
+# PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD sub-types.
+VALID_PURCHASED_RECEIVABLES_SUBTYPES = {"senior", "subordinated", "dilution_risk"}
+
 # RGLA / PSE entity types whose SA exposure class differs from their IRB
 # exposure class (CRR Art. 147(3)/147(4)(b)). Used by the classifier's
 # IRB-class sync (these are excluded from the SA-class sync because their
@@ -725,15 +749,18 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "seniority": VALID_SENIORITY,
         "risk_type": VALID_RISK_TYPES_INPUT,
         "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "loans": {
         "seniority": VALID_SENIORITY,
+        "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "contingents": {
         "seniority": VALID_SENIORITY,
         "bs_type": VALID_BS_TYPES,
         "risk_type": VALID_RISK_TYPES_INPUT,
         "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,

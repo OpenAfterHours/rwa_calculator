@@ -46,6 +46,10 @@ FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     "residential_re_subordinated": Decimal("0.65"),  # 65% (senior: 35%)
     "commercial_re_subordinated": Decimal("0.65"),  # 65% (senior: 35%)
     "other_physical_subordinated": Decimal("0.70"),  # 70% (senior: 40%)
+    # Purchased receivables sub-types — CRR Art. 161(1)(e)/(f)/(g)
+    "purchased_receivables_senior": Decimal("0.45"),  # CRR Art. 161(1)(e): 45%
+    "purchased_receivables_subordinated": Decimal("1.00"),  # CRR Art. 161(1)(f): 100%
+    "dilution_risk": Decimal("0.75"),  # CRR Art. 161(1)(g): 75% (raised to 100% in B3.1)
 }
 
 # Basel 3.1 revised supervisory LGD values (CRE32.9-12, PRA PS1/26)
@@ -69,6 +73,10 @@ BASEL31_FIRB_SUPERVISORY_LGD: dict[str, Decimal] = {
     "commercial_re": Decimal("0.20"),  # 20% (CRR: 35%)
     # Secured by other physical collateral
     "other_physical": Decimal("0.25"),  # 25% (CRR: 40%)
+    # Purchased receivables sub-types — PRA PS1/26 Art. 161(1)(e)/(f)/(g)
+    "purchased_receivables_senior": Decimal("0.40"),  # Art. 161(1)(e): 40% (B3.1 senior)
+    "purchased_receivables_subordinated": Decimal("1.00"),  # Art. 161(1)(f): 100%
+    "dilution_risk": Decimal("1.00"),  # Art. 161(1)(g): 100% (PS1/26 raised from CRR 75%)
 }
 
 
@@ -218,6 +226,28 @@ _CRR_FIRB_ROW_SPECS: tuple[_FirbRowSpec, ...] = (
         "other_physical",
         "Other eligible physical collateral (subordinated)",
     ),
+    # Purchased receivables sub-types — Art. 161(1)(e)/(f)/(g)
+    (
+        "purchased_receivables",
+        "senior",
+        "purchased_receivables_senior",
+        "financial",
+        "Senior purchased receivables (Art. 161(1)(e))",
+    ),
+    (
+        "purchased_receivables",
+        "subordinated",
+        "purchased_receivables_subordinated",
+        "financial",
+        "Subordinated purchased receivables (Art. 161(1)(f))",
+    ),
+    (
+        "purchased_receivables",
+        "dilution_risk",
+        "dilution_risk",
+        "financial",
+        "Dilution risk of purchased receivables (Art. 161(1)(g))",
+    ),
 )
 
 
@@ -321,6 +351,31 @@ _B31_FIRB_ROW_SPECS: tuple[_B31FirbRowSpec, ...] = (
         "other_physical",
         "other_physical",
         "Other eligible physical collateral (CRR: 40%)",
+    ),
+    # Purchased receivables sub-types — Art. 161(1)(e)/(f)/(g) under PS1/26
+    (
+        "purchased_receivables",
+        "senior",
+        False,
+        "purchased_receivables_senior",
+        "financial",
+        "Senior purchased receivables (Art. 161(1)(e))",
+    ),
+    (
+        "purchased_receivables",
+        "subordinated",
+        False,
+        "purchased_receivables_subordinated",
+        "financial",
+        "Subordinated purchased receivables (Art. 161(1)(f))",
+    ),
+    (
+        "purchased_receivables",
+        "dilution_risk",
+        False,
+        "dilution_risk",
+        "financial",
+        "Dilution risk of purchased receivables (Art. 161(1)(g)) — B3.1 100%",
     ),
 )
 

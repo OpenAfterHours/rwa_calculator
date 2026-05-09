@@ -204,6 +204,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_39",
             _generate_p239,
         ),
+        (
+            "P1.123 (CRR Art. 223(5) FCCM exposure volatility haircut HE for SFT exposures)",
+            "p1_123",
+            _generate_p1123,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1076,6 +1081,19 @@ def _generate_p239(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_39", None)
+
+
+def _generate_p1123(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.123 fixtures (CRR Art. 223(5) FCCM exposure volatility haircut HE)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_123 import save_p1123_fixtures
+
+        saved = save_p1123_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_123", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

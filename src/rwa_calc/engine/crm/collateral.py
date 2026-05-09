@@ -350,6 +350,11 @@ def apply_collateral(
         exposures = exposures.with_columns(fallback_cols)
         schema_names |= {expr.meta.output_name() for expr in fallback_cols}
 
+    # CRR Art. 223(5) FCCM exposure volatility haircut (HE). Computed once on
+    # the exposure frame so the SA branch in ``_apply_collateral_unified`` can
+    # gross E by (1 + HE). Non-SFT / cash / standard-loan rows yield HE = 0.
+    exposures = haircut_calculator.apply_exposure_haircut(exposures)
+
     exposures = exposures.with_columns(
         airb_lgd_preserved_expr(config, is_basel_3_1, schema_names).alias("_is_airb_pool")
     )
@@ -1001,19 +1006,27 @@ def _apply_collateral_unified(
     else:
         lgdu_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(supervisory_lgdu_expr)
 
-    # SA EAD reduction (CRR Art. 228(1) / PS1/26 Art. 228(1)):
-    #   E*  = max(0, ead_for_crm − collateral_adjusted_value)
+    # SA EAD reduction (CRR Art. 228(1) / PS1/26 Art. 228(1)) with the
+    # CRR Art. 223(5) FCCM exposure-side gross-up:
+    #   E*  = max(0, ead_for_crm × (1 + HE) − collateral_adjusted_value)
     #   EAD = E* × CCF_actual   (i.e. × effective_ccf for blended rows)
     # The CCF is applied to E*, not to the pre-collateral nominal — this is
     # the regulatorily mandated ordering and reverses the previous
     # implementation (which netted collateral against post-CCF ead_gross).
     # FIRB / Slotting / AIRB keep ead_gross because under those approaches
     # collateral modifies LGD (via lgd_post_crm), not EAD.
+    schema_for_he = exposures.collect_schema().names()
+    if "exposure_volatility_haircut" in schema_for_he:
+        he_factor = pl.lit(1.0) + pl.col("exposure_volatility_haircut").fill_null(0.0)
+    else:
+        he_factor = pl.lit(1.0)
     exposures = exposures.with_columns(
         [
             pl.when(pl.col("approach") == ApproachType.SA.value)
             .then(
-                (pl.col("ead_for_crm") - pl.col("collateral_adjusted_value")).clip(lower_bound=0)
+                (pl.col("ead_for_crm") * he_factor - pl.col("collateral_adjusted_value")).clip(
+                    lower_bound=0
+                )
                 * pl.col("effective_ccf")
             )
             .otherwise(pl.col("ead_gross"))

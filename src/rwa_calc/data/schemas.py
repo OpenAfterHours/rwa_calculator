@@ -137,6 +137,14 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs. Populated when
+    # the exposure itself is a debt security (typical for SFTs where the firm lends
+    # out a bond — the bond carries its own price-volatility risk on the exposure
+    # side). Null/cash/standard loan exposures derive HE = 0. The same Art. 224
+    # Table 1 used for HC governs HE — keyed off these three fields.
+    "exposure_collateral_type": ColumnSpec(pl.String, required=False),
+    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
+    "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -179,6 +187,13 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs — see
+    # LOAN_SCHEMA for full notes. Mirrored on contingents for symmetry with
+    # the loans schema; populated only when the contingent exposure is itself
+    # a debt security under an SFT.
+    "exposure_collateral_type": ColumnSpec(pl.String, required=False),
+    "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
+    "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
 }
 
 COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
@@ -762,6 +777,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "loans": {
         "seniority": VALID_SENIORITY,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
+        "exposure_collateral_type": VALID_COLLATERAL_TYPES,
     },
     "contingents": {
         "seniority": VALID_SENIORITY,
@@ -769,6 +785,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "risk_type": VALID_RISK_TYPES_INPUT,
         "underlying_risk_type": VALID_RISK_TYPES_INPUT,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
+        "exposure_collateral_type": VALID_COLLATERAL_TYPES,
     },
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,

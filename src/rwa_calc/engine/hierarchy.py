@@ -1805,6 +1805,14 @@ class HierarchyResolver:
             ("qualifies_as_retail", pl.Boolean),
             # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased receivables F-IRB LGD subtype.
             ("purchased_receivables_subtype", pl.String),
+            # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs — used
+            # by the CRM engine to gross up E by (1 + HE) when the exposure is
+            # itself a debt security (typically SFTs lending out a bond). The CRM
+            # path keys off these fields per loan; without explicit pass-through
+            # the select would drop them and HE would default to 0.
+            ("exposure_collateral_type", pl.String),
+            ("exposure_security_cqs", pl.Int8),
+            ("exposure_security_residual_maturity_years", pl.Float64),
         ):
             if col_name in loan_cols:
                 loan_select_exprs.append(pl.col(col_name).cast(col_dtype, strict=False))

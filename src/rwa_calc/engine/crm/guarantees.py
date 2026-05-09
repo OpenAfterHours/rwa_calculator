@@ -290,7 +290,7 @@ def apply_guarantees(
             .otherwise(pl.col("exposure_class"))
             .alias("post_crm_exposure_class_guaranteed"),
             # Flag indicating whether exposure has an effective guarantee
-            (pl.col("guaranteed_portion") > 0).alias("is_guaranteed"),
+            (pl.col("guaranteed_portion").fill_null(0.0) > 0).alias("is_guaranteed"),
         ]
     )
 

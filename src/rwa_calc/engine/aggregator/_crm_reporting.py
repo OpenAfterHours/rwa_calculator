@@ -135,7 +135,7 @@ def _build_non_guaranteed_rows(
 ) -> pl.LazyFrame:
     """Build reporting rows for non-guaranteed exposures."""
     rw_col = "risk_weight" if "risk_weight" in cols else None
-    return results.filter(~pl.col("is_guaranteed")).with_columns(
+    return results.filter(~pl.col("is_guaranteed").fill_null(False)).with_columns(
         [
             col_or_default("counterparty_reference", cols).alias("reporting_counterparty"),
             pl.col(exposure_class_col).alias("reporting_exposure_class"),
@@ -163,7 +163,7 @@ def _build_unguaranteed_portions(
         pl.col(pre_crm_rw_col) if pre_crm_rw_col else (pl.col(rw_col) if rw_col else pl.lit(1.0))
     )
 
-    return results.filter(pl.col("is_guaranteed")).with_columns(
+    return results.filter(pl.col("is_guaranteed").fill_null(False)).with_columns(
         [
             col_or_default("counterparty_reference", cols).alias("reporting_counterparty"),
             pl.col(pre_crm_class_col).alias("reporting_exposure_class"),
@@ -209,7 +209,7 @@ def _build_guaranteed_portions(
     else:
         guaranteed_approach_expr = approach_expr
 
-    return results.filter(pl.col("is_guaranteed")).with_columns(
+    return results.filter(pl.col("is_guaranteed").fill_null(False)).with_columns(
         [
             (
                 pl.col(guarantor_ref_col)

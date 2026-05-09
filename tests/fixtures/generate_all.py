@@ -154,6 +154,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_184",
             _generate_p1184,
         ),
+        (
+            "P1.93 (B31 Art. 222(4) FCSM SFT 0%/10% carve-out + Art. 222(6) non-SFT gating)",
+            "p1_93",
+            _generate_p193,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -758,6 +763,19 @@ def _generate_p1184(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_184", None)
+
+
+def _generate_p193(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.93 fixtures (B31 Art. 222(4) FCSM SFT 0%/10% carve-out + Art. 222(6))."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_93 import save_p193_fixtures
+
+        saved = save_p193_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_93", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

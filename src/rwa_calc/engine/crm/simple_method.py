@@ -33,6 +33,8 @@ from rwa_calc.data.tables.crr_risk_weights import (
     INSTITUTION_RISK_WEIGHTS_CRR,
 )
 from rwa_calc.data.tables.crr_simple_method import (
+    ART_222_4_CMP_RW,
+    ART_222_4_NON_CMP_RW,
     FCSM_EQUITY_COLLATERAL_RW,
     FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
@@ -169,22 +171,23 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     )
 
 
-def _is_zero_rw_exception_expr() -> pl.Expr:
-    """Same-currency cash / 0%-RW sovereign 0% RW exception (not floored to 20%).
+def _is_art_222_6_carveout_expr() -> pl.Expr:
+    """Non-SFT same-currency cash / 0%-RW sovereign carve-out (Art. 222(6)).
 
-    CRR Art. 222(4) / PRA PS1/26 Art. 222(6): the 20% floor from Art. 222(1)/(3)
-    does not apply to the following same-currency carve-outs:
+    PRA PS1/26 Art. 222(6) (= CRR Art. 222(4) pre-renumbering): the 20% floor
+    from Art. 222(1)/(3) does not apply to the following same-currency carve-outs
+    when the exposure is NOT an SFT:
     (a) Cash deposit or cash assimilated instrument
     (b) 0%-RW sovereign debt securities (subject to 20% market-value discount)
 
-    The PRA renumbered this to paragraph 6 when drafting PS1/26; the underlying
-    substance is identical. SFT-specific 0%/10% (PRA Art. 222(4) / CRR Art. 222(5))
-    is a separate branch — see P1.93.
+    SFT-specific 0%/10% under Art. 222(4) is a separate branch handled by the
+    secured-floor expression — see ``_secured_floor_expr``.
 
     The currency match is checked via `_fcsm_same_currency` (set upstream).
     """
     ctype = pl.col("collateral_type").str.to_lowercase()
     is_same_currency = pl.col("_fcsm_same_currency").fill_null(False)
+    is_not_sft = ~pl.col("_fcsm_exposure_is_sft").fill_null(False)
 
     # (a) Cash/deposit in same currency
     is_cash_same_ccy = ctype.is_in(["cash", "deposit"]) & is_same_currency
@@ -196,7 +199,41 @@ def _is_zero_rw_exception_expr() -> pl.Expr:
         & ~ctype.is_in(["cash", "deposit", "gold", "equity", "equity_main_index", "equity_other"])
     )
 
-    return is_cash_same_ccy | is_zero_rw_sovereign
+    return (is_cash_same_ccy | is_zero_rw_sovereign) & is_not_sft
+
+
+def _secured_floor_expr() -> pl.Expr:
+    """Per-item secured-portion RW for FCSM, encoding Art. 222(3)/(4)/(6).
+
+    Decision tree (per Art. 222 paragraph priority):
+      1. SFT + Art. 227 zero-haircut criteria met → Art. 222(4) carve-out
+         - Counterparty is core market participant → 0% (Art. 222(4)(a))
+         - Otherwise                                → 10% (Art. 222(4)(b))
+      2. Non-SFT + same-currency cash / 0%-RW sovereign → Art. 222(6) → 0%
+      3. Otherwise → max(item_rw, 20% Art. 222(3) general floor)
+
+    Reads ``_fcsm_exposure_is_sft``, ``_fcsm_cp_is_cmp``,
+    ``_fcsm_qualifies_for_zero_haircut`` propagated by ``compute_fcsm_columns``.
+    """
+    is_sft = pl.col("_fcsm_exposure_is_sft").fill_null(False)
+    is_cmp = pl.col("_fcsm_cp_is_cmp").fill_null(False)
+    qualifies_zero_hc = pl.col("_fcsm_qualifies_for_zero_haircut").fill_null(False)
+    item_rw = pl.col("_fcsm_item_rw")
+    floor = pl.lit(float(FCSM_RW_FLOOR))
+
+    sft_carveout_active = is_sft & qualifies_zero_hc
+    cmp_floor = pl.lit(float(ART_222_4_CMP_RW))
+    non_cmp_floor = pl.lit(float(ART_222_4_NON_CMP_RW))
+
+    return (
+        pl.when(sft_carveout_active & is_cmp)
+        .then(cmp_floor)
+        .when(sft_carveout_active & ~is_cmp)
+        .then(non_cmp_floor)
+        .when(_is_art_222_6_carveout_expr())
+        .then(pl.lit(0.0))
+        .otherwise(pl.max_horizontal(item_rw, floor))
+    )
 
 
 def compute_fcsm_columns(
@@ -232,6 +269,19 @@ def compute_fcsm_columns(
     # 1. Filter to eligible financial collateral
     eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
 
+    # 1b. Ensure Art. 227(2) zero-haircut flag is present (defaults to False so
+    # the Art. 222(4) SFT carve-out and the sovereign-bond discount waiver only
+    # fire when callers explicitly mark the row as qualifying).
+    eligible_schema_names = eligible.collect_schema().names()
+    if "qualifies_for_zero_haircut" not in eligible_schema_names:
+        eligible = eligible.with_columns(
+            pl.lit(False).alias("qualifies_for_zero_haircut"),
+        )
+    else:
+        eligible = eligible.with_columns(
+            pl.col("qualifies_for_zero_haircut").fill_null(False),
+        )
+
     # 2. Derive collateral risk weight per item
     eligible = eligible.with_columns(_derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw"))
 
@@ -251,7 +301,15 @@ def compute_fcsm_columns(
     # CRR Art. 239(1) FCSM eligibility gate (collateral residual maturity
     # must be >= exposure residual maturity — strictly binary, no Art. 239(2)
     # partial adjustment for FCSM).
+    # Also carry the Art. 222(4) gating flags: is_sft (or exposure_is_sft if the
+    # CRM processor has already resolved it) and cp_is_core_market_participant.
     has_exp_maturity = "residual_maturity_years" in schema.names()
+    sft_col = (
+        "exposure_is_sft"
+        if "exposure_is_sft" in schema.names()
+        else ("is_sft" if "is_sft" in schema.names() else None)
+    )
+    has_cmp_col = "cp_is_core_market_participant" in schema.names()
     exp_lookup = exposures.select(
         pl.col(exp_ref_col).alias("_exp_ref"),
         pl.col("currency").alias("_exp_currency")
@@ -261,6 +319,12 @@ def compute_fcsm_columns(
         pl.col("residual_maturity_years").alias("_exp_residual_maturity_years")
         if has_exp_maturity
         else pl.lit(None).cast(pl.Float64).alias("_exp_residual_maturity_years"),
+        pl.col(sft_col).fill_null(False).alias("_exp_is_sft")
+        if sft_col is not None
+        else pl.lit(False).alias("_exp_is_sft"),
+        pl.col("cp_is_core_market_participant").fill_null(False).alias("_exp_cp_is_cmp")
+        if has_cmp_col
+        else pl.lit(False).alias("_exp_cp_is_cmp"),
     ).unique(subset=["_exp_ref"])
 
     # Join collateral items to exposure-level data based on beneficiary_reference
@@ -278,7 +342,7 @@ def compute_fcsm_columns(
     # Art. 239(1) gate is conservative — the collateral must cover the
     # longest-dated exposure in the pool to be eligible at the pool level.
     if facility_col in schema.names():
-        fac_lookup = exposures.group_by(facility_col).agg(
+        fac_aggs = [
             pl.col("currency").first().alias("_fac_currency")
             if "currency" in schema.names()
             else pl.lit("GBP").alias("_fac_currency"),
@@ -286,7 +350,20 @@ def compute_fcsm_columns(
             pl.col("residual_maturity_years").max().alias("_fac_residual_maturity_years")
             if has_exp_maturity
             else pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
-        )
+        ]
+        # Conservative propagation: any-SFT / any-CMP within the facility flips
+        # the flag (mirrors the CRM processor's `_sft_facility = .max()` rule).
+        if sft_col is not None:
+            fac_aggs.append(pl.col(sft_col).fill_null(False).max().alias("_fac_is_sft"))
+        else:
+            fac_aggs.append(pl.lit(False).alias("_fac_is_sft"))
+        if has_cmp_col:
+            fac_aggs.append(
+                pl.col("cp_is_core_market_participant").fill_null(False).max().alias("_fac_cp_is_cmp")
+            )
+        else:
+            fac_aggs.append(pl.lit(False).alias("_fac_cp_is_cmp"))
+        fac_lookup = exposures.group_by(facility_col).agg(fac_aggs)
         coll_with_exp = coll_with_exp.join(
             fac_lookup,
             left_on="beneficiary_reference",
@@ -299,11 +376,13 @@ def compute_fcsm_columns(
             pl.lit(None).cast(pl.Utf8).alias("_fac_currency"),
             pl.lit(None).cast(pl.Float64).alias("_fac_total_ead"),
             pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
+            pl.lit(None).cast(pl.Boolean).alias("_fac_is_sft"),
+            pl.lit(None).cast(pl.Boolean).alias("_fac_cp_is_cmp"),
         )
 
     # For counterparty-level collateral
     if cp_col in schema.names():
-        cp_lookup = exposures.group_by(cp_col).agg(
+        cp_aggs = [
             pl.col("currency").first().alias("_cp_currency")
             if "currency" in schema.names()
             else pl.lit("GBP").alias("_cp_currency"),
@@ -311,7 +390,18 @@ def compute_fcsm_columns(
             pl.col("residual_maturity_years").max().alias("_cp_residual_maturity_years")
             if has_exp_maturity
             else pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
-        )
+        ]
+        if sft_col is not None:
+            cp_aggs.append(pl.col(sft_col).fill_null(False).max().alias("_cp_is_sft"))
+        else:
+            cp_aggs.append(pl.lit(False).alias("_cp_is_sft"))
+        if has_cmp_col:
+            cp_aggs.append(
+                pl.col("cp_is_core_market_participant").fill_null(False).max().alias("_cp_cp_is_cmp")
+            )
+        else:
+            cp_aggs.append(pl.lit(False).alias("_cp_cp_is_cmp"))
+        cp_lookup = exposures.group_by(cp_col).agg(cp_aggs)
         coll_with_exp = coll_with_exp.join(
             cp_lookup,
             left_on="beneficiary_reference",
@@ -324,9 +414,14 @@ def compute_fcsm_columns(
             pl.lit(None).cast(pl.Utf8).alias("_cp_currency"),
             pl.lit(None).cast(pl.Float64).alias("_cp_total_ead"),
             pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
+            pl.lit(None).cast(pl.Boolean).alias("_cp_is_sft"),
+            pl.lit(None).cast(pl.Boolean).alias("_cp_cp_is_cmp"),
         )
 
-    # Determine exposure currency via coalesce (direct → facility → counterparty)
+    # Determine exposure currency via coalesce (direct → facility → counterparty).
+    # Resolve Art. 222(4) gating flags through the same hierarchy and fold the
+    # collateral-frame `qualifies_for_zero_haircut` into a hidden alias so the
+    # secured-floor expression has a single set of column names to reason about.
     coll_with_exp = coll_with_exp.with_columns(
         pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency").alias(
             "_resolved_exp_currency"
@@ -336,6 +431,15 @@ def compute_fcsm_columns(
             "_fac_residual_maturity_years",
             "_cp_residual_maturity_years",
         ).alias("_resolved_exp_residual_maturity_years"),
+        pl.coalesce("_exp_is_sft", "_fac_is_sft", "_cp_is_sft")
+        .fill_null(False)
+        .alias("_fcsm_exposure_is_sft"),
+        pl.coalesce("_exp_cp_is_cmp", "_fac_cp_is_cmp", "_cp_cp_is_cmp")
+        .fill_null(False)
+        .alias("_fcsm_cp_is_cmp"),
+        pl.col("qualifies_for_zero_haircut")
+        .fill_null(False)
+        .alias("_fcsm_qualifies_for_zero_haircut"),
     )
 
     # 4. Same-currency check for Art. 222(4)
@@ -350,7 +454,11 @@ def compute_fcsm_columns(
         ),
     )
 
-    # 5. Apply Art. 222(4)(b) 20% discount for 0%-RW sovereign bonds
+    # 5. Apply Art. 222(6)(b) 20% discount for 0%-RW sovereign bonds. The
+    # discount is waived when the collateral satisfies the Art. 227(2)
+    # zero-haircut criteria (PRA PS1/26 Art. 222(4) SFT carve-out is a flat
+    # RW substitution, not a value haircut — so the 20% market-value discount
+    # must not be applied on top of it).
     is_sovereign_bond = (
         pl.col("issuer_type")
         .fill_null("")
@@ -359,21 +467,25 @@ def compute_fcsm_columns(
         & (pl.col("_fcsm_item_rw").abs() < 1e-10)
         & ~pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit", "gold"])
     )
+    apply_sovereign_discount = (
+        is_sovereign_bond
+        & pl.col("_fcsm_same_currency")
+        & ~pl.col("_fcsm_qualifies_for_zero_haircut")
+    )
     coll_with_exp = coll_with_exp.with_columns(
-        pl.when(is_sovereign_bond & pl.col("_fcsm_same_currency"))
+        pl.when(apply_sovereign_discount)
         .then(pl.col("market_value") * (1.0 - float(SOVEREIGN_BOND_DISCOUNT)))
         .otherwise(pl.col("market_value"))
         .alias("_fcsm_effective_value"),
     )
 
-    # 6. Apply the 20% floor per item here (not on the aggregate) so that
-    # Art. 222(4)/(6) carve-out items flow through at 0% — the floor must not
-    # be re-imposed after the weighted average.
+    # 6. Apply the per-item secured-portion RW. ``_secured_floor_expr`` encodes
+    # the Art. 222(3) 20% general floor, the Art. 222(4) SFT 0%/10% carve-out,
+    # and the Art. 222(6) non-SFT same-currency 0% carve-out as a single
+    # decision tree — applied per item so the downstream weighted average is
+    # not re-floored.
     coll_with_exp = coll_with_exp.with_columns(
-        pl.when(_is_zero_rw_exception_expr())
-        .then(pl.lit(0.0))
-        .otherwise(pl.max_horizontal(pl.col("_fcsm_item_rw"), pl.lit(float(FCSM_RW_FLOOR))))
-        .alias("_fcsm_effective_rw"),
+        _secured_floor_expr().alias("_fcsm_effective_rw"),
     )
 
     # 6b. CRR Art. 239(1) FCSM maturity-mismatch eligibility gate. Collateral

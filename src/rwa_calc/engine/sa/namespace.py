@@ -123,6 +123,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     HIGH_RISK_RW,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
+    INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
     INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
@@ -941,6 +942,23 @@ def _prepare_risk_weight_lookup(
     # Cache uppercase-class once and map detailed classes onto CQS-lookup
     # classes. Sentinel -1 for null CQS so the left join matches.
     upper = pl.col("exposure_class").str.to_uppercase()
+
+    # CRR Art. 117(1) / PRA PS1/26 Art. 117(1)(a): non-named MDBs are treated
+    # as institutions, so their primary CQS source is ``cp_institution_cqs``
+    # (the MDB's own ECAI rating expressed as a CQS). When the exposure has
+    # no top-level ``cqs`` (no rating attached at the rating-mapping stage)
+    # but the counterparty carries an ``institution_cqs``, lift it into
+    # ``cqs`` here so the downstream CQS-keyed branches and joins see it.
+    # Named MDBs (mdb_named) bypass CQS entirely later — coalescing here is
+    # harmless for them.
+    is_mdb_class = upper == "MDB"
+    exposures = exposures.with_columns(
+        pl.when(is_mdb_class & pl.col("cqs").is_null())
+        .then(pl.col("cp_institution_cqs"))
+        .otherwise(pl.col("cqs"))
+        .alias("cqs")
+    )
+
     exposures = exposures.with_columns(
         [
             pl.when(upper.str.contains("CENTRAL_GOVT", literal=True))
@@ -1274,9 +1292,24 @@ def _apply_crr_risk_weight_overrides(
         # International Organisation -> 0% (Art. 118).
         .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "international_org"))
         .then(pl.lit(_SA_SHARED_RW["io"]))
-        # Unrated non-named MDB -> 50% (Art. 117(1), Table 2B).
+        # CRR Art. 117(1): non-named MDBs are treated as institutions and use
+        # the institution risk weight tables (Art. 120 Table 3 if rated, Art.
+        # 121 Table 5 sovereign-derived if unrated). The dedicated Basel 3.1
+        # Table 2B path (PRA PS1/26 Art. 117(1)(a)) does NOT apply under CRR.
+        # The Art. 119(2)/120(2)/121(3) short-term carve-outs are excluded for
+        # MDBs by Art. 117(1), so no short-term branch is consulted here.
+        # Rated non-named MDB: Art. 120 Table 3 (institution own CQS).
+        .when((uc == "MDB") & pl.col("cqs").is_not_null() & (pl.col("cqs") > 0))
+        .then(build_institution_guarantor_rw_expr("cqs", is_basel_3_1=False))
+        # Unrated non-named MDB: Art. 121 Table 5 sovereign-derived; Art. 121
+        # fallback (100%) when the MDB's home sovereign CQS is unknown.
         .when((uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
-        .then(pl.lit(_SA_SHARED_RW["mdb_unrated"]))
+        .then(
+            _sovereign_derived_rw_expr(
+                INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
+                float(INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]),
+            )
+        )
     )
 
     chain = _crr_append_institution_maturity_branches(chain, uc)

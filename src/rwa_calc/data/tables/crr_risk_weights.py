@@ -182,6 +182,22 @@ INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR: dict[CQS, Decimal] = {
 # Overrides the Table 5 sovereign-derived fallback.
 INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = Decimal("0.20")
 
+# CRR Art. 121 Table 5: sovereign-derived risk weights for unrated institutions.
+# Maps the institution's home-jurisdiction sovereign CQS to the institution RW.
+# Also reused for non-named MDBs under Art. 117(1) (institution treatment) when
+# the MDB itself is unrated and a sovereign CQS is available for the MDB's
+# country of incorporation. Numeric values match Art. 116(1) Table 2 / Art.
+# 115(1)(a) Table 1A by design — the sovereign-derived shape is shared across
+# institutions, PSEs and RGLAs in CRR.
+INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.50"),
+    CQS.CQS3: Decimal("1.00"),
+    CQS.CQS4: Decimal("1.00"),
+    CQS.CQS5: Decimal("1.00"),
+    CQS.CQS6: Decimal("1.50"),
+}
+
 
 def _create_institution_df(is_basel_3_1: bool = False) -> pl.DataFrame:
     """Create institution risk weight lookup DataFrame.
@@ -337,8 +353,15 @@ def _create_rgla_df() -> pl.DataFrame:
 # MULTILATERAL DEVELOPMENT BANK RISK WEIGHTS (CRR Art. 117 / PRA PS1/26 Art. 117)
 # =============================================================================
 
-# Art. 117(1), Table 2B: Rated MDB risk weights (own CQS).
-# Differs from institution table: CQS 2 = 30% (same as UK inst), unrated = 50% (not 40%).
+# PRA PS1/26 Art. 117(1)(a) Table 2B: Basel 3.1 dedicated MDB risk weights
+# (own CQS). Used ONLY under the Basel 3.1 framework (is_basel_3_1=True).
+#
+# Under CRR Art. 117(1), non-named MDBs are treated as institutions and routed
+# through INSTITUTION_RISK_WEIGHTS_CRR (rated) or
+# INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED / Art. 121 fallback (unrated) — this
+# table is unreachable under CRR after the Art. 117(1) institution-routing fix.
+#
+# Differs from institution table: CQS 2 = 30% (vs CRR 50%), unrated = 50% (not 40%).
 MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.20"),
     CQS.CQS2: Decimal("0.30"),

@@ -93,7 +93,6 @@ from .firb_lgd import (
     B31_FIRB_LGD_UNSECURED_SENIOR_FSE,
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
-    get_b31_firb_lgd_table,
     get_b31_vs_crr_lgd_comparison,
     get_firb_lgd_table,
     get_firb_lgd_table_for_framework,
@@ -171,7 +170,6 @@ __all__ = [
     "B31_FIRB_LGD_RESIDENTIAL_RE",
     "B31_FIRB_LGD_COMMERCIAL_RE",
     "B31_FIRB_LGD_OTHER_PHYSICAL",
-    "get_b31_firb_lgd_table",
     "lookup_b31_firb_lgd",
     "get_b31_vs_crr_lgd_comparison",
     # EU sovereign treatment

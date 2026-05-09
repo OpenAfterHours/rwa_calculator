@@ -5,7 +5,8 @@ Canonical home for both the CRR and Basel 3.1 Foundation IRB supervisory LGD
 tables, plus the CRR Art. 230 / CRE32.9-12 overcollateralisation ratios and
 minimum thresholds (identical under both frameworks). Framework selection
 happens at the call site via ``CalculationConfig`` or the ``is_basel_3_1``
-flag on the lookup helpers.
+flag on the lookup helpers — the public DataFrame entry point
+``get_firb_lgd_table(is_basel_3_1=...)`` dispatches to the correct table.
 
 Reference:
     CRR Art. 161: LGD for Foundation IRB approach (CRR values)
@@ -446,14 +447,35 @@ def _create_firb_lgd_df() -> pl.DataFrame:
     )
 
 
-def get_firb_lgd_table() -> pl.DataFrame:
+def get_firb_lgd_table(is_basel_3_1: bool = False) -> pl.DataFrame:
     """
     Get F-IRB supervisory LGD lookup table.
 
+    Dispatches to the CRR table by default, or to the Basel 3.1 table when
+    ``is_basel_3_1=True``. The two tables have intentionally distinct schemas:
+
+    - CRR: columns ``collateral_type, seniority, lgd, overcollateralisation_ratio,
+      min_threshold, description``.
+    - Basel 3.1: additionally includes ``is_fse`` to distinguish financial
+      sector entities from other corporates per Art. 161(1)(a) vs (aa).
+
+    Args:
+        is_basel_3_1: True for Basel 3.1 values (PRA PS1/26 Art. 161 / CRE32.9-12),
+            False for CRR Art. 161 / Art. 230 Table 5 values.
+
     Returns:
-        DataFrame with columns: collateral_type, seniority, lgd, description
+        DataFrame with the LGD lookup rows for the selected framework.
     """
+    if is_basel_3_1:
+        return _create_b31_firb_lgd_df()
     return _create_firb_lgd_df()
+
+
+# Resolve the lazy ``from __future__ import annotations`` strings into real
+# types so that ``inspect.signature(get_firb_lgd_table)`` exposes the actual
+# ``bool`` / ``pl.DataFrame`` objects rather than forward-reference strings.
+# Engine call sites and the P1.179 dispatch contract test rely on this.
+get_firb_lgd_table.__annotations__ = {"is_basel_3_1": bool, "return": pl.DataFrame}
 
 
 def lookup_firb_lgd(
@@ -806,16 +828,6 @@ def _create_b31_firb_lgd_df() -> pl.DataFrame:
         FIRB_OVERCOLLATERALISATION_RATIOS,
         FIRB_MIN_COLLATERALISATION_THRESHOLDS,
     )
-
-
-def get_b31_firb_lgd_table() -> pl.DataFrame:
-    """Get Basel 3.1 F-IRB supervisory LGD lookup table.
-
-    Returns:
-        DataFrame with columns: collateral_type, seniority, is_fse, lgd,
-        overcollateralisation_ratio, min_threshold, description
-    """
-    return _create_b31_firb_lgd_df()
 
 
 def lookup_b31_firb_lgd(

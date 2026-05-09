@@ -31,8 +31,8 @@ from rwa_calc.data.tables.firb_lgd import (
     B31_FIRB_LGD_UNSECURED_SENIOR_FSE,
     BASEL31_FIRB_SUPERVISORY_LGD,
     FIRB_SUPERVISORY_LGD,
-    get_b31_firb_lgd_table,
     get_b31_vs_crr_lgd_comparison,
+    get_firb_lgd_table,
     lookup_b31_firb_lgd,
 )
 
@@ -153,7 +153,7 @@ class TestB31FIRBLGDDataFrame:
 
     def test_dataframe_has_expected_columns(self) -> None:
         """DataFrame has all required columns."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         expected_cols = {
             "collateral_type",
             "seniority",
@@ -168,22 +168,22 @@ class TestB31FIRBLGDDataFrame:
     def test_dataframe_has_eleven_rows(self) -> None:
         """DataFrame has 11 rows: 3 unsecured + covered_bond + financial + cash + receivables
         + 3 real_estate + other_physical."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert len(df) == 11
 
     def test_dataframe_lgd_column_float64(self) -> None:
         """LGD column is Float64 type for Polars arithmetic."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert df.schema["lgd"] == pl.Float64
 
     def test_dataframe_overcoll_ratio_float64(self) -> None:
         """Overcollateralisation ratio column is Float64."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert df.schema["overcollateralisation_ratio"] == pl.Float64
 
     def test_dataframe_non_fse_senior_unsecured_value(self) -> None:
         """Non-FSE senior unsecured row has LGD = 0.40."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         non_fse = df.filter(
             (pl.col("collateral_type") == "unsecured")
             & (pl.col("seniority") == "senior")
@@ -194,7 +194,7 @@ class TestB31FIRBLGDDataFrame:
 
     def test_dataframe_fse_senior_unsecured_value(self) -> None:
         """FSE senior unsecured row has LGD = 0.45."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         fse = df.filter(
             (pl.col("collateral_type") == "unsecured")
             & (pl.col("seniority") == "senior")
@@ -205,49 +205,49 @@ class TestB31FIRBLGDDataFrame:
 
     def test_dataframe_subordinated_value(self) -> None:
         """Subordinated row has LGD = 0.75."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         sub = df.filter(pl.col("seniority") == "subordinated")
         assert len(sub) == 1
         assert sub["lgd"][0] == pytest.approx(0.75, abs=1e-10)
 
     def test_dataframe_covered_bond_value(self) -> None:
         """Covered bond row has LGD = 0.1125."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         cb = df.filter(pl.col("collateral_type") == "covered_bond")
         assert len(cb) == 1
         assert cb["lgd"][0] == pytest.approx(0.1125, abs=1e-10)
 
     def test_dataframe_receivables_value(self) -> None:
         """Receivables row has LGD = 0.20 (CRR: 0.35)."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         recv = df.filter(pl.col("collateral_type") == "receivables")
         assert len(recv) == 1
         assert recv["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_residential_re_value(self) -> None:
         """Residential RE row has LGD = 0.20 (CRR: 0.35)."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         rre = df.filter(pl.col("collateral_type") == "residential_re")
         assert len(rre) == 1
         assert rre["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_commercial_re_value(self) -> None:
         """Commercial RE row has LGD = 0.20 (CRR: 0.35)."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         cre = df.filter(pl.col("collateral_type") == "commercial_re")
         assert len(cre) == 1
         assert cre["lgd"][0] == pytest.approx(0.20, abs=1e-10)
 
     def test_dataframe_other_physical_value(self) -> None:
         """Other physical row has LGD = 0.25 (CRR: 0.40)."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         op = df.filter(pl.col("collateral_type") == "other_physical")
         assert len(op) == 1
         assert op["lgd"][0] == pytest.approx(0.25, abs=1e-10)
 
     def test_dataframe_re_overcoll_ratio_one_forty(self) -> None:
         """Real estate rows have 140% overcollateralisation ratio."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         re_rows = df.filter(
             pl.col("collateral_type").is_in(["residential_re", "commercial_re", "real_estate"])
         )
@@ -258,13 +258,13 @@ class TestB31FIRBLGDDataFrame:
 
     def test_dataframe_receivables_overcoll_ratio_one_twenty_five(self) -> None:
         """Receivables have 125% overcollateralisation ratio."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         recv = df.filter(pl.col("collateral_type") == "receivables")
         assert recv["overcollateralisation_ratio"][0] == pytest.approx(1.25, abs=1e-10)
 
     def test_dataframe_re_min_threshold_thirty_percent(self) -> None:
         """Real estate and other physical have 30% minimum threshold."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         rows = df.filter(
             pl.col("collateral_type").is_in(
                 ["residential_re", "commercial_re", "real_estate", "other_physical"]
@@ -274,7 +274,7 @@ class TestB31FIRBLGDDataFrame:
 
     def test_dataframe_financial_no_overcoll(self) -> None:
         """Financial collateral has no overcollateralisation requirement."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         fin = df.filter(pl.col("collateral_type").is_in(["financial_collateral", "cash"]))
         assert all(
             r == pytest.approx(1.0, abs=1e-10) for r in fin["overcollateralisation_ratio"].to_list()
@@ -497,7 +497,7 @@ class TestB31FIRBLGDConsistency:
 
     def test_dataframe_matches_constants_non_fse_senior(self) -> None:
         """DataFrame non-FSE senior LGD matches named constant."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         row = df.filter(
             (pl.col("collateral_type") == "unsecured")
             & (pl.col("seniority") == "senior")
@@ -507,7 +507,7 @@ class TestB31FIRBLGDConsistency:
 
     def test_dataframe_matches_constants_fse_senior(self) -> None:
         """DataFrame FSE senior LGD matches named constant."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         row = df.filter(
             (pl.col("collateral_type") == "unsecured")
             & (pl.col("seniority") == "senior")
@@ -517,13 +517,13 @@ class TestB31FIRBLGDConsistency:
 
     def test_dataframe_matches_constants_receivables(self) -> None:
         """DataFrame receivables LGD matches named constant."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         row = df.filter(pl.col("collateral_type") == "receivables")
         assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_RECEIVABLES), abs=1e-10)
 
     def test_dataframe_matches_constants_other_physical(self) -> None:
         """DataFrame other physical LGD matches named constant."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         row = df.filter(pl.col("collateral_type") == "other_physical")
         assert row["lgd"][0] == pytest.approx(float(B31_FIRB_LGD_OTHER_PHYSICAL), abs=1e-10)
 
@@ -541,15 +541,15 @@ class TestB31FIRBLGDConsistency:
 
     def test_all_lgd_values_non_negative(self) -> None:
         """All LGD values in the DataFrame are non-negative."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert df.filter(pl.col("lgd") < 0).height == 0
 
     def test_all_lgd_values_at_most_one(self) -> None:
         """All LGD values are at most 100% (1.0)."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert df.filter(pl.col("lgd") > 1.0).height == 0
 
     def test_all_overcoll_ratios_at_least_one(self) -> None:
         """All overcollateralisation ratios are >= 1.0."""
-        df = get_b31_firb_lgd_table()
+        df = get_firb_lgd_table(is_basel_3_1=True)
         assert df.filter(pl.col("overcollateralisation_ratio") < 1.0).height == 0

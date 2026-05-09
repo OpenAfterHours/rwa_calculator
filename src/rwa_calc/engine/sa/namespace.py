@@ -83,6 +83,7 @@ from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
+    B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
     B31_COVERED_BOND_UNRATED_FROM_SCRA,
     B31_CURRENCY_MISMATCH_MULTIPLIER,
@@ -275,6 +276,12 @@ _SA_B31_RW: dict[str, float] = {
     "ecra_st_ecai_cqs2": float(B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS[2]),
     "ecra_st_ecai_cqs3": float(B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS[3]),
     "ecra_st_ecai_high": float(B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS[4]),
+    # Table 6A (PRA PS1/26 Art. 122(3)) — corporate dedicated short-term ECAI.
+    # CQS 1=20%, CQS 2=50%, CQS 3=100%, CQS 4-6/Others=150%.
+    "corp_st_ecai_cqs1": float(B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS[1]),
+    "corp_st_ecai_cqs2": float(B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS[2]),
+    "corp_st_ecai_cqs3": float(B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS[3]),
+    "corp_st_ecai_high": float(B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS[4]),
     # SCRA unrated institution weights (CRE20.16-21) — long-term
     "scra_a": float(B31_SCRA_RISK_WEIGHTS["A"]),
     "scra_ae": float(B31_SCRA_RISK_WEIGHTS["A_ENHANCED"]),
@@ -573,6 +580,38 @@ def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
             .when(pl.col("cp_scra_grade") == "B")
             .then(pl.lit(_SA_B31_RW["scra_b"]))
             .otherwise(pl.lit(_SA_B31_RW["scra_c"]))
+        )
+    )
+
+
+def _b31_append_corporate_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+    """Append Basel 3.1 Art. 122(3) Table 6A short-term corporate ECAI branch.
+
+    Fires only for rated CORPORATE exposures with a dedicated short-term ECAI
+    assessment (``has_short_term_ecai=True``) and original maturity ≤ 3 months.
+    Unlike the institution Art. 121(5) extension, Art. 122(3) does NOT extend
+    the gate to trade-finance ≤ 6 months — it remains original maturity ≤ 0.25y.
+
+    Excludes SME corporates (which use the dedicated 85% SME RW path) so the
+    Table 6A lookup only applies to general corporates rated by an ECAI.
+    """
+    is_corporate = uc.str.contains("CORPORATE", literal=True) & ~uc.str.contains(
+        "SME", literal=True
+    )
+    is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
+    has_st_ecai = pl.col("has_short_term_ecai").fill_null(False)
+    original_mty = pl.col("original_maturity_years").fill_null(1.0)
+    in_st_window = original_mty <= 0.25
+    return (
+        chain.when(is_corporate & is_rated & has_st_ecai & in_st_window)
+        .then(
+            pl.when(pl.col("cqs") == 1)
+            .then(pl.lit(_SA_B31_RW["corp_st_ecai_cqs1"]))
+            .when(pl.col("cqs") == 2)
+            .then(pl.lit(_SA_B31_RW["corp_st_ecai_cqs2"]))
+            .when(pl.col("cqs") == 3)
+            .then(pl.lit(_SA_B31_RW["corp_st_ecai_cqs3"]))
+            .otherwise(pl.lit(_SA_B31_RW["corp_st_ecai_high"]))
         )
     )
 
@@ -1037,6 +1076,7 @@ def _apply_b31_risk_weight_overrides(
     )
 
     chain = _b31_append_institution_maturity_branches(chain, uc)
+    chain = _b31_append_corporate_maturity_branches(chain, uc)
 
     # Corporate / retail / misc tail of the chain.
     is_unrated_corporate = (

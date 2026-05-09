@@ -114,6 +114,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_105",
             _generate_p1105,
         ),
+        (
+            "P1.103 (B31 Art. 122(3) Table 6A short-term corporate ECAI RW)",
+            "p1_103",
+            _generate_p1103,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -614,6 +619,19 @@ def _generate_p1105(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_105", None)
+
+
+def _generate_p1103(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.103 fixtures (B31 Art. 122(3) Table 6A short-term ECAI corporate RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_103 import save_p1103_fixtures
+
+        saved = save_p1103_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_103", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

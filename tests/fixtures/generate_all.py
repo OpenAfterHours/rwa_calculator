@@ -164,6 +164,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_159",
             _generate_p1159,
         ),
+        (
+            "P2.14 (CRR Art. 128 high-risk omitted SI 2021/1078 → residual 100% RW)",
+            "p2_14",
+            _generate_p214,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -794,6 +799,19 @@ def _generate_p1159(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_159", None)
+
+
+def _generate_p214(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.14 fixtures (CRR Art. 128 high-risk omitted via SI 2021/1078)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_14 import save_p214_fixtures
+
+        saved = save_p214_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_14", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

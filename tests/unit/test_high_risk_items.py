@@ -139,10 +139,17 @@ class TestHighRiskClassifierMappings:
 
 
 class TestCRRHighRiskItems:
-    """Tests for Art. 128 high-risk items through the CRR SA calculator."""
+    """Tests for Art. 128 high-risk items through the CRR SA calculator.
 
-    def test_generic_high_risk_150_percent(self, sa_calculator, crr_config):
-        """CRR Art. 128: Generic high-risk item → 150% RW."""
+    SI 2021/1078 reg. 6(3)(a) omitted Art. 128 from the onshored UK CRR text
+    with effect from 1 January 2022. Under UK CRR, the engine therefore does
+    not apply a 150% high-risk weight: exposures fall through to the residual
+    OTHER class at 100%. The 150% Art. 128 treatment is re-introduced under
+    PRA PS1/26 Basel 3.1 — see TestB31HighRiskItems below.
+    """
+
+    def test_generic_high_risk_100_percent(self, sa_calculator, crr_config):
+        """UK CRR (Art. 128 omitted by SI 2021/1078): generic high-risk → 100% RW."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -150,11 +157,11 @@ class TestCRRHighRiskItems:
             config=crr_config,
             entity_type="high_risk",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
-        assert result["rwa"] == pytest.approx(1_500_000.0)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(1_000_000.0)
 
-    def test_venture_capital_150_percent(self, sa_calculator, crr_config):
-        """CRR Art. 128(1)(a): Venture capital investment → 150% RW."""
+    def test_venture_capital_100_percent(self, sa_calculator, crr_config):
+        """UK CRR (Art. 128 omitted): venture capital → 100% RW (OTHER fallthrough)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
@@ -162,11 +169,11 @@ class TestCRRHighRiskItems:
             config=crr_config,
             entity_type="high_risk_venture_capital",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
-        assert result["rwa"] == pytest.approx(750_000.0)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(500_000.0)
 
-    def test_private_equity_150_percent(self, sa_calculator, crr_config):
-        """CRR Art. 128(1)(a): Private equity investment → 150% RW."""
+    def test_private_equity_100_percent(self, sa_calculator, crr_config):
+        """UK CRR (Art. 128 omitted): private equity → 100% RW (OTHER fallthrough)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
@@ -174,11 +181,11 @@ class TestCRRHighRiskItems:
             config=crr_config,
             entity_type="high_risk_private_equity",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
-        assert result["rwa"] == pytest.approx(3_000_000.0)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(2_000_000.0)
 
-    def test_speculative_re_150_percent(self, sa_calculator, crr_config):
-        """CRR Art. 128(2): Speculative immovable property financing → 150% RW."""
+    def test_speculative_re_100_percent(self, sa_calculator, crr_config):
+        """UK CRR (Art. 128 omitted): speculative RE → 100% RW (OTHER fallthrough)."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
@@ -186,11 +193,11 @@ class TestCRRHighRiskItems:
             config=crr_config,
             entity_type="high_risk_speculative_re",
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
-        assert result["rwa"] == pytest.approx(15_000_000.0)
+        assert result["risk_weight"] == pytest.approx(1.00)
+        assert result["rwa"] == pytest.approx(10_000_000.0)
 
     def test_high_risk_ignores_cqs(self, sa_calculator, crr_config):
-        """Art. 128: High-risk 150% is unconditional — CQS has no effect."""
+        """UK CRR: 100% OTHER fallthrough is unconditional — CQS has no effect."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -199,10 +206,10 @@ class TestCRRHighRiskItems:
             entity_type="high_risk",
             cqs=1,
         )
-        assert result["risk_weight"] == pytest.approx(1.50)
+        assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_high_risk_ignores_seniority(self, sa_calculator, crr_config):
-        """Art. 128: High-risk 150% is unconditional — seniority has no effect."""
+        """UK CRR: 100% OTHER fallthrough is unconditional — seniority has no effect."""
         for seniority in ("senior", "subordinated"):
             result = calculate_single_sa_exposure(
                 sa_calculator,
@@ -212,7 +219,7 @@ class TestCRRHighRiskItems:
                 entity_type="high_risk",
                 seniority=seniority,
             )
-            assert result["risk_weight"] == pytest.approx(1.50)
+            assert result["risk_weight"] == pytest.approx(1.00)
 
 
 # =============================================================================
@@ -259,8 +266,12 @@ class TestB31HighRiskItems:
         )
         assert result["risk_weight"] == pytest.approx(1.50)
 
-    def test_b31_same_rw_as_crr(self, sa_calculator, b31_config, crr_config):
-        """Art. 128 is unchanged between CRR and Basel 3.1."""
+    def test_b31_diverges_from_crr_for_high_risk(self, sa_calculator, b31_config, crr_config):
+        """Art. 128 was OMITTED from UK CRR (SI 2021/1078) and RE-INTRODUCED under B3.1.
+
+        UK CRR: high-risk → OTHER fallthrough at 100%.
+        PRA PS1/26 B3.1: high-risk Art. 128 → 150%.
+        """
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -275,8 +286,10 @@ class TestB31HighRiskItems:
             config=b31_config,
             entity_type="high_risk",
         )
-        assert crr_result["risk_weight"] == pytest.approx(b31_result["risk_weight"])
-        assert crr_result["rwa"] == pytest.approx(b31_result["rwa"])
+        assert crr_result["risk_weight"] == pytest.approx(1.00)
+        assert b31_result["risk_weight"] == pytest.approx(1.50)
+        # 0.50 × EAD = 500,000 uplift under B3.1.
+        assert b31_result["rwa"] - crr_result["rwa"] == pytest.approx(500_000.0)
 
 
 # =============================================================================
@@ -297,11 +310,14 @@ class TestHighRiskDefaultedPriority:
     with adequate provisions).
     """
 
-    def test_defaulted_high_risk_gets_150_not_100(self, sa_calculator, crr_config):
-        """Defaulted high-risk item: 150% (Art. 128), NOT 100% (Art. 127 high-provision).
+    def test_defaulted_high_risk_gets_100_under_crr(self, sa_calculator, crr_config):
+        """UK CRR defaulted high-risk: 100% (OTHER fallthrough, Art. 128 omitted).
 
-        Without the priority override, a defaulted high-risk item with adequate
-        provisions would get 100% per Art. 127, understating capital by 50pp.
+        Under SI 2021/1078 reg. 6(3)(a), Art. 128 is dead letter under UK CRR
+        so the high-risk class falls through to OTHER (100%). The Art. 112
+        Table A2 priority carve-out remains in place: ``_uc == "HIGH_RISK"``
+        suppresses the Art. 127 defaulted-RW override (so we land on the 100%
+        OTHER fallthrough rather than the Art. 127 100%/150% provision split).
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
@@ -312,8 +328,8 @@ class TestHighRiskDefaultedPriority:
             is_defaulted=True,
             provision_allocated=Decimal("500000"),  # 50% provision > 20% threshold
         )
-        # Should be 150% (Art. 128), not 100% (Art. 127 with high provisions)
-        assert result["risk_weight"] == pytest.approx(1.50)
+        # UK CRR: high-risk class is dead letter → OTHER fallthrough at 100%.
+        assert result["risk_weight"] == pytest.approx(1.00)
 
     def test_defaulted_high_risk_b31_gets_150(self, sa_calculator, b31_config):
         """Defaulted high-risk item under B31: still 150% (Art. 128)."""

@@ -573,6 +573,20 @@ class ExposureClassifier:
             ]
         )
 
+        # CRR Art. 128 (high-risk class, 150%) was OMITTED from the UK onshored
+        # CRR text by SI 2021/1078 reg. 6(3)(a) with effect from 1 January 2022.
+        # Under CRR, entity types that map to HIGH_RISK fall through to the
+        # residual OTHER class. The 150% high-risk treatment is re-introduced
+        # under PRA PS1/26 Basel 3.1 (Art. 128), so the SA-class label is
+        # preserved as HIGH_RISK in that regime.
+        if not config.is_basel_3_1:
+            exposures = exposures.with_columns(
+                pl.when(pl.col("_sa_class") == ExposureClass.HIGH_RISK.value)
+                .then(pl.lit(ExposureClass.OTHER.value))
+                .otherwise(pl.col("_sa_class"))
+                .alias("_sa_class"),
+            )
+
         sl_class = pl.lit(ExposureClass.SPECIALISED_LENDING.value)
         # Art. 112 Table A2: Under SA, specialised lending is a corporate sub-type
         # (Art. 112(1)(g)), not a separate exposure class.  exposure_class_sa reflects

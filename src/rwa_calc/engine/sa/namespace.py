@@ -1324,9 +1324,12 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
         .then(_crr_unrated_cb_rw_expr())
-        # High-risk items (Art. 128).
-        .when(uc == "HIGH_RISK")
-        .then(pl.lit(_SA_CRR_RW["high_risk"]))
+        # CRR Art. 128 (high-risk items, 150%) was OMITTED from UK onshored CRR
+        # by SI 2021/1078 reg. 6(3)(a) with effect from 1 January 2022. Exposures
+        # that map to HIGH_RISK under the entity-type table therefore fall through
+        # to the OTHER (residual) class at 100% under UK CRR. The 150% treatment
+        # is re-introduced under PRA PS1/26 Basel 3.1 — see
+        # _apply_b31_risk_weight_overrides.
         # Other Items (Art. 134): sub-type-specific risk weights.
         .when(
             (uc == "OTHER")

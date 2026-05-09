@@ -5,12 +5,19 @@ Pipeline position:
     RawDataBundle -> Full Pipeline -> AggregatedResultBundle
 
 Scenario:
-    A repo loan to a GB institution (CQS 2) is secured by a covered bond
-    (issuer_cqs=1, residual_maturity_years=2.0, liquidation_period_days=5).
+    A repo loan (is_sft=True) to a GB institution (CQS 2) is secured by a
+    covered bond (issuer_cqs=1, residual_maturity_years=2.0,
+    liquidation_period_days=5).
 
-    Under CRR Art. 224 Table 1, covered bonds must route through the corp-bond
-    haircut table (not "other_physical"). For CQS 1, 1–5y residual maturity the
+    Under CRR Art. 207(2) covered bonds are eligible financial collateral on
+    the SFT path; the engine routes them through the Art. 224 Table 1 corp-bond
+    haircut band (not "other_physical"). For CQS 1, 1–5y residual maturity the
     base haircut is H_10 = 4%.
+
+    is_sft=True is REQUIRED on this fixture: with is_sft=False the engine
+    correctly enforces Art. 197 ineligibility for covered_bond and the FCSM
+    reduction is not applied. See ``test_p1_96_art_197_covered_bond_eligibility``
+    for the paired non-SFT (Art. 197 ineligible) scenario.
 
     Liquidation-period scaling (Art. 226):
         H_m = H_10 × sqrt(T_m / 10) = 0.04 × sqrt(5/10) = 0.04 × 0.70710678 ≈ 0.02828427
@@ -124,6 +131,11 @@ _FACILITY_SCHEMA: dict[str, pl.DataType] = {
     "is_buy_to_let": pl.Boolean,
     "has_one_day_maturity_floor": pl.Boolean,
     "facility_termination_date": pl.Date,
+    # CRR Art. 207(2): is_sft=True signals repo / SFT path so the engine
+    # routes covered_bond collateral through the corp-bond haircut band
+    # (Art. 224 Table 1) and the 5-day SFT liquidation period (Art. 224(2)(c)).
+    # Without this flag the engine treats covered_bond as ineligible per Art. 197.
+    "is_sft": pl.Boolean,
 }
 
 _LOAN_SCHEMA: dict[str, pl.DataType] = {
@@ -148,6 +160,9 @@ _LOAN_SCHEMA: dict[str, pl.DataType] = {
     "netting_facility_reference": pl.String,
     "due_diligence_performed": pl.Boolean,
     "due_diligence_override_rw": pl.Float64,
+    # CRR Art. 207(2): is_sft=True drives the repo / SFT eligibility path —
+    # see facility-schema comment above.
+    "is_sft": pl.Boolean,
 }
 
 _COLLATERAL_SCHEMA: dict[str, pl.DataType] = {
@@ -240,6 +255,7 @@ def _repo_facility(ref: str, cp_ref: str, limit: float = 1_000_000.0) -> dict:
         "is_buy_to_let": False,
         "has_one_day_maturity_floor": False,
         "facility_termination_date": None,
+        "is_sft": True,
     }
 
 
@@ -266,6 +282,7 @@ def _repo_loan(ref: str, cp_ref: str, drawn_amount: float = 1_000_000.0) -> dict
         "netting_facility_reference": None,
         "due_diligence_performed": None,
         "due_diligence_override_rw": None,
+        "is_sft": True,
     }
 
 

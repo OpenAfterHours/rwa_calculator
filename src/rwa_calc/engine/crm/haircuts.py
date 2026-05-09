@@ -384,6 +384,20 @@ class HaircutCalculator:
             is_corp & ((cqs_val >= 4) | cqs_val.is_null())
         )
 
+        # P1.96 — CRR Art. 197 / Art. 207(2): covered bonds are NOT in the
+        # Art. 197(1) closed list of eligible financial collateral. They become
+        # eligible only under Art. 207(2) for repo / SFT / capital-markets-driven
+        # / secured-lending transactions. On non-SFT paths the collateral must
+        # be flagged ineligible so the existing _bond_ineligible machinery
+        # zeros value_after_haircut and overrides is_eligible_financial_collateral.
+        is_raw_covered_bond = pl.col("collateral_type").str.to_lowercase() == "covered_bond"
+        if "exposure_is_sft" in schema.names():
+            sft_flag = pl.col("exposure_is_sft").fill_null(False)
+        else:
+            sft_flag = pl.lit(False)
+        _ineligible_covered_bond_non_sft = is_raw_covered_bond & ~sft_flag
+        _ineligible_bond = _ineligible_bond | _ineligible_covered_bond_non_sft
+
         # Art. 227(2)(a): eligible for zero haircut if cash/deposit or CQS ≤ 1 sovereign bond
         _zero_type_eligible = pl.col("_lookup_type").is_in(["cash"]) | (
             (pl.col("_lookup_type") == "govt_bond")

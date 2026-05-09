@@ -174,6 +174,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_110",
             _generate_p1110,
         ),
+        (
+            "P1.109 (CRR Art. 239(3) maturity mismatch scaling on unfunded protection)",
+            "p1_109",
+            _generate_p1109,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -831,6 +836,19 @@ def _generate_p1110(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_110", None)
+
+
+def _generate_p1109(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.109 fixtures (CRR Art. 239(3) maturity mismatch on unfunded protection)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_109 import save_p1109_fixtures
+
+        saved = save_p1109_fixtures(output_dir / "data")
+        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_109", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

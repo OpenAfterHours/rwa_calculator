@@ -832,14 +832,12 @@ def _build_guarantor_rw_expr(is_domestic_guarantor: pl.Expr, is_basel_3_1: bool)
             .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
             .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
         )
+        # International Organisation (Art. 118): 0% unconditional.
+        .when(gec == "international_organisation")
+        .then(pl.lit(_SA_SHARED_RW["io"]))
         # Named MDB (Art. 117(2)): 0% unconditional.
         .when((gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named"))
         .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
-        # International Organisation (Art. 118): 0% unconditional.
-        .when(
-            (gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "international_org")
-        )
-        .then(pl.lit(_SA_SHARED_RW["io"]))
         # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
         .when(gec == "mdb")
         .then(
@@ -1092,12 +1090,12 @@ def _apply_b31_risk_weight_overrides(
                 _SA_SHARED_RW["rgla_unrated"],
             )
         )
+        # International Organisation -> 0% (Art. 118).
+        .when(uc == "INTERNATIONAL_ORGANISATION")
+        .then(pl.lit(_SA_SHARED_RW["io"]))
         # Named MDB -> 0% (Art. 117(2)).
         .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
         .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
-        # International Organisation -> 0% (Art. 118).
-        .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "international_org"))
-        .then(pl.lit(_SA_SHARED_RW["io"]))
         # Unrated non-named MDB -> 50% (Art. 117(1), Table 2B).
         .when((uc == "MDB") & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0)))
         .then(pl.lit(_SA_SHARED_RW["mdb_unrated"]))
@@ -1293,12 +1291,12 @@ def _apply_crr_risk_weight_overrides(
                 _SA_SHARED_RW["rgla_unrated"],
             )
         )
+        # International Organisation -> 0% (Art. 118).
+        .when(uc == "INTERNATIONAL_ORGANISATION")
+        .then(pl.lit(_SA_SHARED_RW["io"]))
         # Named MDB -> 0% (Art. 117(2)).
         .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "mdb_named"))
         .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
-        # International Organisation -> 0% (Art. 118).
-        .when((uc == "MDB") & (pl.col("cp_entity_type").fill_null("") == "international_org"))
-        .then(pl.lit(_SA_SHARED_RW["io"]))
         # CRR Art. 117(1): non-named MDBs are treated as institutions and use
         # the institution risk weight tables (Art. 120 Table 3 if rated, Art.
         # 121 Table 5 sovereign-derived if unrated). The dedicated Basel 3.1

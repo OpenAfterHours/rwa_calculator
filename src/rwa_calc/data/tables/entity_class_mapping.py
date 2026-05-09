@@ -37,7 +37,7 @@ ENTITY_TYPE_TO_SA_CLASS: dict[str, str] = {
     "pse_institution": ExposureClass.PSE.value,
     "mdb": ExposureClass.MDB.value,
     "mdb_named": ExposureClass.MDB.value,
-    "international_org": ExposureClass.MDB.value,
+    "international_org": ExposureClass.INTERNATIONAL_ORGANISATION.value,
     "institution": ExposureClass.INSTITUTION.value,
     "bank": ExposureClass.INSTITUTION.value,
     "ccp": ExposureClass.INSTITUTION.value,

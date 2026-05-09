@@ -75,7 +75,7 @@ SA_DISCLOSURE_CLASSES: list[tuple[str, str, tuple[str, ...]]] = [
     ("2", "Regional governments or local authorities", ("rgla",)),
     ("3", "Public sector entities", ("pse",)),
     ("4", "Multilateral development banks", ("mdb",)),
-    ("5", "International organisations", ("international_org",)),
+    ("5", "International organisations", ("international_organisation",)),
     ("6", "Institutions", ("institution",)),
     ("7", "Corporates", ("corporate", "corporate_sme")),
     ("8", "Retail", ("retail_other", "retail_qrre")),

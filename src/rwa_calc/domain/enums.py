@@ -91,7 +91,10 @@ class ExposureClass(StrEnum):
     """Exposures to PSEs (CRR Art. 112(c), CRE20.7-15)"""
 
     MDB = "mdb"
-    """Exposures to MDBs and international organisations (CRR Art. 117-118)"""
+    """Exposures to MDBs (CRR Art. 117)"""
+
+    INTERNATIONAL_ORGANISATION = "international_organisation"
+    """Exposures to named international organisations (CRR Art. 112(1)(e), Art. 118)"""
 
     RGLA = "rgla"
     """Regional government and local authorities (CRR Art. 115)"""

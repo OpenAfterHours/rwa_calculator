@@ -12,7 +12,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from rwa_calc.api.errors import create_file_not_found_error, create_validation_error
+from rwa_calc.api.errors import (
+    create_file_not_found_error,
+    create_irb_required_file_error,
+    create_validation_error,
+)
 from rwa_calc.api.models import APIError, ValidationRequest, ValidationResponse
 from rwa_calc.config.data_sources import DataSourceRegistry
 
@@ -71,6 +75,10 @@ class DataPathValidator:
 
         self._check_mandatory(path, request.data_format, files_found, files_missing, errors)
         self._check_optional(path, request.data_format, files_found)
+        if request.permission_mode == "irb":
+            self._check_irb_required(
+                path, request.data_format, files_found, files_missing, errors
+            )
 
         return ValidationResponse(
             valid=len(errors) == 0,
@@ -109,6 +117,32 @@ class DataPathValidator:
         for file_path in self.registry.get_optional(fmt):
             if (base_path / file_path).exists():
                 found.append(file_path)
+
+    def _check_irb_required(
+        self,
+        base_path: Path,
+        fmt: str,
+        found: list[Path],
+        missing: list[Path],
+        errors: list[APIError],
+    ) -> None:
+        """
+        Check files that are required only when permission_mode='irb'.
+
+        Currently this is just config/model_permissions — it is registered
+        as OPTIONAL in DataSourceRegistry (because in standardised mode it
+        is genuinely optional) but is mandatory in IRB mode (P1.147).
+        """
+        source = self.registry.get_by_id("model_permissions")
+        if source is None:
+            return
+        relative = source.get_path(fmt)
+        if (base_path / relative).exists():
+            if relative not in found:
+                found.append(relative)
+            return
+        missing.append(relative)
+        errors.append(create_irb_required_file_error(relative))
 
 
 # =============================================================================

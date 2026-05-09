@@ -231,6 +231,33 @@ def create_file_not_found_error(file_path: Path | str) -> APIError:
     )
 
 
+def create_irb_required_file_error(missing_path: Path | str) -> APIError:
+    """
+    Create an error for a file that is required only when permission_mode='irb'.
+
+    Used by DataPathValidator (P1.147) to fail validation when IRB mode is
+    selected but config/model_permissions is absent — the pipeline must not
+    silently fall back to SA in that case.
+
+    Args:
+        missing_path: Path to the missing IRB-required file (str or Path)
+
+    Returns:
+        APIError with code VAL003
+    """
+    return APIError(
+        code="VAL003",
+        message=(
+            f"Required file not found for IRB permission mode: {missing_path}. "
+            "model_permissions data is mandatory when permission_mode='irb'; "
+            "supply this file or switch to permission_mode='standardised'."
+        ),
+        severity="error",
+        category="Validation",
+        details={"path": missing_path},
+    )
+
+
 def create_load_error(message: str, source: Path | str | None = None) -> APIError:
     """
     Create an error for data loading failures.

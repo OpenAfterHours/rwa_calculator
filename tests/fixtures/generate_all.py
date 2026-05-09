@@ -194,6 +194,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_165",
             _generate_p1165,
         ),
+        (
+            "P1.147 (ValidationRequest IRB mode requires model_permissions)",
+            "api_validation",
+            _generate_p1147,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -903,6 +908,58 @@ def _generate_p1165(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_165", None)
+
+
+def _generate_p1147(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P1.147 builder imports (Python-only builder — no persistent parquet output).
+
+    P1.147 tests the API/validation-plumbing path: DataPathValidator must append
+    config/model_permissions.parquet to files_missing and emit a VAL003 APIError
+    when permission_mode="irb" and that file is absent.
+
+    The fixture writes files into a caller-supplied temporary directory at test
+    time (via write_mandatory_minimum), not into a fixed subdirectory. This
+    function smoke-checks the import and confirms the builder round-trips
+    correctly into a tempfile directory without error.
+    """
+    import tempfile
+
+    sys.path.insert(0, str(output_dir))
+    try:
+        from build_mandatory_only import (  # noqa: PLC0415
+            COUNTERPARTY_REF,
+            FACILITY_REF,
+            LOAN_REF,
+            write_mandatory_minimum,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            from pathlib import Path as _Path  # noqa: PLC0415
+
+            result = write_mandatory_minimum(_Path(tmp))
+            parquets = list(result.rglob("*.parquet"))
+            if len(parquets) != 5:
+                raise AssertionError(
+                    f"Expected 5 mandatory parquet files, got {len(parquets)}: {parquets}"
+                )
+            mp = result / "config" / "model_permissions.parquet"
+            if mp.exists():
+                raise AssertionError("config/model_permissions.parquet must NOT be written")
+
+            # Confirm the three scenario constants are exported
+            for const_name, val in [
+                ("COUNTERPARTY_REF", COUNTERPARTY_REF),
+                ("LOAN_REF", LOAN_REF),
+                ("FACILITY_REF", FACILITY_REF),
+            ]:
+                if not isinstance(val, str) or not val:
+                    raise AssertionError(f"{const_name} must be a non-empty string")
+
+        return [("(python-only builder — no persistent parquet)", 0)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("build_mandatory_only", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

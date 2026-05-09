@@ -39,10 +39,14 @@ class ValidationRequest:
     Attributes:
         data_path: Path to directory to validate
         data_format: Expected format of files ("parquet" or "csv")
+        permission_mode: Calculator permission mode. When "irb", the
+            validator additionally requires config/model_permissions to be
+            present (P1.147).
     """
 
     data_path: str | Path
     data_format: Literal["parquet", "csv"] = "parquet"
+    permission_mode: Literal["standardised", "irb"] = "standardised"
 
     @property
     def path(self) -> Path:

@@ -114,6 +114,7 @@ class CreditRiskCalc:
             ValidationRequest(
                 data_path=self.data_path,
                 data_format=self.data_format,
+                permission_mode=self.permission_mode,
             )
         )
         if not validation.valid:
@@ -166,6 +167,7 @@ class CreditRiskCalc:
             ValidationRequest(
                 data_path=self.data_path,
                 data_format=self.data_format,
+                permission_mode=self.permission_mode,
             )
         )
 

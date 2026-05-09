@@ -294,6 +294,12 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "original_maturity_years": ColumnSpec(pl.Float64, required=False),
     "is_eligible_financial_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_eligible_irb_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 191A(2)(d)-(f): two-layer protection look-through.
+    # Optional reference to the counterparty that posted the collateral (e.g.
+    # the guarantor for guarantee-anchored collateral). When the engine
+    # honours an Art. 191A(2)(e)(i) "funded-only" election, the collateral is
+    # re-anchored from the guarantee onto the original obligor exposure.
+    "posted_by_counterparty_reference": ColumnSpec(pl.String, required=False),
     # CRR Art. 181 / CRE36 / Basel 3.1 Art. 169A: AIRB own LGD already reflects
     # the collateral effect, so collateral incorporated into the firm's internal
     # LGD model must not contribute CRM benefit to non-AIRB exposures of the
@@ -349,6 +355,21 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     # in PSM (parameter substitution) — Art. 161(1)(a)/(aa)/(b). Allowed
     # values: "senior", "subordinated". Engine treats missing as "senior".
     "guarantor_seniority": ColumnSpec(pl.String, required=False),
+    # PRA PS1/26 Art. 191A(2)(d)-(f): two-layer protection look-through.
+    # Flags a guarantee whose obligation is itself collateralised by the
+    # guarantor (e.g. cash pledged against the guarantee).  When True and
+    # ``look_through_election`` is "funded_only", the engine suppresses
+    # the guarantee row (no Art. 235 RWSM substitution) and re-anchors the
+    # guarantor-posted collateral directly onto the original obligor exposure.
+    "is_collateralised_by_guarantor": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 191A(2)(e)(i): election on how to recognise the
+    # two-layer protection. Allowed values:
+    #   "none"        — default; recognise the guarantee normally (no look-through).
+    #   "funded_only" — recognise ONLY the funded collateral; suppress the
+    #                   guarantee and re-anchor the collateral on the obligor.
+    #   "both"        — out of scope for the current implementation; treated
+    #                   as "none" with a CRM warning.
+    "look_through_election": ColumnSpec(pl.String, default="none", required=False),
 }
 
 PROVISION_SCHEMA: dict[str, ColumnSpec] = {
@@ -763,7 +784,12 @@ VALID_EQUITY_TYPES = {
     "other",
 }
 
-VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent"}
+VALID_BENEFICIARY_TYPES = {"counterparty", "loan", "facility", "contingent", "guarantee"}
+
+# PRA PS1/26 Art. 191A(2)(e)(i): allowed values for the look-through election
+# on a two-layer protection guarantee. "funded_only" is the only path
+# implemented today — "both" is reserved for future work (treated as "none").
+VALID_LOOK_THROUGH_ELECTIONS = {"none", "funded_only", "both"}
 
 VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
@@ -831,6 +857,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "guarantees": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,
         "protection_type": VALID_PROTECTION_TYPES,
+        "look_through_election": VALID_LOOK_THROUGH_ELECTIONS,
     },
     "facility_mappings": {
         "child_type": VALID_CHILD_TYPES,

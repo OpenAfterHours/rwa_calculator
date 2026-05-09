@@ -219,6 +219,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_140",
             _generate_p1140,
         ),
+        (
+            "P1.161 (PRA Art. 191A(2)(e)(i) funded-only look-through two-layer protection)",
+            "p1_161",
+            _generate_p1161,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1130,6 +1135,19 @@ def _generate_p1140(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_140", None)
+
+
+def _generate_p1161(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.161 fixtures (PRA Art. 191A(2)(e)(i) funded-only look-through)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_161 import save_p1161_fixtures
+
+        saved = save_p1161_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_161", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

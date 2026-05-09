@@ -46,6 +46,7 @@ from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
+from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
@@ -465,6 +466,17 @@ class CRMProcessor:
         # Start with all exposures
         exposures = data.all_exposures
 
+        # Step 0: PRA Art. 191A(2)(e)(i) two-layer protection look-through.
+        # Re-anchors collateral pledged against a guarantee onto the obligor
+        # exposure when the bank elects "funded_only" — and suppresses the
+        # guarantee row so RWSM substitution does not also apply.  Runs
+        # before any other CRM step so the rewritten collateral / guarantee
+        # frames feed the rest of the pipeline normally.
+        guarantees_lf, collateral_lf, look_through_errors = apply_funded_only_look_through(
+            data.guarantees, data.collateral
+        )
+        errors.extend(look_through_errors)
+
         # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(2))
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
@@ -487,7 +499,7 @@ class CRMProcessor:
 
         # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
         netting_collateral = collateral_mod.generate_netting_collateral(exposures)
-        collateral: pl.LazyFrame | None = data.collateral
+        collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is not None:
             # Track per-exposure netting amount for COREP col 0035
             exposures = _join_netting_amounts(exposures, netting_collateral)
@@ -571,13 +583,13 @@ class CRMProcessor:
 
         # Step 5: Apply guarantees (if available and valid)
         if (
-            has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
             # Materialise guarantee lookup tables to prevent parquet re-scans.
             guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
                 [
-                    data.guarantees,
+                    guarantees_lf,
                     data.counterparty_lookup.counterparties,
                     data.counterparty_lookup.rating_inheritance,
                 ]
@@ -590,8 +602,8 @@ class CRMProcessor:
                 ri_df.lazy(),
             )
         else:
-            if data.guarantees is not None:
-                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+            if guarantees_lf is not None:
+                if not has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS):
                     errors.append(
                         crm_warning(
                             ERROR_INVALID_GUARANTEE,
@@ -670,6 +682,14 @@ class CRMProcessor:
 
         exposures = data.all_exposures
 
+        # Step 0: PRA Art. 191A(2)(e)(i) two-layer protection look-through.
+        # Mirrors get_crm_adjusted_bundle so the unified path honours the
+        # funded-only election before any other CRM step runs.
+        guarantees_lf, collateral_lf, look_through_errors = apply_funded_only_look_through(
+            data.guarantees, data.collateral
+        )
+        errors.extend(look_through_errors)
+
         # Steps 1-7: Same CRM processing as get_crm_adjusted_bundle
         if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
             exposures = self.resolve_provisions(exposures, data.provisions, config)
@@ -687,7 +707,7 @@ class CRMProcessor:
 
         # Generate synthetic collateral from netting (CRR Art. 195)
         netting_collateral = collateral_mod.generate_netting_collateral(exposures)
-        collateral: pl.LazyFrame | None = data.collateral
+        collateral: pl.LazyFrame | None = collateral_lf
         if netting_collateral is not None:
             # Track per-exposure netting amount for COREP col 0035
             exposures = _join_netting_amounts(exposures, netting_collateral)
@@ -732,7 +752,7 @@ class CRMProcessor:
         # (no-guarantee / single / multi-guarantor split) re-evaluates the
         # full collateral plan per branch, causing ~4x slowdown at 100K scale.
         if (
-            has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS)
+            has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
             # Materialise exposures via barrier (disk-spill in streaming mode).
@@ -741,7 +761,7 @@ class CRMProcessor:
             exposures = materialise_barrier(exposures, config, "crm_pre_guarantee_unified")
             guarantees_df, cp_lookup_df, ri_df = pl.collect_all(
                 [
-                    data.guarantees,
+                    guarantees_lf,
                     data.counterparty_lookup.counterparties,
                     data.counterparty_lookup.rating_inheritance,
                 ]
@@ -754,8 +774,8 @@ class CRMProcessor:
                 ri_df.lazy(),
             )
         else:
-            if data.guarantees is not None:
-                if not has_required_columns(data.guarantees, self.GUARANTEE_REQUIRED_COLUMNS):
+            if guarantees_lf is not None:
+                if not has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS):
                     errors.append(
                         crm_warning(
                             ERROR_INVALID_GUARANTEE,

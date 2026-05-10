@@ -79,10 +79,6 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "ccf_modelled": ColumnSpec(pl.Float64, required=False),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 120(2B) Table 4A: True when the institution exposure
-    # carries a dedicated short-term ECAI assessment (vs a long-term rating
-    # applied to a short-term exposure under Art. 120(2) Table 4).
-    "has_short_term_ecai": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 166(8)(d) vs Art. 166(10): True for credit lines / NIFs / RUFs
     # (75% F-IRB CCF), False for issued OBS items (Art. 166(10) — 50% MR / 20% MLR).
     # Facilities default to True because a facility row is, by construction, a
@@ -398,6 +394,15 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     "rating_date": ColumnSpec(pl.Date, required=False),
     "is_solicited": ColumnSpec(pl.Boolean, default=True, required=False),
     "model_id": ColumnSpec(pl.String, required=False),
+    # PRA PS1/26 Art. 120(2B) Table 4A / Art. 122(3) Table 6A: short-term ECAI
+    # assessments are issue-specific (attached to a particular exposure, not the
+    # counterparty as a whole). ``is_short_term=True`` flags this rating row as
+    # such; ``scope_type`` / ``scope_id`` identify which exposure it attaches to.
+    # When ``is_short_term=False`` the rating applies counterparty-wide (legacy
+    # behaviour) and the two scope columns must be null.
+    "is_short_term": ColumnSpec(pl.Boolean, default=False, required=False),
+    "scope_type": ColumnSpec(pl.String, required=False),
+    "scope_id": ColumnSpec(pl.String, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
@@ -805,6 +810,12 @@ VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 
+# Allowed values for ``RATINGS_SCHEMA.scope_type`` — identifies which exposure a
+# short-term rating row attaches to. Mirrors VALID_CHILD_TYPES but kept as a
+# distinct set because the two concepts (facility-mapping child type vs rating
+# scope) are independent contracts. Null is also valid (counterparty-wide).
+VALID_RATING_SCOPE_TYPES = {"facility", "loan", "contingent"}
+
 VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
 
 VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
@@ -848,6 +859,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "ratings": {
         "rating_type": VALID_RATING_TYPES,
+        "scope_type": VALID_RATING_SCOPE_TYPES,
     },
     "specialised_lending": {
         "sl_type": VALID_SL_TYPES,

@@ -2,24 +2,25 @@
 P1.103 — B31 Art. 122(3) Table 6A Short-Term Corporate ECAI Risk Weight.
 
 Acceptance scenario: a GBP 1,000,000 corporate exposure (entity_type=corporate,
-CQS 3, 73-day maturity) carries a dedicated short-term ECAI assessment
-(has_short_term_ecai=True).  Under PRA PS1/26 Art. 122(3) Table 6A the SA risk
-weight for a CQS 3 short-term ECAI rated corporate is 100%, not the 75%
-returned by Table 6 for the same CQS band under the long-term ECAI path.
+CQS 3, 73-day maturity) carries a dedicated short-term ECAI assessment — a
+**rating-row** flag (``is_short_term=True`` with ``scope_type='facility'`` /
+``scope_id=FACILITY_REF``) attaches the short-term assessment to the specific
+facility. Under PRA PS1/26 Art. 122(3) Table 6A the SA risk weight for a CQS
+3 short-term ECAI rated corporate is 100%, not the 75% returned by Table 6
+for the same CQS band under the long-term ECAI path.
 
 Pipeline position:
     Loader → HierarchyResolver → Classifier → CRMProcessor → SACalculator
     → OutputAggregator
 
-Key assertion (currently failing — engine routes to Table 6 regardless of
-has_short_term_ecai flag, returning 0.75 instead of 1.00):
+Key assertion:
     risk_weight == 1.00  (Table 6A CQS 3, Art. 122(3))
     ead_final  == 1_000_000
     rwa_final  == 1_000_000
     k          == 80_000  (RWA × 8%)
 
-Contrastive (Table 6, has_short_term_ecai=False, same exposure):
-    risk_weight == 0.75  — current engine output before P1.103 fix
+Contrastive (no short-term rating row, same exposure):
+    risk_weight == 0.75  — engine routes via Table 6 instead
 
 Hand calculation (Basel 3.1, CalculationConfig.basel_3_1()):
     EAD   = drawn_amount + interest = 1,000,000 + 0 = 1,000,000
@@ -27,16 +28,16 @@ Hand calculation (Basel 3.1, CalculationConfig.basel_3_1()):
     RWA   = EAD × RW = 1,000,000 × 1.00 = 1,000,000
     K     = RWA × 0.08 = 80,000
 
-Maturity gate:
+Maturity (producer-side gate):
     value_date = 2027-01-01, maturity_date = 2027-03-15 → 73 days
-    original_maturity_years = 73/365 ≈ 0.20 ≤ 0.25 → short-term gate fires
-    has_short_term_ecai = True → Table 6A branch taken (not yet implemented)
+    original_maturity_years = 73/365 ≈ 0.20 ≤ 0.25 → Art. 122(3) qualifies
 
 References:
     PRA PS1/26 Art. 122(2): Table 6 long-term corporate ECAI risk weights
     PRA PS1/26 Art. 122(3): Table 6A short-term corporate ECAI risk weights
     src/rwa_calc/data/tables/b31_risk_weights.py: B31_CORPORATE_RISK_WEIGHTS (Table 6)
-    src/rwa_calc/data/schemas.py: FACILITY_SCHEMA field `has_short_term_ecai`
+    src/rwa_calc/data/schemas.py: RATINGS_SCHEMA fields ``is_short_term``,
+        ``scope_type``, ``scope_id``
     tests/fixtures/p1_103/p1_103.py: fixture constants
 """
 
@@ -49,6 +50,7 @@ import polars as pl
 import pytest
 from tests.fixtures.p1_103.p1_103 import (
     EXPECTED_RISK_WEIGHT,
+    FACILITY_REF,
     LOAN_REF,
     TABLE6_FALLBACK_RISK_WEIGHT,
 )
@@ -74,8 +76,9 @@ def p1_103_sa_result() -> dict:
     Run the P1.103 fixture through the Basel 3.1 SA pipeline.
 
     Constructs the RawDataBundle from scenario-local parquets (counterparty,
-    facility, loan, rating).  The facility parquet includes ``has_short_term_ecai=True``
-    appended by the fixture builder.
+    facility, loan, rating).  The ratings parquet carries one row with
+    ``is_short_term=True`` and ``scope_type='facility'`` attaching the short-
+    term ECAI assessment to the test facility.
 
     The test uses inline LazyFrames for facility_mappings and lending_mappings
     because those tables have no P1.103-specific rows — the pipeline only needs
@@ -85,18 +88,27 @@ def p1_103_sa_result() -> dict:
     """
     # Arrange — load scenario-local parquets
     counterparties = pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet")
-    # Facility parquet carries has_short_term_ecai=True (fixture builder)
+    # Ratings parquet carries is_short_term=True + scope_type='facility' for
+    # the short-term ECAI route; the facility parquet is unchanged.
     facilities = pl.scan_parquet(_FIXTURES_DIR / "facility.parquet")
     loans = pl.scan_parquet(_FIXTURES_DIR / "loan.parquet")
     ratings = pl.scan_parquet(_FIXTURES_DIR / "rating.parquet")
 
-    # Empty auxiliary tables with correct schema
+    # Link the loan to the facility so the facility-scoped short-term rating
+    # override propagates onto the loan exposure.
     facility_mappings = pl.LazyFrame(
+        [
+            {
+                "parent_facility_reference": FACILITY_REF,
+                "child_reference": LOAN_REF,
+                "child_type": "loan",
+            }
+        ],
         schema={
             "parent_facility_reference": pl.String,
             "child_reference": pl.String,
             "child_type": pl.String,
-        }
+        },
     )
     lending_mappings = pl.LazyFrame(
         schema={
@@ -144,12 +156,8 @@ class TestP1103Art1223Table6AShortTermECAI:
 
     Art. 122(3) Table 6A assigns higher risk weights than the long-term ECAI
     applied to a short-term exposure (Table 6).  For CQS 3 the contrast is:
-        Table 6A (has_short_term_ecai=True):  1.00  ← expected after fix
-        Table 6  (has_short_term_ecai=False): 0.75  ← current engine output
-
-    Pre-fix failure mode:
-        Engine does not read has_short_term_ecai and routes to Table 6 for
-        all rated short-term corporate exposures, returning RW = 0.75.
+        Table 6A (is_short_term=True rating attached to facility):  1.00
+        Table 6  (no short-term rating attached):                   0.75
     """
 
     def test_p1_103_art_122_3_risk_weight_is_100_pct(
@@ -160,12 +168,10 @@ class TestP1103Art1223Table6AShortTermECAI:
         Art. 122(3) Table 6A CQS 3 → risk_weight = 1.00.
 
         Arrange: corporate, entity_type=corporate, CQS 3, 73-day maturity,
-                 has_short_term_ecai=True, EAD = £1,000,000.
+                 short-term ECAI rating row attached to FACILITY_REF,
+                 EAD = £1,000,000.
         Act:     Basel 3.1 SA pipeline (CalculationConfig.basel_3_1()).
         Assert:  risk_weight == 1.00  (Table 6A CQS 3 = 100%).
-
-        Failure mode before fix:
-            Engine returns risk_weight == 0.75 (Table 6 path, ignores flag).
 
         References:
             PRA PS1/26 Art. 122(3): short-term corporate ECAI Table 6A.

@@ -493,10 +493,14 @@ New in Basel 3.1 — for exposures with a specific short-term ECAI assessment:
 | CQS 4 | 150% |
 | CQS 5 | 150% |
 
-!!! note "Table 4A Schema Gap"
-    The `has_short_term_ecai` schema field is not yet implemented. The calculator
-    currently falls back to Table 4 (general short-term preferential) for all short-term
-    institution exposures. See D3.8.
+!!! info "Table 4A wiring"
+    Short-term ECAI assessments are issue-specific (attached to a particular
+    exposure rather than the counterparty as a whole). The producer signals
+    them on the **ratings table** by setting `is_short_term=True` together with
+    `scope_type` (`facility` / `loan` / `contingent`) and `scope_id` (the
+    matching identifier). The HierarchyResolver overrides the counterparty
+    long-term CQS for the targeted exposure and routes the SA engine to
+    Table 4A. See `RATINGS_SCHEMA` in `src/rwa_calc/data/schemas.py`.
 
 ### Rated Institution Due Diligence CQS Step-Up (Art. 120(4))
 
@@ -1148,12 +1152,15 @@ long-term CQS mapping (Art. 122(1), Table 6) regardless of assessment tenor. The
 structure mirrors institution short-term ECRA (Art. 120(2), Table 4) with the same weight
 progression.
 
-!!! warning "Not Yet Implemented — Schema Gap"
-    Short-term corporate ECAI (Art. 122(3), Table 6A) is not yet implemented. No
-    `has_short_term_ecai` schema field exists for corporate exposures (same gap as
-    institution Table 4A — see D3.8). The calculator falls back to long-term Table 6 for
-    all corporate exposures. No `B31_CORPORATE_SHORT_TERM_RISK_WEIGHTS` constant exists
-    in the codebase.
+!!! info "Table 6A wiring"
+    Same mechanism as institution Table 4A: short-term ECAI assessments are
+    issue-specific. Attach the short-term assessment by adding a row to the
+    ratings table with `is_short_term=True`, `scope_type='facility'` (or
+    `loan` / `contingent`), and `scope_id` pointing at the target exposure.
+    The HierarchyResolver overrides the counterparty long-term CQS and the
+    SA engine routes via Table 6A. SME corporates are excluded — the dedicated
+    85% SME path takes precedence over Table 6A even for short-term-rated
+    SMEs.
 
 ---
 

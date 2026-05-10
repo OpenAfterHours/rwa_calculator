@@ -20,6 +20,7 @@ import polars as pl
 from rwa_calc.contracts.errors import (
     ERROR_EAD_NULL,
     ERROR_INVALID_COLUMN_VALUE,
+    ERROR_INVALID_VALUE,
     ERROR_MATURITY_INVALID,
     ERROR_MISSING_FIELD,
     ERROR_RW_ABOVE_CAP,
@@ -697,6 +698,12 @@ def validate_bundle_values(
         if table_name in {"facilities", "loans", "contingents"}:
             all_errors.extend(_validate_effective_maturity_range(lf, table_name))
 
+        # PRA PS1/26 Art. 120(2B) / Art. 122(3): short-term rating rows must
+        # carry a scope (which exposure they attach to). Flag rows that violate
+        # the is_short_term ↔ scope_type/scope_id contract.
+        if table_name == "ratings":
+            all_errors.extend(_validate_short_term_rating_scope(lf))
+
     return all_errors
 
 
@@ -737,6 +744,77 @@ def _validate_effective_maturity_range(
             expected_value="(0, 5.0]",
         )
     ]
+
+
+def _validate_short_term_rating_scope(lf: pl.LazyFrame) -> list[CalculationError]:
+    """Flag short-term rating rows that violate the scope contract.
+
+    Three violations are detected and reported via ``DQ002``:
+
+    - **Missing scope**: ``is_short_term=True`` with null ``scope_type`` or
+      null ``scope_id``. Short-term rating rows must identify the exposure they
+      attach to.
+    - **Stray scope**: ``is_short_term=False`` (or null) with a non-null
+      ``scope_type``/``scope_id``. Scope columns are only meaningful for
+      short-term rows; populated values on a long-term row indicate a
+      data-entry error.
+
+    ``scope_type`` value-set validation (must be one of
+    ``VALID_RATING_SCOPE_TYPES``) is handled by the generic categorical-value
+    pass via ``COLUMN_VALUE_CONSTRAINTS``.
+    """
+    schema_names = lf.collect_schema().names()
+    if "is_short_term" not in schema_names:
+        return []
+    if "scope_type" not in schema_names or "scope_id" not in schema_names:
+        return []
+
+    is_st = pl.col("is_short_term").fill_null(False)
+    scope_t = pl.col("scope_type")
+    scope_id = pl.col("scope_id")
+
+    bad = (
+        lf.select(
+            [
+                (is_st & (scope_t.is_null() | scope_id.is_null())).sum().alias("missing"),
+                (~is_st & (scope_t.is_not_null() | scope_id.is_not_null())).sum().alias("stray"),
+            ]
+        )
+        .collect()
+        .row(0, named=True)
+    )
+
+    errors: list[CalculationError] = []
+    if bad["missing"]:
+        errors.append(
+            CalculationError(
+                code=ERROR_INVALID_VALUE,
+                message=(
+                    f"[ratings] {bad['missing']} row(s) have is_short_term=True "
+                    "but null scope_type or scope_id. Short-term rating rows must "
+                    "identify the exposure they attach to (PRA PS1/26 Art. 120(2B))."
+                ),
+                severity=ErrorSeverity.ERROR,
+                category=ErrorCategory.DATA_QUALITY,
+                field_name="scope_type",
+                regulatory_reference="PRA PS1/26 Art. 120(2B)",
+            )
+        )
+    if bad["stray"]:
+        errors.append(
+            CalculationError(
+                code=ERROR_INVALID_VALUE,
+                message=(
+                    f"[ratings] {bad['stray']} row(s) have is_short_term=False "
+                    "but populated scope_type/scope_id. Scope columns apply only "
+                    "to short-term rating rows."
+                ),
+                severity=ErrorSeverity.WARNING,
+                category=ErrorCategory.DATA_QUALITY,
+                field_name="scope_type",
+            )
+        )
+    return errors
 
 
 def _validate_table_columns_batched(

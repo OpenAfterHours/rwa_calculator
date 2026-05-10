@@ -615,12 +615,13 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
     [B31 SA Risk Weights — Art. 120(2A)](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-trade-finance-exception-art-1202a-table-4)
     for worked examples and the side-by-side comparison with Art. 121(4).
 
-!!! warning "Table 4A — Short-Term ECAI (Art. 120(2B))"
+!!! info "Table 4A — Short-Term ECAI (Art. 120(2B))"
     Institutions with a specific **short-term credit assessment** use Table 4A
     (CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, Others = 150%) instead of the general
-    Table 4 short-term preferential weights (CQS 1-3 = 20%, CQS 4-5 = 50%). The
-    `has_short_term_ecai` schema field is not yet implemented — all short-term exposures
-    currently fall back to Table 4. See [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+    Table 4 short-term preferential weights (CQS 1-3 = 20%, CQS 4-5 = 50%). Attach
+    the short-term assessment by adding a ratings-table row with `is_short_term=True`,
+    `scope_type='facility'` (or `loan`/`contingent`), and `scope_id` pointing at
+    the target exposure — see [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
 !!! info "Art. 120(4) — Due Diligence CQS Step-Up for Rated Institutions"
     Where an ECAI rating drives the CQS lookup above, Art. 120(4) requires firms to

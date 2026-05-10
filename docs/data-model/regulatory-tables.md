@@ -67,13 +67,15 @@ Sovereign weights are identical under CRR and Basel 3.1.
 Art. 120(3) governs the interaction: Table 4 applies when no short-term assessment exists;
 Table 4A applies when a short-term assessment yields a more favourable or equal weight.
 
-!!! warning "Not Yet Implemented — Schema Gap"
-    No `has_short_term_ecai` schema field or `B31_ECRA_SHORT_TERM_TABLE_4A` lookup table
-    exists. All short-term institution exposures fall back to Table 4 weights, understating
-    risk for CQS 2 (20% applied vs correct 50%) and CQS 3 (20% vs 100%).
-    See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+Table 4A is routed by a rating-row flag: set `is_short_term=True` on the
+ratings row together with `scope_type` and `scope_id` identifying the target
+exposure (`RATINGS_SCHEMA` in `src/rwa_calc/data/schemas.py`). The
+HierarchyResolver overrides the counterparty long-term CQS for that exposure
+and the SA engine routes via Table 4A.
 
-**Source**: `B31_ECRA_SHORT_TERM_RISK_WEIGHTS` in `data/tables/b31_risk_weights.py` (Table 4 only)
+**Source**: `B31_ECRA_SHORT_TERM_RISK_WEIGHTS` (Table 4) and
+`B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS` (Table 4A) in
+`data/tables/b31_risk_weights.py`.
 
 ### Corporate Risk Weights (CRR Art. 122)
 

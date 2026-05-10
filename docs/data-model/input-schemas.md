@@ -623,6 +623,20 @@ provisions = pl.DataFrame({
 | `rating_date` | `Date` | Yes | Rating as-of date |
 | `is_solicited` | `Boolean` | No | Whether rating was solicited |
 | `model_id` | `String` | No | IRB model identifier — links to [Model Permissions](#model-permissions-schema) for per-model approach gating. Flows through rating inheritance pipeline to exposures. Null defaults to SA. |
+| `is_short_term` | `Boolean` | No | `True` flags this row as a dedicated **short-term ECAI assessment** (PRA PS1/26 Art. 120(2B) Table 4A / Art. 122(3) Table 6A). Defaults to `False` (long-term, counterparty-wide). |
+| `scope_type` | `String` | No | Which exposure the short-term rating attaches to: `facility`, `loan`, or `contingent`. Must be populated when `is_short_term=True`; must be null otherwise. |
+| `scope_id` | `String` | No | Matching `facility_reference` / `loan_reference` / `contingent_reference`. Must be populated when `is_short_term=True`; must be null otherwise. |
+
+**Short-term ECAI assessments (Art. 120(2B) / Art. 122(3)):**
+Short-term assessments are issue-specific — they attach to a particular exposure
+rather than to the counterparty as a whole. Populate `is_short_term=True` together
+with `scope_type` and `scope_id` to override the counterparty-level long-term
+rating for the targeted exposure. When the scope is `facility`, the override
+propagates to all loans and undrawn portions drawn under that facility. The
+SA engine routes the overridden exposure via Table 4A (institution) or
+Table 6A (corporate). The producer is responsible for ensuring the underlying
+exposure satisfies the regulatory maturity test before flagging the rating
+short-term — the engine does not re-check maturity.
 
 **Valid `rating_agency` values:**
 

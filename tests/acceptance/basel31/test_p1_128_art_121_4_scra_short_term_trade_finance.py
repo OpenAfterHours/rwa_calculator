@@ -81,9 +81,9 @@ def p1_128_sa_result() -> dict:
     Run the P1.128 fixture through the Basel 3.1 SA pipeline.
 
     Constructs the RawDataBundle from scenario-local parquets (counterparty,
-    facility, loan, rating).  The facility parquet has is_short_term_trade_lc=True
-    and has_short_term_ecai=False.  The ratings parquet is empty — no external
-    CQS forces the SCRA (unrated) institution path.
+    facility, loan, rating).  The facility parquet has is_short_term_trade_lc=True;
+    no short-term ECAI rating row is attached and the ratings parquet is empty,
+    forcing the SCRA (unrated) institution path.
 
     The test uses inline LazyFrames for facility_mappings and lending_mappings
     because those tables have no P1.128-specific rows — the pipeline only needs

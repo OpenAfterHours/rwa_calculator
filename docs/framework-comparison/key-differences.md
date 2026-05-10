@@ -524,11 +524,13 @@ This mirrors the institution short-term ECRA table (Art. 120(2), Table 4) but ap
 corporate exposures. Under CRR, short-term corporate exposures use the standard Table 6
 long-term CQS mapping — there is no tenor-specific treatment.
 
-!!! warning "Not Yet Implemented"
-    Short-term corporate ECAI (Art. 122(3), Table 6A) is not yet implemented in the
-    calculator. No `has_short_term_ecai` schema field exists for corporate exposures.
-    All corporate exposures currently use the long-term CQS table (Art. 122(2), Table 6).
-    See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#short-term-corporate-ecai-art-1223-table-6a)
+!!! info "How to attach a Table 6A short-term ECAI assessment"
+    Short-term corporate ECAI assessments are issue-specific. Add a row to the
+    ratings table with `is_short_term=True`, `scope_type='facility'` (or `loan`
+    /`contingent`), and `scope_id` pointing at the target exposure. The
+    HierarchyResolver overrides the counterparty long-term CQS for that exposure
+    and the SA engine routes via Table 6A. SME corporates are excluded — the
+    dedicated 85% SME RW takes precedence. See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#short-term-corporate-ecai-art-1223-table-6a)
     for details.
 
 ### Institution Exposures
@@ -568,7 +570,7 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
     for worked examples, full implementation fields, and the side-by-side comparison with
     SCRA Art. 121(4).
 
-!!! warning "Table 4A — Short-Term ECAI Assessment (Art. 120(2B))"
+!!! info "Table 4A — Short-Term ECAI Assessment (Art. 120(2B))"
     The "Basel 3.1 (≤3m)" column above shows **Table 4** weights — a long-term ECAI
     rating applied to a short-term exposure. Basel 3.1 also introduces **Table 4A** for
     institutions with a specific short-term credit assessment:
@@ -576,9 +578,11 @@ Basel 3.1 replaces the CRR institution risk weight approach with two distinct me
     Art. 120(3) governs the interaction: where no short-term assessment exists, Table 4
     applies; where a short-term assessment yields a more favourable or equal RW, Table 4A
     applies for that exposure only.
-    **Not yet implemented** — the `has_short_term_ecai` schema field does not exist. All
-    short-term institution exposures currently fall back to Table 4 weights. See
-    [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+
+    The calculator wires this via a rating-row flag rather than a facility flag:
+    set `is_short_term=True` plus `scope_type` / `scope_id` on the ratings row
+    pointing at the target exposure, and the HierarchyResolver routes the SA
+    engine to Table 4A. See [B31 SA Risk Weights spec](../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
 !!! info "Art. 120(4) — Rated Institution Due Diligence CQS Step-Up"
     Basel 3.1 adds Art. 120(4): where an ECAI credit assessment drives the ECRA lookup

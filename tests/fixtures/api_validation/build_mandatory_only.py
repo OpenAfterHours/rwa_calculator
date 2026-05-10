@@ -123,7 +123,6 @@ def _facility_row() -> dict:
         "is_buy_to_let": False,
         "has_one_day_maturity_floor": False,
         "is_obs_commitment": True,
-        "has_short_term_ecai": False,
         "is_sft": False,
         "effective_maturity": None,
         "facility_termination_date": None,

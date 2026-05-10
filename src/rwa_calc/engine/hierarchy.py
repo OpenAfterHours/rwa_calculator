@@ -132,6 +132,13 @@ class HierarchyResolver:
         )
         errors.extend(exp_errors)
 
+        # Per-exposure short-term rating override (PRA PS1/26 Art. 120(2B) Table
+        # 4A, Art. 122(3) Table 6A). Short-term ECAI assessments are issue-
+        # specific, attached to a particular exposure rather than the
+        # counterparty as a whole; when present, they override the counterparty-
+        # level long-term rating for SA risk-weight routing.
+        exposures = self._apply_short_term_rating_override(exposures, data.ratings)
+
         # Apply FX conversion so threshold calculations use consistent currency.
         # The converter methods also preserve ``original_currency`` when conversion
         # is disabled or no FX rates are supplied, so downstream FX-mismatch checks
@@ -373,15 +380,27 @@ class HierarchyResolver:
         """
         sort_cols = ["rating_date", "rating_reference"]
 
-        # Ensure model_id column exists on ratings (may be absent in legacy data)
+        # Ensure model_id + short-term scope columns exist on ratings (legacy
+        # data may carry only the long-term schema).
         ratings = ensure_columns(
             ratings,
-            {"model_id": ColumnSpec(pl.String, required=False)},
+            {
+                "model_id": ColumnSpec(pl.String, required=False),
+                "is_short_term": ColumnSpec(pl.Boolean, default=False, required=False),
+            },
         )
+
+        # Counterparty-wide rating aggregates exclude short-term rating rows.
+        # Short-term ECAI assessments are issue-specific (PRA PS1/26 Art. 120(2B)
+        # / Art. 122(3)) — they attach to a particular exposure and must not
+        # leak into the counterparty's long-term aggregate. The per-exposure
+        # short-term override is applied separately by
+        # ``_apply_short_term_rating_override``.
+        long_term_only = ratings.filter(~pl.col("is_short_term").fill_null(False))
 
         # Best internal rating per counterparty (no CQS — that's external only)
         best_internal = (
-            ratings.filter(pl.col("rating_type") == "internal")
+            long_term_only.filter(pl.col("rating_type") == "internal")
             .sort(sort_cols, descending=[True, True])
             .group_by("counterparty_reference")
             .first()
@@ -401,7 +420,7 @@ class HierarchyResolver:
         # null-keyed ratings into one bucket — the loader contract should
         # already guarantee non-null counterparty_reference on ratings.
         per_agency_latest = (
-            ratings.filter(
+            long_term_only.filter(
                 (pl.col("rating_type") == "external")
                 & pl.col("cqs").is_not_null()
                 & pl.col("counterparty_reference").is_not_null()
@@ -2231,29 +2250,12 @@ class HierarchyResolver:
         if default_cols:
             exposures = exposures.with_columns(default_cols)
 
-        # PRA PS1/26 Art. 120(2B) Table 4A: ``has_short_term_ecai`` describes
-        # the counterparty's ECAI rating, so OR-aggregate the flag across all
-        # facilities of the same counterparty and broadcast to every exposure
-        # of that counterparty (including drawn loans without a facility link).
-        if "has_short_term_ecai" in fac_cols:
-            cp_st_ecai = facilities.group_by("counterparty_reference").agg(
-                pl.col("has_short_term_ecai").fill_null(False).any().alias("_cp_has_st_ecai")
-            )
-            exposures = exposures.join(
-                cp_st_ecai,
-                on="counterparty_reference",
-                how="left",
-            ).with_columns(pl.col("_cp_has_st_ecai").fill_null(False).alias("has_short_term_ecai"))
-            exposures = exposures.drop("_cp_has_st_ecai")
-        else:
-            exposures = exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
-
         # PRA PS1/26 Art. 121(4): the SCRA short-term window extends to self-
         # liquidating trade-finance LCs. The flag lives on the facility row;
         # drawn loans booked under a trade-LC facility have no facility_reference
         # column to inherit from, so OR-aggregate the flag across the facilities
         # of the same counterparty and broadcast it to every exposure of that
-        # counterparty — same precedent as ``has_short_term_ecai`` above.
+        # counterparty.
         # Coalesce preserves any explicit per-row value (e.g. on the synthetic
         # facility_undrawn rows that already carry the flag from their source
         # facility) and only fills nulls from the counterparty-level OR.
@@ -2327,6 +2329,180 @@ class HierarchyResolver:
                 "internal_model_id"
             )
         return exposures.with_columns(pl.lit(None).cast(pl.String).alias("model_id"))
+
+    def _apply_short_term_rating_override(
+        self,
+        exposures: pl.LazyFrame,
+        ratings: pl.LazyFrame | None,
+    ) -> pl.LazyFrame:
+        """Apply per-exposure short-term rating override.
+
+        Short-term ECAI assessments under PRA PS1/26 Art. 120(2B) Table 4A and
+        Art. 122(3) Table 6A are issue-specific — each rating row attaches to a
+        single exposure via ``(scope_type, scope_id)``. When a short-term rating
+        row matches an exposure, its ``cqs`` overrides the counterparty-level
+        rating attached by ``_attach_counterparty_rating`` and the derived
+        ``has_short_term_ecai`` flag is set to True, signalling the SA engine to
+        route via Table 4A / Table 6A.
+
+        Scope matching:
+
+        - ``scope_type='facility'``  -> matches the source facility's drawn loans,
+          its synthetic ``facility_undrawn`` row, and any descendant exposure via
+          ``parent_facility_reference`` / ``root_facility_reference``.
+        - ``scope_type='loan'``      -> matches the loan exposure with the same
+          ``exposure_reference`` and ``exposure_type='loan'``.
+        - ``scope_type='contingent'`` -> matches the contingent exposure with the
+          same ``exposure_reference`` and ``exposure_type='contingent'``.
+
+        Ties (multiple short-term ratings for the same exposure) are resolved by
+        picking the row with the lowest CQS, breaking ties by latest
+        ``rating_date``. This mirrors the external best-rating selection in
+        ``_build_rating_inheritance_lazy``.
+
+        Always returns ``exposures`` augmented with a ``has_short_term_ecai``
+        boolean column (False when no override matched).
+        """
+        if ratings is None:
+            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
+
+        rating_cols = set(ratings.collect_schema().names())
+        if "is_short_term" not in rating_cols:
+            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
+
+        # Ensure scope columns exist so the downstream filter / join code can
+        # rely on them — legacy ratings parquet files may have only the long-
+        # term schema.
+        scope_defaults: list[pl.Expr] = []
+        if "scope_type" not in rating_cols:
+            scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_type"))
+        if "scope_id" not in rating_cols:
+            scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_id"))
+        if scope_defaults:
+            ratings = ratings.with_columns(scope_defaults)
+
+        # Filter to candidate short-term rows. Drop rows missing the required
+        # scope tuple — loader-side DQ flags those as DQ-RT-ST1 / DQ-RT-ST2
+        # errors; here we silently ignore them so the pipeline keeps running.
+        st_ratings = ratings.filter(
+            pl.col("is_short_term").fill_null(False)
+            & pl.col("scope_type").is_not_null()
+            & pl.col("scope_id").is_not_null()
+            & pl.col("counterparty_reference").is_not_null()
+        ).select(
+            [
+                pl.col("counterparty_reference").alias("_st_cp"),
+                pl.col("scope_type").alias("_st_scope_type"),
+                pl.col("scope_id").alias("_st_scope_id"),
+                pl.col("cqs").alias("_st_cqs"),
+                pl.col("rating_date").alias("_st_rating_date"),
+            ]
+        )
+
+        # Per-scope best-rating selection: lowest CQS, then latest date.
+        st_ratings = (
+            st_ratings.sort(
+                ["_st_cqs", "_st_rating_date"],
+                descending=[False, True],
+                nulls_last=True,
+            )
+            .group_by(["_st_cp", "_st_scope_type", "_st_scope_id"])
+            .first()
+        )
+
+        # Materialise the small short-term lookup eagerly so the three scope-
+        # specific joins below can re-use it without re-evaluating the sort.
+        st_ratings_df = st_ratings.collect()
+        if st_ratings_df.height == 0:
+            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
+        st_ratings = st_ratings_df.lazy()
+
+        exp_schema = set(exposures.collect_schema().names())
+
+        # Build a unified ``scope_match_key`` per exposure for each scope_type.
+        # An exposure can satisfy multiple scope_types simultaneously (e.g. a
+        # loan exposure also inherits its parent facility's short-term rating);
+        # we left-join three times in priority order and coalesce — loan-level
+        # scope wins over facility-level when both are present.
+        match_branches: list[tuple[str, pl.Expr]] = []
+        # facility scope: any exposure whose parent or root facility id matches
+        if "parent_facility_reference" in exp_schema or "root_facility_reference" in exp_schema:
+            facility_key_expr = pl.coalesce(
+                [
+                    pl.col("parent_facility_reference")
+                    if "parent_facility_reference" in exp_schema
+                    else pl.lit(None, dtype=pl.String),
+                    pl.col("root_facility_reference")
+                    if "root_facility_reference" in exp_schema
+                    else pl.lit(None, dtype=pl.String),
+                ]
+            )
+            match_branches.append(("facility", facility_key_expr))
+        # loan / contingent scope: match by exposure_reference + exposure_type
+        if "exposure_type" in exp_schema and "exposure_reference" in exp_schema:
+            match_branches.append(
+                (
+                    "loan",
+                    pl.when(pl.col("exposure_type") == "loan")
+                    .then(pl.col("exposure_reference"))
+                    .otherwise(pl.lit(None, dtype=pl.String)),
+                )
+            )
+            match_branches.append(
+                (
+                    "contingent",
+                    pl.when(pl.col("exposure_type") == "contingent")
+                    .then(pl.col("exposure_reference"))
+                    .otherwise(pl.lit(None, dtype=pl.String)),
+                )
+            )
+
+        # Track which scope branches actually produce a match so we can
+        # coalesce the resulting cqs in priority order: loan > contingent >
+        # facility (most specific wins).
+        joined_scopes: list[str] = []
+        for scope, key_expr in match_branches:
+            scope_lookup = st_ratings.filter(pl.col("_st_scope_type") == scope).select(
+                [
+                    pl.col("_st_cp"),
+                    pl.col("_st_scope_id"),
+                    pl.col("_st_cqs").alias(f"_st_{scope}_cqs"),
+                ]
+            )
+            exposures = exposures.with_columns(key_expr.alias(f"_match_key_{scope}"))
+            exposures = exposures.join(
+                scope_lookup,
+                left_on=["counterparty_reference", f"_match_key_{scope}"],
+                right_on=["_st_cp", "_st_scope_id"],
+                how="left",
+            ).drop(f"_match_key_{scope}")
+            joined_scopes.append(scope)
+
+        if not joined_scopes:
+            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
+
+        # Coalesce in priority order: loan > contingent > facility (most
+        # specific scope wins).
+        priority = ["loan", "contingent", "facility"]
+        ordered = [s for s in priority if s in joined_scopes]
+        st_cqs_expr = pl.coalesce([pl.col(f"_st_{s}_cqs") for s in ordered])
+
+        # Override: when the short-term cqs is non-null, replace the cqs column
+        # and set has_short_term_ecai=True. SA Tables 4A / 6A are keyed off cqs
+        # only — rating_agency / rating_value are audit columns added later by
+        # the classifier and intentionally not overridden here.
+        has_st = st_cqs_expr.is_not_null()
+        exposures = exposures.with_columns(
+            [
+                has_st.alias("has_short_term_ecai"),
+                pl.when(has_st)
+                .then(st_cqs_expr)
+                .otherwise(pl.col("cqs"))
+                .cast(pl.Int8)
+                .alias("cqs"),
+            ]
+        )
+        return exposures.drop([f"_st_{s}_cqs" for s in joined_scopes])
 
     def _enrich_with_property_coverage(
         self,

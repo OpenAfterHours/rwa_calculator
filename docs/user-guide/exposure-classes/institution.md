@@ -107,13 +107,13 @@ applies:
 | CQS 3 | 100% |
 | Others | 150% |
 
-!!! warning "Not Yet Implemented — Schema Gap"
-    The `has_short_term_ecai` schema field does not exist. The calculator cannot
-    distinguish Table 4A exposures (specific short-term ECAI) from Table 4 exposures
-    (long-term ECAI applied to short-term tenor). All short-term institution exposures
-    currently receive Table 4 weights, which **understates risk** for CQS 2 (20% applied
-    vs correct 50%) and CQS 3 (20% vs 100%). See D3.8 in the docs implementation plan
-    and [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
+!!! info "How to attach a Table 4A short-term ECAI assessment"
+    Short-term ECAI assessments are issue-specific. Add a row to the ratings
+    table with `is_short_term=True`, `scope_type='facility'` (or `'loan'` /
+    `'contingent'`), and `scope_id` pointing at the target exposure. The
+    HierarchyResolver overrides the counterparty long-term CQS for that
+    exposure and the SA engine routes via Table 4A — see the
+    [B31 SA Risk Weights spec](../../specifications/basel31/sa-risk-weights.md#ecra-short-term-ecai-art-1202b-table-4a).
 
 ### Art. 120(3) — Interaction Rules
 

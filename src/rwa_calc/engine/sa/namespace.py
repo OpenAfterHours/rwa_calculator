@@ -541,7 +541,13 @@ def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
         # ECRA short-term rated institutions with a dedicated short-term ECAI
         # assessment (Table 4A, PRA PS1/26 Art. 120(2B)).
         # CQS 1 = 20%, CQS 2 = 50%, CQS 3 = 100%, CQS 4-5 = 150%.
-        chain.when(is_institution & is_rated & has_st_ecai & in_st_window)
+        #
+        # ``has_short_term_ecai`` is derived per-exposure from the rating row
+        # (issue-specific Art. 120(2B) ECAI assessment). When the flag fires
+        # the engine routes via Table 4A regardless of the original-maturity
+        # gate — the producer is responsible for only flagging rating rows
+        # whose underlying exposure satisfies the ≤3m / ≤6m maturity rule.
+        chain.when(is_institution & is_rated & has_st_ecai)
         .then(
             pl.when(pl.col("cqs") == 1)
             .then(pl.lit(_SA_B31_RW["ecra_st_ecai_cqs1"]))
@@ -595,10 +601,13 @@ def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
 def _b31_append_corporate_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
     """Append Basel 3.1 Art. 122(3) Table 6A short-term corporate ECAI branch.
 
-    Fires only for rated CORPORATE exposures with a dedicated short-term ECAI
-    assessment (``has_short_term_ecai=True``) and original maturity ≤ 3 months.
-    Unlike the institution Art. 121(5) extension, Art. 122(3) does NOT extend
-    the gate to trade-finance ≤ 6 months — it remains original maturity ≤ 0.25y.
+    Fires for rated CORPORATE exposures that carry a dedicated short-term ECAI
+    assessment (``has_short_term_ecai=True``). The flag is derived per-exposure
+    from the rating row's ``is_short_term`` indicator (see
+    ``HierarchyResolver._apply_short_term_rating_override``) — the producer is
+    responsible for only flagging rating rows whose underlying exposure
+    satisfies Art. 122(3)'s ≤3m original-maturity rule, so the engine no
+    longer re-checks maturity here.
 
     Excludes SME corporates (which use the dedicated 85% SME RW path) so the
     Table 6A lookup only applies to general corporates rated by an ECAI.
@@ -608,9 +617,7 @@ def _b31_append_corporate_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.E
     )
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
     has_st_ecai = pl.col("has_short_term_ecai").fill_null(False)
-    original_mty = pl.col("original_maturity_years").fill_null(1.0)
-    in_st_window = original_mty <= 0.25
-    return chain.when(is_corporate & is_rated & has_st_ecai & in_st_window).then(
+    return chain.when(is_corporate & is_rated & has_st_ecai).then(
         pl.when(pl.col("cqs") == 1)
         .then(pl.lit(_SA_B31_RW["corp_st_ecai_cqs1"]))
         .when(pl.col("cqs") == 2)

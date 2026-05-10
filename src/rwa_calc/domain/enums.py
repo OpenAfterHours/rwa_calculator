@@ -614,3 +614,29 @@ class AIRBCollateralMethod(StrEnum):
     with supervisory LGDS values and supervisory LGDU.  Same formula and
     parameters as F-IRB collateral recognition.
     """
+
+
+class RatingScope(StrEnum):
+    """
+    Scope of a rating row in ``RATINGS_SCHEMA``.
+
+    Short-term ECAI assessments under PRA PS1/26 Art. 120(2B) Table 4A and
+    Art. 122(3) Table 6A are issue-specific — they apply to a particular
+    exposure rather than to all of an issuer's debt. Rating rows therefore
+    carry an explicit scope: which exposure the rating attaches to.
+
+    A null ``scope_type`` on the rating row (the default) means the rating
+    applies to the counterparty as a whole (legacy behaviour, used by long-
+    term ratings).
+    """
+
+    FACILITY = "facility"
+    """Rating attaches to a specific facility — propagates to all loans and
+    undrawn portions drawn under that facility (matched by
+    ``parent_facility_reference`` / ``root_facility_reference``)."""
+
+    LOAN = "loan"
+    """Rating attaches to a specific loan exposure only."""
+
+    CONTINGENT = "contingent"
+    """Rating attaches to a specific contingent (off-balance sheet) exposure."""

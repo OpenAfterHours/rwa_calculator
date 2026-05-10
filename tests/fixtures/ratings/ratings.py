@@ -38,7 +38,16 @@ def main() -> None:
 
 @dataclass(frozen=True)
 class Rating:
-    """A credit rating for a counterparty."""
+    """A credit rating for a counterparty.
+
+    Short-term ECAI assessments (PRA PS1/26 Art. 120(2B) / Art. 122(3)) are
+    issue-specific — they attach to a single exposure rather than to the
+    counterparty as a whole. Set ``is_short_term=True`` together with
+    ``scope_type`` ("facility" / "loan" / "contingent") and ``scope_id``
+    (the matching identifier) to attach a short-term rating to a specific
+    exposure. For long-term counterparty-wide ratings (the default), leave
+    all three fields at their defaults.
+    """
 
     rating_reference: str
     counterparty_reference: str
@@ -50,6 +59,9 @@ class Rating:
     rating_date: date
     is_solicited: bool
     model_id: str | None = None
+    is_short_term: bool = False
+    scope_type: str | None = None
+    scope_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +75,9 @@ class Rating:
             "rating_date": self.rating_date,
             "is_solicited": self.is_solicited,
             "model_id": self.model_id,
+            "is_short_term": self.is_short_term,
+            "scope_type": self.scope_type,
+            "scope_id": self.scope_id,
         }
 
 

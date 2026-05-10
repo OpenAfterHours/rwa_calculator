@@ -8,8 +8,8 @@ Key responsibilities:
 - Produce one counterparty row: institution, GB, entity_type="bank", scra_grade="A",
   no external CQS (unrated path — no rating row with a non-null cqs).
 - Produce one facility row: term_loan, GBP 1,000,000, 151-day original maturity
-  (2027-01-01 to 2027-06-01), is_short_term_trade_lc=True (Art. 121(4) gate flag),
-  has_short_term_ecai=False (SCRA path — no ECAI rating).
+  (2027-01-01 to 2027-06-01), is_short_term_trade_lc=True (Art. 121(4) gate flag).
+  No short-term ECAI rating row is attached — SCRA unrated path.
 - Produce one loan row: GBP 1,000,000 drawn, same 151-day maturity window.
 - Produce one empty ratings parquet (RATINGS_SCHEMA schema, zero rows) — absence of
   any external CQS forces the SCRA unrated path.
@@ -203,8 +203,9 @@ def create_p1128_facility() -> pl.DataFrame:
     Return one P1.128 facility row as a DataFrame.
 
     is_short_term_trade_lc=True: gates Art. 121(4) extended short-term window.
-    has_short_term_ecai=False: SCRA path (no dedicated short-term ECAI assessment).
-    The 151-day maturity (0.4137y) is between 0.25y and 0.5y — inside the trade
+    No short-term ECAI rating is attached for this scenario (SCRA path — no
+    dedicated short-term ECAI assessment exists on the ratings table). The
+    151-day maturity (0.4137y) is between 0.25y and 0.5y — inside the trade
     finance window only when is_short_term_trade_lc=True.
     """
     base_row = {
@@ -223,7 +224,6 @@ def create_p1128_facility() -> pl.DataFrame:
         "seniority": "senior",
         "risk_type": "MR",
         "is_short_term_trade_lc": True,
-        "has_short_term_ecai": False,
     }
     return pl.DataFrame([base_row], schema=dtypes_of(FACILITY_SCHEMA))
 

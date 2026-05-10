@@ -645,9 +645,12 @@ CQS mapping. This applies to short-term assessments on institutions and corporat
 | 6 | 150% |
 
 !!! note "Implementation Status"
-    Short-term ECAI assessment mapping (Art. 131) is not yet implemented. The calculator
-    currently uses long-term CQS tables for all exposures. A `has_short_term_ecai` schema
-    field would be needed to route to this table.
+    Under PRA PS1/26 the short-term ECAI assessment mapping is implemented via
+    a rating-row flag (`RATINGS_SCHEMA.is_short_term` + `scope_type` + `scope_id`),
+    routing the SA engine to Table 4A (Art. 120(2B)) / Table 6A (Art. 122(3)).
+    CRR Art. 131 has no equivalent table — under CRR the calculator continues
+    to use long-term CQS tables for all exposures regardless of the
+    `is_short_term` flag.
 
 ## CIU Exposures (CRR Art. 132)
 

@@ -67,6 +67,7 @@ def calculate_single_sa_exposure(
     sovereign_cqs: int | None = None,
     local_currency: str | None = None,
     institution_cqs: int | None = None,
+    is_hedged: bool = False,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch."""
     data: dict = {
@@ -106,6 +107,7 @@ def calculate_single_sa_exposure(
         "cp_sovereign_cqs": [sovereign_cqs],
         "cp_local_currency": [local_currency],
         "cp_institution_cqs": [institution_cqs],
+        "is_hedged": [is_hedged],
     }
     if prior_charge_ltv is not None:
         data["prior_charge_ltv"] = [float(prior_charge_ltv)]

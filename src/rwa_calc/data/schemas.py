@@ -140,6 +140,10 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "netting_facility_reference": ColumnSpec(pl.String, required=False),
     "due_diligence_performed": ColumnSpec(pl.Boolean, default=False, required=False),
     "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+    # PRA PS1/26 Art. 123B(2) / CRE20.93: loan-level hedge flag that suppresses
+    # the 1.5x retail/RE currency-mismatch multiplier when True. Defaults to
+    # False (unhedged — multiplier fires under FX mismatch).
+    "is_hedged": ColumnSpec(pl.Boolean, default=False, required=False),
     # PRA PS1/26 Art. 161(1)(e)/(f)/(g): purchased-receivables F-IRB LGD routing.
     # Null for non-purchased-receivables exposures (default). When set, takes
     # precedence over the seniority-based LGD selector:

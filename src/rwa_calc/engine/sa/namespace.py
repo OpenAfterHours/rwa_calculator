@@ -1885,7 +1885,14 @@ class SALazyFrame:
 
         has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))
 
-        mismatch_applies = is_retail_or_re & has_mismatch
+        # Art. 123B(2) / CRE20.93: the 1.5x mismatch multiplier is suppressed when
+        # the exposure is hedged against currency risk. Default to False (unhedged)
+        # when the column is missing or null.
+        is_hedged_expr = (
+            pl.col("is_hedged").fill_null(False) if "is_hedged" in cols else pl.lit(False)
+        )
+
+        mismatch_applies = is_retail_or_re & has_mismatch & ~is_hedged_expr
 
         return self._lf.with_columns(
             [

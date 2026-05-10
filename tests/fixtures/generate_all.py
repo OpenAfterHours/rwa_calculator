@@ -249,6 +249,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_18",
             _generate_p218,
         ),
+        (
+            "P1.94a (is_hedged flag gates Art. 123B currency-mismatch multiplier)",
+            "p1_94a",
+            _generate_p194a,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1240,6 +1245,19 @@ def _generate_p218(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_18", None)
+
+
+def _generate_p194a(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.94a fixtures (is_hedged flag gates Art. 123B currency-mismatch multiplier)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_94a import save_p194a_fixtures
+
+        saved = save_p194a_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_94a", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

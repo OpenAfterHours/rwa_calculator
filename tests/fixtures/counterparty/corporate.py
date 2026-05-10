@@ -699,6 +699,29 @@ def create_corporate_counterparties() -> pl.DataFrame:
             "apply_fi_scalar": False,
             "is_managed_as_retail": False,
         },
+        # =============================================================================
+        # P2.22 / CRR regression guard: SME + infrastructure overlap
+        # Corporate SME (revenue £30m < EUR 50m threshold) that is also an
+        # infrastructure borrower — exercises the min_horizontal branch in
+        # supporting_factors.py that selects 0.75 over 0.7619.
+        #
+        # Hand-calc: EAD=1,500,000; RW=1.00 (Art. 122 unrated corporate);
+        #   RWA_pre=1,500,000; SME factor eligible (0.7619); infra factor
+        #   eligible (0.75); engine min_horizontal selects 0.75;
+        #   RWA_final=1,125,000.
+        # =============================================================================
+        {
+            "counterparty_reference": "CP_SME_INFRA_001",
+            "counterparty_name": "SME Infrastructure Solutions Ltd",
+            "entity_type": "corporate",
+            "country_code": "GB",
+            "annual_revenue": 30_000_000.0,  # £30m — below EUR 50m (~£43.66m) SME threshold
+            "total_assets": 25_000_000.0,
+            "default_status": False,
+            "sector_code": "42.21",  # Construction of utility projects
+            "apply_fi_scalar": False,
+            "is_managed_as_retail": False,
+        },
     ]
 
     df = pl.DataFrame(corporates, schema=dtypes_of(COUNTERPARTY_SCHEMA))

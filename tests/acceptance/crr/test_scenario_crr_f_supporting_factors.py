@@ -17,6 +17,9 @@ Regulatory References:
 - CRR Art. 501a: Infrastructure supporting factor
 """
 
+from __future__ import annotations
+
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -401,3 +404,177 @@ class TestCRRGroupF_ParameterizedValidation:
                 assert 0.7619 <= factor_float <= 0.85, (
                     f"Factor for {exposure:,} should be between 0.7619 and 0.85"
                 )
+
+
+# =============================================================================
+# P2.22: SME-vs-infrastructure supporting-factor overlap regression guard
+# =============================================================================
+
+
+class TestP222SMEInfraOverlapSubstitution:
+    """
+    P2.22 — Regression guard: when an exposure is eligible for BOTH the SME
+    supporting factor (CRR Art. 501) AND the infrastructure supporting factor
+    (CRR Art. 501a), the engine must apply the LOWER of the two factors.
+
+    Algebraic invariant:
+        0.75 (infra) < 0.7619 (SME tier-1) <= SME_blended <= 0.85 (SME tier-2)
+
+    Because the infra factor (0.75) is always strictly less than any admissible
+    SME blended factor (0.7619 to 0.85), the substitution rule mandates that the
+    infrastructure factor wins whenever both eligibility flags are set.
+
+    Regulatory references:
+    - CRR Art. 501(2) second subparagraph: when both factors are eligible, only
+      the lower of the two shall be applied.
+    - CRR Art. 501a(1): infrastructure supporting factor = 0.75 (flat, not tiered).
+
+    Test fixture:
+    - Counterparty: CP_SME_INFRA_001 — SME Infrastructure Solutions Ltd,
+      annual_revenue=30,000,000 GBP (eligible for SME factor),
+      sector_code=42.21 (transport infrastructure, eligible for infra factor).
+    - Loan: LOAN_SME_INFRA_001 — GBP 1,500,000 drawn, INFRASTRUCTURE_LOAN
+      product_type, counterparty=CP_SME_INFRA_001, unrated corporate (100% RW).
+
+    Hand-calculation (reporting_date=2025-12-31):
+        EAD = 1,500,000
+        RW  = 1.00 (CRR Art. 122 unrated corporate)
+        RWA_pre_factor = EAD × RW = 1,500,000
+
+        SME factor (tier-1, E=1.5m < threshold): 0.7619
+        Infra factor (flat):                      0.75
+        Effective factor applied (min rule):       0.75   [infra wins]
+        RWA_final = 1,500,000 × 0.75 = 1,125,000
+
+    Anti-assertion (regression probe):
+        If the engine applies SME tier-1 (0.7619) instead of infra (0.75):
+            RWA_final = 1,500,000 × 0.7619 = 1,142,850  (wrong)
+    """
+
+    @pytest.fixture(scope="class")
+    def p2_22_result(self, pipeline_results_df: pl.DataFrame) -> dict:
+        """
+        Extract the LOAN_SME_INFRA_001 row from the shared CRR pipeline results.
+
+        Uses the session-scoped pipeline_results_df fixture from conftest so the
+        pipeline is not re-run for this class.
+        """
+        row = get_result_for_exposure(pipeline_results_df, "LOAN_SME_INFRA_001")
+        if row is None:
+            pytest.skip(
+                "P2.22: LOAN_SME_INFRA_001 not found in pipeline results — "
+                "fixture may not have been generated yet"
+            )
+        return row
+
+    def test_p2_22_sme_infra_overlap_substitution_regression(
+        self,
+        p2_22_result: dict,
+    ) -> None:
+        """
+        P2.22 — SME-vs-infra overlap: infrastructure factor (0.75) must be applied.
+
+        When LOAN_SME_INFRA_001 is eligible for both the SME supporting factor
+        (CRR Art. 501) and the infrastructure supporting factor (CRR Art. 501a),
+        the engine must apply the LOWER factor.
+
+        Algebraic invariant (calibration guard):
+            0.75 < 0.7619 <= SME_blended <= 0.85
+        The infra factor (0.75) is always strictly less than any admissible SME
+        blended factor, so a future calibration change that violates this ordering
+        will break this test.
+
+        Regulatory references:
+        - CRR Art. 501(2) second subparagraph: apply only the lower factor.
+        - CRR Art. 501a(1): infrastructure factor = 0.75.
+
+        Arrange: LOAN_SME_INFRA_001, EAD=1,500,000 GBP, RW=1.00 (unrated corporate).
+        Act:     CRR SA pipeline (reporting_date=2025-12-31, STANDARDISED permissions).
+        Assert:
+            1. ead_final == 1,500,000 (full drawn, no CRM)
+            2. risk_weight == 1.00 (Art. 122 unrated corporate)
+            3. rwa_pre_factor == 1,500,000 (EAD × RW before factor)
+            4. is_sme == True (SME eligibility set)
+            5. is_infrastructure == True (infrastructure eligibility set)
+            6. supporting_factor == 0.75 (infra factor wins, NOT 0.7619)
+            7. supporting_factor_applied == True
+            8. rwa_final == 1,125,000 (1,500,000 × 0.75)
+
+        Anti-assertion (regression probe):
+            supporting_factor != 0.7619  — SME tier-1 factor must NOT be applied
+            even though the exposure is SME-tier-1 eligible (E < threshold).
+        """
+        # Arrange — tolerances
+        _EAD = 1_500_000.0
+        _RW = 1.00
+        _RWA_PRE = 1_500_000.0
+        _INFRA_FACTOR = 0.75
+        _SME_TIER1_FACTOR = 0.7619
+        _RWA_FINAL = 1_125_000.0  # 1,500,000 × 0.75
+        _RWA_IF_SME = 1_142_850.0  # 1,500,000 × 0.7619 (wrong path)
+        _MONEY_TOL = 0.50  # £0.50 absolute tolerance
+        _RW_TOL = 1e-6
+        _FACTOR_TOL = 1e-4
+
+        row = p2_22_result
+
+        # Assert 1 — EAD
+        assert row["ead_final"] == pytest.approx(_EAD, abs=_MONEY_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: expected ead_final={_EAD:,.0f}, "
+            f"got {row['ead_final']:,.2f}"
+        )
+
+        # Assert 2 — risk weight (unrated corporate = 100%)
+        assert row["risk_weight"] == pytest.approx(_RW, abs=_RW_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: expected risk_weight={_RW} "
+            f"(CRR Art. 122 unrated corporate), got {row['risk_weight']}"
+        )
+
+        # Assert 3 — RWA before factor
+        assert row["rwa_pre_factor"] == pytest.approx(_RWA_PRE, abs=_MONEY_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: expected rwa_pre_factor={_RWA_PRE:,.0f}, "
+            f"got {row['rwa_pre_factor']:,.2f}"
+        )
+
+        # Assert 4 — SME eligibility flag
+        assert row["is_sme"] is True, (
+            f"P2.22 LOAN_SME_INFRA_001: expected is_sme=True "
+            f"(revenue=30m GBP, E=1.5m < SME threshold), got {row['is_sme']}"
+        )
+
+        # Assert 5 — infrastructure eligibility flag
+        assert row["is_infrastructure"] is True, (
+            f"P2.22 LOAN_SME_INFRA_001: expected is_infrastructure=True "
+            f"(product_type=INFRASTRUCTURE_LOAN, sector_code=42.21), "
+            f"got {row['is_infrastructure']}"
+        )
+
+        # Assert 6 — factor value: infra must win, NOT SME tier-1
+        # Anti-assertion (regression probe): SME tier-1 (0.7619) must NOT be applied.
+        # Algebraic invariant: 0.75 (infra) < 0.7619 (SME tier-1) <= SME_blended <= 0.85
+        assert row["supporting_factor"] != pytest.approx(_SME_TIER1_FACTOR, abs=_FACTOR_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: supporting_factor must NOT be {_SME_TIER1_FACTOR} "
+            f"(SME tier-1) — CRR Art. 501(2) second subparagraph requires the LOWER factor "
+            f"(infra=0.75) when both eligibility flags are set. "
+            f"Algebraic invariant: 0.75 < 0.7619 <= SME_blended <= 0.85"
+        )
+        assert row["supporting_factor"] == pytest.approx(_INFRA_FACTOR, abs=_FACTOR_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: expected supporting_factor={_INFRA_FACTOR} "
+            f"(CRR Art. 501a(1) infrastructure factor — wins via min rule), "
+            f"got {row['supporting_factor']} "
+            f"(SME tier-1 would give {_SME_TIER1_FACTOR})"
+        )
+
+        # Assert 7 — factor is applied
+        assert row["supporting_factor_applied"] is True, (
+            f"P2.22 LOAN_SME_INFRA_001: expected supporting_factor_applied=True, "
+            f"got {row['supporting_factor_applied']}"
+        )
+
+        # Assert 8 — final RWA confirms substitution outcome
+        assert row["rwa_final"] == pytest.approx(_RWA_FINAL, abs=_MONEY_TOL), (
+            f"P2.22 LOAN_SME_INFRA_001: expected rwa_final={_RWA_FINAL:,.0f} "
+            f"(EAD 1,500,000 × RW 1.00 × infra_factor 0.75), "
+            f"got {row['rwa_final']:,.2f} "
+            f"(if SME tier-1 were applied: {_RWA_IF_SME:,.0f})"
+        )

@@ -1557,6 +1557,32 @@ def _supporting_factor_scenario_loans() -> list[Loan]:
             beel=0.0,
             seniority="senior",
         ),
+        # =============================================================================
+        # P2.22 / CRR regression guard: SME + infrastructure overlap
+        # £1.5m infrastructure loan to an SME corporate (revenue £30m).
+        # The classifier will set:
+        #   is_sme=True       (annual_revenue £30m < EUR 50m / ~£43.66m threshold)
+        #   is_infrastructure=True  (product_type contains "INFRASTRUCTURE")
+        # Both supporting factors are eligible; engine min_horizontal picks 0.75.
+        #
+        # Hand-calc: EAD=1,500,000; RW=1.00 (Art. 122 unrated corporate);
+        #   RWA_pre=1,500,000; SME factor 0.7619; infra factor 0.75;
+        #   min_horizontal = 0.75; RWA_final = 1,125,000.
+        # =============================================================================
+        Loan(
+            loan_reference="LOAN_SME_INFRA_001",
+            product_type="INFRASTRUCTURE_LOAN",
+            book_code="CORP_LENDING",
+            counterparty_reference="CP_SME_INFRA_001",
+            value_date=VALUE_DATE,
+            maturity_date=date(2036, 1, 1),
+            currency="GBP",
+            drawn_amount=1_500_000.0,  # £1.5m — below EUR 2.5m tier-1 threshold
+            interest=0.0,
+            lgd=0.45,
+            beel=0.0,
+            seniority="senior",
+        ),
     ]
 
 

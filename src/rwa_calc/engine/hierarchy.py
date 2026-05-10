@@ -34,7 +34,7 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
-from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.contracts.errors import ERROR_HIERARCHY_DEPTH, CalculationError
 from rwa_calc.data.column_spec import (
     ColumnSpec,
     apply_boolean_column_defaults,
@@ -51,7 +51,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RETAIL_RISK_WEIGHT,
 )
 from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
-from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.domain.enums import CQS, ErrorCategory, ErrorSeverity, ExposureClass
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
 
@@ -204,8 +204,13 @@ class HierarchyResolver:
                 }
             )
 
-        # Build ultimate parent mapping (LazyFrame)
+        # Build ultimate parent mapping (LazyFrame). The frame carries an
+        # internal ``truncated`` column flagging chains that hit ``max_depth``;
+        # we synthesise one HIE003 WARNING per truncated row and then drop the
+        # column so downstream consumers see the published schema.
         ultimate_parents = self._build_ultimate_parent_lazy(org_mappings)
+        errors.extend(_extract_hierarchy_depth_errors(ultimate_parents))
+        ultimate_parents = ultimate_parents.drop("truncated")
 
         # If ratings is None, create empty LazyFrame with expected schema
         if ratings is None:
@@ -260,8 +265,12 @@ class HierarchyResolver:
 
         Returns LazyFrame with columns:
         - counterparty_reference: The entity
-        - ultimate_parent_reference: Its ultimate parent
+        - ultimate_parent_reference: Its deepest reachable parent (the true
+          root, or the parent at ``max_depth`` if the chain was truncated)
         - hierarchy_depth: Number of levels traversed
+        - truncated: True iff the chain was cut off at ``max_depth``; consumed
+          by ``_build_counterparty_lookup`` to synthesise HIE003 WARNINGs and
+          stripped before the LazyFrame is exposed on ``CounterpartyLookup``.
         """
         edges = (
             org_mappings.select(
@@ -533,12 +542,14 @@ class HierarchyResolver:
         if facility_edges.height == 0:
             return empty_result
 
+        # The HIE003 channel is counterparty-scoped; drop the new ``truncated``
+        # marker column so the facility lookup keeps its established schema.
         resolved = _resolve_graph_eager(
             facility_edges,
             child_col="child_facility_reference",
             parent_col="parent_facility_reference",
             max_depth=max_depth,
-        )
+        ).drop("truncated")
 
         return resolved.rename(
             {
@@ -2963,6 +2974,45 @@ def _filter_mappings_by_child_type(
     )
 
 
+def _extract_hierarchy_depth_errors(
+    ultimate_parents: pl.LazyFrame,
+) -> list[CalculationError]:
+    """Synthesise HIE003 WARNINGs from the ``truncated`` column.
+
+    Materialises the (small) lookup frame, picks the rows whose chain was cut
+    off by the depth guard, and emits one ``ERROR_HIERARCHY_DEPTH`` per row.
+    Chains that terminate naturally (or hit the cycle break) are flagged
+    ``truncated == False`` upstream and produce no error here, preserving the
+    invariant that depth ``<= max_depth`` chains never warn.
+    """
+    truncated_rows = (
+        ultimate_parents.filter(pl.col("truncated"))
+        .select(["counterparty_reference", "ultimate_parent_reference", "hierarchy_depth"])
+        .collect()
+    )
+    errors: list[CalculationError] = []
+    for row in truncated_rows.iter_rows(named=True):
+        entity = row["counterparty_reference"]
+        deepest = row["ultimate_parent_reference"]
+        max_depth = row["hierarchy_depth"]
+        errors.append(
+            CalculationError(
+                code=ERROR_HIERARCHY_DEPTH,
+                message=(
+                    f"Counterparty hierarchy chain for '{entity}' exceeds "
+                    f"max_depth={max_depth}; resolved ultimate_parent_reference "
+                    f"truncated to '{deepest}'. Check org_mappings for chains "
+                    f"deeper than max_depth levels."
+                ),
+                severity=ErrorSeverity.WARNING,
+                category=ErrorCategory.HIERARCHY,
+                counterparty_reference=entity,
+                actual_value=deepest,
+            )
+        )
+    return errors
+
+
 def _resolve_graph_eager(
     edges: pl.DataFrame,
     child_col: str,
@@ -2983,7 +3033,14 @@ def _resolve_graph_eager(
         max_depth: Safety limit to prevent infinite loops on bad data
 
     Returns:
-        DataFrame with columns: entity (Utf8), root (Utf8), depth (Int32)
+        DataFrame with columns:
+        - entity (Utf8): The traversed child
+        - root (Utf8): The deepest reachable parent (true root if reached,
+          otherwise the parent at depth ``max_depth`` when truncated)
+        - depth (Int32): Number of levels traversed
+        - truncated (Boolean): True iff the traversal exited because of the
+          ``max_depth`` guard rather than reaching the natural root. Callers
+          use this column to synthesise HIE003 WARNINGs.
     """
     child_series = edges[child_col].to_list()
     parent_series = edges[parent_col].to_list()
@@ -2996,6 +3053,7 @@ def _resolve_graph_eager(
     entities: list[str] = []
     roots: list[str] = []
     depths: list[int] = []
+    truncated: list[bool] = []
 
     for entity in parent_of:
         current = entity
@@ -3008,13 +3066,29 @@ def _resolve_graph_eager(
             visited.add(next_parent)
             current = next_parent
             depth += 1
+        # Truncation: depth limit reached AND chain still has further parents.
+        # Natural termination (current not in parent_of) and cycle-detected
+        # break both leave the loop without tripping this branch, so neither
+        # produces a spurious HIE003.
+        was_truncated = depth == max_depth and current in parent_of
         entities.append(entity)
         roots.append(current)
         depths.append(depth)
+        truncated.append(was_truncated)
 
     return pl.DataFrame(
-        {"entity": entities, "root": roots, "depth": depths},
-        schema={"entity": pl.String, "root": pl.String, "depth": pl.Int32},
+        {
+            "entity": entities,
+            "root": roots,
+            "depth": depths,
+            "truncated": truncated,
+        },
+        schema={
+            "entity": pl.String,
+            "root": pl.String,
+            "depth": pl.Int32,
+            "truncated": pl.Boolean,
+        },
     )
 
 

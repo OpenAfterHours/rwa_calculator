@@ -664,6 +664,15 @@ class IRBPermissions:
 
     permissions: dict[ExposureClass, set[ApproachType]] = field(default_factory=dict)
 
+    # Art. 236(1)(a)(i) (PRA PS1/26): PSM LGD source choice for IRB guarantee
+    # parameter substitution. "option_ii" (default) uses the F-IRB supervisory
+    # LGD keyed on the GUARANTOR's seniority/FSE status (i.e. the LGD that would
+    # apply to a direct exposure to the guarantor). "option_i" uses the
+    # borrower's own unprotected (pre-CRM) LGD. The "no better than direct"
+    # floor (Art. 160(4)) continues to use the option_ii guarantor scalar so
+    # the comparison stays meaningful regardless of this switch.
+    psm_lgd_source: Literal["option_i", "option_ii"] = "option_ii"
+
     def is_permitted(self, exposure_class: ExposureClass, approach: ApproachType) -> bool:
         """Check if an approach is permitted for an exposure class."""
         if exposure_class not in self.permissions:
@@ -848,7 +857,12 @@ class CalculationConfig:
     )
     thresholds: RegulatoryThresholds = field(default_factory=RegulatoryThresholds.crr)
     permission_mode: PermissionMode = PermissionMode.STANDARDISED
-    irb_permissions: IRBPermissions = field(init=False)
+    # Optional explicit IRBPermissions override. When None (default) the value
+    # is derived in __post_init__ from permission_mode and framework. Passing a
+    # non-None value (or replacing via ``dataclasses.replace``) lets callers
+    # customise IRB-permission flags such as ``psm_lgd_source`` without having
+    # to reconstruct the master config from scratch.
+    irb_permissions: IRBPermissions | None = None
     equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     scaling_factor: Decimal = Decimal("1.06")  # IRB K scaling (CRR Art. 153)
     eur_gbp_rate: Decimal = Decimal("0.8732")  # FX rate for EUR threshold conversion
@@ -879,7 +893,14 @@ class CalculationConfig:
     log_format: Literal["text", "json"] = "text"  # "text" for humans, "json" for audit ingestion
 
     def __post_init__(self) -> None:
-        """Derive internal irb_permissions from permission_mode and framework."""
+        """Derive internal irb_permissions from permission_mode and framework.
+
+        Skips derivation when an explicit ``irb_permissions`` was supplied so
+        callers can override flags like ``psm_lgd_source`` without losing the
+        permission map.
+        """
+        if self.irb_permissions is not None:
+            return
         if self.permission_mode == PermissionMode.IRB:
             if self.framework == RegulatoryFramework.BASEL_3_1:
                 object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb_b31())

@@ -259,6 +259,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_17",
             _generate_p217,
         ),
+        (
+            "P2.43 (PSM LGD source switch — Art. 236(1)(a)(i) option (i))",
+            "p2_43",
+            _generate_p243,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1282,6 +1287,19 @@ def _generate_p217(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_17", None)
+
+
+def _generate_p243(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.43 fixtures (PSM LGD source switch — Art. 236(1)(a)(i) option (i))."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_43 import save_p243_fixtures
+
+        saved = save_p243_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_43", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

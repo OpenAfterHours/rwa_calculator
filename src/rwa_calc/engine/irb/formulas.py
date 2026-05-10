@@ -61,8 +61,8 @@ def _pd_floor_expression(
     Under CRR (Art. 163): Uniform 0.03% floor for all exposure classes.
     Under Basel 3.1 (CRE30.55): Differentiated floors:
         - Corporate/SME: 0.05%
-        - Retail mortgage: 0.05%
-        - QRRE transactors: 0.03%, revolvers: 0.10%
+        - Retail mortgage: 0.10% (Art. 163(1)(b))
+        - QRRE transactors: 0.05%, revolvers: 0.10% (Art. 163(1)(c))
         - Retail other: 0.05%
 
     Args:

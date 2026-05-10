@@ -1258,6 +1258,14 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("qualifies_as_retail").fill_null(True) == False)  # noqa: E712
         )
         .then(pl.lit(_SA_CRR_RW["non_reg_retail"]))
+        # Payroll/pension loans: 35% (CRR Art. 123 second subparagraph,
+        # inserted by CRR2 Reg. (EU) 2019/876 F68). Scalar identical to the
+        # Basel 3.1 payroll RW (PRA PS1/26 Art. 123(3)(a-b)), so the same
+        # B31_RETAIL_PAYROLL_LOAN_RW constant is reused via _SA_B31_RW.
+        .when(
+            uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False)
+        )
+        .then(pl.lit(_SA_B31_RW["payroll"]))
         # Regulatory retail (non-mortgage): 75% flat.
         .when(uc.str.contains("RETAIL", literal=True))
         .then(pl.lit(_SA_SHARED_RW["retail"]))

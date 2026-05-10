@@ -2980,15 +2980,14 @@ def _of_02_01_row(
 ) -> dict[str, object]:
     """Build an OF 02.01 row with modelled/SA RWA and U-TREA/S-TREA values.
 
-    For a credit-risk-only calculator, U-TREA = modelled RWA and S-TREA = SA RWA
-    for the credit risk row. At the total row, these are the same (only credit
-    risk is in scope).
+    U-TREA (col 0030) = modelled RWA + SA RWA per Annex II §1.3.2;
+    S-TREA (col 0040) = SA-equivalent RWA across the entire portfolio.
     """
     row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
     values = {
         "0010": modelled_rwa,
         "0020": sa_rwa,
-        "0030": modelled_rwa,
+        "0030": modelled_rwa + sa_rwa,
         "0040": sa_rwa,
     }
     for ref in column_refs:

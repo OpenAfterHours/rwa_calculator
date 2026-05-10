@@ -4087,12 +4087,27 @@ class TestOF0201CreditRiskRow:
         # E1=700, E2=1400, E3=100, E4=1050 → 3250
         assert cr_row["0020"][0] == pytest.approx(3250.0)
 
-    def test_u_trea_equals_modelled(self) -> None:
-        """Col 0030 (U-TREA) equals col 0010 for credit-risk-only calculator."""
+    def test_u_trea_is_sum_of_modelled_and_sa(self) -> None:
+        """P2.42: Col 0030 (U-TREA) must equal col 0010 + col 0020 (Annex II §1.3.2).
+
+        Arrange: four exposures with rwa_pre_floor sum=3000, sa_rwa sum=3250.
+        Act:     generate OF 02.01 under BASEL_3_1 framework.
+        Assert:  col 0030 == col 0010 + col 0020 == 6250.0.
+        """
+        # Arrange
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_b31_results_with_floor(), framework="BASEL_3_1")
         cr_row = bundle.of_02_01.filter(pl.col("row_ref") == "0010")
-        assert cr_row["0030"][0] == cr_row["0010"][0]
+
+        # Act / Assert
+        # Regulatory requirement: U-TREA = modelled_TREA + SA_TREA (Annex II §1.3.2)
+        # col 0010 (modelled) = 500+1500+100+900 = 3000
+        # col 0020 (SA)       = 700+1400+100+1050 = 3250
+        # col 0030 (U-TREA)   = 3000 + 3250 = 6250
+        assert cr_row["0030"][0] == pytest.approx(
+            cr_row["0010"][0] + cr_row["0020"][0]
+        ), "U-TREA (col 0030) must equal col 0010 + col 0020 per Annex II §1.3.2"
+        assert cr_row["0030"][0] == pytest.approx(6250.0)
 
     def test_s_trea_equals_sa(self) -> None:
         """Col 0040 (S-TREA) equals col 0020 for credit-risk-only calculator."""

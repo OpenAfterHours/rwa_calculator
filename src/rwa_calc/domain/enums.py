@@ -332,10 +332,15 @@ class SCRAGrade(StrEnum):
     """CET1 >= 14% AND leverage ratio >= 5% → 30% RW (>3m), 20% (≤3m) (CRE20.19)"""
 
     B = "B"
-    """CET1 > 5.5%, Leverage > 3%, meets minimum requirements → 75% RW (>3m), 50% (≤3m)"""
 
     C = "C"
     """Below minimum regulatory requirements → 150% RW"""
+
+
+SCRAGrade.B.__doc__ = (
+    "Substantial credit risk but meets published minimum requirements "
+    "(excluding buffers) (Art. 121(1)(b)) -> 75% RW (>3m), 50% (<=3m)"
+)
 
 
 class CommitmentType(StrEnum):

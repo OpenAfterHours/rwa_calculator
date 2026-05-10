@@ -35,7 +35,7 @@ _NODES = [f"CP_DEPTH_C{i}" for i in range(12)]
 def depth_truncation_bundle() -> RawDataBundle:
     """RawDataBundle with a 12-node straight chain exceeding max_depth=10."""
     # Arrange: 11 child→parent edges
-    children = [f"CP_DEPTH_C{i}" for i in range(11)]   # C0..C10
+    children = [f"CP_DEPTH_C{i}" for i in range(11)]  # C0..C10
     parents = [f"CP_DEPTH_C{i}" for i in range(1, 12)]  # C1..C11
 
     org_mappings = pl.DataFrame(
@@ -232,8 +232,7 @@ class TestHierarchyMaxDepthTruncation:
             f"got {c0_row['ultimate_parent_reference'][0]!r}"
         )
         assert c0_row["hierarchy_depth"][0] == 10, (
-            f"hierarchy_depth for truncated C0 should be 10, "
-            f"got {c0_row['hierarchy_depth'][0]}"
+            f"hierarchy_depth for truncated C0 should be 10, got {c0_row['hierarchy_depth'][0]}"
         )
 
     def test_chain_at_exactly_max_depth_does_not_emit_hie003(
@@ -264,8 +263,7 @@ class TestHierarchyMaxDepthTruncation:
             and e.counterparty_reference in {"CP_DEPTH_C1", "CP_DEPTH_C2"}
         ]
         assert len(spurious) == 0, (
-            f"Expected no HIE003 for CP_DEPTH_C1 or CP_DEPTH_C2, "
-            f"got: {spurious}"
+            f"Expected no HIE003 for CP_DEPTH_C1 or CP_DEPTH_C2, got: {spurious}"
         )
 
     def test_only_one_hie003_emitted_for_single_truncated_chain(

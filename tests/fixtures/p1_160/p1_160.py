@@ -111,28 +111,28 @@ RTG_BORROWER_REF = "RAT_BORR_P1_160"
 RTG_GUARANTOR_REF = "RAT_GUAR_P1_160_SUB"
 
 # Model IDs — separate per counterparty to allow clean resolution
-MODEL_ID_CORP_FIRB_BORR = "CORP_FIRB_BORR_P1_160"    # F-IRB for borrower (corporate)
-MODEL_ID_CORP_FIRB_GUAR = "CORP_FIRB_GUAR_P1_160"    # F-IRB for guarantor PSM path (corporate)
+MODEL_ID_CORP_FIRB_BORR = "CORP_FIRB_BORR_P1_160"  # F-IRB for borrower (corporate)
+MODEL_ID_CORP_FIRB_GUAR = "CORP_FIRB_GUAR_P1_160"  # F-IRB for guarantor PSM path (corporate)
 
 # Dates
 VALUE_DATE = date(2026, 1, 1)
 # maturity_date produces effective_maturity ≈ 2.5y from reporting_date 2027-06-30
 MATURITY_DATE = date(2028, 7, 1)
-GUARANTEE_MATURITY_DATE = date(2030, 12, 31)   # > facility maturity → no maturity mismatch
+GUARANTEE_MATURITY_DATE = date(2030, 12, 31)  # > facility maturity → no maturity mismatch
 RATING_DATE = date(2026, 1, 1)
 
 # IRB inputs
 # Borrower: PD=0.015, well above B31 corporate floor 0.0005 — no floor effect
-PD_BORROWER = 0.0150           # 1.5% corporate borrower PD
+PD_BORROWER = 0.0150  # 1.5% corporate borrower PD
 # Guarantor: PD=0.005, also above B31 corporate floor 0.0005 — no floor effect
-PD_GUARANTOR = 0.0050          # 0.5% corporate guarantor PD
+PD_GUARANTOR = 0.0050  # 0.5% corporate guarantor PD
 
 # Exposure amounts
-EAD_AMOUNT = 1_000_000.0       # GBP 1,000,000 — loan fully drawn
-AMOUNT_COVERED = 1_000_000.0   # 100% coverage — makes the is_guarantee_beneficial decision clear
+EAD_AMOUNT = 1_000_000.0  # GBP 1,000,000 — loan fully drawn
+AMOUNT_COVERED = 1_000_000.0  # 100% coverage — makes the is_guarantee_beneficial decision clear
 PERCENTAGE_COVERED = 1.0
 ORIGINAL_MATURITY_YEARS = 5.0  # > 1y → satisfies Art. 237(2)(a) eligibility
-EFFECTIVE_MATURITY = 2.5       # M = 2.5y (set explicitly to avoid date-rounding ambiguity)
+EFFECTIVE_MATURITY = 2.5  # M = 2.5y (set explicitly to avoid date-rounding ambiguity)
 
 
 # ---------------------------------------------------------------------------
@@ -327,10 +327,10 @@ def create_p1160_counterparties() -> pl.DataFrame:
             counterparty_name="P1.160 Corporate Borrower PLC",
             entity_type="corporate",
             country_code="GB",
-            annual_revenue=None,          # No revenue data — treated as large corp
+            annual_revenue=None,  # No revenue data — treated as large corp
             total_assets=None,
             default_status=False,
-            apply_fi_scalar=False,        # Non-FSE — no Art. 153(2) FI scalar
+            apply_fi_scalar=False,  # Non-FSE — no Art. 153(2) FI scalar
             is_managed_as_retail=False,
             is_financial_sector_entity=False,
             is_natural_person=False,
@@ -343,7 +343,7 @@ def create_p1160_counterparties() -> pl.DataFrame:
             annual_revenue=None,
             total_assets=None,
             default_status=False,
-            apply_fi_scalar=False,        # Non-FSE — no Art. 153(2) FI scalar
+            apply_fi_scalar=False,  # Non-FSE — no Art. 153(2) FI scalar
             is_managed_as_retail=False,
             is_financial_sector_entity=False,
             is_natural_person=False,
@@ -429,7 +429,7 @@ def create_p1160_ratings() -> pl.DataFrame:
             counterparty_reference=BORROWER_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="3A",          # ~1.5% PD band — investment grade corporate
+            rating_value="3A",  # ~1.5% PD band — investment grade corporate
             cqs=3,
             pd=PD_BORROWER,
             rating_date=RATING_DATE,
@@ -441,7 +441,7 @@ def create_p1160_ratings() -> pl.DataFrame:
             counterparty_reference=GUARANTOR_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="2A",          # ~0.5% PD band — investment grade corporate
+            rating_value="2A",  # ~0.5% PD band — investment grade corporate
             cqs=2,
             pd=PD_GUARANTOR,
             rating_date=RATING_DATE,

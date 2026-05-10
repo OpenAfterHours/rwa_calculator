@@ -162,13 +162,15 @@ RATING_DATE = date(2025, 12, 1)
 EXPECTED_GUARANTOR_RW_CRR_TABLE4: float = 0.20  # correct (post-fix, Art. 120(2) Table 4)
 EXPECTED_GUARANTOR_RW_CRR_TABLE3: float = 0.50  # bug     (pre-fix, Art. 120(1) Table 3)
 EXPECTED_RWA_CRR_POSTFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_CRR_TABLE4  # 200,000
-EXPECTED_RWA_CRR_PREFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_CRR_TABLE3   # 500,000
+EXPECTED_RWA_CRR_PREFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_CRR_TABLE3  # 500,000
 
 # Basel 3.1 (UK CQS 2 deviation: Table 3 = 30% for long-term):
 EXPECTED_GUARANTOR_RW_B31_TABLE4: float = 0.20  # correct (post-fix, Art. 120(2) Table 4)
-EXPECTED_GUARANTOR_RW_B31_TABLE3: float = 0.30  # bug     (pre-fix, Art. 120(1) Table 3, UK deviation)
+EXPECTED_GUARANTOR_RW_B31_TABLE3: float = (
+    0.30  # bug     (pre-fix, Art. 120(1) Table 3, UK deviation)
+)
 EXPECTED_RWA_B31_POSTFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_B31_TABLE4  # 200,000
-EXPECTED_RWA_B31_PREFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_B31_TABLE3   # 300,000
+EXPECTED_RWA_B31_PREFIX: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_B31_TABLE3  # 300,000
 
 
 # ---------------------------------------------------------------------------
@@ -543,19 +545,31 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  Borrower:  {BORROWER_REF} (corporate, GB, unrated)")
     print(f"  Guarantor: {GUARANTOR_REF} (institution, DE, CQS {GUARANTOR_CQS}, Moody's A2)")
     print(f"  Loan:      {LOAN_REF}  GBP {LOAN_DRAWN_AMOUNT:,.0f}")
-    print(f"             value_date={LOAN_VALUE_DATE}, maturity_date={LOAN_MATURITY_DATE} (81 days)")
-    print(f"             residual ≈ 0.2219y ≤ 0.25y → short-term gate fires")
-    print(f"  Guarantee: {GUARANTEE_REF}  100% coverage, original_maturity={ORIGINAL_MATURITY_YEARS}y")
+    print(
+        f"             value_date={LOAN_VALUE_DATE}, maturity_date={LOAN_MATURITY_DATE} (81 days)"
+    )
+    print("             residual ≈ 0.2219y ≤ 0.25y → short-term gate fires")
+    print(
+        f"  Guarantee: {GUARANTEE_REF}  100% coverage, original_maturity={ORIGINAL_MATURITY_YEARS}y"
+    )
     print()
     print("  CRR (CalculationConfig.crr()):")
-    print(f"    Table 4 (short-term, post-fix): CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_CRR_TABLE4:.0%}")
-    print(f"    Table 3 (long-term, pre-fix):   CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_CRR_TABLE3:.0%}")
+    print(
+        f"    Table 4 (short-term, post-fix): CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_CRR_TABLE4:.0%}"
+    )
+    print(
+        f"    Table 3 (long-term, pre-fix):   CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_CRR_TABLE3:.0%}"
+    )
     print(f"    Expected RWA (post-fix) = {EXPECTED_RWA_CRR_POSTFIX:,.0f}")
     print(f"    Bug RWA      (pre-fix)  = {EXPECTED_RWA_CRR_PREFIX:,.0f}")
     print()
     print("  B31 (CalculationConfig.basel_3_1()):")
-    print(f"    Table 4 (short-term, post-fix): CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_B31_TABLE4:.0%}")
-    print(f"    Table 3 (long-term, pre-fix):   CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_B31_TABLE3:.0%} (UK deviation)")
+    print(
+        f"    Table 4 (short-term, post-fix): CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_B31_TABLE4:.0%}"
+    )
+    print(
+        f"    Table 3 (long-term, pre-fix):   CQS {GUARANTOR_CQS} → {EXPECTED_GUARANTOR_RW_B31_TABLE3:.0%} (UK deviation)"
+    )
     print(f"    Expected RWA (post-fix) = {EXPECTED_RWA_B31_POSTFIX:,.0f}")
     print(f"    Bug RWA      (pre-fix)  = {EXPECTED_RWA_B31_PREFIX:,.0f}")
 

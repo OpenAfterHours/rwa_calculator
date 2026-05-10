@@ -64,9 +64,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
 from tests.fixtures.p1_157.p1_157 import (
     AMOUNT_COVERED,
     EAD_FACILITY,
@@ -79,6 +76,9 @@ from tests.fixtures.p1_157.p1_157 import (
     PD_GUARANTOR_RAW,
     PERCENTAGE_COVERED,
 )
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
 
 # =============================================================================
 # Scenario expected values (from hand-calculation in tmp/scenario-P1.157.md)
@@ -151,7 +151,6 @@ def _build_p1157_lf(
             # --- Exposure identity ---
             "exposure_reference": [FACILITY_REF],
             "exposure_class": ["retail_qrre"],
-
             # --- Borrower IRB parameters ---
             "pd": [PD_BORROWER],
             "lgd": [LGD_BORROWER],
@@ -161,16 +160,13 @@ def _build_p1157_lf(
             "requires_fi_scalar": [False],
             "has_one_day_maturity_floor": [False],
             "is_qrre_transactor": [False],
-
             # --- Pre-CRM IRB results ---
             "rwa": [borrower_rw * ead],
             "risk_weight": [borrower_rw],
             "expected_loss": [el_pre_crm],
-
             # --- Guarantee split (from CRM processor) ---
             "guaranteed_portion": [guaranteed],
             "unguaranteed_portion": [unguaranteed],
-
             # --- Guarantor attributes (joined by CRM processor) ---
             "guarantor_entity_type": ["corporate"],
             "guarantor_cqs": [1],
@@ -289,8 +285,7 @@ class TestP1157PSMNoBetterThanDirect:
         # Assert
         actual = row["rwa_irb_original"]
         assert actual == pytest.approx(EXPECTED_RWA_ORIGINAL, rel=1e-3), (
-            f"P1.157: rwa_irb_original should be {EXPECTED_RWA_ORIGINAL:,.0f}, "
-            f"got {actual:,.0f}"
+            f"P1.157: rwa_irb_original should be {EXPECTED_RWA_ORIGINAL:,.0f}, got {actual:,.0f}"
         )
 
     # -------------------------------------------------------------------------
@@ -592,9 +587,8 @@ class TestP1157PSMNoBetterThanDirect:
             f"Fixture: raw guarantor PD ({PD_GUARANTOR_RAW}) must be below "
             f"B31 corporate floor ({PD_GUARANTOR_FLOORED}) so Art. 160(4) is exercised"
         )
-        assert PD_GUARANTOR_FLOORED == pytest.approx(0.0005, abs=1e-10), (
-            f"B31 corporate PD floor should be 0.0005 (0.05%), "
-            f"got {PD_GUARANTOR_FLOORED}"
+        assert pytest.approx(0.0005, abs=1e-10) == PD_GUARANTOR_FLOORED, (
+            f"B31 corporate PD floor should be 0.0005 (0.05%), got {PD_GUARANTOR_FLOORED}"
         )
 
     def test_p1_157_percentage_covered_is_sixty_pct(self) -> None:
@@ -606,9 +600,9 @@ class TestP1157PSMNoBetterThanDirect:
 
         Assert: PERCENTAGE_COVERED == 0.60, AMOUNT_COVERED == 600,000.
         """
-        assert PERCENTAGE_COVERED == pytest.approx(0.60, abs=1e-10), (
+        assert pytest.approx(0.60, abs=1e-10) == PERCENTAGE_COVERED, (
             f"Fixture: PERCENTAGE_COVERED should be 0.60, got {PERCENTAGE_COVERED}"
         )
-        assert AMOUNT_COVERED == pytest.approx(600_000.0, abs=0.01), (
+        assert pytest.approx(600_000.0, abs=0.01) == AMOUNT_COVERED, (
             f"Fixture: AMOUNT_COVERED should be 600,000, got {AMOUNT_COVERED:,.0f}"
         )

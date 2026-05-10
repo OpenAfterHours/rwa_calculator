@@ -62,17 +62,11 @@ Code references (post-fix):
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_151.p1_151 import (
-    COUNTERPARTY_REF,
     DRAWN_DILUTION,
     DRAWN_SENIOR,
     DRAWN_SUB,
@@ -86,6 +80,10 @@ from tests.fixtures.p1_151.p1_151 import (
     REPORTING_DATE,
 )
 
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
+
 # ---------------------------------------------------------------------------
 # Fixture paths
 # ---------------------------------------------------------------------------
@@ -96,10 +94,10 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_151"
 # Tolerances (from scenario-architect)
 # ---------------------------------------------------------------------------
 
-_ABS_TOL_LGD = 1e-6    # exact LGD comparison — supervisory scalars are hard-coded
-_ABS_TOL_PD = 1e-6     # exact PD comparison
-_ABS_TOL_RWA = 1e-2    # ±£0.01 on RWA (tight — matches scenario hand-calc exactly)
-_ABS_TOL_EL = 1e-2     # ±£0.01 on expected loss
+_ABS_TOL_LGD = 1e-6  # exact LGD comparison — supervisory scalars are hard-coded
+_ABS_TOL_PD = 1e-6  # exact PD comparison
+_ABS_TOL_RWA = 1e-2  # ±£0.01 on RWA (tight — matches scenario hand-calc exactly)
+_ABS_TOL_EL = 1e-2  # ±£0.01 on expected loss
 
 # ---------------------------------------------------------------------------
 # Expected values (from scenario-architect hand-calculation)
@@ -131,7 +129,7 @@ _EXPECTED_RWA_DILUTION = 325_681.70
 _EXPECTED_EL_DILUTION = 2_000.00
 
 # Pre-fix wrong LGDs (what the engine currently returns without subtype routing)
-_WRONG_LGD_SUB = 0.75       # standard subordinated, not purchased receivables
+_WRONG_LGD_SUB = 0.75  # standard subordinated, not purchased receivables
 _WRONG_LGD_DILUTION = 0.40  # seniority="senior" fallback, not dilution_risk
 
 
@@ -461,9 +459,7 @@ class TestP1151Art161PurchasedReceivablesLGD:
 
         for loan_ref in refs:
             rows = df.filter(pl.col("exposure_reference") == loan_ref).to_dicts()
-            assert len(rows) == 1, (
-                f"P1.151: expected 1 IRB row for {loan_ref!r}, got {len(rows)}."
-            )
+            assert len(rows) == 1, f"P1.151: expected 1 IRB row for {loan_ref!r}, got {len(rows)}."
             approach = rows[0].get("approach_applied") or rows[0].get("approach")
             assert approach == "foundation_irb", (
                 f"P1.151: {loan_ref!r} should route to foundation_irb, got {approach!r}. "
@@ -485,7 +481,7 @@ class TestP1151Art161PurchasedReceivablesLGD:
         Assert: PD (0.01) > B31 corporate floor (0.0005).
         """
         _b31_corporate_pd_floor = 0.0005
-        assert PD > _b31_corporate_pd_floor, (
+        assert _b31_corporate_pd_floor < PD, (
             f"Fixture sanity: PD ({PD}) must exceed B31 corporate floor "
             f"({_b31_corporate_pd_floor}) so the PD floor does not bind "
             f"and obscure the LGD routing assertions."

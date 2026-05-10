@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
@@ -66,7 +67,7 @@ _LOAN_REF = "LOAN_P1161"
 
 # Expected RWA outcomes (from hand-calc in architect proposal)
 _EXPECTED_RWA_RUN_A: float = 1_000_000.0  # regression pin: guarantee not beneficial
-_EXPECTED_RWA_RUN_B: float = 600_000.0    # new path: cash collateral reduces EAD
+_EXPECTED_RWA_RUN_B: float = 600_000.0  # new path: cash collateral reduces EAD
 
 # Expected EAD after collateral (Run B only)
 _EXPECTED_EAD_RUN_B: float = 600_000.0
@@ -144,7 +145,7 @@ def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> pl.DataFr
         "SA results should not be None — check CalculationConfig.basel_3_1() produces "
         "SA routing for a corporate unrated SA exposure."
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 def _get_total_rwa(df: pl.DataFrame) -> float:
@@ -258,9 +259,7 @@ class TestB31_P1_161_Art191A_FundedOnlyLookThrough:
     # Run A REGRESSION PIN — must PASS before and after fix
     # -------------------------------------------------------------------------
 
-    def test_run_a_election_none_regression(
-        self, run_a_results: pl.DataFrame
-    ) -> None:
+    def test_run_a_election_none_regression(self, run_a_results: pl.DataFrame) -> None:
         """
         P1.161 Run A: total RWA = 1,000,000 when look_through_election="none".
 
@@ -331,9 +330,7 @@ class TestB31_P1_161_Art191A_FundedOnlyLookThrough:
             f"engine-implementer must add Art. 191A(2)(e)(i) look-through path."
         )
 
-    def test_run_b_ead_final_reduced_by_collateral(
-        self, run_b_results: pl.DataFrame
-    ) -> None:
+    def test_run_b_ead_final_reduced_by_collateral(self, run_b_results: pl.DataFrame) -> None:
         """
         P1.161 Run B: ead_final = 600,000 after FCSM cash collateral offset.
 

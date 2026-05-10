@@ -103,7 +103,7 @@ from rwa_calc.data.schemas import COLLATERAL_SCHEMA, COUNTERPARTY_SCHEMA, LOAN_S
 # ---------------------------------------------------------------------------
 
 COUNTERPARTY_REF: str = "CP_P186"
-LOAN_REF_SL: str = "LOAN_P186_SL"   # secured lending (is_sft=False)
+LOAN_REF_SL: str = "LOAN_P186_SL"  # secured lending (is_sft=False)
 LOAN_REF_SFT: str = "LOAN_P186_SFT"  # SFT control (is_sft=True)
 COLLATERAL_REF_SL: str = "COLL_P186_SL"
 COLLATERAL_REF_SFT: str = "COLL_P186_SFT"
@@ -120,23 +120,23 @@ MARKET_VALUE: float = 600_000.0
 # ---------------------------------------------------------------------------
 
 # 10-day base haircuts from CRR Art. 224 Table 1
-_H_C_10D: float = 0.02   # govt_bond CQS 1, 1-5y residual maturity
+_H_C_10D: float = 0.02  # govt_bond CQS 1, 1-5y residual maturity
 _H_FX_10D: float = 0.08  # FX mismatch haircut (CRR Art. 233)
 
 # Liquidation periods (Art. 224(2))
-_T_M_SL: int = 20   # Art. 224(2)(a): secured lending default
-_T_M_SFT: int = 5   # Art. 224(2)(c): repo-style SFT
+_T_M_SL: int = 20  # Art. 224(2)(a): secured lending default
+_T_M_SFT: int = 5  # Art. 224(2)(c): repo-style SFT
 
 # ---------------------------------------------------------------------------
 # Hand-calculated expected outputs — single source of truth for assertions
 # ---------------------------------------------------------------------------
 
 # Scaled haircuts for secured lending (20-day)
-H_C_SL: float = _H_C_10D * math.sqrt(_T_M_SL / 10)    # = 0.028284271247461903
+H_C_SL: float = _H_C_10D * math.sqrt(_T_M_SL / 10)  # = 0.028284271247461903
 H_FX_SL: float = _H_FX_10D * math.sqrt(_T_M_SL / 10)  # = 0.113137084989847603
 
 # Scaled haircuts for SFT (5-day)
-H_C_SFT: float = _H_C_10D * math.sqrt(_T_M_SFT / 10)    # = 0.014142135623730951
+H_C_SFT: float = _H_C_10D * math.sqrt(_T_M_SFT / 10)  # = 0.014142135623730951
 H_FX_SFT: float = _H_FX_10D * math.sqrt(_T_M_SFT / 10)  # = 0.056568542494923804
 
 # Adjusted collateral: C* = C × (1 − H_c − H_fx)
@@ -144,13 +144,13 @@ _C_ADJ_SL: float = MARKET_VALUE * (1.0 - H_C_SL - H_FX_SL)
 _C_ADJ_SFT: float = MARKET_VALUE * (1.0 - H_C_SFT - H_FX_SFT)
 
 # EAD (E*) = max(0, E − C*)
-EXPECTED_EAD_SL: float = max(0.0, DRAWN_AMOUNT - _C_ADJ_SL)   # ≈ 484_852.81374238568
+EXPECTED_EAD_SL: float = max(0.0, DRAWN_AMOUNT - _C_ADJ_SL)  # ≈ 484_852.81374238568
 EXPECTED_EAD_SFT: float = max(0.0, DRAWN_AMOUNT - _C_ADJ_SFT)  # ≈ 442_426.40687119284
 
 # SA risk weight: CRR Art. 122, unrated corporate → 100%
 _RISK_WEIGHT: float = 1.0
 
-EXPECTED_RWA_SL: float = EXPECTED_EAD_SL * _RISK_WEIGHT   # ≈ 484_852.81
+EXPECTED_RWA_SL: float = EXPECTED_EAD_SL * _RISK_WEIGHT  # ≈ 484_852.81
 EXPECTED_RWA_SFT: float = EXPECTED_EAD_SFT * _RISK_WEIGHT  # ≈ 442_426.41
 
 # Negative-pin: EAD that must NOT appear if the fix is absent.
@@ -346,12 +346,12 @@ def create_p1186_loans() -> pl.DataFrame:
     rows = [
         _Loan(
             loan_reference=LOAN_REF_SL,
-            is_sft=False,   # secured lending → 20-day liquidation period
+            is_sft=False,  # secured lending → 20-day liquidation period
             **common,
         ),
         _Loan(
             loan_reference=LOAN_REF_SFT,
-            is_sft=True,    # SFT → 5-day liquidation period
+            is_sft=True,  # SFT → 5-day liquidation period
             **common,
         ),
     ]
@@ -384,8 +384,8 @@ def create_p1186_collateral() -> pl.DataFrame:
         "residual_maturity_years": 2.0,
         "original_maturity_years": 5.0,
         "is_eligible_financial_collateral": True,
-        "liquidation_period_days": None,      # load-bearing: None → engine derives T_m
-        "revaluation_frequency_days": None,   # daily revaluation → factor=1.0
+        "liquidation_period_days": None,  # load-bearing: None → engine derives T_m
+        "revaluation_frequency_days": None,  # daily revaluation → factor=1.0
         "qualifies_for_zero_haircut": False,  # Art. 227 zero-haircut does not apply
         "beneficiary_type": "loan",
     }
@@ -458,13 +458,13 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  H_c (base 10-day)  = {_H_C_10D:.4f} (2.0%)")
     print(f"  H_fx (base 10-day) = {_H_FX_10D:.4f} (8.0%)")
     print()
-    print(f"  LOAN_P186_SL  (is_sft=False → T_m=20d, Art. 224(2)(a)):")
+    print("  LOAN_P186_SL  (is_sft=False → T_m=20d, Art. 224(2)(a)):")
     print(f"    H_c  = {H_C_SL:.15f}")
     print(f"    H_fx = {H_FX_SL:.15f}")
     print(f"    EAD  = {EXPECTED_EAD_SL:>20.11f}  (EXPECTED_EAD_SL)")
     print(f"    RWA  = {EXPECTED_RWA_SL:>20.2f}  (EXPECTED_RWA_SL)")
     print()
-    print(f"  LOAN_P186_SFT (is_sft=True  → T_m=5d,  Art. 224(2)(c)):")
+    print("  LOAN_P186_SFT (is_sft=True  → T_m=5d,  Art. 224(2)(c)):")
     print(f"    H_c  = {H_C_SFT:.15f}")
     print(f"    H_fx = {H_FX_SFT:.15f}")
     print(f"    EAD  = {EXPECTED_EAD_SFT:>20.11f}  (EXPECTED_EAD_SFT)")

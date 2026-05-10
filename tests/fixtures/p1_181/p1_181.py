@@ -105,7 +105,7 @@ MATURITY_DATE: date = date(2031, 3, 1)  # 5-year term loan
 EAD: float = 1_000_000.0
 
 # LTV values
-LTV_LOW: float = 0.40   # Exposure A — below 50% threshold → whole loan at 50%
+LTV_LOW: float = 0.40  # Exposure A — below 50% threshold → whole loan at 50%
 LTV_HIGH: float = 0.80  # Exposures B and C — above 50% threshold → proportion split
 
 # CQS values (Art. 122 Table 6)
@@ -366,7 +366,7 @@ def create_p1181_loans() -> pl.DataFrame:
             seniority="senior",
             book_code="BANKING",
             is_sft=False,
-            ltv=LTV_LOW,           # 0.40 — below 50% LTV threshold
+            ltv=LTV_LOW,  # 0.40 — below 50% LTV threshold
             has_income_cover=True,  # income cover met → Art. 126(2) applies
             property_type="commercial",
             is_defaulted=False,
@@ -388,7 +388,7 @@ def create_p1181_loans() -> pl.DataFrame:
             seniority="senior",
             book_code="BANKING",
             is_sft=False,
-            ltv=LTV_HIGH,           # 0.80 — above 50% LTV threshold → proportion split
+            ltv=LTV_HIGH,  # 0.80 — above 50% LTV threshold → proportion split
             has_income_cover=True,
             property_type="commercial",
             is_defaulted=False,
@@ -410,7 +410,7 @@ def create_p1181_loans() -> pl.DataFrame:
             seniority="senior",
             book_code="BANKING",
             is_sft=False,
-            ltv=LTV_HIGH,           # 0.80 — above 50% LTV threshold
+            ltv=LTV_HIGH,  # 0.80 — above 50% LTV threshold
             has_income_cover=True,
             property_type="commercial",
             is_defaulted=False,
@@ -441,11 +441,11 @@ def create_p1181_ratings() -> pl.DataFrame:
             rating_type="internal",
             rating_agency=None,
             rating_value=None,
-            cqs=None,           # null → unrated corporate → Art. 122 100%
+            cqs=None,  # null → unrated corporate → Art. 122 100%
             pd=None,
             rating_date=VALUE_DATE,
             is_solicited=False,
-            model_id=None,      # no IRB model → SA path
+            model_id=None,  # no IRB model → SA path
         ),
         # CQS=1 counterparty — external agency rating
         _Rating(
@@ -454,11 +454,11 @@ def create_p1181_ratings() -> pl.DataFrame:
             rating_type="external",
             rating_agency="SP",
             rating_value="AAA",
-            cqs=1,              # CQS=1 → Art. 122 Table 6 → 20% corporate RW
+            cqs=1,  # CQS=1 → Art. 122 Table 6 → 20% corporate RW
             pd=None,
             rating_date=VALUE_DATE,
             is_solicited=True,
-            model_id=None,      # no IRB model → SA path
+            model_id=None,  # no IRB model → SA path
         ),
     ]
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(RATINGS_SCHEMA))
@@ -516,9 +516,15 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Bug (pre-fix): residual leg uses cre_rw_standard=1.00 (hardcoded)")
     print("Fix: use counterparty CQS risk weight (Art. 122 corporate lookup)")
     print()
-    print(f"  LN-CRE-A  LTV={LTV_LOW:.2f}  unrated  RW={EXPECTED_RW_A:.4f}  RWA={EXPECTED_RWA_A:>12,.2f}")
-    print(f"  LN-CRE-B  LTV={LTV_HIGH:.2f}  unrated  RW={EXPECTED_RW_B:.4f}  RWA={EXPECTED_RWA_B:>12,.2f}")
-    print(f"  LN-CRE-C  LTV={LTV_HIGH:.2f}  CQS=1    RW={EXPECTED_RW_C:.4f}  RWA={EXPECTED_RWA_C:>12,.2f}")
+    print(
+        f"  LN-CRE-A  LTV={LTV_LOW:.2f}  unrated  RW={EXPECTED_RW_A:.4f}  RWA={EXPECTED_RWA_A:>12,.2f}"
+    )
+    print(
+        f"  LN-CRE-B  LTV={LTV_HIGH:.2f}  unrated  RW={EXPECTED_RW_B:.4f}  RWA={EXPECTED_RWA_B:>12,.2f}"
+    )
+    print(
+        f"  LN-CRE-C  LTV={LTV_HIGH:.2f}  CQS=1    RW={EXPECTED_RW_C:.4f}  RWA={EXPECTED_RWA_C:>12,.2f}"
+    )
 
 
 def main() -> None:

@@ -21,7 +21,6 @@ References:
 
 from __future__ import annotations
 
-import importlib
 from decimal import Decimal
 
 import polars as pl
@@ -188,9 +187,7 @@ class TestB31DerivationTableShape:
         value = _B31[Decimal("0.50")]
 
         # Assert
-        assert value == Decimal("0.25"), (
-            f"PS1/26 Art. 129(5)(b): expected 0.25, got {value}"
-        )
+        assert value == Decimal("0.25"), f"PS1/26 Art. 129(5)(b): expected 0.25, got {value}"
 
 
 # =============================================================================

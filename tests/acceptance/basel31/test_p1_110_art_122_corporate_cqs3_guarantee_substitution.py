@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
@@ -58,14 +59,14 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_110" / "d
 _LOAN_REF = "LOAN_P1110"
 
 # Expected values (from fixture module and task description)
-_EXPECTED_RW_B31 = 0.75        # corporate CQS 3, B31 Art. 122(2) Table 6 — post-fix
+_EXPECTED_RW_B31 = 0.75  # corporate CQS 3, B31 Art. 122(2) Table 6 — post-fix
 _EXPECTED_RWA_B31 = 750_000.0  # 1,000,000 × 0.75 — post-fix
 
-_EXPECTED_RW_CRR = 1.00         # corporate CQS 3, CRR Table 5 — regression pin
-_EXPECTED_RWA_CRR = 1_000_000.0 # 1,000,000 × 1.00 — regression pin
+_EXPECTED_RW_CRR = 1.00  # corporate CQS 3, CRR Table 5 — regression pin
+_EXPECTED_RWA_CRR = 1_000_000.0  # 1,000,000 × 1.00 — regression pin
 
 # Pre-fix values (what the engine currently emits, causing the test to fail)
-_PREFIX_RW_B31 = 1.00            # bug: returns CRR value instead of B31 value
+_PREFIX_RW_B31 = 1.00  # bug: returns CRR value instead of B31 value
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +128,7 @@ def _run_pipeline(config: CalculationConfig) -> pl.DataFrame:
     assert results.sa_results is not None, (
         "SA results should not be None — check PermissionMode.STANDARDISED config"
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 def _get_guaranteed_row(df: pl.DataFrame) -> dict:
@@ -233,9 +234,7 @@ class TestP1110Art122CorporateCQS3GuaranteeSubstitution:
     # B31 DISCRIMINATING ASSERTION — this FAILS before the engine fix
     # -------------------------------------------------------------------------
 
-    def test_p1_110_b31_guaranteed_risk_weight_is_75pct(
-        self, b31_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_110_b31_guaranteed_risk_weight_is_75pct(self, b31_sa_results: pl.DataFrame) -> None:
         """
         P1.110 DISCRIMINATING: B31 guaranteed-portion risk_weight = 0.75.
 
@@ -266,9 +265,7 @@ class TestP1110Art122CorporateCQS3GuaranteeSubstitution:
             f"CRR Table 5 (100%) instead of B31 Table 6 (75%) for guarantee substitution."
         )
 
-    def test_p1_110_b31_total_rwa_is_750k(
-        self, b31_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_110_b31_total_rwa_is_750k(self, b31_sa_results: pl.DataFrame) -> None:
         """
         P1.110 DISCRIMINATING: B31 total RWA = 750,000.
 
@@ -321,9 +318,7 @@ class TestP1110Art122CorporateCQS3GuaranteeSubstitution:
             f"The B31 fix must not change CRR Table 5 routing."
         )
 
-    def test_p1_110_crr_total_rwa_is_1m(
-        self, crr_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_110_crr_total_rwa_is_1m(self, crr_sa_results: pl.DataFrame) -> None:
         """
         P1.110 CRR regression: total RWA = 1,000,000.
 
@@ -348,9 +343,7 @@ class TestP1110Art122CorporateCQS3GuaranteeSubstitution:
     # EAD INTEGRITY — regression guard (both frameworks)
     # -------------------------------------------------------------------------
 
-    def test_p1_110_b31_guaranteed_ead_is_1m(
-        self, b31_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_110_b31_guaranteed_ead_is_1m(self, b31_sa_results: pl.DataFrame) -> None:
         """
         P1.110: guaranteed-portion EAD = 1,000,000 (full coverage under B31).
 
@@ -370,9 +363,7 @@ class TestP1110Art122CorporateCQS3GuaranteeSubstitution:
             f"got {row['ead_final']:,.0f}"
         )
 
-    def test_p1_110_crr_guaranteed_ead_is_1m(
-        self, crr_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_110_crr_guaranteed_ead_is_1m(self, crr_sa_results: pl.DataFrame) -> None:
         """
         P1.110: guaranteed-portion EAD = 1,000,000 (full coverage under CRR).
 

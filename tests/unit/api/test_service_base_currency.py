@@ -13,11 +13,8 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-import pytest
-
 from rwa_calc.api.service import CreditRiskCalc
 from rwa_calc.contracts.config import CalculationConfig
-
 
 # =============================================================================
 # CreditRiskCalc._create_config() forwarding tests

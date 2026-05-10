@@ -56,20 +56,16 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_127"
 from tests.fixtures.p1_127.p1_127 import (  # noqa: E402
     EXPECTED_EL_D,
     EXPECTED_EL_ND,
-    EXPECTED_EXCESS_ND,
     EXPECTED_POOL_B_D,
     EXPECTED_POOL_B_ND,
     EXPECTED_SHORTFALL_D,
     EXPECTED_SHORTFALL_ND,
     EXPECTED_TOTAL_AVA,
     EXPECTED_TOTAL_EL,
-    EXPECTED_TOTAL_EXCESS_T2,
     EXPECTED_TOTAL_OTHER_OFR,
     EXPECTED_TOTAL_POOL_B,
     EXPECTED_TOTAL_PROV,
     EXPECTED_TOTAL_SHORTFALL,
-    LOAN_REF_D,
-    LOAN_REF_ND,
 )
 
 # ---------------------------------------------------------------------------
@@ -320,7 +316,9 @@ class TestP1127Art159PoolBAVARegressionGuard:
         )
 
         # Guard 2 — portfolio-level recompute bug (453,375 − 230,000 = 223,375)
-        assert shortfall != pytest.approx(_BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE, abs=Decimal("0.01")), (
+        assert shortfall != pytest.approx(
+            _BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE, abs=Decimal("0.01")
+        ), (
             f"P1.127 Guard 2 REGRESSION: total_el_shortfall == {_BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE} "
             f"indicates the aggregator is computing EL_total − pool_b_total "
             f"(portfolio-level recompute) instead of summing per-exposure shortfalls. "

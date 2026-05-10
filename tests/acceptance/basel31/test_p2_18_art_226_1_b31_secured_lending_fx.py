@@ -92,7 +92,11 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p2_18"
 try:
     from tests.fixtures.p2_18.p2_18 import (
         EAD_FINAL as _EAD_FINAL,
+    )
+    from tests.fixtures.p2_18.p2_18 import (
         EAD_NO_REVAL_SCALING as _EAD_NO_REVAL_SCALING,
+    )
+    from tests.fixtures.p2_18.p2_18 import (
         RWA_FINAL as _RWA_FINAL,
     )
 except ImportError:
@@ -307,9 +311,7 @@ class TestP218Art2261B31SecuredLendingFX:
     # Regression guard 2 — BOTH H_c AND H_fx received the reval factor
     # ------------------------------------------------------------------
 
-    def test_p2_18_ead_final_greater_than_235000_confirms_dual_channel_reval(
-        self, result
-    ) -> None:
+    def test_p2_18_ead_final_greater_than_235000_confirms_dual_channel_reval(self, result) -> None:
         """
         EAD must exceed 235,000 — confirming both H_c and H_fx were reval-scaled.
 

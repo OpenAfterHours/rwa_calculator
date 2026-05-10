@@ -49,20 +49,10 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import (
-    FACILITY_MAPPING_SCHEMA,
-    FACILITY_SCHEMA,
-    LENDING_MAPPING_SCHEMA,
-    RATINGS_SCHEMA,
-)
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_95.p1_95 import (
     EAD,
     EXPECTED_RW_BORROWER,
@@ -82,6 +72,17 @@ from tests.fixtures.p1_95.p1_95 import (
     LOAN_REF_NULL,
 )
 
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import (
+    FACILITY_MAPPING_SCHEMA,
+    FACILITY_SCHEMA,
+    LENDING_MAPPING_SCHEMA,
+    RATINGS_SCHEMA,
+)
+from rwa_calc.engine.pipeline import PipelineOrchestrator
+
 # ---------------------------------------------------------------------------
 # Fixture paths
 # ---------------------------------------------------------------------------
@@ -92,8 +93,8 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_95"
 # Tolerances
 # ---------------------------------------------------------------------------
 
-_RW_TOL = 1e-6    # absolute on risk_weight
-_AMT_TOL = 0.50   # £0.50 absolute on rwa_final / ead_final
+_RW_TOL = 1e-6  # absolute on risk_weight
+_AMT_TOL = 0.50  # £0.50 absolute on rwa_final / ead_final
 
 # ---------------------------------------------------------------------------
 # Guarantee status constants — values the engine emits
@@ -166,7 +167,7 @@ def p1_95_sa_results() -> pl.DataFrame:
         "P1.95: SA results must not be None for SA-only standardised config. "
         "Check PermissionMode.STANDARDISED and CalculationConfig.basel_3_1()."
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 # ---------------------------------------------------------------------------
@@ -813,6 +814,5 @@ class TestP195StructuralGuards:
 
         # Assert
         assert row["approach_applied"] == "standardised", (
-            f"P1.95: expected approach_applied='standardised', "
-            f"got {row['approach_applied']!r}."
+            f"P1.95: expected approach_applied='standardised', got {row['approach_applied']!r}."
         )

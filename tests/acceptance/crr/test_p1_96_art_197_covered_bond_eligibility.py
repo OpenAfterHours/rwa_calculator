@@ -76,14 +76,14 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_96.p1_96 import (
     LOAN_REF_A,
     LOAN_REF_B,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -96,8 +96,8 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_96"
 # ---------------------------------------------------------------------------
 
 _REPORTING_DATE = date(2026, 1, 1)
-_ABS_TOL = 0.50    # £0.50 on 6-figure EAD (~0.00005% relative error)
-_RW_TOL = 1e-9     # tight tolerance for exact 100% risk weight
+_ABS_TOL = 0.50  # £0.50 on 6-figure EAD (~0.00005% relative error)
+_RW_TOL = 1e-9  # tight tolerance for exact 100% risk weight
 
 # Post-fix expected values from the scenario proposal (NOT from the fixture
 # builder's EAD_FINAL_A which encodes the current buggy FCSM behaviour).

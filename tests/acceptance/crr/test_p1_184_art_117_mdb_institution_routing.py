@@ -99,13 +99,13 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_184"
 # Scenario constants (single source of truth, mirrors p1_184.py)
 # ---------------------------------------------------------------------------
 
-_LOAN_RATED = "L_MDB_RATED"           # rated non-named MDB, institution_cqs=2
+_LOAN_RATED = "L_MDB_RATED"  # rated non-named MDB, institution_cqs=2
 _LOAN_UNRATED_SOV1 = "L_MDB_UNRATED_SOV1"  # unrated non-named MDB, sovereign_cqs=1
 _LOAN_UNRATED_NOSOV = "L_MDB_UNRATED_NOSOV"  # unrated non-named MDB, no sovereign
-_LOAN_NAMED = "L_MDB_NAMED"           # named MDB (entity_type=mdb_named)
+_LOAN_NAMED = "L_MDB_NAMED"  # named MDB (entity_type=mdb_named)
 
 # Tolerances
-_RW_TOL = 1e-6   # absolute on risk_weight
+_RW_TOL = 1e-6  # absolute on risk_weight
 _RWA_TOL = 0.50  # £0.50 absolute on rwa_final (covers FX rounding)
 
 # ---------------------------------------------------------------------------
@@ -159,9 +159,9 @@ _B31_RWA_NAMED = 0.0
 # — identical to the Basel 3.1 Table 2B path, since the bug routes CRR through Table 2B
 # ---------------------------------------------------------------------------
 
-_BUGGY_CRR_RW_RATED = 0.30      # Table 2B CQS 2 (wrong for CRR; should be 0.50)
+_BUGGY_CRR_RW_RATED = 0.30  # Table 2B CQS 2 (wrong for CRR; should be 0.50)
 _BUGGY_CRR_RWA_RATED = 300_000.0
-_BUGGY_CRR_RW_UNRATED_SOV1 = 0.50   # Table 2B unrated (wrong for CRR; should be 0.20)
+_BUGGY_CRR_RW_UNRATED_SOV1 = 0.50  # Table 2B unrated (wrong for CRR; should be 0.20)
 _BUGGY_CRR_RWA_UNRATED_SOV1 = 500_000.0
 _BUGGY_CRR_RW_UNRATED_NOSOV = 0.50  # Table 2B unrated (wrong for CRR; should be 1.00)
 _BUGGY_CRR_RWA_UNRATED_NOSOV = 395_000.0
@@ -317,9 +317,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
     # L_MDB_RATED — rated non-named MDB, institution_cqs=2
     # ------------------------------------------------------------------
 
-    def test_crr_mdb_rated_cqs2_risk_weight(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_rated_cqs2_risk_weight(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         Rated non-named MDB (CQS 2) must receive 50% RW under CRR Art. 120 Table 3.
 
@@ -343,9 +341,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
             f"(pre-fix Table 2B gives {_BUGGY_CRR_RW_RATED})"
         )
 
-    def test_crr_mdb_rated_cqs2_rwa(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_rated_cqs2_rwa(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         RWA for rated non-named MDB = EAD × 50% = 500,000.
 
@@ -370,9 +366,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
     # L_MDB_UNRATED_SOV1 — unrated non-named MDB, sovereign_cqs=1
     # ------------------------------------------------------------------
 
-    def test_crr_mdb_unrated_sov1_risk_weight(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_unrated_sov1_risk_weight(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         Unrated non-named MDB with sovereign CQS 1 must receive 20% via Art. 121 Table 5.
 
@@ -396,9 +390,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
             f"(pre-fix Table 2B unrated gives {_BUGGY_CRR_RW_UNRATED_SOV1})"
         )
 
-    def test_crr_mdb_unrated_sov1_rwa(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_unrated_sov1_rwa(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         RWA for unrated non-named MDB (sovereign CQS 1) = EAD × 20% = 200,000.
 
@@ -423,9 +415,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
     # L_MDB_UNRATED_NOSOV — unrated non-named MDB, no sovereign CQS
     # ------------------------------------------------------------------
 
-    def test_crr_mdb_unrated_nosov_risk_weight(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_unrated_nosov_risk_weight(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         Unrated non-named MDB with no sovereign CQS must receive 100% (Art. 120 unrated fallback).
 
@@ -449,9 +439,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
             f"(pre-fix Table 2B unrated gives {_BUGGY_CRR_RW_UNRATED_NOSOV})"
         )
 
-    def test_crr_mdb_unrated_nosov_rwa(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_mdb_unrated_nosov_rwa(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         RWA for unrated non-named MDB (no sovereign) = EAD × 100% = 790,000.
 
@@ -479,9 +467,7 @@ class TestCRRMDBNonNamedUsesInstitutionTable:
     # L_MDB_NAMED — named MDB (entity_type=mdb_named), CRR
     # ------------------------------------------------------------------
 
-    def test_crr_named_mdb_zero_risk_weight(
-        self, p1_184_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_named_mdb_zero_risk_weight(self, p1_184_crr_results: dict[str, dict]) -> None:
         """
         Named MDB (entity_type='mdb_named') must receive 0% RW under CRR Art. 117(2).
 
@@ -523,9 +509,7 @@ class TestB31MDBTable2BUnchanged:
     # L_MDB_RATED — rated non-named MDB, Table 2B CQS 2 = 30%
     # ------------------------------------------------------------------
 
-    def test_b31_mdb_rated_cqs2_risk_weight(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_rated_cqs2_risk_weight(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: rated non-named MDB (CQS 2) → Table 2B = 30%.
 
@@ -545,9 +529,7 @@ class TestB31MDBTable2BUnchanged:
             f"got {row['risk_weight']}"
         )
 
-    def test_b31_mdb_rated_cqs2_rwa(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_rated_cqs2_rwa(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: RWA for rated non-named MDB = EAD × 30% = 300,000.
 
@@ -568,9 +550,7 @@ class TestB31MDBTable2BUnchanged:
     # L_MDB_UNRATED_SOV1 — unrated, Table 2B flat 50% (sov CQS ignored)
     # ------------------------------------------------------------------
 
-    def test_b31_mdb_unrated_sov1_risk_weight(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_unrated_sov1_risk_weight(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: unrated non-named MDB with sovereign CQS 1 → Table 2B unrated = 50%.
 
@@ -591,9 +571,7 @@ class TestB31MDBTable2BUnchanged:
             f"got {row['risk_weight']}"
         )
 
-    def test_b31_mdb_unrated_sov1_rwa(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_unrated_sov1_rwa(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: RWA for unrated non-named MDB (sov CQS 1) = EAD × 50% = 500,000.
 
@@ -614,9 +592,7 @@ class TestB31MDBTable2BUnchanged:
     # L_MDB_UNRATED_NOSOV — unrated, Table 2B flat 50%
     # ------------------------------------------------------------------
 
-    def test_b31_mdb_unrated_nosov_risk_weight(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_unrated_nosov_risk_weight(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: unrated non-named MDB with no sovereign CQS → Table 2B unrated = 50%.
 
@@ -633,9 +609,7 @@ class TestB31MDBTable2BUnchanged:
             f"(Table 2B unrated = 50%), got {row['risk_weight']}"
         )
 
-    def test_b31_mdb_unrated_nosov_rwa(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_mdb_unrated_nosov_rwa(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: RWA for unrated non-named MDB (no sov) = EAD × 50% = 395,000.
 
@@ -658,9 +632,7 @@ class TestB31MDBTable2BUnchanged:
     # L_MDB_NAMED — named MDB, Basel 3.1
     # ------------------------------------------------------------------
 
-    def test_b31_named_mdb_zero_risk_weight(
-        self, p1_184_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_named_mdb_zero_risk_weight(self, p1_184_b31_results: dict[str, dict]) -> None:
         """
         B3.1: named MDB → 0% unconditional (same as CRR).
 

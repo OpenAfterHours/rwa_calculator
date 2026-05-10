@@ -94,7 +94,7 @@ _BUGGY_RWA_B = 1_000_000.0
 _BUGGY_RWA_C = 1_000_000.0  # naïve 100%-residual fix would give 687,500 not 387,500
 
 # Tolerances per proposal § 4
-_RW_TOL = 1e-6   # relative on risk_weight
+_RW_TOL = 1e-6  # relative on risk_weight
 _RWA_TOL = 0.01  # absolute on rwa
 
 
@@ -167,9 +167,7 @@ def p1_181_sa_results() -> dict[str, dict]:
     output: dict[str, dict] = {}
     for loan_ref in (_LOAN_REF_A, _LOAN_REF_B, _LOAN_REF_C):
         rows = df.filter(pl.col("exposure_reference") == loan_ref).to_dicts()
-        assert len(rows) == 1, (
-            f"P1.181: expected exactly 1 SA row for {loan_ref}, got {len(rows)}"
-        )
+        assert len(rows) == 1, f"P1.181: expected exactly 1 SA row for {loan_ref}, got {len(rows)}"
         output[loan_ref] = rows[0]
 
     return output
@@ -340,9 +338,7 @@ class TestP1181Art126CREProportionSplit:
     # No fatal errors during pipeline run
     # ------------------------------------------------------------------
 
-    def test_p1181_no_error_severity_errors(
-        self, p1_181_sa_results: dict[str, dict]
-    ) -> None:
+    def test_p1181_no_error_severity_errors(self, p1_181_sa_results: dict[str, dict]) -> None:
         """
         P1.181 pipeline must not produce ERROR-level CalculationErrors.
 

@@ -81,7 +81,12 @@ from pathlib import Path
 import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import COLLATERAL_SCHEMA, COUNTERPARTY_SCHEMA, FACILITY_SCHEMA, LOAN_SCHEMA
+from rwa_calc.data.schemas import (
+    COLLATERAL_SCHEMA,
+    COUNTERPARTY_SCHEMA,
+    FACILITY_SCHEMA,
+    LOAN_SCHEMA,
+)
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -89,9 +94,9 @@ from rwa_calc.data.schemas import COLLATERAL_SCHEMA, COUNTERPARTY_SCHEMA, FACILI
 
 COUNTERPARTY_REF: str = "CRR-P1123-CP1"
 
-LOAN_REF_CTRL: str = "CRR-P1123-L-CTRL"   # control: is_sft=False, HE=0
-LOAN_REF_BIND: str = "CRR-P1123-L-BIND"   # SFT, corp_bond exposure, HE>0
-LOAN_REF_RUNB: str = "CRR-P1123-L-RUNB"   # SFT, cash exposure, HE=0
+LOAN_REF_CTRL: str = "CRR-P1123-L-CTRL"  # control: is_sft=False, HE=0
+LOAN_REF_BIND: str = "CRR-P1123-L-BIND"  # SFT, corp_bond exposure, HE>0
+LOAN_REF_RUNB: str = "CRR-P1123-L-RUNB"  # SFT, cash exposure, HE=0
 
 FACILITY_REF_CTRL: str = "CRR-P1123-F-CTRL"
 FACILITY_REF_BIND: str = "CRR-P1123-F-BIND"
@@ -113,7 +118,7 @@ COLLATERAL_MARKET_VALUE: float = 950_000.0
 # ---------------------------------------------------------------------------
 
 # Collateral: govt_bond, CQS 1, 2-year residual maturity → 1-5yr band
-_H_C_GOVT_CQS1_1_5Y_10D: float = 0.02   # 2%
+_H_C_GOVT_CQS1_1_5Y_10D: float = 0.02  # 2%
 
 # Exposure (BIND): corp_bond, CQS 2, 4-year residual maturity → CQS 2-3, 1-5yr band
 _H_E_CORP_CQS2_3_1_5Y_10D: float = 0.06  # 6%
@@ -131,15 +136,15 @@ _T_M_SFT: int = 5
 
 # CTRL (is_sft=False → 20-day)
 H_C_CTRL: float = _H_C_GOVT_CQS1_1_5Y_10D * math.sqrt(_T_M_SL / 10)  # 2% × sqrt(2) = 2.8284%
-H_E_CTRL: float = _H_E_ZERO                                             # 0
+H_E_CTRL: float = _H_E_ZERO  # 0
 
 # BIND (is_sft=True → 5-day)
-H_C_BIND: float = _H_C_GOVT_CQS1_1_5Y_10D * math.sqrt(_T_M_SFT / 10)   # 2% × sqrt(0.5) = 1.4142%
+H_C_BIND: float = _H_C_GOVT_CQS1_1_5Y_10D * math.sqrt(_T_M_SFT / 10)  # 2% × sqrt(0.5) = 1.4142%
 H_E_BIND: float = _H_E_CORP_CQS2_3_1_5Y_10D * math.sqrt(_T_M_SFT / 10)  # 6% × sqrt(0.5) = 4.2426%
 
 # RUNB (is_sft=True → 5-day, cash exposure)
-H_C_RUNB: float = _H_C_GOVT_CQS1_1_5Y_10D * math.sqrt(_T_M_SFT / 10)   # = H_C_BIND
-H_E_RUNB: float = _H_E_ZERO                                               # 0
+H_C_RUNB: float = _H_C_GOVT_CQS1_1_5Y_10D * math.sqrt(_T_M_SFT / 10)  # = H_C_BIND
+H_E_RUNB: float = _H_E_ZERO  # 0
 
 # ---------------------------------------------------------------------------
 # Expected E* values (Art. 223(5): E* = max(0, E(1+HE) - C(1-HC-HFX)))
@@ -623,18 +628,18 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  H_c_10d      = {_H_C_GOVT_CQS1_1_5Y_10D:.4f}  (govt_bond CQS 1, 1-5yr)")
     print(f"  H_e_corp_10d = {_H_E_CORP_CQS2_3_1_5Y_10D:.4f}  (corp_bond CQS 2-3, 1-5yr)")
     print()
-    print(f"  L-CTRL (is_sft=False, HE=0, T_m=20d):")
+    print("  L-CTRL (is_sft=False, HE=0, T_m=20d):")
     print(f"    H_c   = {H_C_CTRL:.8f}")
     print(f"    H_e   = {H_E_CTRL:.8f}")
     print(f"    EAD*  = {EXPECTED_EAD_CTRL:>20.8f}  (EXPECTED_EAD_CTRL)")
     print()
-    print(f"  L-BIND (is_sft=True, corp_bond CQS 2 exposure, T_m=5d):")
+    print("  L-BIND (is_sft=True, corp_bond CQS 2 exposure, T_m=5d):")
     print(f"    H_c   = {H_C_BIND:.8f}")
     print(f"    H_e   = {H_E_BIND:.8f}")
     print(f"    EAD*  = {EXPECTED_EAD_BIND:>20.8f}  (EXPECTED_EAD_BIND)  <-- load-bearing")
     print(f"    PRE_FIX_EAD_BIND = {PRE_FIX_EAD_BIND:.8f}  (must NOT match BIND post-fix)")
     print()
-    print(f"  L-RUNB (is_sft=True, cash exposure, T_m=5d):")
+    print("  L-RUNB (is_sft=True, cash exposure, T_m=5d):")
     print(f"    H_c   = {H_C_RUNB:.8f}")
     print(f"    H_e   = {H_E_RUNB:.8f}")
     print(f"    EAD*  = {EXPECTED_EAD_RUNB:>20.8f}  (EXPECTED_EAD_RUNB)")

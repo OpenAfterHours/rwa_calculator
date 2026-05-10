@@ -24,9 +24,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.aggregator import OutputAggregator
 from tests.fixtures.p1_146.p1_146 import (
     EXP_NULL_REF,
     POST_CRM_CORPORATE_EXPOSURE_COUNT,
@@ -35,6 +32,9 @@ from tests.fixtures.p1_146.p1_146 import (
     PRE_CRM_TOTAL_EAD,
     build_sa_results,
 )
+
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.aggregator import OutputAggregator
 
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
 
@@ -115,9 +115,7 @@ class TestP1146IsGuaranteedNullFilter:
 
         # Assert
         detailed_df = result.post_crm_detailed.collect()
-        null_rows = detailed_df.filter(
-            pl.col("reporting_exposure_class") == "CORPORATE"
-        ).filter(
+        null_rows = detailed_df.filter(pl.col("reporting_exposure_class") == "CORPORATE").filter(
             pl.col("crm_portion_type") == "original"
         )
         # Find the row with reporting_ead == 750_000 (EXP_NULL's EAD)

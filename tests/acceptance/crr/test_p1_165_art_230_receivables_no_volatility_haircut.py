@@ -50,12 +50,19 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.fixtures.p1_165.p1_165 import (
+    COUNTERPARTY_REF,
+    EXPECTED_LGD_STAR,
+    LOAN_REF,
+    MODEL_ID,
+    PD,
+    REPORTING_DATE,
+)
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -66,16 +73,6 @@ from rwa_calc.data.tables.haircuts import (
 )
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from tests.fixtures.p1_165.p1_165 import (
-    COLLATERAL_REF,
-    COUNTERPARTY_REF,
-    EXPECTED_LGD_STAR,
-    FACILITY_REF,
-    LOAN_REF,
-    MODEL_ID,
-    PD,
-    REPORTING_DATE,
-)
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -311,9 +308,7 @@ class TestP1165ReceivablesPipelineNoHaircut:
     # EAD assertions — must pass before and after the fix
     # ------------------------------------------------------------------
 
-    def test_crr_p1165_receivables_ead_gross(
-        self, loan_rows: list[dict]
-    ) -> None:
+    def test_crr_p1165_receivables_ead_gross(self, loan_rows: list[dict]) -> None:
         """
         P1.165: ead_gross == 1,000,000.00 (on-BS, CCF=100%, no EAD reduction on F-IRB).
 
@@ -331,9 +326,7 @@ class TestP1165ReceivablesPipelineNoHaircut:
             f"P1.165: expected ead_gross=1,000,000, got {ead:,.2f}."
         )
 
-    def test_crr_p1165_receivables_ead_final(
-        self, loan_rows: list[dict]
-    ) -> None:
+    def test_crr_p1165_receivables_ead_final(self, loan_rows: list[dict]) -> None:
         """
         P1.165: ead_final == 1,000,000.00 (F-IRB collateral does not reduce EAD).
 
@@ -354,9 +347,7 @@ class TestP1165ReceivablesPipelineNoHaircut:
     # PD assertion — must pass before and after the fix
     # ------------------------------------------------------------------
 
-    def test_crr_p1165_receivables_irb_pd_adjusted(
-        self, loan_rows: list[dict]
-    ) -> None:
+    def test_crr_p1165_receivables_irb_pd_adjusted(self, loan_rows: list[dict]) -> None:
         """
         P1.165: pd_floored == 0.02 (above CRR corporate PD floor 0.0003).
 
@@ -384,9 +375,7 @@ class TestP1165ReceivablesPipelineNoHaircut:
     # Load-bearing LGD* assertion — FAILS pre-fix, passes post-fix
     # ------------------------------------------------------------------
 
-    def test_crr_p1165_receivables_pipeline_no_haircut(
-        self, loan_rows: list[dict]
-    ) -> None:
+    def test_crr_p1165_receivables_pipeline_no_haircut(self, loan_rows: list[dict]) -> None:
         """
         P1.165 LOAD-BEARING: lgd_floored == 0.386 (Art. 230 LGD* without Hc).
 
@@ -438,9 +427,7 @@ class TestP1165ReceivablesPipelineNoHaircut:
     # Regression sentinel — pre-fix LGD* must NOT appear post-fix
     # ------------------------------------------------------------------
 
-    def test_crr_p1165_receivables_lgd_not_pre_fix_value(
-        self, loan_rows: list[dict]
-    ) -> None:
+    def test_crr_p1165_receivables_lgd_not_pre_fix_value(self, loan_rows: list[dict]) -> None:
         """
         P1.165 regression sentinel: lgd_floored must NOT be ≈ 0.4041 post-fix.
 

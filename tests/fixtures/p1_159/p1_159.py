@@ -117,31 +117,31 @@ RTG_BORROWER_REF = "RTG_P1159_BORR"
 RTG_GUARANTOR_REF = "RTG_P1159_GTR"
 
 # Model IDs — one per exposure class to make the PSM routing unambiguous
-MODEL_ID_CORP_FIRB = "CORP_FIRB_P1159"       # F-IRB for CORPORATE (borrower)
-MODEL_ID_INST_FIRB = "INST_FIRB_P1159"       # F-IRB for INSTITUTION (guarantor PSM path)
+MODEL_ID_CORP_FIRB = "CORP_FIRB_P1159"  # F-IRB for CORPORATE (borrower)
+MODEL_ID_INST_FIRB = "INST_FIRB_P1159"  # F-IRB for INSTITUTION (guarantor PSM path)
 
 # Dates (reporting_date = 2027-06-30 as specified in proposal)
 REPORTING_DATE = date(2027, 6, 30)
-MATURITY_DATE = date(2029, 12, 30)          # ~2.5y from reporting date → effective_maturity ≈ 2.5
+MATURITY_DATE = date(2029, 12, 30)  # ~2.5y from reporting date → effective_maturity ≈ 2.5
 GUARANTEE_MATURITY_DATE = date(2032, 12, 30)  # 5y+ from reporting date → no maturity mismatch
 RATING_DATE = date(2027, 1, 2)
 
 # Borrower IRB inputs (corporate, F-IRB, FSE)
 # PD=0.0150 (1.5%) — well above B31 corporate floor 0.0005 (0.05%). No floor needed.
 # apply_fi_scalar=True: the FI scalar applies to the borrower's OWN corporate RW.
-PD_BORROWER = 0.0150               # 1.5% corporate borrower PD
+PD_BORROWER = 0.0150  # 1.5% corporate borrower PD
 
 # Guarantor IRB inputs (institution, F-IRB, regulated bank, NO FI scalar)
 # PD=0.0010 (0.10%) — above B31 institution floor 0.0005 (0.05%). No floor needed.
 # apply_fi_scalar=False: regulated bank → Art. 153(2) FI scalar does NOT apply.
-PD_GUARANTOR = 0.0010              # 0.10% institution guarantor PD
+PD_GUARANTOR = 0.0010  # 0.10% institution guarantor PD
 
 # Exposure amounts
-EAD_AMOUNT = 1_000_000.0           # GBP 1,000,000 — loan drawn amount and facility limit
-AMOUNT_COVERED = 600_000.0         # GBP 600,000 (60% partial — keeps both portions non-zero)
+EAD_AMOUNT = 1_000_000.0  # GBP 1,000,000 — loan drawn amount and facility limit
+AMOUNT_COVERED = 600_000.0  # GBP 600,000 (60% partial — keeps both portions non-zero)
 PERCENTAGE_COVERED = 0.60
-ORIGINAL_MATURITY_YEARS = 5.0      # >= M=2.5 → no maturity mismatch (Art. 237(2)(a))
-EFFECTIVE_MATURITY = 2.5           # M = 2.5y (set explicitly to avoid date-rounding ambiguity)
+ORIGINAL_MATURITY_YEARS = 5.0  # >= M=2.5 → no maturity mismatch (Art. 237(2)(a))
+EFFECTIVE_MATURITY = 2.5  # M = 2.5y (set explicitly to avoid date-rounding ambiguity)
 
 
 # ---------------------------------------------------------------------------
@@ -368,22 +368,22 @@ def create_p1159_counterparties() -> pl.DataFrame:
             counterparty_name="P1.159 Corporate Borrower FSE PLC",
             entity_type="corporate",
             country_code="GB",
-            annual_revenue=None,            # Null → engine treats as large-corp (conservative)
+            annual_revenue=None,  # Null → engine treats as large-corp (conservative)
             total_assets=None,
             default_status=False,
-            apply_fi_scalar=True,           # Art. 153(2): FI scalar applies to borrower's own RW
+            apply_fi_scalar=True,  # Art. 153(2): FI scalar applies to borrower's own RW
             is_managed_as_retail=False,
             is_financial_sector_entity=True,
         ),
         _Counterparty(
             counterparty_reference=GUARANTOR_REF,
             counterparty_name="P1.159 Bank Guarantor Institution GB",
-            entity_type="institution",      # → IRB: INSTITUTION class (no FI scalar)
+            entity_type="institution",  # → IRB: INSTITUTION class (no FI scalar)
             country_code="GB",
-            annual_revenue=None,            # Institutions don't have revenue-based turnover test
+            annual_revenue=None,  # Institutions don't have revenue-based turnover test
             total_assets=None,
             default_status=False,
-            apply_fi_scalar=False,          # Regulated bank: FI scalar does NOT apply (Art. 153(2))
+            apply_fi_scalar=False,  # Regulated bank: FI scalar does NOT apply (Art. 153(2))
             is_managed_as_retail=False,
             is_financial_sector_entity=True,
         ),
@@ -497,7 +497,7 @@ def create_p1159_ratings() -> pl.DataFrame:
             counterparty_reference=BORROWER_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="3A",          # ~1.5% PD band — investment grade corporate
+            rating_value="3A",  # ~1.5% PD band — investment grade corporate
             cqs=3,
             pd=PD_BORROWER,
             rating_date=RATING_DATE,
@@ -509,7 +509,7 @@ def create_p1159_ratings() -> pl.DataFrame:
             counterparty_reference=GUARANTOR_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="1A",          # ~0.10% PD band — high-quality institution
+            rating_value="1A",  # ~0.10% PD band — high-quality institution
             cqs=1,
             pd=PD_GUARANTOR,
             rating_date=RATING_DATE,

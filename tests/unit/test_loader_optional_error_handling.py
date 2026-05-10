@@ -18,15 +18,14 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts import errors as _errors
+from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.loader import (
     DataLoadError,
     DataSourceConfig,
     ParquetLoader,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — build a minimal valid required-files layout in tmp_path
@@ -220,9 +219,7 @@ class TestOptionalFileCorruptEmitsLazyFormattedWarningLog:
 class TestRequiredFileCorruptStillRaisesDataLoadError:
     """Regression: corrupt required file -> DataLoadError is still raised (unchanged path)."""
 
-    def test_required_file_corrupt_still_raises_data_load_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_required_file_corrupt_still_raises_data_load_error(self, tmp_path: Path) -> None:
         """_load_file behaviour is unchanged: corrupt required file raises DataLoadError.
 
         Arrange: corrupt facilities.parquet (required file).

@@ -19,8 +19,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import AggregatedResultBundle
 import rwa_calc.contracts.validation as _validation_module
+from rwa_calc.contracts.bundles import AggregatedResultBundle
 
 # Defer resolution of validate_aggregated_bundle so collection succeeds even
 # before the engine-implementer adds the function.  Each test that calls it
@@ -97,9 +97,8 @@ class TestValidateAggregatedBundle:
         errors = validate_aggregated_bundle(bundle)
 
         # Assert — exactly four errors
-        assert len(errors) == 4, (
-            f"Expected 4 errors but got {len(errors)}: "
-            + ", ".join(f"[{e.code}] {e.exposure_reference}" for e in errors)
+        assert len(errors) == 4, f"Expected 4 errors but got {len(errors)}: " + ", ".join(
+            f"[{e.code}] {e.exposure_reference}" for e in errors
         )
 
         codes = [e.code for e in errors]
@@ -235,15 +234,13 @@ class TestValidateAggregatedBundle:
     @pytest.mark.parametrize(
         "rw,expected_violation",
         [
-            (12.5, False),   # exact boundary — not above cap, no error
+            (12.5, False),  # exact boundary — not above cap, no error
             (12.500001, True),  # infinitesimally above — error
-            (0.0, False),    # exact zero — not negative, no error
+            (0.0, False),  # exact zero — not negative, no error
             (-1e-10, True),  # tiny negative — error
         ],
     )
-    def test_validate_aggregated_bundle_boundary_values(
-        self, rw: float, expected_violation: bool
-    ):
+    def test_validate_aggregated_bundle_boundary_values(self, rw: float, expected_violation: bool):
         """Boundary values for risk_weight are handled with strict inequality."""
         # Arrange
         results = _make_results_lf(
@@ -260,10 +257,6 @@ class TestValidateAggregatedBundle:
         # Assert
         rw_codes = {e.code for e in errors if e.code in ("OUT001", "OUT002")}
         if expected_violation:
-            assert len(rw_codes) == 1, (
-                f"Expected 1 RW violation error for rw={rw}, got {rw_codes}"
-            )
+            assert len(rw_codes) == 1, f"Expected 1 RW violation error for rw={rw}, got {rw_codes}"
         else:
-            assert rw_codes == set(), (
-                f"Expected no RW violation for rw={rw}, got {rw_codes}"
-            )
+            assert rw_codes == set(), f"Expected no RW violation for rw={rw}, got {rw_codes}"

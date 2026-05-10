@@ -72,15 +72,15 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p2_14"
 # Scenario constants (single source of truth, mirrors p2_14.py)
 # ---------------------------------------------------------------------------
 
-_LOAN_VC = "LN_VC_001"   # high_risk_venture_capital, EAD=1,000,000 GBP
-_LOAN_PE = "LN_PE_002"   # high_risk_private_equity,  EAD=2,000,000 GBP
+_LOAN_VC = "LN_VC_001"  # high_risk_venture_capital, EAD=1,000,000 GBP
+_LOAN_PE = "LN_PE_002"  # high_risk_private_equity,  EAD=2,000,000 GBP
 
 _EAD_VC = 1_000_000.0
 _EAD_PE = 2_000_000.0
 _TOTAL_EAD = _EAD_VC + _EAD_PE  # 3,000,000
 
 # Tolerances
-_RW_TOL = 1e-6   # absolute on risk_weight
+_RW_TOL = 1e-6  # absolute on risk_weight
 _RWA_TOL = 0.50  # £0.50 absolute on rwa_final
 
 # ---------------------------------------------------------------------------
@@ -88,8 +88,8 @@ _RWA_TOL = 0.50  # £0.50 absolute on rwa_final
 # ---------------------------------------------------------------------------
 
 _CRR_RW = 1.00
-_CRR_RWA_VC = _EAD_VC * _CRR_RW    # 1,000,000
-_CRR_RWA_PE = _EAD_PE * _CRR_RW    # 2,000,000
+_CRR_RWA_VC = _EAD_VC * _CRR_RW  # 1,000,000
+_CRR_RWA_PE = _EAD_PE * _CRR_RW  # 2,000,000
 _CRR_TOTAL_RWA = _CRR_RWA_VC + _CRR_RWA_PE  # 3,000,000
 
 # ---------------------------------------------------------------------------
@@ -97,8 +97,8 @@ _CRR_TOTAL_RWA = _CRR_RWA_VC + _CRR_RWA_PE  # 3,000,000
 # ---------------------------------------------------------------------------
 
 _B31_RW = 1.50
-_B31_RWA_VC = _EAD_VC * _B31_RW    # 1,500,000
-_B31_RWA_PE = _EAD_PE * _B31_RW    # 3,000,000
+_B31_RWA_VC = _EAD_VC * _B31_RW  # 1,500,000
+_B31_RWA_PE = _EAD_PE * _B31_RW  # 3,000,000
 _B31_TOTAL_RWA = _B31_RWA_VC + _B31_RWA_PE  # 4,500,000
 
 # ---------------------------------------------------------------------------
@@ -107,8 +107,8 @@ _B31_TOTAL_RWA = _B31_RWA_VC + _B31_RWA_PE  # 4,500,000
 # ---------------------------------------------------------------------------
 
 _BUGGY_CRR_RW = 1.50
-_BUGGY_CRR_RWA_VC = _EAD_VC * _BUGGY_CRR_RW   # 1,500,000
-_BUGGY_CRR_RWA_PE = _EAD_PE * _BUGGY_CRR_RW   # 3,000,000
+_BUGGY_CRR_RWA_VC = _EAD_VC * _BUGGY_CRR_RW  # 1,500,000
+_BUGGY_CRR_RWA_PE = _EAD_PE * _BUGGY_CRR_RW  # 3,000,000
 
 
 # ---------------------------------------------------------------------------
@@ -196,10 +196,7 @@ def p2_14_crr_results() -> dict[str, dict]:
 
     # Extract one dict per loan reference
     sa_lf = results.sa_results
-    return {
-        loan_ref: _extract_loan_row(sa_lf, loan_ref)
-        for loan_ref in (_LOAN_VC, _LOAN_PE)
-    }
+    return {loan_ref: _extract_loan_row(sa_lf, loan_ref) for loan_ref in (_LOAN_VC, _LOAN_PE)}
 
 
 @pytest.fixture(scope="module")
@@ -229,10 +226,7 @@ def p2_14_b31_results() -> dict[str, dict]:
 
     # Extract one dict per loan reference
     sa_lf = results.sa_results
-    return {
-        loan_ref: _extract_loan_row(sa_lf, loan_ref)
-        for loan_ref in (_LOAN_VC, _LOAN_PE)
-    }
+    return {loan_ref: _extract_loan_row(sa_lf, loan_ref) for loan_ref in (_LOAN_VC, _LOAN_PE)}
 
 
 # ---------------------------------------------------------------------------
@@ -258,9 +252,7 @@ class TestCRRArt128HighRiskUKOmitted:
     # LN_VC_001 — high_risk_venture_capital
     # ------------------------------------------------------------------
 
-    def test_crr_vc_loan_exposure_class(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_vc_loan_exposure_class(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         LN_VC_001 must be classified as residual (OTHER) exposure class under CRR.
 
@@ -282,9 +274,7 @@ class TestCRRArt128HighRiskUKOmitted:
             f"got '{row['exposure_class_for_sa']}'"
         )
 
-    def test_crr_vc_loan_risk_weight(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_vc_loan_risk_weight(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         LN_VC_001 must receive 100% risk weight under CRR (residual OTHER class).
 
@@ -307,9 +297,7 @@ class TestCRRArt128HighRiskUKOmitted:
             f"(pre-fix Art. 128 gives {_BUGGY_CRR_RW})"
         )
 
-    def test_crr_vc_loan_rwa(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_vc_loan_rwa(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         RWA for LN_VC_001 = EAD × 100% = 1,000,000 under CRR.
 
@@ -334,9 +322,7 @@ class TestCRRArt128HighRiskUKOmitted:
     # LN_PE_002 — high_risk_private_equity
     # ------------------------------------------------------------------
 
-    def test_crr_pe_loan_exposure_class(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_pe_loan_exposure_class(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         LN_PE_002 must be classified as residual (OTHER) exposure class under CRR.
 
@@ -357,9 +343,7 @@ class TestCRRArt128HighRiskUKOmitted:
             f"got '{row['exposure_class_for_sa']}'"
         )
 
-    def test_crr_pe_loan_risk_weight(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_pe_loan_risk_weight(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         LN_PE_002 must receive 100% risk weight under CRR (residual OTHER class).
 
@@ -382,9 +366,7 @@ class TestCRRArt128HighRiskUKOmitted:
             f"(pre-fix Art. 128 gives {_BUGGY_CRR_RW})"
         )
 
-    def test_crr_pe_loan_rwa(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_pe_loan_rwa(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         RWA for LN_PE_002 = EAD × 100% = 2,000,000 under CRR.
 
@@ -409,9 +391,7 @@ class TestCRRArt128HighRiskUKOmitted:
     # Aggregate — loan-row total RWA
     # ------------------------------------------------------------------
 
-    def test_crr_total_loan_rwa(
-        self, p2_14_crr_results: dict[str, dict]
-    ) -> None:
+    def test_crr_total_loan_rwa(self, p2_14_crr_results: dict[str, dict]) -> None:
         """
         Total loan-row RWA under CRR = 3,000,000 (both loans at 100%).
 
@@ -455,9 +435,7 @@ class TestB31Art128HighRiskUnchanged:
     # LN_VC_001 — Basel 3.1 regression
     # ------------------------------------------------------------------
 
-    def test_b31_vc_loan_risk_weight(
-        self, p2_14_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_vc_loan_risk_weight(self, p2_14_b31_results: dict[str, dict]) -> None:
         """
         B3.1: LN_VC_001 must receive 150% risk weight (Art. 128 re-introduced).
 
@@ -477,9 +455,7 @@ class TestB31Art128HighRiskUnchanged:
             f"got {row['risk_weight']}"
         )
 
-    def test_b31_vc_loan_rwa(
-        self, p2_14_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_vc_loan_rwa(self, p2_14_b31_results: dict[str, dict]) -> None:
         """
         B3.1: RWA for LN_VC_001 = EAD × 150% = 1,500,000.
 
@@ -501,9 +477,7 @@ class TestB31Art128HighRiskUnchanged:
     # LN_PE_002 — Basel 3.1 regression
     # ------------------------------------------------------------------
 
-    def test_b31_pe_loan_risk_weight(
-        self, p2_14_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_pe_loan_risk_weight(self, p2_14_b31_results: dict[str, dict]) -> None:
         """
         B3.1: LN_PE_002 must receive 150% risk weight (Art. 128 re-introduced).
 
@@ -523,9 +497,7 @@ class TestB31Art128HighRiskUnchanged:
             f"got {row['risk_weight']}"
         )
 
-    def test_b31_pe_loan_rwa(
-        self, p2_14_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_pe_loan_rwa(self, p2_14_b31_results: dict[str, dict]) -> None:
         """
         B3.1: RWA for LN_PE_002 = EAD × 150% = 3,000,000.
 
@@ -547,9 +519,7 @@ class TestB31Art128HighRiskUnchanged:
     # Aggregate — Basel 3.1 loan-row total RWA
     # ------------------------------------------------------------------
 
-    def test_b31_total_loan_rwa(
-        self, p2_14_b31_results: dict[str, dict]
-    ) -> None:
+    def test_b31_total_loan_rwa(self, p2_14_b31_results: dict[str, dict]) -> None:
         """
         Total loan-row RWA under Basel 3.1 = 4,500,000 (both loans at 150%).
 

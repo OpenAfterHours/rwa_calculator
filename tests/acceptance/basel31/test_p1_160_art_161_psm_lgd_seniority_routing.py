@@ -73,11 +73,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ApproachType, PermissionMode
-from rwa_calc.engine.crm.processor import CRMProcessor
 from tests.fixtures.p1_160.p1_160 import (
     AMOUNT_COVERED,
     BORROWER_REF,
@@ -91,6 +86,11 @@ from tests.fixtures.p1_160.p1_160 import (
     PD_GUARANTOR,
     PERCENTAGE_COVERED,
 )
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, PermissionMode
+from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================
 # Scenario expected values (from hand-calculation in module docstring above)
@@ -174,14 +174,12 @@ def _build_p1160_crm_and_irb_result(
             "exposure_class": ["corporate"],
             "approach": [ApproachType.FIRB.value],
             "is_airb": [False],
-
             # --- Borrower IRB parameters (pre-CRM) ---
             "pd": [PD_BORROWER],
             "lgd": [0.40],
             "maturity": [EFFECTIVE_MATURITY],
             "currency": ["GBP"],
             "seniority": ["senior"],
-
             # --- EAD columns required by CRM processor ---
             "ead_after_collateral": [ead],
             "ead_final": [ead],
@@ -238,8 +236,7 @@ def _build_p1160_crm_and_irb_result(
 
     # IRB pipeline: classify → F-IRB LGD → prepare → formulas → EL → guarantee sub
     result = (
-        exposures_with_guarantee
-        .irb.classify_approach(config)
+        exposures_with_guarantee.irb.classify_approach(config)
         .irb.apply_firb_lgd(config)
         .irb.prepare_columns(config)
         .irb.apply_all_formulas(config)
@@ -523,10 +520,10 @@ class TestP1160Art161PSMLGDSeniorityRouting:
 
         Assert: PERCENTAGE_COVERED == 1.0, AMOUNT_COVERED == 1,000,000.
         """
-        assert PERCENTAGE_COVERED == pytest.approx(1.0, abs=1e-10), (
+        assert pytest.approx(1.0, abs=1e-10) == PERCENTAGE_COVERED, (
             f"Fixture: PERCENTAGE_COVERED should be 1.0 (100% coverage), got {PERCENTAGE_COVERED}"
         )
-        assert AMOUNT_COVERED == pytest.approx(EAD_AMOUNT, abs=0.01), (
+        assert pytest.approx(EAD_AMOUNT, abs=0.01) == AMOUNT_COVERED, (
             f"Fixture: AMOUNT_COVERED should equal EAD ({EAD_AMOUNT:,.0f}), "
             f"got {AMOUNT_COVERED:,.0f}"
         )
@@ -541,8 +538,8 @@ class TestP1160Art161PSMLGDSeniorityRouting:
 
         Assert: B31_SUBORDINATED_LGD > B31_SENIOR_NON_FSE_LGD.
         """
-        B31_SENIOR_NON_FSE_LGD = 0.40   # Art. 161(1)(aa)
-        B31_SUBORDINATED_LGD = 0.75     # Art. 161(1)(b)
+        B31_SENIOR_NON_FSE_LGD = 0.40  # Art. 161(1)(aa)
+        B31_SUBORDINATED_LGD = 0.75  # Art. 161(1)(b)
         assert B31_SUBORDINATED_LGD > B31_SENIOR_NON_FSE_LGD, (
             f"Art. 161(1)(b) subordinated LGD ({B31_SUBORDINATED_LGD}) must exceed "
             f"Art. 161(1)(aa) senior non-FSE LGD ({B31_SENIOR_NON_FSE_LGD})"

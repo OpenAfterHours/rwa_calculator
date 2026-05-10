@@ -90,6 +90,7 @@ from pathlib import Path
 
 import polars as pl
 
+from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
     COLLATERAL_SCHEMA,
@@ -102,7 +103,6 @@ from rwa_calc.data.schemas import (
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
 )
-from rwa_calc.contracts.bundles import RawDataBundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -123,8 +123,10 @@ MARKET_VALUE: float = 900_000.0
 # ---------------------------------------------------------------------------
 
 # 10-day base haircuts (PRA PS1/26 Art. 224 Table 1)
-_H_C_10D: float = 0.02    # govt_bond CQS 1, 3-5y band — BASEL31_COLLATERAL_HAIRCUTS key: govt_bond_cqs1_3_5y
-_H_FX_10D: float = 0.08   # FX mismatch haircut (Art. 224 Table 4 / Art. 233, unchanged)
+_H_C_10D: float = (
+    0.02  # govt_bond CQS 1, 3-5y band — BASEL31_COLLATERAL_HAIRCUTS key: govt_bond_cqs1_3_5y
+)
+_H_FX_10D: float = 0.08  # FX mismatch haircut (Art. 224 Table 4 / Art. 233, unchanged)
 
 # Liquidation period (Art. 224(2)(a)): is_sft=False → secured lending default
 _T_M: int = 20
@@ -137,14 +139,14 @@ _N_R: int = 5
 # ---------------------------------------------------------------------------
 
 # Step 2 — Scale to T_m=20d (Art. 226(2))
-H_C_SCALED: float = _H_C_10D * math.sqrt(_T_M / 10)    # = 0.028284271247461903
+H_C_SCALED: float = _H_C_10D * math.sqrt(_T_M / 10)  # = 0.028284271247461903
 H_FX_SCALED: float = _H_FX_10D * math.sqrt(_T_M / 10)  # = 0.113137084989847603
 
 # Step 3 — Non-daily revaluation factor (Art. 226(1))
 REVAL_FACTOR: float = math.sqrt((_N_R + _T_M - 1) / _T_M)  # sqrt(24/20) = sqrt(1.2)
 
 # Step 3 (cont.) — Final adjusted haircuts
-H_C_FINAL: float = H_C_SCALED * REVAL_FACTOR    # = 0.030983866769659336
+H_C_FINAL: float = H_C_SCALED * REVAL_FACTOR  # = 0.030983866769659336
 H_FX_FINAL: float = H_FX_SCALED * REVAL_FACTOR  # = 0.123935467078637344
 
 # Step 4 — Adjusted collateral C* = C × (1 − H_c − H_fx)

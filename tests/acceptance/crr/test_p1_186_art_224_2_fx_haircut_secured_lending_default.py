@@ -64,10 +64,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_186.p1_186 import (
     EXPECTED_EAD_SFT,
     EXPECTED_EAD_SL,
@@ -75,6 +71,10 @@ from tests.fixtures.p1_186.p1_186 import (
     LOAN_REF_SL,
     PRE_FIX_EAD_SL,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -88,7 +88,7 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_186"
 
 _REPORTING_DATE = date(2025, 12, 31)
 _ABS_TOL = 0.50  # £0.50 on a 6-figure EAD (~0.0001% relative error)
-_RW_TOL = 1e-9   # tight tolerance for exact 100% risk weight
+_RW_TOL = 1e-9  # tight tolerance for exact 100% risk weight
 
 # ---------------------------------------------------------------------------
 # Pipeline runner

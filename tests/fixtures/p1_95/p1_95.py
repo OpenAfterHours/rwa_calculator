@@ -106,15 +106,17 @@ GUARANTEE_REF_NULL: str = "GTE_P195_NULL"
 
 # Dates
 VALUE_DATE: date = date(2026, 1, 1)
-MATURITY_DATE: date = date(2031, 1, 1)  # 5y loan; long-term (>3m) — all SCRA long-term weights apply
+MATURITY_DATE: date = date(
+    2031, 1, 1
+)  # 5y loan; long-term (>3m) — all SCRA long-term weights apply
 
 # Economics
-LOAN_AMOUNT: float = 1_000_000.0        # GBP 1,000,000 drawn
-LOAN_INTEREST: float = 0.0              # interest = 0 → EAD = drawn_amount
+LOAN_AMOUNT: float = 1_000_000.0  # GBP 1,000,000 drawn
+LOAN_INTEREST: float = 0.0  # interest = 0 → EAD = drawn_amount
 EAD: float = LOAN_AMOUNT + LOAN_INTEREST
 
 # Guarantee coverage
-PERCENTAGE_COVERED: float = 1.00       # 100% coverage
+PERCENTAGE_COVERED: float = 1.00  # 100% coverage
 ORIGINAL_MATURITY_YEARS: float = 5.0  # 5y ≥ 1y → eligible under Art. 237(2)(a)
 
 # Borrower annual revenue: GBP 20m < GBP 44m SME threshold
@@ -129,20 +131,20 @@ BORROWER_ANNUAL_REVENUE: float = 20_000_000.0
 EXPECTED_RW_BORROWER: float = 0.85
 
 # SCRA guarantor substituted risk weights (long-term >3m, B31 Art. 121 Table 5)
-EXPECTED_RW_SCRA_A: float = 0.40           # Art. 121(1)
+EXPECTED_RW_SCRA_A: float = 0.40  # Art. 121(1)
 EXPECTED_RW_SCRA_A_ENHANCED: float = 0.30  # Art. 121(1A) — A_ENHANCED
-EXPECTED_RW_SCRA_B: float = 0.75           # Art. 121(2)
-EXPECTED_RW_SCRA_C: float = 1.50           # Art. 121(3) — > borrower RW; substitution does NOT apply
+EXPECTED_RW_SCRA_B: float = 0.75  # Art. 121(2)
+EXPECTED_RW_SCRA_C: float = 1.50  # Art. 121(3) — > borrower RW; substitution does NOT apply
 
 # Expected RWAs (EAD × effective risk weight)
 # Grades A, A_ENHANCED, B: substituted RW < borrower RW → substitution applies
-EXPECTED_RWA_A: float = EAD * EXPECTED_RW_SCRA_A           # 400,000
+EXPECTED_RWA_A: float = EAD * EXPECTED_RW_SCRA_A  # 400,000
 EXPECTED_RWA_A_ENHANCED: float = EAD * EXPECTED_RW_SCRA_A_ENHANCED  # 300,000
-EXPECTED_RWA_B: float = EAD * EXPECTED_RW_SCRA_B           # 750,000
+EXPECTED_RWA_B: float = EAD * EXPECTED_RW_SCRA_B  # 750,000
 # Grade C: substituted RW (150%) > borrower RW (85%) → no substitution, use borrower RW
-EXPECTED_RWA_C: float = EAD * EXPECTED_RW_BORROWER         # 850,000
+EXPECTED_RWA_C: float = EAD * EXPECTED_RW_BORROWER  # 850,000
 # null: no SCRA grade → no substitution possible, use borrower RW
-EXPECTED_RWA_NULL: float = EAD * EXPECTED_RW_BORROWER      # 850,000
+EXPECTED_RWA_NULL: float = EAD * EXPECTED_RW_BORROWER  # 850,000
 
 
 # ---------------------------------------------------------------------------
@@ -491,16 +493,22 @@ def print_summary(saved: dict[str, Path]) -> None:
         print(f"  {name:<25} {len(df):>3} row(s)  ->  {path}")
     print("-" * 80)
     print("Scenario: B31 SCRA-grade dispatch for unrated institution guarantor")
-    print(f"  Borrower: {BORROWER_REF} (SME corporate, GB, annual_revenue=GBP {BORROWER_ANNUAL_REVENUE:,.0f})")
+    print(
+        f"  Borrower: {BORROWER_REF} (SME corporate, GB, annual_revenue=GBP {BORROWER_ANNUAL_REVENUE:,.0f})"
+    )
     print(f"  Borrower B31 SA RW (unrated SME corporate, Art. 122(2)): {EXPECTED_RW_BORROWER:.0%}")
     print(f"  EAD per loan: GBP {EAD:,.0f}")
     print()
     print(f"  {'SCRA Grade':<14} {'Guarantor RW':>14} {'Substitution?':>14} {'Expected RWA':>14}")
     print(f"  {'-' * 57}")
     print(f"  {'A':<14} {EXPECTED_RW_SCRA_A:>13.0%} {'Yes':>14} {EXPECTED_RWA_A:>14,.0f}")
-    print(f"  {'A_ENHANCED':<14} {EXPECTED_RW_SCRA_A_ENHANCED:>13.0%} {'Yes':>14} {EXPECTED_RWA_A_ENHANCED:>14,.0f}")
+    print(
+        f"  {'A_ENHANCED':<14} {EXPECTED_RW_SCRA_A_ENHANCED:>13.0%} {'Yes':>14} {EXPECTED_RWA_A_ENHANCED:>14,.0f}"
+    )
     print(f"  {'B':<14} {EXPECTED_RW_SCRA_B:>13.0%} {'Yes':>14} {EXPECTED_RWA_B:>14,.0f}")
-    print(f"  {'C':<14} {EXPECTED_RW_SCRA_C:>13.0%} {'No (>borrower)':>14} {EXPECTED_RWA_C:>14,.0f}")
+    print(
+        f"  {'C':<14} {EXPECTED_RW_SCRA_C:>13.0%} {'No (>borrower)':>14} {EXPECTED_RWA_C:>14,.0f}"
+    )
     print(f"  {'null':<14} {'N/A':>13} {'No (no grade)':>14} {EXPECTED_RWA_NULL:>14,.0f}")
     print("-" * 80)
 

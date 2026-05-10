@@ -47,15 +47,15 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_103.p1_103 import (
     EXPECTED_RISK_WEIGHT,
     LOAN_REF,
     TABLE6_FALLBACK_RISK_WEIGHT,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -272,6 +272,5 @@ class TestP1103Art1223Table6AShortTermECAI:
 
         # Assert
         assert row["approach_applied"] == "standardised", (
-            f"P1.103: expected approach_applied='standardised', "
-            f"got {row['approach_applied']!r}"
+            f"P1.103: expected approach_applied='standardised', got {row['approach_applied']!r}"
         )

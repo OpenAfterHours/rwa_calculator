@@ -52,13 +52,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import LOAN_SCHEMA
-from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_118.p1_118 import (
     CONTINGENT_REF_A,
     CONTINGENT_REF_B,
@@ -66,6 +59,13 @@ from tests.fixtures.p1_118.p1_118 import (
     EXPECTED_M_B,
     REPORTING_DATE,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import LOAN_SCHEMA
+from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -133,12 +133,9 @@ def _get_irb_row(result: object, contingent_ref: str) -> dict:
     Raises AssertionError if not found or not unique.
     """
     assert result.irb_results is not None, "irb_results must not be None for F-IRB scenario"
-    df = (
-        result.irb_results.filter(
-            pl.col("exposure_reference").str.contains(contingent_ref)
-        )
-        .collect()
-    )
+    df = result.irb_results.filter(
+        pl.col("exposure_reference").str.contains(contingent_ref)
+    ).collect()
     assert len(df) == 1, (
         f"Expected exactly 1 IRB row for {contingent_ref!r}, got {len(df)}. "
         f"Check that the counterparty was routed to F-IRB and not SA."
@@ -192,9 +189,7 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
     # Primary assertion — Row A: 1-day floor sets M = 1/365 ≈ 0.00274y
     # ------------------------------------------------------------------
 
-    def test_p1_118_row_a_maturity_equals_one_day_floor(
-        self, row_a: dict
-    ) -> None:
+    def test_p1_118_row_a_maturity_equals_one_day_floor(self, row_a: dict) -> None:
         """
         Row A (is_short_term_trade_lc=True) must have irb_maturity_m = 1/365 ≈ 0.00274y.
 
@@ -233,9 +228,7 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
     # Primary assertion — Row B: standard 1-year floor must bind
     # ------------------------------------------------------------------
 
-    def test_p1_118_row_b_maturity_equals_one_year_standard_floor(
-        self, row_b: dict
-    ) -> None:
+    def test_p1_118_row_b_maturity_equals_one_year_standard_floor(self, row_b: dict) -> None:
         """
         Row B (is_short_term_trade_lc=False) must use the standard 1-year M floor (Art. 162(2)).
 
@@ -265,9 +258,7 @@ class TestP1118Art1624ShortTermTradeFinanceMDerivation:
     # Directional assertion — Row A maturity strictly less than Row B
     # ------------------------------------------------------------------
 
-    def test_p1_118_row_a_maturity_strictly_less_than_row_b(
-        self, row_a: dict, row_b: dict
-    ) -> None:
+    def test_p1_118_row_a_maturity_strictly_less_than_row_b(self, row_a: dict, row_b: dict) -> None:
         """
         Row A (1-day floor, M≈0.00274y) must be strictly lower than Row B (M=1.0y).
 

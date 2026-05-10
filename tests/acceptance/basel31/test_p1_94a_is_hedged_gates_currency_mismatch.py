@@ -66,8 +66,8 @@ _EAD = Decimal("100_000")
 _REPORTING_DATE = date(2027, 1, 4)
 
 # Absolute tolerances
-_RW_TOL = 1e-6      # risk_weight (dimensionless ratio)
-_RWA_TOL = 0.50     # £0.50 on rwa
+_RW_TOL = 1e-6  # risk_weight (dimensionless ratio)
+_RWA_TOL = 0.50  # £0.50 on rwa
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +122,7 @@ class TestP194AHedgedArmMultiplierSuppressed:
             config=b31_config,
         )
 
-    def test_p1_94a_hedged_risk_weight_equals_base_retail_rw(
-        self, hedged_result: dict
-    ) -> None:
+    def test_p1_94a_hedged_risk_weight_equals_base_retail_rw(self, hedged_result: dict) -> None:
         """
         Hedged arm: risk_weight must equal base retail SA RW (no multiplier applied).
 
@@ -213,9 +211,7 @@ class TestP194AUnhedgedArmMultiplierFires:
             config=b31_config,
         )
 
-    def test_p1_94a_unhedged_risk_weight_equals_multiplied_rw(
-        self, unhedged_result: dict
-    ) -> None:
+    def test_p1_94a_unhedged_risk_weight_equals_multiplied_rw(self, unhedged_result: dict) -> None:
         """
         Unhedged arm: risk_weight = 75% × 1.5 = 112.5%.
 
@@ -229,9 +225,7 @@ class TestP194AUnhedgedArmMultiplierFires:
             f"Art. 123B 1.5x multiplier must fire when is_hedged=False and currency mismatch."
         )
 
-    def test_p1_94a_unhedged_rwa_equals_multiplied_rwa(
-        self, unhedged_result: dict
-    ) -> None:
+    def test_p1_94a_unhedged_rwa_equals_multiplied_rwa(self, unhedged_result: dict) -> None:
         """
         Unhedged arm: rwa = 100,000 × 1.125 = 112,500.
 

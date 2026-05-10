@@ -41,11 +41,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import ApproachType, ExposureClass
-from rwa_calc.engine.classifier import ExposureClassifier
 from tests.fixtures.p2_39.p2_39 import (
     EQUITY_EXPOSURE_REF,
     EXPECTED_APPROACH,
@@ -53,6 +48,11 @@ from tests.fixtures.p2_39.p2_39 import (
     make_scenario_b31_bundle,
     make_scenario_crr_bundle,
 )
+
+from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
+from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.classifier import ExposureClassifier
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -193,6 +193,7 @@ class TestB31EquitySaOnlyGuard:
         # is False for all rows and the bug is never triggered.
         enriched_bundle_exposures = _add_internal_pd(bundle.exposures)
         import dataclasses
+
         bundle = dataclasses.replace(bundle, exposures=enriched_bundle_exposures)
 
         # Act
@@ -231,6 +232,7 @@ class TestB31EquitySaOnlyGuard:
         bundle = make_scenario_b31_bundle()
         enriched_bundle_exposures = _add_internal_pd(bundle.exposures)
         import dataclasses
+
         bundle = dataclasses.replace(bundle, exposures=enriched_bundle_exposures)
 
         # Act
@@ -265,6 +267,7 @@ class TestB31EquitySaOnlyGuard:
         bundle = make_scenario_b31_bundle()
         enriched_bundle_exposures = _add_internal_pd(bundle.exposures)
         import dataclasses
+
         bundle = dataclasses.replace(bundle, exposures=enriched_bundle_exposures)
 
         # Act
@@ -293,6 +296,7 @@ class TestB31EquitySaOnlyGuard:
         bundle = make_scenario_b31_bundle()
         enriched_bundle_exposures = _add_internal_pd(bundle.exposures)
         import dataclasses
+
         bundle = dataclasses.replace(bundle, exposures=enriched_bundle_exposures)
 
         # Act
@@ -345,6 +349,7 @@ class TestCrrEquityControlNoB31Guard:
         bundle = make_scenario_crr_bundle()
         enriched_bundle_exposures = _add_internal_pd(bundle.exposures)
         import dataclasses
+
         bundle = dataclasses.replace(bundle, exposures=enriched_bundle_exposures)
 
         # Act

@@ -91,8 +91,8 @@ VALUE_DATE: date = date(2026, 1, 1)
 MATURITY_DATE: date = date(2031, 1, 1)  # 5-year maturity, well beyond all short-term carve-outs
 
 # Facility limits
-IMF_LIMIT: float = 100_000_000.0   # USD 100m
-MDB_LIMIT: float = 50_000_000.0    # EUR 50m
+IMF_LIMIT: float = 100_000_000.0  # USD 100m
+MDB_LIMIT: float = 50_000_000.0  # EUR 50m
 
 # ---------------------------------------------------------------------------
 # Expected risk weights (referenced by test-writer assertions)
@@ -315,7 +315,7 @@ def create_p1154_ratings() -> pl.DataFrame:
             counterparty_reference=CP_MDB_NONNAMED,
             rating_type="external",
             rating_agency="Moody's",
-            rating_value="Baa2",   # Baa2 is representative of CQS 3 (Moody's scale)
+            rating_value="Baa2",  # Baa2 is representative of CQS 3 (Moody's scale)
             cqs=3,
             rating_date=date(2026, 1, 1),
             is_solicited=True,

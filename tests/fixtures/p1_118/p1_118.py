@@ -415,19 +415,19 @@ def create_p1118_contingents() -> pl.DataFrame:
     assert on each row independently without confounding the IRB calc.
     """
     # Shared fields — identical across both rows except the key differentiator.
-    _common = dict(
-        product_type="documentary_credit",
-        value_date=VALUE_DATE,
-        maturity_date=MATURITY_DATE,
-        currency="GBP",
-        nominal_amount=NOMINAL_AMOUNT,
-        risk_type="MLR",
-        is_obs_commitment=False,  # issued OBS item (not a commitment)
-        has_one_day_maturity_floor=False,  # engine derives True for Row A
-        is_sft=False,
-        bs_type="OFB",
-        seniority="senior",
-    )
+    _common = {
+        "product_type": "documentary_credit",
+        "value_date": VALUE_DATE,
+        "maturity_date": MATURITY_DATE,
+        "currency": "GBP",
+        "nominal_amount": NOMINAL_AMOUNT,
+        "risk_type": "MLR",
+        "is_obs_commitment": False,  # issued OBS item (not a commitment)
+        "has_one_day_maturity_floor": False,  # engine derives True for Row A
+        "is_sft": False,
+        "bs_type": "OFB",
+        "seniority": "senior",
+    }
 
     rows = [
         # ----------------------------------------------------------------
@@ -521,16 +521,22 @@ def print_summary(saved: dict[str, Path]) -> None:
         print(f"  {name:<25} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
     print("Scenario: CRR Art. 166(9) F-IRB 20% CCF — short-term trade LC exception")
-    print(f"  Counterparties: {COUNTERPARTY_REF_A} (positive), {COUNTERPARTY_REF_B} (negative guard)")
+    print(
+        f"  Counterparties: {COUNTERPARTY_REF_A} (positive), {COUNTERPARTY_REF_B} (negative guard)"
+    )
     print(f"  PD={PD:.3f}, LGD=0.45 (supervisory), nominal=GBP {NOMINAL_AMOUNT:,.0f}")
     print(f"  value_date={VALUE_DATE}, maturity_date={MATURITY_DATE} (272 days)")
     print(f"  Residual maturity = {RESIDUAL_MATURITY_YEARS:.4f}y")
     print("")
     print(f"  {'Row':<5}  {'Flag':<30}  {'CCF':>5}  {'EAD':>12}  {'M':>8}  {'RWA (approx)':>14}")
-    print(f"  {'A':<5}  {'is_short_term_trade_lc=True':<30}  {CCF_TRADE_LC:>5.0%}  "
-          f"{EXPECTED_EAD_A:>12,.0f}  {EXPECTED_M_A:>8.4f}  {EXPECTED_RWA_A:>14,.0f}")
-    print(f"  {'B':<5}  {'is_short_term_trade_lc=False':<30}  {CCF_GENERAL_MLR:>5.0%}  "
-          f"{EXPECTED_EAD_B:>12,.0f}  {EXPECTED_M_B:>8.4f}  {EXPECTED_RWA_B:>14,.0f}")
+    print(
+        f"  {'A':<5}  {'is_short_term_trade_lc=True':<30}  {CCF_TRADE_LC:>5.0%}  "
+        f"{EXPECTED_EAD_A:>12,.0f}  {EXPECTED_M_A:>8.4f}  {EXPECTED_RWA_A:>14,.0f}"
+    )
+    print(
+        f"  {'B':<5}  {'is_short_term_trade_lc=False':<30}  {CCF_GENERAL_MLR:>5.0%}  "
+        f"{EXPECTED_EAD_B:>12,.0f}  {EXPECTED_M_B:>8.4f}  {EXPECTED_RWA_B:>14,.0f}"
+    )
     print("")
     print("  Key assertions:")
     print(f"    EAD_A ({EXPECTED_EAD_A:,.0f}) << EAD_B ({EXPECTED_EAD_B:,.0f}) — CCF effect")

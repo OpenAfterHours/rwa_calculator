@@ -156,9 +156,9 @@ class TestCRRSlottingELRateLookup:
         """
         long_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=False)
         short_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=True)
-        assert long_maturity == Decimal("0.008")   # same as non-HVCRE long Good
+        assert long_maturity == Decimal("0.008")  # same as non-HVCRE long Good
         assert short_maturity == Decimal("0.004")  # same as non-HVCRE short Good
-        assert long_maturity != short_maturity      # maturity split still applies
+        assert long_maturity != short_maturity  # maturity split still applies
 
     def test_unknown_category_defaults_to_satisfactory(self) -> None:
         assert lookup_slotting_el_rate("unknown") == Decimal("0.028")
@@ -333,7 +333,7 @@ class TestSlottingNamespaceELRateLookup:
 
         el_rates = result["slotting_el_rate"].to_list()
         assert el_rates[0] == pytest.approx(0.004)  # HVCRE Strong long = non-HVCRE long = 0.4%
-        assert el_rates[1] == pytest.approx(0.0)    # HVCRE Strong short = non-HVCRE short = 0.0%
+        assert el_rates[1] == pytest.approx(0.0)  # HVCRE Strong short = non-HVCRE short = 0.0%
 
     def test_b31_el_rates_are_maturity_dependent(self, b31_config: CalculationConfig) -> None:
         """B31 EL rates vary by maturity even though B31 risk weights do not."""

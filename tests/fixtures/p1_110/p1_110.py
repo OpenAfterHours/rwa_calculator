@@ -133,18 +133,18 @@ GUARANTOR_CQS = 3  # discriminating threshold
 # Representative S&P rating values for CQS mapping
 _CQS_RATING_VALUE: dict[int, str] = {
     3: "BBB",  # CQS 3: BBB+ to BBB-  → use BBB (mid-band)
-    5: "B",    # CQS 5: B+ to B-      → use B   (mid-band)
+    5: "B",  # CQS 5: B+ to B-      → use B   (mid-band)
 }
 RATING_AGENCY = "S&P"
 
 # Expected SA risk weights (for documentation; assertions live in the test)
 # B31 (CalculationConfig.basel_3_1()):
-EXPECTED_BORROWER_RW_B31: float = 1.00   # corporate CQS 5, B31 Table 6
+EXPECTED_BORROWER_RW_B31: float = 1.00  # corporate CQS 5, B31 Table 6
 EXPECTED_GUARANTOR_RW_B31: float = 0.75  # corporate CQS 3, B31 Table 6 — POST-FIX
 EXPECTED_RWA_B31: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_B31  # 750,000
 
 # CRR (CalculationConfig.crr()):
-EXPECTED_BORROWER_RW_CRR: float = 1.50   # corporate CQS 5, CRR Table 5
+EXPECTED_BORROWER_RW_CRR: float = 1.50  # corporate CQS 5, CRR Table 5
 EXPECTED_GUARANTOR_RW_CRR: float = 1.00  # corporate CQS 3, CRR Table 5 — regression
 EXPECTED_RWA_CRR: float = LOAN_EAD * EXPECTED_GUARANTOR_RW_CRR  # 1,000,000
 
@@ -478,7 +478,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("  B31 (CalculationConfig.basel_3_1()):")
     print(f"    Substituted guarantor RW = {EXPECTED_GUARANTOR_RW_B31:.0%}")
     print(f"    Expected RWA             = {EXPECTED_RWA_B31:,.0f}")
-    print(f"    Pre-fix bug RWA          = {EXPECTED_RWA_B31_PRE_FIX:,.0f}  (overstates by 250,000)")
+    print(
+        f"    Pre-fix bug RWA          = {EXPECTED_RWA_B31_PRE_FIX:,.0f}  (overstates by 250,000)"
+    )
     print()
     print("  CRR (CalculationConfig.crr()) — regression:")
     print(f"    Substituted guarantor RW = {EXPECTED_GUARANTOR_RW_CRR:.0%}")

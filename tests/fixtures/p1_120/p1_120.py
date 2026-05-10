@@ -91,27 +91,27 @@ VALUE_DATE = date(2027, 1, 1)
 MATURITY_DATE = date(2027, 12, 31)
 
 # Monetary amounts (GBP, exact integers for clean hand-calculation)
-DRAWN_AMOUNT: float = 100_000.0         # Gross outstanding
-PROVISION_AMOUNT: float = 8_000.0       # Deducted specific provision
-COLLATERAL_VALUE: float = 60_000.0      # Cash GBP — 0% haircut
+DRAWN_AMOUNT: float = 100_000.0  # Gross outstanding
+PROVISION_AMOUNT: float = 8_000.0  # Deducted specific provision
+COLLATERAL_VALUE: float = 60_000.0  # Cash GBP — 0% haircut
 
 # Derived intermediates
-EAD_PRE_CRM: float = DRAWN_AMOUNT - PROVISION_AMOUNT           # 92,000
-EAD_FINAL: float = EAD_PRE_CRM - COLLATERAL_VALUE              # 32,000
-GROSS_OUTSTANDING: float = DRAWN_AMOUNT                         # 100,000
+EAD_PRE_CRM: float = DRAWN_AMOUNT - PROVISION_AMOUNT  # 92,000
+EAD_FINAL: float = EAD_PRE_CRM - COLLATERAL_VALUE  # 32,000
+GROSS_OUTSTANDING: float = DRAWN_AMOUNT  # 100,000
 
 # Art. 127(1) B31 threshold test
-PROVISION_RATIO: float = PROVISION_AMOUNT / GROSS_OUTSTANDING   # 0.08
-THRESHOLD: float = 0.20                                         # 20%
+PROVISION_RATIO: float = PROVISION_AMOUNT / GROSS_OUTSTANDING  # 0.08
+THRESHOLD: float = 0.20  # 20%
 
 # Expected results (post-fix)
-EXPECTED_RISK_WEIGHT: float = 1.50      # 8% < 20% → 150%
-EXPECTED_RWA: float = EAD_FINAL * EXPECTED_RISK_WEIGHT          # 48,000
+EXPECTED_RISK_WEIGHT: float = 1.50  # 8% < 20% → 150%
+EXPECTED_RWA: float = EAD_FINAL * EXPECTED_RISK_WEIGHT  # 48,000
 
 # Buggy result (pre-fix) — denominator = EAD_final = 32,000
-BUGGY_PROVISION_RATIO: float = PROVISION_AMOUNT / EAD_FINAL     # 0.25
-BUGGY_RISK_WEIGHT: float = 1.00     # 25% >= 20% → 100% (wrong)
-BUGGY_RWA: float = EAD_FINAL * BUGGY_RISK_WEIGHT                # 32,000
+BUGGY_PROVISION_RATIO: float = PROVISION_AMOUNT / EAD_FINAL  # 0.25
+BUGGY_RISK_WEIGHT: float = 1.00  # 25% >= 20% → 100% (wrong)
+BUGGY_RWA: float = EAD_FINAL * BUGGY_RISK_WEIGHT  # 32,000
 
 
 # ---------------------------------------------------------------------------
@@ -424,12 +424,18 @@ def print_summary(saved: dict[str, Path]) -> None:
     print()
     print("  Art. 127(1) B31 denominator check:")
     print(f"    gross_outstanding = {GROSS_OUTSTANDING:,.0f}")
-    print(f"    provision / gross  = {PROVISION_RATIO:.1%}  <  {THRESHOLD:.0%}  ->  RW = {EXPECTED_RISK_WEIGHT:.0%}")
+    print(
+        f"    provision / gross  = {PROVISION_RATIO:.1%}  <  {THRESHOLD:.0%}  ->  RW = {EXPECTED_RISK_WEIGHT:.0%}"
+    )
     print(f"    CORRECT RWA = {EAD_FINAL:,.0f} x {EXPECTED_RISK_WEIGHT:.0%} = {EXPECTED_RWA:,.0f}")
     print()
     print("  Buggy engine (pre-fix) — denominator = ead_final:")
-    print(f"    provision / ead_final = {BUGGY_PROVISION_RATIO:.1%}  >=  {THRESHOLD:.0%}  ->  buggy RW = {BUGGY_RISK_WEIGHT:.0%}")
-    print(f"    BUGGY RWA = {EAD_FINAL:,.0f} x {BUGGY_RISK_WEIGHT:.0%} = {BUGGY_RWA:,.0f}  (understates by {EXPECTED_RWA - BUGGY_RWA:,.0f})")
+    print(
+        f"    provision / ead_final = {BUGGY_PROVISION_RATIO:.1%}  >=  {THRESHOLD:.0%}  ->  buggy RW = {BUGGY_RISK_WEIGHT:.0%}"
+    )
+    print(
+        f"    BUGGY RWA = {EAD_FINAL:,.0f} x {BUGGY_RISK_WEIGHT:.0%} = {BUGGY_RWA:,.0f}  (understates by {EXPECTED_RWA - BUGGY_RWA:,.0f})"
+    )
 
 
 def main() -> None:

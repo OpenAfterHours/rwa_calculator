@@ -51,11 +51,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_120.p1_120 import (
+    BUGGY_PROVISION_RATIO,
     BUGGY_RWA,
     EAD_FINAL,
     EAD_PRE_CRM,
@@ -65,8 +62,11 @@ from tests.fixtures.p1_120.p1_120 import (
     LOAN_REF,
     PROVISION_AMOUNT,
     PROVISION_RATIO,
-    BUGGY_PROVISION_RATIO,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -78,8 +78,8 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_120"
 # Tolerances
 # ---------------------------------------------------------------------------
 
-_ABS_TOL_MONEY = 0.50   # ±£0.50 on 6-figure monetary values
-_ABS_TOL_RW = 1e-6      # exact risk-weight comparison
+_ABS_TOL_MONEY = 0.50  # ±£0.50 on 6-figure monetary values
+_ABS_TOL_RW = 1e-6  # exact risk-weight comparison
 
 # ---------------------------------------------------------------------------
 # Pipeline runner — module-scoped for single pipeline execution
@@ -292,9 +292,7 @@ class TestP1120Art1271ProvisionRatioDenominator:
         row = result
 
         # Assert
-        assert row["provision_allocated"] == pytest.approx(
-            PROVISION_AMOUNT, abs=_ABS_TOL_MONEY
-        ), (
+        assert row["provision_allocated"] == pytest.approx(PROVISION_AMOUNT, abs=_ABS_TOL_MONEY), (
             f"P1.120: expected provision_allocated={PROVISION_AMOUNT:,.0f}, "
             f"got {row['provision_allocated']:,.2f}. "
             f"The SCRA Stage-3 provision (PROV_K13_001) must be fully allocated "

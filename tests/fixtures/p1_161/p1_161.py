@@ -90,7 +90,6 @@ import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
-    COLLATERAL_SCHEMA,
     COUNTERPARTY_SCHEMA,
     GUARANTEE_SCHEMA,
     LOAN_SCHEMA,
@@ -143,8 +142,8 @@ COLLATERAL_RESIDUAL_MATURITY_YEARS: float = 5.0
 GUARANTOR_CQS: int = 4
 
 # B31 SA risk weights (Art. 122(2) Table 6)
-OBLIGOR_RW_B31: float = 1.00     # unrated corporate, B31
-GUARANTOR_RW_B31: float = 1.00   # CQS 4 (BB+-BB-) corporate, B31 Table 6 = 100% (same as CRR)
+OBLIGOR_RW_B31: float = 1.00  # unrated corporate, B31
+GUARANTOR_RW_B31: float = 1.00  # CQS 4 (BB+-BB-) corporate, B31 Table 6 = 100% (same as CRR)
 
 # Expected RWA outcomes (for documentation; assertions live in acceptance test)
 # Run A: look_through_election="none"
@@ -423,17 +422,20 @@ def create_p1161_collateral() -> pl.DataFrame:
         "beneficiary_type": "guarantee",
         "beneficiary_reference": GUARANTEE_REF,
     }
-    base_df = pl.DataFrame([base_row], schema={
-        "collateral_reference": pl.String,
-        "collateral_type": pl.String,
-        "currency": pl.String,
-        "market_value": pl.Float64,
-        "pledge_percentage": pl.Float64,
-        "is_eligible_financial_collateral": pl.Boolean,
-        "residual_maturity_years": pl.Float64,
-        "beneficiary_type": pl.String,
-        "beneficiary_reference": pl.String,
-    })
+    base_df = pl.DataFrame(
+        [base_row],
+        schema={
+            "collateral_reference": pl.String,
+            "collateral_type": pl.String,
+            "currency": pl.String,
+            "market_value": pl.Float64,
+            "pledge_percentage": pl.Float64,
+            "is_eligible_financial_collateral": pl.Boolean,
+            "residual_maturity_years": pl.Float64,
+            "beneficiary_type": pl.String,
+            "beneficiary_reference": pl.String,
+        },
+    )
     # Append new P1.161 field not yet in COLLATERAL_SCHEMA:
     return base_df.with_columns(
         pl.lit(GUARANTOR_REF).alias("posted_by_counterparty_reference"),
@@ -551,7 +553,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  Collateral:{COLLATERAL_REF} GBP {COLLATERAL_MARKET_VALUE:,.0f} cash")
     print()
     print("  Run A (look_through_election='none'):")
-    print("    Guarantor RW (100%) == Obligor RW (100%) -> guarantee NOT beneficial (no improvement)")
+    print(
+        "    Guarantor RW (100%) == Obligor RW (100%) -> guarantee NOT beneficial (no improvement)"
+    )
     print(f"    Expected RWA = {EXPECTED_RWA_RUN_A:,.0f}")
     print()
     print("  Run B (look_through_election='funded_only'):")

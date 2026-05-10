@@ -57,12 +57,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import LOAN_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_154_b31.p1_154_b31 import (
     EXPECTED_RW_INTERNATIONAL_ORG,
     EXPECTED_RW_MDB_CQS2_B31,
@@ -71,6 +65,12 @@ from tests.fixtures.p1_154_b31.p1_154_b31 import (
     IMF_LIMIT,
     MDB_LIMIT,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import LOAN_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -91,20 +91,20 @@ _EXPECTED_CLASS_IMF = "international_organisation"
 _EXPECTED_CLASS_MDB = "mdb"
 
 # Post-fix expected risk weights (from p1_154_b31.py exports)
-_EXPECTED_RW_IMF = EXPECTED_RW_INTERNATIONAL_ORG    # 0.00 — Art. 118 unconditional
-_EXPECTED_RW_MDB = EXPECTED_RW_MDB_CQS2_B31         # 0.30 — Table 2B CQS 2
+_EXPECTED_RW_IMF = EXPECTED_RW_INTERNATIONAL_ORG  # 0.00 — Art. 118 unconditional
+_EXPECTED_RW_MDB = EXPECTED_RW_MDB_CQS2_B31  # 0.30 — Table 2B CQS 2
 
 # Post-fix expected RWA (face-value EAD, no FX — no fx_rates table in bundle)
-_EXPECTED_RWA_IMF = 0.0                              # 100m × 0.00 = 0
-_EXPECTED_RWA_MDB = 15_000_000.0                     # 50m × 0.30 = 15m
+_EXPECTED_RWA_IMF = 0.0  # 100m × 0.00 = 0
+_EXPECTED_RWA_MDB = 15_000_000.0  # 50m × 0.30 = 15m
 
 # Post-fix expected EAD (face-value, no FX conversion without fx_rates table)
-_EXPECTED_EAD_IMF = IMF_LIMIT                        # USD 100,000,000 (no conversion)
-_EXPECTED_EAD_MDB = MDB_LIMIT                        # EUR 50,000,000 (no conversion)
+_EXPECTED_EAD_IMF = IMF_LIMIT  # USD 100,000,000 (no conversion)
+_EXPECTED_EAD_MDB = MDB_LIMIT  # EUR 50,000,000 (no conversion)
 
 # Tolerances
-_RW_TOL = 1e-6    # absolute on risk_weight
-_AMT_TOL = 0.50   # £0.50 absolute on rwa_final / ead_final
+_RW_TOL = 1e-6  # absolute on risk_weight
+_AMT_TOL = 0.50  # £0.50 absolute on rwa_final / ead_final
 
 
 # ---------------------------------------------------------------------------
@@ -377,9 +377,7 @@ class TestMDBTable2BB31:
             f"(EUR 50m face value, no FX), got {row['ead_final']:,.2f}"
         )
 
-    def test_p1_154_b31_mdb_rwa_table_2b_cqs2(
-        self, p1_154_b31_results: dict[str, dict]
-    ) -> None:
+    def test_p1_154_b31_mdb_rwa_table_2b_cqs2(self, p1_154_b31_results: dict[str, dict]) -> None:
         """
         Non-named MDB RWA = EAD × 30% = 15,000,000 (B31 Art. 117(1)(a) Table 2B).
 
@@ -433,9 +431,7 @@ class TestIMFB31:
             f"got '{row['exposure_class']}'"
         )
 
-    def test_p1_154_b31_imf_risk_weight_is_zero(
-        self, p1_154_b31_results: dict[str, dict]
-    ) -> None:
+    def test_p1_154_b31_imf_risk_weight_is_zero(self, p1_154_b31_results: dict[str, dict]) -> None:
         """
         IMF must receive 0% RW (Art. 118 unconditional).
 
@@ -472,9 +468,7 @@ class TestIMFB31:
             f"(USD 100m face value, no FX), got {row['ead_final']:,.2f}"
         )
 
-    def test_p1_154_b31_imf_rwa_is_zero(
-        self, p1_154_b31_results: dict[str, dict]
-    ) -> None:
+    def test_p1_154_b31_imf_rwa_is_zero(self, p1_154_b31_results: dict[str, dict]) -> None:
         """
         IMF RWA must be zero: EAD × 0% = 0.
 

@@ -39,6 +39,15 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
+from tests.fixtures.p1_145.p1_145 import (
+    EXPOSURE_REF,
+    INTERNAL_PD,
+    MODEL_ID,
+    build_model_permissions_airb_first,
+    build_model_permissions_sa_first,
+    create_p1145_counterparty,
+    create_p1145_loan,
+)
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -48,17 +57,6 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
-from tests.fixtures.p1_145.p1_145 import (
-    COUNTERPARTY_REF,
-    EXPOSURE_REF,
-    INTERNAL_LGD,
-    INTERNAL_PD,
-    MODEL_ID,
-    build_model_permissions_airb_first,
-    build_model_permissions_sa_first,
-    create_p1145_counterparty,
-    create_p1145_loan,
-)
 
 if TYPE_CHECKING:
     pass
@@ -264,9 +262,7 @@ class TestSAPrecedenceAirbFirstOrdering:
         # Assert
         df = result.all_exposures.collect()
         row = df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
-        assert len(row) == 1, (
-            f"Expected exactly one row for {EXPOSURE_REF!r}, got {len(row)}"
-        )
+        assert len(row) == 1, f"Expected exactly one row for {EXPOSURE_REF!r}, got {len(row)}"
 
         actual_airb = row["model_airb_permitted"][0]
         assert actual_airb is False, (
@@ -374,9 +370,7 @@ class TestSAPrecedenceSaFirstOrdering:
         # Assert
         df = result.all_exposures.collect()
         row = df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
-        assert len(row) == 1, (
-            f"Expected exactly one row for {EXPOSURE_REF!r}, got {len(row)}"
-        )
+        assert len(row) == 1, f"Expected exactly one row for {EXPOSURE_REF!r}, got {len(row)}"
 
         actual_airb = row["model_airb_permitted"][0]
         assert actual_airb is False, (
@@ -514,7 +508,8 @@ class TestDiagnosticFilterRejected:
         )
         # The warning message must mention 'filter_rejected' semantics
         filter_rejected_msgs = [
-            e for e in cls006_errors
+            e
+            for e in cls006_errors
             if "scope" in e.message.lower() or "filter" in e.message.lower()
         ]
         assert len(filter_rejected_msgs) >= 1, (
@@ -546,7 +541,8 @@ class TestDiagnosticFilterRejected:
             f"SA-first ordering."
         )
         filter_rejected_msgs = [
-            e for e in cls006_errors
+            e
+            for e in cls006_errors
             if "scope" in e.message.lower() or "filter" in e.message.lower()
         ]
         assert len(filter_rejected_msgs) >= 1, (

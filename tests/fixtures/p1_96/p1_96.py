@@ -72,7 +72,12 @@ from pathlib import Path
 import polars as pl
 
 from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import COLLATERAL_SCHEMA, COUNTERPARTY_SCHEMA, FACILITY_SCHEMA, LOAN_SCHEMA
+from rwa_calc.data.schemas import (
+    COLLATERAL_SCHEMA,
+    COUNTERPARTY_SCHEMA,
+    FACILITY_SCHEMA,
+    LOAN_SCHEMA,
+)
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -117,7 +122,9 @@ EAD_FINAL_B: float = max(0.0, DRAWN_AMOUNT - C_ADJ_B)
 
 # Pre-fix (other_physical 40% base) — for test reference
 H_N_BUG: float = 0.40
-EAD_FINAL_B_PRE_FIX: float = max(0.0, DRAWN_AMOUNT - MARKET_VALUE * (1.0 - H_N_BUG * math.sqrt(LIQ_PERIOD_B / 10)))
+EAD_FINAL_B_PRE_FIX: float = max(
+    0.0, DRAWN_AMOUNT - MARKET_VALUE * (1.0 - H_N_BUG * math.sqrt(LIQ_PERIOD_B / 10))
+)
 
 
 # ---------------------------------------------------------------------------

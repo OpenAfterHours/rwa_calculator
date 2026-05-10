@@ -465,7 +465,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Scenario: CRR/B31 MDB exposure-class routing (Art. 117)")
     print()
     print("  CP_MDB_RATED_CQS2    | mdb        | cqs=2   | RW=30% | RWA=300,000")
-    print("  CP_MDB_UNRATED_SOV1  | mdb        | unrated | RW=50% | RWA=500,000 (sov_cqs=1 ignored)")
+    print(
+        "  CP_MDB_UNRATED_SOV1  | mdb        | unrated | RW=50% | RWA=500,000 (sov_cqs=1 ignored)"
+    )
     print("  CP_MDB_UNRATED_NOSOV | mdb        | unrated | RW=50% | RWA=395,000 (USD, FX=0.79)")
     print("  CP_MDB_NAMED         | mdb_named  | cqs=1   | RW= 0% | RWA=0")
     print()

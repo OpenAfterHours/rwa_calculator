@@ -31,7 +31,6 @@ from rwa_calc.reporting.pillar3.templates import (
     CRR_OV1_ROWS,
 )
 
-
 # ---------------------------------------------------------------------------
 # Expected constants
 # ---------------------------------------------------------------------------
@@ -210,7 +209,7 @@ class TestOv1RatioRowsUseOverride:
 
         # Arrange
         overrides = Pillar3CapitalRatioOverrides(
-            cet1_ratio_pre_floor=Decimal("0.135"),   # 13.5%
+            cet1_ratio_pre_floor=Decimal("0.135"),  # 13.5%
             tier1_ratio_pre_floor=Decimal("0.155"),  # 15.5%
             total_ratio_pre_floor=Decimal("0.185"),  # 18.5%
         )
@@ -255,6 +254,5 @@ class TestOv1RatioRowsUseOverride:
             assert tr_row.height == 1, f"Row '{ref}' must exist"
             val = tr_row["a"][0]
             assert val is None, (
-                f"Row '{ref}' column 'a': expected None (transitional not supplied), "
-                f"got {val}"
+                f"Row '{ref}' column 'a': expected None (transitional not supplied), got {val}"
             )

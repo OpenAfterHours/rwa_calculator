@@ -309,11 +309,15 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"          entity_type=bank, country_code=GB, scra_grade=A, GBP {EAD:,.0f}")
     print(f"          value_date={VALUE_DATE}, maturity_date={MATURITY_DATE} (151 days)")
     print(f"          original_maturity_years = {original_maturity_years:.4f}y")
-    print(f"          0.25y < {original_maturity_years:.4f}y <= 0.5y AND is_short_term_trade_lc=True")
+    print(
+        f"          0.25y < {original_maturity_years:.4f}y <= 0.5y AND is_short_term_trade_lc=True"
+    )
     print("          -> Art. 121(4) extended window fires -> SCRA Grade A short-term")
     print("")
-    print(f"  SCRA Grade  RW        Expected RWA    Capital (8%)")
-    print(f"  A (short)   {EXPECTED_RISK_WEIGHT:.0%}       {EXPECTED_RWA:>12,.0f}    {EXPECTED_K:>10,.0f}")
+    print("  SCRA Grade  RW        Expected RWA    Capital (8%)")
+    print(
+        f"  A (short)   {EXPECTED_RISK_WEIGHT:.0%}       {EXPECTED_RWA:>12,.0f}    {EXPECTED_K:>10,.0f}"
+    )
     print("")
     print("  Contrastive (long-term SCRA Grade A, without Art. 121(4) fix):")
     print(

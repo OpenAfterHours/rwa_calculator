@@ -96,9 +96,6 @@ from datetime import date
 
 import polars as pl
 import pytest
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
 from tests.fixtures.p1_159.p1_159 import (
     AMOUNT_COVERED,
     EAD_AMOUNT,
@@ -110,6 +107,9 @@ from tests.fixtures.p1_159.p1_159 import (
     PD_GUARANTOR,
     PERCENTAGE_COVERED,
 )
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
 
 # =============================================================================
 # Scenario expected values (from hand-calculation in module docstring above)
@@ -141,7 +141,7 @@ BUGGY_GUARANTOR_RW_IRB: float = 0.400718
 # Proposal hand-calc: 709,324 / 0.709324. Engine (polars-normal-stats): 709,083 / 0.709083.
 # Tolerances (abs=500 on RWA, abs=5e-4 on RW) span both values.
 EXPECTED_RISK_WEIGHT_BLENDED: float = 0.709324  # proposal anchor
-EXPECTED_RWA_BLENDED: float = 709_324.0         # proposal anchor; abs=500 tolerance used
+EXPECTED_RWA_BLENDED: float = 709_324.0  # proposal anchor; abs=500 tolerance used
 
 # Buggy blended: 1.327897*400k + 0.400675*600k = 771,568
 BUGGY_RWA_BLENDED: float = 771_594.0  # proposal approx; engine emits ~771,568
@@ -200,7 +200,6 @@ def _build_p1159_lf(
             # --- Exposure identity ---
             "exposure_reference": [FACILITY_REF],
             "exposure_class": ["corporate"],
-
             # --- Borrower IRB parameters ---
             "pd": [PD_BORROWER],
             "lgd": [lgd_borrower],
@@ -211,21 +210,18 @@ def _build_p1159_lf(
             "requires_fi_scalar": [True],
             "has_one_day_maturity_floor": [False],
             "is_qrre_transactor": [False],
-
             # --- Pre-CRM IRB results ---
             "rwa": [pre_crm_rwa],
             "risk_weight": [pre_crm_rw],
             "expected_loss": [el_pre_crm],
-
             # --- Guarantee split (from CRM processor) ---
             "guaranteed_portion": [guaranteed],
             "unguaranteed_portion": [unguaranteed],
-
             # --- Guarantor attributes (joined by CRM processor) ---
-            "guarantor_entity_type": ["institution"],       # regulated bank → INSTITUTION class
+            "guarantor_entity_type": ["institution"],  # regulated bank → INSTITUTION class
             "guarantor_cqs": [1],
-            "guarantor_approach": ["irb"],                  # triggers PSM path
-            "guarantor_pd": [PD_GUARANTOR],                 # 0.001, above institution floor 0.0005
+            "guarantor_approach": ["irb"],  # triggers PSM path
+            "guarantor_pd": [PD_GUARANTOR],  # 0.001, above institution floor 0.0005
             "guarantor_reference": [GUARANTOR_REF],
             "guarantor_seniority": ["senior"],
             # Guarantor is FSE institution → LGD=0.45 (Art. 161(1)(a) FSE senior B31)
@@ -685,9 +681,9 @@ class TestP1159PSMCorrelationGuarantorClass:
 
         Assert: PERCENTAGE_COVERED == 0.60, AMOUNT_COVERED == 600,000.
         """
-        assert PERCENTAGE_COVERED == pytest.approx(0.60, abs=1e-10), (
+        assert pytest.approx(0.60, abs=1e-10) == PERCENTAGE_COVERED, (
             f"Fixture: PERCENTAGE_COVERED should be 0.60, got {PERCENTAGE_COVERED}"
         )
-        assert AMOUNT_COVERED == pytest.approx(600_000.0, abs=0.01), (
+        assert pytest.approx(600_000.0, abs=0.01) == AMOUNT_COVERED, (
             f"Fixture: AMOUNT_COVERED should be 600,000, got {AMOUNT_COVERED:,.0f}"
         )

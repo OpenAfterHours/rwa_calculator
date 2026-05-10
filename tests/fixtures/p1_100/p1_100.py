@@ -305,7 +305,7 @@ def print_summary(saved: dict[str, Path]) -> None:
         print(f"  {name:<20} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
     print("Scenario: CRR Art. 137(1)-(2) — ECA MEIP score 2 → 20% sovereign RW")
-    print(f"          counterparty=SOV_KZ_001, entity_type=sovereign, country_code=KZ")
+    print("          counterparty=SOV_KZ_001, entity_type=sovereign, country_code=KZ")
     print(f"          loan=LN_CRR_A14_ECA_001, USD {EAD:,.0f}")
     print(f"          value_date={VALUE_DATE}, maturity_date={MATURITY_DATE}")
     print(f"          eca_score={ECA_SCORE}, expected_rw={EXPECTED_RISK_WEIGHT:.0%}")

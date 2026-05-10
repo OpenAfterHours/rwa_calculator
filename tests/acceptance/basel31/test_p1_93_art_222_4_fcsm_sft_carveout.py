@@ -99,17 +99,17 @@ _EAD_C = 500_000.0  # CCF 50% applied for MR OBS
 
 # Expected post-fix FCSM outputs
 _EXPECTED_FCSM_COLL_VALUE_A = 1_000_000.0  # sovereign gilt discount waived under Art. 227
-_EXPECTED_FCSM_COLL_RW_A = 0.00            # Art. 222(4)(a) CMP → 0% floor; gilt RW = 0%
+_EXPECTED_FCSM_COLL_RW_A = 0.00  # Art. 222(4)(a) CMP → 0% floor; gilt RW = 0%
 _EXPECTED_RISK_WEIGHT_A = 0.00
 _EXPECTED_RWA_A = 0.0
 
 _EXPECTED_FCSM_COLL_VALUE_B = 1_000_000.0  # sovereign gilt discount waived under Art. 227
-_EXPECTED_FCSM_COLL_RW_B = 0.10            # Art. 222(4)(b) non-CMP → 10% floor; gilt RW = 0%
+_EXPECTED_FCSM_COLL_RW_B = 0.10  # Art. 222(4)(b) non-CMP → 10% floor; gilt RW = 0%
 _EXPECTED_RISK_WEIGHT_B = 0.10
 _EXPECTED_RWA_B = 100_000.0
 
 _EXPECTED_FCSM_COLL_VALUE_C = 1_000_000.0  # cash; no discount
-_EXPECTED_FCSM_COLL_RW_C = 0.00            # Art. 222(6)(a) same-currency cash → 0%
+_EXPECTED_FCSM_COLL_RW_C = 0.00  # Art. 222(6)(a) same-currency cash → 0%
 _EXPECTED_RISK_WEIGHT_C = 0.00
 _EXPECTED_RWA_C = 0.0
 
@@ -323,9 +323,7 @@ class TestRunA_SFT_CMP_ZeroFloor:
         assert result["fcsm_collateral_value"][0] == pytest.approx(
             _EXPECTED_FCSM_COLL_VALUE_A, abs=1e-6
         )
-        assert result["fcsm_collateral_rw"][0] == pytest.approx(
-            _EXPECTED_FCSM_COLL_RW_A, abs=1e-6
-        )
+        assert result["fcsm_collateral_rw"][0] == pytest.approx(_EXPECTED_FCSM_COLL_RW_A, abs=1e-6)
         assert result["risk_weight"][0] == pytest.approx(_EXPECTED_RISK_WEIGHT_A, abs=1e-6), (
             f"Run A: risk_weight should be {_EXPECTED_RISK_WEIGHT_A} "
             f"(Art. 222(4)(a) CMP → blended 0%), got {result['risk_weight'][0]:.4f}"
@@ -431,16 +429,14 @@ class TestRunB_SFT_NonCMP_TenPercentFloor:
                 "ead_final": [_EAD],
                 "risk_weight": [1.0],
                 "fcsm_collateral_value": [_COLLATERAL_VALUE],  # 1,000,000
-                "fcsm_collateral_rw": [0.10],                  # post-fix target
+                "fcsm_collateral_rw": [0.10],  # post-fix target
                 "approach": ["standardised"],
                 "exposure_class": ["CORPORATE"],
             }
         )
 
         # Act
-        result = (
-            exposures_with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config).collect()
-        )
+        result = exposures_with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config).collect()
 
         # Assert
         assert result["risk_weight"][0] == pytest.approx(0.10, abs=1e-6), (
@@ -593,9 +589,7 @@ class TestRunC_NonSFT_CMP_ArtSix_RegressionGuard:
         )
 
         # Assert
-        assert result["fcsm_collateral_rw"][0] == pytest.approx(
-            _EXPECTED_FCSM_COLL_RW_C, abs=1e-6
-        )
+        assert result["fcsm_collateral_rw"][0] == pytest.approx(_EXPECTED_FCSM_COLL_RW_C, abs=1e-6)
         assert result["risk_weight"][0] == pytest.approx(_EXPECTED_RISK_WEIGHT_C, abs=1e-6), (
             f"Run C: risk_weight should be {_EXPECTED_RISK_WEIGHT_C} "
             f"(Art. 222(6)(a) same-currency cash 0%), got {result['risk_weight'][0]:.4f}"

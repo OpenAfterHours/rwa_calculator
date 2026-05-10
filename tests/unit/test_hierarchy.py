@@ -6958,19 +6958,20 @@ class TestOrgMappingDuplicateChild:
 
         # Assert: shapes are correct (1 row each)
         assert (
-            result.exposures.collect().filter(
-                pl.col("exposure_reference") == "LOAN_DUP"
-            ).height == 1
+            result.exposures.collect().filter(pl.col("exposure_reference") == "LOAN_DUP").height
+            == 1
         ), "LOAN_DUP should appear exactly once in clean scenario."
 
         assert (
-            result.counterparty_lookup.counterparties.collect().filter(
-                pl.col("counterparty_reference") == "CHILD_CP"
-            ).height == 1
+            result.counterparty_lookup.counterparties.collect()
+            .filter(pl.col("counterparty_reference") == "CHILD_CP")
+            .height
+            == 1
         ), "CHILD_CP should appear exactly once in counterparties for clean scenario."
 
         assert (
-            result.counterparty_lookup.parent_mappings.collect().filter(
-                pl.col("child_counterparty_reference") == "CHILD_CP"
-            ).height == 1
+            result.counterparty_lookup.parent_mappings.collect()
+            .filter(pl.col("child_counterparty_reference") == "CHILD_CP")
+            .height
+            == 1
         ), "CHILD_CP should appear exactly once in parent_mappings for clean scenario."

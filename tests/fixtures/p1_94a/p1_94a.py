@@ -113,12 +113,12 @@ SA_RETAIL_BASE_RW: float = 0.75
 CURRENCY_MISMATCH_MULTIPLIER: float = 1.50
 
 #: Arm A (hedged) — multiplier suppressed
-RW_HEDGED: float = SA_RETAIL_BASE_RW                         # 0.75
-RWA_HEDGED: float = DRAWN_AMOUNT * RW_HEDGED                 # 75,000.00
+RW_HEDGED: float = SA_RETAIL_BASE_RW  # 0.75
+RWA_HEDGED: float = DRAWN_AMOUNT * RW_HEDGED  # 75,000.00
 
 #: Arm B (unhedged) — multiplier applied
 RW_UNHEDGED: float = SA_RETAIL_BASE_RW * CURRENCY_MISMATCH_MULTIPLIER  # 1.125
-RWA_UNHEDGED: float = DRAWN_AMOUNT * RW_UNHEDGED                       # 112,500.00
+RWA_UNHEDGED: float = DRAWN_AMOUNT * RW_UNHEDGED  # 112,500.00
 
 
 # ---------------------------------------------------------------------------
@@ -436,15 +436,15 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  Base retail SA RW (Art. 123(1)):   {SA_RETAIL_BASE_RW:.0%}")
     print(f"  Art. 123B multiplier:              {CURRENCY_MISMATCH_MULTIPLIER:.2f}×")
     print()
-    print(f"  Arm A (P194A_HEDGED,   is_hedged=True ):")
+    print("  Arm A (P194A_HEDGED,   is_hedged=True ):")
     print(f"    risk_weight                      = {RW_HEDGED:.4f}")
     print(f"    rwa                              = {RWA_HEDGED:,.2f}")
-    print(f"    currency_mismatch_multiplier_applied = False")
+    print("    currency_mismatch_multiplier_applied = False")
     print()
-    print(f"  Arm B (P194A_UNHEDGED, is_hedged=False):")
+    print("  Arm B (P194A_UNHEDGED, is_hedged=False):")
     print(f"    risk_weight                      = {RW_UNHEDGED:.4f}")
     print(f"    rwa                              = {RWA_UNHEDGED:,.2f}")
-    print(f"    currency_mismatch_multiplier_applied = True")
+    print("    currency_mismatch_multiplier_applied = True")
     print()
     # Verify is_hedged column presence and dtype
     loans_df = pl.read_parquet(saved["loans"])

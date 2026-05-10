@@ -4244,9 +4244,9 @@ class TestOF0201CreditRiskRow:
         # col 0010 (modelled) = 500+1500+100+900 = 3000
         # col 0020 (SA)       = 700+1400+100+1050 = 3250
         # col 0030 (U-TREA)   = 3000 + 3250 = 6250
-        assert cr_row["0030"][0] == pytest.approx(
-            cr_row["0010"][0] + cr_row["0020"][0]
-        ), "U-TREA (col 0030) must equal col 0010 + col 0020 per Annex II §1.3.2"
+        assert cr_row["0030"][0] == pytest.approx(cr_row["0010"][0] + cr_row["0020"][0]), (
+            "U-TREA (col 0030) must equal col 0010 + col 0020 per Annex II §1.3.2"
+        )
         assert cr_row["0030"][0] == pytest.approx(6250.0)
 
     def test_s_trea_equals_sa(self) -> None:

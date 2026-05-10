@@ -24,7 +24,6 @@ import pytest
 
 from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table
 
-
 # =============================================================================
 # Helper
 # =============================================================================
@@ -95,9 +94,7 @@ class TestBasel31FlagReturnsB31Table:
         try:
             df = get_firb_lgd_table(is_basel_3_1=True)
         except TypeError as e:
-            pytest.fail(
-                f"get_firb_lgd_table does not yet accept is_basel_3_1 kwarg: {e}"
-            )
+            pytest.fail(f"get_firb_lgd_table does not yet accept is_basel_3_1 kwarg: {e}")
 
         row = _filter_receivables_senior(df)
 
@@ -138,9 +135,7 @@ class TestCrrAndB31TablesDifferOnDiscriminator:
         try:
             df_b31 = get_firb_lgd_table(is_basel_3_1=True)
         except TypeError as e:
-            pytest.fail(
-                f"get_firb_lgd_table does not yet accept is_basel_3_1 kwarg: {e}"
-            )
+            pytest.fail(f"get_firb_lgd_table does not yet accept is_basel_3_1 kwarg: {e}")
 
         lgd_crr = _filter_receivables_senior(df_crr).get_column("lgd")[0]
         lgd_b31 = _filter_receivables_senior(df_b31).get_column("lgd")[0]

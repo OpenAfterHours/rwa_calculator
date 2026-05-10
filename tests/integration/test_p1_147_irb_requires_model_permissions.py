@@ -52,9 +52,7 @@ def _val003_errors(errors: list) -> list:
 class TestP1147IrbRequiresModelPermissions:
     """P1.147: DataPathValidator must emit VAL003 when IRB mode + no model_permissions."""
 
-    def test_validate_irb_mode_missing_model_permissions_is_invalid(
-        self, tmp_path: Path
-    ) -> None:
+    def test_validate_irb_mode_missing_model_permissions_is_invalid(self, tmp_path: Path) -> None:
         """
         When permission_mode='irb' and model_permissions.parquet is absent,
         validate() must return valid=False with exactly one VAL003 error.
@@ -123,9 +121,7 @@ class TestP1147IrbRequiresModelPermissions:
         val003_errs = _val003_errors(response.errors)
 
         # Assert — exactly one VAL003
-        assert len(val003_errs) == 1, (
-            f"Expected exactly 1 VAL003 error; got {val003_errs}"
-        )
+        assert len(val003_errs) == 1, f"Expected exactly 1 VAL003 error; got {val003_errs}"
 
     def test_validate_irb_mode_val003_error_attributes(self, tmp_path: Path) -> None:
         """
@@ -159,9 +155,7 @@ class TestP1147IrbRequiresModelPermissions:
         assert "model_permissions" in err.message.lower(), (
             f"Expected 'model_permissions' in message; got {err.message!r}"
         )
-        assert "irb" in err.message.lower(), (
-            f"Expected 'irb' in message; got {err.message!r}"
-        )
+        assert "irb" in err.message.lower(), f"Expected 'irb' in message; got {err.message!r}"
 
     def test_validate_standardised_mode_no_val003(self, tmp_path: Path) -> None:
         """
@@ -187,9 +181,7 @@ class TestP1147IrbRequiresModelPermissions:
             "validate() returned valid=False in standardised mode (unexpected)"
         )
         val003_errs = _val003_errors(response.errors)
-        assert val003_errs == [], (
-            f"Unexpected VAL003 errors in standardised mode: {val003_errs}"
-        )
+        assert val003_errs == [], f"Unexpected VAL003 errors in standardised mode: {val003_errs}"
 
     def test_calculate_irb_mode_short_circuits_on_val003(self, tmp_path: Path) -> None:
         """

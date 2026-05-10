@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
@@ -65,7 +66,6 @@ from tests.fixtures.p1_109.p1_109 import (  # noqa: E402
     GUAR_FULL_REF,
     GUAR_MM_REF,
     GUARANTOR_REF,
-    LOAN_EAD,
     LOAN_REF,
 )
 
@@ -86,10 +86,10 @@ _EXPECTED_A_RWA = 200_000.0
 
 # Scenario B — maturity-mismatched guarantee (Art. 239(3))
 _EXPECTED_B_EAD = 1_000_000.0
-_EXPECTED_B_GUARANTEED_PORTION = GA_MISMATCH          # 473,684.2105263158
-_EXPECTED_B_UNGUARANTEED_PORTION = GA_UNGUARANTEED     # 526,315.7894736842
+_EXPECTED_B_GUARANTEED_PORTION = GA_MISMATCH  # 473,684.2105263158
+_EXPECTED_B_UNGUARANTEED_PORTION = GA_UNGUARANTEED  # 526,315.7894736842
 _EXPECTED_B_RWA = GA_MISMATCH * 0.20 + GA_UNGUARANTEED * 1.00  # 621,052.6315789474
-_EXPECTED_B_EFFECTIVE_RW = _EXPECTED_B_RWA / _EXPECTED_B_EAD   # ≈ 0.6210526315789474
+_EXPECTED_B_EFFECTIVE_RW = _EXPECTED_B_RWA / _EXPECTED_B_EAD  # ≈ 0.6210526315789474
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ def _run_pipeline(guarantee_ref: str) -> pl.DataFrame:
     )
     results = PipelineOrchestrator().run_with_data(bundle, config)
     assert results.sa_results is not None, "SA results must not be None for SA-only config"
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 def _aggregate_by_parent(df: pl.DataFrame, parent_ref: str) -> dict:
@@ -217,9 +217,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
     # Scenario A — GUAR_FULL (no mismatch) — should PASS today (regression pin)
     # -----------------------------------------------------------------------
 
-    def test_p1_109_full_tenor_guarantee_ead_equals_loan_ead(
-        self, guar_full_results: dict
-    ) -> None:
+    def test_p1_109_full_tenor_guarantee_ead_equals_loan_ead(self, guar_full_results: dict) -> None:
         """
         Full-tenor guarantee: aggregated ead_final == 1,000,000.
 
@@ -304,9 +302,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
             f"got {row['rwa_final']:,.2f}"
         )
 
-    def test_p1_109_full_tenor_guarantee_guarantor_reference(
-        self, guar_full_results: dict
-    ) -> None:
+    def test_p1_109_full_tenor_guarantee_guarantor_reference(self, guar_full_results: dict) -> None:
         """
         Full-tenor guarantee: guarantor_reference on the guaranteed sub-row == CP_GUARANTOR_P1109.
 
@@ -319,8 +315,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
         # Arrange / Act (fixture provides aggregated first-row values for non-additive fields)
         df = _run_pipeline(GUAR_FULL_REF)
         guaranteed_sub_rows = df.filter(
-            (pl.col("parent_exposure_reference") == LOAN_REF)
-            & (pl.col("is_guaranteed") == True)  # noqa: E712
+            (pl.col("parent_exposure_reference") == LOAN_REF) & (pl.col("is_guaranteed") == True)  # noqa: E712
         )
 
         # Assert
@@ -336,9 +331,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
     # Scenario B — GUAR_MM (maturity mismatch) — THESE FAIL TODAY (pre-fix)
     # -----------------------------------------------------------------------
 
-    def test_p1_109_maturity_mismatch_ead_unchanged(
-        self, guar_mm_results: dict
-    ) -> None:
+    def test_p1_109_maturity_mismatch_ead_unchanged(self, guar_mm_results: dict) -> None:
         """
         Maturity-mismatched guarantee: total ead_final == 1,000,000 (EAD is not reduced).
 
@@ -373,15 +366,15 @@ class TestP1109Art237MaturityMismatchGuarantees:
         row = guar_mm_results
 
         # Assert
-        assert row["guaranteed_portion"] == pytest.approx(_EXPECTED_B_GUARANTEED_PORTION, rel=1e-6), (
+        assert row["guaranteed_portion"] == pytest.approx(
+            _EXPECTED_B_GUARANTEED_PORTION, rel=1e-6
+        ), (
             f"P1.109 GUAR_MM: expected guaranteed_portion={_EXPECTED_B_GUARANTEED_PORTION:,.10f} "
             f"(Art. 239(3): 1,000,000 × (2.5−0.25)/(5.0−0.25)), "
             f"got {row['guaranteed_portion']:,.2f}"
         )
 
-    def test_p1_109_maturity_mismatch_unguaranteed_portion(
-        self, guar_mm_results: dict
-    ) -> None:
+    def test_p1_109_maturity_mismatch_unguaranteed_portion(self, guar_mm_results: dict) -> None:
         """
         CRR Art. 239(3): unguaranteed_portion == EAD − scaled GA.
 
@@ -431,9 +424,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
             f"got {row['rwa_final']:,.2f}"
         )
 
-    def test_p1_109_maturity_mismatch_effective_rw(
-        self, guar_mm_results: dict
-    ) -> None:
+    def test_p1_109_maturity_mismatch_effective_rw(self, guar_mm_results: dict) -> None:
         """
         CRR Art. 239(3): effective post-CRM risk weight == rwa_final / ead_final ≈ 0.621053.
 
@@ -456,9 +447,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
             f"got {effective_rw:.10f} (rwa={rwa:,.2f}, ead={ead:,.2f})"
         )
 
-    def test_p1_109_maturity_mismatch_guarantor_reference(
-        self, guar_mm_results: dict
-    ) -> None:
+    def test_p1_109_maturity_mismatch_guarantor_reference(self, guar_mm_results: dict) -> None:
         """
         Maturity-mismatched guarantee: guaranteed sub-row has guarantor_reference == CP_GUARANTOR_P1109.
 
@@ -471,8 +460,7 @@ class TestP1109Art237MaturityMismatchGuarantees:
         # Arrange / Act
         df = _run_pipeline(GUAR_MM_REF)
         guaranteed_sub_rows = df.filter(
-            (pl.col("parent_exposure_reference") == LOAN_REF)
-            & (pl.col("is_guaranteed") == True)  # noqa: E712
+            (pl.col("parent_exposure_reference") == LOAN_REF) & (pl.col("is_guaranteed") == True)  # noqa: E712
         )
 
         # Assert

@@ -378,21 +378,23 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("-" * 72)
     print("Scenario: CRR Art. 239(1) — FCSM binary maturity-mismatch eligibility")
     print(f"  Exposure:            CP_P1104, GBP {DRAWN_AMOUNT:,.0f}, CQS 4, corporate")
-    print(f"  Exposure maturity:   {VALUE_DATE} -> {MATURITY_DATE} (~{EXPOSURE_RESIDUAL_MATURITY_YEARS:.2f}y)")
+    print(
+        f"  Exposure maturity:   {VALUE_DATE} -> {MATURITY_DATE} (~{EXPOSURE_RESIDUAL_MATURITY_YEARS:.2f}y)"
+    )
     print("")
-    print("  Case A (compliant):  COLL_P1104_OK,    residual={:.1f}y >= {:.1f}y exposure".format(
-        COLL_OK_RESIDUAL_MATURITY_YEARS, EXPOSURE_RESIDUAL_MATURITY_YEARS
-    ))
-    print(f"    maturity_eligibility = True")
+    print(
+        f"  Case A (compliant):  COLL_P1104_OK,    residual={COLL_OK_RESIDUAL_MATURITY_YEARS:.1f}y >= {EXPOSURE_RESIDUAL_MATURITY_YEARS:.1f}y exposure"
+    )
+    print("    maturity_eligibility = True")
     print(f"    fcsm_item_rw = max({FCSM_RW_FLOOR}, {CORPORATE_CQS2_RW}) = {FCSM_ITEM_RW:.2f}")
     print(f"    risk_weight  = {EXPECTED_RISK_WEIGHT_A:.2f}")
     print(f"    RWA          = {EXPECTED_RWA_A:,.0f}")
     print("")
-    print("  Case B (mismatch):   COLL_P1104_SHORT, residual={:.1f}y < {:.1f}y exposure".format(
-        COLL_SHORT_RESIDUAL_MATURITY_YEARS, EXPOSURE_RESIDUAL_MATURITY_YEARS
-    ))
-    print(f"    maturity_eligibility = False  (Art. 239(1) ineligible)")
-    print(f"    fcsm_collateral_value = 0")
+    print(
+        f"  Case B (mismatch):   COLL_P1104_SHORT, residual={COLL_SHORT_RESIDUAL_MATURITY_YEARS:.1f}y < {EXPOSURE_RESIDUAL_MATURITY_YEARS:.1f}y exposure"
+    )
+    print("    maturity_eligibility = False  (Art. 239(1) ineligible)")
+    print("    fcsm_collateral_value = 0")
     print(f"    risk_weight  = {EXPECTED_RISK_WEIGHT_B:.2f}")
     print(f"    RWA          = {EXPECTED_RWA_B:,.0f}")
 

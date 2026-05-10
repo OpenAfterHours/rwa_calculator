@@ -54,15 +54,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-import rwa_calc.engine.sa.namespace  # noqa: F401 — register sa namespace
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import CRMCollateralMethod
-from rwa_calc.engine.crm.simple_method import compute_fcsm_columns
 from tests.fixtures.p1_104_art_239_1_fcsm_maturity.p1_104 import (
-    COLLATERAL_REF_OK,
-    COLLATERAL_REF_SHORT,
-    COLL_OK_RESIDUAL_MATURITY_YEARS,
     COLL_SHORT_RESIDUAL_MATURITY_YEARS,
     CORPORATE_CQS4_RW,
     DRAWN_AMOUNT,
@@ -74,10 +66,14 @@ from tests.fixtures.p1_104_art_239_1_fcsm_maturity.p1_104 import (
     EXPECTED_RWA_A,
     EXPECTED_RWA_B,
     EXPOSURE_RESIDUAL_MATURITY_YEARS,
-    FCSM_ITEM_RW,
     LOAN_REF_COMPLIANT,
     LOAN_REF_MISMATCH,
 )
+
+import rwa_calc.engine.sa.namespace  # noqa: F401 — register sa namespace
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import CRMCollateralMethod
+from rwa_calc.engine.crm.simple_method import compute_fcsm_columns
 
 # =============================================================================
 # Fixture paths and shared constants
@@ -169,9 +165,7 @@ class TestP1104FCSMCompliantMaturity:
 
         # Act
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
-        compliant_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_COMPLIANT
-        )
+        compliant_row = result.filter(pl.col("exposure_reference") == LOAN_REF_COMPLIANT)
 
         # Assert
         assert compliant_row["fcsm_collateral_value"][0] == pytest.approx(
@@ -198,9 +192,7 @@ class TestP1104FCSMCompliantMaturity:
 
         # Act
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
-        compliant_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_COMPLIANT
-        )
+        compliant_row = result.filter(pl.col("exposure_reference") == LOAN_REF_COMPLIANT)
 
         # Assert
         assert compliant_row["fcsm_collateral_rw"][0] == pytest.approx(
@@ -231,22 +223,16 @@ class TestP1104FCSMCompliantMaturity:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
         result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
-        compliant_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_COMPLIANT
-        )
+        compliant_row = result.filter(pl.col("exposure_reference") == LOAN_REF_COMPLIANT)
 
         # Assert
-        assert compliant_row["risk_weight"][0] == pytest.approx(
-            EXPECTED_RISK_WEIGHT_A, abs=1e-6
-        ), (
+        assert compliant_row["risk_weight"][0] == pytest.approx(EXPECTED_RISK_WEIGHT_A, abs=1e-6), (
             f"P1.104-A: blended risk_weight should be {EXPECTED_RISK_WEIGHT_A:.2f} "
             f"(fully secured by 50%-RW corporate bond, Art. 239(1) met), "
             f"got {compliant_row['risk_weight'][0]:.4f}"
         )
 
-    def test_p1_104_art_239_1_compliant_rwa(
-        self, crr_simple_config: CalculationConfig
-    ) -> None:
+    def test_p1_104_art_239_1_compliant_rwa(self, crr_simple_config: CalculationConfig) -> None:
         """
         Art. 239(1) satisfied: RWA = EAD × blended_rw = 1,000,000 × 0.50 = 500,000.
 
@@ -265,9 +251,7 @@ class TestP1104FCSMCompliantMaturity:
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
-        compliant_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_COMPLIANT
-        )
+        compliant_row = result.filter(pl.col("exposure_reference") == LOAN_REF_COMPLIANT)
 
         # Assert
         assert compliant_row["rwa"][0] == pytest.approx(EXPECTED_RWA_A, rel=0.001), (
@@ -321,9 +305,7 @@ class TestP1104FCSMMaturityMismatch:
 
         # Act
         result = compute_fcsm_columns(exposures, collateral, crr_simple_config).collect()
-        mismatch_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_MISMATCH
-        )
+        mismatch_row = result.filter(pl.col("exposure_reference") == LOAN_REF_MISMATCH)
 
         # Assert — collateral must be fully excluded (binary FCSM gate)
         assert mismatch_row["fcsm_collateral_value"][0] == pytest.approx(
@@ -356,14 +338,10 @@ class TestP1104FCSMMaturityMismatch:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
         result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
-        mismatch_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_MISMATCH
-        )
+        mismatch_row = result.filter(pl.col("exposure_reference") == LOAN_REF_MISMATCH)
 
         # Assert — risk_weight must equal the unsecured borrower RW
-        assert mismatch_row["risk_weight"][0] == pytest.approx(
-            EXPECTED_RISK_WEIGHT_B, abs=1e-6
-        ), (
+        assert mismatch_row["risk_weight"][0] == pytest.approx(EXPECTED_RISK_WEIGHT_B, abs=1e-6), (
             f"P1.104-B: risk_weight should be {EXPECTED_RISK_WEIGHT_B:.2f} "
             f"(Art. 239(1): collateral {COLL_SHORT_RESIDUAL_MATURITY_YEARS}y maturity "
             f"< exposure {EXPOSURE_RESIDUAL_MATURITY_YEARS:.2f}y → no CRM benefit), "
@@ -400,9 +378,7 @@ class TestP1104FCSMMaturityMismatch:
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
-        mismatch_row = result.filter(
-            pl.col("exposure_reference") == LOAN_REF_MISMATCH
-        )
+        mismatch_row = result.filter(pl.col("exposure_reference") == LOAN_REF_MISMATCH)
 
         # Assert — no FCSM benefit → full unsecured RWA
         assert mismatch_row["rwa"][0] == pytest.approx(EXPECTED_RWA_B, rel=0.001), (

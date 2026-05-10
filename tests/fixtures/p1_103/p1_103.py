@@ -360,12 +360,12 @@ def print_summary(saved: dict[str, Path]) -> None:
     )
     print(f"          has_short_term_ecai=True → Table 6A branch, CQS {CQS}")
     print("")
-    print(f"  CQS  Table 6A RW  Expected RWA    Capital (8%)")
+    print("  CQS  Table 6A RW  Expected RWA    Capital (8%)")
     print(
         f"   {CQS}     {EXPECTED_RISK_WEIGHT:.0%}       {EXPECTED_RWA:>12,.0f}    {EXPECTED_K:>10,.0f}"
     )
     print("")
-    print(f"  Contrastive (Table 6, has_short_term_ecai=False):")
+    print("  Contrastive (Table 6, has_short_term_ecai=False):")
     print(
         f"   {CQS}     {TABLE6_FALLBACK_RISK_WEIGHT:.0%}       {TABLE6_FALLBACK_RWA:>12,.0f}"
         f"    {TABLE6_FALLBACK_RWA * 0.08:>10,.0f}"

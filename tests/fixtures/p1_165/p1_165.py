@@ -107,22 +107,21 @@ COLLATERAL_NOMINAL_VALUE: float = 800_000.00
 PD: float = 0.02  # 2% — well above CRR corporate PD floor (0.03%)
 
 # Art. 230 Foundation Collateral Method parameters (for test-writer reference)
-LGDS_SENIOR_RECEIVABLES: float = 0.35   # CRR Art. 230 Table 5 — senior receivables
-LGDU_SENIOR_CORPORATE: float = 0.45    # CRR Art. 161(1)(a) — senior corporate non-FSE unsecured
-OC_RATIO_RECEIVABLES: float = 1.25     # CRR Art. 230(2), FIRB_OVERCOLLATERALISATION_RATIOS
+LGDS_SENIOR_RECEIVABLES: float = 0.35  # CRR Art. 230 Table 5 — senior receivables
+LGDU_SENIOR_CORPORATE: float = 0.45  # CRR Art. 161(1)(a) — senior corporate non-FSE unsecured
+OC_RATIO_RECEIVABLES: float = 1.25  # CRR Art. 230(2), FIRB_OVERCOLLATERALISATION_RATIOS
 
 # CRM-stage expected values (for test-writer reference — post-fix behaviour)
 # Pre-fix: Hc = 0.20, value_after_haircut = 800,000 * 0.80 = 640,000
-EXPECTED_COLLATERAL_HAIRCUT: float = 0.0        # Art. 224 has no receivables row
+EXPECTED_COLLATERAL_HAIRCUT: float = 0.0  # Art. 224 has no receivables row
 EXPECTED_VALUE_AFTER_HAIRCUT: float = 800_000.00
 EXPECTED_ADJUSTED_VALUE: float = 800_000.00
 
 EFFECTIVELY_SECURED: float = COLLATERAL_MARKET_VALUE / OC_RATIO_RECEIVABLES  # 640,000.00
-UNSECURED_PORTION: float = DRAWN_AMOUNT - EFFECTIVELY_SECURED                 # 360,000.00
+UNSECURED_PORTION: float = DRAWN_AMOUNT - EFFECTIVELY_SECURED  # 360,000.00
 
 LGD_STAR: float = (
-    LGDS_SENIOR_RECEIVABLES * EFFECTIVELY_SECURED
-    + LGDU_SENIOR_CORPORATE * UNSECURED_PORTION
+    LGDS_SENIOR_RECEIVABLES * EFFECTIVELY_SECURED + LGDU_SENIOR_CORPORATE * UNSECURED_PORTION
 ) / DRAWN_AMOUNT  # = (224,000 + 162,000) / 1,000,000 = 0.386
 
 EXPECTED_LGD_STAR: float = LGD_STAR  # 0.386
@@ -530,7 +529,9 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"  Reporting date: {REPORTING_DATE},  M ≈ 3.0y")
     print()
     print("  Expected CRM outputs (post-fix, Hc=0):")
-    print(f"    collateral_haircut   = {EXPECTED_COLLATERAL_HAIRCUT}  (Art. 224 has no receivables row)")
+    print(
+        f"    collateral_haircut   = {EXPECTED_COLLATERAL_HAIRCUT}  (Art. 224 has no receivables row)"
+    )
     print(f"    value_after_haircut  = {EXPECTED_VALUE_AFTER_HAIRCUT:,.2f}")
     print(f"    adjusted_value       = {EXPECTED_ADJUSTED_VALUE:,.2f}")
     print(f"    effectively_secured  = {EFFECTIVELY_SECURED:,.2f}  (800,000 / 1.25 OC ratio)")

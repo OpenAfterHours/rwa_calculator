@@ -27,17 +27,18 @@ class TestCiuFallbackDocstring:
         """
         # Arrange
         doc = EquityType.CIU.__doc__
+        assert doc is not None, "EquityType.CIU must have a docstring"
 
         # Act / Assert
         assert "1,250%" in doc, (
-            f"EquityType.CIU.__doc__ must contain '1,250%' (Art. 132(2) fallback). "
-            f"Got: {doc!r}"
+            f"EquityType.CIU.__doc__ must contain '1,250%' (Art. 132(2) fallback). Got: {doc!r}"
         )
 
     def test_ciu_docstring_contains_art_132_2_reference(self) -> None:
         """EquityType.CIU docstring must cite Art. 132(2) as the authority."""
         # Arrange
         doc = EquityType.CIU.__doc__
+        assert doc is not None, "EquityType.CIU must have a docstring"
 
         # Act / Assert
         assert "Art. 132(2)" in doc, (
@@ -48,17 +49,18 @@ class TestCiuFallbackDocstring:
         """EquityType.CIU docstring must not carry stale '150% CRR SA' phrasing."""
         # Arrange
         doc = EquityType.CIU.__doc__
+        assert doc is not None, "EquityType.CIU must have a docstring"
 
         # Act / Assert
         assert "150% CRR SA" not in doc, (
-            f"EquityType.CIU.__doc__ contains stale phrase '150% CRR SA'. "
-            f"Got: {doc!r}"
+            f"EquityType.CIU.__doc__ contains stale phrase '150% CRR SA'. Got: {doc!r}"
         )
 
     def test_ciu_docstring_does_not_contain_stale_250_listed_or_400_unlisted(self) -> None:
         """EquityType.CIU docstring must not carry stale '250% listed or 400% unlisted' text."""
         # Arrange
         doc = EquityType.CIU.__doc__
+        assert doc is not None, "EquityType.CIU must have a docstring"
 
         # Act / Assert
         assert "250% listed or 400% unlisted" not in doc, (

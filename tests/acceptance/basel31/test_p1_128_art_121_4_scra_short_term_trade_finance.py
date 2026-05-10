@@ -50,10 +50,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_128.p1_128 import (
     EXPECTED_EAD,
     EXPECTED_K,
@@ -63,6 +59,10 @@ from tests.fixtures.p1_128.p1_128 import (
     SCRA_LONG_TERM_FALLBACK_RISK_WEIGHT,
     SCRA_LONG_TERM_FALLBACK_RWA,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -209,8 +209,7 @@ class TestP1128Art1214SCRAShortTermTradeFinance:
 
         # Assert
         assert row["ead_final"] == pytest.approx(EXPECTED_EAD, rel=1e-4), (
-            f"P1.128: expected ead_final={EXPECTED_EAD:,.0f}, "
-            f"got {row['ead_final']:,.0f}"
+            f"P1.128: expected ead_final={EXPECTED_EAD:,.0f}, got {row['ead_final']:,.0f}"
         )
 
     def test_p1_128_rwa_is_200k(
@@ -284,6 +283,5 @@ class TestP1128Art1214SCRAShortTermTradeFinance:
 
         # Assert
         assert row["approach_applied"] == "standardised", (
-            f"P1.128: expected approach_applied='standardised', "
-            f"got {row['approach_applied']!r}"
+            f"P1.128: expected approach_applied='standardised', got {row['approach_applied']!r}"
         )

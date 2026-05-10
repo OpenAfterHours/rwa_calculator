@@ -58,6 +58,7 @@ References:
 
 from __future__ import annotations
 
+import math as _math
 from datetime import date
 from pathlib import Path
 
@@ -81,8 +82,6 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_101"
 _H_N: float = 0.04  # Base 10-day haircut: corp_bond CQS 1, 1–5y band
 _T_M: int = 5  # SFT holding period (days)
 _N: int = 5  # Revaluation frequency (days) — the new field
-
-import math as _math
 
 _H_M: float = _H_N * _math.sqrt(_T_M / 10)  # Art. 226(2)
 _H_REVAL: float = _H_M * _math.sqrt((_N + _T_M - 1) / _T_M)  # Art. 226(1)

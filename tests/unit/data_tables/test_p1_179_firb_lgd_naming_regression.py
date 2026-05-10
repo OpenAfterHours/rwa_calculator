@@ -21,8 +21,6 @@ import polars as pl
 import pytest
 
 from rwa_calc.data.tables.firb_lgd import (
-    BASEL31_FIRB_SUPERVISORY_LGD,
-    FIRB_SUPERVISORY_LGD,
     get_firb_lgd_table,
     get_firb_lgd_table_for_framework,
 )
@@ -128,8 +126,7 @@ class TestP1179FirbLgdNamingRegression:
             .item()
         )
         assert fse_lgd == pytest.approx(0.45), (
-            f"PRA PS1/26 Art. 161(1)(a): expected FSE unsecured senior LGD = 0.45, "
-            f"got {fse_lgd}"
+            f"PRA PS1/26 Art. 161(1)(a): expected FSE unsecured senior LGD = 0.45, got {fse_lgd}"
         )
 
         # Assert — receivables senior (20% under B31)
@@ -211,8 +208,7 @@ class TestP1179FirbLgdNamingRegression:
             f"got {b31_dict['unsecured_senior_fse']!r}"
         )
         assert b31_dict["receivables"] == Decimal("0.20"), (
-            f"BCBS CRE32.9: expected receivables = Decimal('0.20'), "
-            f"got {b31_dict['receivables']!r}"
+            f"BCBS CRE32.9: expected receivables = Decimal('0.20'), got {b31_dict['receivables']!r}"
         )
 
     # -------------------------------------------------------------------------

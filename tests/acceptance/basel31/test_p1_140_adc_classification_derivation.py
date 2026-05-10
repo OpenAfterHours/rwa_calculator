@@ -43,6 +43,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
@@ -138,7 +139,7 @@ def p1_140_sa_results() -> pl.DataFrame:
     assert results.sa_results is not None, (
         "SA results should not be None — check PermissionMode.STANDARDISED config"
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 def _get_spv_rows(df: pl.DataFrame) -> pl.DataFrame:
@@ -199,9 +200,7 @@ class TestB31P1140ADCClassificationDerivation:
     # DISCRIMINATING ASSERTION — FAILS pre-fix
     # -------------------------------------------------------------------------
 
-    def test_p1_140_spv_total_rwa_is_15m(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_spv_total_rwa_is_15m(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140 DISCRIMINATING: SPV ADC exposure total rwa = 15,000,000.
 
@@ -230,9 +229,7 @@ class TestB31P1140ADCClassificationDerivation:
             f"and RE loan-splitting is applied instead of the 150% ADC path."
         )
 
-    def test_p1_140_spv_risk_weight_is_150_pct(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_spv_risk_weight_is_150_pct(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140 DISCRIMINATING: SPV ADC exposure risk_weight = 1.50.
 
@@ -245,9 +242,7 @@ class TestB31P1140ADCClassificationDerivation:
         Assert:  risk_weight ≈ 1.50 (abs=1e-6).
         """
         # Arrange — post-fix: single row; pre-fix: no row with ref == _LOAN_SPV_REF
-        rows = p1_140_sa_results.filter(
-            pl.col("exposure_reference") == _LOAN_SPV_REF
-        ).to_dicts()
+        rows = p1_140_sa_results.filter(pl.col("exposure_reference") == _LOAN_SPV_REF).to_dicts()
 
         # Pre-fix: no unsplit row exists (split_parent_id rows have different refs)
         # → assert will fail on the risk_weight check OR on the len check
@@ -264,9 +259,7 @@ class TestB31P1140ADCClassificationDerivation:
             f"(Art. 124K(1) ADC 150%). Got {row['risk_weight']:.4f}."
         )
 
-    def test_p1_140_spv_exposure_class_is_corporate(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_spv_exposure_class_is_corporate(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140: SPV ADC exposure_class = corporate (not split into RE classes).
 
@@ -279,13 +272,9 @@ class TestB31P1140ADCClassificationDerivation:
         Assert:  exposure_class == "corporate".
         """
         # Arrange
-        rows = p1_140_sa_results.filter(
-            pl.col("exposure_reference") == _LOAN_SPV_REF
-        ).to_dicts()
+        rows = p1_140_sa_results.filter(pl.col("exposure_reference") == _LOAN_SPV_REF).to_dicts()
 
-        assert len(rows) == 1, (
-            f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
-        )
+        assert len(rows) == 1, f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
         row = rows[0]
 
         # Assert
@@ -297,9 +286,7 @@ class TestB31P1140ADCClassificationDerivation:
             f"and 'corporate_sme'."
         )
 
-    def test_p1_140_spv_is_adc_is_true(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_spv_is_adc_is_true(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140 DISCRIMINATING: is_adc = True on the SPV row after derivation.
 
@@ -312,13 +299,9 @@ class TestB31P1140ADCClassificationDerivation:
         Assert:  is_adc == True on the SPV result row.
         """
         # Arrange — post-fix: single unsplit CORPORATE row with is_adc=True
-        rows = p1_140_sa_results.filter(
-            pl.col("exposure_reference") == _LOAN_SPV_REF
-        ).to_dicts()
+        rows = p1_140_sa_results.filter(pl.col("exposure_reference") == _LOAN_SPV_REF).to_dicts()
 
-        assert len(rows) == 1, (
-            f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
-        )
+        assert len(rows) == 1, f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
         row = rows[0]
 
         # Assert
@@ -329,9 +312,7 @@ class TestB31P1140ADCClassificationDerivation:
             f"Pre-fix: derivation not implemented → is_adc=False remains from collateral."
         )
 
-    def test_p1_140_spv_ead_is_10m(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_spv_ead_is_10m(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140: SPV EAD = 10,000,000 (fully drawn, no interest, no CCF).
 
@@ -344,13 +325,9 @@ class TestB31P1140ADCClassificationDerivation:
         Assert:  ead_final ≈ 10,000,000 (abs=1e-3).
         """
         # Arrange
-        rows = p1_140_sa_results.filter(
-            pl.col("exposure_reference") == _LOAN_SPV_REF
-        ).to_dicts()
+        rows = p1_140_sa_results.filter(pl.col("exposure_reference") == _LOAN_SPV_REF).to_dicts()
 
-        assert len(rows) == 1, (
-            f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
-        )
+        assert len(rows) == 1, f"P1.140: expected exactly 1 unsplit SPV row. Got {len(rows)}."
         row = rows[0]
 
         # Assert
@@ -363,9 +340,7 @@ class TestB31P1140ADCClassificationDerivation:
     # NEGATIVE CASE — natural-person gate blocks ADC (regression guard)
     # -------------------------------------------------------------------------
 
-    def test_p1_140_np_risk_weight_is_not_150_pct(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_np_risk_weight_is_not_150_pct(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140 negative case: natural-person borrower does NOT get ADC 150% RW.
 
@@ -388,9 +363,7 @@ class TestB31P1140ADCClassificationDerivation:
             f"Got {row['risk_weight']:.4f}."
         )
 
-    def test_p1_140_np_is_adc_is_false(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_np_is_adc_is_false(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140 negative case: is_adc = False for natural-person borrower.
 
@@ -414,9 +387,7 @@ class TestB31P1140ADCClassificationDerivation:
     # REGRESSION — EAD integrity across both exposures
     # -------------------------------------------------------------------------
 
-    def test_p1_140_np_ead_is_250k(
-        self, p1_140_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p1_140_np_ead_is_250k(self, p1_140_sa_results: pl.DataFrame) -> None:
         """
         P1.140: NP mortgage EAD = 250,000 (fully drawn, interest=0).
 

@@ -47,15 +47,10 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_122.p1_122 import (
     EXPECTED_GUARANTOR_RW_B31_TABLE4,
     EXPECTED_GUARANTOR_RW_CRR_TABLE4,
@@ -63,6 +58,12 @@ from tests.fixtures.p1_122.p1_122 import (
     EXPECTED_RWA_CRR_POSTFIX,
     LOAN_REF,
 )
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -138,7 +139,7 @@ def _run_pipeline(config: CalculationConfig) -> pl.DataFrame:
     assert results.sa_results is not None, (
         "SA results must not be None — check PermissionMode.STANDARDISED config"
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 # ---------------------------------------------------------------------------
@@ -257,9 +258,7 @@ class TestP1122ShortTermInstitutionGuarantorSubstitution:
             f"lookup to Table 4."
         )
 
-    def test_b31_rwa_post_substitution_equals_200_000(
-        self, b31_sa_results: pl.DataFrame
-    ) -> None:
+    def test_b31_rwa_post_substitution_equals_200_000(self, b31_sa_results: pl.DataFrame) -> None:
         """
         P1.122 DISCRIMINATING: B31 total RWA = 200,000.
 
@@ -320,9 +319,7 @@ class TestP1122ShortTermInstitutionGuarantorSubstitution:
             f"lookup to Table 4."
         )
 
-    def test_crr_rwa_post_substitution_equals_200_000(
-        self, crr_sa_results: pl.DataFrame
-    ) -> None:
+    def test_crr_rwa_post_substitution_equals_200_000(self, crr_sa_results: pl.DataFrame) -> None:
         """
         P1.122 DISCRIMINATING: CRR total RWA = 200,000.
 
@@ -374,9 +371,7 @@ class TestP1122ShortTermInstitutionGuarantorSubstitution:
             f"Got {row['guarantee_ratio']!r}"
         )
 
-    def test_ead_final_equals_drawn_amount(
-        self, crr_sa_results: pl.DataFrame
-    ) -> None:
+    def test_ead_final_equals_drawn_amount(self, crr_sa_results: pl.DataFrame) -> None:
         """
         P1.122: guaranteed-portion ead_final = 1,000,000.
 

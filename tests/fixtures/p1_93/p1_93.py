@@ -92,22 +92,22 @@ from rwa_calc.data.schemas import COLLATERAL_SCHEMA, COUNTERPARTY_SCHEMA, FACILI
 # ---------------------------------------------------------------------------
 
 # Counterparty references
-CP_INST_REF = "CP_INST_001"   # institution, CQS 1, is_core_market_participant=True
-CP_CORP_REF = "CP_CORP_001"   # corporate, is_core_market_participant=False
+CP_INST_REF = "CP_INST_001"  # institution, CQS 1, is_core_market_participant=True
+CP_CORP_REF = "CP_CORP_001"  # corporate, is_core_market_participant=False
 
 # Facility references (all three runs)
-FAC_REPO_A = "FAC_REPO_A"   # Run A: SFT repo, CMP counterparty
-FAC_REPO_B = "FAC_REPO_B"   # Run B: SFT repo, non-CMP counterparty
-FAC_OBS_C = "FAC_OBS_C"     # Run C: Non-SFT OBS facility, CMP counterparty
+FAC_REPO_A = "FAC_REPO_A"  # Run A: SFT repo, CMP counterparty
+FAC_REPO_B = "FAC_REPO_B"  # Run B: SFT repo, non-CMP counterparty
+FAC_OBS_C = "FAC_OBS_C"  # Run C: Non-SFT OBS facility, CMP counterparty
 
 # Collateral references
-COLL_GILT_A = "COLL_GILT_A"   # CQS-1 sovereign gilt, beneficiary=FAC_REPO_A
-COLL_GILT_B = "COLL_GILT_B"   # CQS-1 sovereign gilt, beneficiary=FAC_REPO_B
-COLL_CASH_C = "COLL_CASH_C"   # GBP cash deposit, beneficiary=FAC_OBS_C
+COLL_GILT_A = "COLL_GILT_A"  # CQS-1 sovereign gilt, beneficiary=FAC_REPO_A
+COLL_GILT_B = "COLL_GILT_B"  # CQS-1 sovereign gilt, beneficiary=FAC_REPO_B
+COLL_CASH_C = "COLL_CASH_C"  # GBP cash deposit, beneficiary=FAC_OBS_C
 
 REPORTING_DATE = date(2028, 1, 1)
 VALUE_DATE = date(2028, 1, 1)
-MATURITY_DATE = date(2028, 12, 31)   # 1-year tenor
+MATURITY_DATE = date(2028, 12, 31)  # 1-year tenor
 
 NOMINAL_AMOUNT: float = 1_000_000.0
 COLLATERAL_VALUE: float = 1_000_000.0
@@ -116,9 +116,9 @@ COLLATERAL_VALUE: float = 1_000_000.0
 CCF_MR: float = 0.50
 
 # Expected outputs
-INSTITUTION_CQS1_UNSECURED_RW: float = 0.20   # Art. 120(1) Table 3, CQS 1
-CORPORATE_UNRATED_UNSECURED_RW: float = 1.00   # Art. 122, unrated
-SOVEREIGN_CQS1_RW: float = 0.00               # Art. 114(2), CQS 1
+INSTITUTION_CQS1_UNSECURED_RW: float = 0.20  # Art. 120(1) Table 3, CQS 1
+CORPORATE_UNRATED_UNSECURED_RW: float = 1.00  # Art. 122, unrated
+SOVEREIGN_CQS1_RW: float = 0.00  # Art. 114(2), CQS 1
 
 # Run A: Art. 222(4) CMP — floor = 0%, sovereign collateral RW = 0% → secured RW = 0%
 EXPECTED_FCSM_FLOOR_A: float = 0.00
@@ -502,21 +502,27 @@ def print_summary(saved: dict[str, Path]) -> None:
     print(f"    Facility: {FAC_REPO_A} (is_sft=True, risk_type=FR)")
     print(f"    Counterparty: {CP_INST_REF} (institution, CQS 1, CMP=True)")
     print(f"    Collateral: {COLL_GILT_A} (govt_bond, GBP, CQS 1, zero_haircut=True)")
-    print(f"    FCSM floor = {EXPECTED_FCSM_FLOOR_A:.0%}  →  secured RW = {EXPECTED_SECURED_RW_A:.0%}")
+    print(
+        f"    FCSM floor = {EXPECTED_FCSM_FLOOR_A:.0%}  →  secured RW = {EXPECTED_SECURED_RW_A:.0%}"
+    )
     print(f"    Expected RWA = {EXPECTED_RWA_A:,.0f}")
     print()
     print("  Run B — SFT repo, CQS-1 gilt, non-CMP counterparty (Art. 222(4) 10% floor):")
     print(f"    Facility: {FAC_REPO_B} (is_sft=True, risk_type=FR)")
     print(f"    Counterparty: {CP_CORP_REF} (corporate, unrated, CMP=False)")
     print(f"    Collateral: {COLL_GILT_B} (govt_bond, GBP, CQS 1, zero_haircut=True)")
-    print(f"    FCSM floor = {EXPECTED_FCSM_FLOOR_B:.0%}  →  secured RW = {EXPECTED_SECURED_RW_B:.0%}")
+    print(
+        f"    FCSM floor = {EXPECTED_FCSM_FLOOR_B:.0%}  →  secured RW = {EXPECTED_SECURED_RW_B:.0%}"
+    )
     print(f"    Expected RWA = {EXPECTED_RWA_B:,.0f}")
     print()
     print("  Run C — non-SFT OBS, GBP cash, CMP counterparty (Art. 222(6)(a) 0% floor):")
     print(f"    Facility: {FAC_OBS_C} (is_sft=False, risk_type=MR)")
     print(f"    Counterparty: {CP_INST_REF} (institution, CQS 1, CMP=True)")
     print(f"    Collateral: {COLL_CASH_C} (cash, GBP, zero_haircut=False)")
-    print(f"    FCSM floor = {EXPECTED_FCSM_FLOOR_C:.0%}  →  secured RW = {EXPECTED_SECURED_RW_C:.0%}")
+    print(
+        f"    FCSM floor = {EXPECTED_FCSM_FLOOR_C:.0%}  →  secured RW = {EXPECTED_SECURED_RW_C:.0%}"
+    )
     print(f"    CCF (MR) = {CCF_MR:.0%}  →  EAD = {EAD_C:,.0f}")
     print(f"    Expected RWA = {EXPECTED_RWA_C:,.0f}")
 

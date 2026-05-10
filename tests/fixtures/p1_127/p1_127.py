@@ -80,8 +80,8 @@ from rwa_calc.data.schemas import (
 COUNTERPARTY_REF: str = "CP-P1127-A"
 
 # Exposure references
-LOAN_REF_ND: str = "LN-P1127-ND"   # non-defaulted AIRB exposure
-LOAN_REF_D: str = "LN-P1127-D"     # defaulted AIRB exposure
+LOAN_REF_ND: str = "LN-P1127-ND"  # non-defaulted AIRB exposure
+LOAN_REF_D: str = "LN-P1127-D"  # defaulted AIRB exposure
 
 # Rating / model IDs
 RATING_REF_ND: str = "RTG-P1127-ND"
@@ -94,8 +94,8 @@ PROV_REF_D: str = "PROV-P1127-D"
 
 # Dates
 VALUE_DATE: date = date(2026, 1, 1)
-MATURITY_DATE_ND: date = date(2028, 7, 1)   # ~2.5 years from value date
-MATURITY_DATE_D: date = date(2027, 1, 1)    # ~1.0 year from value date
+MATURITY_DATE_ND: date = date(2028, 7, 1)  # ~2.5 years from value date
+MATURITY_DATE_D: date = date(2027, 1, 1)  # ~1.0 year from value date
 RATING_DATE: date = date(2026, 1, 2)
 
 # Non-defaulted exposure inputs
@@ -107,8 +107,8 @@ EFFECTIVE_MATURITY_ND: float = 2.5
 # Defaulted exposure inputs
 EAD_D: float = 1_000_000.0
 PD_D: float = 1.0000
-LGD_D: float = 0.65      # LGD-in-default
-BEEL_D: float = 0.45     # best-estimate expected loss rate (Art. 158(5))
+LGD_D: float = 0.65  # LGD-in-default
+BEEL_D: float = 0.45  # best-estimate expected loss rate (Art. 158(5))
 EFFECTIVE_MATURITY_D: float = 1.0
 
 # Pool B components for non-defaulted exposure
@@ -122,25 +122,25 @@ AVA_D: float = 25_000.0
 OTHER_OFR_D: float = 5_000.0
 
 # Expected per-exposure outputs (for test assertions)
-EXPECTED_EL_ND: float = PD_ND * LGD_ND * EAD_ND          # 3_375.0
+EXPECTED_EL_ND: float = PD_ND * LGD_ND * EAD_ND  # 3_375.0
 EXPECTED_POOL_B_ND: float = PROV_ND + AVA_ND + OTHER_OFR_ND  # 80_000.0
-EXPECTED_SHORTFALL_ND: float = 0.0                         # pool_b > EL
+EXPECTED_SHORTFALL_ND: float = 0.0  # pool_b > EL
 EXPECTED_EXCESS_ND: float = EXPECTED_POOL_B_ND - EXPECTED_EL_ND  # 76_625.0
 
-EXPECTED_EL_D: float = BEEL_D * EAD_D                     # 450_000.0
-EXPECTED_POOL_B_D: float = PROV_D + AVA_D + OTHER_OFR_D   # 150_000.0
+EXPECTED_EL_D: float = BEEL_D * EAD_D  # 450_000.0
+EXPECTED_POOL_B_D: float = PROV_D + AVA_D + OTHER_OFR_D  # 150_000.0
 EXPECTED_SHORTFALL_D: float = EXPECTED_EL_D - EXPECTED_POOL_B_D  # 300_000.0
-EXPECTED_EXCESS_D: float = 0.0                             # EL > pool_b
+EXPECTED_EXCESS_D: float = 0.0  # EL > pool_b
 
 # Expected portfolio-level aggregates (two-branch Art. 159(3) rule)
-EXPECTED_TOTAL_EL: float = EXPECTED_EL_ND + EXPECTED_EL_D          # 453_375.0
-EXPECTED_TOTAL_PROV: float = PROV_ND + PROV_D                      # 150_000.0
-EXPECTED_TOTAL_AVA: float = AVA_ND + AVA_D                         # 65_000.0
-EXPECTED_TOTAL_OTHER_OFR: float = OTHER_OFR_ND + OTHER_OFR_D       # 15_000.0
+EXPECTED_TOTAL_EL: float = EXPECTED_EL_ND + EXPECTED_EL_D  # 453_375.0
+EXPECTED_TOTAL_PROV: float = PROV_ND + PROV_D  # 150_000.0
+EXPECTED_TOTAL_AVA: float = AVA_ND + AVA_D  # 65_000.0
+EXPECTED_TOTAL_OTHER_OFR: float = OTHER_OFR_ND + OTHER_OFR_D  # 15_000.0
 EXPECTED_TOTAL_POOL_B: float = EXPECTED_POOL_B_ND + EXPECTED_POOL_B_D  # 230_000.0
 # Art. 159(3): non-defaulted has excess, defaulted has shortfall — no cross-offset
-EXPECTED_TOTAL_SHORTFALL: float = EXPECTED_SHORTFALL_D             # 300_000.0
-EXPECTED_TOTAL_EXCESS_T2: float = EXPECTED_EXCESS_ND               # 76_625.0
+EXPECTED_TOTAL_SHORTFALL: float = EXPECTED_SHORTFALL_D  # 300_000.0
+EXPECTED_TOTAL_EXCESS_T2: float = EXPECTED_EXCESS_ND  # 76_625.0
 
 
 # ---------------------------------------------------------------------------
@@ -321,9 +321,9 @@ def create_p1127_counterparty() -> pl.DataFrame:
             counterparty_name="P1.127 General Corporate Ltd",
             entity_type="corporate",
             country_code="GB",
-            annual_revenue=200_000_000.0,   # < 440m large-corp threshold
+            annual_revenue=200_000_000.0,  # < 440m large-corp threshold
             total_assets=400_000_000.0,
-            default_status=False,            # default status is per-exposure via beel/PD=1
+            default_status=False,  # default status is per-exposure via beel/PD=1
             apply_fi_scalar=False,
             is_managed_as_retail=False,
         )
@@ -367,7 +367,7 @@ def create_p1127_loans() -> pl.DataFrame:
             drawn_amount=EAD_ND,
             interest=0.0,
             lgd=LGD_ND,
-            beel=0.0,           # non-defaulted: beel not used for EL calc
+            beel=0.0,  # non-defaulted: beel not used for EL calc
             seniority="senior",
             effective_maturity=EFFECTIVE_MATURITY_ND,
             ava_amount=AVA_ND,
@@ -384,7 +384,7 @@ def create_p1127_loans() -> pl.DataFrame:
             drawn_amount=EAD_D,
             interest=0.0,
             lgd=LGD_D,
-            beel=BEEL_D,        # defaulted: EL = beel × EAD per Art. 158(5)
+            beel=BEEL_D,  # defaulted: EL = beel × EAD per Art. 158(5)
             seniority="senior",
             effective_maturity=EFFECTIVE_MATURITY_D,
             ava_amount=AVA_D,
@@ -523,16 +523,21 @@ def print_summary(saved: dict[str, Path]) -> None:
         df = pl.read_parquet(path)
         print(f"  {name:<25} {len(df):>2} row(s)  ->  {path.name}")
     print("-" * 70)
-    print(f"Scenario: Art. 159 Pool B — AVA + other_OFR no double-count")
-    print(f"  EXP-P1127-ND: EL={EXPECTED_EL_ND:,.0f}, pool_b={EXPECTED_POOL_B_ND:,.0f}, "
-          f"shortfall={EXPECTED_SHORTFALL_ND:,.0f}, excess={EXPECTED_EXCESS_ND:,.0f}")
-    print(f"  EXP-P1127-D:  EL={EXPECTED_EL_D:,.0f}, pool_b={EXPECTED_POOL_B_D:,.0f}, "
-          f"shortfall={EXPECTED_SHORTFALL_D:,.0f}")
-    print(f"  Portfolio:    total_el={EXPECTED_TOTAL_EL:,.0f}, "
-          f"total_pool_b={EXPECTED_TOTAL_POOL_B:,.0f}, "
-          f"total_shortfall={EXPECTED_TOTAL_SHORTFALL:,.0f}")
-    print(f"  AVA:          {EXPECTED_TOTAL_AVA:,.0f}  "
-          f"other_OFR: {EXPECTED_TOTAL_OTHER_OFR:,.0f}")
+    print("Scenario: Art. 159 Pool B — AVA + other_OFR no double-count")
+    print(
+        f"  EXP-P1127-ND: EL={EXPECTED_EL_ND:,.0f}, pool_b={EXPECTED_POOL_B_ND:,.0f}, "
+        f"shortfall={EXPECTED_SHORTFALL_ND:,.0f}, excess={EXPECTED_EXCESS_ND:,.0f}"
+    )
+    print(
+        f"  EXP-P1127-D:  EL={EXPECTED_EL_D:,.0f}, pool_b={EXPECTED_POOL_B_D:,.0f}, "
+        f"shortfall={EXPECTED_SHORTFALL_D:,.0f}"
+    )
+    print(
+        f"  Portfolio:    total_el={EXPECTED_TOTAL_EL:,.0f}, "
+        f"total_pool_b={EXPECTED_TOTAL_POOL_B:,.0f}, "
+        f"total_shortfall={EXPECTED_TOTAL_SHORTFALL:,.0f}"
+    )
+    print(f"  AVA:          {EXPECTED_TOTAL_AVA:,.0f}  other_OFR: {EXPECTED_TOTAL_OTHER_OFR:,.0f}")
 
 
 def main() -> None:

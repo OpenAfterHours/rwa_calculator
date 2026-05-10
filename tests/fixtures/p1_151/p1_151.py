@@ -419,15 +419,15 @@ def create_p1151_loans() -> pl.DataFrame:
         drawn_amount=200,000 → EAD=200,000
         Expected LGD = 100% (Art. 161(1)(g))
     """
-    _common = dict(
-        counterparty_reference=COUNTERPARTY_REF,
-        currency="GBP",
-        value_date=VALUE_DATE,
-        maturity_date=MATURITY_DATE,
-        interest=0.0,
-        is_sft=False,
-        book_code="BANKING",
-    )
+    _common = {
+        "counterparty_reference": COUNTERPARTY_REF,
+        "currency": "GBP",
+        "value_date": VALUE_DATE,
+        "maturity_date": MATURITY_DATE,
+        "interest": 0.0,
+        "is_sft": False,
+        "book_code": "BANKING",
+    }
 
     rows = [
         # ----------------------------------------------------------------
@@ -556,7 +556,14 @@ def print_summary(saved: dict[str, Path]) -> None:
     rows_data = [
         (LOAN_REF_SENIOR, "senior", "senior", DRAWN_SENIOR, LGD_SENIOR, EXPECTED_RWA_SENIOR),
         (LOAN_REF_SUB, "subordinated", "subordinated", DRAWN_SUB, LGD_SUB, EXPECTED_RWA_SUB),
-        (LOAN_REF_DILUTION, "dilution_risk", "senior", DRAWN_DILUTION, LGD_DILUTION, EXPECTED_RWA_DILUTION),
+        (
+            LOAN_REF_DILUTION,
+            "dilution_risk",
+            "senior",
+            DRAWN_DILUTION,
+            LGD_DILUTION,
+            EXPECTED_RWA_DILUTION,
+        ),
     ]
     for ref, subtype, seniority, drawn, lgd, rwa in rows_data:
         print(
@@ -565,10 +572,12 @@ def print_summary(saved: dict[str, Path]) -> None:
         )
     print("")
     print("  Key assertions:")
-    print(f"    LGD_senior     = {LGD_SENIOR:.0%}  (Art. 161(1)(e)) — aligns with non-FSE senior B31")
+    print(
+        f"    LGD_senior     = {LGD_SENIOR:.0%}  (Art. 161(1)(e)) — aligns with non-FSE senior B31"
+    )
     print(f"    LGD_sub        = {LGD_SUB:.0%} (Art. 161(1)(f)) — unchanged from CRR")
     print(f"    LGD_dilution   = {LGD_DILUTION:.0%} (Art. 161(1)(g)) — increased from CRR 75%")
-    print(f"    Without routing: LGD_sub/dilution wrong at 40% → RWA_B understated by ~60%")
+    print("    Without routing: LGD_sub/dilution wrong at 40% → RWA_B understated by ~60%")
 
 
 def main() -> None:

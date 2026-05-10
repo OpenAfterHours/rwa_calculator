@@ -104,8 +104,8 @@ RTG_BORROWER_REF = "RTG_P1157_BORR"
 RTG_GUARANTOR_REF = "RTG_P1157_GTR"
 
 # Model IDs
-MODEL_ID_RETAIL_AIRB = "RTL_AIRB_P1157"   # AIRB for retail_qrre (borrower)
-MODEL_ID_CORP_FIRB = "CORP_FIRB_P1157"    # FIRB for corporate (guarantor PSM path)
+MODEL_ID_RETAIL_AIRB = "RTL_AIRB_P1157"  # AIRB for retail_qrre (borrower)
+MODEL_ID_CORP_FIRB = "CORP_FIRB_P1157"  # FIRB for corporate (guarantor PSM path)
 
 # Dates
 VALUE_DATE = date(2026, 1, 1)
@@ -117,23 +117,23 @@ RATING_DATE = date(2026, 1, 2)
 # Borrower IRB inputs (A-IRB retail QRRE revolver, NOT transactor)
 # PD=0.02 → high borrower risk weight (~32%), making the guarantee beneficial.
 # is_qrre_transactor=False (revolvers have higher PD floors than transactors).
-PD_BORROWER = 0.0200           # 2.0% own PD (retail revolver)
-LGD_BORROWER = 0.50            # 50% own LGD (A-IRB unsecured retail QRRE)
-EAD_FACILITY = 1_000_000.0     # GBP 1,000,000 facility limit (fully utilised)
-EFFECTIVE_MATURITY = 2.5       # M = 2.5y — distinguishes corporate MA from retail flat MA=1.0
+PD_BORROWER = 0.0200  # 2.0% own PD (retail revolver)
+LGD_BORROWER = 0.50  # 50% own LGD (A-IRB unsecured retail QRRE)
+EAD_FACILITY = 1_000_000.0  # GBP 1,000,000 facility limit (fully utilised)
+EFFECTIVE_MATURITY = 2.5  # M = 2.5y — distinguishes corporate MA from retail flat MA=1.0
 
 # Guarantor IRB inputs (corporate, F-IRB via PSM)
 # Raw PD = 0.0004 is intentionally below the Basel 3.1 corporate PD floor of
 # 0.0005 (0.05%, Art. 163(1)(a)).
 # The NBD floor triggers because RW_direct (corporate R~0.237, M=2.5) >> guarantor_rw_irb
 # (borrower QRRE context R=0.04, M=1.0).
-PD_GUARANTOR_RAW = 0.0004       # 0.04% — below corporate B31 floor 0.0005
-PD_GUARANTOR_FLOORED = 0.0005   # 0.05% — after Art. 163(1)(a) floor (expected engine output)
+PD_GUARANTOR_RAW = 0.0004  # 0.04% — below corporate B31 floor 0.0005
+PD_GUARANTOR_FLOORED = 0.0005  # 0.05% — after Art. 163(1)(a) floor (expected engine output)
 
 # Guarantee coverage
-AMOUNT_COVERED = 600_000.0      # GBP 600,000 (60% of EAD)
+AMOUNT_COVERED = 600_000.0  # GBP 600,000 (60% of EAD)
 PERCENTAGE_COVERED = 0.60
-ORIGINAL_MATURITY_YEARS = 5.0   # > 1y → satisfies Art. 237(2)(a) eligibility
+ORIGINAL_MATURITY_YEARS = 5.0  # > 1y → satisfies Art. 237(2)(a) eligibility
 
 # Guarantor revenue — above B31 large-corp 440m threshold
 GUARANTOR_ANNUAL_REVENUE = 750_000_000.0
@@ -332,7 +332,7 @@ def create_p1157_counterparties() -> pl.DataFrame:
             counterparty_name="P1.157 QRRE Revolver Borrower",
             entity_type="individual",
             country_code="GB",
-            annual_revenue=None,        # Individual — no revenue
+            annual_revenue=None,  # Individual — no revenue
             total_assets=None,
             default_status=False,
             apply_fi_scalar=False,
@@ -344,12 +344,12 @@ def create_p1157_counterparties() -> pl.DataFrame:
             counterparty_name="P1.157 Corporate Guarantor NonFSE PLC",
             entity_type="corporate",
             country_code="GB",
-            annual_revenue=GUARANTOR_ANNUAL_REVENUE,   # GBP 750m — above 440m large-corp
+            annual_revenue=GUARANTOR_ANNUAL_REVENUE,  # GBP 750m — above 440m large-corp
             total_assets=GUARANTOR_TOTAL_ASSETS,
             default_status=False,
             apply_fi_scalar=False,
             is_managed_as_retail=False,
-            is_financial_sector_entity=False,           # Non-FSE → LGD 40% B31 (Art. 161(1)(aa))
+            is_financial_sector_entity=False,  # Non-FSE → LGD 40% B31 (Art. 161(1)(aa))
         ),
     ]
     return pl.DataFrame([r.to_dict() for r in rows], schema=dtypes_of(COUNTERPARTY_SCHEMA))
@@ -382,9 +382,9 @@ def create_p1157_facilities() -> pl.DataFrame:
         lgd=LGD_BORROWER,
         beel=0.0,
         is_revolving=True,
-        is_qrre_transactor=False,       # Revolver — NOT a transactor
+        is_qrre_transactor=False,  # Revolver — NOT a transactor
         seniority="senior",
-        risk_type="FR",                 # Fully revolving
+        risk_type="FR",  # Fully revolving
         effective_maturity=EFFECTIVE_MATURITY,
     )
     return pl.DataFrame([facility.to_dict()], schema=dtypes_of(FACILITY_SCHEMA))
@@ -441,7 +441,7 @@ def create_p1157_ratings() -> pl.DataFrame:
             counterparty_reference=BORROWER_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="5B",       # Indicative retail revolver band (PD ~2%)
+            rating_value="5B",  # Indicative retail revolver band (PD ~2%)
             cqs=5,
             pd=PD_BORROWER,
             rating_date=RATING_DATE,
@@ -453,9 +453,9 @@ def create_p1157_ratings() -> pl.DataFrame:
             counterparty_reference=GUARANTOR_REF,
             rating_type="internal",
             rating_agency="internal",
-            rating_value="1A",       # High-quality corporate (PD ~0.04% raw)
+            rating_value="1A",  # High-quality corporate (PD ~0.04% raw)
             cqs=1,
-            pd=PD_GUARANTOR_RAW,    # 0.0004 — below B31 corporate floor 0.0005
+            pd=PD_GUARANTOR_RAW,  # 0.0004 — below B31 corporate floor 0.0005
             rating_date=RATING_DATE,
             is_solicited=False,
             model_id=MODEL_ID_CORP_FIRB,

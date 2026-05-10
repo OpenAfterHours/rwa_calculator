@@ -114,21 +114,21 @@ GUARANTEED_PORTION: float = 600_000.0
 UNGUARANTEED_PORTION: float = 400_000.0
 
 # Risk weights
-RW_GUAR_BLENDED: float = 0.58    # blended: (400_000 × 1.0 + 600_000 × 0.0) / 1_000_000 = 0.40
-                                  # Proposal specifies 0.58 — use as given.
+RW_GUAR_BLENDED: float = 0.58  # blended: (400_000 × 1.0 + 600_000 × 0.0) / 1_000_000 = 0.40
+# Proposal specifies 0.58 — use as given.
 RW_PLAIN: float = 1.0
 RW_NULL: float = 1.0
 
-RW_PRE_CRM_GUAR: float = 1.0     # original borrower (CORPORATE) risk weight pre-CRM
-RW_GUARANTOR: float = 0.0        # central govt guarantor
+RW_PRE_CRM_GUAR: float = 1.0  # original borrower (CORPORATE) risk weight pre-CRM
+RW_GUARANTOR: float = 0.0  # central govt guarantor
 
 # RWA (EAD × blended RW)
-RWA_GUAR: float = 580_000.0      # 1_000_000 × 0.58
+RWA_GUAR: float = 580_000.0  # 1_000_000 × 0.58
 RWA_PLAIN: float = 1_000_000.0
 RWA_NULL: float = 750_000.0
 
 # Pre-CRM summary aggregates (all 3 exposures, CORPORATE class)
-PRE_CRM_TOTAL_EAD: float = EAD_GUAR + EAD_PLAIN + EAD_NULL        # 2_750_000.0
+PRE_CRM_TOTAL_EAD: float = EAD_GUAR + EAD_PLAIN + EAD_NULL  # 2_750_000.0
 PRE_CRM_TOTAL_RWA_BLENDED: float = RWA_GUAR + RWA_PLAIN + RWA_NULL  # 2_330_000.0
 PRE_CRM_EXPOSURE_COUNT: int = 3
 PRE_CRM_GUARANTEED_COUNT: int = 1  # only EXP_GUAR has is_guaranteed=True

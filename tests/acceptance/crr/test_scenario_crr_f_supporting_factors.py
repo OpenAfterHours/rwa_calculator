@@ -19,7 +19,6 @@ Regulatory References:
 
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -520,8 +519,7 @@ class TestP222SMEInfraOverlapSubstitution:
 
         # Assert 1 — EAD
         assert row["ead_final"] == pytest.approx(_EAD, abs=_MONEY_TOL), (
-            f"P2.22 LOAN_SME_INFRA_001: expected ead_final={_EAD:,.0f}, "
-            f"got {row['ead_final']:,.2f}"
+            f"P2.22 LOAN_SME_INFRA_001: expected ead_final={_EAD:,.0f}, got {row['ead_final']:,.2f}"
         )
 
         # Assert 2 — risk weight (unrated corporate = 100%)

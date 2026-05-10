@@ -123,8 +123,10 @@ GUAR_MM_RESIDUAL_YEARS: float = 2.5  # t (= original_maturity_years for new prot
 _MATURITY_FLOOR: float = 0.25  # Art. 239(3) floor
 
 # Art. 239(3) derived values (for reference; assertions belong in tests)
-GA_MISMATCH: float = LOAN_EAD * (GUAR_MM_RESIDUAL_YEARS - _MATURITY_FLOOR) / (
-    LOAN_RESIDUAL_MATURITY_YEARS - _MATURITY_FLOOR
+GA_MISMATCH: float = (
+    LOAN_EAD
+    * (GUAR_MM_RESIDUAL_YEARS - _MATURITY_FLOOR)
+    / (LOAN_RESIDUAL_MATURITY_YEARS - _MATURITY_FLOOR)
 )  # = 473,684.2105263158
 GA_UNGUARANTEED: float = LOAN_EAD - GA_MISMATCH  # = 526,315.7894736842
 
@@ -466,7 +468,7 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("    t == T → no mismatch adjustment → GA = 1,000,000 → RWA = 200,000")
     print()
     print(f"  {GUAR_MM_REF}: maturity=2028-07-01, original_maturity_years=2.5")
-    print(f"    t=2.5y < T=5.0y → Art. 239(3) applies")
+    print("    t=2.5y < T=5.0y → Art. 239(3) applies")
     print(f"    GA = 1,000,000 × (2.5−0.25)/(5.0−0.25) = {GA_MISMATCH:.10f}")
     print(f"    unguaranteed = {GA_UNGUARANTEED:.10f}")
     print(f"    total RWA = {GA_MISMATCH * 0.20 + GA_UNGUARANTEED * 1.00:.10f}")

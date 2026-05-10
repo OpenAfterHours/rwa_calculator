@@ -881,7 +881,9 @@ def _generate_p1154b31(output_dir: Path) -> list[tuple[str, int]]:
 
         data_dir = output_dir / "data"
         saved = save_p1154b31_fixtures(data_dir)
-        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_154_b31", None)
@@ -934,7 +936,9 @@ def _generate_p1110(output_dir: Path) -> list[tuple[str, int]]:
 
         data_dir = output_dir / "data"
         saved = save_p1110_fixtures(data_dir)
-        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_110", None)
@@ -947,7 +951,9 @@ def _generate_p1109(output_dir: Path) -> list[tuple[str, int]]:
         from p1_109 import save_p1109_fixtures
 
         saved = save_p1109_fixtures(output_dir / "data")
-        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_109", None)
@@ -1136,9 +1142,7 @@ def _generate_p239(output_dir: Path) -> list[tuple[str, int]]:
                     f"Scenario {label}: is_financial_sector_entity must be present"
                 )
             if cp_df["is_financial_sector_entity"][0] is not False:
-                raise AssertionError(
-                    f"Scenario {label}: is_financial_sector_entity must be False"
-                )
+                raise AssertionError(f"Scenario {label}: is_financial_sector_entity must be False")
 
         # Invariant 7: model_permissions must be None on both bundles (config-side permissions only).
         for label, bundle in [("B31", bundle_b31), ("CRR", bundle_crr)]:
@@ -1202,7 +1206,9 @@ def _generate_p1122(output_dir: Path) -> list[tuple[str, int]]:
 
         data_dir = output_dir / "data"
         saved = save_p1122_fixtures(data_dir)
-        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_122", None)

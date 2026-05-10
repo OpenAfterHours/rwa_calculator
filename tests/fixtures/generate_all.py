@@ -224,6 +224,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_161",
             _generate_p1161,
         ),
+        (
+            "P1.122 (CRR Art. 120(2) Table 4 short-term institution guarantor substitution)",
+            "p1_122",
+            _generate_p1122,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1148,6 +1153,20 @@ def _generate_p1161(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_161", None)
+
+
+def _generate_p1122(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.122 fixtures (CRR Art. 120(2) Table 4 short-term institution guarantor substitution)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_122 import save_p1122_fixtures
+
+        data_dir = output_dir / "data"
+        saved = save_p1122_fixtures(data_dir)
+        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_122", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

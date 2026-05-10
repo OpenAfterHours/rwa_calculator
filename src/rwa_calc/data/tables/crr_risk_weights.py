@@ -168,7 +168,8 @@ INSTITUTION_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = {
 }
 
 # CRR Art. 120(2) Table 4: rated institution, residual maturity <= 3 months.
-# Differs from B31 Table 4, which applies 20% uniformly across CQS 1-5.
+# Numerically identical to PRA PS1/26 Art. 120(2) Table 4 ECRA short-term;
+# kept as a separate dict for symmetry with the long-term CRR/B31 split.
 INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR: dict[CQS, Decimal] = {
     CQS.CQS1: Decimal("0.20"),
     CQS.CQS2: Decimal("0.20"),
@@ -176,6 +177,20 @@ INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR: dict[CQS, Decimal] = {
     CQS.CQS4: Decimal("0.50"),
     CQS.CQS5: Decimal("0.50"),
     CQS.CQS6: Decimal("1.50"),
+    CQS.UNRATED: Decimal("0.20"),  # Art. 121(3): unrated short-term institution = 20%
+}
+
+# PRA PS1/26 Art. 120(2) Table 4: short-term ECRA rated institution
+# (residual maturity <= 3 months). Numerically identical to CRR Table 4 across
+# CQS 1-6; the unrated fallback maps to SCRA Grade A short-term (20%).
+INSTITUTION_SHORT_TERM_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = {
+    CQS.CQS1: Decimal("0.20"),
+    CQS.CQS2: Decimal("0.20"),
+    CQS.CQS3: Decimal("0.20"),
+    CQS.CQS4: Decimal("0.50"),
+    CQS.CQS5: Decimal("0.50"),
+    CQS.CQS6: Decimal("1.50"),
+    CQS.UNRATED: Decimal("0.20"),  # PS1/26 SCRA Grade A short-term fallback = 20%
 }
 
 # CRR Art. 121(3): unrated institution, original effective maturity <= 3 months.
@@ -213,37 +228,60 @@ def _create_institution_df(is_basel_3_1: bool = False) -> pl.DataFrame:
 def build_institution_guarantor_rw_expr(
     cqs_col: str,
     is_basel_3_1: bool,
+    short_term_flag_col: str | None = None,
 ) -> pl.Expr:
     """Build a CQS → institution risk weight expression from the canonical dicts.
 
     Used by SA and IRB guarantee substitution to look up the RW to apply to the
     guaranteed portion when the guarantor is an institution. Drives values from
-    ``INSTITUTION_RISK_WEIGHTS_CRR`` / ``INSTITUTION_RISK_WEIGHTS_B31_ECRA`` so
-    there is a single source of truth.
+    ``INSTITUTION_RISK_WEIGHTS_CRR`` / ``INSTITUTION_RISK_WEIGHTS_B31_ECRA``
+    (long-term, Art. 120 Table 3) or
+    ``INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR`` /
+    ``INSTITUTION_SHORT_TERM_RISK_WEIGHTS_B31_ECRA`` (short-term, Art. 120(2)
+    Table 4) so there is a single source of truth.
 
     Args:
         cqs_col: Name of the integer CQS column on the frame.
         is_basel_3_1: Select PS1/26 ECRA table when True, CRR Art. 120 Table 3
             when False.
+        short_term_flag_col: Optional name of a Boolean column. When provided,
+            rows where the column evaluates True route to the Art. 120(2)
+            Table 4 short-term dict (residual maturity ≤ 3 months); rows where
+            the column is False or null use the long-term Table 3 dict.
 
     Returns:
         Float64 Polars expression evaluating to the institution RW.
     """
-    table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
-    col = pl.col(cqs_col)
-    return (
-        pl.when(col == 1)
-        .then(pl.lit(float(table[CQS.CQS1])))
-        .when(col == 2)
-        .then(pl.lit(float(table[CQS.CQS2])))
-        .when(col == 3)
-        .then(pl.lit(float(table[CQS.CQS3])))
-        .when(col.is_in([4, 5]))
-        .then(pl.lit(float(table[CQS.CQS4])))
-        .when(col == 6)
-        .then(pl.lit(float(table[CQS.CQS6])))
-        .otherwise(pl.lit(float(table[CQS.UNRATED])))
+    long_term = (
+        INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
     )
+    short_term = (
+        INSTITUTION_SHORT_TERM_RISK_WEIGHTS_B31_ECRA
+        if is_basel_3_1
+        else INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR
+    )
+    col = pl.col(cqs_col)
+
+    def _branch(table: dict[CQS, Decimal]) -> pl.Expr:
+        return (
+            pl.when(col == 1)
+            .then(pl.lit(float(table[CQS.CQS1])))
+            .when(col == 2)
+            .then(pl.lit(float(table[CQS.CQS2])))
+            .when(col == 3)
+            .then(pl.lit(float(table[CQS.CQS3])))
+            .when(col.is_in([4, 5]))
+            .then(pl.lit(float(table[CQS.CQS4])))
+            .when(col == 6)
+            .then(pl.lit(float(table[CQS.CQS6])))
+            .otherwise(pl.lit(float(table[CQS.UNRATED])))
+        )
+
+    if short_term_flag_col is None:
+        return _branch(long_term)
+
+    is_short_term = pl.col(short_term_flag_col).fill_null(False)
+    return pl.when(is_short_term).then(_branch(short_term)).otherwise(_branch(long_term))
 
 
 # =============================================================================

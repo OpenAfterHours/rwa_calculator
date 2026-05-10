@@ -775,7 +775,11 @@ def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
     return build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
 
 
-def _build_guarantor_rw_expr(is_domestic_guarantor: pl.Expr, is_basel_3_1: bool) -> pl.Expr:
+def _build_guarantor_rw_expr(
+    is_domestic_guarantor: pl.Expr,
+    is_basel_3_1: bool,
+    institution_short_term_flag_col: str | None = None,
+) -> pl.Expr:
     """Build the full when/then chain that maps a guarantor to its RW.
 
     Uses ``guarantor_exposure_class`` (derived from ENTITY_TYPE_TO_SA_CLASS by
@@ -789,7 +793,9 @@ def _build_guarantor_rw_expr(is_domestic_guarantor: pl.Expr, is_basel_3_1: bool)
         CCP (CRR Art. 306, CRE54.14-15)
         Named MDB (Art. 117(2)) / International Organisation (Art. 118)
         MDB Table 2B (Art. 117(1))
-        Institution (ECRA / SCRA via build_institution_guarantor_rw_expr)
+        Institution (ECRA / SCRA via build_institution_guarantor_rw_expr —
+            short-term Art. 120(2) Table 4 when the borrower exposure's
+            residual maturity ≤ 3 months, otherwise long-term Table 3)
         PSE (Art. 116(2) Table 2A, sovereign-derived for unrated)
         RGLA (Art. 115(1)(b) Table 1B, sovereign-derived for unrated)
         Corporate (Art. 122 corporate CQS table)
@@ -849,9 +855,16 @@ def _build_guarantor_rw_expr(is_domestic_guarantor: pl.Expr, is_basel_3_1: bool)
         )
         # Institution guarantors — RW driven from INSTITUTION_RISK_WEIGHTS_CRR /
         # INSTITUTION_RISK_WEIGHTS_B31_ECRA so the dicts remain the single source
-        # of truth.
+        # of truth. When the borrower exposure's residual maturity ≤ 3 months
+        # (CRR/PS1/26 Art. 120(2)), the short-term Table 4 dicts apply instead.
         .when(gec == "institution")
-        .then(build_institution_guarantor_rw_expr("guarantor_cqs", is_basel_3_1))
+        .then(
+            build_institution_guarantor_rw_expr(
+                "guarantor_cqs",
+                is_basel_3_1,
+                short_term_flag_col=institution_short_term_flag_col,
+            )
+        )
         # PSE guarantors — Art. 116(2) Table 2A for rated, sovereign-derived for unrated.
         .when(gec == "pse")
         .then(
@@ -1737,11 +1750,32 @@ class SALazyFrame:
         # Art. 114(3)/(4) domestic CGCB-guarantor currency check.
         is_domestic_guarantor = _build_domestic_guarantor_expr(exposures.collect_schema().names())
 
+        # CRR/PS1/26 Art. 120(2) Table 4 short-term institution guarantor flag.
+        # The substituted exposure's original maturity (≤ 3 months / 0.25y)
+        # drives the short-term carve-out — same convention as the direct
+        # institution short-term branches elsewhere in this module (Art. 120(2),
+        # Art. 121(3)). ``original_maturity_years`` is derived earlier in
+        # ``apply_risk_weights`` from (maturity_date - value_date) when absent,
+        # so it is always populated here.
+        short_term_flag_col = "_inst_guarantor_short_term"
+        if "original_maturity_years" in exposures.collect_schema().names():
+            short_term_expr = (
+                pl.col("original_maturity_years").is_not_null()
+                & (pl.col("original_maturity_years") <= 0.25)
+            )
+        else:
+            short_term_expr = pl.lit(False)
+        exposures = exposures.with_columns(
+            short_term_expr.fill_null(False).alias(short_term_flag_col),
+        )
+
         # Look up guarantor's RW based on exposure class + CQS.
         exposures = exposures.with_columns(
-            _build_guarantor_rw_expr(is_domestic_guarantor, config.is_basel_3_1).alias(
-                "guarantor_rw"
-            ),
+            _build_guarantor_rw_expr(
+                is_domestic_guarantor,
+                config.is_basel_3_1,
+                institution_short_term_flag_col=short_term_flag_col,
+            ).alias("guarantor_rw"),
         )
 
         # Check if guarantee is beneficial (guarantor RW < borrower RW)

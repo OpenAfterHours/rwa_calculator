@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 
 if TYPE_CHECKING:
@@ -89,6 +90,8 @@ def _pd_floor_expression(
     all_values = {
         floors.corporate,
         floors.corporate_sme,
+        floors.sovereign,
+        floors.institution,
         floors.retail_mortgage,
         floors.retail_other,
         floors.retail_qrre_transactor,
@@ -113,6 +116,9 @@ def _pd_floor_expression(
         # Conservative default: revolver floor (0.10% under Basel 3.1)
         qrre_floor = pl.lit(float(floors.retail_qrre_revolver))
 
+    sovereign_value = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value.upper()
+    institution_value = ExposureClass.INSTITUTION.value.upper()
+
     return (
         pl.when(exp_class.str.contains("QRRE"))
         .then(qrre_floor)
@@ -122,6 +128,10 @@ def _pd_floor_expression(
         .then(pl.lit(float(floors.retail_other)))
         .when(exp_class == "CORPORATE_SME")
         .then(pl.lit(float(floors.corporate_sme)))
+        .when(exp_class == sovereign_value)
+        .then(pl.lit(float(floors.sovereign)))
+        .when(exp_class == institution_value)
+        .then(pl.lit(float(floors.institution)))
         .otherwise(pl.lit(float(floors.corporate)))
     )
 

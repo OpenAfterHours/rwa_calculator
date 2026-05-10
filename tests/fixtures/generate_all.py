@@ -274,6 +274,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_122a",
             _generate_p1122a,
         ),
+        (
+            "P2.36 (sovereign/institution PD floor first-class config fields)",
+            "p2_36",
+            _generate_p236,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1339,6 +1344,19 @@ def _generate_p1122a(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_122a", None)
+
+
+def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.36 fixtures (sovereign/institution PD floor first-class config fields)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_36 import save_p236_fixtures
+
+        saved = save_p236_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_36", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

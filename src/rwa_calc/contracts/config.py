@@ -55,6 +55,8 @@ class PDFloors:
 
     corporate: Decimal = Decimal("0.0003")  # 0.03%
     corporate_sme: Decimal = Decimal("0.0003")
+    sovereign: Decimal = Decimal("0.0003")  # CRR Art. 160(1) uniform 0.03%
+    institution: Decimal = Decimal("0.0003")  # CRR Art. 160(1) uniform 0.03%
     retail_mortgage: Decimal = Decimal("0.0003")
     retail_other: Decimal = Decimal("0.0003")
     retail_qrre_transactor: Decimal = Decimal("0.0003")
@@ -66,6 +68,10 @@ class PDFloors:
             return self.corporate
         elif exposure_class == ExposureClass.CORPORATE_SME:
             return self.corporate_sme
+        elif exposure_class == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK:
+            return self.sovereign
+        elif exposure_class == ExposureClass.INSTITUTION:
+            return self.institution
         elif exposure_class == ExposureClass.RETAIL_MORTGAGE:
             return self.retail_mortgage
         elif exposure_class == ExposureClass.RETAIL_QRRE:
@@ -82,6 +88,8 @@ class PDFloors:
         return cls(
             corporate=Decimal("0.0003"),
             corporate_sme=Decimal("0.0003"),
+            sovereign=Decimal("0.0003"),  # CRR Art. 160(1)
+            institution=Decimal("0.0003"),  # CRR Art. 160(1)
             retail_mortgage=Decimal("0.0003"),
             retail_other=Decimal("0.0003"),
             retail_qrre_transactor=Decimal("0.0003"),
@@ -94,6 +102,8 @@ class PDFloors:
         return cls(
             corporate=Decimal("0.0005"),  # 0.05% Art. 160(1)
             corporate_sme=Decimal("0.0005"),  # 0.05% Art. 160(1)
+            sovereign=Decimal("0.0005"),  # 0.05% PRA PS1/26 Art. 160(1)
+            institution=Decimal("0.0005"),  # 0.05% PRA PS1/26 Art. 160(1)
             retail_mortgage=Decimal("0.0010"),  # 0.10% Art. 163(1)(b) secured by UK RRE
             retail_other=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail
             retail_qrre_transactor=Decimal("0.0005"),  # 0.05% Art. 163(1)(c) all other retail

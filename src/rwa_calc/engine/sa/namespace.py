@@ -1877,18 +1877,18 @@ class SALazyFrame:
         if income_col is None or "currency" not in cols:
             return self._lf
 
-        _uc = (
-            pl.col("_upper_class")
-            if "_upper_class" in cols
-            else (pl.col("exposure_class").fill_null("").str.to_uppercase())
-        )
-
-        is_retail_or_re = (
-            _uc.str.contains("RETAIL", literal=True)
-            | _uc.str.contains("MORTGAGE", literal=True)
-            | _uc.str.contains("RESIDENTIAL", literal=True)
-            | _uc.str.contains("COMMERCIAL", literal=True)
-            | _uc.str.contains("CRE", literal=True)
+        # PRA PS1/26 Art. 123B: the 1.5x currency-mismatch multiplier is in scope
+        # ONLY for retail (Art. 112(h)) and residential RE (Art. 112(i)) exposures.
+        # Commercial RE (Art. 112(j) per Art. 124H/124I) and corporate are OUT of
+        # scope. Use exact-match against ExposureClass enum string values rather
+        # than substring matching to avoid COMMERCIAL_MORTGAGE matching "COMMERCIAL".
+        is_retail_or_re = pl.col("exposure_class").fill_null("").is_in(
+            [
+                "retail_other",
+                "retail_qrre",
+                "retail_mortgage",
+                "residential_mortgage",
+            ]
         )
 
         has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))

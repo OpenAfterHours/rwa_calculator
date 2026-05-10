@@ -255,6 +255,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p194a,
         ),
         (
+            "P1.94f (exposure-class gate on Art. 123B currency-mismatch multiplier)",
+            "p1_94f",
+            _generate_p194f,
+        ),
+        (
             "P2.17 (CRR Art. 123 second subparagraph payroll/pension loan 35% RW)",
             "p2_17",
             _generate_p217,
@@ -1274,6 +1279,19 @@ def _generate_p194a(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_94a", None)
+
+
+def _generate_p194f(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.94f fixtures (exposure-class gate on Art. 123B currency-mismatch multiplier)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_94f import save_p194f_fixtures
+
+        saved = save_p194f_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_94f", None)
 
 
 def _generate_p217(output_dir: Path) -> list[tuple[str, int]]:

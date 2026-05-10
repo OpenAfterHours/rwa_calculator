@@ -160,6 +160,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1154,
         ),
         (
+            "P1.154-B31 (B31 Art. 118 IO discriminator vs Art. 117(1)(a) Table 2B MDB CQS 2 = 30%)",
+            "p1_154_b31",
+            _generate_p1154b31,
+        ),
+        (
             "P1.93 (B31 Art. 222(4) FCSM SFT 0%/10% carve-out + Art. 222(6) non-SFT gating)",
             "p1_93",
             _generate_p193,
@@ -846,6 +851,20 @@ def _generate_p1154(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_154", None)
+
+
+def _generate_p1154b31(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.154-B31 fixtures (B31 Art. 118 IO discriminator vs Art. 117(1)(a) Table 2B MDB)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_154_b31 import save_p1154b31_fixtures
+
+        data_dir = output_dir / "data"
+        saved = save_p1154b31_fixtures(data_dir)
+        return [(f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_154_b31", None)
 
 
 def _generate_p193(output_dir: Path) -> list[tuple[str, int]]:

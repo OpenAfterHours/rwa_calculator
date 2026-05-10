@@ -64,7 +64,7 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
 # src/rwa_calc/data/schemas.py.
 VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # ApproachType enum values + aggregator fallback labels (internal routing)
-    "engine/aggregator/_schemas.py": {"IRB_APPROACHES"},
+    "engine/aggregator/_schemas.py": {"IRB_APPROACHES", "SA_APPROACHES", "EQUITY_APPROACHES"},
     "engine/comparison.py": {
         "_COMPARISON_COLUMNS",  # output column names
         "_OPTIONAL_COLUMNS",  # output column names

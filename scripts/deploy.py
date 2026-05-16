@@ -5,9 +5,13 @@ Deployment script for rwa-calc package.
 Automates version updates and PyPI publishing:
 1. Updates version in pyproject.toml, __init__.py, docs
 2. Updates changelog with new version section
-3. Syncs uv.lock
-4. Builds the package
-5. Optionally publishes to PyPI
+3. Regenerates docs/development/citation-matrix.md from @cites decorators
+4. Syncs uv.lock
+5. Builds the package
+6. Commits the version bump and creates a git tag
+7. Optionally publishes to PyPI
+
+After it runs, only `git push origin master --tags` is required.
 
 Usage:
     python scripts/deploy.py 0.1.4
@@ -37,6 +41,16 @@ VERSION_FILES = {
 }
 
 CHANGELOG_PATH = PROJECT_ROOT / "docs" / "appendix" / "changelog.md"
+
+# Files to stage in the release commit. Versioned files + changelog + the lockfile
+# touched by `uv sync`. Listed explicitly to avoid accidentally sweeping in untracked
+# scratch files via `git add -A`.
+GIT_STAGE_FILES = [
+    *VERSION_FILES.keys(),
+    "docs/appendix/changelog.md",
+    "docs/development/citation-matrix.md",
+    "uv.lock",
+]
 
 
 def get_current_version() -> str:
@@ -150,6 +164,38 @@ def update_changelog(new_version: str, old_version: str) -> bool:
     return True
 
 
+def git_tag_exists(tag: str) -> bool:
+    """Return True if a git tag with this name already exists locally."""
+    result = subprocess.run(
+        ["git", "tag", "--list", tag],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == tag
+
+
+def commit_and_tag(new_version: str) -> bool:
+    """Stage release files, commit, and create an annotated tag."""
+    tag = f"v{new_version}"
+    if git_tag_exists(tag):
+        print(f"  ERROR: tag {tag} already exists. Aborting before commit.")
+        return False
+
+    existing_files = [f for f in GIT_STAGE_FILES if (PROJECT_ROOT / f).exists()]
+    if not run_command(["git", "add", *existing_files], "Staging release files"):
+        return False
+
+    commit_msg = f"chore(release): bump version to {new_version}"
+    if not run_command(["git", "commit", "-m", commit_msg], "Committing release"):
+        return False
+
+    return run_command(
+        ["git", "tag", "-a", tag, "-m", f"Release {tag}"],
+        f"Creating tag {tag}",
+    )
+
+
 def run_command(cmd: list[str], description: str) -> bool:
     """Run a command and return success status."""
     print(f"\n{description}...")
@@ -212,6 +258,11 @@ Examples:
         action="store_true",
         help="Skip running tests before deployment",
     )
+    parser.add_argument(
+        "--no-git",
+        action="store_true",
+        help="Skip git commit and tag creation (leave changes uncommitted)",
+    )
 
     args = parser.parse_args()
 
@@ -239,8 +290,11 @@ Examples:
         for file_path in VERSION_FILES:
             print(f"    - {file_path}")
         print("  - Update changelog")
+        print("  - Run: uv run python scripts/generate_citation_matrix.py")
         print("  - Run: uv sync")
         print("  - Run: uv build")
+        if not args.no_git:
+            print(f"  - git commit + git tag v{new_version}")
         if args.publish:
             print("  - Run: uv publish")
         return 0
@@ -271,6 +325,13 @@ Examples:
     print("\nUpdating changelog...")
     update_changelog(new_version, current_version)
 
+    # Regenerate citation matrix from live @cites decorators
+    if not run_command(
+        ["uv", "run", "python", "scripts/generate_citation_matrix.py"],
+        "Regenerating citation matrix",
+    ):
+        return 1
+
     # Sync uv.lock
     if not run_command(["uv", "sync"], "Syncing uv.lock"):
         return 1
@@ -286,6 +347,14 @@ Examples:
         for f in sorted(dist_dir.glob(f"*{new_version}*")):
             print(f"  {f.name}")
 
+    # Commit + tag before publishing so a successful PyPI release always has a
+    # matching git tag.
+    if not args.no_git:
+        print("\nCommitting release and creating tag...")
+        if not commit_and_tag(new_version):
+            print("\nGit commit/tag failed. Resolve manually before publishing.")
+            return 1
+
     # Publish if requested
     if args.publish:
         if not run_command(["uv", "publish"], "Publishing to PyPI"):
@@ -297,12 +366,15 @@ Examples:
         print("Run with --publish to upload to PyPI:")
         print(f"  python scripts/deploy.py {new_version} --publish")
 
-    # Remind about git
-    print("\nDon't forget to commit and tag:")
-    print("  git add -A")
-    print(f'  git commit -m "chore: release v{new_version}"')
-    print(f"  git tag v{new_version}")
-    print("  git push origin master --tags")
+    if args.no_git:
+        print("\nGit step skipped (--no-git). To commit and tag manually:")
+        print(f"  git add {' '.join(GIT_STAGE_FILES)}")
+        print(f'  git commit -m "chore(release): bump version to {new_version}"')
+        print(f'  git tag -a v{new_version} -m "Release v{new_version}"')
+        print("  git push origin master --tags")
+    else:
+        print("\nRelease committed and tagged. To finish, push:")
+        print("  git push origin master --tags")
 
     return 0
 

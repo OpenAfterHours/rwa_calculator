@@ -69,6 +69,84 @@ class RowSection:
 
 
 # =============================================================================
+# Shared label / group / section constants (DRY — referenced by multiple templates)
+# =============================================================================
+
+# --- SA exposure-class labels ---
+_LBL_SA_CENTRAL_GOVT = "Central governments or central banks"
+_LBL_IRB_CENTRAL_GOVT = "Central governments and central banks"
+_LBL_SA_RGLA = "Regional governments or local authorities"
+_LBL_SA_PSE = "Public sector entities"
+_LBL_SA_MDB = "Multilateral development banks"
+_LBL_SA_INTL_ORG = "International organisations"
+_LBL_SA_MORTGAGES = "Secured by mortgages on immovable property"
+_LBL_SA_DEFAULTED = "Exposures in default"
+_LBL_SA_COVERED_BOND = "Covered bonds"
+_LBL_SA_OTHER = "Other items"
+
+# --- Common column / row labels ---
+_LBL_COL_ORIG_EXPOSURE = "Original exposure pre conversion factors"
+_LBL_COL_VALUE_ADJUSTMENTS = "(-) Value adjustments and provisions"
+_LBL_COL_GUARANTEES = "(-) Guarantees"
+_LBL_COL_CREDIT_DERIVS = "(-) Credit derivatives"
+_LBL_COL_OTHER_FUNDED = "(-) Other funded credit protection"
+_LBL_COL_SUBST_OUTFLOWS = "(-) Substitution outflows"
+_LBL_COL_SUBST_INFLOWS = "Substitution inflows (+)"
+_LBL_COL_EXPOSURE_VALUE_LC = "Exposure value"
+_LBL_COL_RWEA_PRE_SF = "RWEA pre supporting factors"
+_LBL_COL_SME_SF_ADJ = "(-) SME supporting factor adjustment"
+_LBL_COL_INFRA_SF_ADJ = "(-) Infrastructure supporting factor adjustment"
+_LBL_COL_RWEA_POST_SF = "RWEA after supporting factors"
+_LBL_COL_OF_WHICH_ECAI = "Of which: with ECAI credit assessment"
+_LBL_COL_RWEA_HYPHEN = "Risk-weighted exposure amount"
+_LBL_COL_RWEA_SPACE_SUFFIX = "Risk weighted exposure amount (RWEA)"
+_LBL_COL_OF_WHICH_LARGE_FSE = "  Of which: large financial sector entities"
+_LBL_COL_OF_WHICH_OFF_BS = "  Of which: off balance sheet"
+_LBL_COL_EW_AVG_LGD = "Exposure-weighted average LGD (%)"
+_LBL_COL_EXPECTED_LOSS = "Expected loss amount"
+_LBL_COL_NUM_OBLIGORS = "Number of obligors"
+_LBL_COL_EW_AVG_MATURITY_YRS = "Exposure-weighted average maturity (years)"
+_LBL_COL_OBSERVED_DEFAULTS = "Observed new defaults for the period"
+_LBL_COL_GEN_CRA = "General credit risk adjustments"
+_LBL_COL_SPEC_CRA = "Specific credit risk adjustments"
+_LBL_COL_CRA_WRITEOFFS = "Credit risk adjustments/write-offs for observed new defaults"
+_LBL_ROW_TOTAL_EXPOSURES_UC = "TOTAL EXPOSURES"
+_LBL_ROW_TOTAL_EXPOSURES_MC = "Total exposures"
+_LBL_ROW_SFT_NETTING = "SFT netting sets"
+_LBL_ROW_OF_WHICH_QCCP = "  of which: centrally cleared through a QCCP"
+_LBL_ROW_DERIV_LST_NETTING = "Derivatives & Long Settlement Transactions netting sets"
+_LBL_ROW_CCP_NETTING = "From Contractual Cross Product netting sets"
+_LBL_ROW_CREDIT_RISK_EXCL_CCR = "Credit risk (excluding CCR)"
+_LBL_ROW_OP_RISK = "Operational risk"
+_LBL_ROW_CIU = "Collective investment undertakings (CIU)"
+_LBL_ROW_OF_WHICH_SME_LC = "  of which: SME"
+
+# --- Common group labels ---
+_GRP_CRM_SUBST_UNFUNDED = "CRM Substitution: Unfunded"
+_GRP_CRM_SUBST_FUNDED = "CRM Substitution: Funded"
+_GRP_CRM_SUBST = "CRM Substitution"
+_GRP_FIN_COLL_COMP = "Fin. Collateral Comprehensive"
+_GRP_CCF_BREAKDOWN = "CCF Breakdown"
+_GRP_EXPOSURE_VALUE = "Exposure Value"
+_GRP_INTERNAL_RATING = "Internal Rating"
+_GRP_CRM_LGD_UNFUNDED = "CRM in LGD: Unfunded"
+_GRP_CRM_LGD_FUNDED = "CRM in LGD: Funded"
+_GRP_OUTPUT_FLOOR = "Output Floor"
+_GRP_COVERAGE_PCT = "Coverage %"
+_GRP_RWEA_SA_BREAKDOWN = "RWEA: SA Breakdown"
+
+# --- Section names ---
+_SEC_BREAKDOWN_EXPOSURE_TYPES = "Breakdown by Exposure Types"
+
+# --- Slotting category labels ---
+_LBL_SLOT_CAT1 = "Category 1 (Strong)"
+_LBL_SLOT_CAT2 = "Category 2 (Good)"
+_LBL_SLOT_CAT3 = "Category 3 (Satisfactory)"
+_LBL_SLOT_CAT4 = "Category 4 (Weak)"
+_LBL_SLOT_CAT5 = "Category 5 (Default)"
+
+
+# =============================================================================
 # SA EXPOSURE CLASS FILTER — used by generator to filter pipeline data
 # =============================================================================
 
@@ -77,27 +155,27 @@ class RowSection:
 # per-exposure-class template submission. They are NOT the row structure
 # of the template itself — see SA_ROW_SECTIONS for that.
 SA_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", "Central governments or central banks"),
-    "rgla": ("0020", "Regional governments or local authorities"),
-    "pse": ("0030", "Public sector entities"),
-    "mdb": ("0040", "Multilateral development banks"),
-    "international_organisation": ("0050", "International organisations"),
+    "central_govt_central_bank": ("0010", _LBL_SA_CENTRAL_GOVT),
+    "rgla": ("0020", _LBL_SA_RGLA),
+    "pse": ("0030", _LBL_SA_PSE),
+    "mdb": ("0040", _LBL_SA_MDB),
+    "international_organisation": ("0050", _LBL_SA_INTL_ORG),
     "institution": ("0060", "Institutions"),
     "corporate": ("0070", "Corporates"),
     "corporate_sme": ("0071", "  Of which: SME corporates"),
-    "retail_mortgage": ("0080", "Secured by mortgages on immovable property"),
+    "retail_mortgage": ("0080", _LBL_SA_MORTGAGES),
     "retail_other": ("0090", "Retail"),
     "retail_qrre": ("0091", "  Of which: Qualifying revolving"),
-    "defaulted": ("0100", "Exposures in default"),
-    "covered_bond": ("0105", "Covered bonds"),
+    "defaulted": ("0100", _LBL_SA_DEFAULTED),
+    "covered_bond": ("0105", _LBL_SA_COVERED_BOND),
     "equity": ("0110", "Equity exposures"),
-    "other": ("0120", "Other items"),
+    "other": ("0120", _LBL_SA_OTHER),
 }
 
 # IRB exposure class filter values — used by generator for per-class filtering.
 # Not the row structure; see IRB_ROW_SECTIONS for that.
 IRB_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
-    "central_govt_central_bank": ("0010", "Central governments and central banks"),
+    "central_govt_central_bank": ("0010", _LBL_IRB_CENTRAL_GOVT),
     "institution": ("0020", "Institutions"),
     "corporate": ("0030", "Corporates - Other"),
     "corporate_sme": ("0040", "Corporates - SME"),
@@ -115,86 +193,86 @@ IRB_EXPOSURE_CLASS_ROWS: dict[str, tuple[str, str]] = {
 # CRR C 07.00: 24 columns (refs 0010-0240) covering the full SA credit risk
 # waterfall from original exposure through CRM to final RWEA.
 CRR_C07_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Exposures deducted from own funds", "Exposure"),
-    COREPColumn("0030", "(-) Value adjustments and provisions", "Exposure"),
+    COREPColumn("0030", _LBL_COL_VALUE_ADJUSTMENTS, "Exposure"),
     COREPColumn("0040", "Exposure net of value adjustments and provisions", "Exposure"),
-    COREPColumn("0050", "(-) Guarantees", "CRM Substitution: Unfunded"),
-    COREPColumn("0060", "(-) Credit derivatives", "CRM Substitution: Unfunded"),
-    COREPColumn("0070", "(-) Financial collateral: Simple method", "CRM Substitution: Funded"),
-    COREPColumn("0080", "(-) Other funded credit protection", "CRM Substitution: Funded"),
-    COREPColumn("0090", "(-) Substitution outflows", "CRM Substitution"),
-    COREPColumn("0100", "Substitution inflows (+)", "CRM Substitution"),
+    COREPColumn("0050", _LBL_COL_GUARANTEES, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0060", _LBL_COL_CREDIT_DERIVS, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0070", "(-) Financial collateral: Simple method", _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0080", _LBL_COL_OTHER_FUNDED, _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0090", _LBL_COL_SUBST_OUTFLOWS, _GRP_CRM_SUBST),
+    COREPColumn("0100", _LBL_COL_SUBST_INFLOWS, _GRP_CRM_SUBST),
     COREPColumn("0110", "Net exposure after CRM substitution effects pre CCFs", "Post-CRM"),
-    COREPColumn("0120", "Volatility adjustment to the exposure", "Fin. Collateral Comprehensive"),
+    COREPColumn("0120", "Volatility adjustment to the exposure", _GRP_FIN_COLL_COMP),
     COREPColumn(
         "0130",
         "(-) Financial collateral: adjusted value (Cvam)",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn(
         "0140",
         "(-) Of which: volatility and maturity adjustments",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn("0150", "Fully adjusted exposure value (E*)", "Post-CRM"),
-    COREPColumn("0160", "Off-BS by CCF: 0%", "CCF Breakdown"),
-    COREPColumn("0170", "Off-BS by CCF: 20%", "CCF Breakdown"),
-    COREPColumn("0180", "Off-BS by CCF: 50%", "CCF Breakdown"),
-    COREPColumn("0190", "Off-BS by CCF: 100%", "CCF Breakdown"),
-    COREPColumn("0200", "Exposure value", "Final"),
+    COREPColumn("0160", "Off-BS by CCF: 0%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0170", "Off-BS by CCF: 20%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0180", "Off-BS by CCF: 50%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0190", "Off-BS by CCF: 100%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0200", _LBL_COL_EXPOSURE_VALUE_LC, "Final"),
     COREPColumn("0210", "Of which: arising from CCR", "Final"),
     COREPColumn("0211", "Of which: CCR excl. CCP", "Final"),
-    COREPColumn("0215", "RWEA pre supporting factors", "RWEA"),
-    COREPColumn("0216", "(-) SME supporting factor adjustment", "RWEA"),
-    COREPColumn("0217", "(-) Infrastructure supporting factor adjustment", "RWEA"),
-    COREPColumn("0220", "RWEA after supporting factors", "RWEA"),
-    COREPColumn("0230", "Of which: with ECAI credit assessment", "RWEA"),
+    COREPColumn("0215", _LBL_COL_RWEA_PRE_SF, "RWEA"),
+    COREPColumn("0216", _LBL_COL_SME_SF_ADJ, "RWEA"),
+    COREPColumn("0217", _LBL_COL_INFRA_SF_ADJ, "RWEA"),
+    COREPColumn("0220", _LBL_COL_RWEA_POST_SF, "RWEA"),
+    COREPColumn("0230", _LBL_COL_OF_WHICH_ECAI, "RWEA"),
     COREPColumn("0240", "Of which: credit assessment derived from central govt", "RWEA"),
 ]
 
 # Basel 3.1 OF 07.00: 22 columns — adds 0035, 0171, 0235; removes 0215-0217;
 # changes 0160 from 0% CCF to 10% CCF.
 B31_C07_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Exposures deducted from own funds", "Exposure"),
-    COREPColumn("0030", "(-) Value adjustments and provisions", "Exposure"),
+    COREPColumn("0030", _LBL_COL_VALUE_ADJUSTMENTS, "Exposure"),
     COREPColumn(
         "0035", "(-) Adjustment due to on-balance sheet netting", "Exposure"
     ),  # New in B3.1
     COREPColumn(
         "0040", "Exposure net of adjustments, provisions, and netting", "Exposure"
     ),  # Changed
-    COREPColumn("0050", "(-) Guarantees (adjusted values)", "CRM Substitution: Unfunded"),
-    COREPColumn("0060", "(-) Credit derivatives", "CRM Substitution: Unfunded"),
-    COREPColumn("0070", "(-) Financial collateral: Simple method", "CRM Substitution: Funded"),
-    COREPColumn("0080", "(-) Other funded credit protection", "CRM Substitution: Funded"),
-    COREPColumn("0090", "(-) Substitution outflows", "CRM Substitution"),
-    COREPColumn("0100", "Substitution inflows (+)", "CRM Substitution"),
+    COREPColumn("0050", "(-) Guarantees (adjusted values)", _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0060", _LBL_COL_CREDIT_DERIVS, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0070", "(-) Financial collateral: Simple method", _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0080", _LBL_COL_OTHER_FUNDED, _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0090", _LBL_COL_SUBST_OUTFLOWS, _GRP_CRM_SUBST),
+    COREPColumn("0100", _LBL_COL_SUBST_INFLOWS, _GRP_CRM_SUBST),
     COREPColumn("0110", "Net exposure after CRM substitution effects pre CCFs", "Post-CRM"),
-    COREPColumn("0120", "Volatility adjustment to the exposure", "Fin. Collateral Comprehensive"),
+    COREPColumn("0120", "Volatility adjustment to the exposure", _GRP_FIN_COLL_COMP),
     COREPColumn(
         "0130",
         "(-) Financial collateral: adjusted value (Cvam)",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn(
         "0140",
         "(-) Of which: volatility and maturity adjustments",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn("0150", "Fully adjusted exposure value (E*)", "Post-CRM"),
-    COREPColumn("0160", "Off-BS by CCF: 10%", "CCF Breakdown"),  # Changed: was 0% in CRR
-    COREPColumn("0170", "Off-BS by CCF: 20%", "CCF Breakdown"),
-    COREPColumn("0171", "Off-BS by CCF: 40%", "CCF Breakdown"),  # New in B3.1
-    COREPColumn("0180", "Off-BS by CCF: 50%", "CCF Breakdown"),
-    COREPColumn("0190", "Off-BS by CCF: 100%", "CCF Breakdown"),
-    COREPColumn("0200", "Exposure value", "Final"),
+    COREPColumn("0160", "Off-BS by CCF: 10%", _GRP_CCF_BREAKDOWN),  # Changed: was 0% in CRR
+    COREPColumn("0170", "Off-BS by CCF: 20%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0171", "Off-BS by CCF: 40%", _GRP_CCF_BREAKDOWN),  # New in B3.1
+    COREPColumn("0180", "Off-BS by CCF: 50%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0190", "Off-BS by CCF: 100%", _GRP_CCF_BREAKDOWN),
+    COREPColumn("0200", _LBL_COL_EXPOSURE_VALUE_LC, "Final"),
     COREPColumn("0210", "Of which: arising from CCR", "Final"),
     COREPColumn("0211", "Of which: CCR excl. CCP", "Final"),
     # 0215-0217 removed: supporting factors don't exist under Basel 3.1
-    COREPColumn("0220", "Risk-weighted exposure amount", "RWEA"),  # Changed name
-    COREPColumn("0230", "Of which: with ECAI credit assessment", "RWEA"),
+    COREPColumn("0220", _LBL_COL_RWEA_HYPHEN, "RWEA"),  # Changed name
+    COREPColumn("0230", _LBL_COL_OF_WHICH_ECAI, "RWEA"),
     COREPColumn("0235", "Of which: without ECAI credit assessment", "RWEA"),  # New in B3.1
     COREPColumn("0240", "Of which: credit assessment derived from central govt", "RWEA"),
 ]
@@ -211,7 +289,7 @@ CRR_SA_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Total Exposures",
         [
-            COREPRow("0010", "TOTAL EXPOSURES"),
+            COREPRow("0010", _LBL_ROW_TOTAL_EXPOSURES_UC),
             COREPRow("0015", "of which: Defaulted exposures"),
             COREPRow("0020", "of which: SME"),
             COREPRow("0030", "of which: Exposures subject to SME-supporting factor"),
@@ -222,15 +300,15 @@ CRR_SA_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
     RowSection(
-        "Breakdown by Exposure Types",
+        _SEC_BREAKDOWN_EXPOSURE_TYPES,
         [
             COREPRow("0070", "On balance sheet exposures subject to credit risk"),
             COREPRow("0080", "Off balance sheet exposures subject to credit risk"),
-            COREPRow("0090", "SFT netting sets"),
-            COREPRow("0100", "  of which: centrally cleared through a QCCP"),
-            COREPRow("0110", "Derivatives & Long Settlement Transactions netting sets"),
-            COREPRow("0120", "  of which: centrally cleared through a QCCP"),
-            COREPRow("0130", "From Contractual Cross Product netting sets"),
+            COREPRow("0090", _LBL_ROW_SFT_NETTING),
+            COREPRow("0100", _LBL_ROW_OF_WHICH_QCCP),
+            COREPRow("0110", _LBL_ROW_DERIV_LST_NETTING),
+            COREPRow("0120", _LBL_ROW_OF_WHICH_QCCP),
+            COREPRow("0130", _LBL_ROW_CCP_NETTING),
         ],
     ),
     RowSection(
@@ -276,7 +354,7 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Total Exposures",
         [
-            COREPRow("0010", "TOTAL EXPOSURES"),
+            COREPRow("0010", _LBL_ROW_TOTAL_EXPOSURES_UC),
             COREPRow("0015", "of which: Defaulted exposures"),
             COREPRow("0020", "of which: SME"),
             # 0030 removed: SME supporting factor doesn't exist under Basel 3.1
@@ -307,15 +385,15 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
     RowSection(
-        "Breakdown by Exposure Types",
+        _SEC_BREAKDOWN_EXPOSURE_TYPES,
         [
             COREPRow("0070", "On balance sheet exposures subject to credit risk"),
             COREPRow("0080", "Off balance sheet exposures subject to credit risk"),
-            COREPRow("0090", "SFT netting sets"),
-            COREPRow("0100", "  of which: centrally cleared through a QCCP"),
-            COREPRow("0110", "Derivatives & Long Settlement Transactions netting sets"),
-            COREPRow("0120", "  of which: centrally cleared through a QCCP"),
-            COREPRow("0130", "From Contractual Cross Product netting sets"),
+            COREPRow("0090", _LBL_ROW_SFT_NETTING),
+            COREPRow("0100", _LBL_ROW_OF_WHICH_QCCP),
+            COREPRow("0110", _LBL_ROW_DERIV_LST_NETTING),
+            COREPRow("0120", _LBL_ROW_OF_WHICH_QCCP),
+            COREPRow("0130", _LBL_ROW_CCP_NETTING),
         ],
     ),
     RowSection(
@@ -439,42 +517,42 @@ B31_SA_RISK_WEIGHT_BANDS: list[tuple[float, str]] = [
 # CRR C 08.01: 35 columns covering PD, exposure, CRM substitution, CRM in LGD
 # estimates, exposure value, LGD, maturity, RWEA, expected loss, memorandum items.
 CRR_C08_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", "Internal Rating"),
-    COREPColumn("0020", "Original exposure pre conversion factors", "Exposure"),
-    COREPColumn("0030", "  Of which: large financial sector entities", "Exposure"),
-    COREPColumn("0040", "(-) Guarantees", "CRM Substitution: Unfunded"),
-    COREPColumn("0050", "(-) Credit derivatives", "CRM Substitution: Unfunded"),
-    COREPColumn("0060", "(-) Other funded credit protection", "CRM Substitution: Funded"),
-    COREPColumn("0070", "(-) Substitution outflows", "CRM Substitution"),
-    COREPColumn("0080", "Substitution inflows (+)", "CRM Substitution"),
+    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", _GRP_INTERNAL_RATING),
+    COREPColumn("0020", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
+    COREPColumn("0030", _LBL_COL_OF_WHICH_LARGE_FSE, "Exposure"),
+    COREPColumn("0040", _LBL_COL_GUARANTEES, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0050", _LBL_COL_CREDIT_DERIVS, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0060", _LBL_COL_OTHER_FUNDED, _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0070", _LBL_COL_SUBST_OUTFLOWS, _GRP_CRM_SUBST),
+    COREPColumn("0080", _LBL_COL_SUBST_INFLOWS, _GRP_CRM_SUBST),
     COREPColumn("0090", "Exposure after CRM substitution pre CCFs", "Post-CRM"),
-    COREPColumn("0100", "  Of which: off balance sheet", "Post-CRM"),
-    COREPColumn("0110", "Exposure value", "Exposure Value"),
-    COREPColumn("0120", "  Of which: off balance sheet", "Exposure Value"),
-    COREPColumn("0130", "  Of which: arising from CCR", "Exposure Value"),
-    COREPColumn("0140", "  Of which: large financial sector entities", "Exposure Value"),
-    COREPColumn("0150", "Guarantees (own LGD estimates)", "CRM in LGD: Unfunded"),
-    COREPColumn("0160", "Credit derivatives (own LGD estimates)", "CRM in LGD: Unfunded"),
-    COREPColumn("0170", "Other funded credit protection (own LGD estimates)", "CRM in LGD: Funded"),
-    COREPColumn("0171", "  Cash on deposit", "CRM in LGD: Funded"),
-    COREPColumn("0172", "  Life insurance policies", "CRM in LGD: Funded"),
-    COREPColumn("0173", "  Instruments held by a third party", "CRM in LGD: Funded"),
-    COREPColumn("0180", "Eligible financial collateral", "CRM in LGD: Funded"),
-    COREPColumn("0190", "  Other eligible collateral: Real estate", "CRM in LGD: Funded"),
-    COREPColumn("0200", "  Other eligible collateral: Other physical", "CRM in LGD: Funded"),
-    COREPColumn("0210", "  Other eligible collateral: Receivables", "CRM in LGD: Funded"),
+    COREPColumn("0100", _LBL_COL_OF_WHICH_OFF_BS, "Post-CRM"),
+    COREPColumn("0110", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0120", _LBL_COL_OF_WHICH_OFF_BS, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0130", "  Of which: arising from CCR", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0140", _LBL_COL_OF_WHICH_LARGE_FSE, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0150", "Guarantees (own LGD estimates)", _GRP_CRM_LGD_UNFUNDED),
+    COREPColumn("0160", "Credit derivatives (own LGD estimates)", _GRP_CRM_LGD_UNFUNDED),
+    COREPColumn("0170", "Other funded credit protection (own LGD estimates)", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0171", "  Cash on deposit", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0172", "  Life insurance policies", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0173", "  Instruments held by a third party", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0180", "Eligible financial collateral", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0190", "  Other eligible collateral: Real estate", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0200", "  Other eligible collateral: Other physical", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0210", "  Other eligible collateral: Receivables", _GRP_CRM_LGD_FUNDED),
     COREPColumn("0220", "Subject to double default treatment: Unfunded", "Double Default"),
-    COREPColumn("0230", "Exposure-weighted average LGD (%)", "Parameters"),
+    COREPColumn("0230", _LBL_COL_EW_AVG_LGD, "Parameters"),
     COREPColumn("0240", "  For large financial sector entities", "Parameters"),
     COREPColumn("0250", "Exposure-weighted average maturity (days)", "Parameters"),
-    COREPColumn("0255", "RWEA pre supporting factors", "RWEA"),
-    COREPColumn("0256", "(-) SME supporting factor adjustment", "RWEA"),
-    COREPColumn("0257", "(-) Infrastructure supporting factor adjustment", "RWEA"),
-    COREPColumn("0260", "RWEA after supporting factors", "RWEA"),
-    COREPColumn("0270", "  Of which: large financial sector entities", "RWEA"),
-    COREPColumn("0280", "Expected loss amount", "Memorandum"),
-    COREPColumn("0290", "(-) Value adjustments and provisions", "Memorandum"),
-    COREPColumn("0300", "Number of obligors", "Memorandum"),
+    COREPColumn("0255", _LBL_COL_RWEA_PRE_SF, "RWEA"),
+    COREPColumn("0256", _LBL_COL_SME_SF_ADJ, "RWEA"),
+    COREPColumn("0257", _LBL_COL_INFRA_SF_ADJ, "RWEA"),
+    COREPColumn("0260", _LBL_COL_RWEA_POST_SF, "RWEA"),
+    COREPColumn("0270", _LBL_COL_OF_WHICH_LARGE_FSE, "RWEA"),
+    COREPColumn("0280", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
+    COREPColumn("0290", _LBL_COL_VALUE_ADJUSTMENTS, "Memorandum"),
+    COREPColumn("0300", _LBL_COL_NUM_OBLIGORS, "Memorandum"),
     COREPColumn("0310", "Pre-credit derivatives RWEA", "Memorandum"),
 ]
 
@@ -483,51 +561,51 @@ CRR_C08_COLUMNS: list[COREPColumn] = [
 # post-model adjustments, output floor columns.
 B31_C08_COLUMNS: list[COREPColumn] = [
     # 0010 removed: PD only in OF 08.02
-    COREPColumn("0020", "Original exposure pre conversion factors", "Exposure"),
-    COREPColumn("0030", "  Of which: large financial sector entities", "Exposure"),
+    COREPColumn("0020", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
+    COREPColumn("0030", _LBL_COL_OF_WHICH_LARGE_FSE, "Exposure"),
     COREPColumn(
         "0035", "(-) Adjustment due to on-balance sheet netting", "Exposure"
     ),  # New in B3.1
-    COREPColumn("0040", "(-) Guarantees", "CRM Substitution: Unfunded"),
-    COREPColumn("0050", "(-) Credit derivatives", "CRM Substitution: Unfunded"),
-    COREPColumn("0060", "(-) Other funded credit protection", "CRM Substitution: Funded"),
-    COREPColumn("0070", "(-) Substitution outflows", "CRM Substitution"),
-    COREPColumn("0080", "Substitution inflows (+)", "CRM Substitution"),
+    COREPColumn("0040", _LBL_COL_GUARANTEES, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0050", _LBL_COL_CREDIT_DERIVS, _GRP_CRM_SUBST_UNFUNDED),
+    COREPColumn("0060", _LBL_COL_OTHER_FUNDED, _GRP_CRM_SUBST_FUNDED),
+    COREPColumn("0070", _LBL_COL_SUBST_OUTFLOWS, _GRP_CRM_SUBST),
+    COREPColumn("0080", _LBL_COL_SUBST_INFLOWS, _GRP_CRM_SUBST),
     COREPColumn("0090", "Exposure after CRM substitution pre CCFs", "Post-CRM"),
-    COREPColumn("0100", "  Of which: off balance sheet", "Post-CRM"),
+    COREPColumn("0100", _LBL_COL_OF_WHICH_OFF_BS, "Post-CRM"),
     COREPColumn(
-        "0101", "Volatility adjustment to the exposure (Slotting)", "Fin. Collateral Comprehensive"
+        "0101", "Volatility adjustment to the exposure (Slotting)", _GRP_FIN_COLL_COMP
     ),
     COREPColumn(
         "0102",
         "(-) Financial collateral adjusted value Cvam (Slotting)",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn(
         "0103",
         "(-) Of which: volatility and maturity adj (Slotting)",
-        "Fin. Collateral Comprehensive",
+        _GRP_FIN_COLL_COMP,
     ),
     COREPColumn(
-        "0104", "Exposure after all CRM pre CCFs (Slotting)", "Fin. Collateral Comprehensive"
+        "0104", "Exposure after all CRM pre CCFs (Slotting)", _GRP_FIN_COLL_COMP
     ),
-    COREPColumn("0110", "Exposure value", "Exposure Value"),
-    COREPColumn("0120", "  Of which: off balance sheet", "Exposure Value"),
-    COREPColumn("0125", "  Of which: defaulted", "Exposure Value"),  # New in B3.1
-    COREPColumn("0130", "  Of which: arising from CCR", "Exposure Value"),
-    COREPColumn("0140", "  Of which: large financial sector entities", "Exposure Value"),
-    COREPColumn("0150", "Guarantees", "CRM in LGD: Unfunded"),
-    COREPColumn("0160", "Credit derivatives", "CRM in LGD: Unfunded"),
-    COREPColumn("0170", "Other funded credit protection", "CRM in LGD: Funded"),
-    COREPColumn("0171", "  Cash on deposit", "CRM in LGD: Funded"),
-    COREPColumn("0172", "  Life insurance policies", "CRM in LGD: Funded"),
-    COREPColumn("0173", "  Instruments held by a third party", "CRM in LGD: Funded"),
-    COREPColumn("0180", "Eligible financial collateral", "CRM in LGD: Funded"),
-    COREPColumn("0190", "  Other eligible collateral: Real estate", "CRM in LGD: Funded"),
-    COREPColumn("0200", "  Other eligible collateral: Other physical", "CRM in LGD: Funded"),
-    COREPColumn("0210", "  Other eligible collateral: Receivables", "CRM in LGD: Funded"),
+    COREPColumn("0110", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0120", _LBL_COL_OF_WHICH_OFF_BS, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0125", "  Of which: defaulted", _GRP_EXPOSURE_VALUE),  # New in B3.1
+    COREPColumn("0130", "  Of which: arising from CCR", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0140", _LBL_COL_OF_WHICH_LARGE_FSE, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0150", "Guarantees", _GRP_CRM_LGD_UNFUNDED),
+    COREPColumn("0160", "Credit derivatives", _GRP_CRM_LGD_UNFUNDED),
+    COREPColumn("0170", "Other funded credit protection", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0171", "  Cash on deposit", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0172", "  Life insurance policies", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0173", "  Instruments held by a third party", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0180", "Eligible financial collateral", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0190", "  Other eligible collateral: Real estate", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0200", "  Other eligible collateral: Other physical", _GRP_CRM_LGD_FUNDED),
+    COREPColumn("0210", "  Other eligible collateral: Receivables", _GRP_CRM_LGD_FUNDED),
     # 0220 removed: double default treatment removed in Basel 3.1
-    COREPColumn("0230", "Exposure-weighted average LGD (%)", "Parameters"),
+    COREPColumn("0230", _LBL_COL_EW_AVG_LGD, "Parameters"),
     COREPColumn("0240", "  For large financial sector entities", "Parameters"),
     COREPColumn("0250", "Exposure-weighted average maturity (days)", "Parameters"),
     COREPColumn("0251", "RWEA pre adjustments", "RWEA"),  # New in B3.1
@@ -537,16 +615,16 @@ B31_C08_COLUMNS: list[COREPColumn] = [
     # 0255-0257 removed: supporting factors don't exist under Basel 3.1
     COREPColumn("0260", "RWEA after adjustments", "RWEA"),  # Changed name
     COREPColumn("0265", "  Of which: defaulted", "RWEA"),  # New in B3.1
-    COREPColumn("0270", "  Of which: large financial sector entities", "RWEA"),
-    COREPColumn("0275", "Non-modelled approaches: exposure value", "Output Floor"),  # New
-    COREPColumn("0276", "Non-modelled approaches: RWEA", "Output Floor"),  # New
+    COREPColumn("0270", _LBL_COL_OF_WHICH_LARGE_FSE, "RWEA"),
+    COREPColumn("0275", "Non-modelled approaches: exposure value", _GRP_OUTPUT_FLOOR),  # New
+    COREPColumn("0276", "Non-modelled approaches: RWEA", _GRP_OUTPUT_FLOOR),  # New
     COREPColumn("0280", "Expected loss amount (pre post-model adj)", "Memorandum"),  # Changed
     COREPColumn(
         "0281", "Adjustment to EL due to post-model adjustments", "Memorandum"
     ),  # New in B3.1
     COREPColumn("0282", "Expected loss amount after post-model adjustments", "Memorandum"),  # New
-    COREPColumn("0290", "(-) Value adjustments and provisions", "Memorandum"),
-    COREPColumn("0300", "Number of obligors", "Memorandum"),
+    COREPColumn("0290", _LBL_COL_VALUE_ADJUSTMENTS, "Memorandum"),
+    COREPColumn("0300", _LBL_COL_NUM_OBLIGORS, "Memorandum"),
     COREPColumn("0310", "Pre-credit derivatives RWEA", "Memorandum"),
 ]
 
@@ -559,19 +637,19 @@ CRR_IRB_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Total and Supporting Factors",
         [
-            COREPRow("0010", "TOTAL EXPOSURES"),
+            COREPRow("0010", _LBL_ROW_TOTAL_EXPOSURES_UC),
             COREPRow("0015", "of which: Exposures subject to SME-supporting factor"),
             COREPRow("0016", "of which: Exposures subject to infrastructure supporting factor"),
         ],
     ),
     RowSection(
-        "Breakdown by Exposure Types",
+        _SEC_BREAKDOWN_EXPOSURE_TYPES,
         [
             COREPRow("0020", "On balance sheet items subject to credit risk"),
             COREPRow("0030", "Off balance sheet items subject to credit risk"),
-            COREPRow("0040", "SFT netting sets"),
-            COREPRow("0050", "Derivatives & Long Settlement Transactions netting sets"),
-            COREPRow("0060", "From Contractual Cross Product netting sets"),
+            COREPRow("0040", _LBL_ROW_SFT_NETTING),
+            COREPRow("0050", _LBL_ROW_DERIV_LST_NETTING),
+            COREPRow("0060", _LBL_ROW_CCP_NETTING),
         ],
     ),
     RowSection(
@@ -590,13 +668,13 @@ B31_IRB_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Total",
         [
-            COREPRow("0010", "TOTAL EXPOSURES"),
+            COREPRow("0010", _LBL_ROW_TOTAL_EXPOSURES_UC),
             COREPRow("0017", "of which: revolving loan commitments"),  # New in B3.1
             # 0015, 0016 removed: supporting factors don't exist under Basel 3.1
         ],
     ),
     RowSection(
-        "Breakdown by Exposure Types",
+        _SEC_BREAKDOWN_EXPOSURE_TYPES,
         [
             COREPRow("0020", "On balance sheet items subject to credit risk"),
             COREPRow("0030", "Off balance sheet items subject to credit risk"),
@@ -605,9 +683,9 @@ B31_IRB_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0033", "  of which: off-BS by CCF 40%"),
             COREPRow("0034", "  of which: off-BS by CCF 50%"),
             COREPRow("0035", "  of which: off-BS by CCF 100%"),
-            COREPRow("0040", "SFT netting sets"),
-            COREPRow("0050", "Derivatives & Long Settlement Transactions netting sets"),
-            COREPRow("0060", "From Contractual Cross Product netting sets"),
+            COREPRow("0040", _LBL_ROW_SFT_NETTING),
+            COREPRow("0050", _LBL_ROW_DERIV_LST_NETTING),
+            COREPRow("0060", _LBL_ROW_CCP_NETTING),
         ],
     ),
     RowSection(
@@ -649,14 +727,14 @@ PD_BANDS: list[tuple[float, float, str]] = [
 # C 08.02 uses the same columns as C 08.01 with addition of 0005 (obligor grade).
 # The column set depends on the framework.
 CRR_C08_02_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0005", "Obligor grade row identifier", "Internal Rating"),
+    COREPColumn("0005", "Obligor grade row identifier", _GRP_INTERNAL_RATING),
     *CRR_C08_COLUMNS,
 ]
 
 B31_C08_02_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0005", "Obligor grade row identifier", "Internal Rating"),
+    COREPColumn("0005", "Obligor grade row identifier", _GRP_INTERNAL_RATING),
     # PD column 0010 is retained in OF 08.02 (removed from OF 08.01 totals only)
-    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", "Internal Rating"),
+    COREPColumn("0010", "PD assigned to obligor grade or pool (%)", _GRP_INTERNAL_RATING),
     *B31_C08_COLUMNS,
 ]
 
@@ -707,11 +785,11 @@ CRR_C08_03_COLUMNS: list[COREPColumn] = [
     COREPColumn("0030", "Average CCF (%)", "CCF"),
     COREPColumn("0040", "Exposure value (post CCF and post CRM)", "EAD"),
     COREPColumn("0050", "Exposure-weighted average PD (%)", "PD"),
-    COREPColumn("0060", "Number of obligors", "Obligors"),
-    COREPColumn("0070", "Exposure-weighted average LGD (%)", "LGD"),
-    COREPColumn("0080", "Exposure-weighted average maturity (years)", "Maturity"),
-    COREPColumn("0090", "Risk weighted exposure amount (RWEA)", "RWEA"),
-    COREPColumn("0100", "Expected loss amount", "EL"),
+    COREPColumn("0060", _LBL_COL_NUM_OBLIGORS, "Obligors"),
+    COREPColumn("0070", _LBL_COL_EW_AVG_LGD, "LGD"),
+    COREPColumn("0080", _LBL_COL_EW_AVG_MATURITY_YRS, "Maturity"),
+    COREPColumn("0090", _LBL_COL_RWEA_SPACE_SUFFIX, "RWEA"),
+    COREPColumn("0100", _LBL_COL_EXPECTED_LOSS, "EL"),
     COREPColumn("0110", "Value adjustments and provisions", "Provisions"),
 ]
 
@@ -728,11 +806,11 @@ B31_C08_03_COLUMNS: list[COREPColumn] = [
         "Exposure-weighted average PD (%) (post input floor)",
         "PD",
     ),
-    COREPColumn("0060", "Number of obligors", "Obligors"),
-    COREPColumn("0070", "Exposure-weighted average LGD (%)", "LGD"),
-    COREPColumn("0080", "Exposure-weighted average maturity (years)", "Maturity"),
-    COREPColumn("0090", "Risk weighted exposure amount (RWEA)", "RWEA"),
-    COREPColumn("0100", "Expected loss amount", "EL"),
+    COREPColumn("0060", _LBL_COL_NUM_OBLIGORS, "Obligors"),
+    COREPColumn("0070", _LBL_COL_EW_AVG_LGD, "LGD"),
+    COREPColumn("0080", _LBL_COL_EW_AVG_MATURITY_YRS, "Maturity"),
+    COREPColumn("0090", _LBL_COL_RWEA_SPACE_SUFFIX, "RWEA"),
+    COREPColumn("0100", _LBL_COL_EXPECTED_LOSS, "EL"),
     COREPColumn("0110", "Value adjustments and provisions", "Provisions"),
 ]
 
@@ -826,7 +904,7 @@ CRR_C08_04_COLUMNS: list[COREPColumn] = [
 ]
 
 B31_C08_04_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Risk-weighted exposure amount", "RWEA"),
+    COREPColumn("0010", _LBL_COL_RWEA_HYPHEN, "RWEA"),
 ]
 
 C08_04_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_04_COLUMNS]
@@ -866,20 +944,20 @@ def get_c08_04_columns(framework: str = "CRR") -> list[COREPColumn]:
 OF_02_01_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", "Total risk exposure amount (modelled approaches)", "Comparison"),
     COREPColumn("0020", "Total risk exposure amount (standardised approaches)", "Comparison"),
-    COREPColumn("0030", "U-TREA", "Output Floor"),
-    COREPColumn("0040", "S-TREA", "Output Floor"),
+    COREPColumn("0030", "U-TREA", _GRP_OUTPUT_FLOOR),
+    COREPColumn("0040", "S-TREA", _GRP_OUTPUT_FLOOR),
 ]
 
 OF_02_01_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Risk Type Breakdown",
         [
-            COREPRow("0010", "Credit risk (excluding CCR)"),
+            COREPRow("0010", _LBL_ROW_CREDIT_RISK_EXCL_CCR),
             COREPRow("0020", "Counterparty credit risk"),
             COREPRow("0030", "Credit valuation adjustment risk"),
             COREPRow("0040", "Securitisation positions in the non-trading book"),
             COREPRow("0050", "Market risk"),
-            COREPRow("0060", "Operational risk"),
+            COREPRow("0060", _LBL_ROW_OP_RISK),
             COREPRow("0070", "Other"),
             COREPRow("0080", "Total"),
         ],
@@ -910,32 +988,32 @@ OF_02_01_COLUMN_REFS: list[str] = [c.ref for c in OF_02_01_COLUMNS]
 # - PRA PS1/26 Annex II (OF 08.06 reporting instructions)
 
 CRR_C08_06_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Exposure after CRM substitution effects pre CCFs", "Post-CRM"),
     COREPColumn("0030", "Of which: off-balance sheet items (original)", "Exposure"),
-    COREPColumn("0040", "Exposure value", "Exposure Value"),
-    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", "Exposure Value"),
-    COREPColumn("0060", "Of which: arising from counterparty credit risk", "Exposure Value"),
+    COREPColumn("0040", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0060", "Of which: arising from counterparty credit risk", _GRP_EXPOSURE_VALUE),
     COREPColumn("0070", "Risk weight", "Parameters"),
     COREPColumn("0080", "Risk-weighted exposure amount after supporting factors", "RWEA"),
-    COREPColumn("0090", "Expected loss amount", "Memorandum"),
-    COREPColumn("0100", "(-) Value adjustments and provisions", "Memorandum"),
+    COREPColumn("0090", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
+    COREPColumn("0100", _LBL_COL_VALUE_ADJUSTMENTS, "Memorandum"),
 ]
 
 B31_C08_06_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Exposure after CRM substitution effects pre CCFs", "Post-CRM"),
     COREPColumn("0030", "Of which: off-balance sheet items (original)", "Exposure"),
     COREPColumn(
-        "0031", "(-) Change in exposure due to FCCM", "Fin. Collateral Comprehensive"
+        "0031", "(-) Change in exposure due to FCCM", _GRP_FIN_COLL_COMP
     ),  # New in B3.1
-    COREPColumn("0040", "Exposure value", "Exposure Value"),
-    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", "Exposure Value"),
-    COREPColumn("0060", "Of which: arising from counterparty credit risk", "Exposure Value"),
+    COREPColumn("0040", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", _GRP_EXPOSURE_VALUE),
+    COREPColumn("0060", "Of which: arising from counterparty credit risk", _GRP_EXPOSURE_VALUE),
     COREPColumn("0070", "Risk weight", "Parameters"),
-    COREPColumn("0080", "Risk-weighted exposure amount", "RWEA"),  # No "after supporting factors"
-    COREPColumn("0090", "Expected loss amount", "Memorandum"),
-    COREPColumn("0100", "(-) Value adjustments and provisions", "Memorandum"),
+    COREPColumn("0080", _LBL_COL_RWEA_HYPHEN, "RWEA"),  # No "after supporting factors"
+    COREPColumn("0090", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
+    COREPColumn("0100", _LBL_COL_VALUE_ADJUSTMENTS, "Memorandum"),
 ]
 
 C08_06_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_06_COLUMNS]
@@ -946,16 +1024,16 @@ C08_06_COLUMN_REFS: list[str] = [c.ref for c in CRR_C08_06_COLUMNS]
 
 # CRR: 12 rows (5 categories × 2 maturity bands + 2 totals)
 CRR_C08_06_ROWS: list[tuple[str, str, bool | None, str]] = [
-    ("0010", "Category 1 (Strong)", True, "50%"),
-    ("0020", "Category 1 (Strong)", False, "70%"),
-    ("0030", "Category 2 (Good)", True, "70%"),
-    ("0040", "Category 2 (Good)", False, "90%"),
-    ("0050", "Category 3 (Satisfactory)", True, "115%"),
-    ("0060", "Category 3 (Satisfactory)", False, "115%"),
-    ("0070", "Category 4 (Weak)", True, "250%"),
-    ("0080", "Category 4 (Weak)", False, "250%"),
-    ("0090", "Category 5 (Default)", True, "0%"),
-    ("0100", "Category 5 (Default)", False, "0%"),
+    ("0010", _LBL_SLOT_CAT1, True, "50%"),
+    ("0020", _LBL_SLOT_CAT1, False, "70%"),
+    ("0030", _LBL_SLOT_CAT2, True, "70%"),
+    ("0040", _LBL_SLOT_CAT2, False, "90%"),
+    ("0050", _LBL_SLOT_CAT3, True, "115%"),
+    ("0060", _LBL_SLOT_CAT3, False, "115%"),
+    ("0070", _LBL_SLOT_CAT4, True, "250%"),
+    ("0080", _LBL_SLOT_CAT4, False, "250%"),
+    ("0090", _LBL_SLOT_CAT5, True, "0%"),
+    ("0100", _LBL_SLOT_CAT5, False, "0%"),
     ("0110", "Total", True, ""),
     ("0120", "Total", False, ""),
 ]
@@ -964,31 +1042,31 @@ CRR_C08_06_ROWS: list[tuple[str, str, bool | None, str]] = [
 # Sub-rows 0015/0025 are subsets of parent rows 0020/0040 respectively (not
 # mutually exclusive — sub-row exposures also appear in the parent row).
 B31_C08_06_ROWS: list[tuple[str, str, bool | None, str]] = [
-    ("0010", "Category 1 (Strong)", True, "50%"),
+    ("0010", _LBL_SLOT_CAT1, True, "50%"),
     ("0015", "Category 1 (Strong) — substantially stronger", False, "50%"),
-    ("0020", "Category 1 (Strong)", False, "70%"),
-    ("0030", "Category 2 (Good)", True, "70%"),
+    ("0020", _LBL_SLOT_CAT1, False, "70%"),
+    ("0030", _LBL_SLOT_CAT2, True, "70%"),
     ("0025", "Category 2 (Good) — substantially stronger", False, "70%"),
-    ("0040", "Category 2 (Good)", False, "90%"),
-    ("0050", "Category 3 (Satisfactory)", True, "115%"),
-    ("0060", "Category 3 (Satisfactory)", False, "115%"),
-    ("0070", "Category 4 (Weak)", True, "250%"),
-    ("0080", "Category 4 (Weak)", False, "250%"),
-    ("0090", "Category 5 (Default)", True, "0%"),
-    ("0100", "Category 5 (Default)", False, "0%"),
+    ("0040", _LBL_SLOT_CAT2, False, "90%"),
+    ("0050", _LBL_SLOT_CAT3, True, "115%"),
+    ("0060", _LBL_SLOT_CAT3, False, "115%"),
+    ("0070", _LBL_SLOT_CAT4, True, "250%"),
+    ("0080", _LBL_SLOT_CAT4, False, "250%"),
+    ("0090", _LBL_SLOT_CAT5, True, "0%"),
+    ("0100", _LBL_SLOT_CAT5, False, "0%"),
     ("0110", "Total", True, ""),
     ("0120", "Total", False, ""),
 ]
 
 # Category name → slotting_category pipeline value mapping
 C08_06_CATEGORY_MAP: dict[str, str] = {
-    "Category 1 (Strong)": "strong",
+    _LBL_SLOT_CAT1: "strong",
     "Category 1 (Strong) — substantially stronger": "strong",
-    "Category 2 (Good)": "good",
+    _LBL_SLOT_CAT2: "good",
     "Category 2 (Good) — substantially stronger": "good",
-    "Category 3 (Satisfactory)": "satisfactory",
-    "Category 4 (Weak)": "weak",
-    "Category 5 (Default)": "default",
+    _LBL_SLOT_CAT3: "satisfactory",
+    _LBL_SLOT_CAT4: "weak",
+    _LBL_SLOT_CAT5: "default",
 }
 
 # SL type filter values — maps sl_type pipeline values to display names.
@@ -1044,38 +1122,38 @@ def get_c08_06_sl_types(framework: str = "CRR") -> dict[str, str]:
 CRR_C08_07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", "Total exposure value subject to IRB", "Exposure"),
     COREPColumn("0020", "Total exposure value subject to SA and IRB", "Exposure"),
-    COREPColumn("0030", "% subject to permanent partial use of SA", "Coverage %"),
-    COREPColumn("0040", "% subject to a roll-out plan", "Coverage %"),
-    COREPColumn("0050", "% subject to IRB approach", "Coverage %"),
+    COREPColumn("0030", "% subject to permanent partial use of SA", _GRP_COVERAGE_PCT),
+    COREPColumn("0040", "% subject to a roll-out plan", _GRP_COVERAGE_PCT),
+    COREPColumn("0050", "% subject to IRB approach", _GRP_COVERAGE_PCT),
 ]
 
 B31_C08_07_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", "Total exposure value subject to IRB (Art 166A-166D)", "Exposure"),
     COREPColumn("0020", "Total exposure value subject to SA and IRB", "Exposure"),
-    COREPColumn("0030", "% subject to permanent partial use of SA", "Coverage %"),
-    COREPColumn("0040", "% subject to a roll-out plan", "Coverage %"),
-    COREPColumn("0050", "% subject to IRB approach", "Coverage %"),
+    COREPColumn("0030", "% subject to permanent partial use of SA", _GRP_COVERAGE_PCT),
+    COREPColumn("0040", "% subject to a roll-out plan", _GRP_COVERAGE_PCT),
+    COREPColumn("0050", "% subject to IRB approach", _GRP_COVERAGE_PCT),
     COREPColumn("0060", "Total RWEA for exposures subject to SA or IRB", "RWEA"),
     COREPColumn(
-        "0070", "RWEA for SA: connected counterparties (Art 150(1)(e))", "RWEA: SA Breakdown"
+        "0070", "RWEA for SA: connected counterparties (Art 150(1)(e))", _GRP_RWEA_SA_BREAKDOWN
     ),
     COREPColumn(
         "0080",
         "RWEA for SA: roll-out class — SA does not result in lower capital",
-        "RWEA: SA Breakdown",
+        _GRP_RWEA_SA_BREAKDOWN,
     ),
     COREPColumn(
-        "0090", "RWEA for SA: roll-out class — cannot reasonably model", "RWEA: SA Breakdown"
+        "0090", "RWEA for SA: roll-out class — cannot reasonably model", _GRP_RWEA_SA_BREAKDOWN
     ),
-    COREPColumn("0100", "RWEA for SA: roll-out class — immaterial", "RWEA: SA Breakdown"),
+    COREPColumn("0100", "RWEA for SA: roll-out class — immaterial", _GRP_RWEA_SA_BREAKDOWN),
     COREPColumn(
-        "0110", "RWEA for SA: exposure type — cannot reasonably model", "RWEA: SA Breakdown"
+        "0110", "RWEA for SA: exposure type — cannot reasonably model", _GRP_RWEA_SA_BREAKDOWN
     ),
     COREPColumn(
-        "0120", "RWEA for SA: exposure type — immaterial in aggregate", "RWEA: SA Breakdown"
+        "0120", "RWEA for SA: exposure type — immaterial in aggregate", _GRP_RWEA_SA_BREAKDOWN
     ),
-    COREPColumn("0130", "RWEA for SA: due to roll-out plan", "RWEA: SA Breakdown"),
-    COREPColumn("0140", "RWEA for SA: other", "RWEA: SA Breakdown"),
+    COREPColumn("0130", "RWEA for SA: due to roll-out plan", _GRP_RWEA_SA_BREAKDOWN),
+    COREPColumn("0140", "RWEA for SA: other", _GRP_RWEA_SA_BREAKDOWN),
     COREPColumn("0150", "RWEA for exposures subject to IRB", "RWEA"),
     COREPColumn("0160", "Materiality of roll-out class (Art 150(1A)(c))", "Materiality"),
     COREPColumn("0170", "% subject to permanent partial use (type)", "Materiality"),
@@ -1090,7 +1168,7 @@ B31_C08_07_COLUMN_REFS: list[str] = [c.ref for c in B31_C08_07_COLUMNS]
 # CRR C 08.07 rows: Art. 147(2) exposure classes (17 rows)
 # Tuples: (row_ref, display_name, exposure_class_value or None for sub-rows)
 CRR_C08_07_ROWS: list[tuple[str, str, str | None]] = [
-    ("0010", "Central governments or central banks", "central_govt_central_bank"),
+    ("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
     ("0020", "Of which: regional governments or local authorities", "rgla"),
     ("0030", "Of which: public sector entities", "pse"),
     ("0040", "Institutions", "institution"),
@@ -1161,29 +1239,29 @@ def get_c08_07_rows(framework: str = "CRR") -> list[tuple[str, str, str | None]]
 
 # Old 9-column C 07.00 definition — used by generator until Task 1B rewrites it.
 C07_COLUMNS: list[COREPColumn] = [
-    COREPColumn("010", "Original exposure pre conversion factors"),
-    COREPColumn("020", "(-) Value adjustments and provisions"),
+    COREPColumn("010", _LBL_COL_ORIG_EXPOSURE),
+    COREPColumn("020", _LBL_COL_VALUE_ADJUSTMENTS),
     COREPColumn("030", "Exposure net of value adjustments and provisions"),
     COREPColumn("040", "(-) Funded credit protection (collateral)"),
     COREPColumn("050", "(-) Unfunded credit protection (guarantees)"),
     COREPColumn("060", "Net exposure after CRM substitution effects"),
     COREPColumn("070", "Exposure value (E*) post CCF"),
-    COREPColumn("080", "Risk weighted exposure amount (RWEA)"),
-    COREPColumn("090", "Of which: with ECAI credit assessment"),
+    COREPColumn("080", _LBL_COL_RWEA_SPACE_SUFFIX),
+    COREPColumn("090", _LBL_COL_OF_WHICH_ECAI),
 ]
 
 # Old 11-column C 08.01 definition — used by generator until Task 1B rewrites it.
 C08_01_COLUMNS: list[COREPColumn] = [
     COREPColumn("010", "Weighted average PD (%)"),
-    COREPColumn("020", "Original exposure pre conversion factors"),
-    COREPColumn("030", "(-) Value adjustments and provisions"),
+    COREPColumn("020", _LBL_COL_ORIG_EXPOSURE),
+    COREPColumn("030", _LBL_COL_VALUE_ADJUSTMENTS),
     COREPColumn("040", "Exposure value (EAD)"),
-    COREPColumn("050", "Exposure-weighted average LGD (%)"),
-    COREPColumn("060", "Exposure-weighted average maturity (years)"),
-    COREPColumn("070", "Risk weighted exposure amount (RWEA)"),
-    COREPColumn("080", "Expected loss amount"),
+    COREPColumn("050", _LBL_COL_EW_AVG_LGD),
+    COREPColumn("060", _LBL_COL_EW_AVG_MATURITY_YRS),
+    COREPColumn("070", _LBL_COL_RWEA_SPACE_SUFFIX),
+    COREPColumn("080", _LBL_COL_EXPECTED_LOSS),
     COREPColumn("090", "(-) Provisions allocated"),
-    COREPColumn("100", "Number of obligors"),
+    COREPColumn("100", _LBL_COL_NUM_OBLIGORS),
     COREPColumn("110", "EL shortfall (-)  / excess (+)"),
 ]
 
@@ -1220,7 +1298,7 @@ CRR_C02_00_COLUMNS: list[COREPColumn] = [
 B31_C02_00_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", "All approaches (U-TREA components)", "Own Funds Requirements"),
     COREPColumn("0020", "Standardised approaches only (S-TREA components)", "Floor Comparison"),
-    COREPColumn("0030", "Output floor (after floor multiplier and OF-ADJ)", "Output Floor"),
+    COREPColumn("0030", "Output floor (after floor multiplier and OF-ADJ)", _GRP_OUTPUT_FLOOR),
 ]
 
 # --- CRR C 02.00 Row Sections ---
@@ -1235,24 +1313,24 @@ CRR_C02_00_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0010", "TOTAL RISK EXPOSURE AMOUNT"),
             COREPRow("0040", "TOTAL OWN FUNDS REQUIREMENTS"),
             # Credit risk
-            COREPRow("0050", "Credit risk (excluding CCR)"),
+            COREPRow("0050", _LBL_ROW_CREDIT_RISK_EXCL_CCR),
             COREPRow("0060", "Of which: Standardised Approach (SA)"),
-            COREPRow("0070", "Central governments and central banks"),
+            COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
             COREPRow("0080", "Regional governments and local authorities"),
-            COREPRow("0090", "Public sector entities"),
-            COREPRow("0100", "Multilateral development banks"),
-            COREPRow("0110", "International organisations"),
+            COREPRow("0090", _LBL_SA_PSE),
+            COREPRow("0100", _LBL_SA_MDB),
+            COREPRow("0110", _LBL_SA_INTL_ORG),
             COREPRow("0120", "Institutions"),
             COREPRow("0130", "Corporates"),
             COREPRow("0140", "Retail"),
-            COREPRow("0150", "Secured by mortgages on immovable property"),
-            COREPRow("0160", "Exposures in default"),
+            COREPRow("0150", _LBL_SA_MORTGAGES),
+            COREPRow("0160", _LBL_SA_DEFAULTED),
             COREPRow("0170", "Higher-risk items"),
-            COREPRow("0180", "Covered bonds"),
+            COREPRow("0180", _LBL_SA_COVERED_BOND),
             COREPRow("0190", "Short-term credit assessment"),
-            COREPRow("0200", "Collective investment undertakings (CIU)"),
+            COREPRow("0200", _LBL_ROW_CIU),
             COREPRow("0210", "Equity"),
-            COREPRow("0211", "Other items"),
+            COREPRow("0211", _LBL_SA_OTHER),
         ],
     ),
     RowSection(
@@ -1281,7 +1359,7 @@ CRR_C02_00_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0440", "Securitisation positions in non-trading book"),
             COREPRow("0460", "Position, foreign exchange and commodities risk"),
             COREPRow("0590", "Credit valuation adjustment (CVA)"),
-            COREPRow("0640", "Operational risk"),
+            COREPRow("0640", _LBL_ROW_OP_RISK),
             COREPRow("0680", "Additional risk exposure: fixed overheads"),
         ],
     ),
@@ -1307,25 +1385,25 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
     RowSection(
         "Credit Risk — SA",
         [
-            COREPRow("0050", "Credit risk (excluding CCR)"),
+            COREPRow("0050", _LBL_ROW_CREDIT_RISK_EXCL_CCR),
             COREPRow("0060", "Of which: Standardised Approach (SA)"),
-            COREPRow("0070", "Central governments and central banks"),
+            COREPRow("0070", _LBL_IRB_CENTRAL_GOVT),
             COREPRow("0080", "Regional governments and local authorities"),
-            COREPRow("0090", "Public sector entities"),
-            COREPRow("0100", "Multilateral development banks"),
-            COREPRow("0110", "International organisations"),
+            COREPRow("0090", _LBL_SA_PSE),
+            COREPRow("0100", _LBL_SA_MDB),
+            COREPRow("0110", _LBL_SA_INTL_ORG),
             COREPRow("0120", "Institutions"),
             COREPRow("0130", "Corporates"),
             COREPRow("0131", "Of which: specialised lending"),
             COREPRow("0140", "Retail"),
-            COREPRow("0150", "Secured by mortgages on immovable property"),
-            COREPRow("0160", "Exposures in default"),
+            COREPRow("0150", _LBL_SA_MORTGAGES),
+            COREPRow("0160", _LBL_SA_DEFAULTED),
             COREPRow("0170", "Higher-risk items"),
-            COREPRow("0180", "Covered bonds"),
+            COREPRow("0180", _LBL_SA_COVERED_BOND),
             COREPRow("0190", "Short-term credit assessment"),
-            COREPRow("0200", "Collective investment undertakings (CIU)"),
+            COREPRow("0200", _LBL_ROW_CIU),
             COREPRow("0210", "Equity"),
-            COREPRow("0211", "Other items"),
+            COREPRow("0211", _LBL_SA_OTHER),
         ],
     ),
     RowSection(
@@ -1382,7 +1460,7 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0440", "Securitisation positions in non-trading book"),
             COREPRow("0460", "Position, foreign exchange and commodities risk"),
             COREPRow("0590", "Credit valuation adjustment (CVA)"),
-            COREPRow("0640", "Operational risk"),
+            COREPRow("0640", _LBL_ROW_OP_RISK),
             COREPRow("0680", "Additional risk exposure: fixed overheads"),
         ],
     ),
@@ -1493,41 +1571,41 @@ C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset(
 # - CRR Art. 112 (SA exposure classes)
 
 CRR_C09_01_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Defaulted exposures", "Exposure"),
-    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
-    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
-    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0040", _LBL_COL_OBSERVED_DEFAULTS, "Defaults"),
+    COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
+    COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
     COREPColumn(
         "0061", "Additional value adjustments and other own funds reductions", "Provisions"
     ),
     COREPColumn(
-        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
     ),
-    COREPColumn("0075", "Exposure value", "Exposure Value"),
-    COREPColumn("0080", "RWEA pre supporting factors", "RWEA"),
-    COREPColumn("0081", "(-) SME supporting factor adjustment", "RWEA"),
-    COREPColumn("0082", "(-) Infrastructure supporting factor adjustment", "RWEA"),
-    COREPColumn("0090", "RWEA after supporting factors", "RWEA"),
+    COREPColumn("0075", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0080", _LBL_COL_RWEA_PRE_SF, "RWEA"),
+    COREPColumn("0081", _LBL_COL_SME_SF_ADJ, "RWEA"),
+    COREPColumn("0082", _LBL_COL_INFRA_SF_ADJ, "RWEA"),
+    COREPColumn("0090", _LBL_COL_RWEA_POST_SF, "RWEA"),
 ]
 
 # OF 09.01 (Basel 3.1): removes supporting factor columns 0080-0082
 B31_C09_01_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Defaulted exposures", "Exposure"),
-    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
-    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
-    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0040", _LBL_COL_OBSERVED_DEFAULTS, "Defaults"),
+    COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
+    COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
     COREPColumn(
         "0061", "Additional value adjustments and other own funds reductions", "Provisions"
     ),
     COREPColumn(
-        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
     ),
-    COREPColumn("0075", "Exposure value", "Exposure Value"),
-    COREPColumn("0090", "Risk-weighted exposure amount", "RWEA"),
+    COREPColumn("0075", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0090", _LBL_COL_RWEA_HYPHEN, "RWEA"),
 ]
 
 C09_01_COLUMN_REFS: list[str] = [c.ref for c in CRR_C09_01_COLUMNS]
@@ -1535,68 +1613,68 @@ B31_C09_01_COLUMN_REFS: list[str] = [c.ref for c in B31_C09_01_COLUMNS]
 
 # CRR C 09.01 rows — SA exposure classes for geographical breakdown
 CRR_C09_01_ROWS: list[COREPRow] = [
-    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
-    COREPRow("0020", "Regional governments or local authorities", "rgla"),
-    COREPRow("0030", "Public sector entities", "pse"),
-    COREPRow("0040", "Multilateral development banks", "mdb"),
-    COREPRow("0050", "International organisations", "international_organisation"),
+    COREPRow("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
+    COREPRow("0020", _LBL_SA_RGLA, "rgla"),
+    COREPRow("0030", _LBL_SA_PSE, "pse"),
+    COREPRow("0040", _LBL_SA_MDB, "mdb"),
+    COREPRow("0050", _LBL_SA_INTL_ORG, "international_organisation"),
     COREPRow("0060", "Institutions", "institution"),
     COREPRow("0070", "Corporates", "corporate"),
-    COREPRow("0075", "  of which: SME", "corporate_sme"),
+    COREPRow("0075", _LBL_ROW_OF_WHICH_SME_LC, "corporate_sme"),
     COREPRow("0080", "Retail", "retail"),
-    COREPRow("0085", "  of which: SME", "retail_sme"),
-    COREPRow("0090", "Secured by mortgages on immovable property", "retail_mortgage"),
-    COREPRow("0095", "  of which: SME", "mortgage_sme"),
-    COREPRow("0100", "Exposures in default", "defaulted"),
+    COREPRow("0085", _LBL_ROW_OF_WHICH_SME_LC, "retail_sme"),
+    COREPRow("0090", _LBL_SA_MORTGAGES, "retail_mortgage"),
+    COREPRow("0095", _LBL_ROW_OF_WHICH_SME_LC, "mortgage_sme"),
+    COREPRow("0100", _LBL_SA_DEFAULTED, "defaulted"),
     COREPRow("0110", "Items associated with particularly high risk", "high_risk"),
-    COREPRow("0120", "Covered bonds", "covered_bond"),
+    COREPRow("0120", _LBL_SA_COVERED_BOND, "covered_bond"),
     COREPRow(
         "0130",
         "Claims on institutions and corporates with a short-term credit assessment",
         "short_term",
     ),
-    COREPRow("0140", "Collective investment undertakings (CIU)", "ciu"),
+    COREPRow("0140", _LBL_ROW_CIU, "ciu"),
     COREPRow("0141", "  Look-through approach", "ciu_look_through"),
     COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
     COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
     COREPRow("0150", "Equity exposures", "equity"),
     COREPRow("0160", "Other exposures", "other"),
-    COREPRow("0170", "Total exposures", None),
+    COREPRow("0170", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]
 
 # OF 09.01 (Basel 3.1) rows — adds SL sub-rows, restructures RE rows
 B31_C09_01_ROWS: list[COREPRow] = [
-    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
-    COREPRow("0020", "Regional governments or local authorities", "rgla"),
-    COREPRow("0030", "Public sector entities", "pse"),
-    COREPRow("0040", "Multilateral development banks", "mdb"),
-    COREPRow("0050", "International organisations", "international_organisation"),
+    COREPRow("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
+    COREPRow("0020", _LBL_SA_RGLA, "rgla"),
+    COREPRow("0030", _LBL_SA_PSE, "pse"),
+    COREPRow("0040", _LBL_SA_MDB, "mdb"),
+    COREPRow("0050", _LBL_SA_INTL_ORG, "international_organisation"),
     COREPRow("0060", "Institutions", "institution"),
     COREPRow("0070", "Corporates", "corporate"),
-    COREPRow("0075", "  of which: SME", "corporate_sme"),
+    COREPRow("0075", _LBL_ROW_OF_WHICH_SME_LC, "corporate_sme"),
     COREPRow("0071", "  of which: specialised lending - object finance", "sl_object_finance"),
     COREPRow(
         "0072", "  of which: specialised lending - commodities finance", "sl_commodities_finance"
     ),
     COREPRow("0073", "  of which: specialised lending - project finance", "sl_project_finance"),
     COREPRow("0080", "Retail", "retail"),
-    COREPRow("0085", "  of which: SME", "retail_sme"),
+    COREPRow("0085", _LBL_ROW_OF_WHICH_SME_LC, "retail_sme"),
     COREPRow("0090", "Real estate exposures", "real_estate"),
-    COREPRow("0095", "  of which: SME", "re_sme"),
+    COREPRow("0095", _LBL_ROW_OF_WHICH_SME_LC, "re_sme"),
     COREPRow("0091", "  of which: regulatory residential real estate", "re_residential"),
     COREPRow("0092", "  of which: regulatory commercial real estate", "re_commercial"),
     COREPRow("0093", "  of which: other real estate", "re_other"),
     COREPRow("0094", "  of which: land acquisition, development and construction", "re_adc"),
-    COREPRow("0100", "Exposures in default", "defaulted"),
+    COREPRow("0100", _LBL_SA_DEFAULTED, "defaulted"),
     COREPRow("0110", "Exposures associated with particularly high risk", "high_risk"),
     COREPRow("0120", "Eligible covered bonds", "covered_bond"),
-    COREPRow("0140", "Collective investment undertakings (CIU)", "ciu"),
+    COREPRow("0140", _LBL_ROW_CIU, "ciu"),
     COREPRow("0141", "  Look-through approach", "ciu_look_through"),
     COREPRow("0142", "  Mandate-based approach", "ciu_mandate"),
     COREPRow("0143", "  Fall-back approach", "ciu_fallback"),
     COREPRow("0150", "Subordinated debt, equity and other own funds instruments", "equity"),
-    COREPRow("0160", "Other items", "other"),
-    COREPRow("0170", "Total exposures", None),
+    COREPRow("0160", _LBL_SA_OTHER, "other"),
+    COREPRow("0170", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]
 
 
@@ -1612,46 +1690,46 @@ B31_C09_01_ROWS: list[COREPRow] = [
 # - CRR Art. 147 (IRB exposure classes)
 
 CRR_C09_02_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0030", "Of which: defaulted", "Exposure"),
-    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
-    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
-    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0040", _LBL_COL_OBSERVED_DEFAULTS, "Defaults"),
+    COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
+    COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
     COREPColumn(
-        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
     ),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
-    COREPColumn("0105", "Exposure value", "Exposure Value"),
-    COREPColumn("0110", "RWEA pre supporting factors", "RWEA"),
+    COREPColumn("0105", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0110", _LBL_COL_RWEA_PRE_SF, "RWEA"),
     COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
-    COREPColumn("0121", "(-) SME supporting factor adjustment", "RWEA"),
-    COREPColumn("0122", "(-) Infrastructure supporting factor adjustment", "RWEA"),
-    COREPColumn("0125", "RWEA after supporting factors", "RWEA"),
-    COREPColumn("0130", "Expected loss amount", "Memorandum"),
+    COREPColumn("0121", _LBL_COL_SME_SF_ADJ, "RWEA"),
+    COREPColumn("0122", _LBL_COL_INFRA_SF_ADJ, "RWEA"),
+    COREPColumn("0125", _LBL_COL_RWEA_POST_SF, "RWEA"),
+    COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 
 # OF 09.02 (Basel 3.1): adds 0107 (defaulted EV), removes 0110/0121/0122
 B31_C09_02_COLUMNS: list[COREPColumn] = [
-    COREPColumn("0010", "Original exposure pre conversion factors", "Exposure"),
+    COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0030", "Of which: defaulted", "Exposure"),
-    COREPColumn("0040", "Observed new defaults for the period", "Defaults"),
-    COREPColumn("0050", "General credit risk adjustments", "Provisions"),
-    COREPColumn("0055", "Specific credit risk adjustments", "Provisions"),
+    COREPColumn("0040", _LBL_COL_OBSERVED_DEFAULTS, "Defaults"),
+    COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
+    COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
     COREPColumn(
-        "0070", "Credit risk adjustments/write-offs for observed new defaults", "Provisions"
+        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
     ),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
-    COREPColumn("0105", "Exposure value", "Exposure Value"),
-    COREPColumn("0107", "Of which: defaulted (exposure value)", "Exposure Value"),
+    COREPColumn("0105", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
+    COREPColumn("0107", "Of which: defaulted (exposure value)", _GRP_EXPOSURE_VALUE),
     COREPColumn("0120", "Of which: defaulted (RWEA)", "RWEA"),
-    COREPColumn("0125", "Risk-weighted exposure amount", "RWEA"),
-    COREPColumn("0130", "Expected loss amount", "Memorandum"),
+    COREPColumn("0125", _LBL_COL_RWEA_HYPHEN, "RWEA"),
+    COREPColumn("0130", _LBL_COL_EXPECTED_LOSS, "Memorandum"),
 ]
 
 C09_02_COLUMN_REFS: list[str] = [c.ref for c in CRR_C09_02_COLUMNS]
@@ -1659,7 +1737,7 @@ B31_C09_02_COLUMN_REFS: list[str] = [c.ref for c in B31_C09_02_COLUMNS]
 
 # CRR C 09.02 rows — IRB exposure classes for geographical breakdown
 CRR_C09_02_ROWS: list[COREPRow] = [
-    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
     COREPRow("0020", "Institutions", "institution"),
     COREPRow("0030", "Corporates", "corporate"),
     COREPRow(
@@ -1676,13 +1754,13 @@ CRR_C09_02_ROWS: list[COREPRow] = [
     COREPRow("0120", "    SME", "retail_other_sme"),
     COREPRow("0130", "    Non-SME", "retail_other_non_sme"),
     COREPRow("0140", "Equity", "equity"),
-    COREPRow("0150", "Total exposures", None),
+    COREPRow("0150", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]
 
 # OF 09.02 (Basel 3.1) rows — adds corporate sub-rows, restructures retail RE,
 # removes equity
 B31_C09_02_ROWS: list[COREPRow] = [
-    COREPRow("0010", "Central governments or central banks", "central_govt_central_bank"),
+    COREPRow("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
     COREPRow("0020", "Institutions", "institution"),
     COREPRow("0030", "Corporates", "corporate"),
     COREPRow(
@@ -1716,7 +1794,7 @@ B31_C09_02_ROWS: list[COREPRow] = [
     COREPRow("0105", "  Purchased receivables (Art 157)", "retail_purchased_receivables"),
     COREPRow("0120", "  Other retail - SME", "retail_other_sme"),
     COREPRow("0130", "  Other retail - non-SME", "retail_other_non_sme"),
-    COREPRow("0150", "Total exposures", None),
+    COREPRow("0150", _LBL_ROW_TOTAL_EXPOSURES_MC, None),
 ]
 
 # Mapping from pipeline exposure_class values to C 09.01 row filter keys.

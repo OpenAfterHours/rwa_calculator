@@ -43,6 +43,9 @@ from pathlib import Path
 # The abstraction layer itself is allowed to use raw collect patterns
 COLLECT_ALLOWLIST = {"materialise.py"}
 
+_PATH_AGGREGATOR_SCHEMAS = "engine/aggregator/_schemas.py"
+_PATH_COMPARISON = "engine/comparison.py"
+
 # Existing module-level regulatory-like scalars in engine/** that were
 # deliberately kept in place (see PR notes next to each). New entries require
 # explicit regulatory justification — regulatory values otherwise belong in
@@ -51,9 +54,9 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     # float alias of imported Decimal (PR #248)
     "engine/aggregator/_floor.py": {"GCRA_CAP_RATE"},
     # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
-    "engine/aggregator/_schemas.py": {"T2_CREDIT_CAP_RATE"},
+    _PATH_AGGREGATOR_SCHEMAS: {"T2_CREDIT_CAP_RATE"},
     # float alias of imported CRR_K_SCALING_FACTOR Decimal (PR #248)
-    "engine/comparison.py": {"_CRR_SCALING_FACTOR"},
+    _PATH_COMPARISON: {"_CRR_SCALING_FACTOR"},
     "engine/equity/calculator.py": {
         "_CIU_THIRD_PARTY_MULTIPLIER",  # Art. 132b(2) 20% uplift multiplier
         "_RW_TO_PERCENT",  # audit formatting constant (not regulatory)
@@ -70,8 +73,8 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
 # src/rwa_calc/data/schemas.py.
 VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # ApproachType enum values + aggregator fallback labels (internal routing)
-    "engine/aggregator/_schemas.py": {"IRB_APPROACHES", "SA_APPROACHES", "EQUITY_APPROACHES"},
-    "engine/comparison.py": {
+    _PATH_AGGREGATOR_SCHEMAS: {"IRB_APPROACHES", "SA_APPROACHES", "EQUITY_APPROACHES"},
+    _PATH_COMPARISON: {
         "_COMPARISON_COLUMNS",  # output column names
         "_OPTIONAL_COLUMNS",  # output column names
         "_IRB_APPROACHES",  # approach IDs
@@ -121,7 +124,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/aggregator/_el_summary.py",
     "engine/aggregator/_equity_prep.py",
     "engine/aggregator/_floor.py",
-    "engine/aggregator/_schemas.py",
+    _PATH_AGGREGATOR_SCHEMAS,
     "engine/aggregator/_summaries.py",
     "engine/aggregator/_supporting_factors.py",
     "engine/aggregator/_utils.py",
@@ -133,7 +136,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
 # — schema-driven defaults otherwise belong in ensure_columns + ColumnSpec.
 SCHEMA_DEFAULTS_ALLOWLIST: set[str] = {
     # Optional-output column detection for COREP comparison frame.
-    "engine/comparison.py",
+    _PATH_COMPARISON,
     # Early-exit guards (netting / parent-facility detection, CRM output check)
     # — not defaulting.
     "engine/crm/collateral.py",
@@ -267,6 +270,42 @@ def _iter_module_assignments(tree: ast.Module) -> Iterator[tuple[int, str, ast.A
             yield stmt.lineno, stmt.target.id, stmt.value
 
 
+def _constant_is_reg_scalar(value: object) -> bool:
+    """True when a bare numeric literal qualifies as a regulatory scalar."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value not in (0, 1, -1)
+    return False
+
+
+def _unaryop_is_reg_scalar(node: ast.UnaryOp) -> bool:
+    """True when a UnaryOp wrapping a numeric literal qualifies as a regulatory scalar."""
+    if not isinstance(node.operand, ast.Constant):
+        return False
+    val = node.operand.value
+    if isinstance(val, bool):
+        return False
+    if isinstance(val, (int, float)):
+        return val not in (0, 1)
+    return False
+
+
+def _call_is_reg_scalar(node: ast.Call) -> bool:
+    """True when a Call is a typical regulatory-scalar wrapper (Decimal / float / int)."""
+    fn = node.func
+    fn_name: str | None = None
+    if isinstance(fn, ast.Name):
+        fn_name = fn.id
+    elif isinstance(fn, ast.Attribute):
+        fn_name = fn.attr
+    if fn_name == "Decimal":
+        return True
+    if fn_name in {"float", "int"} and len(node.args) == 1 and not node.keywords:
+        return True
+    return False
+
+
 def _rhs_is_regulatory_scalar(node: ast.AST) -> bool:
     """True when the RHS looks like a hardcoded regulatory scalar literal.
 
@@ -276,29 +315,11 @@ def _rhs_is_regulatory_scalar(node: ast.AST) -> bool:
     - float(...) / int(...) calls with a single argument (typical alias pattern)
     """
     if isinstance(node, ast.Constant):
-        if isinstance(node.value, bool):
-            return False
-        if isinstance(node.value, (int, float)):
-            return node.value not in (0, 1, -1)
-        return False
-    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
-        val = node.operand.value
-        if isinstance(val, bool):
-            return False
-        if isinstance(val, (int, float)):
-            return val not in (0, 1)
-        return False
+        return _constant_is_reg_scalar(node.value)
+    if isinstance(node, ast.UnaryOp):
+        return _unaryop_is_reg_scalar(node)
     if isinstance(node, ast.Call):
-        fn = node.func
-        fn_name: str | None = None
-        if isinstance(fn, ast.Name):
-            fn_name = fn.id
-        elif isinstance(fn, ast.Attribute):
-            fn_name = fn.attr
-        if fn_name == "Decimal":
-            return True
-        if fn_name in {"float", "int"} and len(node.args) == 1 and not node.keywords:
-            return True
+        return _call_is_reg_scalar(node)
     return False
 
 
@@ -368,6 +389,18 @@ def check_no_regulatory_scalars_in_engine(path: Path) -> list[str]:
     return violations
 
 
+def _line_triggers_schema_default(
+    line: str, pattern: re.Pattern[str], exempt_marker: re.Pattern[str]
+) -> bool:
+    """True when a line is a real inline-schema-default violation (post-exemption)."""
+    stripped = line.strip()
+    if stripped.startswith(("#", '"""', "'''")):
+        return False
+    if exempt_marker.search(line):
+        return False
+    return bool(pattern.search(line))
+
+
 def check_no_inline_schema_defaults(path: Path) -> list[str]:
     """No inline `"col" not in schema.names()` / `"col" not in df.columns` in engine/**.
 
@@ -395,12 +428,7 @@ def check_no_inline_schema_defaults(path: Path) -> list[str]:
         except (OSError, UnicodeDecodeError):
             continue
         for i, line in enumerate(text.split("\n"), 1):
-            stripped = line.strip()
-            if stripped.startswith(("#", '"""', "'''")):
-                continue
-            if exempt_marker.search(line):
-                continue
-            if pattern.search(line):
+            if _line_triggers_schema_default(line, pattern, exempt_marker):
                 violations.append(
                     f"  {py_file}:{i}: inline `not in schema.names()` -- "
                     "use ensure_columns against a ColumnSpec schema "
@@ -432,6 +460,41 @@ def check_no_validation_enums_in_engine(path: Path) -> list[str]:
     return violations
 
 
+def _check_logger_declared(
+    py_file: Path, rel: str, text: str, logger_pattern: re.Pattern[str]
+) -> list[str]:
+    """Return a violation if a non-exempt engine module lacks the module logger."""
+    if rel in LOGGER_REQUIRED_EXEMPT or logger_pattern.search(text):
+        return []
+    return [
+        f"  {py_file}: stage module must declare "
+        "`logger = logging.getLogger(__name__)` "
+        "(or be added to LOGGER_REQUIRED_EXEMPT if it is a helper module)"
+    ]
+
+
+def _check_no_print_or_basic_config(
+    py_file: Path,
+    text: str,
+    print_pattern: re.Pattern[str],
+    basic_config_pattern: re.Pattern[str],
+) -> list[str]:
+    """Return per-line violations for `print(` and `logging.basicConfig(` usage."""
+    violations: list[str] = []
+    for i, line in enumerate(text.split("\n"), 1):
+        stripped = line.strip()
+        if stripped.startswith(("#", '"""', "'''")):
+            continue
+        if print_pattern.search(line):
+            violations.append(f"  {py_file}:{i}: `print(` in engine/ — use a module logger")
+        if basic_config_pattern.search(line):
+            violations.append(
+                f"  {py_file}:{i}: `logging.basicConfig(` in engine/ — "
+                "use rwa_calc.observability.configure_logging at the entry point"
+            )
+    return violations
+
+
 def check_engine_logger_contract(path: Path) -> list[str]:
     """Every non-exempt engine module declares a module logger and avoids
     `print()` / `logging.basicConfig()`.
@@ -455,24 +518,10 @@ def check_engine_logger_contract(path: Path) -> list[str]:
         except (OSError, UnicodeDecodeError):
             continue
 
-        if rel not in LOGGER_REQUIRED_EXEMPT and not logger_pattern.search(text):
-            violations.append(
-                f"  {py_file}: stage module must declare "
-                "`logger = logging.getLogger(__name__)` "
-                "(or be added to LOGGER_REQUIRED_EXEMPT if it is a helper module)"
-            )
-
-        for i, line in enumerate(text.split("\n"), 1):
-            stripped = line.strip()
-            if stripped.startswith(("#", '"""', "'''")):
-                continue
-            if print_pattern.search(line):
-                violations.append(f"  {py_file}:{i}: `print(` in engine/ — use a module logger")
-            if basic_config_pattern.search(line):
-                violations.append(
-                    f"  {py_file}:{i}: `logging.basicConfig(` in engine/ — "
-                    "use rwa_calc.observability.configure_logging at the entry point"
-                )
+        violations.extend(_check_logger_declared(py_file, rel, text, logger_pattern))
+        violations.extend(
+            _check_no_print_or_basic_config(py_file, text, print_pattern, basic_config_pattern)
+        )
     return violations
 
 
@@ -510,6 +559,30 @@ def check_watchfire_citations() -> tuple[list[str], list[str]]:
     return fatal, warnings
 
 
+def _run_checks(target: Path, checks: list[tuple[str, ...]]) -> list[tuple[str, list[str]]]:
+    """Run each (name, fn) pair against `target`, returning (name, violations) for failures."""
+    all_violations: list[tuple[str, list[str]]] = []
+    for name, fn in checks:
+        v = fn(target)
+        if v:
+            all_violations.append((name, v))
+    return all_violations
+
+
+def _print_watchfire_warnings(watchfire_warnings: list[str], leading_blank: bool) -> None:
+    """Print the watchfire [WARN] block. When `leading_blank`, emit a blank line first."""
+    if not watchfire_warnings:
+        return
+    if leading_blank:
+        print()
+    print(
+        f"[WARN] watchfire: {len(watchfire_warnings)} soft finding(s) "
+        "(PS / PRA Rulebook citations pending upstream index)"
+    )
+    for w in watchfire_warnings:
+        print(w)
+
+
 def main() -> int:
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("src/rwa_calc")
     if not target.exists():
@@ -539,11 +612,7 @@ def main() -> int:
         ),
     ]
 
-    all_violations: list[tuple[str, list[str]]] = []
-    for name, fn in checks:
-        v = fn(target)
-        if v:
-            all_violations.append((name, v))
+    all_violations = _run_checks(target, checks)
 
     watchfire_fatal, watchfire_warnings = check_watchfire_citations()
     if watchfire_fatal:
@@ -556,14 +625,7 @@ def main() -> int:
 
     if not all_violations:
         print("arch_check: all checks passed")
-        if watchfire_warnings:
-            print()
-            print(
-                f"[WARN] watchfire: {len(watchfire_warnings)} soft finding(s) "
-                "(PS / PRA Rulebook citations pending upstream index)"
-            )
-            for w in watchfire_warnings:
-                print(w)
+        _print_watchfire_warnings(watchfire_warnings, leading_blank=True)
         return 0
 
     print("arch_check: VIOLATIONS FOUND\n")
@@ -573,13 +635,8 @@ def main() -> int:
             print(v)
         print()
 
+    _print_watchfire_warnings(watchfire_warnings, leading_blank=False)
     if watchfire_warnings:
-        print(
-            f"[WARN] watchfire: {len(watchfire_warnings)} soft finding(s) "
-            "(PS / PRA Rulebook citations pending upstream index)"
-        )
-        for w in watchfire_warnings:
-            print(w)
         print()
 
     total = sum(len(v) for _, v in all_violations)

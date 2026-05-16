@@ -594,11 +594,7 @@ def generate_loans(
             "book_code": book_codes,
             "counterparty_reference": cp_refs_arr[cp_assignments],
             "value_date": pl.Series([base_date] * n_loans),
-            "maturity_date": pl.Series([base_date] * n_loans).dt.offset_by(
-                pl.Series([f"{d}d" for d in maturity_days])
-            )
-            if False
-            else [base_date + timedelta(days=int(d)) for d in maturity_days],
+            "maturity_date": [base_date + timedelta(days=int(d)) for d in maturity_days],
             "currency": currencies,
             "drawn_amount": drawn_amounts,
             "interest": np.zeros(n_loans),  # Accrued interest
@@ -791,7 +787,7 @@ def generate_ratings(
             sov_cqs = rng.choice(
                 [1, 2, 3, 4, 5, 6], size=n_sov, p=[0.30, 0.25, 0.20, 0.15, 0.07, 0.03]
             )
-            ext_indices = np.where(ext_mask)[0]
+            ext_indices = np.nonzero(ext_mask)[0]
             cqs_arr[ext_indices[sov_ext_mask]] = sov_cqs
 
         # Institution CQS
@@ -801,7 +797,7 @@ def generate_ratings(
             inst_cqs = rng.choice(
                 [1, 2, 3, 4, 5, 6], size=n_inst, p=[0.15, 0.35, 0.30, 0.12, 0.06, 0.02]
             )
-            ext_indices = np.where(ext_mask)[0]
+            ext_indices = np.nonzero(ext_mask)[0]
             cqs_arr[ext_indices[inst_ext_mask]] = inst_cqs
 
         # Other (corporate/individual) CQS
@@ -811,7 +807,7 @@ def generate_ratings(
             other_cqs = rng.choice(
                 [1, 2, 3, 4, 5, 6], size=n_other, p=[0.05, 0.20, 0.35, 0.25, 0.10, 0.05]
             )
-            ext_indices = np.where(ext_mask)[0]
+            ext_indices = np.nonzero(ext_mask)[0]
             cqs_arr[ext_indices[other_ext_mask]] = other_cqs
 
         # Map CQS to rating values and PDs for external
@@ -837,7 +833,7 @@ def generate_ratings(
         cqs_arr[int_mask] = internal_cqs
 
         # Generate rating values
-        int_indices = np.where(int_mask)[0]
+        int_indices = np.nonzero(int_mask)[0]
         for cqs_val in range(1, 7):
             cqs_mask = cqs_arr[int_mask] == cqs_val
             values[int_indices[cqs_mask]] = f"INT_{cqs_val}"
@@ -1110,7 +1106,7 @@ def generate_collateral(
         is_income_producing[real_estate_mask] = rng.random(n_re) < 0.3
         is_adc[real_estate_mask] = rng.random(n_re) < 0.1
         # Presold only applies to ADC
-        adc_indices = np.where(is_adc)[0]
+        adc_indices = np.nonzero(is_adc)[0]
         if len(adc_indices) > 0:
             is_presold[adc_indices] = rng.random(len(adc_indices)) < 0.5
 

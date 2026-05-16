@@ -2,7 +2,18 @@
   "mcpServers": {
     "polars-mcp": {
       "command": "uvx.exe",
-      "args": ["polars-mcp"]
+      "args": [
+        "polars-mcp"
+      ]
+    },
+    "sonarqube": {
+      "command": "sonar",
+      "args": [
+        "run",
+        "mcp",
+        "--project",
+        "OpenAfterHours_rwa_calculator"
+      ]
     }
   }
 }

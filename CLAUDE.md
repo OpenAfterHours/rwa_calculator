@@ -200,3 +200,7 @@ Agents never commit or push — commits land in the slash-command orchestrator o
 - **Docstrings**: All public classes and functions must have docstrings following the module docstring pattern (purpose, responsibilities, references)
 - **Changelog**: Update `docs/appendix/changelog.md` for any user-facing changes
 - **After every change**: Update relevant docs, docstrings, and changelog entry
+
+### Citation tracking (`watchfire`)
+
+When you implement or modify a function whose responsibility maps onto a specific regulatory article, add a `@cites(...)` decorator alongside the existing docstring reference. Stack one decorator per article — CRR (primary) outer, PS1/26 (secondary) inner — when both frameworks apply to the same code path. The decorator is a no-op at runtime; `uv run watchfire matrix` materialises the article -> function index from these annotations, and `uv run python scripts/arch_check.py` invokes `watchfire check` as the final gate step. See [docs/development/citation-tracking.md](docs/development/citation-tracking.md) for the canonical citation grammar and the upstream parser limitations (alphanumeric amendment articles like `123B` are not yet parseable).

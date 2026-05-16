@@ -35,6 +35,7 @@ dependencies = [
     "uvicorn>=0.40.0",
     "marimo>=0.19.6",
     "ty>=0.0.26",
+    "watchfire==0.3.0",
 ]
 
 [project.scripts]
@@ -149,6 +150,14 @@ invalid-assignment = "ignore"     # Polars ChainedThen vs Then in when/then chai
 invalid-parameter-default = "ignore"  # Polars pl.String as DataType default
 no-matching-overload = "ignore"   # dict.fromkeys with Polars DataType values
 not-subscriptable = "ignore"      # LazyFrame.collect() returns DataFrame|InProcessQuery
+
+[tool.watchfire]
+# Static-analysis citation validator (watchfire check / watchfire matrix).
+# Pin matches the bundled rulebook snapshot the pilot annotations were
+# written against; bump when upstream ships an updated PS / PRA Rulebook index.
+rulebook_version = "2026-05-14"
+instruments = ["CRR", "PS", "PRA_RULEBOOK", "SS"]
+source_paths = ["src/rwa_calc/engine", "src/rwa_calc/data/tables"]
 
 [dependency-groups]
 dev = [

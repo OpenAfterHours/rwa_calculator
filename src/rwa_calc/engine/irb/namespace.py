@@ -33,6 +33,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
@@ -421,6 +422,8 @@ class IRBLazyFrame:
     # INDIVIDUAL FORMULA STEPS
     # =========================================================================
 
+    @cites("CRR Art. 163")
+    @cites("PS1/26, paragraph 163")
     def apply_pd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
         """
         Apply PD floor based on configuration.
@@ -444,6 +447,8 @@ class IRBLazyFrame:
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         )
 
+    @cites("CRR Art. 164")
+    @cites("PS1/26, paragraph 164")
     def apply_lgd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
         """
         Apply LGD floor for Basel 3.1 A-IRB exposures.

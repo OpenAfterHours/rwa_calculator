@@ -66,6 +66,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.errors import (
     ERROR_DUE_DILIGENCE_NOT_PERFORMED,
@@ -1262,9 +1263,7 @@ def _apply_crr_risk_weight_overrides(
         # inserted by CRR2 Reg. (EU) 2019/876 F68). Scalar identical to the
         # Basel 3.1 payroll RW (PRA PS1/26 Art. 123(3)(a-b)), so the same
         # B31_RETAIL_PAYROLL_LOAN_RW constant is reused via _SA_B31_RW.
-        .when(
-            uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False)
-        )
+        .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Regulatory retail (non-mortgage): 75% flat.
         .when(uc.str.contains("RETAIL", literal=True))
@@ -1851,6 +1850,7 @@ class SALazyFrame:
 
         return exposures
 
+    @cites("PS1/26, paragraph 123B")
     def apply_currency_mismatch_multiplier(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
 
@@ -1882,13 +1882,17 @@ class SALazyFrame:
         # Commercial RE (Art. 112(j) per Art. 124H/124I) and corporate are OUT of
         # scope. Use exact-match against ExposureClass enum string values rather
         # than substring matching to avoid COMMERCIAL_MORTGAGE matching "COMMERCIAL".
-        is_retail_or_re = pl.col("exposure_class").fill_null("").is_in(
-            [
-                "retail_other",
-                "retail_qrre",
-                "retail_mortgage",
-                "residential_mortgage",
-            ]
+        is_retail_or_re = (
+            pl.col("exposure_class")
+            .fill_null("")
+            .is_in(
+                [
+                    "retail_other",
+                    "retail_qrre",
+                    "retail_mortgage",
+                    "residential_mortgage",
+                ]
+            )
         )
 
         has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))

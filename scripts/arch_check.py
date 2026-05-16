@@ -12,11 +12,16 @@ Checks machine-verifiable invariants from CLAUDE.md:
    ensure_columns against a ColumnSpec schema in data/schemas.py instead)
 8. Every stage module in engine/** declares `logger = logging.getLogger(__name__)`
    and does not call `print()` or `logging.basicConfig()`.
+9. Every `@cites(...)` decorator references an instrument allowed by
+   `[tool.watchfire]` and a citation the rulebook index recognises (PS / PRA
+   Rulebook citations are reported as soft warnings until the upstream index
+   ships richer coverage; CRR-side failures are fatal).
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
-observability contract (see docs/specifications/observability.md). Rare
-intentional exceptions are listed in the ALLOWLIST dicts below; adding a new
-entry there should be a deliberate, reviewed decision.
+observability contract (see docs/specifications/observability.md). Check 9
+keeps the watchfire citation matrix honest. Rare intentional exceptions are
+listed in the ALLOWLIST dicts below; adding a new entry there should be a
+deliberate, reviewed decision.
 
 Usage:
     python scripts/arch_check.py [path]  # defaults to src/rwa_calc/
@@ -470,6 +475,40 @@ def check_engine_logger_contract(path: Path) -> list[str]:
     return violations
 
 
+def check_watchfire_citations() -> tuple[list[str], list[str]]:
+    """Run `watchfire check` via its Python API.
+
+    Returns ``(fatal, warnings)`` where ``fatal`` is the list of findings
+    that must block the gate (parse failures, unknown instruments, version
+    mismatches, and CRR / Delegated Regulation unknown-article findings —
+    those should never happen against the bundled CRR index) and
+    ``warnings`` is the list of soft findings (PS / PRA Rulebook / SS
+    unknown-article findings, expected until the upstream index ships
+    richer non-CRR coverage; plus AST-walker ``unresolved`` cases).
+    """
+    try:
+        from watchfire.checks import run_check
+        from watchfire.config import load_config
+    except ImportError as exc:
+        return ([f"  watchfire not importable: {exc}"], [])
+
+    config = load_config(Path.cwd())
+    report = run_check(config)
+
+    soft_instruments = {"PS", "PRA_RULEBOOK", "SS"}
+    fatal: list[str] = []
+    warnings: list[str] = []
+    for r in report.results:
+        location = f"  {r.file}:{r.line}: {r.function}: {r.kind}: {r.message}"
+        is_soft_instrument = any(inst in r.message for inst in soft_instruments)
+        if r.kind == "unresolved" or r.kind == "unknown_article" and is_soft_instrument:
+            warnings.append(location)
+        else:
+            fatal.append(location)
+
+    return fatal, warnings
+
+
 def main() -> int:
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("src/rwa_calc")
     if not target.exists():
@@ -505,8 +544,25 @@ def main() -> int:
         if v:
             all_violations.append((name, v))
 
+    watchfire_fatal, watchfire_warnings = check_watchfire_citations()
+    if watchfire_fatal:
+        all_violations.append(
+            (
+                "watchfire: malformed or unknown citations",
+                watchfire_fatal,
+            )
+        )
+
     if not all_violations:
         print("arch_check: all checks passed")
+        if watchfire_warnings:
+            print()
+            print(
+                f"[WARN] watchfire: {len(watchfire_warnings)} soft finding(s) "
+                "(PS / PRA Rulebook citations pending upstream index)"
+            )
+            for w in watchfire_warnings:
+                print(w)
         return 0
 
     print("arch_check: VIOLATIONS FOUND\n")
@@ -514,6 +570,15 @@ def main() -> int:
         print(f"[FAIL] {name}")
         for v in violations:
             print(v)
+        print()
+
+    if watchfire_warnings:
+        print(
+            f"[WARN] watchfire: {len(watchfire_warnings)} soft finding(s) "
+            "(PS / PRA Rulebook citations pending upstream index)"
+        )
+        for w in watchfire_warnings:
+            print(w)
         print()
 
     total = sum(len(v) for _, v in all_violations)

@@ -1,0 +1,73 @@
+# Citation Tracking with watchfire
+
+The project uses [`watchfire`](https://pypi.org/project/watchfire/) to attach machine-readable regulatory citations to engine functions so that "which articles does our code cover?" stops being a grep question and starts being a build artefact.
+
+## What `@cites` does
+
+`@cites` is a no-runtime-cost decorator. It parses a citation string at import time, attaches the resulting `Citation` object to the function as `__watchfire__`, and returns the function unchanged. The actual analysis runs offline via the `watchfire` CLI (AST-walks the project, builds a citation -> function matrix, validates each citation against a bundled rulebook index).
+
+```python
+from watchfire import cites
+
+@cites("CRR Art. 153(1)")
+def calculate_k(pd: float, lgd: float, correlation: float) -> float:
+    ...
+```
+
+## When to add `@cites`
+
+When you implement or modify a function whose responsibility maps cleanly onto a specific regulatory article, add a `@cites(...)` decorator alongside the existing docstring reference. The docstring stays — it's the prose explanation; the decorator is the index entry.
+
+## Dual citations (CRR and PS1/26)
+
+The CRR and Basel 3.1 frameworks are co-located in the same engine modules and routed by `config.is_basel_3_1`. When a function implements both a CRR article AND its Basel 3.1 / PS1/26 equivalent, stack the decorators — CRR (primary) outer, PS1/26 (secondary) inner:
+
+```python
+@cites("CRR Art. 163")
+@cites("PS1/26, paragraph 163")
+def apply_pd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
+    ...
+```
+
+Today watchfire 0.2.0's `__watchfire__` attribute holds only the outer decorator (`CRR Art. 163` in the example), so `watchfire matrix` reports the CRR citation and ignores the inner one. Once upstream watchfire stacks citations into a tuple, both decorators will surface in the matrix with no source-code change here.
+
+## Canonical citation forms
+
+| Instrument | Canonical form | Example |
+| --- | --- | --- |
+| CRR article | `CRR Art. N` or `CRR Art. N(p)(point)` | `CRR Art. 153(1)`, `CRR Art. 124(2)(a)` |
+| PRA Policy Statement | `PSn/yy` or `PSn/yy, paragraph N.N` | `PS1/26`, `PS1/26, paragraph 4.55` |
+| PRA Supervisory Statement | `SSn/yy[, paragraph N.N]` | `SS1/23, paragraph 2.5` |
+| PRA Rulebook | `PRA Rulebook, <part>[, N.N]` | `PRA Rulebook, Credit Risk, 3.2` |
+| Delegated Regulation | `Delegated Regulation <id>, Art. N` | `Delegated Regulation 2018/171, Art. 1` |
+
+Notes:
+- Article numbers are integers only. Alphanumeric amendment articles ("Art. 123B", "Art. 110A") are not yet parseable by watchfire — cite the closest valid form (`PS1/26` at instrument level) and document the precise sub-article in the docstring/comment.
+- PS / SS paragraphs are numeric (e.g. `paragraph 4.55`); the `B`/`A` suffixes used in CRR-style amendment articles are not valid paragraph IDs.
+
+## Running the tooling
+
+```bash
+# Validate every @cites against the bundled rulebook index.
+uv run watchfire check
+
+# Produce a coverage matrix (citation -> functions).
+uv run watchfire matrix --format markdown
+uv run watchfire matrix --instrument CRR
+uv run watchfire matrix --article 153
+```
+
+`watchfire check` is invoked automatically by `uv run python scripts/arch_check.py` as the final step of the architectural gate. The wrapper treats PS / PRA Rulebook `unknown_article` findings as soft warnings (the bundled upstream index covers only CRR comprehensively today); CRR-side parse failures, unknown instruments, and version mismatches remain fatal.
+
+## Configuration
+
+The `[tool.watchfire]` table in `pyproject.toml` controls source paths, allowed instruments, and the rulebook version pin:
+
+```toml
+[tool.watchfire]
+rulebook_version = "2026-05-14"
+instruments = ["CRR", "PS", "PRA_RULEBOOK", "SS"]
+source_paths = ["src/rwa_calc/engine", "src/rwa_calc/data/tables"]
+```
+
+Bump `rulebook_version` when upstream watchfire ships an updated index. Source paths are intentionally narrow: `engine/` (rule application) and `data/tables/` (regulatory scalars) — UI, IO, contracts, and tests hold no regulatory rules and would just add noise to the matrix.

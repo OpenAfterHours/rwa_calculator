@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
@@ -954,6 +955,7 @@ def _run_scalar_via_vectorized(
 # =============================================================================
 
 
+@cites("CRR Art. 153(1)")
 def calculate_correlation(
     pd: float,
     exposure_class: str,
@@ -995,6 +997,7 @@ def calculate_correlation(
     )
 
 
+@cites("CRR Art. 153(1)")
 def calculate_k(pd: float, lgd: float, correlation: float) -> float:
     """Scalar capital requirement calculation.
 

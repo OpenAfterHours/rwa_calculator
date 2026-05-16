@@ -33,6 +33,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -157,7 +158,7 @@ class Pillar3Generator:
             cr6a=self._generate_cr6a(results, cols, framework, errors),
             cr7=self._generate_cr7(results, cols, framework, errors),
             cr7a=self._generate_all_cr7a(results, cols, framework, errors),
-            cr8=self._generate_cr8(irb_data, cols, framework, errors),
+            cr8=self._generate_cr8(irb_data, cols, errors),
             cr9=self._generate_all_cr9(irb_data, cols, framework, errors),
             cr10=self._generate_all_cr10(slotting_data, cols, framework, errors),
             cms1=self._generate_cms1(results, cols, framework, errors),
@@ -241,71 +242,25 @@ class Pillar3Generator:
         approach_col = _pick(cols, "approach_applied", "approach")
         pre_floor_col = _pick(cols, "rwa_pre_floor")
         data = results.collect()
-        rows_out: list[dict[str, object]] = []
         column_refs = [c.ref for c in OV1_COLUMNS]
 
-        total_rwa = _col_sum(data, cols, rwa_col)
+        total_rwa = _col_sum(data, rwa_col)
         own_funds = total_rwa * 0.08 if total_rwa else None
-
-        ratio_refs = {"5a", "5b", "6a", "6b", "7a", "7b"}
-
-        for row_def in get_ov1_rows(framework):
-            values: dict[str, object] = {}
-            ref = row_def.ref
-
-            if ref == "29" or ref == "1":
-                values["a"] = total_rwa
-                values["c"] = own_funds
-            elif ref == "2" and approach_col:
-                sa_rwa = _approach_rwa(data, approach_col, rwa_col, "standardised")
-                eq_rwa = _approach_rwa(data, approach_col, rwa_col, "equity")
-                values["a"] = (sa_rwa or 0.0) + (eq_rwa or 0.0)
-            elif ref == "3" and approach_col:
-                values["a"] = _approach_rwa(data, approach_col, rwa_col, "foundation_irb")
-            elif ref == "4" and approach_col:
-                values["a"] = _approach_rwa(data, approach_col, rwa_col, "slotting")
-            elif ref == "4a":
-                # Pre-floor total RWEAs — sum rwa_pre_floor across all exposures
-                if pre_floor_col:
-                    pre_floor_total = _col_sum(data, cols, pre_floor_col)
-                    values["a"] = pre_floor_total
-                    values["c"] = pre_floor_total * 0.08 if pre_floor_total is not None else None
-                # else: leave a/b/c as None (mirror existing fallback posture)
-            elif ref == "UK4a" and approach_col:
-                values["a"] = _approach_rwa(data, approach_col, rwa_col, "equity")
-            elif ref == "5" and approach_col:
-                values["a"] = _approach_rwa(data, approach_col, rwa_col, "advanced_irb")
-            elif ref in ratio_refs:
-                # Pre-floor capital-ratio rows — populated from caller-supplied
-                # overrides only. Columns b and c stay None even when a is
-                # populated (no own-funds × 0.08 shim for ratio rows).
-                ratio = _ratio_for_ref(capital_ratios, ref)
-                values["a"] = float(ratio) * 100.0 if ratio is not None else None
-            elif ref == "24":
-                # Memo: 250% RW exposures — filter to risk_weight == 2.50
-                rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
-                if rw_col:
-                    memo = data.filter((pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505))
-                    values["a"] = _col_sum(memo, cols, rwa_col)
-            elif ref == "26":
-                # Output floor multiplier — from config, not pipeline data
-                values["a"] = None
-            elif ref == "27":
-                # Output floor adjustment — from config
-                values["a"] = None
-            elif ref in ("11", "12", "13", "14"):
-                # Equity sub-rows — pipeline equity data not granular enough
-                values["a"] = None
-
-            # Column b (T-1) always None — requires prior period data
-            values.setdefault("b", None)
-            # Auto-shim: own funds = a * 0.08, except for ratio rows where
-            # column c is intentionally None (a is itself a percentage).
-            if ref not in ratio_refs and values.get("a") is not None and values.get("c") is None:
-                values["c"] = float(values["a"] or 0.0) * 0.08
-
-            rows_out.append(_make_row(row_def, values, column_refs))
-
+        rows_out: list[dict[str, object]] = [
+            _ov1_row_values(
+                row_def,
+                data=data,
+                cols=cols,
+                rwa_col=rwa_col,
+                approach_col=approach_col,
+                pre_floor_col=pre_floor_col,
+                total_rwa=total_rwa,
+                own_funds=own_funds,
+                capital_ratios=capital_ratios,
+                column_refs=column_refs,
+            )
+            for row_def in get_ov1_rows(framework)
+        ]
         return _build_df(rows_out, column_refs)
 
     # ---- CR4 ----
@@ -496,11 +451,11 @@ class Pillar3Generator:
                 rows_out.append(_null_row(row_def, column_refs))
                 continue
 
-            total_ead = _col_sum(subset, cols, ead_col) or 0.0
+            total_ead = _col_sum(subset, ead_col) or 0.0
             irb_subset = subset.filter(pl.col(approach_col).is_in(list(irb_approaches)))
-            irb_ead = _col_sum(irb_subset, cols, ead_col) or 0.0
+            irb_ead = _col_sum(irb_subset, ead_col) or 0.0
             sa_subset = subset.filter(~pl.col(approach_col).is_in(list(irb_approaches)))
-            sa_ead = _col_sum(sa_subset, cols, ead_col) or 0.0
+            sa_ead = _col_sum(sa_subset, ead_col) or 0.0
 
             values: dict[str, object] = {
                 "a": irb_ead,
@@ -532,128 +487,26 @@ class Pillar3Generator:
         data = results.collect()
         cr7_rows = get_cr7_rows(framework)
         column_refs = [c.ref for c in CR7_COLUMNS]
-        rows_out: list[dict[str, object]] = []
 
         firb = data.filter(pl.col(approach_col) == "foundation_irb")
         airb = data.filter(pl.col(approach_col) == "advanced_irb")
         slotting = data.filter(pl.col(approach_col) == "slotting")
 
+        rows_out: list[dict[str, object]] = []
         for row_def in cr7_rows:
-            ref = row_def.ref
+            rwa = _cr7_row_rwa(
+                row_def,
+                framework=framework,
+                data=data,
+                firb=firb,
+                airb=airb,
+                slotting=slotting,
+                ec_col=ec_col,
+                approach_col=approach_col,
+                rwa_col=rwa_col,
+            )
             # Pre-CD RWEA approximation = post-CD RWEA (pre-CD tracking not available)
-            if ref == "1":
-                rwa = _col_sum(firb, cols, rwa_col)
-            elif ref == "2" and ec_col:
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col)
-                else:
-                    rwa = _col_sum(
-                        firb.filter(pl.col(ec_col) == "central_govt_central_bank"),
-                        cols,
-                        rwa_col,
-                    )
-            elif ref == "3" and ec_col:
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(
-                        firb.filter(
-                            pl.col(ec_col).is_in(
-                                ["corporate", "corporate_sme", "specialised_lending"]
-                            )
-                        ),
-                        cols,
-                        rwa_col,
-                    )
-                else:
-                    rwa = _col_sum(firb.filter(pl.col(ec_col) == "institution"), cols, rwa_col)
-            elif ref == "4":
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(airb, cols, rwa_col)
-                else:
-                    rwa = _col_sum(
-                        firb.filter(pl.col(ec_col) == "corporate_sme") if ec_col else firb,
-                        cols,
-                        rwa_col,
-                    )
-            elif ref == "5":
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(
-                        airb.filter(
-                            pl.col(ec_col).is_in(
-                                ["corporate", "corporate_sme", "specialised_lending"]
-                            )
-                        )
-                        if ec_col
-                        else airb,
-                        cols,
-                        rwa_col,
-                    )
-                else:
-                    rwa = _col_sum(
-                        firb.filter(pl.col(ec_col).is_in(["corporate", "specialised_lending"]))
-                        if ec_col
-                        else firb,
-                        cols,
-                        rwa_col,
-                    )
-            elif ref == "6":
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(
-                        airb.filter(
-                            pl.col(ec_col).is_in(["retail_mortgage", "retail_qrre", "retail_other"])
-                        )
-                        if ec_col
-                        else airb,
-                        cols,
-                        rwa_col,
-                    )
-                else:
-                    rwa = _col_sum(airb, cols, rwa_col)
-            elif ref == "7":
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(slotting, cols, rwa_col)
-                else:
-                    rwa = _col_sum(
-                        airb.filter(
-                            pl.col(ec_col).is_in(
-                                ["corporate", "corporate_sme", "specialised_lending"]
-                            )
-                        )
-                        if ec_col
-                        else airb,
-                        cols,
-                        rwa_col,
-                    )
-            elif ref == "8":
-                if framework == "BASEL_3_1":
-                    rwa = _col_sum(
-                        airb.filter(pl.col(ec_col) == "retail_mortgage") if ec_col else airb,
-                        cols,
-                        rwa_col,
-                    )
-                else:
-                    rwa = _col_sum(
-                        airb.filter(pl.col(ec_col).is_in(["retail_other", "retail_qrre"]))
-                        if ec_col
-                        else airb,
-                        cols,
-                        rwa_col,
-                    )
-            elif ref == "9" and ec_col:
-                rwa = _col_sum(
-                    airb.filter(pl.col(ec_col).is_in(["retail_other", "retail_qrre"])),
-                    cols,
-                    rwa_col,
-                )
-            elif ref == "10" or row_def.is_total:
-                irb_all = data.filter(
-                    pl.col(approach_col).is_in(["foundation_irb", "advanced_irb", "slotting"])
-                )
-                rwa = _col_sum(irb_all, cols, rwa_col)
-            else:
-                rwa = None
-
-            values = {"a": rwa, "b": rwa}  # Pre-CD ≈ post-CD
-            rows_out.append(_make_row(row_def, values, column_refs))
+            rows_out.append(_make_row(row_def, {"a": rwa, "b": rwa}, column_refs))
 
         return _build_df(rows_out, column_refs)
 
@@ -701,7 +554,7 @@ class Pillar3Generator:
                     rows_out.append(_null_row(row_def, column_refs))
                     continue
 
-                values = _compute_cr7a_values(subset, cols, ead_col, rwa_col)
+                values = _compute_cr7a_values(subset, cols, ead_col)
                 rows_out.append(_make_row(row_def, values, column_refs))
 
             result[approach_key] = _build_df(rows_out, column_refs)
@@ -714,7 +567,6 @@ class Pillar3Generator:
         self,
         irb_data: pl.LazyFrame,
         cols: set[str],
-        framework: str,
         errors: list[str],
     ) -> pl.DataFrame | None:
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
@@ -724,7 +576,7 @@ class Pillar3Generator:
 
         data = irb_data.collect()
         column_refs = [c.ref for c in CR8_COLUMNS]
-        closing_rwa = _col_sum(data, cols, rwa_col)
+        closing_rwa = _col_sum(data, rwa_col)
         rows_out: list[dict[str, object]] = []
 
         for row_def in CR8_ROWS:
@@ -819,57 +671,29 @@ class Pillar3Generator:
         rows_out: list[dict[str, object]] = []
 
         for lower, upper, row_ref, label in CR6_PD_RANGES:
-            if math.isinf(upper):
-                bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
-            else:
-                bucket = class_data.filter(
-                    (pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper)
-                )
-
-            if bucket.height == 0:
-                continue
-
-            values = _compute_cr9_values(
-                bucket,
-                cols,
-                report_pd_col,
-            )
-            values["a"] = class_display
-            values["b"] = label
-            row = P3Row(row_ref, label)
-            rows_out.append(_make_row(row, values, column_refs))
-
-        # Total row
-        if class_data.height > 0:
-            total_values = _compute_cr9_values(
+            bucket_row = _cr9_bucket_row(
                 class_data,
                 cols,
+                alloc_pd_col,
                 report_pd_col,
+                class_display,
+                lower,
+                upper,
+                label,
+                row_ref,
+                column_refs,
             )
-            total_values["a"] = class_display
-            total_values["b"] = "Total"
+            if bucket_row is not None:
+                rows_out.append(bucket_row)
+
+        if class_data.height > 0:
             rows_out.append(
-                _make_row(
-                    P3Row("18", "Total", is_total=True),
-                    total_values,
-                    column_refs,
-                )
+                _cr9_total_row(class_data, cols, report_pd_col, class_display, column_refs)
             )
 
         if not rows_out:
-            schema: dict[str, pl.DataType] = {
-                "row_ref": pl.String,
-                "row_name": pl.String,
-            }
-            for ref in column_refs:
-                schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
-            return pl.DataFrame([], schema=schema)
-
-        # Build with mixed types: cols a, b are String; rest Float64
-        schema = {"row_ref": pl.String, "row_name": pl.String}
-        for ref in column_refs:
-            schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
-        return pl.DataFrame(rows_out, schema=schema)
+            return _cr9_empty_schema(column_refs)
+        return pl.DataFrame(rows_out, schema=_cr9_schema(column_refs))
 
     # ---- CR10 ----
 
@@ -899,38 +723,19 @@ class Pillar3Generator:
         result: dict[str, pl.DataFrame] = {}
 
         for sl_key in subtemplates:
-            if sl_type_col:
-                if sl_key == "ipre" and framework != "BASEL_3_1":
-                    # CRR: IPRE combined with HVCRE
-                    type_data = data.filter(pl.col(sl_type_col).is_in(["ipre", "hvcre"]))
-                else:
-                    type_data = data.filter(pl.col(sl_type_col) == sl_key)
-            else:
-                type_data = data.filter(pl.lit(False))
-
+            type_data = _cr10_type_data(data, sl_type_col, sl_key, framework)
             if type_data.height == 0 and sl_key != "equity":
                 continue
 
-            is_hvcre = sl_key == "hvcre"
-            rw_map = HVCRE_RISK_WEIGHTS if is_hvcre else SLOTTING_RISK_WEIGHTS
+            rw_map = _cr10_rw_map_for(sl_key)
             rows_out: list[dict[str, object]] = []
 
             for row_def in CR10_SLOTTING_ROWS:
-                if row_def.is_total:
-                    subset = type_data
-                    rw_value = None
-                elif cat_col:
-                    pipeline_cat = CR10_CATEGORY_MAP.get(row_def.name)
-                    if pipeline_cat:
-                        subset = type_data.filter(pl.col(cat_col) == pipeline_cat)
-                        rw_value = rw_map.get(pipeline_cat)
-                    else:
-                        rows_out.append(_null_row(row_def, column_refs))
-                        continue
-                else:
+                subset_pair = _cr10_row_subset(row_def, type_data, cat_col, rw_map)
+                if subset_pair is None:
                     rows_out.append(_null_row(row_def, column_refs))
                     continue
-
+                subset, rw_value = subset_pair
                 values = _compute_cr10_values(subset, cols, ead_col, rwa_col, el_col, rw_value)
                 rows_out.append(_make_row(row_def, values, column_refs))
 
@@ -981,14 +786,14 @@ class Pillar3Generator:
             modelled_approaches = ["foundation_irb", "advanced_irb", "slotting"]
             modelled = data.filter(pl.col(approach_col).is_in(modelled_approaches))
             sa_only = data.filter(~pl.col(approach_col).is_in(modelled_approaches))
-            modelled_rwa = _col_sum(modelled, cols, rwa_col) or 0.0
-            sa_portfolio_rwa = _col_sum(sa_only, cols, rwa_col) or 0.0
+            modelled_rwa = _col_sum(modelled, rwa_col) or 0.0
+            sa_portfolio_rwa = _col_sum(sa_only, rwa_col) or 0.0
 
         # Col c: Total actual RWA = modelled + SA portfolio
         total_actual_rwa = modelled_rwa + sa_portfolio_rwa
 
         # Col d: Full SA RWA (all exposures under SA)
-        full_sa_rwa = _col_sum(data, cols, sa_rwa_col) if sa_rwa_col else None
+        full_sa_rwa = _col_sum(data, sa_rwa_col) if sa_rwa_col else None
 
         for row_def in CMS1_ROWS:
             values: dict[str, object] = {"a": None, "b": None, "c": None, "d": None}
@@ -1050,78 +855,16 @@ class Pillar3Generator:
         rows_out: list[dict[str, object]] = []
 
         for row_def in CMS2_ROWS:
-            values: dict[str, object] = {"a": None, "b": None, "c": None, "d": None}
-
-            if row_def.is_total:
-                # Total row: sum all credit risk exposures
-                values["a"] = _col_sum(modelled_data, cols, rwa_col)
-                values["b"] = _col_sum(modelled_data, cols, sa_rwa_col) if sa_rwa_col else None
-                modelled_total = values["a"] or 0.0
-                sa_port_rwa = _col_sum(sa_collected, cols, rwa_col) or 0.0
-                values["c"] = modelled_total + sa_port_rwa
-                values["d"] = _col_sum(all_data, cols, sa_rwa_col) if sa_rwa_col else None
-            elif row_def.ref == "0041" and ec_col and approach_col:
-                # "Of which are FIRB" — corporate exposures under F-IRB
-                corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
-                firb_corp = modelled_data.filter(
-                    pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "foundation_irb")
-                )
-                values["a"] = _col_sum(firb_corp, cols, rwa_col)
-                values["b"] = _col_sum(firb_corp, cols, sa_rwa_col) if sa_rwa_col else None
-                sa_firb = (
-                    sa_collected.filter(pl.col(ec_col).is_in(corp_classes))
-                    if ec_col
-                    else sa_collected.filter(pl.lit(False))
-                )
-                values["c"] = (values["a"] or 0.0) + (_col_sum(sa_firb, cols, rwa_col) or 0.0)
-                values["d"] = (
-                    _col_sum(
-                        all_data.filter(pl.col(ec_col).is_in(corp_classes)),
-                        cols,
-                        sa_rwa_col,
-                    )
-                    if sa_rwa_col and ec_col
-                    else None
-                )
-            elif row_def.ref == "0042" and ec_col and approach_col:
-                # "Of which are AIRB" — corporate exposures under A-IRB
-                corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
-                airb_corp = modelled_data.filter(
-                    pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "advanced_irb")
-                )
-                values["a"] = _col_sum(airb_corp, cols, rwa_col)
-                values["b"] = _col_sum(airb_corp, cols, sa_rwa_col) if sa_rwa_col else None
-                # c and d: same as FIRB sub-row pattern but filtered to AIRB
-                values["c"] = values["a"]  # Sub-row: no SA portfolio add
-                values["d"] = None  # Sub-row: comparison at parent level
-            elif row_def.ref in ("0044", "0045", "0054"):
-                # Sub-rows requiring pipeline data not currently available:
-                # 0044 IPRE/HVCRE, 0045 purchased receivables (corp),
-                # 0054 purchased receivables (retail)
-                pass  # All null
-            elif row_def.exposure_classes and ec_col:
-                # Standard asset class row
-                ec_list = list(row_def.exposure_classes)
-
-                # Col a: modelled RWA for this class
-                class_modelled = modelled_data.filter(pl.col(ec_col).is_in(ec_list))
-                values["a"] = _col_sum(class_modelled, cols, rwa_col)
-
-                # Col b: SA-equivalent RWA for modelled exposures
-                values["b"] = _col_sum(class_modelled, cols, sa_rwa_col) if sa_rwa_col else None
-
-                # Col c: Total actual RWA = modelled + SA portfolio for this class
-                class_sa = sa_collected.filter(pl.col(ec_col).is_in(ec_list))
-                modelled_rwa = values["a"] or 0.0
-                sa_port_rwa = _col_sum(class_sa, cols, rwa_col) or 0.0
-                values["c"] = modelled_rwa + sa_port_rwa
-
-                # Col d: Full SA RWA for all exposures in this class
-                sa_class_key = row_def.ref
-                sa_classes = CMS2_SA_CLASS_MAP.get(sa_class_key, ec_list)
-                class_all = all_data.filter(pl.col(ec_col).is_in(list(sa_classes)))
-                values["d"] = _col_sum(class_all, cols, sa_rwa_col) if sa_rwa_col else None
-
+            values = _cms2_row_values(
+                row_def,
+                modelled_data=modelled_data,
+                sa_collected=sa_collected,
+                all_data=all_data,
+                ec_col=ec_col,
+                approach_col=approach_col,
+                rwa_col=rwa_col,
+                sa_rwa_col=sa_rwa_col,
+            )
             rows_out.append(_make_row(row_def, values, column_refs))
 
         return _build_df(rows_out, column_refs)
@@ -1145,7 +888,7 @@ def _pick(cols: set[str], *candidates: str) -> str | None:
     return None
 
 
-def _col_sum(data: pl.DataFrame, cols: set[str], col_name: str | None) -> float | None:
+def _col_sum(data: pl.DataFrame, col_name: str | None) -> float | None:
     """Sum a single column, returning None if absent or empty."""
     if not col_name or col_name not in data.columns or data.height == 0:
         return None
@@ -1153,7 +896,7 @@ def _col_sum(data: pl.DataFrame, cols: set[str], col_name: str | None) -> float 
     return float(result) if result is not None else None
 
 
-def _safe_sum(data: pl.DataFrame, cols: set[str], *col_names: str) -> float | None:
+def _safe_sum(data: pl.DataFrame, *col_names: str) -> float | None:
     """Sum multiple columns, skipping absent ones."""
     total = 0.0
     found = False
@@ -1182,7 +925,6 @@ def _approach_rwa(
 
 def _ead_weighted_avg(
     data: pl.DataFrame,
-    cols: set[str],
     ead_col: str,
     metric_col: str | None,
 ) -> float | None:
@@ -1263,6 +1005,287 @@ def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
     return data.filter(pl.lit(False))
 
 
+_OV1_RATIO_REFS: frozenset[str] = frozenset({"5a", "5b", "6a", "6b", "7a", "7b"})
+_OV1_EXPLICIT_NULL_REFS: frozenset[str] = frozenset({"26", "27", "11", "12", "13", "14"})
+# Refs whose value is _approach_rwa(approach_col, rwa_col, <approach>).
+_OV1_APPROACH_REFS: dict[str, str] = {
+    "3": "foundation_irb",
+    "4": "slotting",
+    "UK4a": "equity",
+    "5": "advanced_irb",
+}
+
+
+def _ov1_row_values(
+    row_def: P3Row,
+    *,
+    data: pl.DataFrame,
+    cols: set[str],
+    rwa_col: str,
+    approach_col: str | None,
+    pre_floor_col: str | None,
+    total_rwa: float | None,
+    own_funds: float | None,
+    capital_ratios: Pillar3CapitalRatioOverrides | None,
+    column_refs: list[str],
+) -> dict[str, object]:
+    """Compute OV1 cell values for a single template row."""
+    ref = row_def.ref
+    values = _ov1_cell_values(
+        ref,
+        data=data,
+        cols=cols,
+        rwa_col=rwa_col,
+        approach_col=approach_col,
+        pre_floor_col=pre_floor_col,
+        total_rwa=total_rwa,
+        own_funds=own_funds,
+        capital_ratios=capital_ratios,
+    )
+
+    # Column b (T-1) always None — requires prior period data
+    values.setdefault("b", None)
+    # Auto-shim: own funds = a * 0.08, except for ratio rows where column c
+    # is intentionally None (a is itself a percentage).
+    if ref not in _OV1_RATIO_REFS and values.get("a") is not None and values.get("c") is None:
+        values["c"] = float(values["a"] or 0.0) * 0.08
+
+    return _make_row(row_def, values, column_refs)
+
+
+def _ov1_cell_values(
+    ref: str,
+    *,
+    data: pl.DataFrame,
+    cols: set[str],
+    rwa_col: str,
+    approach_col: str | None,
+    pre_floor_col: str | None,
+    total_rwa: float | None,
+    own_funds: float | None,
+    capital_ratios: Pillar3CapitalRatioOverrides | None,
+) -> dict[str, object]:
+    """Resolve the populated cell values for one OV1 row (pre auto-shim)."""
+    if ref in ("29", "1"):
+        return {"a": total_rwa, "c": own_funds}
+    if ref == "4a":
+        return _ov1_pre_floor_row(data, pre_floor_col)
+    if ref in _OV1_RATIO_REFS:
+        return {"a": _ov1_ratio_value(capital_ratios, ref)}
+    if ref == "24":
+        return {"a": _ov1_memo_250_row(data, cols, rwa_col)}
+    if ref in _OV1_EXPLICIT_NULL_REFS:
+        # Output floor multiplier/adjustment (26/27) come from config not
+        # pipeline data; equity sub-rows (11-14) lack pipeline granularity.
+        return {"a": None}
+    if approach_col:
+        return _ov1_approach_cell(ref, data, approach_col, rwa_col)
+    return {}
+
+
+def _ov1_approach_cell(
+    ref: str,
+    data: pl.DataFrame,
+    approach_col: str,
+    rwa_col: str,
+) -> dict[str, object]:
+    """OV1 rows whose column ``a`` comes from a per-approach RWA sum."""
+    if ref == "2":
+        sa_rwa = _approach_rwa(data, approach_col, rwa_col, "standardised")
+        eq_rwa = _approach_rwa(data, approach_col, rwa_col, "equity")
+        return {"a": (sa_rwa or 0.0) + (eq_rwa or 0.0)}
+    approach = _OV1_APPROACH_REFS.get(ref)
+    if approach is None:
+        return {}
+    return {"a": _approach_rwa(data, approach_col, rwa_col, approach)}
+
+
+def _ov1_pre_floor_row(
+    data: pl.DataFrame,
+    pre_floor_col: str | None,
+) -> dict[str, object]:
+    """OV1 row 4a: pre-floor total RWEAs."""
+    if not pre_floor_col:
+        # No pre-floor column — leave a/b/c as None (mirror existing fallback).
+        return {}
+    pre_floor_total = _col_sum(data, pre_floor_col)
+    return {
+        "a": pre_floor_total,
+        "c": pre_floor_total * 0.08 if pre_floor_total is not None else None,
+    }
+
+
+def _ov1_ratio_value(
+    capital_ratios: Pillar3CapitalRatioOverrides | None,
+    ref: str,
+) -> float | None:
+    """Pre-floor capital-ratio cell value as a percentage."""
+    ratio = _ratio_for_ref(capital_ratios, ref)
+    return float(ratio) * 100.0 if ratio is not None else None
+
+
+def _ov1_memo_250_row(
+    data: pl.DataFrame,
+    cols: set[str],
+    rwa_col: str,
+) -> float | None:
+    """Memo row 24: RWA of exposures with a 250% risk weight."""
+    rw_col = _pick(cols, "risk_weight", "sa_final_risk_weight")
+    if not rw_col:
+        return None
+    memo = data.filter((pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505))
+    return _col_sum(memo, rwa_col)
+
+
+# ---------------------------------------------------------------------------
+# CR7 row helpers
+# ---------------------------------------------------------------------------
+
+
+_CR7_IRB_APPROACHES: tuple[str, ...] = ("foundation_irb", "advanced_irb", "slotting")
+_CR7_B31_CORP_CLASSES: tuple[str, ...] = ("corporate", "corporate_sme", "specialised_lending")
+_CR7_CRR_CORP_CLASSES: tuple[str, ...] = ("corporate", "specialised_lending")
+_CR7_B31_RETAIL_CLASSES: tuple[str, ...] = ("retail_mortgage", "retail_qrre", "retail_other")
+_CR7_CRR_RETAIL_CLASSES: tuple[str, ...] = ("retail_other", "retail_qrre")
+
+
+_Cr7Handler = Callable[[pl.DataFrame, pl.DataFrame, pl.DataFrame, str | None, str], float | None]
+
+
+def _cr7_filter_in(
+    frame: pl.DataFrame,
+    ec_col: str | None,
+    classes: tuple[str, ...],
+) -> pl.DataFrame:
+    """Filter ``frame`` to rows whose exposure_class is in ``classes``.
+
+    Falls back to ``frame`` unchanged when no ``ec_col`` is available.
+    """
+    if not ec_col:
+        return frame
+    return frame.filter(pl.col(ec_col).is_in(list(classes)))
+
+
+def _cr7_row_rwa(
+    row_def: P3Row,
+    *,
+    framework: str,
+    data: pl.DataFrame,
+    firb: pl.DataFrame,
+    airb: pl.DataFrame,
+    slotting: pl.DataFrame,
+    ec_col: str | None,
+    approach_col: str,
+    rwa_col: str,
+) -> float | None:
+    """Resolve the RWA total for a single CR7 row, dispatching by ref."""
+    ref = row_def.ref
+    is_b31 = framework == "BASEL_3_1"
+
+    if ref == "1":
+        return _col_sum(firb, rwa_col)
+    if ref == "10" or row_def.is_total:
+        return _col_sum(
+            data.filter(pl.col(approach_col).is_in(list(_CR7_IRB_APPROACHES))),
+            rwa_col,
+        )
+    if ref == "9":
+        if not ec_col:
+            return None
+        return _col_sum(_cr7_filter_in(airb, ec_col, _CR7_CRR_RETAIL_CLASSES), rwa_col)
+
+    handler = _CR7_HANDLERS_B31.get(ref) if is_b31 else _CR7_HANDLERS_CRR.get(ref)
+    if handler is None:
+        return None
+    return handler(firb, airb, slotting, ec_col, rwa_col)
+
+
+def _cr7_b31_ref2(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    if not ec_col:
+        return None
+    return _col_sum(firb.filter(pl.col(ec_col) == "institution"), rwa_col)
+
+
+def _cr7_crr_ref2(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    if not ec_col:
+        return None
+    return _col_sum(firb.filter(pl.col(ec_col) == "central_govt_central_bank"), rwa_col)
+
+
+def _cr7_b31_ref3(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    if not ec_col:
+        return None
+    return _col_sum(_cr7_filter_in(firb, ec_col, _CR7_B31_CORP_CLASSES), rwa_col)
+
+
+def _cr7_crr_ref3(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    if not ec_col:
+        return None
+    return _col_sum(firb.filter(pl.col(ec_col) == "institution"), rwa_col)
+
+
+def _cr7_b31_ref4(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(airb, rwa_col)
+
+
+def _cr7_crr_ref4(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    subset = firb.filter(pl.col(ec_col) == "corporate_sme") if ec_col else firb
+    return _col_sum(subset, rwa_col)
+
+
+def _cr7_b31_ref5(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(_cr7_filter_in(airb, ec_col, _CR7_B31_CORP_CLASSES), rwa_col)
+
+
+def _cr7_crr_ref5(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(_cr7_filter_in(firb, ec_col, _CR7_CRR_CORP_CLASSES), rwa_col)
+
+
+def _cr7_b31_ref6(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(_cr7_filter_in(airb, ec_col, _CR7_B31_RETAIL_CLASSES), rwa_col)
+
+
+def _cr7_crr_ref6(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(airb, rwa_col)
+
+
+def _cr7_b31_ref7(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(slotting, rwa_col)
+
+
+def _cr7_crr_ref7(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(_cr7_filter_in(airb, ec_col, _CR7_B31_CORP_CLASSES), rwa_col)
+
+
+def _cr7_b31_ref8(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    subset = airb.filter(pl.col(ec_col) == "retail_mortgage") if ec_col else airb
+    return _col_sum(subset, rwa_col)
+
+
+def _cr7_crr_ref8(firb, airb, slotting, ec_col, rwa_col):  # noqa: ARG001
+    return _col_sum(_cr7_filter_in(airb, ec_col, _CR7_CRR_RETAIL_CLASSES), rwa_col)
+
+
+_CR7_HANDLERS_B31: dict[str, _Cr7Handler] = {
+    "2": _cr7_b31_ref2,
+    "3": _cr7_b31_ref3,
+    "4": _cr7_b31_ref4,
+    "5": _cr7_b31_ref5,
+    "6": _cr7_b31_ref6,
+    "7": _cr7_b31_ref7,
+    "8": _cr7_b31_ref8,
+}
+_CR7_HANDLERS_CRR: dict[str, _Cr7Handler] = {
+    "2": _cr7_crr_ref2,
+    "3": _cr7_crr_ref3,
+    "4": _cr7_crr_ref4,
+    "5": _cr7_crr_ref5,
+    "6": _cr7_crr_ref6,
+    "7": _cr7_crr_ref7,
+    "8": _cr7_crr_ref8,
+}
+
+
 # ---------------------------------------------------------------------------
 # Per-template value computation
 # ---------------------------------------------------------------------------
@@ -1278,11 +1301,11 @@ def _compute_cr4_values(
     on_bs = _filter_on_bs(data, cols)
     off_bs = _filter_off_bs(data, cols)
 
-    on_bs_pre = _safe_sum(on_bs, cols, "drawn_amount", "interest") or 0.0
-    off_bs_pre = _safe_sum(off_bs, cols, "nominal_amount", "undrawn_amount") or 0.0
-    on_bs_post = _col_sum(on_bs, cols, ead_col) or 0.0
-    off_bs_post = _col_sum(off_bs, cols, ead_col) or 0.0
-    rwa = _col_sum(data, cols, rwa_col) or 0.0
+    on_bs_pre = _safe_sum(on_bs, "drawn_amount", "interest") or 0.0
+    off_bs_pre = _safe_sum(off_bs, "nominal_amount", "undrawn_amount") or 0.0
+    on_bs_post = _col_sum(on_bs, ead_col) or 0.0
+    off_bs_post = _col_sum(off_bs, ead_col) or 0.0
+    rwa = _col_sum(data, rwa_col) or 0.0
     denominator = on_bs_post + off_bs_post
 
     return {
@@ -1304,7 +1327,7 @@ def _compute_cr5_values(
     is_b31: bool,
 ) -> dict[str, object]:
     """Compute CR5 column values: EAD allocated to risk-weight buckets."""
-    total_ead = _col_sum(data, cols, ead_col) or 0.0
+    total_ead = _col_sum(data, ead_col) or 0.0
     allocated = 0.0
     values: dict[str, object] = {}
 
@@ -1313,29 +1336,29 @@ def _compute_cr5_values(
         # Filter to ±0.5pp tolerance for risk weight match
         tol = 0.005
         bucket = data.filter((pl.col(rw_col) >= rw_value - tol) & (pl.col(rw_col) < rw_value + tol))
-        bucket_ead = _col_sum(bucket, cols, ead_col) or 0.0
+        bucket_ead = _col_sum(bucket, ead_col) or 0.0
         values[ref] = bucket_ead
         allocated += bucket_ead
 
     n = len(rw_bands)
-    # Other/Deducted = residual
+    # Residual bucket: total EAD minus all allocated bands
     values[_letter_ref(n)] = max(0.0, total_ead - allocated)
     # Total
     values[_letter_ref(n + 1)] = total_ead
     # Unrated
     if "sa_cqs" in data.columns:
         unrated = data.filter(pl.col("sa_cqs").is_null())
-        values[_letter_ref(n + 2)] = _col_sum(unrated, cols, ead_col)
+        values[_letter_ref(n + 2)] = _col_sum(unrated, ead_col)
     else:
         values[_letter_ref(n + 2)] = total_ead  # All unrated
 
     if is_b31:
         on_bs = _filter_on_bs(data, cols)
         off_bs = _filter_off_bs(data, cols)
-        on_bs_ead = _safe_sum(on_bs, cols, "drawn_amount", "interest")
-        off_bs_ead = _safe_sum(off_bs, cols, "nominal_amount", "undrawn_amount")
+        on_bs_ead = _safe_sum(on_bs, "drawn_amount", "interest")
+        off_bs_ead = _safe_sum(off_bs, "nominal_amount", "undrawn_amount")
         ccf_col = _pick(cols, "ccf_applied", "ccf")
-        avg_ccf = _ead_weighted_avg(off_bs, cols, ead_col, ccf_col) if ccf_col else None
+        avg_ccf = _ead_weighted_avg(off_bs, ead_col, ccf_col) if ccf_col else None
         values["ba"] = on_bs_ead
         values["bb"] = off_bs_ead
         values["bc"] = avg_ccf
@@ -1363,22 +1386,22 @@ def _compute_cr6_values(
     ccf_col = _pick(cols, "ccf_applied", "ccf")
     prov_col = _pick(cols, "scra_provision_amount", "provision_held")
 
-    ead_sum = _col_sum(data, cols, ead_col) or 0.0
-    rwa_sum = _col_sum(data, cols, rwa_col) or 0.0
+    ead_sum = _col_sum(data, ead_col) or 0.0
+    rwa_sum = _col_sum(data, rwa_col) or 0.0
 
     values: dict[str, object] = {
-        "b": _safe_sum(on_bs, cols, "drawn_amount", "interest"),
-        "c": _safe_sum(off_bs, cols, "nominal_amount", "undrawn_amount"),
-        "d": _ead_weighted_avg(off_bs, cols, ead_col, ccf_col),
+        "b": _safe_sum(on_bs, "drawn_amount", "interest"),
+        "c": _safe_sum(off_bs, "nominal_amount", "undrawn_amount"),
+        "d": _ead_weighted_avg(off_bs, ead_col, ccf_col),
         "e": ead_sum,
-        "f": _ead_weighted_avg(data, cols, ead_col, pd_col),
+        "f": _ead_weighted_avg(data, ead_col, pd_col),
         "g": _obligor_count(data, cols),
-        "h": _ead_weighted_avg(data, cols, ead_col, lgd_col),
-        "i": _ead_weighted_avg(data, cols, ead_col, maturity_col),
+        "h": _ead_weighted_avg(data, ead_col, lgd_col),
+        "i": _ead_weighted_avg(data, ead_col, maturity_col),
         "j": rwa_sum,
         "k": rwa_sum / ead_sum if ead_sum > 0 else None,
-        "l": _col_sum(data, cols, el_col),
-        "m": _col_sum(data, cols, prov_col),
+        "l": _col_sum(data, el_col),
+        "m": _col_sum(data, prov_col),
     }
 
     # Convert PD/LGD to percentage for display
@@ -1388,6 +1411,60 @@ def _compute_cr6_values(
         values["h"] = float(values["h"]) * 100.0
 
     return values
+
+
+def _cr9_schema(column_refs: list[str]) -> dict[str, pl.DataType]:
+    """Schema for CR9 frames: a/b are String, remaining cols Float64."""
+    schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+    for ref in column_refs:
+        schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
+    return schema
+
+
+def _cr9_empty_schema(column_refs: list[str]) -> pl.DataFrame:
+    """Empty CR9 frame with the correct schema."""
+    return pl.DataFrame([], schema=_cr9_schema(column_refs))
+
+
+def _cr9_bucket_row(
+    class_data: pl.DataFrame,
+    cols: set[str],
+    alloc_pd_col: str,
+    report_pd_col: str,
+    class_display: str,
+    lower: float,
+    upper: float,
+    label: str,
+    row_ref: str,
+    column_refs: list[str],
+) -> dict[str, object] | None:
+    """Build a single CR9 PD-bucket row, or None when the bucket is empty."""
+    if math.isinf(upper):
+        bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
+    else:
+        bucket = class_data.filter(
+            (pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper)
+        )
+    if bucket.height == 0:
+        return None
+    values = _compute_cr9_values(bucket, cols, report_pd_col)
+    values["a"] = class_display
+    values["b"] = label
+    return _make_row(P3Row(row_ref, label), values, column_refs)
+
+
+def _cr9_total_row(
+    class_data: pl.DataFrame,
+    cols: set[str],
+    report_pd_col: str,
+    class_display: str,
+    column_refs: list[str],
+) -> dict[str, object]:
+    """Build the CR9 total row for an exposure class."""
+    total_values = _compute_cr9_values(class_data, cols, report_pd_col)
+    total_values["a"] = class_display
+    total_values["b"] = "Total"
+    return _make_row(P3Row("18", "Total", is_total=True), total_values, column_refs)
 
 
 def _compute_cr9_values(
@@ -1414,93 +1491,110 @@ def _compute_cr9_values(
         return {}
 
     n_rows = data.height
-
-    # Col c: obligor count — prefer unique counterparty_reference
     cp_col = "counterparty_reference" if "counterparty_reference" in data.columns else None
-    n_obligors = float(data.select(pl.col(cp_col).n_unique()).item()) if cp_col else float(n_rows)
-
-    # Default detection: is_defaulted → PD >= 1.0 fallback
-    default_col = _pick(cols, "is_defaulted", "default_status")
-    if default_col and default_col in data.columns:
-        defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
-        n_defaults = (
-            float(defaulted.select(pl.col(cp_col).n_unique()).item())
-            if cp_col and defaulted.height > 0
-            else float(defaulted.height)
-        )
-    elif pd_col in data.columns:
-        defaulted = data.filter(pl.col(pd_col) >= 1.0)
-        n_defaults = (
-            float(defaulted.select(pl.col(cp_col).n_unique()).item())
-            if cp_col and defaulted.height > 0
-            else float(defaulted.height)
-        )
-    else:
-        n_defaults = 0.0
-
-    # Col c: prior year obligors — use prior_year_obligor_count if available,
-    # else fall back to current-period count
-    prior_col = _pick(cols, "prior_year_obligor_count")
-    if prior_col and prior_col in data.columns:
-        prior_obligors = float(data.select(pl.col(prior_col).fill_null(0.0).sum()).item())
-    else:
-        prior_obligors = n_obligors
-
-    # Col e: observed average default rate
+    n_obligors = _cr9_obligor_count(data, cp_col, n_rows)
+    n_defaults = _cr9_default_count(data, cols, pd_col, cp_col)
+    prior_obligors = _cr9_prior_obligor_count(data, cols, n_obligors)
     observed_rate = (n_defaults / n_obligors * 100.0) if n_obligors > 0 else 0.0
-
-    # Col f: exposure-weighted average PD (post input floor) — same as CR6 col f
-    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
-    if ead_col and ead_col in data.columns and pd_col in data.columns:
-        ewa_pd = _ead_weighted_avg(data, cols, ead_col, pd_col)
-        ewa_pd_pct = float(ewa_pd) * 100.0 if ewa_pd is not None else None
-    elif pd_col in data.columns:
-        # Fallback to arithmetic average if no EAD column
-        avg_pd = data.select(pl.col(pd_col).mean()).item()
-        ewa_pd_pct = float(avg_pd) * 100.0 if avg_pd is not None else None
-    else:
-        ewa_pd_pct = None
-
-    # Col g: arithmetic average PD at disclosure date (obligor-weighted, not
-    # exposure-weighted) — includes PD input floors
-    if pd_col in data.columns:
-        avg_pd_g = data.select(pl.col(pd_col).mean()).item()
-        avg_pd_pct = float(avg_pd_g) * 100.0 if avg_pd_g is not None else None
-    else:
-        avg_pd_pct = None
-
-    # Col h: average historical annual default rate (5-year simple average)
-    hist_col = _pick(cols, "historical_annual_default_rate")
-    if hist_col and hist_col in data.columns and n_rows > 0:
-        hist_rate = data.select(pl.col(hist_col).fill_null(0.0).mean()).item()
-        hist_rate_pct = float(hist_rate) * 100.0 if hist_rate is not None else None
-    else:
-        # Fall back to current-period observed rate as single-period approximation
-        hist_rate_pct = observed_rate
 
     return {
         "c": prior_obligors,
         "d": n_defaults,
         "e": observed_rate,
-        "f": ewa_pd_pct,
-        "g": avg_pd_pct,
-        "h": hist_rate_pct,
+        "f": _cr9_ewa_pd_pct(data, cols, pd_col),
+        "g": _cr9_avg_pd_pct(data, pd_col),
+        "h": _cr9_hist_rate_pct(data, cols, observed_rate, n_rows),
     }
+
+
+def _cr9_obligor_count(data: pl.DataFrame, cp_col: str | None, n_rows: int) -> float:
+    """Unique-obligor count when available, else row count."""
+    if cp_col:
+        return float(data.select(pl.col(cp_col).n_unique()).item())
+    return float(n_rows)
+
+
+def _cr9_default_count(
+    data: pl.DataFrame,
+    cols: set[str],
+    pd_col: str,
+    cp_col: str | None,
+) -> float:
+    """Count of defaulted obligors. Prefers ``is_defaulted``; falls back to PD>=1.0."""
+    default_col = _pick(cols, "is_defaulted", "default_status")
+    if default_col and default_col in data.columns:
+        defaulted = data.filter(pl.col(default_col) == True)  # noqa: E712
+    elif pd_col in data.columns:
+        defaulted = data.filter(pl.col(pd_col) >= 1.0)
+    else:
+        return 0.0
+    if cp_col and defaulted.height > 0:
+        return float(defaulted.select(pl.col(cp_col).n_unique()).item())
+    return float(defaulted.height)
+
+
+def _cr9_prior_obligor_count(
+    data: pl.DataFrame,
+    cols: set[str],
+    n_obligors: float,
+) -> float:
+    """Prior-year obligor count when the column exists, else current period."""
+    prior_col = _pick(cols, "prior_year_obligor_count")
+    if prior_col and prior_col in data.columns:
+        return float(data.select(pl.col(prior_col).fill_null(0.0).sum()).item())
+    return n_obligors
+
+
+def _cr9_ewa_pd_pct(
+    data: pl.DataFrame,
+    cols: set[str],
+    pd_col: str,
+) -> float | None:
+    """Col f: exposure-weighted average PD (%), with arithmetic-mean fallback."""
+    ead_col = _pick(cols, "ead_final", "final_ead", "ead")
+    if ead_col and ead_col in data.columns and pd_col in data.columns:
+        ewa_pd = _ead_weighted_avg(data, ead_col, pd_col)
+        return float(ewa_pd) * 100.0 if ewa_pd is not None else None
+    if pd_col in data.columns:
+        avg_pd = data.select(pl.col(pd_col).mean()).item()
+        return float(avg_pd) * 100.0 if avg_pd is not None else None
+    return None
+
+
+def _cr9_avg_pd_pct(data: pl.DataFrame, pd_col: str) -> float | None:
+    """Col g: arithmetic average PD at disclosure date (%)."""
+    if pd_col not in data.columns:
+        return None
+    avg = data.select(pl.col(pd_col).mean()).item()
+    return float(avg) * 100.0 if avg is not None else None
+
+
+def _cr9_hist_rate_pct(
+    data: pl.DataFrame,
+    cols: set[str],
+    observed_rate: float,
+    n_rows: int,
+) -> float | None:
+    """Col h: historical annual default rate (%), with current-period fallback."""
+    hist_col = _pick(cols, "historical_annual_default_rate")
+    if hist_col and hist_col in data.columns and n_rows > 0:
+        hist_rate = data.select(pl.col(hist_col).fill_null(0.0).mean()).item()
+        return float(hist_rate) * 100.0 if hist_rate is not None else None
+    return observed_rate
 
 
 def _compute_cr7a_values(
     data: pl.DataFrame,
     cols: set[str],
     ead_col: str,
-    rwa_col: str,
 ) -> dict[str, object]:
     """Compute CR7-A column values for a filtered IRB subset."""
-    total_ead = _col_sum(data, cols, ead_col) or 0.0
+    total_ead = _col_sum(data, ead_col) or 0.0
 
     def _pct(col_name: str | None) -> float | None:
         if not col_name or col_name not in data.columns or total_ead == 0:
             return None
-        val = _col_sum(data, cols, col_name) or 0.0
+        val = _col_sum(data, col_name) or 0.0
         return val / total_ead * 100.0
 
     values: dict[str, object] = {
@@ -1513,8 +1607,8 @@ def _compute_cr7a_values(
         "i": None,  # Life insurance — not separately tracked
         "j": None,  # Instruments held by third party — not separately tracked
         "k": _pct(_pick(cols, "guaranteed_portion")),
-        "m": _col_sum(data, cols, _pick(cols, "rwa_final", "final_rwa", "rwa")),
-        "n": _col_sum(data, cols, _pick(cols, "rwa_final", "final_rwa", "rwa")),
+        "m": _col_sum(data, _pick(cols, "rwa_final", "final_rwa", "rwa")),
+        "n": _col_sum(data, _pick(cols, "rwa_final", "final_rwa", "rwa")),
     }
 
     # c = sum of d + e + f
@@ -1536,6 +1630,46 @@ def _compute_cr7a_values(
     return values
 
 
+def _cr10_type_data(
+    data: pl.DataFrame,
+    sl_type_col: str | None,
+    sl_key: str,
+    framework: str,
+) -> pl.DataFrame:
+    """Subset slotting data for a given subtemplate key.
+
+    CRR groups IPRE with HVCRE; Basel 3.1 keeps them separate.
+    """
+    if not sl_type_col:
+        return data.filter(pl.lit(False))
+    if sl_key == "ipre" and framework != "BASEL_3_1":
+        return data.filter(pl.col(sl_type_col).is_in(["ipre", "hvcre"]))
+    return data.filter(pl.col(sl_type_col) == sl_key)
+
+
+def _cr10_rw_map_for(sl_key: str) -> dict[str, float]:
+    """Risk-weight lookup table for a CR10 subtemplate key."""
+    return HVCRE_RISK_WEIGHTS if sl_key == "hvcre" else SLOTTING_RISK_WEIGHTS
+
+
+def _cr10_row_subset(
+    row_def: P3Row,
+    type_data: pl.DataFrame,
+    cat_col: str | None,
+    rw_map: dict[str, float],
+) -> tuple[pl.DataFrame, float | None] | None:
+    """Return (subset, rw_value) for a CR10 row, or None to emit a null row."""
+    if row_def.is_total:
+        return type_data, None
+    if not cat_col:
+        return None
+    pipeline_cat = CR10_CATEGORY_MAP.get(row_def.name)
+    if not pipeline_cat:
+        return None
+    subset = type_data.filter(pl.col(cat_col) == pipeline_cat)
+    return subset, rw_map.get(pipeline_cat)
+
+
 def _compute_cr10_values(
     data: pl.DataFrame,
     cols: set[str],
@@ -1549,12 +1683,147 @@ def _compute_cr10_values(
     off_bs = _filter_off_bs(data, cols)
 
     return {
-        "a": _safe_sum(on_bs, cols, "drawn_amount", "interest"),
-        "b": _safe_sum(off_bs, cols, "nominal_amount", "undrawn_amount"),
+        "a": _safe_sum(on_bs, "drawn_amount", "interest"),
+        "b": _safe_sum(off_bs, "nominal_amount", "undrawn_amount"),
         "c": rw_value * 100.0 if rw_value is not None else None,
-        "d": _col_sum(data, cols, ead_col),
-        "e": _col_sum(data, cols, rwa_col),
-        "f": _col_sum(data, cols, el_col) if el_col else None,
+        "d": _col_sum(data, ead_col),
+        "e": _col_sum(data, rwa_col),
+        "f": _col_sum(data, el_col) if el_col else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# CMS2 row helpers
+# ---------------------------------------------------------------------------
+
+
+_CMS2_SUBROW_NULL_REFS: frozenset[str] = frozenset({"0044", "0045", "0054"})
+
+
+def _cms2_row_values(
+    row_def: P3Row,
+    *,
+    modelled_data: pl.DataFrame,
+    sa_collected: pl.DataFrame,
+    all_data: pl.DataFrame,
+    ec_col: str | None,
+    approach_col: str | None,
+    rwa_col: str,
+    sa_rwa_col: str | None,
+) -> dict[str, object]:
+    """Compute CMS2 column values for a single row, dispatching by ref."""
+    if row_def.is_total:
+        return _cms2_total_row(modelled_data, sa_collected, all_data, rwa_col, sa_rwa_col)
+    if row_def.ref == "0041" and ec_col and approach_col:
+        return _cms2_firb_row(
+            modelled_data, sa_collected, all_data, ec_col, approach_col, rwa_col, sa_rwa_col
+        )
+    if row_def.ref == "0042" and ec_col and approach_col:
+        return _cms2_airb_row(modelled_data, ec_col, approach_col, rwa_col, sa_rwa_col)
+    if row_def.ref in _CMS2_SUBROW_NULL_REFS:
+        # 0044 IPRE/HVCRE, 0045 purchased receivables (corp),
+        # 0054 purchased receivables (retail) — pipeline data not available.
+        return {"a": None, "b": None, "c": None, "d": None}
+    if row_def.exposure_classes and ec_col:
+        return _cms2_class_row(
+            row_def, modelled_data, sa_collected, all_data, ec_col, rwa_col, sa_rwa_col
+        )
+    return {"a": None, "b": None, "c": None, "d": None}
+
+
+def _cms2_total_row(
+    modelled_data: pl.DataFrame,
+    sa_collected: pl.DataFrame,
+    all_data: pl.DataFrame,
+    rwa_col: str,
+    sa_rwa_col: str | None,
+) -> dict[str, object]:
+    """CMS2 total row: sum across all credit risk exposures."""
+    modelled_rwa = _col_sum(modelled_data, rwa_col)
+    sa_port_rwa = _col_sum(sa_collected, rwa_col) or 0.0
+    return {
+        "a": modelled_rwa,
+        "b": _col_sum(modelled_data, sa_rwa_col) if sa_rwa_col else None,
+        "c": (modelled_rwa or 0.0) + sa_port_rwa,
+        "d": _col_sum(all_data, sa_rwa_col) if sa_rwa_col else None,
+    }
+
+
+def _cms2_firb_row(
+    modelled_data: pl.DataFrame,
+    sa_collected: pl.DataFrame,
+    all_data: pl.DataFrame,
+    ec_col: str,
+    approach_col: str,
+    rwa_col: str,
+    sa_rwa_col: str | None,
+) -> dict[str, object]:
+    """Row 0041: 'Of which are FIRB' — corporate exposures under F-IRB."""
+    corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
+    firb_corp = modelled_data.filter(
+        pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "foundation_irb")
+    )
+    a_val = _col_sum(firb_corp, rwa_col)
+    sa_firb = sa_collected.filter(pl.col(ec_col).is_in(corp_classes))
+    return {
+        "a": a_val,
+        "b": _col_sum(firb_corp, sa_rwa_col) if sa_rwa_col else None,
+        "c": (a_val or 0.0) + (_col_sum(sa_firb, rwa_col) or 0.0),
+        "d": (
+            _col_sum(all_data.filter(pl.col(ec_col).is_in(corp_classes)), sa_rwa_col)
+            if sa_rwa_col
+            else None
+        ),
+    }
+
+
+def _cms2_airb_row(
+    modelled_data: pl.DataFrame,
+    ec_col: str,
+    approach_col: str,
+    rwa_col: str,
+    sa_rwa_col: str | None,
+) -> dict[str, object]:
+    """Row 0042: 'Of which are AIRB' — corporate exposures under A-IRB."""
+    corp_classes = list(CMS2_SA_CLASS_MAP.get("0040", ()))
+    airb_corp = modelled_data.filter(
+        pl.col(ec_col).is_in(corp_classes) & (pl.col(approach_col) == "advanced_irb")
+    )
+    a_val = _col_sum(airb_corp, rwa_col)
+    # Sub-row pattern: c mirrors a (no SA portfolio add); d compared at parent level.
+    return {
+        "a": a_val,
+        "b": _col_sum(airb_corp, sa_rwa_col) if sa_rwa_col else None,
+        "c": a_val,
+        "d": None,
+    }
+
+
+def _cms2_class_row(
+    row_def: P3Row,
+    modelled_data: pl.DataFrame,
+    sa_collected: pl.DataFrame,
+    all_data: pl.DataFrame,
+    ec_col: str,
+    rwa_col: str,
+    sa_rwa_col: str | None,
+) -> dict[str, object]:
+    """Standard CMS2 asset-class row driven by ``row_def.exposure_classes``."""
+    ec_list = list(row_def.exposure_classes or ())
+    class_modelled = modelled_data.filter(pl.col(ec_col).is_in(ec_list))
+    a_val = _col_sum(class_modelled, rwa_col)
+
+    class_sa = sa_collected.filter(pl.col(ec_col).is_in(ec_list))
+    sa_port_rwa = _col_sum(class_sa, rwa_col) or 0.0
+
+    sa_classes = CMS2_SA_CLASS_MAP.get(row_def.ref, ec_list)
+    class_all = all_data.filter(pl.col(ec_col).is_in(list(sa_classes)))
+
+    return {
+        "a": a_val,
+        "b": _col_sum(class_modelled, sa_rwa_col) if sa_rwa_col else None,
+        "c": (a_val or 0.0) + sa_port_rwa,
+        "d": _col_sum(class_all, sa_rwa_col) if sa_rwa_col else None,
     }
 
 

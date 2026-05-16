@@ -136,6 +136,8 @@ nav = [
     { "Adding Features" = "development/extending.md" },
     { "Code Style" = "development/code-style.md" },
     { "Documentation Conventions" = "development/documentation-conventions.md" },
+    { "Citation Tracking" = "development/citation-tracking.md" },
+    { "Citation Coverage Matrix" = "development/citation-matrix.md" },
   ]},
   { "Plans" = [
     "plans/index.md",

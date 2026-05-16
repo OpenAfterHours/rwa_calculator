@@ -88,7 +88,7 @@ def compute_of_adj(
     return of_adj, gcra_capped
 
 
-@cites("CRR Art. 92")
+@cites("PS1/26, paragraph 92")
 def apply_floor_with_impact(
     combined: pl.LazyFrame,
     sa_results: pl.LazyFrame,

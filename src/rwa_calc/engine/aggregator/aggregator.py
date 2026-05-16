@@ -61,7 +61,7 @@ class OutputAggregator:
     supporting factors), and produces all summary and reporting views.
     """
 
-    @cites("CRR Art. 92")
+    @cites("PS1/26, paragraph 92")
     def aggregate(
         self,
         sa_results: pl.LazyFrame,

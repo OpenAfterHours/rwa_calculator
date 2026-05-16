@@ -12,6 +12,8 @@ The development guide covers:
 - [**Benchmark Tests**](benchmarks.md) - Performance and scale testing (10K-10M)
 - [**Adding Features**](extending.md) - Extending the calculator
 - [**Code Style**](code-style.md) - Coding standards and conventions
+- [**Citation Tracking**](citation-tracking.md) - `@cites` decorator conventions, watchfire CLI usage, strict-gate behaviour
+- [**Citation Coverage Matrix**](citation-matrix.md) - Auto-generated article -> implementing-function index with click-to-expand source snippets
 
 ## Development Setup
 

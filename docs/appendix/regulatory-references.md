@@ -2,6 +2,9 @@
 
 This page provides links to key regulatory documents and resources.
 
+!!! info "From article to implementation"
+    For any CRR article or PS1/26 paragraph listed below, see the [Citation Coverage Matrix](../development/citation-matrix.md) to jump straight to the implementing function(s) in `src/rwa_calc/` — each article has a click-to-expand source snippet pulled live from the codebase. The mapping is auto-generated from `@cites(...)` decorators (see [Citation Tracking](../development/citation-tracking.md) for the conventions) and stays in sync with every code change.
+
 ## UK Regulations
 
 ### PRA Rulebook

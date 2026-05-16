@@ -1,5 +1,8 @@
 # Regulatory Compliance Matrix
 
+!!! info "Live citation-to-code matrix"
+    The tables below are hand-maintained article-status summaries. For the **live mapping from each regulatory article to its implementing function(s)** — auto-generated from `@cites(...)` decorators with click-to-expand source snippets — see the [Citation Coverage Matrix](../development/citation-matrix.md). The [Citation Tracking](../development/citation-tracking.md) page documents the annotation conventions.
+
 ## CRR (Basel 3.0) — Current UK Rules
 
 | CRR Article | Topic | Status |

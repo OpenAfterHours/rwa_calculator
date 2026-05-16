@@ -59,7 +59,7 @@ def generate_post_crm_detailed(results: pl.LazyFrame) -> pl.LazyFrame:
     """
     cols = set(results.collect_schema().names())
 
-    ead_col = "ead_final" if "ead_final" in cols else ("ead" if "ead" in cols else None)
+    ead_col = next((c for c in ("ead_final", "ead") if c in cols), None)
     exposure_class_col = "exposure_class" if "exposure_class" in cols else None
 
     if not ead_col or not exposure_class_col:
@@ -71,8 +71,8 @@ def generate_post_crm_detailed(results: pl.LazyFrame) -> pl.LazyFrame:
         return _build_original_only_rows(results, cols, ead_col, exposure_class_col)
 
     non_guaranteed = _build_non_guaranteed_rows(results, cols, ead_col, exposure_class_col)
-    unguar_portion = _build_unguaranteed_portions(results, cols, ead_col, exposure_class_col)
-    guar_portion = _build_guaranteed_portions(results, cols, ead_col, exposure_class_col)
+    unguar_portion = _build_unguaranteed_portions(results, cols, exposure_class_col)
+    guar_portion = _build_guaranteed_portions(results, cols, exposure_class_col)
 
     return pl.concat([non_guaranteed, unguar_portion, guar_portion], how="diagonal_relaxed")
 
@@ -150,18 +150,18 @@ def _build_non_guaranteed_rows(
 def _build_unguaranteed_portions(
     results: pl.LazyFrame,
     cols: set[str],
-    ead_col: str,
     exposure_class_col: str,
 ) -> pl.LazyFrame:
     """Build reporting rows for the unguaranteed portion of guaranteed exposures."""
     pre_crm_class_col = (
         "pre_crm_exposure_class" if "pre_crm_exposure_class" in cols else exposure_class_col
     )
-    pre_crm_rw_col = "pre_crm_risk_weight" if "pre_crm_risk_weight" in cols else None
-    rw_col = "risk_weight" if "risk_weight" in cols else None
-    rw_expr = (
-        pl.col(pre_crm_rw_col) if pre_crm_rw_col else (pl.col(rw_col) if rw_col else pl.lit(1.0))
-    )
+    if "pre_crm_risk_weight" in cols:
+        rw_expr = pl.col("pre_crm_risk_weight")
+    elif "risk_weight" in cols:
+        rw_expr = pl.col("risk_weight")
+    else:
+        rw_expr = pl.lit(1.0)
 
     return results.filter(pl.col("is_guaranteed").fill_null(False)).with_columns(
         [
@@ -178,7 +178,6 @@ def _build_unguaranteed_portions(
 def _build_guaranteed_portions(
     results: pl.LazyFrame,
     cols: set[str],
-    ead_col: str,
     exposure_class_col: str,
 ) -> pl.LazyFrame:
     """Build reporting rows for the guaranteed portion of guaranteed exposures."""
@@ -188,13 +187,12 @@ def _build_guaranteed_portions(
         if "post_crm_exposure_class_guaranteed" in cols
         else exposure_class_col
     )
-    guarantor_rw_col = "guarantor_rw" if "guarantor_rw" in cols else None
-    rw_col = "risk_weight" if "risk_weight" in cols else None
-    rw_expr = (
-        pl.col(guarantor_rw_col)
-        if guarantor_rw_col
-        else (pl.col(rw_col) if rw_col else pl.lit(1.0))
-    )
+    if "guarantor_rw" in cols:
+        rw_expr = pl.col("guarantor_rw")
+    elif "risk_weight" in cols:
+        rw_expr = pl.col("risk_weight")
+    else:
+        rw_expr = pl.lit(1.0)
 
     # For guaranteed portion: use "standardised" when guarantor is SA, else original
     has_approach = "approach_applied" in cols

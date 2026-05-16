@@ -13,4 +13,6 @@ tests/benchmarks/data/
 .pypirc
 dist/
 logs/
-*.pdf
+*.pdfdocs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF
+docs/assets/*.pdf
+docs/assets/*.PDF

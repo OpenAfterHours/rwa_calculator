@@ -120,9 +120,9 @@ WHITELIST: list[tuple[str, str, tuple[str, ...]]] = [
     ("rwa_calc.engine.classifier", "ExposureClassifier.classify", ("CRR Art. 112",)),
     # --- Aggregator ---
     ("rwa_calc.engine.aggregator.aggregator", "OutputAggregator.aggregate",
-     ("CRR Art. 92",)),
+     ("PS1/26, paragraph 92",)),
     ("rwa_calc.engine.aggregator._floor", "apply_floor_with_impact",
-     ("CRR Art. 92",)),
+     ("PS1/26, paragraph 92",)),
     # --- data/tables/ builders ---
     ("rwa_calc.data.tables.crr_risk_weights", "build_institution_guarantor_rw_expr",
      ("CRR Art. 120", "CRR Art. 121")),

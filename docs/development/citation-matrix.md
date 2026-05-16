@@ -417,9 +417,17 @@ Last generated: 2026-05-16.
     --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:75:112"
     ```
 
-??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:171"
+??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:169"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:171:375"
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:169:373"
+    ```
+
+
+### CRR Art. 501a — Adjustment to own funds requirements for credit risk for exposures to entities that operate or finance physical structures or facilities, systems and networks that provide or support essential public services
+
+??? quote "`calculate_infrastructure_factor` — src/rwa_calc/engine/sa/supporting_factors.py:114"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:114:131"
     ```
 
 

@@ -14,6 +14,15 @@ import marimo
 __generated_with = "0.19.4"
 app = marimo.App(width="medium", css_file="shared/theme.css", html_head_file="shared/head.html")
 
+# Sentinel prefixes used in reactive state to encode pending actions.
+# Hoisted so the prefix string is defined once and referenced everywhere
+# (avoids drift between the producing cell that builds e.g. "__folder__:<name>"
+# and the consuming cell that strips that prefix).
+_FOLDER_SENTINEL = "__folder__:"
+_PUBLISH_SENTINEL = "__publish__:"
+# Dropdown label for "no subfolder / workspace root" in the move-workbook dialog.
+_ROOT_LABEL = "(root)"
+
 
 @app.cell
 def _():
@@ -445,9 +454,9 @@ def _(
         _btn_meta: dict[str, tuple[str, object]] = {}
         _cards: list[object] = []
 
-        # Folder cards
+        # Folder cards — buttons only; _py_count is recomputed in the card-display
+        # loop below where it is actually consumed.
         for _di, _d in enumerate(_folders):
-            _py_count = len([f for f in _d.glob("*.py") if f.stem != "__init__"])
             _open_key = f"folder_open_{_di}"
             _del_key = f"folder_del_{_di}"
             _btn_elements[_open_key] = mo.ui.button(
@@ -680,7 +689,7 @@ def _(mo, pending_delete):
     cancel_btn = mo.ui.run_button(label="Cancel")
 
     _label = pending_delete()
-    if _label.startswith("__folder__:"):
+    if _label.startswith(_FOLDER_SENTINEL):
         _display = f"folder **{_label[len('__folder__:') :]}"
     else:
         _display = f"**{_label}**"
@@ -712,9 +721,9 @@ def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
         _label = pending_delete()
 
-        if _label.startswith("__folder__:"):
+        if _label.startswith(_FOLDER_SENTINEL):
             # Folder delete
-            _folder_name = _label[len("__folder__:") :]
+            _folder_name = _label[len(_FOLDER_SENTINEL) :]
             _folder_path = _ws_dir / _folder_name
             _py_files = (
                 [f for f in _folder_path.glob("*.py") if f.stem != "__init__"]
@@ -763,8 +772,8 @@ def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
     _source_path, _source_name = pending_move()
 
     # Handle publish action
-    if _source_path.startswith("__publish__:"):
-        _pub_rel = _source_path[len("__publish__:") :]
+    if _source_path.startswith(_PUBLISH_SENTINEL):
+        _pub_rel = _source_path[len(_PUBLISH_SENTINEL) :]
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
         _team_dir = Path(__file__).parent / "workspaces" / "team"
         _src = _ws_dir / f"{_pub_rel}.py"
@@ -792,7 +801,7 @@ def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
     else:
         # Move dialog — show folder dropdown
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
-        _available_folders = ["(root)"] + sorted(
+        _available_folders = [_ROOT_LABEL] + sorted(
             d.name
             for d in _ws_dir.iterdir()
             if d.is_dir() and d.name not in SKIP_DIRS and not d.name.startswith(".")
@@ -800,7 +809,7 @@ def _(Path, SKIP_DIRS, mo, pending_move, set_pending_move, set_refresh):
         move_dropdown = mo.ui.dropdown(
             options=_available_folders,
             label="Move to",
-            value="(root)",
+            value=_ROOT_LABEL,
         )
         move_confirm_btn = mo.ui.run_button(label="Move")
         move_cancel_btn = mo.ui.run_button(label="Cancel")
@@ -834,7 +843,7 @@ def _(
 
     _source_path, _source_name = pending_move()
     # Skip publish actions (handled above)
-    mo.stop(_source_path.startswith("__publish__:"))
+    mo.stop(_source_path.startswith(_PUBLISH_SENTINEL))
 
     mo.stop(not move_confirm_btn.value and not move_cancel_btn.value)
 
@@ -845,7 +854,7 @@ def _(
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
         _src = _ws_dir / _source_path
         _dest_folder = move_dropdown.value
-        _dest_dir = _ws_dir if _dest_folder == "(root)" else _ws_dir / _dest_folder
+        _dest_dir = _ws_dir if _dest_folder == _ROOT_LABEL else _ws_dir / _dest_folder
         _dest = _dest_dir / _src.name
         if _dest.exists():
             mo.callout(

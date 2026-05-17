@@ -102,3 +102,39 @@ uv run python scripts/download_docs.py --list
 # Dry run (show what would be done)
 uv run python scripts/download_docs.py --dry-run
 ```
+
+## worktree.py
+
+Manages developer git worktrees for running multiple Claude Code instances in
+parallel. Each worktree gets its own branch `wt/<name>` and sits at
+`../rwa_calculator-<name>` next to the main repo.
+
+This is distinct from `/next-items`, which manages its own `batch/*` worktrees
+internally — `worktree.py` is the manual equivalent for human-driven parallel
+work.
+
+### Usage
+
+```bash
+# Create a new worktree off current HEAD
+uv run python scripts/worktree.py create feature-x
+
+# Create off a specific base
+uv run python scripts/worktree.py create spike-y --from master
+
+# List all wt/* worktrees with dirty/ahead/behind status
+uv run python scripts/worktree.py list
+
+# Remove a worktree, keep the branch
+uv run python scripts/worktree.py remove feature-x
+
+# Remove a worktree AND delete the branch
+uv run python scripts/worktree.py remove feature-x --delete-branch
+
+# Force-remove (skips dirty-state check, force-removes existing path)
+uv run python scripts/worktree.py remove feature-x --force
+```
+
+After `create`, the script prints the exact `UV_PROJECT_ENVIRONMENT` export
+command for both PowerShell and bash so the new worktree reuses the main
+repo's `.venv` (saves disk and `uv sync` time per worktree).

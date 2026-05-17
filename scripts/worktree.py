@@ -137,13 +137,14 @@ def cmd_create(name: str, base_ref: str, force: bool) -> int:
     if venv_path.exists():
         print("To use the main .venv from this worktree (saves disk + sync time):")
         print()
-        print("  PowerShell:")
-        print(f'    $env:UV_PROJECT_ENVIRONMENT = "{venv_path}"')
-        print(f'    cd "{worktree_path}"')
-        print()
-        print("  bash/zsh:")
-        print(f'    export UV_PROJECT_ENVIRONMENT="{venv_path}"')
-        print(f'    cd "{worktree_path}"')
+        if sys.platform == "win32":
+            print("  PowerShell:")
+            print(f'    $env:UV_PROJECT_ENVIRONMENT = "{venv_path}"')
+            print(f'    cd "{worktree_path}"')
+        else:
+            print("  bash/zsh:")
+            print(f'    export UV_PROJECT_ENVIRONMENT="{venv_path}"')
+            print(f'    cd "{worktree_path}"')
         print()
         print("Then start a new Claude Code session in that directory.")
     else:

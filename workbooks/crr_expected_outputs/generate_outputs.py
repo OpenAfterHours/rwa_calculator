@@ -64,6 +64,13 @@ from workbooks.shared.irb_formulas import (
     calculate_irb_rwa as base_calculate_irb_rwa,
 )
 
+# ---------------------------------------------------------------------------
+# Shared regulatory citation literals (hoisted — reused across scenarios)
+# ---------------------------------------------------------------------------
+_REG_FIRB_CORP = "CRR Art. 153, 161"  # F-IRB corporate / institution
+_REG_FCCR_HAIRCUTS = "CRR Art. 224"  # Financial collateral comprehensive method haircuts
+_REG_SLOTTING = "CRR Art. 153(5)"  # IRB slotting (specialised lending)
+
 
 @dataclass
 class CRRScenarioOutput:
@@ -506,7 +513,7 @@ def generate_crr_a_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_b_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group B (F-IRB) scenario outputs.
 
     Tests Foundation IRB calculations under CRR:
@@ -569,7 +576,7 @@ def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=result_b1["rwa"],
             expected_loss=calculate_expected_loss(pd_floored_b1, lgd_b1, ead_b1),
-            regulatory_reference="CRR Art. 153, 161",
+            regulatory_reference=_REG_FIRB_CORP,
             calculation_notes="Senior unsecured, supervisory LGD 45%. Low PD with maturity > 2.5y.",
         )
     )
@@ -620,7 +627,7 @@ def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=result_b2["rwa"],
             expected_loss=calculate_expected_loss(pd_floored_b2, lgd_b2, ead_b2),
-            regulatory_reference="CRR Art. 153, 161",
+            regulatory_reference=_REG_FIRB_CORP,
             calculation_notes="High PD corporate. Correlation decreases at high PD (R→0.12).",
         )
     )
@@ -671,7 +678,7 @@ def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=result_b3["rwa"],
             expected_loss=calculate_expected_loss(pd_floored_b3, lgd_b3, ead_b3),
-            regulatory_reference="CRR Art. 153, 161",
+            regulatory_reference=_REG_FIRB_CORP,
             calculation_notes="Subordinated claim: 75% LGD vs 45% senior. Significantly higher RWA.",
         )
     )
@@ -907,7 +914,7 @@ def generate_crr_b_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_c_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_c_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group C (A-IRB) scenario outputs."""
     scenarios = []
 
@@ -1054,7 +1061,7 @@ def generate_crr_c_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_d_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group D (CRM) scenario outputs."""
     scenarios = []
 
@@ -1128,7 +1135,7 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa_post_d2),
             expected_loss=None,
-            regulatory_reference="CRR Art. 224",
+            regulatory_reference=_REG_FCCR_HAIRCUTS,
             calculation_notes=f"CQS 1 govt bond >5y: {coll_haircut_d2 * 100:.1f}% haircut",
         )
     )
@@ -1165,7 +1172,7 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa_post_d3),
             expected_loss=None,
-            regulatory_reference="CRR Art. 224",
+            regulatory_reference=_REG_FCCR_HAIRCUTS,
             calculation_notes="Main index equity: 15% haircut (other equity: 25%)",
         )
     )
@@ -1278,7 +1285,7 @@ def generate_crr_d_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa_post_d6),
             expected_loss=None,
-            regulatory_reference="CRR Art. 224",
+            regulatory_reference=_REG_FCCR_HAIRCUTS,
             calculation_notes=f"FX mismatch: {fx_haircut_d6 * 100:.0f}% additional haircut",
         )
     )
@@ -1352,7 +1359,7 @@ def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(rwa),
             expected_loss=None,
-            regulatory_reference="CRR Art. 153(5)",
+            regulatory_reference=_REG_SLOTTING,
             calculation_notes=calculation_notes,
         )
 
@@ -1484,7 +1491,7 @@ def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
             supporting_factor=1.0,
             rwa_after_sf=float(e9_rwa),
             expected_loss=float(e9_el),
-            regulatory_reference="CRR Art. 153(5)",
+            regulatory_reference=_REG_SLOTTING,
             calculation_notes=(
                 "HVCRE Strong, >=2.5yr: 70% RW (Table 1). UK CRR has no HVCRE "
                 "sub-class; is_hvcre=True preserved in audit trail. "
@@ -1496,7 +1503,7 @@ def generate_crr_e_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_f_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_f_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """
     Generate CRR Group F (Supporting Factors) scenario outputs.
 
@@ -1540,7 +1547,7 @@ def generate_crr_f_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_g_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_g_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group G (Provisions) scenario outputs."""
     scenarios = []
 
@@ -1674,7 +1681,7 @@ def generate_crr_g_scenarios(fixtures) -> list[CRRScenarioOutput]:
     return scenarios
 
 
-def generate_crr_h_scenarios(fixtures) -> list[CRRScenarioOutput]:
+def generate_crr_h_scenarios(_fixtures) -> list[CRRScenarioOutput]:
     """Generate CRR Group H (Complex/Combined) scenario outputs."""
     scenarios = []
 
@@ -1820,7 +1827,7 @@ def generate_all_outputs():
             "sa_risk_weights": "CRR Art. 112-134",
             "irb_approach": "CRR Art. 142-191",
             "crm": "CRR Art. 207-236",
-            "slotting": "CRR Art. 153(5)",
+            "slotting": _REG_SLOTTING,
             "provisions": "CRR Art. 110, 158-159, 62(d)",
         },
         "scenario_groups": {

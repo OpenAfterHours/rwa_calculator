@@ -27,9 +27,9 @@ import shutil
 import subprocess
 import sys
 import webbrowser
+from collections.abc import Awaitable, Callable
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import marimo
 import uvicorn
@@ -37,10 +37,24 @@ from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
-if TYPE_CHECKING:
-    pass
-
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Response documentation — used in `responses=` on route decorators so the
+# generated OpenAPI schema documents each raised HTTPException status code.
+# ---------------------------------------------------------------------------
+_RESP_400_INVALID_PATH: dict[int | str, dict[str, str]] = {
+    400: {"description": "Invalid path or input"}
+}
+_RESP_404_NOT_FOUND: dict[int | str, dict[str, str]] = {
+    404: {"description": "Resource not found"}
+}
+_RESP_409_CONFLICT: dict[int | str, dict[str, str]] = {
+    409: {"description": "Conflict with existing resource"}
+}
+_RESP_500_GIT_ERROR: dict[int | str, dict[str, str]] = {
+    500: {"description": "Git repository error"}
+}
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -93,11 +107,14 @@ gateway = FastAPI(title="RWA Calculator")
 
 
 @gateway.middleware("http")
-async def _favicon_middleware(request: Request, call_next: object) -> Response:
+async def _favicon_middleware(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     """Serve custom favicon for all app paths (marimo uses relative ./favicon.ico)."""
     if request.url.path.endswith("/favicon.ico") and _FAVICON_BYTES:
         return Response(content=_FAVICON_BYTES, media_type="image/png")
-    return await call_next(request)  # type: ignore[operator]
+    return await call_next(request)
 
 
 @gateway.on_event("startup")
@@ -124,46 +141,56 @@ def _sanitise_name(raw: str) -> str:
     return "".join(c if c.isalnum() or c == "_" else "_" for c in raw)
 
 
+def _relative_path(folder: str, name: str) -> str:
+    return f"{folder}/{name}" if folder else name
+
+
+def _folder_entry(entry: Path, folder: str) -> dict[str, str]:
+    py_count = sum(1 for f in entry.glob("*.py") if f.stem != "__init__")
+    return {
+        "type": "folder",
+        "name": entry.name,
+        "path": _relative_path(folder, entry.name),
+        "count": str(py_count),
+    }
+
+
+def _file_entry(entry: Path, folder: str) -> dict[str, str]:
+    from datetime import datetime
+
+    mod = datetime.fromtimestamp(entry.stat().st_mtime, tz=UTC)
+    return {
+        "type": "file",
+        "name": entry.stem,
+        "path": _relative_path(folder, entry.name),
+        "modified": mod.isoformat(),
+    }
+
+
+def _classify_entry(entry: Path, folder: str) -> dict[str, str] | None:
+    if entry.name.startswith((".", "__")):
+        return None
+    if entry.is_dir() and entry.name not in _SKIP_DIRS:
+        return _folder_entry(entry, folder)
+    if entry.is_file() and entry.suffix == ".py" and entry.stem != "__init__":
+        return _file_entry(entry, folder)
+    return None
+
+
 def _list_items(base: Path, folder: str = "") -> list[dict[str, str]]:
     """List workbook files and subfolders within *base* / *folder*.
 
     Returns a list of dicts with keys: type, name, path, modified.
     """
-    from datetime import datetime
-
     target = _validate_workspace_path(base, folder) if folder else base
     if not target.exists() or not target.is_dir():
         return []
 
-    items: list[dict[str, str]] = []
-
-    for entry in sorted(target.iterdir(), key=lambda p: p.name):
-        if entry.name.startswith(".") or entry.name.startswith("__"):
-            continue
-        if entry.is_dir() and entry.name not in _SKIP_DIRS:
-            py_count = len([f for f in entry.glob("*.py") if f.stem != "__init__"])
-            rel = f"{folder}/{entry.name}" if folder else entry.name
-            items.append(
-                {
-                    "type": "folder",
-                    "name": entry.name,
-                    "path": rel,
-                    "count": str(py_count),
-                }
-            )
-        elif entry.is_file() and entry.suffix == ".py" and entry.stem != "__init__":
-            mod = datetime.fromtimestamp(entry.stat().st_mtime, tz=UTC)
-            rel = f"{folder}/{entry.name}" if folder else entry.name
-            items.append(
-                {
-                    "type": "file",
-                    "name": entry.stem,
-                    "path": rel,
-                    "modified": mod.isoformat(),
-                }
-            )
-
-    return items
+    return [
+        item
+        for entry in sorted(target.iterdir(), key=lambda p: p.name)
+        if (item := _classify_entry(entry, folder)) is not None
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +217,7 @@ async def list_workbooks(folder: str = "") -> dict[str, object]:
     return {"folder": folder, "items": items, "breadcrumbs": breadcrumbs}
 
 
-@gateway.post("/api/workbooks/duplicate")
+@gateway.post("/api/workbooks/duplicate", responses=_RESP_400_INVALID_PATH)
 async def duplicate_template(
     template: str,
     name: str | None = None,
@@ -219,7 +246,10 @@ async def duplicate_template(
     }
 
 
-@gateway.delete("/api/workbooks/{name:path}")
+@gateway.delete(
+    "/api/workbooks/{name:path}",
+    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT},
+)
 async def delete_workbook(name: str) -> dict[str, str]:
     """Delete a user workbook or an empty folder."""
     target = _validate_workspace_path(workspaces_dir, name)
@@ -243,7 +273,10 @@ async def delete_workbook(name: str) -> dict[str, str]:
     return {"deleted": name, "type": "file"}
 
 
-@gateway.post("/api/folders")
+@gateway.post(
+    "/api/folders",
+    responses={**_RESP_400_INVALID_PATH, **_RESP_409_CONFLICT},
+)
 async def create_folder(name: str, workspace: str = "local") -> dict[str, str]:
     """Create a new folder in the specified workspace."""
     sanitised = _sanitise_name(name)
@@ -257,7 +290,10 @@ async def create_folder(name: str, workspace: str = "local") -> dict[str, str]:
     return {"folder": sanitised, "workspace": workspace}
 
 
-@gateway.post("/api/workbooks/move")
+@gateway.post(
+    "/api/workbooks/move",
+    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT},
+)
 async def move_workbook(source: str, dest_folder: str = "") -> dict[str, str]:
     """Move a workbook to a different folder (or to root if *dest_folder* is empty)."""
     src = _validate_workspace_path(workspaces_dir, source)
@@ -293,7 +329,7 @@ async def list_team_workbooks(folder: str = "") -> dict[str, object]:
     return {"folder": folder, "items": items, "breadcrumbs": breadcrumbs}
 
 
-@gateway.get("/api/team/status")
+@gateway.get("/api/team/status", responses=_RESP_500_GIT_ERROR)
 async def team_status() -> dict[str, object]:
     """Return git status for all files in the team workspace."""
     from rwa_calc.ui.marimo.git_ops import find_repo_root, get_status
@@ -307,7 +343,7 @@ async def team_status() -> dict[str, object]:
     return {"files": [{"name": s.name, "folder": s.folder, "status": s.status} for s in statuses]}
 
 
-@gateway.post("/api/team/publish")
+@gateway.post("/api/team/publish", responses=_RESP_404_NOT_FOUND)
 async def publish_to_team(name: str, folder: str = "") -> dict[str, str]:
     """Copy a workbook from local/ to team/ and stage it."""
     from rwa_calc.ui.marimo.git_ops import publish
@@ -328,7 +364,7 @@ async def publish_to_team(name: str, folder: str = "") -> dict[str, str]:
     }
 
 
-@gateway.post("/api/team/commit")
+@gateway.post("/api/team/commit", responses=_RESP_500_GIT_ERROR)
 async def commit_team(message: str = "") -> dict[str, object]:
     """Stage all changes in team/, commit, and push."""
     from rwa_calc.ui.marimo.git_ops import find_repo_root, publish_changes
@@ -355,7 +391,7 @@ async def commit_team(message: str = "") -> dict[str, object]:
     }
 
 
-@gateway.post("/api/team/pull")
+@gateway.post("/api/team/pull", responses=_RESP_500_GIT_ERROR)
 async def pull_team() -> dict[str, object]:
     """Pull latest team changes from remote."""
     from rwa_calc.ui.marimo.git_ops import find_repo_root, pull

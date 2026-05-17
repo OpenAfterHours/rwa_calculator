@@ -1405,8 +1405,8 @@ class TestCombinedGeneration:
         crr = gen.generate_from_lazyframe(_sa_results(), framework="CRR")
         b31 = gen.generate_from_lazyframe(_sa_results(), framework="BASEL_3_1")
 
-        crr_cols = set(list(crr.c07_00.values())[0].columns)
-        b31_cols = set(list(b31.c07_00.values())[0].columns)
+        crr_cols = set(next(iter(crr.c07_00.values())).columns)
+        b31_cols = set(next(iter(b31.c07_00.values())).columns)
 
         # CRR has supporting factor columns, B3.1 doesn't
         assert "0215" in crr_cols
@@ -1510,7 +1510,7 @@ class TestSupportingFactors:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols(), framework="BASEL_3_1")
 
-        corp = list(bundle.c07_00.values())[0]
+        corp = next(iter(bundle.c07_00.values()))
         assert "0215" not in corp.columns
         assert "0216" not in corp.columns
         assert "0217" not in corp.columns
@@ -1611,7 +1611,7 @@ class TestECAIUnratedSplit:
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols(), framework="BASEL_3_1")
 
-        corp = list(bundle.c07_00.values())[0]
+        corp = next(iter(bundle.c07_00.values()))
         assert "0235" in corp.columns
 
     def test_b31_unrated_exposure_in_0235(self) -> None:
@@ -8935,7 +8935,9 @@ class TestEquityTransitionalColumns:
         # Replace equity_transitional with our test config
         import dataclasses
 
-        config_with_trans = dataclasses.replace(config_b31, equity_transitional=eq_config)
+        config_with_trans: CalculationConfig = dataclasses.replace(
+            config_b31, equity_transitional=eq_config
+        )
 
         exposures = pl.LazyFrame(
             {

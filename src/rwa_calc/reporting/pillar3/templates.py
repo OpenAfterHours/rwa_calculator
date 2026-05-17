@@ -55,6 +55,35 @@ class P3Row:
 
 
 # ---------------------------------------------------------------------------
+# Shared label / group constants (DRY — referenced by multiple templates)
+# ---------------------------------------------------------------------------
+
+# --- Exposure-class display labels ---
+_LBL_CENTRAL_GOVT = "Central governments or central banks"
+_LBL_RETAIL_RE_MORTGAGE = "Retail — Secured by immovable property"
+_LBL_RETAIL_QRRE = "Retail — Qualifying revolving"
+_LBL_RETAIL_OTHER = "Retail — Other"
+_LBL_CORP_SPECIALISED_LENDING = "Corporates — Specialised lending"
+_LBL_ROW_CORPORATES_INDENTED = "  Corporates"
+
+# --- Common row labels ---
+_LBL_CREDIT_RISK_EX_CCR = "Credit risk (excluding CCR)"
+
+# --- Common column labels ---
+_LBL_COL_RWEA_DENSITY = "RWEA density"
+_LBL_COL_PD_RANGE = "PD range"
+_LBL_COL_ONBS_EXPOSURES = "On-BS exposures"
+_LBL_COL_EXP_VALUE_POST_CCF_CRM = "Exposure value post CCF and CRM"
+_LBL_COL_EXPECTED_LOSS = "Expected loss amount"
+_LBL_COL_EW_AVG_PD_POST_FLOOR = "Exposure-weighted average PD (%) — post input floor"
+
+# --- Common group labels ---
+_GRP_RISK_WEIGHT = "Risk weight"
+_GRP_EXPOSURE_BREAKDOWN = "Exposure breakdown"
+_GRP_FUNDED_CP = "Funded credit protection"
+
+
+# ---------------------------------------------------------------------------
 # Letter-ref helper (used for CR5 risk-weight bucket columns)
 # ---------------------------------------------------------------------------
 
@@ -71,7 +100,7 @@ def _letter_ref(i: int) -> str:
 # ---------------------------------------------------------------------------
 
 SA_DISCLOSURE_CLASSES: list[tuple[str, str, tuple[str, ...]]] = [
-    ("1", "Central governments or central banks", ("central_govt_central_bank",)),
+    ("1", _LBL_CENTRAL_GOVT, ("central_govt_central_bank",)),
     ("2", "Regional governments or local authorities", ("rgla",)),
     ("3", "Public sector entities", ("pse",)),
     ("4", "Multilateral development banks", ("mdb",)),
@@ -91,14 +120,14 @@ SA_DISCLOSURE_CLASSES: list[tuple[str, str, tuple[str, ...]]] = [
 
 # IRB exposure class display names (used by CR6, CR6-A, CR7-A)
 IRB_EXPOSURE_CLASSES: dict[str, str] = {
-    "central_govt_central_bank": "Central governments or central banks",
+    "central_govt_central_bank": _LBL_CENTRAL_GOVT,
     "institution": "Institutions",
     "corporate": "Corporates",
     "corporate_sme": "Corporates — SME",
     "specialised_lending": "Specialised lending",
-    "retail_mortgage": "Retail — Secured by immovable property",
-    "retail_qrre": "Retail — Qualifying revolving",
-    "retail_other": "Retail — Other",
+    "retail_mortgage": _LBL_RETAIL_RE_MORTGAGE,
+    "retail_qrre": _LBL_RETAIL_QRRE,
+    "retail_other": _LBL_RETAIL_OTHER,
 }
 
 # ---------------------------------------------------------------------------
@@ -112,7 +141,7 @@ OV1_COLUMNS: list[P3Column] = [
 ]
 
 CRR_OV1_ROWS: list[P3Row] = [
-    P3Row("1", "Credit risk (excluding CCR)"),
+    P3Row("1", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("2", "Of which: standardised approach"),
     P3Row("3", "Of which: foundation IRB approach"),
     P3Row("4", "Of which: slotting approach"),
@@ -123,7 +152,7 @@ CRR_OV1_ROWS: list[P3Row] = [
 ]
 
 B31_OV1_ROWS: list[P3Row] = [
-    P3Row("1", "Credit risk (excluding CCR)"),
+    P3Row("1", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("2", "Of which: standardised approach"),
     P3Row("3", "Of which: foundation IRB approach"),
     P3Row("4", "Of which: slotting approach"),
@@ -156,7 +185,7 @@ CRR_CR4_COLUMNS: list[P3Column] = [
     P3Column("c", "On-BS amount post CCF and post CRM", "Exposures post CCF and CRM"),
     P3Column("d", "Off-BS amount post CCF and post CRM", "Exposures post CCF and CRM"),
     P3Column("e", "RWEAs"),
-    P3Column("f", "RWEA density"),
+    P3Column("f", _LBL_COL_RWEA_DENSITY),
 ]
 
 B31_CR4_COLUMNS: list[P3Column] = [
@@ -165,7 +194,7 @@ B31_CR4_COLUMNS: list[P3Column] = [
     P3Column("c", "On-BS amount post CF and post CRM", "Exposures post CF and CRM"),
     P3Column("d", "Off-BS amount post CF and post CRM", "Exposures post CF and CRM"),
     P3Column("e", "RWEAs"),
-    P3Column("f", "RWEA density"),
+    P3Column("f", _LBL_COL_RWEA_DENSITY),
 ]
 
 CRR_CR4_ROWS: list[P3Row] = [
@@ -254,18 +283,18 @@ def _build_cr5_columns(
     """Build CR5 columns from a risk-weight band list."""
     cols: list[P3Column] = []
     for i, (_, label) in enumerate(rw_list):
-        cols.append(P3Column(_letter_ref(i), label, "Risk weight"))
+        cols.append(P3Column(_letter_ref(i), label, _GRP_RISK_WEIGHT))
     n = len(rw_list)
-    cols.append(P3Column(_letter_ref(n), "Other/Deducted", "Risk weight"))
+    cols.append(P3Column(_letter_ref(n), "Other/Deducted", _GRP_RISK_WEIGHT))
     cols.append(P3Column(_letter_ref(n + 1), "Total"))
     cols.append(P3Column(_letter_ref(n + 2), "Of which: unrated"))
     if is_b31:
         cols.extend(
             [
-                P3Column("ba", "On-BS exposure amount", "Exposure breakdown"),
-                P3Column("bb", "Off-BS exposure amount", "Exposure breakdown"),
-                P3Column("bc", "Weighted average CF", "Exposure breakdown"),
-                P3Column("bd", "Total post CF and CRM", "Exposure breakdown"),
+                P3Column("ba", "On-BS exposure amount", _GRP_EXPOSURE_BREAKDOWN),
+                P3Column("bb", "Off-BS exposure amount", _GRP_EXPOSURE_BREAKDOWN),
+                P3Column("bc", "Weighted average CF", _GRP_EXPOSURE_BREAKDOWN),
+                P3Column("bd", "Total post CF and CRM", _GRP_EXPOSURE_BREAKDOWN),
             ]
         )
     return cols
@@ -284,34 +313,34 @@ B31_CR5_ROWS: list[P3Row] = B31_CR4_ROWS
 # ---------------------------------------------------------------------------
 
 CRR_CR6_COLUMNS: list[P3Column] = [
-    P3Column("a", "PD range"),
-    P3Column("b", "On-BS exposures"),
+    P3Column("a", _LBL_COL_PD_RANGE),
+    P3Column("b", _LBL_COL_ONBS_EXPOSURES),
     P3Column("c", "Off-BS exposures pre-CCF"),
     P3Column("d", "Exposure-weighted average CCF"),
-    P3Column("e", "Exposure value post CCF and CRM"),
+    P3Column("e", _LBL_COL_EXP_VALUE_POST_CCF_CRM),
     P3Column("f", "Exposure-weighted average PD (%)"),
     P3Column("g", "Number of obligors"),
     P3Column("h", "Exposure-weighted average LGD (%)"),
     P3Column("i", "Exposure-weighted average maturity (years)"),
     P3Column("j", "RWEAs"),
-    P3Column("k", "RWEA density"),
-    P3Column("l", "Expected loss amount"),
+    P3Column("k", _LBL_COL_RWEA_DENSITY),
+    P3Column("l", _LBL_COL_EXPECTED_LOSS),
     P3Column("m", "Value adjustments and provisions"),
 ]
 
 B31_CR6_COLUMNS: list[P3Column] = [
-    P3Column("a", "PD range"),
-    P3Column("b", "On-BS exposures"),
+    P3Column("a", _LBL_COL_PD_RANGE),
+    P3Column("b", _LBL_COL_ONBS_EXPOSURES),
     P3Column("c", "Off-BS exposures pre-CCF"),
     P3Column("d", "Exposure-weighted average CCF"),
-    P3Column("e", "Exposure value post CCF and CRM"),
-    P3Column("f", "Exposure-weighted average PD (%) — post input floor"),
+    P3Column("e", _LBL_COL_EXP_VALUE_POST_CCF_CRM),
+    P3Column("f", _LBL_COL_EW_AVG_PD_POST_FLOOR),
     P3Column("g", "Number of obligors"),
     P3Column("h", "Exposure-weighted average LGD (%) — including input floors"),
     P3Column("i", "Exposure-weighted average maturity (years)"),
     P3Column("j", "RWEAs"),
-    P3Column("k", "RWEA density"),
-    P3Column("l", "Expected loss amount"),
+    P3Column("k", _LBL_COL_RWEA_DENSITY),
+    P3Column("l", _LBL_COL_EXPECTED_LOSS),
     P3Column("m", "Value adjustments and provisions"),
 ]
 
@@ -349,23 +378,23 @@ CR6A_COLUMNS: list[P3Column] = [
 ]
 
 CRR_CR6A_ROWS: list[P3Row] = [
-    P3Row("1", "Central governments or central banks", ("central_govt_central_bank",)),
+    P3Row("1", _LBL_CENTRAL_GOVT, ("central_govt_central_bank",)),
     P3Row("2", "Institutions", ("institution",)),
     P3Row("3", "Corporates", ("corporate", "corporate_sme", "specialised_lending")),
-    P3Row("4", "Retail — Secured by immovable property", ("retail_mortgage",)),
-    P3Row("5", "Retail — Qualifying revolving", ("retail_qrre",)),
-    P3Row("6", "Retail — Other", ("retail_other",)),
+    P3Row("4", _LBL_RETAIL_RE_MORTGAGE, ("retail_mortgage",)),
+    P3Row("5", _LBL_RETAIL_QRRE, ("retail_qrre",)),
+    P3Row("6", _LBL_RETAIL_OTHER, ("retail_other",)),
     P3Row("7", "Equity", ("equity",)),
     P3Row("8", "Total", is_total=True),
 ]
 
 B31_CR6A_ROWS: list[P3Row] = [
-    P3Row("1", "Central governments or central banks", ("central_govt_central_bank",)),
+    P3Row("1", _LBL_CENTRAL_GOVT, ("central_govt_central_bank",)),
     P3Row("2", "Institutions", ("institution",)),
     P3Row("3", "Corporates", ("corporate", "corporate_sme", "specialised_lending")),
-    P3Row("4", "Retail — Secured by immovable property", ("retail_mortgage",)),
-    P3Row("5", "Retail — Qualifying revolving", ("retail_qrre",)),
-    P3Row("6", "Retail — Other", ("retail_other",)),
+    P3Row("4", _LBL_RETAIL_RE_MORTGAGE, ("retail_mortgage",)),
+    P3Row("5", _LBL_RETAIL_QRRE, ("retail_qrre",)),
+    P3Row("6", _LBL_RETAIL_OTHER, ("retail_other",)),
     P3Row("7", "Total", is_total=True),
 ]
 
@@ -385,7 +414,7 @@ CRR_CR7_ROWS: list[P3Row] = [
     P3Row("4", "  Corporates — SME"),
     P3Row("5", "  Corporates — Other"),
     P3Row("6", "A-IRB subtotal"),
-    P3Row("7", "  Corporates"),
+    P3Row("7", _LBL_ROW_CORPORATES_INDENTED),
     P3Row("8", "  Retail — Secured by immovable property"),
     P3Row("9", "  Retail — Other"),
     P3Row("10", "Total", is_total=True),
@@ -394,9 +423,9 @@ CRR_CR7_ROWS: list[P3Row] = [
 B31_CR7_ROWS: list[P3Row] = [
     P3Row("1", "F-IRB subtotal"),
     P3Row("2", "  Institutions"),
-    P3Row("3", "  Corporates"),
+    P3Row("3", _LBL_ROW_CORPORATES_INDENTED),
     P3Row("4", "A-IRB subtotal"),
-    P3Row("5", "  Corporates"),
+    P3Row("5", _LBL_ROW_CORPORATES_INDENTED),
     P3Row("6", "  Retail"),
     P3Row("7", "Slotting subtotal"),
     P3Row("8", "Total", is_total=True),
@@ -409,15 +438,15 @@ B31_CR7_ROWS: list[P3Row] = [
 
 CRR_CR7A_COLUMNS: list[P3Column] = [
     P3Column("a", "Total exposures", "Total"),
-    P3Column("b", "FCP: Financial collateral (%)", "Funded credit protection"),
-    P3Column("c", "FCP: Other eligible collateral (%)", "Funded credit protection"),
-    P3Column("d", "FCP: Immovable property (%)", "Funded credit protection"),
-    P3Column("e", "FCP: Receivables (%)", "Funded credit protection"),
-    P3Column("f", "FCP: Other physical collateral (%)", "Funded credit protection"),
-    P3Column("g", "FCP: Other funded CP (%)", "Funded credit protection"),
-    P3Column("h", "FCP: Cash on deposit (%)", "Funded credit protection"),
-    P3Column("i", "FCP: Life insurance policies (%)", "Funded credit protection"),
-    P3Column("j", "FCP: Instruments held by third party (%)", "Funded credit protection"),
+    P3Column("b", "FCP: Financial collateral (%)", _GRP_FUNDED_CP),
+    P3Column("c", "FCP: Other eligible collateral (%)", _GRP_FUNDED_CP),
+    P3Column("d", "FCP: Immovable property (%)", _GRP_FUNDED_CP),
+    P3Column("e", "FCP: Receivables (%)", _GRP_FUNDED_CP),
+    P3Column("f", "FCP: Other physical collateral (%)", _GRP_FUNDED_CP),
+    P3Column("g", "FCP: Other funded CP (%)", _GRP_FUNDED_CP),
+    P3Column("h", "FCP: Cash on deposit (%)", _GRP_FUNDED_CP),
+    P3Column("i", "FCP: Life insurance policies (%)", _GRP_FUNDED_CP),
+    P3Column("j", "FCP: Instruments held by third party (%)", _GRP_FUNDED_CP),
     P3Column("k", "UFCP: Guarantees (%)", "Unfunded credit protection"),
     P3Column("l", "UFCP: Credit derivatives (%)", "Unfunded credit protection"),
     P3Column("m", "RWEA post all CRM (obligor class)"),
@@ -432,19 +461,19 @@ B31_CR7A_COLUMNS: list[P3Column] = [
 
 # CR7-A rows per approach: F-IRB, A-IRB (separate disclosure tables)
 CR7A_FIRB_ROWS: list[P3Row] = [
-    P3Row("1", "Central governments or central banks", ("central_govt_central_bank",)),
+    P3Row("1", _LBL_CENTRAL_GOVT, ("central_govt_central_bank",)),
     P3Row("2", "Institutions", ("institution",)),
-    P3Row("3", "Corporates — Specialised lending", ("specialised_lending",)),
+    P3Row("3", _LBL_CORP_SPECIALISED_LENDING, ("specialised_lending",)),
     P3Row("4", "Corporates — Other", ("corporate", "corporate_sme")),
     P3Row("5", "Total", is_total=True),
 ]
 
 CR7A_AIRB_ROWS: list[P3Row] = [
-    P3Row("1", "Corporates — Specialised lending", ("specialised_lending",)),
+    P3Row("1", _LBL_CORP_SPECIALISED_LENDING, ("specialised_lending",)),
     P3Row("2", "Corporates — Other", ("corporate", "corporate_sme")),
-    P3Row("3", "Retail — Secured by immovable property", ("retail_mortgage",)),
-    P3Row("4", "Retail — Qualifying revolving", ("retail_qrre",)),
-    P3Row("5", "Retail — Other", ("retail_other",)),
+    P3Row("3", _LBL_RETAIL_RE_MORTGAGE, ("retail_mortgage",)),
+    P3Row("4", _LBL_RETAIL_QRRE, ("retail_qrre",)),
+    P3Row("5", _LBL_RETAIL_OTHER, ("retail_other",)),
     P3Row("6", "Total", is_total=True),
 ]
 
@@ -474,21 +503,21 @@ CR8_ROWS: list[P3Row] = [
 # ---------------------------------------------------------------------------
 
 CRR_CR10_COLUMNS: list[P3Column] = [
-    P3Column("a", "On-BS exposures"),
+    P3Column("a", _LBL_COL_ONBS_EXPOSURES),
     P3Column("b", "Off-BS exposures"),
-    P3Column("c", "Risk weight"),
+    P3Column("c", _GRP_RISK_WEIGHT),
     P3Column("d", "Exposure value"),
     P3Column("e", "RWEA"),
-    P3Column("f", "Expected loss amount"),
+    P3Column("f", _LBL_COL_EXPECTED_LOSS),
 ]
 
 B31_CR10_COLUMNS: list[P3Column] = [
-    P3Column("a", "On-BS exposures"),
+    P3Column("a", _LBL_COL_ONBS_EXPOSURES),
     P3Column("b", "Off-BS exposures"),
-    P3Column("c", "Risk weight"),
-    P3Column("d", "Exposure value post CCF and CRM"),
+    P3Column("c", _GRP_RISK_WEIGHT),
+    P3Column("d", _LBL_COL_EXP_VALUE_POST_CCF_CRM),
     P3Column("e", "RWEA"),
-    P3Column("f", "Expected loss amount"),
+    P3Column("f", _LBL_COL_EXPECTED_LOSS),
 ]
 
 CRR_CR10_SUBTEMPLATES: dict[str, str] = {
@@ -557,11 +586,11 @@ HVCRE_RISK_WEIGHTS: dict[str, float] = {
 
 CR9_COLUMNS: list[P3Column] = [
     P3Column("a", "Exposure class"),
-    P3Column("b", "PD range"),
+    P3Column("b", _LBL_COL_PD_RANGE),
     P3Column("c", "Number of obligors at end of previous year"),
     P3Column("d", "Of which: defaulted during the year"),
     P3Column("e", "Observed average default rate (%)"),
-    P3Column("f", "Exposure-weighted average PD (%) — post input floor"),
+    P3Column("f", _LBL_COL_EW_AVG_PD_POST_FLOOR),
     P3Column("g", "Average PD at disclosure date (%) — post input floor"),
     P3Column("h", "Average historical annual default rate (%)"),
 ]
@@ -571,18 +600,18 @@ CR9_COLUMN_REFS: list[str] = [c.ref for c in CR9_COLUMNS]
 # CR9 AIRB exposure class breakdown (Art. 147(2)(c)-(d))
 CR9_AIRB_CLASSES: list[tuple[str, str]] = [
     ("corporate", "Corporates"),
-    ("specialised_lending", "Corporates — Specialised lending"),
+    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING),
     ("corporate_sme", "Corporates — Other general corporates (SME)"),
-    ("retail_mortgage", "Retail — Secured by immovable property"),
-    ("retail_qrre", "Retail — Qualifying revolving"),
-    ("retail_other", "Retail — Other"),
+    ("retail_mortgage", _LBL_RETAIL_RE_MORTGAGE),
+    ("retail_qrre", _LBL_RETAIL_QRRE),
+    ("retail_other", _LBL_RETAIL_OTHER),
 ]
 
 # CR9 FIRB exposure class breakdown (Art. 147(2)(b)-(c))
 CR9_FIRB_CLASSES: list[tuple[str, str]] = [
     ("institution", "Institutions"),
     ("corporate", "Corporates"),
-    ("specialised_lending", "Corporates — Specialised lending"),
+    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING),
     ("corporate_sme", "Corporates — Other general corporates (SME)"),
 ]
 
@@ -608,7 +637,7 @@ CR9_1_COLUMNS: list[P3Column] = [
     P3Column("c", "Number of obligors at end of previous year"),
     P3Column("d", "Of which: defaulted during the year"),
     P3Column("e", "Observed average default rate (%)"),
-    P3Column("f", "Exposure-weighted average PD (%) — post input floor"),
+    P3Column("f", _LBL_COL_EW_AVG_PD_POST_FLOOR),
     P3Column("g", "Average PD at disclosure date (%) — post input floor"),
     P3Column("h", "Average historical annual default rate (%)"),
     # Additional ECAI columns are added dynamically per firm
@@ -630,7 +659,7 @@ CMS1_COLUMNS: list[P3Column] = [
 ]
 
 CMS1_ROWS: list[P3Row] = [
-    P3Row("0010", "Credit risk (excluding CCR)"),
+    P3Row("0010", _LBL_CREDIT_RISK_EX_CCR),
     P3Row("0020", "Counterparty credit risk"),
     P3Row("0030", "Credit valuation adjustment"),
     P3Row("0040", "Securitisation exposures in the banking book"),

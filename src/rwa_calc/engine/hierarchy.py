@@ -1121,56 +1121,38 @@ class HierarchyResolver:
         waterfall rows, and "_RESIDUAL" for the optional MOF residual row —
         set by ``_expand_mof_facility_undrawn``.
         """
+        col_or_null = _make_col_or_null(facility_cols)
+        col_or_false = _make_col_or_false(facility_cols)
         return [
             (pl.col("facility_reference") + pl.lit("_UNDRAWN") + pl.col("_exposure_suffix")).alias(
                 "exposure_reference"
             ),
             pl.lit("facility_undrawn").alias("exposure_type"),
-            pl.col("product_type")
-            if "product_type" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("product_type"),
-            pl.col("book_code").cast(pl.String, strict=False)
-            if "book_code" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("book_code"),
+            col_or_null("product_type", pl.String),
+            col_or_null("book_code", pl.String, cast=True),
             pl.coalesce(
                 pl.col("share_counterparty_reference"),
                 pl.col("counterparty_reference")
                 if "counterparty_reference" in facility_cols
                 else pl.lit(None).cast(pl.String),
             ).alias("counterparty_reference"),
-            (
-                pl.col("counterparty_reference").alias("original_counterparty_reference")
-                if "counterparty_reference" in facility_cols
-                else pl.lit(None).cast(pl.String).alias("original_counterparty_reference")
+            col_or_null(
+                "counterparty_reference", pl.String, alias="original_counterparty_reference"
             ),
-            pl.col("value_date")
-            if "value_date" in facility_cols
-            else pl.lit(None).cast(pl.Date).alias("value_date"),
-            pl.col("maturity_date")
-            if "maturity_date" in facility_cols
-            else pl.lit(None).cast(pl.Date).alias("maturity_date"),
-            pl.col("currency")
-            if "currency" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("currency"),
+            col_or_null("value_date", pl.Date),
+            col_or_null("maturity_date", pl.Date),
+            col_or_null("currency", pl.String),
             pl.lit(0.0).alias("drawn_amount"),
             pl.lit(0.0).alias("interest"),
             pl.col("undrawn_amount"),
             pl.col("undrawn_amount").alias("nominal_amount"),
-            pl.col("lgd").cast(pl.Float64, strict=False)
-            if "lgd" in facility_cols
-            else pl.lit(None).cast(pl.Float64).alias("lgd"),
-            pl.col("lgd_unsecured").cast(pl.Float64, strict=False)
-            if "lgd_unsecured" in facility_cols
-            else pl.lit(None).cast(pl.Float64).alias("lgd_unsecured"),
-            pl.col("has_sufficient_collateral_data").cast(pl.Boolean, strict=False)
-            if "has_sufficient_collateral_data" in facility_cols
-            else pl.lit(None).cast(pl.Boolean).alias("has_sufficient_collateral_data"),
+            col_or_null("lgd", pl.Float64, cast=True),
+            col_or_null("lgd_unsecured", pl.Float64, cast=True),
+            col_or_null("has_sufficient_collateral_data", pl.Boolean, cast=True),
             pl.col("beel").cast(pl.Float64, strict=False).fill_null(0.0)
             if "beel" in facility_cols
             else pl.lit(0.0).alias("beel"),
-            pl.col("seniority")
-            if "seniority" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("seniority"),
+            col_or_null("seniority", pl.String),
             pl.coalesce(
                 pl.col("mof_risk_type"),
                 pl.col("risk_type")
@@ -1178,60 +1160,26 @@ class HierarchyResolver:
                 else pl.lit(None).cast(pl.String),
             ).alias("risk_type"),
             pl.col("mof_risk_type_source"),
-            pl.col("underlying_risk_type")
-            if "underlying_risk_type" in facility_cols
-            else pl.lit(None).cast(pl.String).alias("underlying_risk_type"),
-            pl.col("ccf_modelled").cast(pl.Float64, strict=False)
-            if "ccf_modelled" in facility_cols
-            else pl.lit(None).cast(pl.Float64).alias("ccf_modelled"),
-            pl.col("ead_modelled").cast(pl.Float64, strict=False)
-            if "ead_modelled" in facility_cols
-            else pl.lit(None).cast(pl.Float64).alias("ead_modelled"),
-            (
-                pl.col("is_short_term_trade_lc").fill_null(False)
-                if "is_short_term_trade_lc" in facility_cols
-                else pl.lit(False).alias("is_short_term_trade_lc")
-            ),
+            col_or_null("underlying_risk_type", pl.String),
+            col_or_null("ccf_modelled", pl.Float64, cast=True),
+            col_or_null("ead_modelled", pl.Float64, cast=True),
+            col_or_false("is_short_term_trade_lc"),
             # CRR Art. 166(8)(d): facility undrawn is a credit line by construction,
             # so default True. An explicit False override flips the row to the
             # Art. 166(10) issued-item bucket (50% MR / 20% MLR). The column is
             # synthesised to True and null-filled by the entry-point normalisation,
             # so we can read it directly here.
             pl.col("is_obs_commitment"),
-            (
-                pl.col("is_payroll_loan").fill_null(False)
-                if "is_payroll_loan" in facility_cols
-                else pl.lit(False).alias("is_payroll_loan")
-            ),
-            (
-                pl.col("is_buy_to_let").fill_null(False)
-                if "is_buy_to_let" in facility_cols
-                else pl.lit(False).alias("is_buy_to_let")
-            ),
+            col_or_false("is_payroll_loan"),
+            col_or_false("is_buy_to_let"),
             # PRA PS1/26 Art. 124(3) / Art. 124K: under-construction flag drives
             # ADC classification derivation in the classifier. Facility-level
             # value flows through to facility_undrawn rows so commitments to
             # development-finance facilities also surface the flag.
-            (
-                pl.col("is_under_construction").fill_null(False)
-                if "is_under_construction" in facility_cols
-                else pl.lit(False).alias("is_under_construction")
-            ),
-            (
-                pl.col("has_one_day_maturity_floor").fill_null(False)
-                if "has_one_day_maturity_floor" in facility_cols
-                else pl.lit(False).alias("has_one_day_maturity_floor")
-            ),
-            (
-                pl.col("is_sft").fill_null(False)
-                if "is_sft" in facility_cols
-                else pl.lit(False).alias("is_sft")
-            ),
-            (
-                pl.col("effective_maturity")
-                if "effective_maturity" in facility_cols
-                else pl.lit(None).cast(pl.Float64).alias("effective_maturity")
-            ),
+            col_or_false("is_under_construction"),
+            col_or_false("has_one_day_maturity_floor"),
+            col_or_false("is_sft"),
+            col_or_null("effective_maturity", pl.Float64),
             pl.lit(False).alias("has_netting_agreement"),
             # QRRE classification fields (CRR Art. 147(5), CRE30.55).
             # Both columns are synthesised to False and null-filled by the
@@ -1244,11 +1192,7 @@ class HierarchyResolver:
                 else pl.lit(None).cast(pl.Float64).alias("facility_limit")
             ),
             # Art. 162(2A)(k): max contractual termination date for revolving M under B31
-            (
-                pl.col("facility_termination_date")
-                if "facility_termination_date" in facility_cols
-                else pl.lit(None).cast(pl.Date).alias("facility_termination_date")
-            ),
+            col_or_null("facility_termination_date", pl.Date),
             # Propagate facility reference for collateral allocation
             # This allows facility-level collateral to be linked to undrawn exposures
             pl.col("facility_reference").alias("source_facility_reference"),
@@ -2157,98 +2101,17 @@ class HierarchyResolver:
         has_fac_ref = "facility_reference" in fac_cols
         exp_schema: set[str] = set()
 
-        if has_fac_ref:
-            # Scratch: facility-side QRRE / limit / termination columns join as
-            # `_fac_*`, get coalesced into their unprefixed exposure-level
-            # counterparts (`is_revolving`, `is_qrre_transactor`, `facility_limit`,
-            # `facility_termination_date`) below, then dropped via `temp_cols`.
-            fac_select = [pl.col("facility_reference").alias("_fac_ref")]
-            if "is_revolving" in fac_cols:
-                fac_select.append(pl.col("is_revolving").fill_null(False).alias("_fac_revolving"))
-            if "is_qrre_transactor" in fac_cols:
-                fac_select.append(
-                    pl.col("is_qrre_transactor").fill_null(False).alias("_fac_transactor")
-                )
-            if "limit" in fac_cols:
-                fac_select.append(pl.col("limit").alias("_fac_limit"))
-            if "facility_termination_date" in fac_cols:
-                fac_select.append(
-                    pl.col("facility_termination_date").alias("_fac_termination_date")
-                )
-
-            fac_lookup = facilities.select(fac_select)
-            exposures = exposures.join(
-                fac_lookup,
-                left_on="parent_facility_reference",
-                right_on="_fac_ref",
-                how="left",
+        if has_fac_ref and facilities is not None:
+            exposures, exp_schema = self._join_facility_qrre_columns(
+                exposures, facilities, fac_cols
             )
-            coalesce_cols = []
-            # Single schema check covers both QRRE coalesce and default columns below
-            exp_schema = set(exposures.collect_schema().names())
-            if "_fac_revolving" in exp_schema:
-                coalesce_cols.append(
-                    pl.coalesce(pl.col("is_revolving"), pl.col("_fac_revolving"))
-                    .fill_null(False)
-                    .alias("is_revolving")
-                    if "is_revolving" in exp_schema
-                    else pl.col("_fac_revolving").fill_null(False).alias("is_revolving")
-                )
-            if "_fac_transactor" in exp_schema:
-                coalesce_cols.append(
-                    pl.coalesce(pl.col("is_qrre_transactor"), pl.col("_fac_transactor"))
-                    .fill_null(False)
-                    .alias("is_qrre_transactor")
-                    if "is_qrre_transactor" in exp_schema
-                    else pl.col("_fac_transactor").fill_null(False).alias("is_qrre_transactor")
-                )
-            if "_fac_limit" in exp_schema:
-                coalesce_cols.append(
-                    pl.coalesce(pl.col("facility_limit"), pl.col("_fac_limit")).alias(
-                        "facility_limit"
-                    )
-                    if "facility_limit" in exp_schema
-                    else pl.col("_fac_limit").alias("facility_limit")
-                )
-            if "_fac_termination_date" in exp_schema:
-                coalesce_cols.append(
-                    pl.coalesce(
-                        pl.col("facility_termination_date"),
-                        pl.col("_fac_termination_date"),
-                    ).alias("facility_termination_date")
-                    if "facility_termination_date" in exp_schema
-                    else pl.col("_fac_termination_date").alias("facility_termination_date")
-                )
-
-            if coalesce_cols:
-                exposures = exposures.with_columns(coalesce_cols)
-            # Drop temporary join columns (we know which exist from fac_cols)
-            temp_cols = []
-            if "is_revolving" in fac_cols:
-                temp_cols.append("_fac_revolving")
-            if "is_qrre_transactor" in fac_cols:
-                temp_cols.append("_fac_transactor")
-            if "limit" in fac_cols:
-                temp_cols.append("_fac_limit")
-            if "facility_termination_date" in fac_cols:
-                temp_cols.append("_fac_termination_date")
-            if temp_cols:
-                exposures = exposures.drop(temp_cols)
 
         # Ensure QRRE columns always exist with safe defaults.
         # After the facility join branch above, these columns may or may not exist
         # depending on the facility data. Reuse exp_schema from the join branch
         # (or check fresh if we skipped the branch entirely).
         qrre_schema = exp_schema if has_fac_ref else set(exposures.collect_schema().names())
-        default_cols = []
-        if "is_revolving" not in qrre_schema:
-            default_cols.append(pl.lit(False).alias("is_revolving"))
-        if "is_qrre_transactor" not in qrre_schema:
-            default_cols.append(pl.lit(False).alias("is_qrre_transactor"))
-        if "facility_limit" not in qrre_schema:
-            default_cols.append(pl.lit(None).cast(pl.Float64).alias("facility_limit"))
-        if default_cols:
-            exposures = exposures.with_columns(default_cols)
+        exposures = _apply_qrre_defaults(exposures, qrre_schema)
 
         # PRA PS1/26 Art. 121(4): the SCRA short-term window extends to self-
         # liquidating trade-finance LCs. The flag lives on the facility row;
@@ -2259,31 +2122,67 @@ class HierarchyResolver:
         # Coalesce preserves any explicit per-row value (e.g. on the synthetic
         # facility_undrawn rows that already carry the flag from their source
         # facility) and only fills nulls from the counterparty-level OR.
-        if "is_short_term_trade_lc" in fac_cols:
-            cp_trade_lc = facilities.group_by("counterparty_reference").agg(
-                pl.col("is_short_term_trade_lc").fill_null(False).any().alias("_cp_trade_lc")
-            )
-            exposures = exposures.join(
-                cp_trade_lc,
-                on="counterparty_reference",
-                how="left",
-            )
-            if "is_short_term_trade_lc" in exposures.collect_schema().names():
-                exposures = exposures.with_columns(
-                    pl.coalesce(
-                        pl.col("is_short_term_trade_lc"),
-                        pl.col("_cp_trade_lc"),
-                    )
-                    .fill_null(False)
-                    .alias("is_short_term_trade_lc")
-                )
-            else:
-                exposures = exposures.with_columns(
-                    pl.col("_cp_trade_lc").fill_null(False).alias("is_short_term_trade_lc")
-                )
-            exposures = exposures.drop("_cp_trade_lc")
+        if "is_short_term_trade_lc" in fac_cols and facilities is not None:
+            exposures = _broadcast_trade_lc_flag(exposures, facilities)
 
         return exposures
+
+    def _join_facility_qrre_columns(
+        self,
+        exposures: pl.LazyFrame,
+        facilities: pl.LazyFrame,
+        fac_cols: set[str],
+    ) -> tuple[pl.LazyFrame, set[str]]:
+        """Join facility-side QRRE / limit / termination columns onto exposures.
+
+        Scratch: facility-side QRRE / limit / termination columns join as
+        ``_fac_*``, get coalesced into their unprefixed exposure-level
+        counterparts (``is_revolving``, ``is_qrre_transactor``, ``facility_limit``,
+        ``facility_termination_date``), then dropped via ``temp_cols``.
+        """
+        # (facility column, scratch alias, exposure-level column, fill-null bool default)
+        fac_specs: tuple[tuple[str, str, str, bool], ...] = (
+            ("is_revolving", "_fac_revolving", "is_revolving", True),
+            ("is_qrre_transactor", "_fac_transactor", "is_qrre_transactor", True),
+            ("limit", "_fac_limit", "facility_limit", False),
+            (
+                "facility_termination_date",
+                "_fac_termination_date",
+                "facility_termination_date",
+                False,
+            ),
+        )
+
+        fac_select: list[pl.Expr] = [pl.col("facility_reference").alias("_fac_ref")]
+        for src_col, alias, _exp_col, fill_false in fac_specs:
+            if src_col in fac_cols:
+                expr = pl.col(src_col)
+                if fill_false:
+                    expr = expr.fill_null(False)
+                fac_select.append(expr.alias(alias))
+
+        exposures = exposures.join(
+            facilities.select(fac_select),
+            left_on="parent_facility_reference",
+            right_on="_fac_ref",
+            how="left",
+        )
+
+        # Single schema check covers both QRRE coalesce and default columns
+        exp_schema = set(exposures.collect_schema().names())
+        coalesce_cols = [
+            _build_qrre_coalesce_expr(alias, exp_col, exp_schema, fill_false)
+            for _src_col, alias, exp_col, fill_false in fac_specs
+            if alias in exp_schema
+        ]
+        if coalesce_cols:
+            exposures = exposures.with_columns(coalesce_cols)
+
+        # Drop temporary join columns (we know which exist from fac_cols)
+        temp_cols = [alias for src_col, alias, _exp_col, _fill in fac_specs if src_col in fac_cols]
+        if temp_cols:
+            exposures = exposures.drop(temp_cols)
+        return exposures, exp_schema
 
     def _attach_counterparty_rating(
         self,
@@ -2363,99 +2262,12 @@ class HierarchyResolver:
         Always returns ``exposures`` augmented with a ``has_short_term_ecai``
         boolean column (False when no override matched).
         """
-        if ratings is None:
+        st_ratings = _prepare_short_term_lookup(ratings)
+        if st_ratings is None:
             return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
-
-        rating_cols = set(ratings.collect_schema().names())
-        if "is_short_term" not in rating_cols:
-            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
-
-        # Ensure scope columns exist so the downstream filter / join code can
-        # rely on them — legacy ratings parquet files may have only the long-
-        # term schema.
-        scope_defaults: list[pl.Expr] = []
-        if "scope_type" not in rating_cols:
-            scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_type"))
-        if "scope_id" not in rating_cols:
-            scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_id"))
-        if scope_defaults:
-            ratings = ratings.with_columns(scope_defaults)
-
-        # Filter to candidate short-term rows. Drop rows missing the required
-        # scope tuple — loader-side DQ flags those as DQ-RT-ST1 / DQ-RT-ST2
-        # errors; here we silently ignore them so the pipeline keeps running.
-        st_ratings = ratings.filter(
-            pl.col("is_short_term").fill_null(False)
-            & pl.col("scope_type").is_not_null()
-            & pl.col("scope_id").is_not_null()
-            & pl.col("counterparty_reference").is_not_null()
-        ).select(
-            [
-                pl.col("counterparty_reference").alias("_st_cp"),
-                pl.col("scope_type").alias("_st_scope_type"),
-                pl.col("scope_id").alias("_st_scope_id"),
-                pl.col("cqs").alias("_st_cqs"),
-                pl.col("rating_date").alias("_st_rating_date"),
-            ]
-        )
-
-        # Per-scope best-rating selection: lowest CQS, then latest date.
-        st_ratings = (
-            st_ratings.sort(
-                ["_st_cqs", "_st_rating_date"],
-                descending=[False, True],
-                nulls_last=True,
-            )
-            .group_by(["_st_cp", "_st_scope_type", "_st_scope_id"])
-            .first()
-        )
-
-        # Materialise the small short-term lookup eagerly so the three scope-
-        # specific joins below can re-use it without re-evaluating the sort.
-        st_ratings_df = st_ratings.collect()
-        if st_ratings_df.height == 0:
-            return exposures.with_columns(pl.lit(False).alias("has_short_term_ecai"))
-        st_ratings = st_ratings_df.lazy()
 
         exp_schema = set(exposures.collect_schema().names())
-
-        # Build a unified ``scope_match_key`` per exposure for each scope_type.
-        # An exposure can satisfy multiple scope_types simultaneously (e.g. a
-        # loan exposure also inherits its parent facility's short-term rating);
-        # we left-join three times in priority order and coalesce — loan-level
-        # scope wins over facility-level when both are present.
-        match_branches: list[tuple[str, pl.Expr]] = []
-        # facility scope: any exposure whose parent or root facility id matches
-        if "parent_facility_reference" in exp_schema or "root_facility_reference" in exp_schema:
-            facility_key_expr = pl.coalesce(
-                [
-                    pl.col("parent_facility_reference")
-                    if "parent_facility_reference" in exp_schema
-                    else pl.lit(None, dtype=pl.String),
-                    pl.col("root_facility_reference")
-                    if "root_facility_reference" in exp_schema
-                    else pl.lit(None, dtype=pl.String),
-                ]
-            )
-            match_branches.append(("facility", facility_key_expr))
-        # loan / contingent scope: match by exposure_reference + exposure_type
-        if "exposure_type" in exp_schema and "exposure_reference" in exp_schema:
-            match_branches.append(
-                (
-                    "loan",
-                    pl.when(pl.col("exposure_type") == "loan")
-                    .then(pl.col("exposure_reference"))
-                    .otherwise(pl.lit(None, dtype=pl.String)),
-                )
-            )
-            match_branches.append(
-                (
-                    "contingent",
-                    pl.when(pl.col("exposure_type") == "contingent")
-                    .then(pl.col("exposure_reference"))
-                    .otherwise(pl.lit(None, dtype=pl.String)),
-                )
-            )
+        match_branches = _build_short_term_match_branches(exp_schema)
 
         # Track which scope branches actually produce a match so we can
         # coalesce the resulting cqs in priority order: loan > contingent >
@@ -2583,10 +2395,8 @@ class HierarchyResolver:
             needs_facility_flag = True
         else:
             # Multi-level linking with .over() allocation weights
-            residential_collateral = all_property_collateral.filter(is_residential)
             exposures = self._join_property_collateral_multi_level(
                 exposures,
-                residential_collateral,
                 all_property_collateral,
             )
             needs_facility_flag = False
@@ -2623,7 +2433,6 @@ class HierarchyResolver:
     def _join_property_collateral_multi_level(
         self,
         exposures: pl.LazyFrame,
-        residential_collateral: pl.LazyFrame,
         all_property_collateral: pl.LazyFrame,
     ) -> pl.LazyFrame:
         """
@@ -2635,8 +2444,9 @@ class HierarchyResolver:
 
         Args:
             exposures: Exposures with total_exposure_amount column
-            residential_collateral: Filtered residential property collateral
-            all_property_collateral: All property collateral (residential + commercial)
+            all_property_collateral: All property collateral (residential + commercial);
+                residential rows are filtered inline via ``filter(is_residential)``
+                within the conditional ``group_by`` aggregate.
 
         Returns:
             Exposures with residential_collateral_value, property_collateral_value,
@@ -2896,61 +2706,18 @@ class HierarchyResolver:
         # Requires beneficiary_reference and property_ltv columns
         required_cols = {"beneficiary_reference", "property_ltv"}
         if not has_required_columns(collateral, required_cols):
-            # No valid LTV data available, add null columns — but only for
-            # columns the caller has not already populated on the exposure
-            # row. Loan / contingent fixtures may carry exposure-level
-            # ``ltv`` / ``property_type`` / ``has_income_cover`` /
-            # ``is_qualifying_re`` / ``prior_charge_ltv`` values
-            # (e.g. CRE Art. 126(2)(d) scenarios where the LTV and income-
-            # cover flags live on the loan rather than a collateral row);
-            # overwriting them here would silently break the SA real-estate
-            # branch downstream.
-            existing = set(exposures.collect_schema().names())
-            defaults: list[pl.Expr] = []
-            if "ltv" not in existing:
-                defaults.append(pl.lit(None).cast(pl.Float64).alias("ltv"))
-            if "property_type" not in existing:
-                defaults.append(pl.lit(None).cast(pl.Utf8).alias("property_type"))
-            if "has_income_cover" not in existing:
-                defaults.append(pl.lit(False).alias("has_income_cover"))
-            if "is_qualifying_re" not in existing:
-                defaults.append(pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re"))
-            if "prior_charge_ltv" not in existing:
-                defaults.append(pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv"))
-            return exposures.with_columns(defaults) if defaults else exposures
+            return _add_ltv_defaults_for_missing_collateral(exposures)
 
         # Check which optional columns exist on collateral
         collateral_schema = collateral.collect_schema()
         has_beneficiary_type = "beneficiary_type" in collateral_schema.names()
-        has_property_type = "property_type" in collateral_schema.names()
-        has_income_producing = "is_income_producing" in collateral_schema.names()
-        has_qualifying_re = "is_qualifying_re" in collateral_schema.names()
-        has_prior_charge_ltv = "prior_charge_ltv" in collateral_schema.names()
 
         # Filter for collateral with LTV data
         ltv_collateral = collateral.filter(pl.col("property_ltv").is_not_null())
 
-        # Build the list of columns to select from collateral
-        # Always include beneficiary_reference and property_ltv
-        _prop_type = (
-            pl.col("property_type")
-            if has_property_type
-            else pl.lit(None).cast(pl.Utf8).alias("property_type")
-        )
-        _income_cover = (
-            pl.col("is_income_producing").fill_null(False).alias("has_income_cover")
-            if has_income_producing
-            else pl.lit(False).alias("has_income_cover")
-        )
-        _qualifying_re = (
-            pl.col("is_qualifying_re")
-            if has_qualifying_re
-            else pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")
-        )
-        _prior_charge_ltv = (
-            pl.col("prior_charge_ltv")
-            if has_prior_charge_ltv
-            else pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv")
+        # Build the optional collateral-column expressions used downstream.
+        _prop_type, _income_cover, _qualifying_re, _prior_charge_ltv = (
+            _build_collateral_ltv_optional_exprs(set(collateral_schema.names()))
         )
 
         if not has_beneficiary_type:
@@ -3091,6 +2858,271 @@ class HierarchyResolver:
             drop_cols.extend(f"{p}_{source_suffix}" for p in prefixes)
 
         return exposures.with_columns(coalesces).drop(drop_cols)
+
+
+def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Append null/default LTV columns the caller has not already populated.
+
+    Loan / contingent fixtures may carry exposure-level ``ltv`` /
+    ``property_type`` / ``has_income_cover`` / ``is_qualifying_re`` /
+    ``prior_charge_ltv`` values (e.g. CRE Art. 126(2)(d) scenarios where the
+    LTV and income-cover flags live on the loan rather than a collateral row);
+    overwriting them here would silently break the SA real-estate branch
+    downstream.
+    """
+    existing = set(exposures.collect_schema().names())
+    # (output column, default expression)
+    default_specs: tuple[tuple[str, pl.Expr], ...] = (
+        ("ltv", pl.lit(None).cast(pl.Float64).alias("ltv")),
+        ("property_type", pl.lit(None).cast(pl.Utf8).alias("property_type")),
+        ("has_income_cover", pl.lit(False).alias("has_income_cover")),
+        ("is_qualifying_re", pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")),
+        ("prior_charge_ltv", pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv")),
+    )
+    defaults = [expr for col, expr in default_specs if col not in existing]
+    return exposures.with_columns(defaults) if defaults else exposures
+
+
+def _build_collateral_ltv_optional_exprs(
+    collateral_cols: set[str],
+) -> tuple[pl.Expr, pl.Expr, pl.Expr, pl.Expr]:
+    """Build the four optional collateral expressions used by LTV joins.
+
+    Returns ``(property_type, income_cover, qualifying_re, prior_charge_ltv)``,
+    each falling back to a typed-null (or False for income cover) when the
+    source column is missing from the collateral frame.
+    """
+    prop_type = (
+        pl.col("property_type")
+        if "property_type" in collateral_cols
+        else pl.lit(None).cast(pl.Utf8).alias("property_type")
+    )
+    income_cover = (
+        pl.col("is_income_producing").fill_null(False).alias("has_income_cover")
+        if "is_income_producing" in collateral_cols
+        else pl.lit(False).alias("has_income_cover")
+    )
+    qualifying_re = (
+        pl.col("is_qualifying_re")
+        if "is_qualifying_re" in collateral_cols
+        else pl.lit(None).cast(pl.Boolean).alias("is_qualifying_re")
+    )
+    prior_charge_ltv = (
+        pl.col("prior_charge_ltv")
+        if "prior_charge_ltv" in collateral_cols
+        else pl.lit(None).cast(pl.Float64).alias("prior_charge_ltv")
+    )
+    return prop_type, income_cover, qualifying_re, prior_charge_ltv
+
+
+def _prepare_short_term_lookup(ratings: pl.LazyFrame | None) -> pl.LazyFrame | None:
+    """Filter, sort and materialise the short-term rating lookup.
+
+    Returns ``None`` if no short-term rows are available (i.e. ``ratings`` is
+    ``None``, the frame lacks ``is_short_term``, or the filtered set is empty).
+    The caller treats ``None`` as "no override applies — set
+    ``has_short_term_ecai=False``".
+    """
+    if ratings is None:
+        return None
+
+    rating_cols = set(ratings.collect_schema().names())
+    if "is_short_term" not in rating_cols:
+        return None
+
+    # Ensure scope columns exist so the downstream filter / join code can
+    # rely on them — legacy ratings parquet files may have only the long-
+    # term schema.
+    scope_defaults: list[pl.Expr] = []
+    if "scope_type" not in rating_cols:
+        scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_type"))
+    if "scope_id" not in rating_cols:
+        scope_defaults.append(pl.lit(None, dtype=pl.String).alias("scope_id"))
+    if scope_defaults:
+        ratings = ratings.with_columns(scope_defaults)
+
+    # Filter to candidate short-term rows. Drop rows missing the required
+    # scope tuple — loader-side DQ flags those as DQ-RT-ST1 / DQ-RT-ST2
+    # errors; here we silently ignore them so the pipeline keeps running.
+    st_ratings = ratings.filter(
+        pl.col("is_short_term").fill_null(False)
+        & pl.col("scope_type").is_not_null()
+        & pl.col("scope_id").is_not_null()
+        & pl.col("counterparty_reference").is_not_null()
+    ).select(
+        [
+            pl.col("counterparty_reference").alias("_st_cp"),
+            pl.col("scope_type").alias("_st_scope_type"),
+            pl.col("scope_id").alias("_st_scope_id"),
+            pl.col("cqs").alias("_st_cqs"),
+            pl.col("rating_date").alias("_st_rating_date"),
+        ]
+    )
+
+    # Per-scope best-rating selection: lowest CQS, then latest date.
+    st_ratings = (
+        st_ratings.sort(
+            ["_st_cqs", "_st_rating_date"],
+            descending=[False, True],
+            nulls_last=True,
+        )
+        .group_by(["_st_cp", "_st_scope_type", "_st_scope_id"])
+        .first()
+    )
+
+    # Materialise the small short-term lookup eagerly so the three scope-
+    # specific joins below can re-use it without re-evaluating the sort.
+    st_ratings_df = st_ratings.collect()
+    if st_ratings_df.height == 0:
+        return None
+    return st_ratings_df.lazy()
+
+
+def _build_short_term_match_branches(exp_schema: set[str]) -> list[tuple[str, pl.Expr]]:
+    """Build ``(scope_type, key_expression)`` pairs for each available scope.
+
+    An exposure can satisfy multiple scope_types simultaneously (e.g. a loan
+    exposure also inherits its parent facility's short-term rating); the
+    caller left-joins each branch and coalesces in priority order so the most
+    specific scope wins (loan > contingent > facility).
+    """
+    match_branches: list[tuple[str, pl.Expr]] = []
+    # facility scope: any exposure whose parent or root facility id matches
+    has_parent = "parent_facility_reference" in exp_schema
+    has_root = "root_facility_reference" in exp_schema
+    if has_parent or has_root:
+        facility_key_expr = pl.coalesce(
+            [
+                pl.col("parent_facility_reference")
+                if has_parent
+                else pl.lit(None, dtype=pl.String),
+                pl.col("root_facility_reference") if has_root else pl.lit(None, dtype=pl.String),
+            ]
+        )
+        match_branches.append(("facility", facility_key_expr))
+    # loan / contingent scope: match by exposure_reference + exposure_type
+    if "exposure_type" in exp_schema and "exposure_reference" in exp_schema:
+        match_branches.append(
+            (
+                "loan",
+                pl.when(pl.col("exposure_type") == "loan")
+                .then(pl.col("exposure_reference"))
+                .otherwise(pl.lit(None, dtype=pl.String)),
+            )
+        )
+        match_branches.append(
+            (
+                "contingent",
+                pl.when(pl.col("exposure_type") == "contingent")
+                .then(pl.col("exposure_reference"))
+                .otherwise(pl.lit(None, dtype=pl.String)),
+            )
+        )
+    return match_branches
+
+
+def _make_col_or_null(
+    available_cols: set[str],
+):
+    """Return a builder ``(name, dtype, *, cast=False, alias=None) -> pl.Expr``.
+
+    When ``name`` is in ``available_cols`` the expression projects ``pl.col(name)``
+    (optionally ``.cast(dtype, strict=False)``); otherwise it projects a null
+    literal cast to ``dtype``. ``alias`` overrides the output column name when
+    the source name differs from the desired output name.
+    """
+
+    def builder(
+        name: str,
+        dtype: pl.DataType | type[pl.DataType],
+        *,
+        cast: bool = False,
+        alias: str | None = None,
+    ) -> pl.Expr:
+        target = alias or name
+        if name in available_cols:
+            expr = pl.col(name).cast(dtype, strict=False) if cast else pl.col(name)
+            return expr.alias(target)
+        return pl.lit(None).cast(dtype).alias(target)
+
+    return builder
+
+
+def _make_col_or_false(available_cols: set[str]):
+    """Return a builder ``(name) -> pl.Expr`` for boolean flags with False default."""
+
+    def builder(name: str) -> pl.Expr:
+        if name in available_cols:
+            return pl.col(name).fill_null(False).alias(name)
+        return pl.lit(False).alias(name)
+
+    return builder
+
+
+def _build_qrre_coalesce_expr(
+    alias: str,
+    exp_col: str,
+    exp_schema: set[str],
+    fill_false: bool,
+) -> pl.Expr:
+    """Build the coalesce / fallback expression for one QRRE column.
+
+    When ``exp_col`` already exists on the exposures frame, coalesce its value
+    with the joined ``alias`` scratch column; otherwise project the scratch
+    column directly. ``fill_false=True`` applies ``fill_null(False)`` so the
+    output column is non-null boolean.
+    """
+    expr = pl.coalesce(pl.col(exp_col), pl.col(alias)) if exp_col in exp_schema else pl.col(alias)
+    if fill_false:
+        expr = expr.fill_null(False)
+    return expr.alias(exp_col)
+
+
+def _apply_qrre_defaults(exposures: pl.LazyFrame, qrre_schema: set[str]) -> pl.LazyFrame:
+    """Ensure ``is_revolving``, ``is_qrre_transactor`` and ``facility_limit`` exist."""
+    default_specs: tuple[tuple[str, pl.Expr], ...] = (
+        ("is_revolving", pl.lit(False).alias("is_revolving")),
+        ("is_qrre_transactor", pl.lit(False).alias("is_qrre_transactor")),
+        ("facility_limit", pl.lit(None).cast(pl.Float64).alias("facility_limit")),
+    )
+    default_cols = [expr for col, expr in default_specs if col not in qrre_schema]
+    if default_cols:
+        exposures = exposures.with_columns(default_cols)
+    return exposures
+
+
+def _broadcast_trade_lc_flag(
+    exposures: pl.LazyFrame,
+    facilities: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """OR-aggregate ``is_short_term_trade_lc`` per counterparty and broadcast.
+
+    Coalesces with any explicit per-row value already on the exposures frame
+    (e.g. synthetic facility_undrawn rows carrying the flag from their source
+    facility) and only fills nulls from the counterparty-level OR.
+    """
+    cp_trade_lc = facilities.group_by("counterparty_reference").agg(
+        pl.col("is_short_term_trade_lc").fill_null(False).any().alias("_cp_trade_lc")
+    )
+    exposures = exposures.join(
+        cp_trade_lc,
+        on="counterparty_reference",
+        how="left",
+    )
+    if "is_short_term_trade_lc" in exposures.collect_schema().names():
+        exposures = exposures.with_columns(
+            pl.coalesce(
+                pl.col("is_short_term_trade_lc"),
+                pl.col("_cp_trade_lc"),
+            )
+            .fill_null(False)
+            .alias("is_short_term_trade_lc")
+        )
+    else:
+        exposures = exposures.with_columns(
+            pl.col("_cp_trade_lc").fill_null(False).alias("is_short_term_trade_lc")
+        )
+    return exposures.drop("_cp_trade_lc")
 
 
 def _resolve_to_root_facility(

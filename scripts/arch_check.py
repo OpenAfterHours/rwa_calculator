@@ -37,7 +37,7 @@ from __future__ import annotations
 import ast
 import re
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 # The abstraction layer itself is allowed to use raw collect patterns
@@ -301,9 +301,7 @@ def _call_is_reg_scalar(node: ast.Call) -> bool:
         fn_name = fn.attr
     if fn_name == "Decimal":
         return True
-    if fn_name in {"float", "int"} and len(node.args) == 1 and not node.keywords:
-        return True
-    return False
+    return bool(fn_name in {"float", "int"} and len(node.args) == 1 and not node.keywords)
 
 
 def _rhs_is_regulatory_scalar(node: ast.AST) -> bool:
@@ -559,7 +557,10 @@ def check_watchfire_citations() -> tuple[list[str], list[str]]:
     return fatal, warnings
 
 
-def _run_checks(target: Path, checks: list[tuple[str, ...]]) -> list[tuple[str, list[str]]]:
+def _run_checks(
+    target: Path,
+    checks: list[tuple[str, Callable[[Path], list[str]]]],
+) -> list[tuple[str, list[str]]]:
     """Run each (name, fn) pair against `target`, returning (name, violations) for failures."""
     all_violations: list[tuple[str, list[str]]] = []
     for name, fn in checks:

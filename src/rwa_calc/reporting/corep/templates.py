@@ -573,9 +573,7 @@ B31_C08_COLUMNS: list[COREPColumn] = [
     COREPColumn("0080", _LBL_COL_SUBST_INFLOWS, _GRP_CRM_SUBST),
     COREPColumn("0090", "Exposure after CRM substitution pre CCFs", "Post-CRM"),
     COREPColumn("0100", _LBL_COL_OF_WHICH_OFF_BS, "Post-CRM"),
-    COREPColumn(
-        "0101", "Volatility adjustment to the exposure (Slotting)", _GRP_FIN_COLL_COMP
-    ),
+    COREPColumn("0101", "Volatility adjustment to the exposure (Slotting)", _GRP_FIN_COLL_COMP),
     COREPColumn(
         "0102",
         "(-) Financial collateral adjusted value Cvam (Slotting)",
@@ -586,9 +584,7 @@ B31_C08_COLUMNS: list[COREPColumn] = [
         "(-) Of which: volatility and maturity adj (Slotting)",
         _GRP_FIN_COLL_COMP,
     ),
-    COREPColumn(
-        "0104", "Exposure after all CRM pre CCFs (Slotting)", _GRP_FIN_COLL_COMP
-    ),
+    COREPColumn("0104", "Exposure after all CRM pre CCFs (Slotting)", _GRP_FIN_COLL_COMP),
     COREPColumn("0110", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0120", _LBL_COL_OF_WHICH_OFF_BS, _GRP_EXPOSURE_VALUE),
     COREPColumn("0125", "  Of which: defaulted", _GRP_EXPOSURE_VALUE),  # New in B3.1
@@ -1004,9 +1000,7 @@ B31_C08_06_COLUMNS: list[COREPColumn] = [
     COREPColumn("0010", _LBL_COL_ORIG_EXPOSURE, "Exposure"),
     COREPColumn("0020", "Exposure after CRM substitution effects pre CCFs", "Post-CRM"),
     COREPColumn("0030", "Of which: off-balance sheet items (original)", "Exposure"),
-    COREPColumn(
-        "0031", "(-) Change in exposure due to FCCM", _GRP_FIN_COLL_COMP
-    ),  # New in B3.1
+    COREPColumn("0031", "(-) Change in exposure due to FCCM", _GRP_FIN_COLL_COMP),  # New in B3.1
     COREPColumn("0040", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0050", "Of which: off-balance sheet items (exposure value)", _GRP_EXPOSURE_VALUE),
     COREPColumn("0060", "Of which: arising from counterparty credit risk", _GRP_EXPOSURE_VALUE),
@@ -1580,9 +1574,7 @@ CRR_C09_01_COLUMNS: list[COREPColumn] = [
     COREPColumn(
         "0061", "Additional value adjustments and other own funds reductions", "Provisions"
     ),
-    COREPColumn(
-        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
-    ),
+    COREPColumn("0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"),
     COREPColumn("0075", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0080", _LBL_COL_RWEA_PRE_SF, "RWEA"),
     COREPColumn("0081", _LBL_COL_SME_SF_ADJ, "RWEA"),
@@ -1601,9 +1593,7 @@ B31_C09_01_COLUMNS: list[COREPColumn] = [
     COREPColumn(
         "0061", "Additional value adjustments and other own funds reductions", "Provisions"
     ),
-    COREPColumn(
-        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
-    ),
+    COREPColumn("0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"),
     COREPColumn("0075", _LBL_COL_EXPOSURE_VALUE_LC, _GRP_EXPOSURE_VALUE),
     COREPColumn("0090", _LBL_COL_RWEA_HYPHEN, "RWEA"),
 ]
@@ -1696,9 +1686,7 @@ CRR_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
     COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn(
-        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
-    ),
+    COREPColumn("0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),
@@ -1719,9 +1707,7 @@ B31_C09_02_COLUMNS: list[COREPColumn] = [
     COREPColumn("0050", _LBL_COL_GEN_CRA, "Provisions"),
     COREPColumn("0055", _LBL_COL_SPEC_CRA, "Provisions"),
     COREPColumn("0060", "Write-offs", "Provisions"),
-    COREPColumn(
-        "0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"
-    ),
+    COREPColumn("0070", _LBL_COL_CRA_WRITEOFFS, "Provisions"),
     COREPColumn("0080", "PD assigned to the obligor grade or pool (%)", "Parameters"),
     COREPColumn("0090", "Exposure weighted average LGD (%)", "Parameters"),
     COREPColumn("0100", "Of which: defaulted (LGD)", "Parameters"),

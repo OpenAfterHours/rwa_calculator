@@ -1442,9 +1442,7 @@ def _cr9_bucket_row(
     if math.isinf(upper):
         bucket = class_data.filter(pl.col(alloc_pd_col) >= lower)
     else:
-        bucket = class_data.filter(
-            (pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper)
-        )
+        bucket = class_data.filter((pl.col(alloc_pd_col) >= lower) & (pl.col(alloc_pd_col) < upper))
     if bucket.height == 0:
         return None
     values = _compute_cr9_values(bucket, cols, report_pd_col)

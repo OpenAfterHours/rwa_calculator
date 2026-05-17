@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -346,9 +345,7 @@ class COREPGenerator:
             row_count=total_rows,
         )
 
-    def _export_all_template_sheets(
-        self, workbook: object, bundle: COREPTemplateBundle
-    ) -> int:
+    def _export_all_template_sheets(self, workbook: object, bundle: COREPTemplateBundle) -> int:
         """Dispatch all per-template writers for ``bundle`` to ``workbook``.
 
         Returns the total row count written. Encapsulates the 8 per-class
@@ -921,9 +918,7 @@ class COREPGenerator:
 
         # B3.1 finer-grained sub-row aggregation (SME/FSE/property-type)
         self._irb_sub_rwa = (
-            self._c02_00_irb_sub_agg(results, approach_col, ec_col, rwa_col, cols)
-            if is_b31
-            else {}
+            self._c02_00_irb_sub_agg(results, approach_col, ec_col, rwa_col, cols) if is_b31 else {}
         )
         return total_rwa
 
@@ -970,9 +965,7 @@ class COREPGenerator:
             sub_select.append(pl.col("is_sme").fill_null(False).alias("_sme"))
         if has_fse:
             fse_col = (
-                "apply_fi_scalar"
-                if "apply_fi_scalar" in cols
-                else "cp_is_financial_sector_entity"
+                "apply_fi_scalar" if "apply_fi_scalar" in cols else "cp_is_financial_sector_entity"
             )
             sub_select.append(pl.col(fse_col).fill_null(False).alias("_fse"))
         if has_pt:
@@ -980,9 +973,7 @@ class COREPGenerator:
 
         irb_approaches = {"foundation_irb", "advanced_irb"}
         sub_collected = (
-            results.filter(pl.col(approach_col).is_in(irb_approaches))
-            .select(sub_select)
-            .collect()
+            results.filter(pl.col(approach_col).is_in(irb_approaches)).select(sub_select).collect()
         )
         gb_cols = ["_approach", "_ec"]
         if has_sme:
@@ -1051,9 +1042,7 @@ class COREPGenerator:
         result: dict[str, pl.DataFrame] = {}
 
         # Generate total-level template first
-        total_df = self._generate_c09_01_for_country(
-            sa_df, df_cols, row_defs, column_refs
-        )
+        total_df = self._generate_c09_01_for_country(sa_df, df_cols, row_defs, column_refs)
         result["TOTAL"] = total_df
 
         # Generate per-country templates
@@ -1090,9 +1079,7 @@ class COREPGenerator:
                 values = _compute_c09_01_values(country_data, cols, column_refs)
                 rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
             elif row_def.exposure_class_value is not None:
-                row_data = _filter_c09_01_row(
-                    country_data, cols, row_def.exposure_class_value
-                )
+                row_data = _filter_c09_01_row(country_data, cols, row_def.exposure_class_value)
                 if len(row_data) > 0:
                     values = _compute_c09_01_values(row_data, cols, column_refs)
                     rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
@@ -2601,9 +2588,7 @@ def _filter_section3_unrated_ig(
     unrated_filter = pl.col("sa_cqs").is_null() if "sa_cqs" in cols else pl.lit(True)
     if "cp_is_investment_grade" in cols:
         return data.filter(
-            ec_filter
-            & unrated_filter
-            & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
+            ec_filter & unrated_filter & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
         )
     if "irb_pd_floored" in cols:
         return data.filter(ec_filter & unrated_filter & (pl.col("irb_pd_floored") <= 0.005))
@@ -2851,9 +2836,7 @@ def _compute_c07_values(
 
     # --- CRM substitution + comprehensive financial-collateral block ---
     values.update(
-        _c07_crm_and_collateral_cols(
-            data, cols, substitution_inflow, values.get("0040") or 0.0
-        )
+        _c07_crm_and_collateral_cols(data, cols, substitution_inflow, values.get("0040") or 0.0)
     )
 
     # --- CCF Breakdown --- Phase 2C
@@ -2985,7 +2968,13 @@ def _c07_crm_and_collateral_cols(
 
 _C07_CCF_REFS = ("0160", "0170", "0171", "0180", "0190")
 _C07_CCF_MAP_CRR: dict[float, str] = {0.0: "0160", 0.2: "0170", 0.5: "0180", 1.0: "0190"}
-_C07_CCF_MAP_B31: dict[float, str] = {0.1: "0160", 0.2: "0170", 0.4: "0171", 0.5: "0180", 1.0: "0190"}
+_C07_CCF_MAP_B31: dict[float, str] = {
+    0.1: "0160",
+    0.2: "0170",
+    0.4: "0171",
+    0.5: "0180",
+    1.0: "0190",
+}
 
 
 def _c07_ccf_cols(
@@ -3115,16 +3104,12 @@ def _c08_of_which_cols(
     return values
 
 
-def _c08_lgd_protection_cols(
-    data: pl.DataFrame, cols: set[str]
-) -> dict[str, float | None]:
+def _c08_lgd_protection_cols(data: pl.DataFrame, cols: set[str]) -> dict[str, float | None]:
     """Compute C 08.01/02 CRM-in-LGD protection columns (0150-0220)."""
     values: dict[str, float | None] = {}
 
     guar = _sum_by_protection_type(data, cols, "guarantee")
-    values["0150"] = (
-        guar if guar is not None else _col_sum_eager(data, cols, "guaranteed_portion")
-    )
+    values["0150"] = guar if guar is not None else _col_sum_eager(data, cols, "guaranteed_portion")
     cd_val = _sum_by_protection_type(data, cols, "credit_derivative")
     values["0160"] = cd_val if cd_val is not None else 0.0
     values["0170"] = 0.0  # Other funded credit protection catch-all
@@ -3149,9 +3134,7 @@ def _c08_lfse_lgd_avg(
         return 0.0 if "apply_fi_scalar" in cols else None
     lfse_cols = set(lfse_data.columns)
     lfse_lgd_col = _pick(lfse_cols, "irb_lgd_floored", "irb_lgd_original")
-    lfse_ead_sum = (
-        float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
-    )
+    lfse_ead_sum = float(lfse_data[ead_col].fill_null(0.0).sum()) if ead_col in lfse_cols else 0.0
     if lfse_lgd_col is None or lfse_ead_sum <= 0:
         return None
     lgd_x_ead = float(
@@ -4114,9 +4097,11 @@ def _filter_c09_02_retail_re(
     ptypes = list(_C09_02_RE_PROPERTY_TYPES[row_key])
     if "property_type" in cols:
         base = base.filter(pl.col("property_type").is_in(ptypes))
-    return _filter_sme(base, cols) if row_key.endswith("_sme") and not row_key.endswith(
-        "_non_sme"
-    ) else _filter_non_sme(base, cols)
+    return (
+        _filter_sme(base, cols)
+        if row_key.endswith("_sme") and not row_key.endswith("_non_sme")
+        else _filter_non_sme(base, cols)
+    )
 
 
 def _filter_c09_02_sl_rows(
@@ -4176,9 +4161,7 @@ def _filter_c09_02_corporate(
         return sl_result
 
     if row_key == "corporate_sme":
-        return _filter_sme(
-            data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"])), cols
-        )
+        return _filter_sme(data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"])), cols)
     if row_key == "corporate_fse_large":
         base = data.filter(pl.col(ec_col).is_in(["corporate", "corporate_sme"]))
         if "apply_fi_scalar" in cols:
@@ -4194,9 +4177,7 @@ def _filter_c09_02_retail_basic(
 ) -> pl.DataFrame | None:
     """Handle CRR retail sub-rows: mortgage/other × SME/non-SME and retail aggregate."""
     if row_key == "retail":
-        return data.filter(
-            pl.col(ec_col).is_in(["retail_mortgage", "retail_qrre", "retail_other"])
-        )
+        return data.filter(pl.col(ec_col).is_in(["retail_mortgage", "retail_qrre", "retail_other"]))
     if row_key == "retail_mortgage_sme":
         return _filter_sme(data.filter(pl.col(ec_col) == "retail_mortgage"), cols)
     if row_key == "retail_mortgage_non_sme":
@@ -4255,9 +4236,7 @@ def _weighted_avg_or_mean(
     if value_col is None:
         return None
     if weight_col is not None and weight_sum > 0:
-        weighted = float(
-            (data[value_col].fill_null(0.0) * data[weight_col].fill_null(0.0)).sum()
-        )
+        weighted = float((data[value_col].fill_null(0.0) * data[weight_col].fill_null(0.0)).sum())
         return weighted / weight_sum
     vals = data[value_col].drop_nulls()
     return float(vals.mean()) if len(vals) > 0 else None
@@ -4686,9 +4665,7 @@ def _c02_00_floor_indicator_rows(
     if not is_b31:
         return
 
-    floor_applicable = (
-        output_floor_config is None or output_floor_config.is_floor_applicable()
-    )
+    floor_applicable = output_floor_config is None or output_floor_config.is_floor_applicable()
     if floor_applicable:
         row_values["0034"] = {"0010": 1.0 if floor_activated else 0.0}
         if output_floor_summary is not None:

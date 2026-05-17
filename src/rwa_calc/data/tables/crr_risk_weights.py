@@ -788,6 +788,7 @@ COVERED_BOND_UNRATED_DERIVATION_B31: dict[Decimal, Decimal] = {
 COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = COVERED_BOND_UNRATED_DERIVATION_B31
 
 
+@cites("CRR Art. 129")
 def _create_covered_bond_df() -> pl.DataFrame:
     """Create covered bond risk weight lookup DataFrame (CRR Art. 129)."""
     return _build_cqs_rw_df(

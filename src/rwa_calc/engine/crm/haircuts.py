@@ -132,7 +132,8 @@ class HaircutCalculator:
         )
 
         # Calculate collateral-specific haircut based on type
-        collateral = self._apply_collateral_haircuts(collateral, is_b31)
+        # Framework selection lives in self._haircut_table — no need to pass is_b31.
+        collateral = self._apply_collateral_haircuts(collateral)
 
         # Scale collateral haircut and FX haircut by liquidation period (Art. 226(2))
         # H_m = H_10 × sqrt(T_m / 10)
@@ -428,7 +429,6 @@ class HaircutCalculator:
     def _apply_collateral_haircuts(
         self,
         collateral: pl.LazyFrame,
-        is_basel_3_1: bool = False,
     ) -> pl.LazyFrame:
         """Apply collateral-type-specific haircuts via lookup table join.
 
@@ -741,58 +741,23 @@ class HaircutCalculator:
             HaircutResult with all haircut details
         """
         # Art. 227: zero-haircut for qualifying repos — check type eligibility
-        if qualifies_for_zero_haircut:
-            norm = collateral_type.lower()
-            is_cash = norm in ("cash", "deposit")
-            is_eligible_sovereign = norm in (
-                "govt_bond",
-                "sovereign_bond",
-                "government_bond",
-                "gilt",
-            ) and (cqs is not None and cqs <= ZERO_HAIRCUT_MAX_SOVEREIGN_CQS)
-            if is_cash or is_eligible_sovereign:
-                # All volatility adjustments zeroed: H_c = 0%, H_e = 0%, H_fx = 0%
-                adjusted = market_value
-                # Still apply maturity mismatch if applicable
-                maturity_adj = Decimal("1.0")
-                if collateral_maturity_years and exposure_maturity_years:
-                    adjusted, _ = calculate_maturity_mismatch_adjustment(
-                        collateral_value=adjusted,
-                        collateral_maturity_years=collateral_maturity_years,
-                        exposure_maturity_years=exposure_maturity_years,
-                        original_maturity_years=original_maturity_years,
-                        has_one_day_maturity_floor=has_one_day_maturity_floor,
-                    )
-                    if adjusted > Decimal("0") and market_value > Decimal("0"):
-                        maturity_adj = adjusted / market_value
-                return HaircutResult(
-                    original_value=market_value,
-                    collateral_haircut=Decimal("0.0"),
-                    fx_haircut=Decimal("0.0"),
-                    maturity_adjustment=maturity_adj,
-                    adjusted_value=adjusted,
-                    description=(
-                        f"MV={market_value:,.0f}; Art.227 zero-haircut "
-                        f"(type={collateral_type}); Adj={adjusted:,.0f}"
-                    ),
-                )
+        if qualifies_for_zero_haircut and _is_art227_eligible(collateral_type, cqs):
+            return self._build_art227_zero_result(
+                collateral_type=collateral_type,
+                market_value=market_value,
+                collateral_maturity_years=collateral_maturity_years,
+                exposure_maturity_years=exposure_maturity_years,
+                original_maturity_years=original_maturity_years,
+                has_one_day_maturity_floor=has_one_day_maturity_floor,
+            )
 
         # Art. 232: Life insurance — no supervisory haircut (surrender value IS the value)
         if collateral_type.lower() == "life_insurance":
-            fx_h = lookup_fx_haircut(
-                exposure_currency, collateral_currency, liquidation_period_days
-            )
-            adjusted = market_value * (1 - fx_h)
-            return HaircutResult(
-                original_value=market_value,
-                collateral_haircut=Decimal("0"),
-                fx_haircut=fx_h,
-                maturity_adjustment=Decimal("1.0"),
-                adjusted_value=adjusted,
-                description=(
-                    f"MV={market_value:,.0f}; Art.232 life insurance "
-                    f"Hc=0%; Hfx={fx_h:.1%}; Adj={adjusted:,.0f}"
-                ),
+            return self._build_life_insurance_result(
+                market_value=market_value,
+                collateral_currency=collateral_currency,
+                exposure_currency=exposure_currency,
+                liquidation_period_days=liquidation_period_days,
             )
 
         # Art. 218: CLN → treat as cash collateral
@@ -811,16 +776,8 @@ class HaircutCalculator:
 
         # Ineligible bonds: zero adjusted value
         if coll_haircut is None:
-            return HaircutResult(
-                original_value=market_value,
-                collateral_haircut=Decimal("1.0"),
-                fx_haircut=Decimal("0.0"),
-                maturity_adjustment=Decimal("0.0"),
-                adjusted_value=Decimal("0"),
-                description=(
-                    f"MV={market_value:,.0f}; INELIGIBLE per Art. 197 "
-                    f"(type={collateral_type}, CQS={cqs})"
-                ),
+            return _build_ineligible_result(
+                market_value=market_value, collateral_type=collateral_type, cqs=cqs
             )
 
         # Get FX haircut (scaled for liquidation period)
@@ -836,17 +793,14 @@ class HaircutCalculator:
         )
 
         # Apply maturity mismatch if applicable
-        maturity_adj = Decimal("1.0")
-        if collateral_maturity_years and exposure_maturity_years:
-            adjusted, _ = calculate_maturity_mismatch_adjustment(
-                collateral_value=adjusted,
-                collateral_maturity_years=collateral_maturity_years,
-                exposure_maturity_years=exposure_maturity_years,
-                original_maturity_years=original_maturity_years,
-                has_one_day_maturity_floor=has_one_day_maturity_floor,
-            )
-            if adjusted > Decimal("0"):
-                maturity_adj = adjusted / (market_value * (1 - coll_haircut - fx_haircut))
+        adjusted, maturity_adj = _apply_optional_maturity_mismatch(
+            adjusted=adjusted,
+            collateral_maturity_years=collateral_maturity_years,
+            exposure_maturity_years=exposure_maturity_years,
+            original_maturity_years=original_maturity_years,
+            has_one_day_maturity_floor=has_one_day_maturity_floor,
+            denominator=market_value * (1 - coll_haircut - fx_haircut),
+        )
 
         description = (
             f"MV={market_value:,.0f}; Hc={coll_haircut:.1%}; "
@@ -862,6 +816,63 @@ class HaircutCalculator:
             description=description,
         )
 
+    @staticmethod
+    def _build_art227_zero_result(
+        *,
+        collateral_type: str,
+        market_value: Decimal,
+        collateral_maturity_years: float | None,
+        exposure_maturity_years: float | None,
+        original_maturity_years: float | None,
+        has_one_day_maturity_floor: bool,
+    ) -> HaircutResult:
+        """Art. 227: All volatility adjustments zeroed (H_c = H_e = H_fx = 0%).
+
+        Maturity mismatch is still applied via Art. 237-238 if applicable.
+        """
+        adjusted, maturity_adj = _apply_optional_maturity_mismatch(
+            adjusted=market_value,
+            collateral_maturity_years=collateral_maturity_years,
+            exposure_maturity_years=exposure_maturity_years,
+            original_maturity_years=original_maturity_years,
+            has_one_day_maturity_floor=has_one_day_maturity_floor,
+            denominator=market_value,
+        )
+        return HaircutResult(
+            original_value=market_value,
+            collateral_haircut=Decimal("0.0"),
+            fx_haircut=Decimal("0.0"),
+            maturity_adjustment=maturity_adj,
+            adjusted_value=adjusted,
+            description=(
+                f"MV={market_value:,.0f}; Art.227 zero-haircut "
+                f"(type={collateral_type}); Adj={adjusted:,.0f}"
+            ),
+        )
+
+    @staticmethod
+    def _build_life_insurance_result(
+        *,
+        market_value: Decimal,
+        collateral_currency: str,
+        exposure_currency: str,
+        liquidation_period_days: int,
+    ) -> HaircutResult:
+        """Art. 232: Life insurance — surrender value IS the value (no supervisory haircut)."""
+        fx_h = lookup_fx_haircut(exposure_currency, collateral_currency, liquidation_period_days)
+        adjusted = market_value * (1 - fx_h)
+        return HaircutResult(
+            original_value=market_value,
+            collateral_haircut=Decimal("0"),
+            fx_haircut=fx_h,
+            maturity_adjustment=Decimal("1.0"),
+            adjusted_value=adjusted,
+            description=(
+                f"MV={market_value:,.0f}; Art.232 life insurance "
+                f"Hc=0%; Hfx={fx_h:.1%}; Adj={adjusted:,.0f}"
+            ),
+        )
+
 
 def create_haircut_calculator(is_basel_3_1: bool = False) -> HaircutCalculator:
     """
@@ -874,3 +885,59 @@ def create_haircut_calculator(is_basel_3_1: bool = False) -> HaircutCalculator:
         HaircutCalculator ready for use
     """
     return HaircutCalculator(is_basel_3_1=is_basel_3_1)
+
+
+def _is_art227_eligible(collateral_type: str, cqs: int | None) -> bool:
+    """Art. 227(2)(a) eligibility: cash/deposit or CQS ≤ 1 sovereign bond."""
+    norm = collateral_type.lower()
+    if norm in ("cash", "deposit"):
+        return True
+    is_sovereign = norm in ("govt_bond", "sovereign_bond", "government_bond", "gilt")
+    return is_sovereign and cqs is not None and cqs <= ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
+
+
+def _build_ineligible_result(
+    *, market_value: Decimal, collateral_type: str, cqs: int | None
+) -> HaircutResult:
+    """Art. 197 ineligible bond: zero adjusted value, descriptive trail."""
+    return HaircutResult(
+        original_value=market_value,
+        collateral_haircut=Decimal("1.0"),
+        fx_haircut=Decimal("0.0"),
+        maturity_adjustment=Decimal("0.0"),
+        adjusted_value=Decimal("0"),
+        description=(
+            f"MV={market_value:,.0f}; INELIGIBLE per Art. 197 (type={collateral_type}, CQS={cqs})"
+        ),
+    )
+
+
+def _apply_optional_maturity_mismatch(
+    *,
+    adjusted: Decimal,
+    collateral_maturity_years: float | None,
+    exposure_maturity_years: float | None,
+    original_maturity_years: float | None,
+    has_one_day_maturity_floor: bool,
+    denominator: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Apply Art. 237-238 maturity mismatch if both maturities are present.
+
+    Returns the (possibly adjusted) value and the implied maturity-adjustment ratio.
+    ``denominator`` is the pre-mismatch value used to derive the ratio (i.e. the
+    Art. 223(5) E*-equivalent for the haircut path, or ``market_value`` for the
+    Art. 227 zero-haircut path).
+    """
+    maturity_adj = Decimal("1.0")
+    if not (collateral_maturity_years and exposure_maturity_years):
+        return adjusted, maturity_adj
+    adjusted, _ = calculate_maturity_mismatch_adjustment(
+        collateral_value=adjusted,
+        collateral_maturity_years=collateral_maturity_years,
+        exposure_maturity_years=exposure_maturity_years,
+        original_maturity_years=original_maturity_years,
+        has_one_day_maturity_floor=has_one_day_maturity_floor,
+    )
+    if adjusted > Decimal("0") and denominator > Decimal("0"):
+        maturity_adj = adjusted / denominator
+    return adjusted, maturity_adj

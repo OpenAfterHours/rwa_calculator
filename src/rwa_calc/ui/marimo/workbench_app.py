@@ -428,6 +428,122 @@ def _(
 ):
     refresh_trigger  # noqa: B018 — reactive dependency
 
+    def _build_folder_buttons(mo, folders):
+        """Build open/delete buttons for each subfolder card. Returns (elements, meta)."""
+        elements: dict[str, object] = {}
+        meta: dict[str, tuple[str, object]] = {}
+        for idx, folder in enumerate(folders):
+            open_key = f"folder_open_{idx}"
+            del_key = f"folder_del_{idx}"
+            elements[open_key] = mo.ui.button(label="Open →", on_click=lambda v: (v or 0) + 1)
+            elements[del_key] = mo.ui.button(
+                label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
+            )
+            meta[open_key] = ("open_folder", folder.name)
+            meta[del_key] = ("delete_folder", folder.name)
+        return elements, meta
+
+    def _build_file_buttons(mo, files, current_folder_value):
+        """Build delete/move/publish buttons for each file card. Returns (elements, meta)."""
+        elements: dict[str, object] = {}
+        meta: dict[str, tuple[str, object]] = {}
+        for idx, file in enumerate(files):
+            del_key = f"btn_{idx}"
+            move_key = f"move_{idx}"
+            pub_key = f"pub_{idx}"
+            elements[del_key] = mo.ui.button(
+                label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
+            )
+            elements[move_key] = mo.ui.button(label="Move", on_click=lambda v: (v or 0) + 1)
+            elements[pub_key] = mo.ui.button(label="Publish", on_click=lambda v: (v or 0) + 1)
+            meta[del_key] = (
+                "delete_file",
+                f"{current_folder_value}/{file.stem}" if current_folder_value else file.stem,
+            )
+            meta[move_key] = (
+                "move_file",
+                (
+                    f"{current_folder_value}/{file.stem}.py"
+                    if current_folder_value
+                    else f"{file.stem}.py",
+                    file.stem,
+                ),
+            )
+            meta[pub_key] = (
+                "publish_file",
+                (
+                    f"__publish__:{current_folder_value}/{file.stem}"
+                    if current_folder_value
+                    else f"__publish__:{file.stem}",
+                    file.stem,
+                ),
+            )
+        return elements, meta
+
+    def _make_folder_card(mo, folder, py_count, open_btn, del_btn):
+        """Compose a single folder callout card."""
+        return mo.callout(
+            mo.vstack(
+                [
+                    mo.md(f"\U0001f4c1 **{folder.name}**"),
+                    mo.md(f"_{py_count} workbook(s)_"),
+                    mo.hstack([open_btn, del_btn]),
+                ]
+            ),
+            kind="info",
+        )
+
+    def _make_file_card(
+        mo, file, current_folder_value, edit_port, run_port, move_btn, pub_btn, del_btn, datetime
+    ):
+        """Compose a single workbook file callout card."""
+        mod_time = datetime.fromtimestamp(file.stat().st_mtime)
+        rel = (
+            f"local/{current_folder_value}/{file.name}"
+            if current_folder_value
+            else f"local/{file.name}"
+        )
+        run_rel = (
+            f"local/{current_folder_value}/{file.stem}"
+            if current_folder_value
+            else f"local/{file.stem}"
+        )
+        edit_link = mo.md(f"[Open in Editor →](http://localhost:{edit_port}/?file={rel})")
+        run_link = mo.md(f"[Run as App ▶](http://localhost:{run_port}/run/{run_rel})")
+        return mo.callout(
+            mo.vstack(
+                [
+                    mo.md(f"\U0001f4d3 **{file.stem}**"),
+                    mo.md(f"_Modified {mod_time:%Y-%m-%d %H:%M}_"),
+                    mo.hstack([run_link, edit_link, move_btn, pub_btn, del_btn]),
+                ]
+            ),
+            kind="neutral",
+        )
+
+    def _chunk_card_rows(mo, cards, per_row=3):
+        """Arrange cards into hstack rows of `per_row` cards each."""
+        return [
+            mo.hstack(cards[start : start + per_row], widths="equal")
+            for start in range(0, len(cards), per_row)
+        ]
+
+    def _empty_local_html(WB_STYLES):
+        """HTML for the empty 'no workbooks yet' state."""
+        return (
+            WB_STYLES
+            + """
+<div class="wb-page">
+  <div class="wb-empty">
+    <div class="wb-empty-icon">\U0001f4d3</div>
+    <h3>No workbooks yet</h3>
+    <p>Create your first workbook below to start analysing results
+    with custom Python notebooks.</p>
+  </div>
+</div>
+"""
+        )
+
     _ws_dir = Path(__file__).parent / "workspaces" / "local"
     _browse_dir = _ws_dir / current_folder() if current_folder() else _ws_dir
 
@@ -450,127 +566,47 @@ def _(
     if _folders or _files:
         # Build buttons in a mo.ui.dictionary for reliable reactivity
         # (.batch() does not propagate interactions to downstream cells)
-        _btn_elements: dict[str, object] = {}
-        _btn_meta: dict[str, tuple[str, object]] = {}
+        _cf = current_folder()
+        _folder_elements, _folder_meta = _build_folder_buttons(mo, _folders)
+        _file_elements, _file_meta = _build_file_buttons(mo, _files, _cf)
+        wb_actions = mo.ui.dictionary({**_folder_elements, **_file_elements})
+        wb_action_meta = {**_folder_meta, **_file_meta}
         _cards: list[object] = []
-
-        # Folder cards — buttons only; _py_count is recomputed in the card-display
-        # loop below where it is actually consumed.
-        for _di, _d in enumerate(_folders):
-            _open_key = f"folder_open_{_di}"
-            _del_key = f"folder_del_{_di}"
-            _btn_elements[_open_key] = mo.ui.button(
-                label="Open \u2192", on_click=lambda v: (v or 0) + 1
-            )
-            _btn_elements[_del_key] = mo.ui.button(
-                label="\U0001f5d1\ufe0f", on_click=lambda v: (v or 0) + 1, kind="danger"
-            )
-            _btn_meta[_open_key] = ("open_folder", _d.name)
-            _btn_meta[_del_key] = ("delete_folder", _d.name)
-
-        for _i, _f in enumerate(_files):
-            _del_key = f"btn_{_i}"
-            _move_key = f"move_{_i}"
-            _pub_key = f"pub_{_i}"
-            _cf = current_folder()
-            _btn_elements[_del_key] = mo.ui.button(
-                label="\U0001f5d1\ufe0f", on_click=lambda v: (v or 0) + 1, kind="danger"
-            )
-            _btn_elements[_move_key] = mo.ui.button(label="Move", on_click=lambda v: (v or 0) + 1)
-            _btn_elements[_pub_key] = mo.ui.button(label="Publish", on_click=lambda v: (v or 0) + 1)
-            _btn_meta[_del_key] = (
-                "delete_file",
-                f"{_cf}/{_f.stem}" if _cf else _f.stem,
-            )
-            _btn_meta[_move_key] = (
-                "move_file",
-                (f"{_cf}/{_f.stem}.py" if _cf else f"{_f.stem}.py", _f.stem),
-            )
-            _btn_meta[_pub_key] = (
-                "publish_file",
-                (
-                    f"__publish__:{_cf}/{_f.stem}" if _cf else f"__publish__:{_f.stem}",
-                    _f.stem,
-                ),
-            )
-
-        wb_actions = mo.ui.dictionary(_btn_elements)
-        wb_action_meta = _btn_meta
 
         # Build card display using dictionary buttons
         for _di, _d in enumerate(_folders):
             _py_count = len([f for f in _d.glob("*.py") if f.stem != "__init__"])
             _cards.append(
-                mo.callout(
-                    mo.vstack(
-                        [
-                            mo.md(f"\U0001f4c1 **{_d.name}**"),
-                            mo.md(f"_{_py_count} workbook(s)_"),
-                            mo.hstack(
-                                [
-                                    wb_actions[f"folder_open_{_di}"],
-                                    wb_actions[f"folder_del_{_di}"],
-                                ]
-                            ),
-                        ]
-                    ),
-                    kind="info",
+                _make_folder_card(
+                    mo,
+                    _d,
+                    _py_count,
+                    wb_actions[f"folder_open_{_di}"],
+                    wb_actions[f"folder_del_{_di}"],
                 )
             )
 
-        _cf = current_folder()
         for _i, _f in enumerate(_files):
-            _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
-            _rel = f"local/{_cf}/{_f.name}" if _cf else f"local/{_f.name}"
-            _run_rel = f"local/{_cf}/{_f.stem}" if _cf else f"local/{_f.stem}"
-            _edit_link = mo.md(
-                f"[Open in Editor \u2192](http://localhost:{EDIT_PORT}/?file={_rel})"
-            )
-            _run_link = mo.md(f"[Run as App \u25b6](http://localhost:{RUN_PORT}/run/{_run_rel})")
             _cards.append(
-                mo.callout(
-                    mo.vstack(
-                        [
-                            mo.md(f"\U0001f4d3 **{_f.stem}**"),
-                            mo.md(f"_Modified {_mod_time:%Y-%m-%d %H:%M}_"),
-                            mo.hstack(
-                                [
-                                    _run_link,
-                                    _edit_link,
-                                    wb_actions[f"move_{_i}"],
-                                    wb_actions[f"pub_{_i}"],
-                                    wb_actions[f"btn_{_i}"],
-                                ]
-                            ),
-                        ]
-                    ),
-                    kind="neutral",
+                _make_file_card(
+                    mo,
+                    _f,
+                    _cf,
+                    EDIT_PORT,
+                    RUN_PORT,
+                    wb_actions[f"move_{_i}"],
+                    wb_actions[f"pub_{_i}"],
+                    wb_actions[f"btn_{_i}"],
+                    datetime,
                 )
             )
 
-        # Arrange cards in rows of 3
-        _rows = []
-        for _start in range(0, len(_cards), 3):
-            _rows.append(mo.hstack(_cards[_start : _start + 3], widths="equal"))
+        _rows = _chunk_card_rows(mo, _cards, 3)
         mo.output.replace(mo.Html(WB_STYLES) if not _rows else mo.vstack(_rows))
     else:
         wb_actions = mo.ui.dictionary({})
         wb_action_meta = {}
-        mo.output.replace(
-            mo.Html(
-                WB_STYLES
-                + """
-<div class="wb-page">
-  <div class="wb-empty">
-    <div class="wb-empty-icon">\U0001f4d3</div>
-    <h3>No workbooks yet</h3>
-    <p>Create your first workbook below to start analysing results
-    with custom Python notebooks.</p>
-  </div>
-</div>
-"""
-            )
-        )
+        mo.output.replace(mo.Html(_empty_local_html(WB_STYLES)))
     return wb_action_meta, wb_actions
 
 
@@ -714,45 +750,56 @@ def _(Path, cancel_btn, confirm_btn, mo, pending_delete, set_pending_delete, set
     mo.stop(pending_delete() is None)
     mo.stop(not confirm_btn.value and not cancel_btn.value)
 
+    def _handle_folder_delete(folder_name, ws_dir, mo, set_pending_delete, set_refresh, shutil):
+        """Delete a folder if it is empty of workbooks; otherwise show a warning."""
+        folder_path = ws_dir / folder_name
+        py_files = (
+            [f for f in folder_path.glob("*.py") if f.stem != "__init__"]
+            if folder_path.exists()
+            else []
+        )
+        if py_files:
+            set_pending_delete(None)
+            mo.callout(
+                mo.md(
+                    f"Cannot delete **{folder_name}** — it contains "
+                    f"{len(py_files)} workbook(s). Move or delete them first."
+                ),
+                kind="danger",
+            )
+        elif folder_path.exists():
+            shutil.rmtree(folder_path)
+            set_refresh(lambda n: n + 1)
+            set_pending_delete(None)
+            mo.callout(mo.md(f"Deleted folder **{folder_name}**."), kind="warn")
+
+    def _handle_file_delete(label, ws_dir, mo, set_pending_delete, set_refresh):
+        """Delete a workbook file (label may be 'folder/name' or just 'name')."""
+        target = ws_dir / f"{label}.py"
+        display_name = label.split("/")[-1] if "/" in label else label
+        if target.exists():
+            target.unlink()
+        set_refresh(lambda n: n + 1)
+        set_pending_delete(None)
+        mo.callout(mo.md(f"Deleted **{display_name}**."), kind="warn")
+
     if cancel_btn.value:
         set_pending_delete(None)
         mo.callout(mo.md("Deletion cancelled."), kind="info")
     elif confirm_btn.value:
         _ws_dir = Path(__file__).parent / "workspaces" / "local"
         _label = pending_delete()
-
         if _label.startswith(_FOLDER_SENTINEL):
-            # Folder delete
-            _folder_name = _label[len(_FOLDER_SENTINEL) :]
-            _folder_path = _ws_dir / _folder_name
-            _py_files = (
-                [f for f in _folder_path.glob("*.py") if f.stem != "__init__"]
-                if _folder_path.exists()
-                else []
+            _handle_folder_delete(
+                _label[len(_FOLDER_SENTINEL) :],
+                _ws_dir,
+                mo,
+                set_pending_delete,
+                set_refresh,
+                shutil,
             )
-            if _py_files:
-                set_pending_delete(None)
-                mo.callout(
-                    mo.md(
-                        f"Cannot delete **{_folder_name}** — it contains "
-                        f"{len(_py_files)} workbook(s). Move or delete them first."
-                    ),
-                    kind="danger",
-                )
-            elif _folder_path.exists():
-                shutil.rmtree(_folder_path)
-                set_refresh(lambda n: n + 1)
-                set_pending_delete(None)
-                mo.callout(mo.md(f"Deleted folder **{_folder_name}**."), kind="warn")
         else:
-            # File delete — _label may be "folder/name" or just "name"
-            _target = _ws_dir / f"{_label}.py"
-            _display_name = _label.split("/")[-1] if "/" in _label else _label
-            if _target.exists():
-                _target.unlink()
-            set_refresh(lambda n: n + 1)
-            set_pending_delete(None)
-            mo.callout(mo.md(f"Deleted **{_display_name}**."), kind="warn")
+            _handle_file_delete(_label, _ws_dir, mo, set_pending_delete, set_refresh)
     return
 
 
@@ -904,63 +951,86 @@ def _(WB_STYLES, mo):
 def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
     refresh_trigger  # noqa: B018
 
-    _team_dir = Path(__file__).parent / "workspaces" / "team"
+    def _load_team_git_statuses(team_dir):
+        """Load git statuses for team workbook files; returns a dict keyed by relative path."""
+        statuses: dict[str, str] = {}
+        try:
+            from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
+            from rwa_calc.ui.marimo.git_ops import get_status as _get_status
 
-    # Get git status for team files
-    _git_statuses: dict[str, str] = {}
-    try:
-        from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
-        from rwa_calc.ui.marimo.git_ops import get_status as _get_status
+            repo_root = _find_repo_root(team_dir)
+            for s in _get_status(team_dir, repo_root):
+                key = f"{s.folder}/{s.name}" if s.folder else s.name
+                statuses[key] = s.status
+        except Exception:
+            pass
+        return statuses
 
-        _repo_root = _find_repo_root(_team_dir)
-        for _s in _get_status(_team_dir, _repo_root):
-            _key = f"{_s.folder}/{_s.name}" if _s.folder else _s.name
-            _git_statuses[_key] = _s.status
-    except Exception:
-        pass
-
-    # Discover team files
-    _files = []
-    if _team_dir.exists():
-        _files = sorted(
+    def _discover_team_files(team_dir, skip_dirs):
+        """Return sorted list of team workbook .py files, excluding skip_dirs."""
+        if not team_dir.exists():
+            return []
+        return sorted(
             f
-            for f in _team_dir.rglob("*.py")
+            for f in team_dir.rglob("*.py")
             if f.stem != "__init__"
-            and not any(p in SKIP_DIRS for p in f.relative_to(_team_dir).parts)
+            and not any(p in skip_dirs for p in f.relative_to(team_dir).parts)
         )
 
+    def _make_team_card_html(file, team_dir, git_statuses, edit_port, run_port, datetime):
+        """Build the HTML fragment for a single team workbook card."""
+        rel_to_team = file.relative_to(team_dir)
+        status_key = (
+            f"{rel_to_team.parent}/{rel_to_team.stem}"
+            if len(rel_to_team.parts) > 1
+            else rel_to_team.stem
+        )
+        status = git_statuses.get(status_key, "unmodified")
+        status_dot = f'<span class="wb-status wb-status-{status}"></span>'
+        mod_time = datetime.fromtimestamp(file.stat().st_mtime)
+        rel = f"team/{rel_to_team.as_posix()}"
+        run_rel = f"team/{rel_to_team.with_suffix('').as_posix()}"
+        folder_prefix = f"{rel_to_team.parent}/" if len(rel_to_team.parts) > 1 else ""
+        return (
+            f'<div class="wb-card">'
+            f'  <div class="wb-card-icon">\U0001f4d3</div>'
+            f"  <h3>{status_dot}{file.stem}</h3>"
+            f'  <span class="wb-card-desc">{folder_prefix}Team workbook</span>'
+            f'  <span class="wb-card-meta">Modified {mod_time:%Y-%m-%d %H:%M}</span>'
+            f'  <div class="wb-card-actions">'
+            f'    <a href="http://localhost:{run_port}/run/{run_rel}"'
+            f'       class="wb-card-action-run">Run as App ▶</a>'
+            f'    <a href="http://localhost:{edit_port}/?file={rel}"'
+            f'       class="wb-card-action">Open in Editor →</a>'
+            f"  </div>"
+            f"</div>"
+        )
+
+    def _empty_team_html(WB_STYLES):
+        """HTML for the empty 'no team workbooks yet' state."""
+        return (
+            WB_STYLES
+            + """
+<div class="wb-page">
+  <div class="wb-empty">
+    <div class="wb-empty-icon">\U0001f91d</div>
+    <h3>No team workbooks yet</h3>
+    <p>Publish a workbook from your local workspace to share it with
+    your team via git.</p>
+  </div>
+</div>
+"""
+        )
+
+    _team_dir = Path(__file__).parent / "workspaces" / "team"
+    _git_statuses = _load_team_git_statuses(_team_dir)
+    _files = _discover_team_files(_team_dir, SKIP_DIRS)
+
     if _files:
-        _buttons = {}
-        _card_html = []
-        for _i, _f in enumerate(_files):
-            _rel_to_team = _f.relative_to(_team_dir)
-            _status_key = (
-                f"{_rel_to_team.parent}/{_rel_to_team.stem}"
-                if len(_rel_to_team.parts) > 1
-                else _rel_to_team.stem
-            )
-            _status = _git_statuses.get(_status_key, "unmodified")
-            _status_dot = f'<span class="wb-status wb-status-{_status}"></span>'
-            _mod_time = datetime.fromtimestamp(_f.stat().st_mtime)
-            _rel = f"team/{_rel_to_team.as_posix()}"
-            _run_rel = f"team/{_rel_to_team.with_suffix('').as_posix()}"
-            _folder_prefix = f"{_rel_to_team.parent}/" if len(_rel_to_team.parts) > 1 else ""
-
-            _card_html.append(
-                f'<div class="wb-card">'
-                f'  <div class="wb-card-icon">\U0001f4d3</div>'
-                f"  <h3>{_status_dot}{_f.stem}</h3>"
-                f'  <span class="wb-card-desc">{_folder_prefix}Team workbook</span>'
-                f'  <span class="wb-card-meta">Modified {_mod_time:%Y-%m-%d %H:%M}</span>'
-                f'  <div class="wb-card-actions">'
-                f'    <a href="http://localhost:{RUN_PORT}/run/{_run_rel}"'
-                f'       class="wb-card-action-run">Run as App \u25b6</a>'
-                f'    <a href="http://localhost:{EDIT_PORT}/?file={_rel}"'
-                f'       class="wb-card-action">Open in Editor \u2192</a>'
-                f"  </div>"
-                f"</div>"
-            )
-
+        _card_html = [
+            _make_team_card_html(_f, _team_dir, _git_statuses, EDIT_PORT, RUN_PORT, datetime)
+            for _f in _files
+        ]
         _safe_styles = WB_STYLES.replace("{", "{{").replace("}", "}}")
         team_card_grid = mo.Html(
             _safe_styles
@@ -971,21 +1041,7 @@ def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_tri
         mo.output.replace(team_card_grid)
     else:
         team_card_grid = None
-        mo.output.replace(
-            mo.Html(
-                WB_STYLES
-                + """
-<div class="wb-page">
-  <div class="wb-empty">
-    <div class="wb-empty-icon">\U0001f91d</div>
-    <h3>No team workbooks yet</h3>
-    <p>Publish a workbook from your local workspace to share it with
-    your team via git.</p>
-  </div>
-</div>
-"""
-            )
-        )
+        mo.output.replace(mo.Html(_empty_team_html(WB_STYLES)))
     return (team_card_grid,)
 
 

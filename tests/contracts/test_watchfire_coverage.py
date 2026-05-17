@@ -139,6 +139,23 @@ WHITELIST: list[tuple[str, str, tuple[str, ...]]] = [
     ("rwa_calc.data.tables.haircuts", "get_maturity_band", ("CRR Art. 224",)),
     ("rwa_calc.data.tables.b31_risk_weights", "get_b31_combined_cqs_risk_weights",
      ("PS1/26, paragraph 122",)),
+    # --- Defaulted exposures (Art. 127) ---
+    ("rwa_calc.engine.sa.namespace", "_apply_defaulted_risk_weight",
+     ("CRR Art. 127", "PS1/26, paragraph 127")),
+    # --- High-risk items (Art. 128, B31-only — omitted from UK CRR) ---
+    ("rwa_calc.engine.sa.namespace", "_b31_append_high_risk_branch",
+     ("PS1/26, paragraph 128",)),
+    # --- Covered bonds (Art. 129) ---
+    ("rwa_calc.engine.sa.namespace", "_crr_unrated_cb_rw_expr", ("CRR Art. 129",)),
+    ("rwa_calc.engine.sa.namespace", "_b31_unrated_cb_rw_expr",
+     ("CRR Art. 129", "PS1/26, paragraph 129")),
+    ("rwa_calc.data.tables.crr_risk_weights", "_create_covered_bond_df",
+     ("CRR Art. 129",)),
+    ("rwa_calc.data.tables.b31_risk_weights", "_create_b31_covered_bond_df",
+     ("PS1/26, paragraph 129",)),
+    # --- CIU treatment (Art. 132 — UK CRR omitted; PS1/26 132A-132C reintroduce) ---
+    ("rwa_calc.engine.equity.calculator", "_append_ciu_branches",
+     ("PS1/26, paragraph 132",)),
 ]
 # fmt: on
 

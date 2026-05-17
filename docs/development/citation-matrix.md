@@ -41,9 +41,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/classifier.py:122:172"
     ```
 
-??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/namespace.py:1596"
+??? quote "`apply_risk_weights` — src/rwa_calc/engine/sa/namespace.py:1614"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1596:1640"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1614:1658"
     ```
 
 
@@ -105,16 +105,42 @@ Last generated: 2026-05-17.
     ```
 
 
-### CRR Art. 133 — Equity exposures
+### CRR Art. 127 — Exposures in default
 
-??? quote "`calculate_branch` — src/rwa_calc/engine/equity/calculator.py:163"
+??? quote "`_apply_defaulted_risk_weight` — src/rwa_calc/engine/sa/namespace.py:1480"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:163:190"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1480:1570"
     ```
 
-??? quote "`calculate` — src/rwa_calc/engine/equity/calculator.py:192"
+
+### CRR Art. 129 — Exposures in the form of covered bonds
+
+??? quote "`_create_covered_bond_df` — src/rwa_calc/data/tables/crr_risk_weights.py:766"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:192:224"
+    --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:766:773"
+    ```
+
+??? quote "`_crr_unrated_cb_rw_expr` — src/rwa_calc/engine/sa/namespace.py:401"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:401:438"
+    ```
+
+??? quote "`_b31_unrated_cb_rw_expr` — src/rwa_calc/engine/sa/namespace.py:441"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:441:477"
+    ```
+
+
+### CRR Art. 133 — Equity exposures
+
+??? quote "`calculate_branch` — src/rwa_calc/engine/equity/calculator.py:164"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:164:191"
+    ```
+
+??? quote "`calculate` — src/rwa_calc/engine/equity/calculator.py:193"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:193:225"
     ```
 
 
@@ -155,14 +181,14 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:1015:1043"
     ```
 
-??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/namespace.py:516"
+??? quote "`calculate_correlation` — src/rwa_calc/engine/irb/namespace.py:587"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:516:550"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:587:621"
     ```
 
-??? quote "`calculate_k` — src/rwa_calc/engine/irb/namespace.py:552"
+??? quote "`calculate_k` — src/rwa_calc/engine/irb/namespace.py:623"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:552:565"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:623:636"
     ```
 
 ??? quote "`calculate_branch` — src/rwa_calc/engine/slotting/calculator.py:83"
@@ -186,9 +212,9 @@ Last generated: 2026-05-17.
 
 ### CRR Art. 155 — Risk-weighted exposure amounts for equity exposures
 
-??? quote "`calculate` — src/rwa_calc/engine/equity/calculator.py:193"
+??? quote "`calculate` — src/rwa_calc/engine/equity/calculator.py:194"
     ```python
-    --8<-- "src/rwa_calc/engine/equity/calculator.py:192:224"
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:193:225"
     ```
 
 
@@ -237,9 +263,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:1046:1080"
     ```
 
-??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/namespace.py:567"
+??? quote "`calculate_maturity_adjustment` — src/rwa_calc/engine/irb/namespace.py:638"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:567:605"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:638:676"
     ```
 
 
@@ -250,9 +276,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:53:139"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/namespace.py:425"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/namespace.py:496"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:425:448"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:496:519"
     ```
 
 
@@ -263,9 +289,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:142:192"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/namespace.py:450"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/namespace.py:521"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:450:514"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:521:585"
     ```
 
 
@@ -284,9 +310,9 @@ Last generated: 2026-05-17.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:428"
+??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:477"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:428:449"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:477:498"
     ```
 
 
@@ -305,9 +331,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:46:308"
     ```
 
-??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/namespace.py:1737"
+??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/sa/namespace.py:1755"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1737:1862"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1755:1880"
     ```
 
 
@@ -331,9 +357,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/crm/simple_method.py:240:664"
     ```
 
-??? quote "`apply_fcsm_rw_substitution` — src/rwa_calc/engine/sa/namespace.py:1642"
+??? quote "`apply_fcsm_rw_substitution` — src/rwa_calc/engine/sa/namespace.py:1660"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1642:1697"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1660:1715"
     ```
 
 
@@ -383,9 +409,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/crm/life_insurance.py:70:154"
     ```
 
-??? quote "`apply_life_insurance_rw_mapping` — src/rwa_calc/engine/sa/namespace.py:1699"
+??? quote "`apply_life_insurance_rw_mapping` — src/rwa_calc/engine/sa/namespace.py:1717"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1699:1735"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1717:1753"
     ```
 
 
@@ -407,9 +433,9 @@ Last generated: 2026-05-17.
 
 ### CRR Art. 501 — Adjustment of risk-weighted non-defaulted SME exposures
 
-??? quote "`apply_supporting_factors` — src/rwa_calc/engine/sa/namespace.py:2007"
+??? quote "`apply_supporting_factors` — src/rwa_calc/engine/sa/namespace.py:2025"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:2007:2030"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:2025:2048"
     ```
 
 ??? quote "`calculate_sme_factor` — src/rwa_calc/engine/sa/supporting_factors.py:75"
@@ -448,25 +474,25 @@ Last generated: 2026-05-17.
 
 ### PS1/26, paragraph 110A — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/namespace.py:1934"
+??? quote "`apply_due_diligence_override` — src/rwa_calc/engine/sa/namespace.py:1952"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1934:1993"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1952:2011"
     ```
 
 
 ### PS1/26, paragraph 122 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/data/tables/b31_risk_weights.py:387"
+??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/data/tables/b31_risk_weights.py:388"
     ```python
-    --8<-- "src/rwa_calc/data/tables/b31_risk_weights.py:387:418"
+    --8<-- "src/rwa_calc/data/tables/b31_risk_weights.py:388:419"
     ```
 
 
 ### PS1/26, paragraph 123B — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/namespace.py:1864"
+??? quote "`apply_currency_mismatch_multiplier` — src/rwa_calc/engine/sa/namespace.py:1882"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/namespace.py:1864:1932"
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1882:1950"
     ```
 
 
@@ -478,6 +504,43 @@ Last generated: 2026-05-17.
     ```
 
 
+### PS1/26, paragraph 127 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_apply_defaulted_risk_weight` — src/rwa_calc/engine/sa/namespace.py:1481"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:1480:1570"
+    ```
+
+
+### PS1/26, paragraph 128 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_b31_append_high_risk_branch` — src/rwa_calc/engine/sa/namespace.py:511"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:511:523"
+    ```
+
+
+### PS1/26, paragraph 129 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_create_b31_covered_bond_df` — src/rwa_calc/data/tables/b31_risk_weights.py:366"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/b31_risk_weights.py:366:376"
+    ```
+
+??? quote "`_b31_unrated_cb_rw_expr` — src/rwa_calc/engine/sa/namespace.py:442"
+    ```python
+    --8<-- "src/rwa_calc/engine/sa/namespace.py:441:477"
+    ```
+
+
+### PS1/26, paragraph 132 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
+
+??? quote "`_append_ciu_branches` — src/rwa_calc/engine/equity/calculator.py:109"
+    ```python
+    --8<-- "src/rwa_calc/engine/equity/calculator.py:109:131"
+    ```
+
+
 ### PS1/26, paragraph 163 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
 ??? quote "`_pd_floor_expression` — src/rwa_calc/engine/irb/formulas.py:54"
@@ -485,9 +548,9 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:53:139"
     ```
 
-??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/namespace.py:426"
+??? quote "`apply_pd_floor` — src/rwa_calc/engine/irb/namespace.py:497"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:425:448"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:496:519"
     ```
 
 
@@ -508,8 +571,8 @@ Last generated: 2026-05-17.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:265:349"
     ```
 
-??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/namespace.py:451"
+??? quote "`apply_lgd_floor` — src/rwa_calc/engine/irb/namespace.py:522"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/namespace.py:450:514"
+    --8<-- "src/rwa_calc/engine/irb/namespace.py:521:585"
     ```
 

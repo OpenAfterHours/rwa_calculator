@@ -106,6 +106,7 @@ _RW_TO_PERCENT = 100
 _AUDIT_RWA_ROUND = 0
 
 
+@cites("PS1/26, paragraph 132")
 def _append_ciu_branches(chain: pl.Expr) -> pl.Expr:
     """Append CIU approach-aware risk weight branches to a when/then chain (Art. 132-132C).
 

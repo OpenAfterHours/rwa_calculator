@@ -363,6 +363,7 @@ _B31_CQS_RATED_ORDER: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
 _B31_CQS_ORDER_WITH_UNRATED: tuple[int | None, ...] = (1, 2, 3, 4, 5, 6, None)
 
 
+@cites("PS1/26, paragraph 129")
 def _create_b31_covered_bond_df() -> pl.DataFrame:
     """Create Basel 3.1 covered bond risk weight lookup DataFrame.
 

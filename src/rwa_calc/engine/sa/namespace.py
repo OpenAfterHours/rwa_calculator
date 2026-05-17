@@ -398,6 +398,7 @@ def _eca_meip_rw_expr() -> pl.Expr:
 # ---------------------------------------------------------------------------
 
 
+@cites("CRR Art. 129")
 def _crr_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for CRR Art. 129(5) unrated covered bond RW derivation.
 
@@ -437,6 +438,8 @@ def _crr_unrated_cb_rw_expr() -> pl.Expr:
     return expr.otherwise(pl.lit(unrated_cb_rw))
 
 
+@cites("CRR Art. 129")
+@cites("PS1/26, paragraph 129")
 def _b31_unrated_cb_rw_expr() -> pl.Expr:
     """Build Polars expression for B31 Art. 129(5) unrated covered bond RW derivation.
 
@@ -503,6 +506,21 @@ def _is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
 def _is_residential_re_class(uc: pl.Expr) -> pl.Expr:
     """Match residential RE — relies on commercial being routed first."""
     return uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
+
+
+@cites("PS1/26, paragraph 128")
+def _b31_append_high_risk_branch(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+    """Append Basel 3.1 Art. 128 high-risk items branch (150% flat).
+
+    Items associated with particularly high risk — venture capital, private
+    equity, speculative immovable property financing, and other
+    PRA-designated high-risk items — receive a 150% risk weight under
+    PRA PS1/26 Art. 128. CRR has no parallel branch: Art. 128 was omitted
+    from UK CRR by SI 2021/1078 reg. 6(3)(a) effective 1 January 2022, so
+    HIGH_RISK exposures fall through to the residual OTHER class (100%)
+    on the CRR path.
+    """
+    return chain.when(uc == "HIGH_RISK").then(pl.lit(_SA_B31_RW["high_risk"]))
 
 
 def _b31_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
@@ -1122,6 +1140,7 @@ def _apply_b31_risk_weight_overrides(
 
     chain = _b31_append_institution_maturity_branches(chain, uc)
     chain = _b31_append_corporate_maturity_branches(chain, uc)
+    chain = _b31_append_high_risk_branch(chain, uc)
 
     # Corporate / retail / misc tail of the chain.
     is_unrated_corporate = (
@@ -1190,9 +1209,6 @@ def _apply_b31_risk_weight_overrides(
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
         .then(_b31_unrated_cb_rw_expr())
-        # High-risk items (Art. 128): VC, PE, speculative RE, etc.
-        .when(uc == "HIGH_RISK")
-        .then(pl.lit(_SA_B31_RW["high_risk"]))
         # Other Items (Art. 134): sub-type-specific risk weights.
         .when(
             (uc == "OTHER")
@@ -1461,6 +1477,8 @@ def _apply_sovereign_floor_for_institutions(
     return exposures
 
 
+@cites("CRR Art. 127")
+@cites("PS1/26, paragraph 127")
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,

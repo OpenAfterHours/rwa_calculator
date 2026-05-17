@@ -196,6 +196,56 @@ def _build_maturity_exprs(config: CalculationConfig, names: set[str]) -> list[pl
 # =============================================================================
 
 
+def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[pl.Expr]:
+    """Build the default-column expressions for ``IRBLazyFrame.prepare_columns``.
+
+    Extracted as a module-level helper to keep the public method's cognitive
+    complexity under the project limit. The order of expressions mirrors the
+    original inline construction so column-dependency ordering is preserved.
+    """
+    exprs: list[pl.Expr] = []
+
+    if "pd" not in names:
+        exprs.append(pl.lit(0.01).alias("pd"))
+
+    if "ead_final" not in names:
+        ead_expr = pl.col("ead") if "ead" in names else pl.lit(0.0)
+        exprs.append(ead_expr.alias("ead_final"))
+
+    # Maturity priority chain — see ``prepare_columns`` docstring for details.
+    maturity_already_set = "maturity" in names
+    if not maturity_already_set:
+        exprs.extend(_build_maturity_exprs(config, names))
+
+    if "turnover_m" not in names:
+        turnover_expr = (
+            (pl.col("cp_annual_revenue") / 1_000_000.0)
+            if "cp_annual_revenue" in names
+            else pl.lit(None).cast(pl.Float64)
+        )
+        exprs.append(turnover_expr.alias("turnover_m"))
+
+    if "exposure_class" not in names:
+        exprs.append(pl.lit("CORPORATE").alias("exposure_class"))
+
+    if "is_defaulted" not in names:
+        exprs.append(pl.lit(False).alias("is_defaulted"))
+    if "beel" not in names:
+        exprs.append(pl.lit(0.0).alias("beel"))
+
+    # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
+    # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
+    # lending, and short-term self-liquidating trade transactions.
+    # When the maturity branch above ran, it has already appended the
+    # derived flag; we only need to default-False if neither the input
+    # column nor the derived expression were materialised.
+    needs_floor_default = "has_one_day_maturity_floor" not in names and maturity_already_set
+    if needs_floor_default:
+        exprs.append(pl.lit(False).alias("has_one_day_maturity_floor"))
+
+    return exprs
+
+
 def _lgd_floored_expr(config: CalculationConfig, schema_names: set[str], lgd_col: str) -> pl.Expr:
     """Build the ``lgd_floored`` expression for ``apply_all_formulas``.
 
@@ -430,23 +480,7 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with all required columns
         """
-        schema = self._lf.collect_schema()
-        names = set(schema.names())
-        exprs: list[pl.Expr] = []
-
-        # PD
-        if "pd" not in names:
-            exprs.append(pl.lit(0.01).alias("pd"))
-
-        # EAD
-        if "ead_final" not in names:
-            if "ead" in names:
-                exprs.append(pl.col("ead").alias("ead_final"))
-            else:
-                exprs.append(pl.lit(0.0).alias("ead_final"))
-
-        # Maturity
-        # Priority chain (highest wins):
+        # Maturity priority chain (highest wins) — see ``_build_maturity_exprs``:
         #   1. effective_maturity input populated → firm override, clipped [1 day, 5y]
         #   2. has_one_day_maturity_floor flag → M = 1/365 (Art. 162(3) carve-out:
         #      daily-margined SFTs/derivatives/margin lending, short-term trade)
@@ -455,36 +489,8 @@ class IRBLazyFrame:
         #   5. Fallback default 2.5y
         # CRR F-IRB SFT supervisory M = 0.5y (Art. 162(1)) is applied to the base
         # chain (4/3) but is superseded by the two explicit overrides above.
-        if "maturity" not in names:
-            exprs.extend(_build_maturity_exprs(config, names))
-
-        # Turnover for SME correlation adjustment
-        if "turnover_m" not in names:
-            if "cp_annual_revenue" in names:
-                exprs.append((pl.col("cp_annual_revenue") / 1_000_000.0).alias("turnover_m"))
-            else:
-                exprs.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-
-        # Exposure class
-        if "exposure_class" not in names:
-            exprs.append(pl.lit("CORPORATE").alias("exposure_class"))
-
-        # Defaulted exposure columns
-        if "is_defaulted" not in names:
-            exprs.append(pl.lit(False).alias("is_defaulted"))
-        if "beel" not in names:
-            exprs.append(pl.lit(0.0).alias("beel"))
-
-        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
-        # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
-        # lending, and short-term self-liquidating trade transactions.
-        # When the maturity branch above ran, it has already appended the
-        # derived flag; we only need to default-False if neither the input
-        # column nor the derived expression were materialised.
-        already_set = "maturity" not in names
-        if "has_one_day_maturity_floor" not in names and not already_set:
-            exprs.append(pl.lit(False).alias("has_one_day_maturity_floor"))
-
+        names = set(self._lf.collect_schema().names())
+        exprs = _prepare_columns_exprs(config, names)
         if exprs:
             return self._lf.with_columns(exprs)
         return self._lf

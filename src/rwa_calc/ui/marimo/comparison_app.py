@@ -303,68 +303,57 @@ def _(
 
 @app.cell
 def _(comparison_bundle, mo, pl):
-    if comparison_bundle is not None:
-        # Compute headline metrics from comparison bundle
-        crr_agg = comparison_bundle.crr_results
-        b31_agg = comparison_bundle.b31_results
-
-        # Get total RWA from summary_by_approach for each framework
-        def _sum_rwa(result) -> float:
-            if result.summary_by_approach is not None:
-                df = result.summary_by_approach.collect()
-                if "total_rwa" in df.columns and df.height > 0:
-                    return float(df["total_rwa"].sum())
+    def _sum_column(result, column: str) -> float:
+        if result.summary_by_approach is None:
             return 0.0
+        df = result.summary_by_approach.collect()
+        if column in df.columns and df.height > 0:
+            return float(df[column].sum())
+        return 0.0
 
-        def _sum_ead(result) -> float:
-            if result.summary_by_approach is not None:
-                df = result.summary_by_approach.collect()
-                if "total_ead" in df.columns and df.height > 0:
-                    return float(df["total_ead"].sum())
-            return 0.0
+    def _avg_rw(rwa: float, ead: float) -> str:
+        return f"{rwa / ead:.2%}" if ead else "N/A"
 
-        crr_rwa = _sum_rwa(crr_agg)
-        b31_rwa = _sum_rwa(b31_agg)
-        crr_ead = _sum_ead(crr_agg)
-        b31_ead = _sum_ead(b31_agg)
+    def _build_summary_view(crr_agg, b31_agg):
+        crr_rwa = _sum_column(crr_agg, "total_rwa")
+        b31_rwa = _sum_column(b31_agg, "total_rwa")
+        crr_ead = _sum_column(crr_agg, "total_ead")
+        b31_ead = _sum_column(b31_agg, "total_ead")
         delta_rwa = b31_rwa - crr_rwa
         delta_pct = (delta_rwa / crr_rwa * 100) if crr_rwa != 0 else 0.0
 
         def _fmt(val: float) -> str:
             return f"{val:,.0f}"
 
+        return mo.vstack(
+            [
+                mo.md("## Executive Summary"),
+                mo.hstack(
+                    [
+                        mo.stat(value=_fmt(crr_rwa), label="CRR Total RWA"),
+                        mo.stat(value=_fmt(b31_rwa), label="Basel 3.1 Total RWA"),
+                        mo.stat(
+                            value=f"{_fmt(delta_rwa)} ({delta_pct:+.1f}%)",
+                            label="Delta RWA",
+                        ),
+                    ],
+                    justify="space-around",
+                ),
+                mo.hstack(
+                    [
+                        mo.stat(value=_fmt(crr_ead), label="CRR Total EAD"),
+                        mo.stat(value=_fmt(b31_ead), label="Basel 3.1 Total EAD"),
+                        mo.stat(value=_avg_rw(crr_rwa, crr_ead), label="CRR Avg RW"),
+                        mo.stat(value=_avg_rw(b31_rwa, b31_ead), label="B31 Avg RW"),
+                    ],
+                    justify="space-around",
+                ),
+            ]
+        )
+
+    if comparison_bundle is not None:
         mo.output.replace(
-            mo.vstack(
-                [
-                    mo.md("## Executive Summary"),
-                    mo.hstack(
-                        [
-                            mo.stat(value=_fmt(crr_rwa), label="CRR Total RWA"),
-                            mo.stat(value=_fmt(b31_rwa), label="Basel 3.1 Total RWA"),
-                            mo.stat(
-                                value=f"{_fmt(delta_rwa)} ({delta_pct:+.1f}%)",
-                                label="Delta RWA",
-                            ),
-                        ],
-                        justify="space-around",
-                    ),
-                    mo.hstack(
-                        [
-                            mo.stat(value=_fmt(crr_ead), label="CRR Total EAD"),
-                            mo.stat(value=_fmt(b31_ead), label="Basel 3.1 Total EAD"),
-                            mo.stat(
-                                value=f"{crr_rwa / crr_ead:.2%}" if crr_ead else "N/A",
-                                label="CRR Avg RW",
-                            ),
-                            mo.stat(
-                                value=f"{b31_rwa / b31_ead:.2%}" if b31_ead else "N/A",
-                                label="B31 Avg RW",
-                            ),
-                        ],
-                        justify="space-around",
-                    ),
-                ]
-            )
+            _build_summary_view(comparison_bundle.crr_results, comparison_bundle.b31_results)
         )
     return
 
@@ -376,48 +365,45 @@ def _(comparison_bundle, mo, pl):
 
 @app.cell
 def _(impact_bundle, mo, pl):
+    def _impact_direction(impact: float) -> str:
+        if impact > 0:
+            return "increase"
+        if impact < 0:
+            return "decrease"
+        return "neutral"
+
+    def _build_waterfall_row(waterfall_df, i: int) -> dict:
+        impact = float(waterfall_df["impact_rwa"][i])
+        cumulative = float(waterfall_df["cumulative_rwa"][i])
+        sign = "+" if impact >= 0 else ""
+        return {
+            "Step": int(waterfall_df["step"][i]),
+            "Driver": waterfall_df["driver"][i],
+            "Impact (RWA)": f"{sign}{impact:,.0f}",
+            "Cumulative": f"{cumulative:,.0f}",
+            "Direction": _impact_direction(impact),
+        }
+
+    def _render_waterfall(waterfall_df):
+        rows = [_build_waterfall_row(waterfall_df, i) for i in range(waterfall_df.height)]
+        waterfall_display = pl.DataFrame(rows)
+        total_impact = sum(float(waterfall_df["impact_rwa"][i]) for i in range(waterfall_df.height))
+        return mo.vstack(
+            [
+                mo.md("## Capital Impact Waterfall"),
+                mo.md(
+                    "The RWA delta is decomposed into four sequential regulatory drivers. "
+                    "Each driver's impact is additive — they sum exactly to the total delta."
+                ),
+                mo.ui.table(waterfall_display, selection=None),
+                mo.md(f"**Total RWA impact: {total_impact:+,.0f}**"),
+            ]
+        )
+
     if impact_bundle is not None:
         waterfall_df = impact_bundle.portfolio_waterfall.collect()
-
         if waterfall_df.height > 0:
-            # Build a formatted waterfall display
-            rows = []
-            for i in range(waterfall_df.height):
-                driver = waterfall_df["driver"][i]
-                impact = float(waterfall_df["impact_rwa"][i])
-                cumulative = float(waterfall_df["cumulative_rwa"][i])
-                direction = "increase" if impact > 0 else "decrease" if impact < 0 else "neutral"
-                sign = "+" if impact >= 0 else ""
-                rows.append(
-                    {
-                        "Step": int(waterfall_df["step"][i]),
-                        "Driver": driver,
-                        "Impact (RWA)": f"{sign}{impact:,.0f}",
-                        "Cumulative": f"{cumulative:,.0f}",
-                        "Direction": direction,
-                    }
-                )
-
-            waterfall_display = pl.DataFrame(rows)
-
-            # Calculate the total delta for the summary bar
-            total_impact = sum(
-                float(waterfall_df["impact_rwa"][i]) for i in range(waterfall_df.height)
-            )
-
-            mo.output.replace(
-                mo.vstack(
-                    [
-                        mo.md("## Capital Impact Waterfall"),
-                        mo.md(
-                            "The RWA delta is decomposed into four sequential regulatory drivers. "
-                            "Each driver's impact is additive — they sum exactly to the total delta."
-                        ),
-                        mo.ui.table(waterfall_display, selection=None),
-                        mo.md(f"**Total RWA impact: {total_impact:+,.0f}**"),
-                    ]
-                )
-            )
+            mo.output.replace(_render_waterfall(waterfall_df))
     return
 
 
@@ -727,62 +713,69 @@ def _(comparison_bundle, mo, pl):
 
 @app.cell
 def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, mo, pl):
-    if comparison_bundle is not None and drill_class_filter is not None:
-        _deltas_lf = comparison_bundle.exposure_deltas
-        _schema = _deltas_lf.collect_schema().names()
+    _DRILL_DEFAULT_COLS = [
+        "exposure_reference",
+        "exposure_class",
+        "approach_applied",
+        "ead_final_crr",
+        "ead_final_b31",
+        "risk_weight_crr",
+        "risk_weight_b31",
+        "rwa_final_crr",
+        "rwa_final_b31",
+        "delta_rwa",
+        "delta_risk_weight",
+        "delta_rwa_pct",
+    ]
 
-        # Apply filters
+    _SORT_MAP = {
+        "delta_rwa_desc": ("delta_rwa", True, False),
+        "delta_rwa_asc": ("delta_rwa", False, False),
+        "delta_rwa_abs": ("delta_rwa", True, True),
+    }
+
+    def _apply_drill_filters(lf, schema):
         predicates = []
-        if drill_class_filter.value != "All" and "exposure_class" in _schema:
+        if drill_class_filter.value != "All" and "exposure_class" in schema:
             predicates.append(pl.col("exposure_class") == drill_class_filter.value)
-        if drill_approach_filter.value != "All" and "approach_applied" in _schema:
+        if drill_approach_filter.value != "All" and "approach_applied" in schema:
             predicates.append(pl.col("approach_applied") == drill_approach_filter.value)
+        if not predicates:
+            return lf
+        combined = predicates[0]
+        for p in predicates[1:]:
+            combined = combined & p
+        return lf.filter(combined)
 
-        _filtered = _deltas_lf
-        if predicates:
-            combined = predicates[0]
-            for p in predicates[1:]:
-                combined = combined & p
-            _filtered = _deltas_lf.filter(combined)
+    def _select_display_cols(schema):
+        cols = [c for c in _DRILL_DEFAULT_COLS if c in schema]
+        if cols:
+            return cols
+        fallback = [c for c in schema if c != "exposure_reference"][:10]
+        if "exposure_reference" in schema:
+            return ["exposure_reference", *fallback]
+        return fallback
 
-        # Select display columns
-        _display_cols = [
-            c
-            for c in [
-                "exposure_reference",
-                "exposure_class",
-                "approach_applied",
-                "ead_final_crr",
-                "ead_final_b31",
-                "risk_weight_crr",
-                "risk_weight_b31",
-                "rwa_final_crr",
-                "rwa_final_b31",
-                "delta_rwa",
-                "delta_risk_weight",
-                "delta_rwa_pct",
-            ]
-            if c in _schema
-        ]
-
-        if not _display_cols:
-            _display_cols = [c for c in _schema if c != "exposure_reference"][:10]
-            if "exposure_reference" in _schema:
-                _display_cols = ["exposure_reference"] + _display_cols
-
-        # Apply sort
+    def _apply_drill_sort(lf, schema):
         sort_val = drill_sort.value if drill_sort else "delta_rwa_desc"
-        if sort_val == "delta_rwa_desc" and "delta_rwa" in _schema:
-            _filtered = _filtered.sort("delta_rwa", descending=True)
-        elif sort_val == "delta_rwa_asc" and "delta_rwa" in _schema:
-            _filtered = _filtered.sort("delta_rwa", descending=False)
-        elif sort_val == "delta_rwa_abs" and "delta_rwa" in _schema:
-            _filtered = _filtered.sort(pl.col("delta_rwa").abs(), descending=True)
+        spec = _SORT_MAP.get(sort_val)
+        if spec is None or "delta_rwa" not in schema:
+            return lf
+        col_name, descending, use_abs = spec
+        sort_expr = pl.col(col_name).abs() if use_abs else col_name
+        return lf.sort(sort_expr, descending=descending)
 
-        result_df = _filtered.select(_display_cols).head(200).collect()
+    def _extract_stat(stats, name: str) -> float:
+        value = stats[name][0]
+        return float(value) if value is not None else 0.0
 
-        # Summary stats for filtered set
-        stats = _filtered.select(
+    def _render_drilldown(lf, schema):
+        filtered = _apply_drill_filters(lf, schema)
+        display_cols = _select_display_cols(schema)
+        sorted_lf = _apply_drill_sort(filtered, schema)
+        result_df = sorted_lf.select(display_cols).head(200).collect()
+
+        stats = filtered.select(
             [
                 pl.len().alias("count"),
                 pl.col("delta_rwa").sum().alias("total_delta"),
@@ -791,25 +784,28 @@ def _(comparison_bundle, drill_approach_filter, drill_class_filter, drill_sort, 
         ).collect()
 
         count = int(stats["count"][0])
-        total_delta = float(stats["total_delta"][0]) if stats["total_delta"][0] is not None else 0.0
-        avg_delta = float(stats["avg_delta"][0]) if stats["avg_delta"][0] is not None else 0.0
+        total_delta = _extract_stat(stats, "total_delta")
+        avg_delta = _extract_stat(stats, "avg_delta")
 
-        mo.output.replace(
-            mo.vstack(
-                [
-                    mo.hstack(
-                        [
-                            mo.stat(value=f"{count:,}", label="Exposures"),
-                            mo.stat(value=f"{total_delta:+,.0f}", label="Total Delta RWA"),
-                            mo.stat(value=f"{avg_delta:+,.0f}", label="Avg Delta RWA"),
-                        ],
-                        justify="space-around",
-                    ),
-                    mo.md(f"*Showing first {result_df.height:,} of {count:,} exposures*"),
-                    mo.ui.table(result_df, selection=None),
-                ]
-            )
+        return mo.vstack(
+            [
+                mo.hstack(
+                    [
+                        mo.stat(value=f"{count:,}", label="Exposures"),
+                        mo.stat(value=f"{total_delta:+,.0f}", label="Total Delta RWA"),
+                        mo.stat(value=f"{avg_delta:+,.0f}", label="Avg Delta RWA"),
+                    ],
+                    justify="space-around",
+                ),
+                mo.md(f"*Showing first {result_df.height:,} of {count:,} exposures*"),
+                mo.ui.table(result_df, selection=None),
+            ]
         )
+
+    if comparison_bundle is not None and drill_class_filter is not None:
+        _deltas_lf = comparison_bundle.exposure_deltas
+        _schema = _deltas_lf.collect_schema().names()
+        mo.output.replace(_render_drilldown(_deltas_lf, _schema))
     return
 
 

@@ -58,6 +58,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
+    "pytest-xdist>=3.5.0",
     "ruff>=0.3.0",
     "ty",
     "zensical>=0.0.29",
@@ -112,10 +113,11 @@ pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --benchmark-disable -m 'not slow'"
+addopts = "-v --tb=short --benchmark-disable -m 'not slow and not stress' -n auto --dist=loadfile"
 markers = [
     "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
     "slow: mark test as slow (10M+ scale, may take several minutes)",
+    "stress: mark test as a correctness-at-scale validation (10K+ rows, opt-in; CI runs with -m 'not slow')",
 ]
 
 [tool.coverage.run]

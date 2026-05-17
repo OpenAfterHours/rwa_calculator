@@ -643,3 +643,33 @@ def b31_irb_result_10k(
 ) -> AggregatedResultBundle:
     """Basel 3.1 IRB pipeline result at 10K scale."""
     return run_pipeline(stress_dataset_10k, b31_irb_config)
+
+
+# Collected-DataFrame variants of the four result bundles. Tests should
+# consume these instead of calling `.results.collect()` themselves —
+# collecting once per session keeps stress runs proportional to the
+# number of pipelines (4), not the number of tests (~60).
+
+
+@pytest.fixture(scope="session")
+def crr_sa_result_10k_df(crr_sa_result_10k: AggregatedResultBundle) -> pl.DataFrame:
+    """CRR SA pipeline result at 10K scale, collected once."""
+    return crr_sa_result_10k.results.collect()
+
+
+@pytest.fixture(scope="session")
+def crr_irb_result_10k_df(crr_irb_result_10k: AggregatedResultBundle) -> pl.DataFrame:
+    """CRR IRB pipeline result at 10K scale, collected once."""
+    return crr_irb_result_10k.results.collect()
+
+
+@pytest.fixture(scope="session")
+def b31_sa_result_10k_df(b31_sa_result_10k: AggregatedResultBundle) -> pl.DataFrame:
+    """Basel 3.1 SA pipeline result at 10K scale, collected once."""
+    return b31_sa_result_10k.results.collect()
+
+
+@pytest.fixture(scope="session")
+def b31_irb_result_10k_df(b31_irb_result_10k: AggregatedResultBundle) -> pl.DataFrame:
+    """Basel 3.1 IRB pipeline result at 10K scale, collected once."""
+    return b31_irb_result_10k.results.collect()

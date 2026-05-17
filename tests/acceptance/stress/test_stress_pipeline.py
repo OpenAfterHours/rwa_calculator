@@ -35,6 +35,8 @@ from .conftest import run_pipeline
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle
 
+pytestmark = pytest.mark.stress
+
 
 # ---------------------------------------------------------------------------
 # Required output columns that every pipeline result must contain
@@ -76,12 +78,12 @@ class TestRowCountPreservation:
 
     def test_crr_sa_loans_preserved(
         self,
-        crr_sa_result_10k: AggregatedResultBundle,
+        crr_sa_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """CRR SA: all input loans appear in output."""
         n_loans, _ = self._get_expected_counts(stress_dataset_10k)
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         output_loans = df.filter(pl.col("exposure_type") == "loan").height
         assert output_loans == n_loans, (
             f"Loan count mismatch: {output_loans} output vs {n_loans} input"
@@ -89,20 +91,20 @@ class TestRowCountPreservation:
 
     def test_crr_sa_contingents_preserved(
         self,
-        crr_sa_result_10k: AggregatedResultBundle,
+        crr_sa_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """CRR SA: all input contingents appear in output."""
         _, n_contingents = self._get_expected_counts(stress_dataset_10k)
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         output_contingents = df.filter(pl.col("exposure_type") == "contingent").height
         assert output_contingents == n_contingents, (
             f"Contingent count mismatch: {output_contingents} output vs {n_contingents} input"
         )
 
-    def test_crr_sa_no_unknown_types(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_crr_sa_no_unknown_types(self, crr_sa_result_10k_df: pl.DataFrame):
         """CRR SA: all exposure types are known."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         known_types = {"loan", "contingent", "facility_undrawn"}
         actual_types = set(df["exposure_type"].unique().to_list())
         unknown = actual_types - known_types
@@ -110,51 +112,51 @@ class TestRowCountPreservation:
 
     def test_crr_irb_loans_preserved(
         self,
-        crr_irb_result_10k: AggregatedResultBundle,
+        crr_irb_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """CRR IRB: all input loans appear in output."""
         n_loans, _ = self._get_expected_counts(stress_dataset_10k)
-        df = crr_irb_result_10k.results.collect()
+        df = crr_irb_result_10k_df
         output_loans = df.filter(pl.col("exposure_type") == "loan").height
         assert output_loans == n_loans
 
     def test_b31_sa_loans_preserved(
         self,
-        b31_sa_result_10k: AggregatedResultBundle,
+        b31_sa_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """Basel 3.1 SA: all input loans appear in output."""
         n_loans, _ = self._get_expected_counts(stress_dataset_10k)
-        df = b31_sa_result_10k.results.collect()
+        df = b31_sa_result_10k_df
         output_loans = df.filter(pl.col("exposure_type") == "loan").height
         assert output_loans == n_loans
 
     def test_b31_irb_loans_preserved(
         self,
-        b31_irb_result_10k: AggregatedResultBundle,
+        b31_irb_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """Basel 3.1 IRB: all input loans appear in output."""
         n_loans, _ = self._get_expected_counts(stress_dataset_10k)
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         output_loans = df.filter(pl.col("exposure_type") == "loan").height
         assert output_loans == n_loans
 
     def test_b31_irb_contingents_preserved(
         self,
-        b31_irb_result_10k: AggregatedResultBundle,
+        b31_irb_result_10k_df: pl.DataFrame,
         stress_dataset_10k: dict[str, pl.LazyFrame],
     ):
         """Basel 3.1 IRB: all input contingents appear in output."""
         _, n_contingents = self._get_expected_counts(stress_dataset_10k)
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         output_contingents = df.filter(pl.col("exposure_type") == "contingent").height
         assert output_contingents == n_contingents
 
-    def test_facility_undrawn_rows_created(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_facility_undrawn_rows_created(self, crr_sa_result_10k_df: pl.DataFrame):
         """Committed facilities should generate undrawn exposure rows."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         undrawn = df.filter(pl.col("exposure_type") == "facility_undrawn").height
         assert undrawn > 0, "No facility_undrawn rows — committed facilities should create them"
 
@@ -171,27 +173,27 @@ class TestColumnCompleteness:
     COREP reporting and Pillar III disclosures depend on these fields.
     """
 
-    def test_crr_sa_columns(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_crr_sa_columns(self, crr_sa_result_10k_df: pl.DataFrame):
         """CRR SA output contains all required columns."""
-        results_df = crr_sa_result_10k.results.collect()
+        results_df = crr_sa_result_10k_df
         missing = REQUIRED_OUTPUT_COLUMNS - set(results_df.columns)
         assert not missing, f"Missing output columns: {missing}"
 
-    def test_crr_irb_columns(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_crr_irb_columns(self, crr_irb_result_10k_df: pl.DataFrame):
         """CRR IRB output contains all required columns."""
-        results_df = crr_irb_result_10k.results.collect()
+        results_df = crr_irb_result_10k_df
         missing = REQUIRED_OUTPUT_COLUMNS - set(results_df.columns)
         assert not missing, f"Missing output columns: {missing}"
 
-    def test_b31_sa_columns(self, b31_sa_result_10k: AggregatedResultBundle):
+    def test_b31_sa_columns(self, b31_sa_result_10k_df: pl.DataFrame):
         """B31 SA output contains all required columns."""
-        results_df = b31_sa_result_10k.results.collect()
+        results_df = b31_sa_result_10k_df
         missing = REQUIRED_OUTPUT_COLUMNS - set(results_df.columns)
         assert not missing, f"Missing output columns: {missing}"
 
-    def test_b31_irb_columns(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_b31_irb_columns(self, b31_irb_result_10k_df: pl.DataFrame):
         """B31 IRB output contains all required columns."""
-        results_df = b31_irb_result_10k.results.collect()
+        results_df = b31_irb_result_10k_df
         missing = REQUIRED_OUTPUT_COLUMNS - set(results_df.columns)
         assert not missing, f"Missing output columns: {missing}"
 
@@ -208,65 +210,65 @@ class TestNumericalStability:
     and inf from division-by-zero are most likely to manifest at scale.
     """
 
-    def test_no_nan_in_rwa_crr_sa(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_nan_in_rwa_crr_sa(self, crr_sa_result_10k_df: pl.DataFrame):
         """No NaN values in rwa_final column."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         nan_count = df.select(pl.col("rwa_final").is_nan().sum()).item()
         assert nan_count == 0, f"Found {nan_count} NaN values in rwa_final"
 
-    def test_no_nan_in_rwa_b31_irb(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_no_nan_in_rwa_b31_irb(self, b31_irb_result_10k_df: pl.DataFrame):
         """No NaN values in rwa_final under B31 IRB."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         nan_count = df.select(pl.col("rwa_final").is_nan().sum()).item()
         assert nan_count == 0, f"Found {nan_count} NaN values in rwa_final"
 
-    def test_no_inf_in_rwa(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_inf_in_rwa(self, crr_sa_result_10k_df: pl.DataFrame):
         """No infinite values in rwa_final."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         inf_count = df.select(pl.col("rwa_final").is_infinite().sum()).item()
         assert inf_count == 0, f"Found {inf_count} infinite values in rwa_final"
 
-    def test_no_negative_rwa(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_negative_rwa(self, crr_sa_result_10k_df: pl.DataFrame):
         """RWA must be non-negative (RW can be 0% but not negative)."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         neg_count = df.filter(pl.col("rwa_final") < 0).height
         assert neg_count == 0, f"Found {neg_count} negative RWA values"
 
-    def test_rwa_sum_is_finite_crr(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_rwa_sum_is_finite_crr(self, crr_sa_result_10k_df: pl.DataFrame):
         """Total RWA sum is finite and positive."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         total = df.select(pl.col("rwa_final").sum()).item()
         assert total > 0, "Total RWA should be positive for a non-trivial portfolio"
         assert total < float("inf"), "Total RWA must be finite"
 
-    def test_rwa_sum_is_finite_b31(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_rwa_sum_is_finite_b31(self, b31_irb_result_10k_df: pl.DataFrame):
         """Total RWA sum is finite and positive under Basel 3.1."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         total = df.select(pl.col("rwa_final").sum()).item()
         assert total > 0
         assert total < float("inf")
 
-    def test_no_null_rwa(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_null_rwa(self, crr_sa_result_10k_df: pl.DataFrame):
         """rwa_final should have no null values — every exposure gets an RWA."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         null_count = df.select(pl.col("rwa_final").is_null().sum()).item()
         assert null_count == 0, f"Found {null_count} null rwa_final values"
 
-    def test_no_null_risk_weight(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_null_risk_weight(self, crr_sa_result_10k_df: pl.DataFrame):
         """risk_weight should have no null values."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         null_count = df.select(pl.col("risk_weight").is_null().sum()).item()
         assert null_count == 0, f"Found {null_count} null risk_weight values"
 
-    def test_no_nan_in_ead(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_nan_in_ead(self, crr_sa_result_10k_df: pl.DataFrame):
         """No NaN values in ead_final."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         nan_count = df.select(pl.col("ead_final").is_nan().sum()).item()
         assert nan_count == 0, f"Found {nan_count} NaN values in ead_final"
 
-    def test_b31_no_negative_rwa(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_b31_no_negative_rwa(self, b31_irb_result_10k_df: pl.DataFrame):
         """Basel 3.1 IRB: no negative RWA."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         neg_count = df.filter(pl.col("rwa_final") < 0).height
         assert neg_count == 0, f"Found {neg_count} negative RWA values"
 
@@ -288,31 +290,31 @@ class TestRiskWeightBounds:
     - CRR Art. 153 (IRB risk weight formula)
     """
 
-    def test_sa_rw_bounds_crr(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_sa_rw_bounds_crr(self, crr_sa_result_10k_df: pl.DataFrame):
         """CRR SA risk weights within [0%, 1250%]."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         rw_min = df.select(pl.col("risk_weight").min()).item()
         rw_max = df.select(pl.col("risk_weight").max()).item()
         assert rw_min >= 0.0, f"Risk weight below 0%: {rw_min}"
         assert rw_max <= 12.50, f"Risk weight above 1250%: {rw_max}"
 
-    def test_sa_rw_bounds_b31(self, b31_sa_result_10k: AggregatedResultBundle):
+    def test_sa_rw_bounds_b31(self, b31_sa_result_10k_df: pl.DataFrame):
         """Basel 3.1 SA risk weights within [0%, 1250%]."""
-        df = b31_sa_result_10k.results.collect()
+        df = b31_sa_result_10k_df
         rw_min = df.select(pl.col("risk_weight").min()).item()
         rw_max = df.select(pl.col("risk_weight").max()).item()
         assert rw_min >= 0.0, f"Risk weight below 0%: {rw_min}"
         assert rw_max <= 12.50, f"Risk weight above 1250%: {rw_max}"
 
-    def test_irb_rw_non_negative(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_irb_rw_non_negative(self, crr_irb_result_10k_df: pl.DataFrame):
         """CRR IRB risk weights must be non-negative."""
-        df = crr_irb_result_10k.results.collect()
+        df = crr_irb_result_10k_df
         neg_count = df.filter(pl.col("risk_weight") < 0).height
         assert neg_count == 0, f"Found {neg_count} negative IRB risk weights"
 
-    def test_irb_rw_non_negative_b31(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_irb_rw_non_negative_b31(self, b31_irb_result_10k_df: pl.DataFrame):
         """Basel 3.1 IRB risk weights must be non-negative."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         neg_count = df.filter(pl.col("risk_weight") < 0).height
         assert neg_count == 0, f"Found {neg_count} negative IRB risk weights"
 
@@ -329,9 +331,9 @@ class TestApproachDistribution:
     not permitted) produces systematically wrong capital numbers.
     """
 
-    def test_sa_only_mode_all_sa(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_sa_only_mode_all_sa(self, crr_sa_result_10k_df: pl.DataFrame):
         """In SA-only mode, all exposures should use SA approach."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         approaches = df.select("approach_applied").unique()["approach_applied"].to_list()
         # SA-only mode: all approaches should be "standardised" or "equity" (equity is separate)
         for approach in approaches:
@@ -339,9 +341,9 @@ class TestApproachDistribution:
                 f"Unexpected approach in SA mode: {approach}"
             )
 
-    def test_irb_mode_has_irb_exposures(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_irb_mode_has_irb_exposures(self, crr_irb_result_10k_df: pl.DataFrame):
         """In IRB mode, some exposures should use IRB approaches."""
-        df = crr_irb_result_10k.results.collect()
+        df = crr_irb_result_10k_df
         approaches = set(df.select("approach_applied").unique()["approach_applied"].to_list())
         # With mixed entity types, IRB mode should route some to FIRB/AIRB
         irb_approaches = approaches & {"foundation_irb", "advanced_irb"}
@@ -349,24 +351,24 @@ class TestApproachDistribution:
             f"No IRB exposures found in IRB mode. Approaches: {approaches}"
         )
 
-    def test_irb_exposures_have_rwa(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_irb_exposures_have_rwa(self, crr_irb_result_10k_df: pl.DataFrame):
         """IRB exposures should have positive RWA (not zero from miscalculation)."""
-        df = crr_irb_result_10k.results.collect()
+        df = crr_irb_result_10k_df
         irb_df = df.filter(pl.col("approach_applied").is_in(["advanced_irb", "foundation_irb"]))
         assert irb_df.height > 0, "No IRB exposures to check"
         irb_rwa = irb_df.select(pl.col("rwa_final").sum()).item()
         assert irb_rwa > 0, "Total IRB RWA should be positive"
 
-    def test_approach_count_matches_total(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_approach_count_matches_total(self, crr_irb_result_10k_df: pl.DataFrame):
         """Sum of per-approach counts equals total row count."""
-        df = crr_irb_result_10k.results.collect()
+        df = crr_irb_result_10k_df
         approach_counts = df.group_by("approach_applied").len()
         total_from_approaches = approach_counts.select(pl.col("len").sum()).item()
         assert total_from_approaches == len(df)
 
-    def test_b31_irb_has_mixed_approaches(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_b31_irb_has_mixed_approaches(self, b31_irb_result_10k_df: pl.DataFrame):
         """Basel 3.1 IRB should have SA, IRB and potentially slotting exposures."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         approaches = set(df.select("approach_applied").unique()["approach_applied"].to_list())
         assert "standardised" in approaches, "B31 IRB should have SA exposures"
 
@@ -384,28 +386,28 @@ class TestExposureClassCoverage:
     exposure class assignments.
     """
 
-    def test_multiple_exposure_classes_crr(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_multiple_exposure_classes_crr(self, crr_sa_result_10k_df: pl.DataFrame):
         """CRR SA produces multiple exposure classes."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         n_classes = df.select("exposure_class").n_unique()
         assert n_classes >= 3, f"Only {n_classes} exposure classes — expected at least 3"
 
-    def test_multiple_exposure_classes_b31(self, b31_sa_result_10k: AggregatedResultBundle):
+    def test_multiple_exposure_classes_b31(self, b31_sa_result_10k_df: pl.DataFrame):
         """Basel 3.1 SA produces multiple exposure classes."""
-        df = b31_sa_result_10k.results.collect()
+        df = b31_sa_result_10k_df
         n_classes = df.select("exposure_class").n_unique()
         assert n_classes >= 3, f"Only {n_classes} exposure classes — expected at least 3"
 
-    def test_corporate_class_exists(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_corporate_class_exists(self, crr_sa_result_10k_df: pl.DataFrame):
         """Corporate exposure class should be present (35% of entities are corporate)."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         classes = df.select("exposure_class").unique()["exposure_class"].to_list()
         corporate_classes = [c for c in classes if c and "corporate" in c.lower()]
         assert len(corporate_classes) > 0, f"No corporate class found. Classes: {classes}"
 
-    def test_retail_class_exists(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_retail_class_exists(self, crr_sa_result_10k_df: pl.DataFrame):
         """Retail exposure class should be present (30% of entities are retail)."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         classes = df.select("exposure_class").unique()["exposure_class"].to_list()
         retail_classes = [c for c in classes if c and "retail" in c.lower()]
         assert len(retail_classes) > 0, f"No retail class found. Classes: {classes}"
@@ -498,9 +500,9 @@ class TestErrorAccumulation:
         # Errors are typically per-class or per-column, not per-row
         assert n_errors < 1000, f"Too many errors ({n_errors}) — likely per-row error emission"
 
-    def test_pipeline_succeeds_with_errors(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_pipeline_succeeds_with_errors(self, crr_sa_result_10k_df: pl.DataFrame):
         """Pipeline should produce results even with data quality warnings."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         assert len(df) > 0, "Pipeline produced no results despite having input data"
 
     def test_b31_errors_bounded(self, b31_irb_result_10k: AggregatedResultBundle):
@@ -521,7 +523,11 @@ class TestSummaryConsistency:
     detailed per-exposure results. Discrepancies indicate aggregation bugs.
     """
 
-    def test_summary_by_class_total_matches(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_summary_by_class_total_matches(
+        self,
+        crr_sa_result_10k: AggregatedResultBundle,
+        crr_sa_result_10k_df: pl.DataFrame,
+    ):
         """RWA sum from summary_by_class should approximate results total."""
         if crr_sa_result_10k.summary_by_class is None:
             pytest.skip("No summary_by_class available")
@@ -530,7 +536,7 @@ class TestSummaryConsistency:
         if isinstance(summary_df, pl.LazyFrame):
             summary_df = summary_df.collect()
 
-        results_df = crr_sa_result_10k.results.collect()
+        results_df = crr_sa_result_10k_df
 
         if "rwa_final" in summary_df.columns:
             summary_total = summary_df.select(pl.col("rwa_final").sum()).item()
@@ -539,7 +545,11 @@ class TestSummaryConsistency:
                 f"Summary RWA {summary_total} != results RWA {results_total}"
             )
 
-    def test_summary_by_approach_covers_all(self, crr_irb_result_10k: AggregatedResultBundle):
+    def test_summary_by_approach_covers_all(
+        self,
+        crr_irb_result_10k: AggregatedResultBundle,
+        crr_irb_result_10k_df: pl.DataFrame,
+    ):
         """summary_by_approach should cover all approaches in results."""
         if crr_irb_result_10k.summary_by_approach is None:
             pytest.skip("No summary_by_approach available")
@@ -548,7 +558,7 @@ class TestSummaryConsistency:
         if isinstance(summary_df, pl.LazyFrame):
             summary_df = summary_df.collect()
 
-        results_df = crr_irb_result_10k.results.collect()
+        results_df = crr_irb_result_10k_df
         result_approaches = set(results_df["approach_applied"].unique().to_list())
 
         if "approach_applied" in summary_df.columns:
@@ -569,27 +579,27 @@ class TestEADConsistency:
     can produce zero EAD or wildly inflated EAD for off-balance items.
     """
 
-    def test_no_negative_ead(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_negative_ead(self, crr_sa_result_10k_df: pl.DataFrame):
         """EAD must be non-negative."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         neg = df.filter(pl.col("ead_final") < 0).height
         assert neg == 0, f"Found {neg} negative EAD values"
 
-    def test_ead_sum_positive(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_ead_sum_positive(self, crr_sa_result_10k_df: pl.DataFrame):
         """Total EAD should be positive for a non-trivial portfolio."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         total_ead = df.select(pl.col("ead_final").sum()).item()
         assert total_ead > 0, "Total EAD should be positive"
 
-    def test_no_null_ead(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_no_null_ead(self, crr_sa_result_10k_df: pl.DataFrame):
         """ead_final should have no null values."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         null_count = df.select(pl.col("ead_final").is_null().sum()).item()
         assert null_count == 0, f"Found {null_count} null ead_final values"
 
-    def test_ead_no_nan(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_ead_no_nan(self, b31_irb_result_10k_df: pl.DataFrame):
         """No NaN in ead_final under B31 IRB."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         nan_count = df.select(pl.col("ead_final").is_nan().sum()).item()
         assert nan_count == 0
 
@@ -637,12 +647,12 @@ class TestFrameworkComparison:
 
     def test_b31_sa_rwa_differs_from_crr(
         self,
-        crr_sa_result_10k: AggregatedResultBundle,
-        b31_sa_result_10k: AggregatedResultBundle,
+        crr_sa_result_10k_df: pl.DataFrame,
+        b31_sa_result_10k_df: pl.DataFrame,
     ):
         """B31 SA total RWA should differ from CRR SA (different risk weights)."""
-        crr_total = crr_sa_result_10k.results.collect().select(pl.col("rwa_final").sum()).item()
-        b31_total = b31_sa_result_10k.results.collect().select(pl.col("rwa_final").sum()).item()
+        crr_total = crr_sa_result_10k_df.select(pl.col("rwa_final").sum()).item()
+        b31_total = b31_sa_result_10k_df.select(pl.col("rwa_final").sum()).item()
         # B31 generally produces higher RWA due to higher equity weights, etc.
         assert crr_total != pytest.approx(b31_total, rel=0.01), (
             f"CRR and B31 SA should differ: CRR={crr_total:.0f}, B31={b31_total:.0f}"
@@ -747,18 +757,18 @@ class TestExposureReferenceUniqueness:
     and misleading exposure-level audit trails.
     """
 
-    def test_unique_references_crr(self, crr_sa_result_10k: AggregatedResultBundle):
+    def test_unique_references_crr(self, crr_sa_result_10k_df: pl.DataFrame):
         """All exposure_reference values should be unique in output."""
-        df = crr_sa_result_10k.results.collect()
+        df = crr_sa_result_10k_df
         total = len(df)
         unique = df.select("exposure_reference").n_unique()
         assert unique == total, (
             f"Duplicate exposure references: {total - unique} duplicates in {total} rows"
         )
 
-    def test_unique_references_b31(self, b31_irb_result_10k: AggregatedResultBundle):
+    def test_unique_references_b31(self, b31_irb_result_10k_df: pl.DataFrame):
         """Basel 3.1: all exposure_reference values unique."""
-        df = b31_irb_result_10k.results.collect()
+        df = b31_irb_result_10k_df
         total = len(df)
         unique = df.select("exposure_reference").n_unique()
         assert unique == total

@@ -414,6 +414,179 @@ def _(WB_STYLES, current_folder, mo):
 # ---------------------------------------------------------------------------
 
 
+def _build_folder_buttons(mo, folders):
+    """Build open/delete buttons for each subfolder card. Returns (elements, meta)."""
+    elements: dict[str, object] = {}
+    meta: dict[str, tuple[str, object]] = {}
+    for idx, folder in enumerate(folders):
+        open_key = f"folder_open_{idx}"
+        del_key = f"folder_del_{idx}"
+        elements[open_key] = mo.ui.button(label="Open →", on_click=lambda v: (v or 0) + 1)
+        elements[del_key] = mo.ui.button(
+            label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
+        )
+        meta[open_key] = ("open_folder", folder.name)
+        meta[del_key] = ("delete_folder", folder.name)
+    return elements, meta
+
+
+def _build_file_buttons(mo, files, current_folder_value):
+    """Build delete/move/publish buttons for each file card. Returns (elements, meta)."""
+    elements: dict[str, object] = {}
+    meta: dict[str, tuple[str, object]] = {}
+    for idx, file in enumerate(files):
+        del_key = f"btn_{idx}"
+        move_key = f"move_{idx}"
+        pub_key = f"pub_{idx}"
+        elements[del_key] = mo.ui.button(
+            label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
+        )
+        elements[move_key] = mo.ui.button(label="Move", on_click=lambda v: (v or 0) + 1)
+        elements[pub_key] = mo.ui.button(label="Publish", on_click=lambda v: (v or 0) + 1)
+        meta[del_key] = (
+            "delete_file",
+            f"{current_folder_value}/{file.stem}" if current_folder_value else file.stem,
+        )
+        meta[move_key] = (
+            "move_file",
+            (
+                f"{current_folder_value}/{file.stem}.py"
+                if current_folder_value
+                else f"{file.stem}.py",
+                file.stem,
+            ),
+        )
+        meta[pub_key] = (
+            "publish_file",
+            (
+                f"__publish__:{current_folder_value}/{file.stem}"
+                if current_folder_value
+                else f"__publish__:{file.stem}",
+                file.stem,
+            ),
+        )
+    return elements, meta
+
+
+def _make_folder_card(mo, folder, py_count, open_btn, del_btn):
+    """Compose a single folder callout card."""
+    return mo.callout(
+        mo.vstack(
+            [
+                mo.md(f"\U0001f4c1 **{folder.name}**"),
+                mo.md(f"_{py_count} workbook(s)_"),
+                mo.hstack([open_btn, del_btn]),
+            ]
+        ),
+        kind="info",
+    )
+
+
+def _make_file_card(
+    mo, file, current_folder_value, edit_port, run_port, move_btn, pub_btn, del_btn, datetime
+):
+    """Compose a single workbook file callout card."""
+    mod_time = datetime.fromtimestamp(file.stat().st_mtime)
+    rel = (
+        f"local/{current_folder_value}/{file.name}"
+        if current_folder_value
+        else f"local/{file.name}"
+    )
+    run_rel = (
+        f"local/{current_folder_value}/{file.stem}"
+        if current_folder_value
+        else f"local/{file.stem}"
+    )
+    edit_link = mo.md(f"[Open in Editor →](http://localhost:{edit_port}/?file={rel})")
+    run_link = mo.md(f"[Run as App ▶](http://localhost:{run_port}/run/{run_rel})")
+    return mo.callout(
+        mo.vstack(
+            [
+                mo.md(f"\U0001f4d3 **{file.stem}**"),
+                mo.md(f"_Modified {mod_time:%Y-%m-%d %H:%M}_"),
+                mo.hstack([run_link, edit_link, move_btn, pub_btn, del_btn]),
+            ]
+        ),
+        kind="neutral",
+    )
+
+
+def _chunk_card_rows(mo, cards, per_row=3):
+    """Arrange cards into hstack rows of `per_row` cards each."""
+    return [
+        mo.hstack(cards[start : start + per_row], widths="equal")
+        for start in range(0, len(cards), per_row)
+    ]
+
+
+def _empty_local_html(styles):
+    """HTML for the empty 'no workbooks yet' state."""
+    return (
+        styles
+        + """
+<div class="wb-page">
+  <div class="wb-empty">
+    <div class="wb-empty-icon">\U0001f4d3</div>
+    <h3>No workbooks yet</h3>
+    <p>Create your first workbook below to start analysing results
+    with custom Python notebooks.</p>
+  </div>
+</div>
+"""
+    )
+
+
+def _discover_local_folders(browse_dir, current_folder_value, skip_dirs):
+    """Return sorted list of subfolder paths at the workspace root."""
+    if current_folder_value or not browse_dir.exists():
+        return []
+    return sorted(
+        d
+        for d in browse_dir.iterdir()
+        if d.is_dir() and d.name not in skip_dirs and not d.name.startswith(".")
+    )
+
+
+def _discover_local_files(browse_dir):
+    """Return sorted list of local workbook .py files in browse_dir."""
+    if not browse_dir.exists():
+        return []
+    return sorted(f for f in browse_dir.glob("*.py") if f.stem != "__init__")
+
+
+def _build_local_cards(
+    mo, folders, files, wb_actions, current_folder_value, edit_port, run_port, datetime
+):
+    """Compose folder + file callout cards for the local workbooks grid."""
+    cards: list[object] = []
+    for di, d in enumerate(folders):
+        py_count = len([f for f in d.glob("*.py") if f.stem != "__init__"])
+        cards.append(
+            _make_folder_card(
+                mo,
+                d,
+                py_count,
+                wb_actions[f"folder_open_{di}"],
+                wb_actions[f"folder_del_{di}"],
+            )
+        )
+    for i, f in enumerate(files):
+        cards.append(
+            _make_file_card(
+                mo,
+                f,
+                current_folder_value,
+                edit_port,
+                run_port,
+                wb_actions[f"move_{i}"],
+                wb_actions[f"pub_{i}"],
+                wb_actions[f"btn_{i}"],
+                datetime,
+            )
+        )
+    return cards
+
+
 @app.cell
 def _(
     EDIT_PORT,
@@ -428,179 +601,23 @@ def _(
 ):
     refresh_trigger  # noqa: B018 — reactive dependency
 
-    def _build_folder_buttons(mo, folders):
-        """Build open/delete buttons for each subfolder card. Returns (elements, meta)."""
-        elements: dict[str, object] = {}
-        meta: dict[str, tuple[str, object]] = {}
-        for idx, folder in enumerate(folders):
-            open_key = f"folder_open_{idx}"
-            del_key = f"folder_del_{idx}"
-            elements[open_key] = mo.ui.button(label="Open →", on_click=lambda v: (v or 0) + 1)
-            elements[del_key] = mo.ui.button(
-                label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
-            )
-            meta[open_key] = ("open_folder", folder.name)
-            meta[del_key] = ("delete_folder", folder.name)
-        return elements, meta
-
-    def _build_file_buttons(mo, files, current_folder_value):
-        """Build delete/move/publish buttons for each file card. Returns (elements, meta)."""
-        elements: dict[str, object] = {}
-        meta: dict[str, tuple[str, object]] = {}
-        for idx, file in enumerate(files):
-            del_key = f"btn_{idx}"
-            move_key = f"move_{idx}"
-            pub_key = f"pub_{idx}"
-            elements[del_key] = mo.ui.button(
-                label="\U0001f5d1️", on_click=lambda v: (v or 0) + 1, kind="danger"
-            )
-            elements[move_key] = mo.ui.button(label="Move", on_click=lambda v: (v or 0) + 1)
-            elements[pub_key] = mo.ui.button(label="Publish", on_click=lambda v: (v or 0) + 1)
-            meta[del_key] = (
-                "delete_file",
-                f"{current_folder_value}/{file.stem}" if current_folder_value else file.stem,
-            )
-            meta[move_key] = (
-                "move_file",
-                (
-                    f"{current_folder_value}/{file.stem}.py"
-                    if current_folder_value
-                    else f"{file.stem}.py",
-                    file.stem,
-                ),
-            )
-            meta[pub_key] = (
-                "publish_file",
-                (
-                    f"__publish__:{current_folder_value}/{file.stem}"
-                    if current_folder_value
-                    else f"__publish__:{file.stem}",
-                    file.stem,
-                ),
-            )
-        return elements, meta
-
-    def _make_folder_card(mo, folder, py_count, open_btn, del_btn):
-        """Compose a single folder callout card."""
-        return mo.callout(
-            mo.vstack(
-                [
-                    mo.md(f"\U0001f4c1 **{folder.name}**"),
-                    mo.md(f"_{py_count} workbook(s)_"),
-                    mo.hstack([open_btn, del_btn]),
-                ]
-            ),
-            kind="info",
-        )
-
-    def _make_file_card(
-        mo, file, current_folder_value, edit_port, run_port, move_btn, pub_btn, del_btn, datetime
-    ):
-        """Compose a single workbook file callout card."""
-        mod_time = datetime.fromtimestamp(file.stat().st_mtime)
-        rel = (
-            f"local/{current_folder_value}/{file.name}"
-            if current_folder_value
-            else f"local/{file.name}"
-        )
-        run_rel = (
-            f"local/{current_folder_value}/{file.stem}"
-            if current_folder_value
-            else f"local/{file.stem}"
-        )
-        edit_link = mo.md(f"[Open in Editor →](http://localhost:{edit_port}/?file={rel})")
-        run_link = mo.md(f"[Run as App ▶](http://localhost:{run_port}/run/{run_rel})")
-        return mo.callout(
-            mo.vstack(
-                [
-                    mo.md(f"\U0001f4d3 **{file.stem}**"),
-                    mo.md(f"_Modified {mod_time:%Y-%m-%d %H:%M}_"),
-                    mo.hstack([run_link, edit_link, move_btn, pub_btn, del_btn]),
-                ]
-            ),
-            kind="neutral",
-        )
-
-    def _chunk_card_rows(mo, cards, per_row=3):
-        """Arrange cards into hstack rows of `per_row` cards each."""
-        return [
-            mo.hstack(cards[start : start + per_row], widths="equal")
-            for start in range(0, len(cards), per_row)
-        ]
-
-    def _empty_local_html(WB_STYLES):
-        """HTML for the empty 'no workbooks yet' state."""
-        return (
-            WB_STYLES
-            + """
-<div class="wb-page">
-  <div class="wb-empty">
-    <div class="wb-empty-icon">\U0001f4d3</div>
-    <h3>No workbooks yet</h3>
-    <p>Create your first workbook below to start analysing results
-    with custom Python notebooks.</p>
-  </div>
-</div>
-"""
-        )
-
     _ws_dir = Path(__file__).parent / "workspaces" / "local"
-    _browse_dir = _ws_dir / current_folder() if current_folder() else _ws_dir
+    _cf = current_folder()
+    _browse_dir = _ws_dir / _cf if _cf else _ws_dir
 
-    # Discover subfolders (only when at root)
-    _folders = []
-    if not current_folder() and _browse_dir.exists():
-        _folders = sorted(
-            d
-            for d in _browse_dir.iterdir()
-            if d.is_dir() and d.name not in SKIP_DIRS and not d.name.startswith(".")
-        )
-
-    # Discover files
-    _files = (
-        sorted(f for f in _browse_dir.glob("*.py") if f.stem != "__init__")
-        if _browse_dir.exists()
-        else []
-    )
+    _folders = _discover_local_folders(_browse_dir, _cf, SKIP_DIRS)
+    _files = _discover_local_files(_browse_dir)
 
     if _folders or _files:
         # Build buttons in a mo.ui.dictionary for reliable reactivity
         # (.batch() does not propagate interactions to downstream cells)
-        _cf = current_folder()
         _folder_elements, _folder_meta = _build_folder_buttons(mo, _folders)
         _file_elements, _file_meta = _build_file_buttons(mo, _files, _cf)
         wb_actions = mo.ui.dictionary({**_folder_elements, **_file_elements})
         wb_action_meta = {**_folder_meta, **_file_meta}
-        _cards: list[object] = []
-
-        # Build card display using dictionary buttons
-        for _di, _d in enumerate(_folders):
-            _py_count = len([f for f in _d.glob("*.py") if f.stem != "__init__"])
-            _cards.append(
-                _make_folder_card(
-                    mo,
-                    _d,
-                    _py_count,
-                    wb_actions[f"folder_open_{_di}"],
-                    wb_actions[f"folder_del_{_di}"],
-                )
-            )
-
-        for _i, _f in enumerate(_files):
-            _cards.append(
-                _make_file_card(
-                    mo,
-                    _f,
-                    _cf,
-                    EDIT_PORT,
-                    RUN_PORT,
-                    wb_actions[f"move_{_i}"],
-                    wb_actions[f"pub_{_i}"],
-                    wb_actions[f"btn_{_i}"],
-                    datetime,
-                )
-            )
-
+        _cards = _build_local_cards(
+            mo, _folders, _files, wb_actions, _cf, EDIT_PORT, RUN_PORT, datetime
+        )
         _rows = _chunk_card_rows(mo, _cards, 3)
         mo.output.replace(mo.Html(WB_STYLES) if not _rows else mo.vstack(_rows))
     else:
@@ -947,70 +964,68 @@ def _(WB_STYLES, mo):
 # ---------------------------------------------------------------------------
 
 
-@app.cell
-def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
-    refresh_trigger  # noqa: B018
+def _load_team_git_statuses(team_dir):
+    """Load git statuses for team workbook files; returns a dict keyed by relative path."""
+    statuses: dict[str, str] = {}
+    try:
+        from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
+        from rwa_calc.ui.marimo.git_ops import get_status as _get_status
 
-    def _load_team_git_statuses(team_dir):
-        """Load git statuses for team workbook files; returns a dict keyed by relative path."""
-        statuses: dict[str, str] = {}
-        try:
-            from rwa_calc.ui.marimo.git_ops import find_repo_root as _find_repo_root
-            from rwa_calc.ui.marimo.git_ops import get_status as _get_status
+        repo_root = _find_repo_root(team_dir)
+        for s in _get_status(team_dir, repo_root):
+            key = f"{s.folder}/{s.name}" if s.folder else s.name
+            statuses[key] = s.status
+    except Exception:
+        pass
+    return statuses
 
-            repo_root = _find_repo_root(team_dir)
-            for s in _get_status(team_dir, repo_root):
-                key = f"{s.folder}/{s.name}" if s.folder else s.name
-                statuses[key] = s.status
-        except Exception:
-            pass
-        return statuses
 
-    def _discover_team_files(team_dir, skip_dirs):
-        """Return sorted list of team workbook .py files, excluding skip_dirs."""
-        if not team_dir.exists():
-            return []
-        return sorted(
-            f
-            for f in team_dir.rglob("*.py")
-            if f.stem != "__init__"
-            and not any(p in skip_dirs for p in f.relative_to(team_dir).parts)
-        )
+def _discover_team_files(team_dir, skip_dirs):
+    """Return sorted list of team workbook .py files, excluding skip_dirs."""
+    if not team_dir.exists():
+        return []
+    return sorted(
+        f
+        for f in team_dir.rglob("*.py")
+        if f.stem != "__init__" and not any(p in skip_dirs for p in f.relative_to(team_dir).parts)
+    )
 
-    def _make_team_card_html(file, team_dir, git_statuses, edit_port, run_port, datetime):
-        """Build the HTML fragment for a single team workbook card."""
-        rel_to_team = file.relative_to(team_dir)
-        status_key = (
-            f"{rel_to_team.parent}/{rel_to_team.stem}"
-            if len(rel_to_team.parts) > 1
-            else rel_to_team.stem
-        )
-        status = git_statuses.get(status_key, "unmodified")
-        status_dot = f'<span class="wb-status wb-status-{status}"></span>'
-        mod_time = datetime.fromtimestamp(file.stat().st_mtime)
-        rel = f"team/{rel_to_team.as_posix()}"
-        run_rel = f"team/{rel_to_team.with_suffix('').as_posix()}"
-        folder_prefix = f"{rel_to_team.parent}/" if len(rel_to_team.parts) > 1 else ""
-        return (
-            f'<div class="wb-card">'
-            f'  <div class="wb-card-icon">\U0001f4d3</div>'
-            f"  <h3>{status_dot}{file.stem}</h3>"
-            f'  <span class="wb-card-desc">{folder_prefix}Team workbook</span>'
-            f'  <span class="wb-card-meta">Modified {mod_time:%Y-%m-%d %H:%M}</span>'
-            f'  <div class="wb-card-actions">'
-            f'    <a href="http://localhost:{run_port}/run/{run_rel}"'
-            f'       class="wb-card-action-run">Run as App ▶</a>'
-            f'    <a href="http://localhost:{edit_port}/?file={rel}"'
-            f'       class="wb-card-action">Open in Editor →</a>'
-            f"  </div>"
-            f"</div>"
-        )
 
-    def _empty_team_html(WB_STYLES):
-        """HTML for the empty 'no team workbooks yet' state."""
-        return (
-            WB_STYLES
-            + """
+def _make_team_card_html(file, team_dir, git_statuses, edit_port, run_port, datetime):
+    """Build the HTML fragment for a single team workbook card."""
+    rel_to_team = file.relative_to(team_dir)
+    status_key = (
+        f"{rel_to_team.parent}/{rel_to_team.stem}"
+        if len(rel_to_team.parts) > 1
+        else rel_to_team.stem
+    )
+    status = git_statuses.get(status_key, "unmodified")
+    status_dot = f'<span class="wb-status wb-status-{status}"></span>'
+    mod_time = datetime.fromtimestamp(file.stat().st_mtime)
+    rel = f"team/{rel_to_team.as_posix()}"
+    run_rel = f"team/{rel_to_team.with_suffix('').as_posix()}"
+    folder_prefix = f"{rel_to_team.parent}/" if len(rel_to_team.parts) > 1 else ""
+    return (
+        f'<div class="wb-card">'
+        f'  <div class="wb-card-icon">\U0001f4d3</div>'
+        f"  <h3>{status_dot}{file.stem}</h3>"
+        f'  <span class="wb-card-desc">{folder_prefix}Team workbook</span>'
+        f'  <span class="wb-card-meta">Modified {mod_time:%Y-%m-%d %H:%M}</span>'
+        f'  <div class="wb-card-actions">'
+        f'    <a href="http://localhost:{run_port}/run/{run_rel}"'
+        f'       class="wb-card-action-run">Run as App ▶</a>'
+        f'    <a href="http://localhost:{edit_port}/?file={rel}"'
+        f'       class="wb-card-action">Open in Editor →</a>'
+        f"  </div>"
+        f"</div>"
+    )
+
+
+def _empty_team_html(styles):
+    """HTML for the empty 'no team workbooks yet' state."""
+    return (
+        styles
+        + """
 <div class="wb-page">
   <div class="wb-empty">
     <div class="wb-empty-icon">\U0001f91d</div>
@@ -1020,7 +1035,12 @@ def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_tri
   </div>
 </div>
 """
-        )
+    )
+
+
+@app.cell
+def _(EDIT_PORT, RUN_PORT, Path, SKIP_DIRS, WB_STYLES, datetime, mo, refresh_trigger):
+    refresh_trigger  # noqa: B018
 
     _team_dir = Path(__file__).parent / "workspaces" / "team"
     _git_statuses = _load_team_git_statuses(_team_dir)

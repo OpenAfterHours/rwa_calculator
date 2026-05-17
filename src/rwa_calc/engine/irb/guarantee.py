@@ -111,7 +111,7 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
     lf = _apply_parameter_substitution(lf, cols, config, use_parameter_substitution)
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
-    lf = _apply_double_default(lf, cols, config, has_guarantor_pd, use_parameter_substitution)
+    lf = _apply_double_default(lf, cols, config, has_guarantor_pd)
 
     # --- Blend RWA and adjust expected loss ---
     ead_col = "ead_final" if "ead_final" in cols else "ead"
@@ -303,133 +303,160 @@ def _apply_parameter_substitution(
     — and expose ``guarantor_rw_post_nbd = max(guarantor_rw_irb, RW_direct)``.
     The downstream beneficial-gate uses ``guarantor_rw_post_nbd``.
     """
-    if use_parameter_substitution:
-        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
-
-        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
-        firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
-        # FSE-specific senior key only exists in the Basel 3.1 table; CRR has
-        # no FSE split (Art. 161(1)(a) covers all senior unsecured at 45%).
-        firb_lgd_senior_fse = float(
-            firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])
-        )
-        firb_lgd_subordinated = float(firb_lgd_table["subordinated"])
-
-        # Ensure columns required by _parametric_irb_risk_weight_expr exist
-        ensure_cols: list[pl.Expr] = []
-        if "turnover_m" not in cols:
-            ensure_cols.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-        if "requires_fi_scalar" not in cols:
-            ensure_cols.append(pl.lit(False).alias("requires_fi_scalar"))
-        if "has_one_day_maturity_floor" not in cols:
-            ensure_cols.append(pl.lit(False).alias("has_one_day_maturity_floor"))
-        if "guarantor_seniority" not in cols:
-            ensure_cols.append(pl.lit(None).cast(pl.String).alias("guarantor_seniority"))
-        if "guarantor_is_financial_sector_entity" not in cols:
-            ensure_cols.append(
-                pl.lit(False).alias("guarantor_is_financial_sector_entity"),
-            )
-        if ensure_cols:
-            lf = lf.with_columns(ensure_cols)
-
-        # Floor the guarantor's PD using the GUARANTOR's exposure class context
-        # (Art. 160(4) / 163(1)): the guaranteed portion is economically
-        # equivalent to a direct exposure to the guarantor, so the guarantor's
-        # class floor governs. For a corporate guarantor under B31 the floor is
-        # 0.0005 (Art. 163(1)(a)) — not the borrower's QRRE-revolver floor of
-        # 0.0010. Guarantors are not QRRE in our model, so the transactor flag
-        # is intentionally disabled for the guarantor floor.
-        pd_floor_expr = _pd_floor_expression(
-            config,
-            has_transactor_col=False,
-            exposure_class_col="guarantor_exposure_class",
-        )
-        guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
-
-        scaling_factor = 1.06 if config.is_crr else 1.0
-        eur_gbp_rate = float(config.eur_gbp_rate)
-
-        # Per-row F-IRB supervisory LGD selection (Art. 161(1)(a)/(aa)/(b)).
-        # Missing seniority defaults to "senior". This is the option (ii) LGD
-        # — the supervisory LGD for a direct obligation of the guarantor's
-        # seniority — which is also used unconditionally for the Art. 160(4)
-        # "no better than direct" floor regardless of psm_lgd_source.
-        seniority = pl.col("guarantor_seniority").cast(pl.String).fill_null("senior")
-        is_fse = pl.col("guarantor_is_financial_sector_entity").fill_null(False)
-        guarantor_supervisory_lgd_expr = (
-            pl.when(seniority == "subordinated")
-            .then(pl.lit(firb_lgd_subordinated))
-            .when(is_fse)
-            .then(pl.lit(firb_lgd_senior_fse))
-            .otherwise(pl.lit(firb_lgd_senior))
-        )
-
-        # Art. 236(1)(a)(i): firms may choose between option (i) — the
-        # borrower's own unprotected LGD — and option (ii) — the guarantor's
-        # supervisory LGD. Default is option_ii (preserves historical engine
-        # behaviour). For option_i the borrower's unprotected LGD is read from
-        # ``lgd``, which by the time guarantee substitution runs has already
-        # been populated with the F-IRB supervisory value derived from the
-        # borrower's seniority (e.g. Art. 161(1)(b) = 75% for subordinated)
-        # by ``IRBLazyFrame.apply_firb_lgd``. ``lgd_pre_crm`` is unsuitable
-        # because the CRM processor initialises it to the raw input ``lgd``
-        # (which is null for typical F-IRB inputs and therefore falls back to
-        # the 45% default rather than the seniority-correct supervisory LGD).
-        if config.irb_permissions.psm_lgd_source == "option_i":
-            psm_lgd_expr = pl.col("lgd")
-        else:
-            psm_lgd_expr = guarantor_supervisory_lgd_expr
-
-        # Compute IRB risk weight from guarantor's PD and the chosen PSM LGD.
-        # Per Art. 236(1)(a)(i) (PRA PS1/26): the PSM substitutes the guarantor's
-        # PD/LGD AND derives the correlation R from the GUARANTOR's exposure
-        # class context, not the borrower's. ``_parametric_irb_risk_weight_expr``
-        # reads ``exposure_class``, ``turnover_m``, ``requires_fi_scalar`` and
-        # ``is_qrre_transactor`` from the LazyFrame — so we compute both
-        # ``guarantor_rw_irb`` (PSM) and ``rw_direct`` (Art. 160(4) NBD floor)
-        # inside a single swap-restore window where those columns hold the
-        # guarantor's values. The NBD floor always uses the option_ii
-        # supervisory LGD so the comparison stays meaningful for option_i rows.
-        sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
-        lf = _apply_no_better_than_direct_floor(
-            lf,
-            guarantor_pd_floored=guarantor_pd_floored,
-            psm_lgd_expr=psm_lgd_expr,
-            direct_lgd_expr=guarantor_supervisory_lgd_expr,
-            scaling_factor=scaling_factor,
-            eur_gbp_rate=eur_gbp_rate,
-            is_b31=config.is_basel_3_1,
-            sme_turnover_threshold_m=sme_turnover_m,
-        )
-
-        # Select method: IRB guarantor under Basel 3.1 -> parameter substitution,
-        # SA guarantor -> SA RW substitution. The "no better than direct" floor
-        # applies to the IRB-substituted RW only.
-        is_irb_guarantor = (pl.col("guarantor_approach").fill_null("") == "irb") & pl.col(
-            "guarantor_pd"
-        ).is_not_null()
-
+    if not use_parameter_substitution:
+        # CRR or no guarantor PD: always SA RW substitution
         return lf.with_columns(
             [
-                pl.when(is_irb_guarantor)
-                .then(pl.col("guarantor_rw_post_nbd"))
-                .otherwise(pl.col("guarantor_rw_sa"))
-                .alias("guarantor_rw"),
-                # Track which method is being used per-row
-                pl.when((pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor)
-                .then(pl.lit(True))
-                .otherwise(pl.lit(False))
-                .alias("_is_pd_substitution"),
+                pl.col("guarantor_rw_sa").alias("guarantor_rw"),
+                pl.lit(False).alias("_is_pd_substitution"),
             ]
         )
 
-    # CRR or no guarantor PD: always SA RW substitution
+    firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated = _firb_lgd_tuple(config)
+
+    lf = _ensure_parameter_substitution_columns(lf, cols)
+
+    # Floor the guarantor's PD using the GUARANTOR's exposure class context
+    # (Art. 160(4) / 163(1)): the guaranteed portion is economically
+    # equivalent to a direct exposure to the guarantor, so the guarantor's
+    # class floor governs. For a corporate guarantor under B31 the floor is
+    # 0.0005 (Art. 163(1)(a)) — not the borrower's QRRE-revolver floor of
+    # 0.0010. Guarantors are not QRRE in our model, so the transactor flag
+    # is intentionally disabled for the guarantor floor.
+    pd_floor_expr = _pd_floor_expression(
+        config,
+        has_transactor_col=False,
+        exposure_class_col="guarantor_exposure_class",
+    )
+    guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
+
+    scaling_factor = 1.06 if config.is_crr else 1.0
+    eur_gbp_rate = float(config.eur_gbp_rate)
+
+    # Per-row F-IRB supervisory LGD selection (Art. 161(1)(a)/(aa)/(b)).
+    # Missing seniority defaults to "senior". This is the option (ii) LGD
+    # — the supervisory LGD for a direct obligation of the guarantor's
+    # seniority — which is also used unconditionally for the Art. 160(4)
+    # "no better than direct" floor regardless of psm_lgd_source.
+    guarantor_supervisory_lgd_expr = _guarantor_supervisory_lgd_expr(
+        firb_lgd_senior=firb_lgd_senior,
+        firb_lgd_senior_fse=firb_lgd_senior_fse,
+        firb_lgd_subordinated=firb_lgd_subordinated,
+    )
+
+    psm_lgd_expr = _psm_lgd_expr(config, guarantor_supervisory_lgd_expr)
+
+    # Compute IRB risk weight from guarantor's PD and the chosen PSM LGD.
+    # Per Art. 236(1)(a)(i) (PRA PS1/26): the PSM substitutes the guarantor's
+    # PD/LGD AND derives the correlation R from the GUARANTOR's exposure
+    # class context, not the borrower's. ``_parametric_irb_risk_weight_expr``
+    # reads ``exposure_class``, ``turnover_m``, ``requires_fi_scalar`` and
+    # ``is_qrre_transactor`` from the LazyFrame — so we compute both
+    # ``guarantor_rw_irb`` (PSM) and ``rw_direct`` (Art. 160(4) NBD floor)
+    # inside a single swap-restore window where those columns hold the
+    # guarantor's values. The NBD floor always uses the option_ii
+    # supervisory LGD so the comparison stays meaningful for option_i rows.
+    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    lf = _apply_no_better_than_direct_floor(
+        lf,
+        guarantor_pd_floored=guarantor_pd_floored,
+        psm_lgd_expr=psm_lgd_expr,
+        direct_lgd_expr=guarantor_supervisory_lgd_expr,
+        scaling_factor=scaling_factor,
+        eur_gbp_rate=eur_gbp_rate,
+        is_b31=config.is_basel_3_1,
+        sme_turnover_threshold_m=sme_turnover_m,
+    )
+
+    # Select method: IRB guarantor under Basel 3.1 -> parameter substitution,
+    # SA guarantor -> SA RW substitution. The "no better than direct" floor
+    # applies to the IRB-substituted RW only.
+    is_irb_guarantor = (pl.col("guarantor_approach").fill_null("") == "irb") & pl.col(
+        "guarantor_pd"
+    ).is_not_null()
+
     return lf.with_columns(
         [
-            pl.col("guarantor_rw_sa").alias("guarantor_rw"),
-            pl.lit(False).alias("_is_pd_substitution"),
+            pl.when(is_irb_guarantor)
+            .then(pl.col("guarantor_rw_post_nbd"))
+            .otherwise(pl.col("guarantor_rw_sa"))
+            .alias("guarantor_rw"),
+            # Track which method is being used per-row
+            pl.when((pl.col("guaranteed_portion").fill_null(0) > 0) & is_irb_guarantor)
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+            .alias("_is_pd_substitution"),
         ]
     )
+
+
+def _firb_lgd_tuple(config: CalculationConfig) -> tuple[float, float, float]:
+    """Return (senior, senior_fse, subordinated) F-IRB supervisory LGDs.
+
+    The FSE-specific senior key only exists in the Basel 3.1 table; CRR has
+    no FSE split (Art. 161(1)(a) covers all senior unsecured at 45%).
+    """
+    from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
+
+    firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+    firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
+    firb_lgd_senior_fse = float(
+        firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])
+    )
+    firb_lgd_subordinated = float(firb_lgd_table["subordinated"])
+    return firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated
+
+
+def _ensure_parameter_substitution_columns(lf: pl.LazyFrame, cols: list[str]) -> pl.LazyFrame:
+    """Add the columns required by ``_parametric_irb_risk_weight_expr`` when
+    missing. No-op if all expected columns are already present.
+    """
+    defaults: list[tuple[str, pl.Expr]] = [
+        ("turnover_m", pl.lit(None).cast(pl.Float64)),
+        ("requires_fi_scalar", pl.lit(False)),
+        ("has_one_day_maturity_floor", pl.lit(False)),
+        ("guarantor_seniority", pl.lit(None).cast(pl.String)),
+        ("guarantor_is_financial_sector_entity", pl.lit(False)),
+    ]
+    ensure_cols = [expr.alias(name) for name, expr in defaults if name not in cols]
+    if not ensure_cols:
+        return lf
+    return lf.with_columns(ensure_cols)
+
+
+def _guarantor_supervisory_lgd_expr(
+    *,
+    firb_lgd_senior: float,
+    firb_lgd_senior_fse: float,
+    firb_lgd_subordinated: float,
+) -> pl.Expr:
+    """Build the per-row F-IRB supervisory LGD expression (Art. 161(1))."""
+    seniority = pl.col("guarantor_seniority").cast(pl.String).fill_null("senior")
+    is_fse = pl.col("guarantor_is_financial_sector_entity").fill_null(False)
+    return (
+        pl.when(seniority == "subordinated")
+        .then(pl.lit(firb_lgd_subordinated))
+        .when(is_fse)
+        .then(pl.lit(firb_lgd_senior_fse))
+        .otherwise(pl.lit(firb_lgd_senior))
+    )
+
+
+def _psm_lgd_expr(config: CalculationConfig, guarantor_supervisory_lgd_expr: pl.Expr) -> pl.Expr:
+    """Select the PSM LGD per ``psm_lgd_source`` (Art. 236(1)(a)(i)).
+
+    Option (i) returns the borrower's own unprotected LGD (read from
+    ``lgd``, which by this stage carries the seniority-correct borrower
+    supervisory value from ``IRBLazyFrame.apply_firb_lgd``). ``lgd_pre_crm``
+    is unsuitable because the CRM processor initialises it to the raw input
+    ``lgd`` (often null for F-IRB inputs, falling back to the 45% default).
+
+    Option (ii) returns the guarantor supervisory LGD expression — the
+    historical engine default.
+    """
+    if config.irb_permissions.psm_lgd_source == "option_i":
+        return pl.col("lgd")
+    return guarantor_supervisory_lgd_expr
 
 
 def _apply_no_better_than_direct_floor(
@@ -559,7 +586,6 @@ def _apply_double_default(
     cols: list[str],
     config: CalculationConfig,
     has_guarantor_pd: bool,
-    use_parameter_substitution: bool,
 ) -> pl.LazyFrame:
     """Apply double default treatment (CRR Art. 153(3), 202-203)."""
     use_double_default = config.is_crr and config.enable_double_default and has_guarantor_pd

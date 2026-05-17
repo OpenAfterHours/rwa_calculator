@@ -21,6 +21,7 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -266,402 +267,64 @@ def compute_fcsm_columns(
     if collateral is None:
         return _add_default_fcsm_columns(exposures)
 
-    is_b31 = config.is_basel_3_1
-
-    # 1. Filter to eligible financial collateral
-    eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
-
-    # 1b. Ensure Art. 227(2) zero-haircut flag is present (defaults to False so
-    # the Art. 222(4) SFT carve-out and the sovereign-bond discount waiver only
-    # fire when callers explicitly mark the row as qualifying).
-    eligible_schema_names = eligible.collect_schema().names()
-    if "qualifies_for_zero_haircut" not in eligible_schema_names:
-        eligible = eligible.with_columns(
-            pl.lit(False).alias("qualifies_for_zero_haircut"),
-        )
-    else:
-        eligible = eligible.with_columns(
-            pl.col("qualifies_for_zero_haircut").fill_null(False),
-        )
-
-    # 2. Derive collateral risk weight per item
-    eligible = eligible.with_columns(_derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw"))
-
-    # 3. Join to exposures to get currency for same-currency check
-    # Multi-level matching: direct (loan/exposure), facility, counterparty
     schema = exposures.collect_schema()
-    ead_col = "ead_gross" if "ead_gross" in schema.names() else "ead"
-
-    # Build reference-to-currency/EAD lookup from exposures
-    exp_ref_col = (
-        "exposure_reference" if "exposure_reference" in schema.names() else "loan_reference"
-    )
+    schema_names = schema.names()
+    ead_col = "ead_gross" if "ead_gross" in schema_names else "ead"
+    exp_ref_col = "exposure_reference" if "exposure_reference" in schema_names else "loan_reference"
     facility_col = "parent_facility_reference"
     cp_col = "counterparty_reference"
 
-    # Direct-level lookup. Also carry residual_maturity_years for the
-    # CRR Art. 239(1) FCSM eligibility gate (collateral residual maturity
-    # must be >= exposure residual maturity — strictly binary, no Art. 239(2)
-    # partial adjustment for FCSM).
-    # Also carry the Art. 222(4) gating flags: is_sft (or exposure_is_sft if the
-    # CRM processor has already resolved it) and cp_is_core_market_participant.
-    has_exp_maturity = "residual_maturity_years" in schema.names()
-    sft_col = (
-        "exposure_is_sft"
-        if "exposure_is_sft" in schema.names()
-        else ("is_sft" if "is_sft" in schema.names() else None)
-    )
-    has_cmp_col = "cp_is_core_market_participant" in schema.names()
-    exp_lookup = exposures.select(
-        pl.col(exp_ref_col).alias("_exp_ref"),
-        pl.col("currency").alias("_exp_currency")
-        if "currency" in schema.names()
-        else pl.lit("GBP").alias("_exp_currency"),
-        pl.col(ead_col).alias("_exp_ead"),
-        pl.col("residual_maturity_years").alias("_exp_residual_maturity_years")
-        if has_exp_maturity
-        else pl.lit(None).cast(pl.Float64).alias("_exp_residual_maturity_years"),
-        pl.col(sft_col).fill_null(False).alias("_exp_is_sft")
-        if sft_col is not None
-        else pl.lit(False).alias("_exp_is_sft"),
-        pl.col("cp_is_core_market_participant").fill_null(False).alias("_exp_cp_is_cmp")
-        if has_cmp_col
-        else pl.lit(False).alias("_exp_cp_is_cmp"),
-    ).unique(subset=["_exp_ref"])
-
-    # Join collateral items to exposure-level data based on beneficiary_reference
-    # Simple approach: join by beneficiary_reference = exposure_reference first,
-    # then facility, then counterparty. Coalesce results.
-    coll_with_exp = eligible.join(
-        exp_lookup,
-        left_on="beneficiary_reference",
-        right_on="_exp_ref",
-        how="left",
+    schema_flags = _SchemaFlags(
+        has_exp_maturity="residual_maturity_years" in schema_names,
+        sft_col=_resolve_sft_column(schema_names),
+        has_cmp_col="cp_is_core_market_participant" in schema_names,
+        has_currency="currency" in schema_names,
+        has_facility=facility_col in schema_names,
+        has_counterparty=cp_col in schema_names,
     )
 
-    # For facility-level collateral, build a facility lookup. Use the
-    # MAX residual_maturity_years across the facility's exposures so the
-    # Art. 239(1) gate is conservative — the collateral must cover the
-    # longest-dated exposure in the pool to be eligible at the pool level.
-    if facility_col in schema.names():
-        fac_aggs = [
-            pl.col("currency").first().alias("_fac_currency")
-            if "currency" in schema.names()
-            else pl.lit("GBP").alias("_fac_currency"),
-            pl.col(ead_col).sum().alias("_fac_total_ead"),
-            pl.col("residual_maturity_years").max().alias("_fac_residual_maturity_years")
-            if has_exp_maturity
-            else pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
-        ]
-        # Conservative propagation: any-SFT / any-CMP within the facility flips
-        # the flag (mirrors the CRM processor's `_sft_facility = .max()` rule).
-        if sft_col is not None:
-            fac_aggs.append(pl.col(sft_col).fill_null(False).max().alias("_fac_is_sft"))
-        else:
-            fac_aggs.append(pl.lit(False).alias("_fac_is_sft"))
-        if has_cmp_col:
-            fac_aggs.append(
-                pl.col("cp_is_core_market_participant")
-                .fill_null(False)
-                .max()
-                .alias("_fac_cp_is_cmp")
-            )
-        else:
-            fac_aggs.append(pl.lit(False).alias("_fac_cp_is_cmp"))
-        fac_lookup = exposures.group_by(facility_col).agg(fac_aggs)
-        coll_with_exp = coll_with_exp.join(
-            fac_lookup,
-            left_on="beneficiary_reference",
-            right_on=facility_col,
-            how="left",
-            suffix="_fac",
-        )
-    else:
-        coll_with_exp = coll_with_exp.with_columns(
-            pl.lit(None).cast(pl.Utf8).alias("_fac_currency"),
-            pl.lit(None).cast(pl.Float64).alias("_fac_total_ead"),
-            pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
-            pl.lit(None).cast(pl.Boolean).alias("_fac_is_sft"),
-            pl.lit(None).cast(pl.Boolean).alias("_fac_cp_is_cmp"),
-        )
+    # 1. Filter to eligible financial collateral + ensure zero-haircut flag
+    # 2. Derive per-item RW
+    eligible = _prepare_eligible_collateral(collateral, config.is_basel_3_1)
 
-    # For counterparty-level collateral
-    if cp_col in schema.names():
-        cp_aggs = [
-            pl.col("currency").first().alias("_cp_currency")
-            if "currency" in schema.names()
-            else pl.lit("GBP").alias("_cp_currency"),
-            pl.col(ead_col).sum().alias("_cp_total_ead"),
-            pl.col("residual_maturity_years").max().alias("_cp_residual_maturity_years")
-            if has_exp_maturity
-            else pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
-        ]
-        if sft_col is not None:
-            cp_aggs.append(pl.col(sft_col).fill_null(False).max().alias("_cp_is_sft"))
-        else:
-            cp_aggs.append(pl.lit(False).alias("_cp_is_sft"))
-        if has_cmp_col:
-            cp_aggs.append(
-                pl.col("cp_is_core_market_participant")
-                .fill_null(False)
-                .max()
-                .alias("_cp_cp_is_cmp")
-            )
-        else:
-            cp_aggs.append(pl.lit(False).alias("_cp_cp_is_cmp"))
-        cp_lookup = exposures.group_by(cp_col).agg(cp_aggs)
-        coll_with_exp = coll_with_exp.join(
-            cp_lookup,
-            left_on="beneficiary_reference",
-            right_on=cp_col,
-            how="left",
-            suffix="_cp",
-        )
-    else:
-        coll_with_exp = coll_with_exp.with_columns(
-            pl.lit(None).cast(pl.Utf8).alias("_cp_currency"),
-            pl.lit(None).cast(pl.Float64).alias("_cp_total_ead"),
-            pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
-            pl.lit(None).cast(pl.Boolean).alias("_cp_is_sft"),
-            pl.lit(None).cast(pl.Boolean).alias("_cp_cp_is_cmp"),
-        )
-
-    # Determine exposure currency via coalesce (direct → facility → counterparty).
-    # Resolve Art. 222(4) gating flags through the same hierarchy and fold the
-    # collateral-frame `qualifies_for_zero_haircut` into a hidden alias so the
-    # secured-floor expression has a single set of column names to reason about.
-    coll_with_exp = coll_with_exp.with_columns(
-        pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency").alias(
-            "_resolved_exp_currency"
-        ),
-        pl.coalesce(
-            "_exp_residual_maturity_years",
-            "_fac_residual_maturity_years",
-            "_cp_residual_maturity_years",
-        ).alias("_resolved_exp_residual_maturity_years"),
-        pl.coalesce("_exp_is_sft", "_fac_is_sft", "_cp_is_sft")
-        .fill_null(False)
-        .alias("_fcsm_exposure_is_sft"),
-        pl.coalesce("_exp_cp_is_cmp", "_fac_cp_is_cmp", "_cp_cp_is_cmp")
-        .fill_null(False)
-        .alias("_fcsm_cp_is_cmp"),
-        pl.col("qualifies_for_zero_haircut")
-        .fill_null(False)
-        .alias("_fcsm_qualifies_for_zero_haircut"),
+    # 3. Multi-level join (direct + facility + counterparty) to bring exposure
+    # currency, maturity, SFT and CMP flags onto each collateral row.
+    coll_with_exp = _join_exposure_levels(
+        eligible, exposures, exp_ref_col, facility_col, cp_col, ead_col, schema_flags
     )
 
-    # 4. Same-currency check for Art. 222(4)
-    coll_currency = (
-        pl.col("currency").fill_null("").str.to_uppercase()
-        if "currency" in coll_with_exp.collect_schema().names()
-        else pl.lit("")
-    )
-    coll_with_exp = coll_with_exp.with_columns(
-        (coll_currency == pl.col("_resolved_exp_currency").fill_null("").str.to_uppercase()).alias(
-            "_fcsm_same_currency"
-        ),
-    )
+    # 4. Resolve coalesced exposure-level columns and Art. 222(4) gating flags.
+    coll_with_exp = _resolve_exposure_levels(coll_with_exp)
 
-    # 5. Apply Art. 222(6)(b) 20% discount for 0%-RW sovereign bonds. The
-    # discount is waived when the collateral satisfies the Art. 227(2)
-    # zero-haircut criteria (PRA PS1/26 Art. 222(4) SFT carve-out is a flat
-    # RW substitution, not a value haircut — so the 20% market-value discount
-    # must not be applied on top of it).
-    is_sovereign_bond = (
-        pl.col("issuer_type")
-        .fill_null("")
-        .str.to_lowercase()
-        .is_in(["sovereign", "central_government", "central_bank"])
-        & (pl.col("_fcsm_item_rw").abs() < 1e-10)
-        & ~pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit", "gold"])
-    )
-    apply_sovereign_discount = (
-        is_sovereign_bond
-        & pl.col("_fcsm_same_currency")
-        & ~pl.col("_fcsm_qualifies_for_zero_haircut")
-    )
-    coll_with_exp = coll_with_exp.with_columns(
-        pl.when(apply_sovereign_discount)
-        .then(pl.col("market_value") * (1.0 - float(SOVEREIGN_BOND_DISCOUNT)))
-        .otherwise(pl.col("market_value"))
-        .alias("_fcsm_effective_value"),
-    )
+    # 5. Same-currency check + Art. 222(6)(b) sovereign-bond discount.
+    coll_with_exp = _apply_currency_and_sovereign_discount(coll_with_exp)
 
-    # 6. Apply the per-item secured-portion RW. ``_secured_floor_expr`` encodes
-    # the Art. 222(3) 20% general floor, the Art. 222(4) SFT 0%/10% carve-out,
-    # and the Art. 222(6) non-SFT same-currency 0% carve-out as a single
-    # decision tree — applied per item so the downstream weighted average is
-    # not re-floored.
+    # 6. Per-item secured-portion RW (Art. 222(3)/(4)/(6) decision tree).
     coll_with_exp = coll_with_exp.with_columns(
         _secured_floor_expr().alias("_fcsm_effective_rw"),
     )
 
-    # 6b. CRR Art. 239(1) FCSM maturity-mismatch eligibility gate. Collateral
-    # whose residual maturity is strictly less than the secured exposure's
-    # residual maturity is INELIGIBLE — Art. 239(1) is binary (the Art. 239(2)
-    # (t-0.25)/(T-0.25) partial adjustment formula applies to FCCM/IRB only,
-    # not FCSM). Zero-suppress the contribution at the per-item level so the
-    # downstream weighted aggregation drops the row entirely. Only enforced
-    # when both maturities are populated; missing data on either side
-    # preserves the pre-existing (permissive) behaviour.
-    coll_schema_names = coll_with_exp.collect_schema().names()
-    if "residual_maturity_years" in coll_schema_names:
-        coll_residual = pl.col("residual_maturity_years")
-        exp_residual = pl.col("_resolved_exp_residual_maturity_years")
-        is_maturity_ineligible = (
-            coll_residual.is_not_null()
-            & exp_residual.is_not_null()
-            & (coll_residual < exp_residual)
-        )
-        coll_with_exp = coll_with_exp.with_columns(
-            pl.when(is_maturity_ineligible)
-            .then(pl.lit(0.0))
-            .otherwise(pl.col("_fcsm_effective_value"))
-            .alias("_fcsm_effective_value"),
-            pl.when(is_maturity_ineligible)
-            .then(pl.lit(0.0))
-            .otherwise(pl.col("_fcsm_effective_rw"))
-            .alias("_fcsm_effective_rw"),
-        )
+    # 6b. Art. 239(1) FCSM maturity-mismatch eligibility gate.
+    coll_with_exp = _apply_maturity_eligibility_gate(coll_with_exp)
 
-    # 7. Aggregate per beneficiary_reference: total value and weighted-avg RW
-    agg = (
-        coll_with_exp.group_by("beneficiary_reference")
-        .agg(
-            pl.col("_fcsm_effective_value").sum().alias("_fcsm_total_value"),
-            (pl.col("_fcsm_effective_value") * pl.col("_fcsm_effective_rw"))
-            .sum()
-            .alias("_fcsm_weighted_rw_sum"),
-        )
-        .with_columns(
-            pl.when(pl.col("_fcsm_total_value") > 0)
-            .then(pl.col("_fcsm_weighted_rw_sum") / pl.col("_fcsm_total_value"))
-            .otherwise(0.0)
-            .alias("_fcsm_avg_rw"),
-        )
-    )
+    # 7. Aggregate per beneficiary_reference.
+    agg = _aggregate_per_beneficiary(coll_with_exp)
 
-    # 8. Multi-level join back to exposures
-    # Direct-level
-    result = exposures.join(
-        agg.select(
-            pl.col("beneficiary_reference").alias("_agg_ref"),
-            pl.col("_fcsm_total_value").alias("_fcsm_val_d"),
-            pl.col("_fcsm_avg_rw").alias("_fcsm_rw_d"),
-        ),
-        left_on=exp_ref_col,
-        right_on="_agg_ref",
-        how="left",
-    )
-
-    # Facility-level
-    if facility_col in schema.names():
-        # Compute pro-rata share for facility-level collateral
-        fac_ead = exposures.group_by(facility_col).agg(
-            pl.col(ead_col).sum().alias("_fac_ead_total"),
-        )
-        result = (
-            result.join(
-                agg.select(
-                    pl.col("beneficiary_reference").alias("_agg_ref_f"),
-                    pl.col("_fcsm_total_value").alias("_fcsm_val_f"),
-                    pl.col("_fcsm_avg_rw").alias("_fcsm_rw_f"),
-                ),
-                left_on=facility_col,
-                right_on="_agg_ref_f",
-                how="left",
-            )
-            .join(
-                fac_ead,
-                on=facility_col,
-                how="left",
-            )
-            .with_columns(
-                # Pro-rata share within facility
-                pl.when(pl.col("_fac_ead_total") > 0)
-                .then(pl.col(ead_col) / pl.col("_fac_ead_total"))
-                .otherwise(0.0)
-                .alias("_fcsm_fac_share"),
-            )
-        )
-    else:
-        result = result.with_columns(
-            pl.lit(None).cast(pl.Float64).alias("_fcsm_val_f"),
-            pl.lit(None).cast(pl.Float64).alias("_fcsm_rw_f"),
-            pl.lit(0.0).alias("_fcsm_fac_share"),
-            pl.lit(None).cast(pl.Float64).alias("_fac_ead_total"),
-        )
-
-    # Counterparty-level
-    if cp_col in schema.names():
-        cp_ead = exposures.group_by(cp_col).agg(
-            pl.col(ead_col).sum().alias("_cp_ead_total"),
-        )
-        result = (
-            result.join(
-                agg.select(
-                    pl.col("beneficiary_reference").alias("_agg_ref_c"),
-                    pl.col("_fcsm_total_value").alias("_fcsm_val_c"),
-                    pl.col("_fcsm_avg_rw").alias("_fcsm_rw_c"),
-                ),
-                left_on=cp_col,
-                right_on="_agg_ref_c",
-                how="left",
-            )
-            .join(
-                cp_ead,
-                on=cp_col,
-                how="left",
-            )
-            .with_columns(
-                pl.when(pl.col("_cp_ead_total") > 0)
-                .then(pl.col(ead_col) / pl.col("_cp_ead_total"))
-                .otherwise(0.0)
-                .alias("_fcsm_cp_share"),
-            )
-        )
-    else:
-        result = result.with_columns(
-            pl.lit(None).cast(pl.Float64).alias("_fcsm_val_c"),
-            pl.lit(None).cast(pl.Float64).alias("_fcsm_rw_c"),
-            pl.lit(0.0).alias("_fcsm_cp_share"),
-            pl.lit(None).cast(pl.Float64).alias("_cp_ead_total"),
-        )
-
-    # 9. Combine multi-level: direct + pro-rata facility + pro-rata counterparty
-    result = result.with_columns(
-        (
-            pl.col("_fcsm_val_d").fill_null(0.0)
-            + pl.col("_fcsm_val_f").fill_null(0.0) * pl.col("_fcsm_fac_share")
-            + pl.col("_fcsm_val_c").fill_null(0.0) * pl.col("_fcsm_cp_share")
-        ).alias("_fcsm_raw_value"),
-        # Weighted-average RW: use the RW from the highest-value level
-        pl.coalesce("_fcsm_rw_d", "_fcsm_rw_f", "_fcsm_rw_c").fill_null(0.0).alias("_fcsm_raw_rw"),
+    # 8-9. Multi-level join back to exposures and combine with pro-rata shares.
+    result = _join_aggregates_back(
+        exposures, agg, exp_ref_col, facility_col, cp_col, ead_col, schema_flags
     )
 
     # 10. Cap collateral value at EAD; RW floor was applied per-item in step 6.
-    ead_expr = pl.col(ead_col).fill_null(0.0)
-    result = result.with_columns(
-        pl.min_horizontal("_fcsm_raw_value", ead_expr)
-        .clip(lower_bound=0.0)
-        .alias("fcsm_collateral_value"),
-        pl.col("_fcsm_raw_rw").alias("fcsm_collateral_rw"),
-    )
+    result = _finalise_fcsm_columns(result, ead_col)
 
     # Drop temporary columns
     temp_cols = [
         c
         for c in result.collect_schema().names()
-        if c.startswith("_fcsm_")
-        or c
-        in (
-            "_fac_ead_total",
-            "_cp_ead_total",
-        )
+        if c.startswith("_fcsm_") or c in ("_fac_ead_total", "_cp_ead_total")
     ]
-    result = result.drop(temp_cols)
-
-    return result
+    return result.drop(temp_cols)
 
 
 def undo_sa_ead_reduction(exposures: pl.LazyFrame) -> pl.LazyFrame:
@@ -709,4 +372,449 @@ def _add_default_fcsm_columns(exposures: pl.LazyFrame) -> pl.LazyFrame:
     return exposures.with_columns(
         pl.lit(0.0).alias("fcsm_collateral_value"),
         pl.lit(0.0).alias("fcsm_collateral_rw"),
+    )
+
+
+@dataclass(frozen=True)
+class _SchemaFlags:
+    """Bundle of resolved exposure-schema feature flags used to pick join shape.
+
+    Captures which optional columns are present on the exposure frame plus
+    the resolved name of the SFT flag — ``exposure_is_sft`` if the CRM
+    processor has already normalised, otherwise the raw ``is_sft`` if present,
+    otherwise ``None`` so a literal False is substituted.
+    """
+
+    has_exp_maturity: bool
+    sft_col: str | None
+    has_cmp_col: bool
+    has_currency: bool
+    has_facility: bool
+    has_counterparty: bool
+
+
+def _resolve_sft_column(schema_names: list[str]) -> str | None:
+    """Pick the SFT flag column name (or None if neither is present)."""
+    if "exposure_is_sft" in schema_names:
+        return "exposure_is_sft"
+    if "is_sft" in schema_names:
+        return "is_sft"
+    return None
+
+
+def _prepare_eligible_collateral(collateral: pl.LazyFrame, is_b31: bool) -> pl.LazyFrame:
+    """Filter to eligible FC, normalise zero-haircut flag, derive per-item RW."""
+    eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
+
+    eligible_schema_names = eligible.collect_schema().names()
+    if "qualifies_for_zero_haircut" not in eligible_schema_names:
+        eligible = eligible.with_columns(
+            pl.lit(False).alias("qualifies_for_zero_haircut"),
+        )
+    else:
+        eligible = eligible.with_columns(
+            pl.col("qualifies_for_zero_haircut").fill_null(False),
+        )
+
+    return eligible.with_columns(_derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw"))
+
+
+def _currency_expr(present: bool, alias: str) -> pl.Expr:
+    """Currency column for the given level, defaulting to GBP if absent."""
+    return pl.col("currency").alias(alias) if present else pl.lit("GBP").alias(alias)
+
+
+def _maturity_expr(present: bool, alias: str) -> pl.Expr:
+    """Residual-maturity-years column, defaulting to null Float64 if absent."""
+    if present:
+        return pl.col("residual_maturity_years").alias(alias)
+    return pl.lit(None).cast(pl.Float64).alias(alias)
+
+
+def _sft_expr(sft_col: str | None, alias: str, *, aggregated: bool) -> pl.Expr:
+    """SFT flag column, taking .max() across the group when aggregated."""
+    if sft_col is None:
+        return pl.lit(False).alias(alias)
+    base = pl.col(sft_col).fill_null(False)
+    if aggregated:
+        base = base.max()
+    return base.alias(alias)
+
+
+def _cmp_expr(has_cmp_col: bool, alias: str, *, aggregated: bool) -> pl.Expr:
+    """Core-market-participant flag column, taking .max() when aggregated."""
+    if not has_cmp_col:
+        return pl.lit(False).alias(alias)
+    base = pl.col("cp_is_core_market_participant").fill_null(False)
+    if aggregated:
+        base = base.max()
+    return base.alias(alias)
+
+
+def _build_exposure_lookup(
+    exposures: pl.LazyFrame, exp_ref_col: str, ead_col: str, sf: _SchemaFlags
+) -> pl.LazyFrame:
+    """Direct-level lookup carrying currency, EAD, maturity, SFT and CMP flags."""
+    return exposures.select(
+        pl.col(exp_ref_col).alias("_exp_ref"),
+        _currency_expr(sf.has_currency, "_exp_currency"),
+        pl.col(ead_col).alias("_exp_ead"),
+        _maturity_expr(sf.has_exp_maturity, "_exp_residual_maturity_years"),
+        _sft_expr(sf.sft_col, "_exp_is_sft", aggregated=False),
+        _cmp_expr(sf.has_cmp_col, "_exp_cp_is_cmp", aggregated=False),
+    ).unique(subset=["_exp_ref"])
+
+
+def _build_facility_lookup(
+    exposures: pl.LazyFrame, facility_col: str, ead_col: str, sf: _SchemaFlags
+) -> pl.LazyFrame:
+    """Facility-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
+    fac_aggs = [
+        pl.col("currency").first().alias("_fac_currency")
+        if sf.has_currency
+        else pl.lit("GBP").alias("_fac_currency"),
+        pl.col(ead_col).sum().alias("_fac_total_ead"),
+        pl.col("residual_maturity_years").max().alias("_fac_residual_maturity_years")
+        if sf.has_exp_maturity
+        else pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
+        _sft_expr(sf.sft_col, "_fac_is_sft", aggregated=True),
+        _cmp_expr(sf.has_cmp_col, "_fac_cp_is_cmp", aggregated=True),
+    ]
+    return exposures.group_by(facility_col).agg(fac_aggs)
+
+
+def _build_counterparty_lookup(
+    exposures: pl.LazyFrame, cp_col: str, ead_col: str, sf: _SchemaFlags
+) -> pl.LazyFrame:
+    """Counterparty-level aggregate lookup (MAX maturity, ANY SFT, ANY CMP)."""
+    cp_aggs = [
+        pl.col("currency").first().alias("_cp_currency")
+        if sf.has_currency
+        else pl.lit("GBP").alias("_cp_currency"),
+        pl.col(ead_col).sum().alias("_cp_total_ead"),
+        pl.col("residual_maturity_years").max().alias("_cp_residual_maturity_years")
+        if sf.has_exp_maturity
+        else pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
+        _sft_expr(sf.sft_col, "_cp_is_sft", aggregated=True),
+        _cmp_expr(sf.has_cmp_col, "_cp_cp_is_cmp", aggregated=True),
+    ]
+    return exposures.group_by(cp_col).agg(cp_aggs)
+
+
+def _default_facility_columns() -> list[pl.Expr]:
+    """Null-filled facility-level columns when no facility column exists."""
+    return [
+        pl.lit(None).cast(pl.Utf8).alias("_fac_currency"),
+        pl.lit(None).cast(pl.Float64).alias("_fac_total_ead"),
+        pl.lit(None).cast(pl.Float64).alias("_fac_residual_maturity_years"),
+        pl.lit(None).cast(pl.Boolean).alias("_fac_is_sft"),
+        pl.lit(None).cast(pl.Boolean).alias("_fac_cp_is_cmp"),
+    ]
+
+
+def _default_counterparty_columns() -> list[pl.Expr]:
+    """Null-filled counterparty-level columns when no CP column exists."""
+    return [
+        pl.lit(None).cast(pl.Utf8).alias("_cp_currency"),
+        pl.lit(None).cast(pl.Float64).alias("_cp_total_ead"),
+        pl.lit(None).cast(pl.Float64).alias("_cp_residual_maturity_years"),
+        pl.lit(None).cast(pl.Boolean).alias("_cp_is_sft"),
+        pl.lit(None).cast(pl.Boolean).alias("_cp_cp_is_cmp"),
+    ]
+
+
+def _join_exposure_levels(
+    eligible: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+    exp_ref_col: str,
+    facility_col: str,
+    cp_col: str,
+    ead_col: str,
+    sf: _SchemaFlags,
+) -> pl.LazyFrame:
+    """Join collateral to direct, facility and counterparty exposure data.
+
+    Each level contributes its own currency / EAD / maturity / SFT / CMP
+    columns; downstream code coalesces them in `_resolve_exposure_levels`.
+    """
+    exp_lookup = _build_exposure_lookup(exposures, exp_ref_col, ead_col, sf)
+    coll_with_exp = eligible.join(
+        exp_lookup, left_on="beneficiary_reference", right_on="_exp_ref", how="left"
+    )
+
+    if sf.has_facility:
+        fac_lookup = _build_facility_lookup(exposures, facility_col, ead_col, sf)
+        coll_with_exp = coll_with_exp.join(
+            fac_lookup,
+            left_on="beneficiary_reference",
+            right_on=facility_col,
+            how="left",
+            suffix="_fac",
+        )
+    else:
+        coll_with_exp = coll_with_exp.with_columns(_default_facility_columns())
+
+    if sf.has_counterparty:
+        cp_lookup = _build_counterparty_lookup(exposures, cp_col, ead_col, sf)
+        coll_with_exp = coll_with_exp.join(
+            cp_lookup,
+            left_on="beneficiary_reference",
+            right_on=cp_col,
+            how="left",
+            suffix="_cp",
+        )
+    else:
+        coll_with_exp = coll_with_exp.with_columns(_default_counterparty_columns())
+
+    return coll_with_exp
+
+
+def _resolve_exposure_levels(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
+    """Coalesce direct/facility/counterparty columns into resolved aliases.
+
+    Resolves Art. 222(4) gating flags through the same direct -> facility ->
+    counterparty hierarchy and folds the collateral-frame
+    ``qualifies_for_zero_haircut`` into a hidden alias so the secured-floor
+    expression has a single set of column names to reason about.
+    """
+    return coll_with_exp.with_columns(
+        pl.coalesce("_exp_currency", "_fac_currency", "_cp_currency").alias(
+            "_resolved_exp_currency"
+        ),
+        pl.coalesce(
+            "_exp_residual_maturity_years",
+            "_fac_residual_maturity_years",
+            "_cp_residual_maturity_years",
+        ).alias("_resolved_exp_residual_maturity_years"),
+        pl.coalesce("_exp_is_sft", "_fac_is_sft", "_cp_is_sft")
+        .fill_null(False)
+        .alias("_fcsm_exposure_is_sft"),
+        pl.coalesce("_exp_cp_is_cmp", "_fac_cp_is_cmp", "_cp_cp_is_cmp")
+        .fill_null(False)
+        .alias("_fcsm_cp_is_cmp"),
+        pl.col("qualifies_for_zero_haircut")
+        .fill_null(False)
+        .alias("_fcsm_qualifies_for_zero_haircut"),
+    )
+
+
+def _apply_currency_and_sovereign_discount(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
+    """Set _fcsm_same_currency and apply the Art. 222(6)(b) 20% discount.
+
+    The discount is waived when the collateral satisfies the Art. 227(2)
+    zero-haircut criteria (PRA PS1/26 Art. 222(4) SFT carve-out is a flat
+    RW substitution, not a value haircut — so the 20% market-value discount
+    must not be applied on top of it).
+    """
+    coll_schema_names = coll_with_exp.collect_schema().names()
+    coll_currency = (
+        pl.col("currency").fill_null("").str.to_uppercase()
+        if "currency" in coll_schema_names
+        else pl.lit("")
+    )
+    coll_with_exp = coll_with_exp.with_columns(
+        (coll_currency == pl.col("_resolved_exp_currency").fill_null("").str.to_uppercase()).alias(
+            "_fcsm_same_currency"
+        ),
+    )
+
+    is_sovereign_bond = (
+        pl.col("issuer_type")
+        .fill_null("")
+        .str.to_lowercase()
+        .is_in(["sovereign", "central_government", "central_bank"])
+        & (pl.col("_fcsm_item_rw").abs() < 1e-10)
+        & ~pl.col("collateral_type").str.to_lowercase().is_in(["cash", "deposit", "gold"])
+    )
+    apply_sovereign_discount = (
+        is_sovereign_bond
+        & pl.col("_fcsm_same_currency")
+        & ~pl.col("_fcsm_qualifies_for_zero_haircut")
+    )
+    return coll_with_exp.with_columns(
+        pl.when(apply_sovereign_discount)
+        .then(pl.col("market_value") * (1.0 - float(SOVEREIGN_BOND_DISCOUNT)))
+        .otherwise(pl.col("market_value"))
+        .alias("_fcsm_effective_value"),
+    )
+
+
+def _apply_maturity_eligibility_gate(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
+    """Zero-suppress collateral whose residual maturity is < exposure's.
+
+    CRR Art. 239(1) FCSM maturity-mismatch eligibility gate is binary — the
+    Art. 239(2) (t-0.25)/(T-0.25) partial adjustment applies to FCCM/IRB only.
+    Only enforced when both maturities are populated; missing data on either
+    side preserves the pre-existing (permissive) behaviour.
+    """
+    coll_schema_names = coll_with_exp.collect_schema().names()
+    if "residual_maturity_years" not in coll_schema_names:
+        return coll_with_exp
+
+    coll_residual = pl.col("residual_maturity_years")
+    exp_residual = pl.col("_resolved_exp_residual_maturity_years")
+    is_maturity_ineligible = (
+        coll_residual.is_not_null() & exp_residual.is_not_null() & (coll_residual < exp_residual)
+    )
+    return coll_with_exp.with_columns(
+        pl.when(is_maturity_ineligible)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("_fcsm_effective_value"))
+        .alias("_fcsm_effective_value"),
+        pl.when(is_maturity_ineligible)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("_fcsm_effective_rw"))
+        .alias("_fcsm_effective_rw"),
+    )
+
+
+def _aggregate_per_beneficiary(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
+    """Sum collateral value and value-weighted RW per beneficiary_reference."""
+    return (
+        coll_with_exp.group_by("beneficiary_reference")
+        .agg(
+            pl.col("_fcsm_effective_value").sum().alias("_fcsm_total_value"),
+            (pl.col("_fcsm_effective_value") * pl.col("_fcsm_effective_rw"))
+            .sum()
+            .alias("_fcsm_weighted_rw_sum"),
+        )
+        .with_columns(
+            pl.when(pl.col("_fcsm_total_value") > 0)
+            .then(pl.col("_fcsm_weighted_rw_sum") / pl.col("_fcsm_total_value"))
+            .otherwise(0.0)
+            .alias("_fcsm_avg_rw"),
+        )
+    )
+
+
+def _join_aggregates_back(
+    exposures: pl.LazyFrame,
+    agg: pl.LazyFrame,
+    exp_ref_col: str,
+    facility_col: str,
+    cp_col: str,
+    ead_col: str,
+    sf: _SchemaFlags,
+) -> pl.LazyFrame:
+    """Join direct/facility/counterparty aggregates back to exposures.
+
+    Computes the pro-rata share for facility- and counterparty-level
+    collateral, then combines the three levels into a single raw value and
+    coalesced RW for the downstream EAD cap.
+    """
+    result = exposures.join(
+        agg.select(
+            pl.col("beneficiary_reference").alias("_agg_ref"),
+            pl.col("_fcsm_total_value").alias("_fcsm_val_d"),
+            pl.col("_fcsm_avg_rw").alias("_fcsm_rw_d"),
+        ),
+        left_on=exp_ref_col,
+        right_on="_agg_ref",
+        how="left",
+    )
+
+    result = _join_facility_aggregate(result, exposures, agg, facility_col, ead_col, sf)
+    result = _join_counterparty_aggregate(result, exposures, agg, cp_col, ead_col, sf)
+
+    return result.with_columns(
+        (
+            pl.col("_fcsm_val_d").fill_null(0.0)
+            + pl.col("_fcsm_val_f").fill_null(0.0) * pl.col("_fcsm_fac_share")
+            + pl.col("_fcsm_val_c").fill_null(0.0) * pl.col("_fcsm_cp_share")
+        ).alias("_fcsm_raw_value"),
+        # Weighted-average RW: use the RW from the highest-value level
+        pl.coalesce("_fcsm_rw_d", "_fcsm_rw_f", "_fcsm_rw_c").fill_null(0.0).alias("_fcsm_raw_rw"),
+    )
+
+
+def _join_facility_aggregate(
+    result: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+    agg: pl.LazyFrame,
+    facility_col: str,
+    ead_col: str,
+    sf: _SchemaFlags,
+) -> pl.LazyFrame:
+    """Join the facility-level aggregate with pro-rata share, or default to 0."""
+    if not sf.has_facility:
+        return result.with_columns(
+            pl.lit(None).cast(pl.Float64).alias("_fcsm_val_f"),
+            pl.lit(None).cast(pl.Float64).alias("_fcsm_rw_f"),
+            pl.lit(0.0).alias("_fcsm_fac_share"),
+            pl.lit(None).cast(pl.Float64).alias("_fac_ead_total"),
+        )
+
+    fac_ead = exposures.group_by(facility_col).agg(
+        pl.col(ead_col).sum().alias("_fac_ead_total"),
+    )
+    return (
+        result.join(
+            agg.select(
+                pl.col("beneficiary_reference").alias("_agg_ref_f"),
+                pl.col("_fcsm_total_value").alias("_fcsm_val_f"),
+                pl.col("_fcsm_avg_rw").alias("_fcsm_rw_f"),
+            ),
+            left_on=facility_col,
+            right_on="_agg_ref_f",
+            how="left",
+        )
+        .join(fac_ead, on=facility_col, how="left")
+        .with_columns(
+            pl.when(pl.col("_fac_ead_total") > 0)
+            .then(pl.col(ead_col) / pl.col("_fac_ead_total"))
+            .otherwise(0.0)
+            .alias("_fcsm_fac_share"),
+        )
+    )
+
+
+def _join_counterparty_aggregate(
+    result: pl.LazyFrame,
+    exposures: pl.LazyFrame,
+    agg: pl.LazyFrame,
+    cp_col: str,
+    ead_col: str,
+    sf: _SchemaFlags,
+) -> pl.LazyFrame:
+    """Join the counterparty-level aggregate with pro-rata share, or default."""
+    if not sf.has_counterparty:
+        return result.with_columns(
+            pl.lit(None).cast(pl.Float64).alias("_fcsm_val_c"),
+            pl.lit(None).cast(pl.Float64).alias("_fcsm_rw_c"),
+            pl.lit(0.0).alias("_fcsm_cp_share"),
+            pl.lit(None).cast(pl.Float64).alias("_cp_ead_total"),
+        )
+
+    cp_ead = exposures.group_by(cp_col).agg(
+        pl.col(ead_col).sum().alias("_cp_ead_total"),
+    )
+    return (
+        result.join(
+            agg.select(
+                pl.col("beneficiary_reference").alias("_agg_ref_c"),
+                pl.col("_fcsm_total_value").alias("_fcsm_val_c"),
+                pl.col("_fcsm_avg_rw").alias("_fcsm_rw_c"),
+            ),
+            left_on=cp_col,
+            right_on="_agg_ref_c",
+            how="left",
+        )
+        .join(cp_ead, on=cp_col, how="left")
+        .with_columns(
+            pl.when(pl.col("_cp_ead_total") > 0)
+            .then(pl.col(ead_col) / pl.col("_cp_ead_total"))
+            .otherwise(0.0)
+            .alias("_fcsm_cp_share"),
+        )
+    )
+
+
+def _finalise_fcsm_columns(result: pl.LazyFrame, ead_col: str) -> pl.LazyFrame:
+    """Cap collateral value at EAD and rename internal RW column to public."""
+    ead_expr = pl.col(ead_col).fill_null(0.0)
+    return result.with_columns(
+        pl.min_horizontal("_fcsm_raw_value", ead_expr)
+        .clip(lower_bound=0.0)
+        .alias("fcsm_collateral_value"),
+        pl.col("_fcsm_raw_rw").alias("fcsm_collateral_rw"),
     )

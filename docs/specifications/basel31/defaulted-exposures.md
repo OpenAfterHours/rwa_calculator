@@ -259,10 +259,11 @@ routed through the A-IRB approach (see
     those rows silently mass-flagged as defaulted. The classifier's
     `_build_is_defaulted_expr` (`engine/classifier.py`) derives `is_defaulted`
     from two explicit signals only — `cp_default_status` and the row-level
-    `is_defaulted` flag — and a non-zero `beel` on a non-defaulted row
-    surfaces as one `DQ008` warning per offending exposure
-    (`ERROR_BEEL_ON_NON_DEFAULTED_EXPOSURE` in `contracts/errors.py`,
-    severity `WARNING`, category `DATA_QUALITY`). The calc is unaffected on
+    `is_defaulted` flag — and a non-zero `beel` on any non-defaulted row
+    surfaces as a single aggregate `DQ008` warning carrying the total
+    count of offending exposures (`ERROR_BEEL_ON_NON_DEFAULTED_EXPOSURE`
+    in `contracts/errors.py`, severity `WARNING`, category
+    `DATA_QUALITY`), mirroring the CLS006 / CLS008 roll-up pattern. The calc is unaffected on
     those rows — `beel` is only consumed when the derived `is_defaulted` is
     `True`. To eliminate the warning, restrict `beel` population to defaulted
     rows in the upstream loader.

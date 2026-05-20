@@ -362,20 +362,17 @@ def re_split_warning(
     )
 
 
-def beel_on_non_defaulted_exposure_warning(
-    *,
-    exposure_reference: str | None,
-    beel_value: float,
-) -> CalculationError:
+def beel_on_non_defaulted_exposure_warning(*, n: int) -> CalculationError:
     """Create a DQ008 warning for the (is_defaulted=False ∧ beel>0) contradiction.
 
     PS1/26 Art. 181(1)(h)(ii) and CRR Art. 158(5) define BEEL only for
     defaulted exposures. When a firm's A-IRB pipeline populates ``beel``
     alongside ``lgd`` on performing rows, the engine does NOT silently
     promote those rows to defaulted; instead it routes them through the
-    standard performing branch and emits one of these warnings per
-    offending exposure so the input contradiction is visible in the
-    audit trail. The value is unused downstream — IRB defaulted treatment
+    standard performing branch and emits a single aggregate warning
+    carrying the total count of offending exposures, mirroring the
+    CLS006 / CLS008 roll-up pattern used by every other classifier-stage
+    warning. The value is unused downstream — IRB defaulted treatment
     only reads ``beel`` when ``is_defaulted`` is True.
     """
     return CalculationError(
@@ -383,14 +380,13 @@ def beel_on_non_defaulted_exposure_warning(
         severity=ErrorSeverity.WARNING,
         category=ErrorCategory.DATA_QUALITY,
         message=(
-            f"BEEL populated on non-defaulted exposure (beel={beel_value:g}); "
+            f"BEEL populated on {n} non-defaulted exposure(s); "
             "BEEL is defined only for defaulted exposures under "
-            "PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5). Value will not be consumed."
+            "PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5). "
+            "Value will not be consumed on these rows."
         ),
-        exposure_reference=exposure_reference,
         regulatory_reference="PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)",
         field_name="beel",
-        actual_value=f"{beel_value:g}",
     )
 
 

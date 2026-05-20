@@ -388,9 +388,10 @@ final liquidation/recovery. See
 !!! warning "`beel > 0` is not a default trigger"
     The classifier derives `is_defaulted` from `cp_default_status` OR the
     row-level `is_defaulted` flag — `beel > 0` alone does **not** route a
-    row to defaulted treatment. A non-zero `beel` on a row whose derived
-    `is_defaulted` is `False` is reported as one non-blocking `DQ008`
-    warning per offending exposure; the value is otherwise unused.
+    row to defaulted treatment. A non-zero `beel` on any row whose derived
+    `is_defaulted` is `False` is reported as a single non-blocking
+    aggregate `DQ008` warning carrying the total count; the value is
+    otherwise unused.
     Restrict `beel` to defaulted rows in the upstream loader to suppress
     the warning. Detail in
     [Defaulted Exposures spec — Required Input](../basel31/defaulted-exposures.md#beel-best-estimate-of-expected-loss-art-1585-art-1811hii).

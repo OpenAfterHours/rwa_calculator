@@ -1328,8 +1328,8 @@ class TestDefaultClassification:
         PS1/26 Art. 181(1)(h)(ii): BEEL is defined only for defaulted
         exposures, but firms whose A-IRB models emit a BEEL-style value on
         performing rows would otherwise be silently mass-flagged. The
-        classifier routes performing and emits one DQ008 warning per
-        offending row.
+        classifier routes performing and emits a single aggregate DQ008
+        warning carrying the offender count.
         """
         counterparties = pl.DataFrame(
             {
@@ -1359,7 +1359,74 @@ class TestDefaultClassification:
         assert df["is_defaulted"][0] is False
         dq008 = [e for e in result.classification_errors if e.code == "DQ008"]
         assert len(dq008) == 1
-        assert dq008[0].exposure_reference == "BEEL_PERF_EXP"
+        assert "1 non-defaulted exposure" in dq008[0].message
+        assert dq008[0].field_name == "beel"
+
+    def test_beel_warning_is_aggregated_across_multiple_offenders(
+        self,
+        classifier: ExposureClassifier,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """N performing rows with beel>0 must produce ONE aggregate DQ008 warning.
+
+        Locks in the aggregate roll-up pattern that matches CLS006 model
+        permission diagnostics and CLS008 large-corp revenue conservatism:
+        regardless of how many offending exposures the classifier sees,
+        exactly one DQ008 warning is emitted, and the count is embedded in
+        the message body. Prevents regressing back to one-warning-per-row.
+        """
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["PERF_CP"],
+                "counterparty_name": ["Performing Corp"],
+                "entity_type": ["corporate"],
+                "country_code": ["GB"],
+                "annual_revenue": [10_000_000.0],
+                "total_assets": [50_000_000.0],
+                "default_status": [False],
+                "sector_code": ["MANU"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["BEEL_EXP_1", "BEEL_EXP_2", "BEEL_EXP_3"],
+                "exposure_type": ["loan", "loan", "loan"],
+                "product_type": ["TERM_LOAN", "TERM_LOAN", "TERM_LOAN"],
+                "book_code": ["CORP", "CORP", "CORP"],
+                "counterparty_reference": ["PERF_CP", "PERF_CP", "PERF_CP"],
+                "value_date": [date(2023, 1, 1)] * 3,
+                "maturity_date": [date(2028, 1, 1)] * 3,
+                "currency": ["GBP", "GBP", "GBP"],
+                "drawn_amount": [1_000_000.0, 1_000_000.0, 1_000_000.0],
+                "undrawn_amount": [0.0, 0.0, 0.0],
+                "nominal_amount": [0.0, 0.0, 0.0],
+                "lgd": [0.45, 0.45, 0.45],
+                "seniority": ["senior", "senior", "senior"],
+                "exposure_has_parent": [False, False, False],
+                "root_facility_reference": [None, None, None],
+                "facility_hierarchy_depth": [1, 1, 1],
+                "counterparty_has_parent": [False, False, False],
+                "parent_counterparty_reference": [None, None, None],
+                "ultimate_parent_reference": [None, None, None],
+                "counterparty_hierarchy_depth": [1, 1, 1],
+                "lending_group_reference": [None, None, None],
+                "lending_group_total_exposure": [0.0, 0.0, 0.0],
+                "is_defaulted": [False, False, False],
+                "beel": [0.05, 0.10, 0.15],
+            }
+        ).lazy()
+        bundle = create_resolved_bundle(exposures, counterparties)
+
+        result = classifier.classify(bundle, crr_config)
+
+        df = result.all_exposures.collect()
+        assert df["is_defaulted"].to_list() == [False, False, False]
+        dq008 = [e for e in result.classification_errors if e.code == "DQ008"]
+        assert len(dq008) == 1
+        assert "3 non-defaulted exposure" in dq008[0].message
+        assert dq008[0].field_name == "beel"
 
     def test_cp_default_with_beel_no_dq008(
         self,

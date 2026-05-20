@@ -14,8 +14,9 @@ Background:
     two explicit signals only:
         is_defaulted = cp_default_status OR row-level is_defaulted
     A contradictory ``(is_defaulted=False ∧ beel>0)`` combination is
-    surfaced as a non-blocking ``DQ008`` warning so the input issue is
-    visible without changing the calc.
+    surfaced as a single non-blocking ``DQ008`` warning carrying the
+    total offender count, so the input issue is visible without changing
+    the calc.
 
 Regulatory References:
     - CRR Art. 178: counterparty / exposure default definition
@@ -205,12 +206,13 @@ class TestBEELDoesNotTriggerDefault:
         self,
         crr_irb_config: CalculationConfig,
     ) -> None:
-        """A-IRB performing row with beel>0 → not defaulted, one DQ008.
+        """A-IRB performing row with beel>0 → not defaulted, one aggregate DQ008.
 
         Mirrors the user's reported scenario: their A-IRB model team
         populates ``beel`` alongside ``lgd`` for every advanced-IRB
         customer. The engine must keep the row on the performing A-IRB
-        path and emit one DQ008 warning per offending exposure.
+        path and emit a single aggregate DQ008 warning whose message
+        carries the count of offending rows.
         """
         exposures = _exposure_lf(
             exposure_reference="EXP_AIRB_PERF",
@@ -231,10 +233,10 @@ class TestBEELDoesNotTriggerDefault:
         assert df["approach"][0] == ApproachType.AIRB.value
         dq008 = [e for e in result.classification_errors if e.code == "DQ008"]
         assert len(dq008) == 1
-        offender = dq008[0]
-        assert offender.exposure_reference == "EXP_AIRB_PERF"
-        assert offender.regulatory_reference == "PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)"
-        assert offender.field_name == "beel"
+        warning = dq008[0]
+        assert "1 non-defaulted exposure" in warning.message
+        assert warning.regulatory_reference == "PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)"
+        assert warning.field_name == "beel"
 
     def test_cp_defaulted_with_beel_routes_defaulted_no_warning(
         self,

@@ -268,7 +268,7 @@ class ExposureClassifier:
         classified: pl.LazyFrame,
         schema_names: set[str],
     ) -> list[CalculationError]:
-        """Emit one DQ008 warning per ``(is_defaulted=False ∧ beel>0)`` row.
+        """Emit a single aggregate DQ008 warning summing ``(is_defaulted=False ∧ beel>0)`` rows.
 
         PS1/26 Art. 181(1)(h)(ii) and CRR Art. 158(5) define BEEL only for
         defaulted exposures, but a firm's A-IRB model pipeline may emit a
@@ -278,27 +278,27 @@ class ExposureClassifier:
         input contradiction as a non-blocking data-quality warning so the
         audit trail is explicit.
 
-        Returns an empty list when ``beel`` is absent from the schema.
-        Reads the *derived* ``is_defaulted`` so rows that the counterparty
-        cascade legitimately routes to defaulted are NOT flagged — those
-        rows correctly consume BEEL in the IRB defaulted formula.
+        Returns an empty list when ``beel`` is absent from the schema or
+        no rows are offending. Otherwise returns a single-element list
+        carrying the total count, matching the CLS006 / CLS008 roll-up
+        pattern used by every other classifier-stage warning. Reads the
+        *derived* ``is_defaulted`` so rows that the counterparty cascade
+        legitimately routes to defaulted are NOT flagged — those rows
+        correctly consume BEEL in the IRB defaulted formula.
         """
         if "beel" not in schema_names:
             return []
-        offenders = (
+        offender_count = (
             classified.filter(
                 ~pl.col("is_defaulted").fill_null(False) & (pl.col("beel").fill_null(0.0) > 0.0)
             )
-            .select(["exposure_reference", "beel"])
+            .select(pl.len())
             .collect()
+            .item()
         )
-        return [
-            beel_on_non_defaulted_exposure_warning(
-                exposure_reference=row["exposure_reference"],
-                beel_value=float(row["beel"]),
-            )
-            for row in offenders.iter_rows(named=True)
-        ]
+        if offender_count == 0:
+            return []
+        return [beel_on_non_defaulted_exposure_warning(n=offender_count)]
 
     def _build_bundle(
         self,

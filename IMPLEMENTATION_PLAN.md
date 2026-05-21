@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Last updated:** 2026-05-16 (audit pass — close silent fixes, scope-correct stale items, add new findings)
+**Last updated:** 2026-05-21 (operator pass — added Tier 8 CCR integration epic)
 **Package version:** 0.2.10 in `pyproject.toml` (was 0.2.30; release tags were consolidated and the project version was reset to the pre-batch release marker — engine fixes shipped under v0.2.21–v0.2.30 still live in the codebase, but the public version number was rolled back. New work should re-baseline from 0.2.10.)
 **Source TODO/FIXME/HACK count:** 0 (P6.26 closed v0.2.29; prior header was stale)
 
@@ -97,7 +97,7 @@ These items are docstring / code-comment / structural-organisation corrections o
 - **P2.47** [ ] **NEW** — Art. 136 ECAI grade strings, Art. 137 OECD MEIP direct-to-RW, and Art. 138 second-best selection not implemented. Engine accepts only raw CQS integers. Need: Art. 136 grade-string→CQS map; Art. 137 Table 9 MEIP 0-7→RW direct (not via CQS); Art. 121 sovereign-derived institution propagation; Art. 138 second-best across ECAI+ECA. Distinct from P1.100. **Capital impact:** unrated sovereigns with low MEIP default to 100% instead of 0%/20%. **Effort: M** | Ref: PRA PS1/26 Art. 136-138, 121
 - **P2.48** [ ] **NEW** — Pillar III CR8 RWEA flow only populates closing row; rows 1 (opening) and 2-8 (flow drivers) emit `None` (`pillar3/generator.py::_generate_cr8:690-718` lacks prior-period data). Sign convention: increases positive, decreases negative. Need optional `previous_period_results` on reporting boundary; compute seven flow drivers; signed Decimals. **Effort: M** | Ref: PRA PS1/26 Annex XXII §11
 - **P2.49** [ ] **NEW** — CR9 column-`a` taxonomy missing F-IRB sub-classes 2.2 (Financial/large corp) and 2.4 (Other corp — non-SME), and A-IRB sub-class 1.3 plus seven retail sub-classes (RRE/CRE × SME/non-SME, QRRE, Other-SME, Other-non-SME) currently collapsed into `retail_mortgage`/`retail_qrre`/`retail_other`. **Supersedes P2.28**. Extend `CR9_FIRB_CLASSES`/`CR9_AIRB_CLASSES`. **Effort: M** | Ref: PRA PS1/26 Annex XXII pp.19-20
-- **P2.9** [ ] OF 34.07 — IRB CCR template. CCR is out of scope; document as known gap or add placeholder. **Effort: S**
+- **P2.9** [~] **RE-SCOPED 2026-05-21** — OF 34.07 IRB CCR template now in scope under Tier 8 (P8.50). Becomes a sub-deliverable of P8.50 / P8.51 (COREP CCR template suite) rather than a known gap. Originally tracked as "CCR is out of scope; document as known gap" — now actively planned. **Effort: M** | See Tier 8.
 - **P4.20** [ ] C 08.02 PD bands use fixed buckets instead of firm-specific internal rating grades. **Effort: M**
 
 ### Tier 4 — Pillar III Disclosure Gaps
@@ -159,11 +159,105 @@ These items are docstring / code-comment / structural-organisation corrections o
 - **P7.6** [ ] **NEW** — Art. 147B roll-out class tracking in the classification engine (currently only in COREP reporting). **Effort: M**
 - **P7.8** [ ] **NEW** — CRR Art. 121(4) trade finance preferential RW for unrated institutions (CRR-only, sunsets 31 Dec 2026). Flat 50% (≤1y) / 20% (≤3m), independent of sovereign CQS ladder. CRR SA routes all unrated institutions through Art. 121(1); CQS 2-6 over-weighted. Add `is_trade_finance` Bool, `CRR_ART_121_4_*_RW` constants, gate in CRR institution branch. **Effort: S** | Ref: CRR Art. 121(4); 162(3); 4(1)(80)
 
----
+### Tier 8 — Counterparty Credit Risk (CCR) Integration (NEW 2026-05-21)
 
-## Detailed Sections (Long-Form)
+Major new epic adding Counterparty Credit Risk to the project. CCR is a separate-but-adjacent risk type to default credit risk: it produces the **EAD** for derivative and SFT (securities financing transaction) exposures, which then flows through the existing SA / IRB risk-weight machinery to produce the counterparty default-risk RWA. CVA (Credit Valuation Adjustment) capital is a related but separate framework and is scoped as a sub-epic (P8.60–P8.69).
 
-The bullet list above is the canonical work-queue. The two items below have substantive sub-issue structure that doesn't compress cleanly into a single bullet, so they are kept in long-form.
+**Pipeline shape:** the CCR stage sits between `Loader` and `Classifier` (or between `HierarchyResolver` and `Classifier`, TBD per P8.20). It consumes trade-level and netting-set-level inputs, produces exposure-level rows keyed by counterparty, and merges those rows into the existing `ExposureBundle` so downstream SA / IRB / Aggregator stages need minimal change.
+
+**Scope boundaries (initial release):**
+- **In scope:** SA-CCR (Art. 274-280, the post-CRR2 default), Simplified SA-CCR (Art. 281), Original Exposure Method / OEM (Art. 282), CCP exposures (Art. 306-310), failed trades (Art. 378-380), counterparty default-risk RWA via existing SA/IRB.
+- **Deferred to v2.0:** Internal Model Method / IMM (Art. 283-294) — large model-governance footprint, separate skill/spec, tracked as P8.90 placeholder only.
+- **Sub-epic (P8.60–P8.69):** CVA capital (BA-CVA / SA-CVA per PRA PS1/26 Title VI). Tracked separately so default-risk CCR can land first.
+
+**Cross-cutting blockers:**
+- Trade-level fixtures are a step-change from the current exposure-level parquet shape. `fixture-builder` agent needs new builders before any acceptance scenario can be pinned (P8.40).
+- The `output_floor.py` numerator must include SA-CCR-derived EAD × SA-RW for IMM firms (P8.55).
+
+#### Phase 1 — Foundations: contracts, bundles, loader, configuration
+
+- **P8.1** [ ] **NEW** — Trade-level input bundles. Add `@dataclass(frozen=True)` `TradeBundle`, `NettingSetBundle`, `MarginAgreementBundle`, `CCRCollateralBundle` to `contracts/bundles.py`. Trade attributes: `trade_id`, `netting_set_id`, `asset_class` (IR/FX/credit/equity/commodity/other), `transaction_type` (option, swap, forward, future), `notional`, `currency`, `maturity_date`, `start_date`, `delta`, `is_long`, `mtm_value`, optional `underlying_reference`, `option_strike`, `payment_leg_index_id`. Netting-set attributes: `netting_set_id`, `is_legally_enforceable` Bool, `margin_type` (`unmargined` / `margined_one_way` / `margined_two_way`), `threshold`, `mta`, `nica`, `mpor_days`. **Effort: M** | Ref: CRR Art. 272 definitions, Art. 295-297 netting recognition
+- **P8.2** [ ] **NEW** — Extend `RawDataBundle` with optional `ccr: RawCCRBundle | None` field. `RawCCRBundle` aggregates trade / netting-set / margin / collateral frames. Backward-compatible (None → CCR stage no-ops). Update `contracts/bundles.py`. **Effort: S**
+- **P8.3** [ ] **NEW** — `CCRCalculator` Protocol in `contracts/protocols.py`. Methods: `compute_ead(trades: LazyFrame, netting_sets: LazyFrame, margin: LazyFrame, collateral: LazyFrame, config: CCRConfig) -> LazyFrame` returning rows keyed by `netting_set_id` with `ead_ccr`, `rc`, `pfe`, `alpha`, `ccr_method` columns. **Effort: S**
+- **P8.4** [ ] **NEW** — `engine/ccr/` subpackage scaffold mirroring `engine/sa/`. Files: `__init__.py`, `sa_ccr.py` (orchestrator), `rc.py` (replacement cost), `pfe.py` (potential future exposure), `hedging_sets.py`, `supervisory_delta.py`, `adjusted_notional.py`, `maturity_factor.py`, `simplified.py` (Art. 281), `oem.py` (Art. 282), `namespace.py` (Polars `df.rwa_ccr.*` extension). Each module gets `logger = logging.getLogger(__name__)` per logging contract. **Effort: M**
+- **P8.5** [ ] **NEW** — Loader extension for CCR parquet sources. `engine/loader.py` learns to read `trades.parquet`, `netting_sets.parquet`, `margin_agreements.parquet`, `ccr_collateral.parquet`. New schemas in `data/schemas.py`: `TRADE_SCHEMA`, `NETTING_SET_SCHEMA`, `MARGIN_AGREEMENT_SCHEMA`, `CCR_COLLATERAL_SCHEMA`. **Effort: M**
+- **P8.6** [ ] **NEW** — `CCRConfig` dataclass added to `contracts/config.py`. Fields: `method: Literal["sa_ccr", "simplified_sa_ccr", "oem"]`, `alpha: Decimal = Decimal("1.4")`, `enable_ccp_exposures: bool`, `mpor_floor_days: int`, `recognise_im: bool`. Wire into `CalculationConfig.crr()` / `CalculationConfig.basel_3_1()` factories with regulator-appropriate defaults. **Effort: S** | Ref: CRR Art. 274(2) α
+- **P8.7** [ ] **NEW** — `data/tables/sa_ccr_factors.py` — pure-data tables for SA-CCR. Supervisory factors per asset class & sub-class (Art. 280 Annex / CRR Annex II): interest-rate by currency bucket, FX, credit single-name by IG/HY/non-rated, credit index by IG/HY, equity single-name vs index, commodity by sub-type. Supervisory correlations (Art. 280 (1)-(3)). Maturity-factor constants. **Effort: M** | Ref: CRR Art. 280, Annex II; PRA PS1/26 Title II Chapter 6 §6
+
+#### Phase 2 — SA-CCR core: RC and PFE building blocks
+
+- **P8.10** [ ] **NEW** — SA-CCR Replacement Cost — unmargined transactions. `engine/ccr/rc.py::compute_rc_unmargined`. Formula: `RC = max(V − C, 0)` per Art. 275(1). Inputs: net MTM `V` (sum of trade MTMs in netting set), net collateral value `C` (post-haircut). Pure Polars LazyFrame; no `.collect()`. **Effort: M** | Ref: CRR Art. 275(1); BCBS CRE52.10
+- **P8.11** [ ] **NEW** — SA-CCR Replacement Cost — margined transactions. `engine/ccr/rc.py::compute_rc_margined`. Formula: `RC = max(V − C, TH + MTA − NICA, 0)` per Art. 275(2). Threshold (TH), Minimum Transfer Amount (MTA), Net Independent Collateral Amount (NICA) from `MarginAgreementBundle`. **Effort: M** | Ref: CRR Art. 275(2); BCBS CRE52.11
+- **P8.12** [ ] **NEW** — SA-CCR Adjusted notional `d` per asset class. `engine/ccr/adjusted_notional.py`. Per Art. 279b: IR/credit use `d = notional × SD(S, E)` where `SD(S,E) = (exp(-0.05·S) − exp(-0.05·E))/0.05` (supervisory duration); FX uses domestic-currency notional; equity/commodity use spot × quantity. **Effort: M** | Ref: CRR Art. 279b; BCBS CRE52.40
+- **P8.13** [ ] **NEW** — SA-CCR Supervisory delta `δ`. `engine/ccr/supervisory_delta.py`. Per Art. 279a: ±1 for non-option linear instruments, Black-Scholes Φ(d1) for European options, CDO-tranche formula for tranched credit derivatives. Polars expression via `polars-normal-stats` for Φ. **Effort: M** | Ref: CRR Art. 279a; BCBS CRE52.41-43
+- **P8.14** [ ] **NEW** — SA-CCR Maturity factor `MF`. `engine/ccr/maturity_factor.py`. Unmargined: `MF = sqrt(min(M, 1y) / 1y)` per Art. 279c(1). Margined: `MF = (3/2) × sqrt(MPOR / 1y)` per Art. 279c(2), with MPOR ≥ 5/10/20 business days depending on margin frequency / netting-set size / disputes (Art. 285). **Effort: M** | Ref: CRR Art. 279c, 285; BCBS CRE52.50-52
+- **P8.15** [ ] **NEW** — SA-CCR Hedging sets and asset-class add-on aggregation. `engine/ccr/hedging_sets.py` + `engine/ccr/pfe.py::compute_addon_per_asset_class`. Hedging-set partition per Art. 277 (IR by currency × maturity bucket [<1y, 1-5y, >5y]; FX by currency pair; credit by reference entity; equity by issuer; commodity by sub-type). Aggregation formulas per Art. 277a using supervisory correlations from P8.7. **Effort: L** | Ref: CRR Art. 277, 277a, 280; BCBS CRE52.60-72
+- **P8.16** [ ] **NEW** — SA-CCR PFE multiplier and aggregate. `engine/ccr/pfe.py::compute_pfe`. PFE = multiplier × `AddOn_aggregate` where `multiplier = min(1, F + (1−F) × exp((V−C) / (2×(1−F)×AddOn_agg)))`, F = 0.05, per Art. 278(3). Recognises over-collateralisation and negative MTM. **Effort: M** | Ref: CRR Art. 278; BCBS CRE52.20-23
+- **P8.17** [ ] **NEW** — SA-CCR EAD = α × (RC + PFE). `engine/ccr/sa_ccr.py::compute_ead`. α = 1.4 default per Art. 274(2); PRA may permit firm-specific α subject to permission (config-driven via P8.6). **Effort: S** | Ref: CRR Art. 274
+- **P8.18** [ ] **NEW** — Netting-set legal-enforceability gate. `engine/ccr/sa_ccr.py`. If `NettingSetBundle.is_legally_enforceable=False` per Art. 295-297, treat each trade as its own single-trade netting set (Art. 274(3)). Emit `CalculationError` of category `CCR_LEGAL` severity `WARNING` listing the netting set. **Effort: S** | Ref: CRR Art. 295, 296, 297
+
+#### Phase 3 — Alternative methods, CCP, and edge cases
+
+- **P8.20** [ ] **NEW** — Pipeline integration — insert CCR stage. `engine/pipeline.py` gains stage between `Loader`/`HierarchyResolver` and `Classifier`. Wrapped with `stage_timer(logger, "ccr_sa_ccr")` per logging contract. CCR output (one row per netting set keyed by counterparty) is merged into `ExposureBundle` with `risk_type=CCR_DERIVATIVE` so Classifier routes it via existing counterparty-class lookup. **Effort: M**
+- **P8.21** [ ] **NEW** — Simplified SA-CCR. `engine/ccr/simplified.py`. Per Art. 281: same PFE structure but **PFE multiplier fixed at 1** and **MF simplification**. Available only for firms below derivative-portfolio threshold (Art. 273a(1)) — config-gated. **Effort: M** | Ref: CRR Art. 281, 273a(1)
+- **P8.22** [ ] **NEW** — Original Exposure Method (OEM). `engine/ccr/oem.py`. Per Art. 282: `EAD = (α × notional) × supervisory factor by residual maturity`. Available only for small derivative portfolios (Art. 273a(2)). **Effort: S** | Ref: CRR Art. 282, 273a(2)
+- **P8.23** [ ] **NEW** — Long-settlement transactions Art. 271(2). Treated under SA-CCR by default but with bespoke MPOR floor. Separate flag `is_long_settlement` on `TradeBundle`. **Effort: S** | Ref: CRR Art. 271(2)
+- **P8.24** [ ] **NEW** — Failed trades (DvP / non-DvP). `engine/ccr/failed_trades.py`. Per Art. 378-379: DvP unsettled trades after first payment leg attract escalating multipliers (×8 to ×100% deduction by t+45). Non-DvP after t+4 deducted. Emits as additive RWA, not via EAD route. **Effort: M** | Ref: CRR Art. 378, 379, 380
+- **P8.25** [ ] **NEW** — Qualifying CCP (QCCP) trade exposures. `engine/ccr/ccp.py`. Per Art. 306: 2% RW on trade exposures to QCCP. Per Art. 307: clearing member exposures to clients. Distinguish QCCP vs non-QCCP via `counterparty.is_qccp` flag. **Effort: M** | Ref: CRR Art. 306, 307; PRA PS1/26 Art. 306
+- **P8.26** [ ] **NEW** — Default fund contributions to QCCP. `engine/ccr/ccp.py::compute_dfc_capital`. Per Art. 308 alternative formula `K_CCP × DF_i / DF_CM`. Non-QCCP default fund contributions: 1,250% RW (Art. 309). **Effort: M** | Ref: CRR Art. 308, 309
+- **P8.27** [ ] **NEW** — Wrong-way risk (WWR) identification. `engine/ccr/wwr.py`. Specific WWR per Art. 291(4)-(5): treat exposure as separate netting set with no offsetting recognition; PD floor at 3% per Art. 153(1)(iii) for IRB. General WWR is qualitative — produce diagnostic flag only. **Effort: M** | Ref: CRR Art. 291
+
+#### Phase 4 — Counterparty default-risk RWA routing (SA + IRB)
+
+- **P8.30** [ ] **NEW** — Route SA-CCR EAD through SA risk weights. `engine/classifier.py` learns `risk_type=CCR_DERIVATIVE` and looks up counterparty class (Institution, Corporate, Sovereign, Retail-derivative). EAD from P8.17 replaces drawn-amount / CCF flow. No changes needed in `engine/sa/`. **Effort: S**
+- **P8.31** [ ] **NEW** — Route SA-CCR EAD through IRB (F-IRB / A-IRB). `engine/irb/` integration. IRB derivative exposures use SA-CCR EAD as the EAD input to existing PD/LGD/M machinery. Maturity `M` for derivatives uses Art. 162(2)(g)-(i) special rules (weighted MTM-positive cash flows). **Effort: M** | Ref: CRR Art. 162(2)(g)-(i)
+- **P8.32** [ ] **NEW** — CCR-specific PD floor application. Per Art. 153(1)(iii) PD floor of 0.03% is replaced by 0.05% for unrated large financial sector entities under B3.1 (PRA PS1/26 Annex 1 Art. 153). Wire into existing PD-floor logic. **Effort: S** | Ref: PRA PS1/26 Art. 153(1)
+
+#### Phase 5 — CVA capital sub-epic (separable)
+
+- **P8.60** [ ] **NEW (sub-epic)** — BA-CVA (Basic Approach). `engine/cva/ba_cva.py`. Per PRA PS1/26 Art. 383a-c (post-B3.1). Compute `K_reduced` and `K_full` with hedge recognition, aggregate per Art. 383b formula. Output `cva_rwa` field on `AggregatedResultBundle`. **Effort: L** | Ref: PRA PS1/26 Art. 383, 383a-c
+- **P8.61** [ ] **NEW (sub-epic)** — SA-CVA (Standardised Approach). `engine/cva/sa_cva.py`. PRA permission gated. Sensitivity-based: delta + vega risk across six risk classes (IR, FX, counterparty credit spread, reference credit spread, equity, commodity). **Effort: L (3-4 months)** | Ref: PRA PS1/26 Art. 383d-w
+- **P8.62** [ ] **NEW (sub-epic)** — CVA hedges eligibility. Per Art. 386 (B3.1 amendments). Eligible single-name and index CDS, with attribution to specific counterparties / sub-portfolios. **Effort: M** | Ref: PRA PS1/26 Art. 386
+- **P8.63** [ ] **NEW (sub-epic)** — Aggregated CVA on `AggregatedResultBundle`. New fields: `cva_rwa`, `cva_method`, `cva_hedges_recognised`. Update aggregator to compose default-risk RWA + CVA RWA. **Effort: S**
+
+#### Phase 6 — Reporting (COREP + Pillar III)
+
+- **P8.50** [ ] **NEW** — COREP CCR template suite. `reporting/corep/templates.py` + `generator.py`. New templates: **C 34.01** (CCR analysis by approach), **C 34.02** (SA-CCR), **C 34.03** (IMM, placeholder for v2.0), **C 34.04** (CVA), **C 34.05** (composition of collateral), **C 34.06** (top 10 counterparties), **C 34.07** (IRB CCR — supersedes P2.9), **C 34.08** (exposures to CCPs), **C 34.09** (RWEA flow CCR), **C 34.10** (RWEA flow CVA), **C 34.11** (CCR IRB). **Effort: L** | Ref: COREP Annex II §C 34.01-11; supersedes P2.9
+- **P8.51** [ ] **NEW** — Pillar III CCR disclosure templates. `reporting/pillar3/templates.py` + `generator.py`. New tables: **CCR1** (CCR analysis by approach), **CCR2** (CVA capital), **CCR3** (SA EAD by RW), **CCR4** (IRB EAD by PD scale), **CCR5** (collateral composition), **CCR6** (credit derivatives), **CCR7** (RWEA flow under IMM — placeholder), **CCR8** (CCP exposures). **Effort: L** | Ref: PRA PS1/26 Annex XXII §CCR1-8
+- **P8.52** [ ] **NEW** — `AggregatedResultBundle` extension for CCR reporting columns. Add: `ead_ccr_total`, `rwa_ccr_default`, `rwa_ccr_qccp_trade`, `rwa_ccr_default_fund`, `cva_rwa`, `failed_trades_rwa`. **Effort: S**
+
+#### Phase 7 — Output floor
+
+- **P8.55** [ ] **NEW** — Output floor S-TREA / U-TREA inclusion. `engine/aggregator/_floor.py`. SA-CCR-equivalent EAD × SA-RW always contributes to S-TREA (the floor numerator). IMM firms (when P8.90 lands) must compute SA-CCR EAD as the floor numerator regardless of which method they use for U-TREA. Until IMM is implemented, S-TREA = U-TREA for CCR (no floor binding for CCR specifically). **Effort: S** | Ref: PRA PS1/26 Art. 92(2A); BCBS CRE52 floor commentary
+
+#### Phase 8 — Fixtures, tests, and documentation
+
+- **P8.40** [ ] **NEW** — Trade-level fixture builders. `tests/fixtures/ccr/` new directory: `trade_builder.py`, `netting_set_builder.py`, `margin_builder.py`. Produce parquet rows matching P8.5 schemas. Single-trade golden case, multi-trade netting case, margined vs unmargined pairs. **Effort: M** | Owner: `fixture-builder` agent
+- **P8.41** [ ] **NEW** — Acceptance scenarios **CCR-A1..A10** (SA-CCR golden files). Each scenario: one asset class × margined/unmargined × number of trades. Hand-calc against BCBS CRE52 Annex examples. Files: `tests/acceptance/ccr/test_ccr_sa_ccr_*.py` + `tests/expected_outputs/ccr/CCR-A*.json`. **Effort: L** | Owner: `scenario-architect` → `fixture-builder` → `test-writer`
+- **P8.42** [ ] **NEW** — Acceptance scenarios **CCR-B1..B5** (CCP exposures). QCCP 2% RW; non-QCCP 1,250%; default-fund alternative formula. **Effort: M**
+- **P8.43** [ ] **NEW** — Acceptance scenarios **CCR-C1..C3** (failed trades). DvP escalating multiplier across t+5..t+45. **Effort: S**
+- **P8.44** [ ] **NEW** — Acceptance scenarios **CCR-D1..D3** (Simplified SA-CCR + OEM). Threshold-gated portfolios. **Effort: S**
+- **P8.45** [ ] **NEW** — Acceptance scenarios **CCR-E1..E5** (default-risk RWA integration). SA-CCR EAD → Institution / Corporate / Sovereign / Retail-derivative routing under both CRR and B3.1. Cross-check that EAD is consistent and RW lookup uses existing tables. **Effort: M**
+- **P8.46** [ ] **NEW (sub-epic)** — Acceptance scenarios **CVA-A1..A10** (BA-CVA + SA-CVA). Block on P8.60 / P8.61. **Effort: L**
+- **P8.47** [ ] **NEW** — Performance benchmarks for CCR pipeline. `tests/benchmarks/test_ccr_perf.py`. 100k trades / 10k netting sets target wall-clock. Profile group-by-netting-set; consider streaming if memory pressure. **Effort: S**
+- **P8.48** [ ] **NEW** — `@cites` decorators for CRR Art. 271-311 and PRA PS1/26 CCR articles on every new function with a regulatory referent. `watchfire matrix` must produce a clean article→function index for the new module. Update `watchfire`'s CRR index if Art. 271-311 are not yet covered. **Effort: S** | Ref: `docs/development/citation-tracking.md`
+
+#### Phase 9 — Documentation
+
+- **P8.70** [ ] **NEW** — `docs/specifications/ccr.md` — canonical specification page. Covers: scope, SA-CCR formula chain, simplified / OEM thresholds, CCP treatment, integration into existing pipeline, configuration knobs, CVA scope. **Effort: M** | Owner: `doc-writer` (post-implementation) — tracked in `DOCS_IMPLEMENTATION_PLAN.md`
+- **P8.71** [ ] **NEW** — `docs/user-guide/regulatory/ccr.md` — user-facing guide with worked examples. **Effort: M**
+- **P8.72** [ ] **NEW** — Update `docs/specifications/architecture.md` data-model section with the four new bundles (`TradeBundle`, `NettingSetBundle`, `MarginAgreementBundle`, `CCRCollateralBundle`). **Effort: S**
+- **P8.73** [ ] **NEW** — Update `docs/plans/implementation-plan.md` (the published Zensical narrative) with the CCR roadmap once Phase 1 (P8.1-P8.7) is closed. **Effort: S**
+- **P8.74** [ ] **NEW** — `.claude/skills/basel31/references/ccr-changes.md` + `.claude/skills/crr/references/ccr.md` — skill reference files so the `crr` and `basel31` skills can answer SA-CCR queries. **Effort: M**
+
+#### Phase 10 — Deferred (v2.0)
+
+- **P8.90** [ ] **DEFERRED v2.0** — Internal Model Method (IMM). CRR Art. 283-294. Large scope: EPE/EEPE simulation engine, alpha calibration, model-validation governance, stressed-EPE add-on, PRA permission process. Recommended only after SA-CCR + CVA are stable in production. **Effort: XL (6-9 months)** | Ref: CRR Art. 283-294; PRA SS12/13 IMM
+- **P8.91** [ ] **DEFERRED v2.0** — IMM-specific output-floor S-TREA computation per P8.55. Block on P8.90. **Effort: M**
+
+
+
+The bullet list above is the canonical work-queue. The items below have substantive sub-issue structure that doesn't compress cleanly into a single bullet, so they are kept in long-form.
 
 ### P1.9 Output Floor — OF-ADJ, portfolio-level application, U-TREA/S-TREA
 
@@ -187,6 +281,77 @@ The bullet list above is the canonical work-queue. The two items below have subs
 - **Fix:** Migrate generator to use full template definitions. Rework row/column logic. Add missing pipeline columns for equity transitional and currency mismatch reporting. Remove dead alias objects.
 - **Tests needed:** Rewrite COREP tests (~250 tests in `tests/unit/test_corep.py`).
 
+### P8 Tier 8 — CCR Integration (long-form roadmap)
+
+- **Status:** [ ] Not started — new epic added 2026-05-21
+- **Total effort:** L–XL across 30+ tickets, sequenced over 6–9 months for SA-CCR + CVA; IMM deferred to v2.0 (+6 months).
+- **Headline rationale:** the calculator currently has no representation of derivative or SFT exposures. Trade-level data, netting sets, and margin agreements have no schema; the pipeline has no stage that produces an EAD from those inputs. Without CCR, the calculator cannot produce a complete RWA number for any firm with non-trivial derivative activity. SA-CCR is the regulatory floor method post-CRR2 and is mandatory under PRA PS1/26 for all firms above the small-derivative-portfolio threshold (Art. 273a). CVA capital is a separable but adjacent epic that depends on SA-CCR EAD.
+
+#### Reference materials
+- **CRR Title II Chapter 6 (Articles 271-311)** — counterparty credit risk methods. PDF in `docs/assets/` (search "CCR").
+- **CRR Title VI (Articles 381-386)** — own funds requirements for CVA risk.
+- **PRA PS1/26 Appendix 1** — UK Basel 3.1 amendments to CCR and CVA. `docs/assets/ps126app1.pdf`.
+- **BCBS CRE52** — SA-CCR methodology. https://www.bis.org/basel_framework/standard/CRE.htm (sub-pages CRE52, CRE53 IMM, CRE54 simplified).
+- **BCBS MAR50** — minimum capital requirements for CVA risk.
+- **PRA SS12/13** — Counterparty credit risk model permissions (IMM governance; v2.0 reference only).
+
+#### Architectural impact summary
+
+| Layer | Net new files / surfaces |
+|---|---|
+| `contracts/bundles.py` | `TradeBundle`, `NettingSetBundle`, `MarginAgreementBundle`, `CCRCollateralBundle`, `RawCCRBundle`; field on `RawDataBundle`; CCR fields on `AggregatedResultBundle` |
+| `contracts/protocols.py` | `CCRCalculator` Protocol |
+| `contracts/config.py` | `CCRConfig` dataclass; factory wiring on `crr()` / `basel_3_1()` |
+| `engine/ccr/` | `sa_ccr.py`, `rc.py`, `pfe.py`, `hedging_sets.py`, `supervisory_delta.py`, `adjusted_notional.py`, `maturity_factor.py`, `simplified.py`, `oem.py`, `ccp.py`, `failed_trades.py`, `wwr.py`, `namespace.py` |
+| `engine/cva/` | `ba_cva.py`, `sa_cva.py`, `hedges.py` (sub-epic) |
+| `data/tables/` | `sa_ccr_factors.py` (supervisory factors, correlations, maturity scalers, PFE multiplier constants) |
+| `data/schemas.py` | `TRADE_SCHEMA`, `NETTING_SET_SCHEMA`, `MARGIN_AGREEMENT_SCHEMA`, `CCR_COLLATERAL_SCHEMA`; CCR-specific enums (asset class, transaction type, margin type) |
+| `engine/pipeline.py` | New stage between Loader/Hierarchy and Classifier, wrapped with `stage_timer` |
+| `engine/loader.py` | Read 4 new parquet sources |
+| `engine/classifier.py` | Route `risk_type=CCR_DERIVATIVE` rows to existing counterparty class lookup |
+| `engine/aggregator/_floor.py` | SA-CCR EAD always contributes to S-TREA; bookkeeping for IMM firms (deferred) |
+| `reporting/corep/` | 11 new templates C 34.01-11 |
+| `reporting/pillar3/` | 8 new templates CCR1-8 |
+| `tests/fixtures/ccr/` | Trade / netting-set / margin builders |
+| `tests/acceptance/ccr/` | ~30 CCR-* / CVA-* scenarios |
+| `tests/benchmarks/` | `test_ccr_perf.py` |
+| `docs/specifications/ccr.md` | Canonical spec page |
+| `.claude/skills/{crr,basel31}/references/` | `ccr.md`, `ccr-changes.md` |
+
+#### Sequencing & dependency notes
+
+1. **Phase 1 (P8.1–P8.7)** must land first — without bundles + loader + config + supervisory factors, nothing downstream can be tested.
+2. **Phase 2 (P8.10–P8.18)** is the SA-CCR core. It must close before Phase 4 (default-risk RWA integration) — there is no EAD to route otherwise.
+3. **Phase 3 (P8.20–P8.27)** can run in parallel with Phase 4 once Phase 2 closes. P8.20 (pipeline integration) is the linchpin.
+4. **Phase 4 (P8.30–P8.32)** unblocks the first end-to-end acceptance scenarios.
+5. **Phase 5 (P8.60–P8.63 CVA)** is a separable sub-epic. Can start once Phase 4 closes; does not block default-risk CCR shipping.
+6. **Phase 6 (P8.50–P8.52 reporting)** depends on Phase 4 (CCR columns on `AggregatedResultBundle`) and Phase 5 (CVA columns) for full content.
+7. **Phase 7 (P8.55 output floor)** is a small add once Phase 4 is wired.
+8. **Phases 8–9 (fixtures, tests, docs)** run alongside each phase, not after — agents (`fixture-builder` → `test-writer` → `engine-implementer`) follow the per-item pipeline established in `/next-items`.
+
+#### Open scope decisions (need operator answer before Phase 1 starts)
+
+1. **Do we ship Simplified SA-CCR + OEM?** They exist for small portfolios (Art. 273a). Recommendation: yes — small additional cost over SA-CCR, removes the "non-coverage" reason to fall back to vendor tools.
+2. **CVA epic — BA-CVA only, or both BA-CVA and SA-CVA?** SA-CVA is permission-gated and 3-4 months on its own. Recommendation: ship BA-CVA first; treat SA-CVA as separable.
+3. **IMM — confirmed deferred to v2.0?** Recommendation: yes — model-governance footprint is disproportionate. Track as P8.90 placeholder only.
+4. **SFT comprehensive-method overlap.** Existing CRM logic covers SFT collateral haircuts (`engine/crm/`). Question: do SFTs route under CCR (Art. 271(2)(b) lists SFTs as in-scope for CCR methods) or stay under CRM? Recommendation: route through CCR as a separate `risk_type=CCR_SFT`, but reuse existing CRM haircut tables — avoid duplicating the supervisory haircut table.
+
+#### Risk register
+
+- **R-CCR-1** — Trade-level data is a step-change. Existing fixtures are exposure-level. Mitigation: build minimal CCR-A1 (one trade, one netting set, unmargined IR swap) in Phase 1 alongside loader work, not at the end.
+- **R-CCR-2** — Netting-set group-by is a new performance class. Polars handles this well, but every per-trade column → per-netting-set aggregation is a shuffle. Mitigation: benchmark from CCR-A2 onward, not at the end.
+- **R-CCR-3** — Supervisory delta for options requires Φ(d1). Already have `polars-normal-stats` in deps (used by IRB). Verify dependency covers our needs.
+- **R-CCR-4** — α=1.4 is regulator-default; some firms have PRA permission for firm-specific α. Config-driven from day 1 (P8.6) avoids retrofitting.
+- **R-CCR-5** — COREP C 34.x templates are large (~11 templates, dozens of columns each). Mitigation: ship the SA-CCR templates (C 34.01, C 34.02, C 34.06, C 34.07, C 34.08) first; defer IMM/CVA-only templates (C 34.03, C 34.04, C 34.10, C 34.11) until those engines exist.
+
+#### Out-of-scope (explicit non-goals for this epic)
+
+- **Margin model permission** — we compute SA-CCR assuming margin agreement inputs are accurate; we do not validate or model the margin process itself.
+- **CCP loss-mutualisation simulation** — `K_CCP` is treated as a CCP-published input, not computed from the calculator.
+- **Securities financing transactions exhaustive coverage** — only those SFTs already covered by CCR Art. 271(2)(b) are in scope. Repo/reverse-repo/securities lending under comprehensive method stay in CRM (see scope decision 4 above).
+- **Long-settlement transaction modelling beyond the MPOR floor** — Art. 271(2) explicit, but bespoke modelling is not.
+- **Market risk on derivatives** — only counterparty default risk (and CVA in sub-epic). Trading book / FRTB market risk is a separate project.
+
 ---
 
 ## Audit History
@@ -196,6 +361,7 @@ For per-pass detail see git history (`git log -p IMPLEMENTATION_PLAN.md`) and `d
 | Pass | Date | New items | Notes |
 |------|------|-----------|-------|
 | Curator | 2026-05-16 | 2 new (P1.188, P5.16) | Closed P1.137/P1.138 (silent fix — equity transitional ladder + IRB higher-of); P1.171/P4.26/P4.27 (closed-claim-invalid); P1.167/P1.174/P2.13 (tracking-entry cleanups). Re-scoped P2.40 (file:line drift), P6.16 (membership claim resolved, style remains). Merged P2.15 → P1.139 (CIU underlying higher-of duplicate). Acknowledged release-tag rollback in header. |
+| Operator | 2026-05-21 | 39 new (P8.1–P8.7, P8.10–P8.18, P8.20–P8.27, P8.30–P8.32, P8.40–P8.48, P8.50–P8.52, P8.55, P8.60–P8.63, P8.70–P8.74, P8.90–P8.91) | New Tier 8 — Counterparty Credit Risk (CCR) Integration epic. Adds SA-CCR (Phases 1-4), Simplified SA-CCR / OEM (Phase 3), CCP exposures + failed trades + WWR (Phase 3), CVA capital sub-epic BA-CVA + SA-CVA (Phase 5), COREP C 34.01-11 + Pillar III CCR1-8 (Phase 6), output-floor inclusion (Phase 7), fixtures + acceptance + benchmarks + citations (Phase 8), specs + user-guide + skill references (Phase 9), IMM deferred to v2.0 (Phase 10). Re-scoped P2.9 (was "out of scope") → now sub-deliverable of P8.50. Includes long-form roadmap with sequencing, risk register, and explicit non-goals. |
 
 ---
 

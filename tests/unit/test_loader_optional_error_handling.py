@@ -196,8 +196,18 @@ class TestOptionalFileCorruptEmitsLazyFormattedWarningLog:
         _write_corrupt_collateral(tmp_path)
         loader = ParquetLoader(tmp_path, config=_config_with_collateral(tmp_path))
 
-        with caplog.at_level(logging.WARNING, logger="rwa_calc.engine.loader"):
-            loader.load()
+        # rwa_calc.observability.configure_logging() sets propagate=False on the
+        # `rwa_calc` namespace logger, which prevents caplog (attached to root)
+        # from seeing records from descendants like rwa_calc.engine.loader.
+        # Temporarily re-enable propagation so the test captures the warning.
+        namespace_logger = logging.getLogger("rwa_calc")
+        saved_propagate = namespace_logger.propagate
+        namespace_logger.propagate = True
+        try:
+            with caplog.at_level(logging.WARNING, logger="rwa_calc.engine.loader"):
+                loader.load()
+        finally:
+            namespace_logger.propagate = saved_propagate
 
         loader_warnings = [
             r

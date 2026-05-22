@@ -85,58 +85,72 @@ def get_status(team_dir: Path, repo_root: Path) -> list[GitFileStatus]:
     if result.returncode != 0:
         return []
 
+    statuses, tracked_paths = _parse_porcelain(result.stdout, rel_team)
+    statuses.extend(_list_clean_files(team_dir, tracked_paths))
+    return sorted(statuses, key=lambda s: (s.folder, s.name))
+
+
+def _parse_porcelain(stdout: str, rel_team: Path) -> tuple[list[GitFileStatus], set[str]]:
+    """Parse ``git status --porcelain`` output into statuses + tracked paths."""
     statuses: list[GitFileStatus] = []
-
-    # Parse porcelain output  (XY <path>)
     tracked_paths: set[str] = set()
-    for line in result.stdout.splitlines():
-        if len(line) < 4:
+    for line in stdout.splitlines():
+        entry = _parse_porcelain_line(line, rel_team)
+        if entry is None:
             continue
-        xy = line[:2]
-        file_path = line[3:].strip().strip('"')
-        if not file_path.endswith(".py"):
-            continue
-
-        try:
-            rel = Path(file_path).relative_to(rel_team)
-        except ValueError:
-            continue
-
-        parts = rel.parts
-        # Skip files inside _SKIP_DIRS
-        if any(p in _SKIP_DIRS for p in parts):
-            continue
-
-        name = rel.stem
-        folder = str(rel.parent) if len(parts) > 1 else ""
-        if folder == ".":
-            folder = ""
+        rel, xy = entry
         tracked_paths.add(str(rel))
+        statuses.append(_make_status(rel, _classify_xy(xy)))
+    return statuses, tracked_paths
 
-        if "U" in xy or (xy[0] == "D" and xy[1] == "D"):
-            status = "conflict"
-        elif "?" in xy:
-            status = "new"
-        else:
-            status = "modified"
 
-        statuses.append(GitFileStatus(name=name, folder=folder, status=status))
+def _parse_porcelain_line(line: str, rel_team: Path) -> tuple[Path, str] | None:
+    """Return ``(rel_path, xy)`` for a valid ``.py`` porcelain line, else None."""
+    if len(line) < 4:
+        return None
+    xy = line[:2]
+    file_path = line[3:].strip().strip('"')
+    if not file_path.endswith(".py"):
+        return None
+    try:
+        rel = Path(file_path).relative_to(rel_team)
+    except ValueError:
+        return None
+    if any(p in _SKIP_DIRS for p in rel.parts):
+        return None
+    return rel, xy
 
-    # Also list committed (clean) .py files not in the porcelain output
+
+def _classify_xy(xy: str) -> str:
+    """Map a porcelain XY status code to our coarse status label."""
+    if "U" in xy or (xy[0] == "D" and xy[1] == "D"):
+        return "conflict"
+    if "?" in xy:
+        return "new"
+    return "modified"
+
+
+def _list_clean_files(team_dir: Path, tracked_paths: set[str]) -> list[GitFileStatus]:
+    """Yield ``"unmodified"`` statuses for committed .py files not in porcelain."""
+    clean: list[GitFileStatus] = []
     for py_file in team_dir.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
         rel = py_file.relative_to(team_dir)
         if any(p in _SKIP_DIRS for p in rel.parts):
             continue
-        if str(rel) not in tracked_paths:
-            name = rel.stem
-            folder = str(rel.parent) if len(rel.parts) > 1 else ""
-            if folder == ".":
-                folder = ""
-            statuses.append(GitFileStatus(name=name, folder=folder, status="unmodified"))
+        if str(rel) in tracked_paths:
+            continue
+        clean.append(_make_status(rel, "unmodified"))
+    return clean
 
-    return sorted(statuses, key=lambda s: (s.folder, s.name))
+
+def _make_status(rel: Path, status: str) -> GitFileStatus:
+    """Build a :class:`GitFileStatus` from a relative path and status label."""
+    folder = str(rel.parent) if len(rel.parts) > 1 else ""
+    if folder == ".":
+        folder = ""
+    return GitFileStatus(name=rel.stem, folder=folder, status=status)
 
 
 def publish(source: Path, team_dir: Path) -> Path:

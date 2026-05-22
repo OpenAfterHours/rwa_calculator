@@ -154,57 +154,13 @@ class SlottingLazyFrame:
         """
         schema = self._lf.collect_schema()
 
-        # Define default columns to add if they don't exist
-        defaults = {
-            "slotting_category": lit("satisfactory"),
-            "is_hvcre": lit(False),
-            "sl_type": lit("project_finance"),
-            "is_pre_operational": lit(False),
-        }
+        to_add: list[pl.Expr] = []
 
-        # Add EAD logic specifically
-        to_add = []
         if "ead_final" not in schema:
-            ead_col = (
-                col("ead")
-                if "ead" in schema
-                else col("ead_pre_crm")
-                if "ead_pre_crm" in schema
-                else lit(0.0)
-            )
-            to_add.append(ead_col.alias("ead_final"))
+            to_add.append(_resolve_ead_source(schema).alias("ead_final"))
 
-        # Derive is_short_maturity from maturity_date when not already present
-        if "is_short_maturity" not in schema:
-            if config is not None and "maturity_date" in schema:
-                remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
-                to_add.append(
-                    remaining.alias("remaining_maturity_years"),
-                )
-                to_add.append(
-                    pl.when(col("maturity_date").is_not_null())
-                    .then(remaining < _SHORT_MATURITY_THRESHOLD_YEARS)
-                    .otherwise(lit(False))
-                    .alias("is_short_maturity"),
-                )
-            else:
-                # No config or no maturity_date — conservative default (long maturity)
-                to_add.append(lit(False).alias("is_short_maturity"))
-
-        # Add remaining_maturity_years for audit even when is_short_maturity exists
-        if (
-            "remaining_maturity_years" not in schema
-            and "is_short_maturity" in schema
-            and config is not None
-            and "maturity_date" in schema
-        ):
-            remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
-            to_add.append(remaining.alias("remaining_maturity_years"))
-
-        # Add missing default columns
-        for name, expr in defaults.items():
-            if name not in schema:
-                to_add.append(expr.alias(name))
+        to_add.extend(_maturity_columns(schema, config))
+        to_add.extend(_default_columns(schema))
 
         return self._lf.with_columns(to_add) if to_add else self._lf
 
@@ -477,3 +433,53 @@ class SlottingExpr:
             default=lit(weights["satisfactory"]),
             return_dtype=pl.Float64,
         )
+
+
+# =============================================================================
+# PRIVATE HELPERS
+# =============================================================================
+
+
+def _resolve_ead_source(schema: pl.Schema) -> pl.Expr:
+    """Pick the EAD source column, falling back to ead_pre_crm or zero."""
+    if "ead" in schema:
+        return col("ead")
+    if "ead_pre_crm" in schema:
+        return col("ead_pre_crm")
+    return lit(0.0)
+
+
+def _maturity_columns(schema: pl.Schema, config: CalculationConfig | None) -> list[pl.Expr]:
+    """Derive is_short_maturity and remaining_maturity_years column expressions."""
+    needs_short = "is_short_maturity" not in schema
+
+    if config is None or "maturity_date" not in schema:
+        # No config or no maturity_date — conservative default when missing.
+        return [lit(False).alias("is_short_maturity")] if needs_short else []
+
+    remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
+
+    if needs_short:
+        return [
+            remaining.alias("remaining_maturity_years"),
+            pl.when(col("maturity_date").is_not_null())
+            .then(remaining < _SHORT_MATURITY_THRESHOLD_YEARS)
+            .otherwise(lit(False))
+            .alias("is_short_maturity"),
+        ]
+
+    if "remaining_maturity_years" not in schema:
+        return [remaining.alias("remaining_maturity_years")]
+
+    return []
+
+
+def _default_columns(schema: pl.Schema) -> list[pl.Expr]:
+    """Provide default values for missing slotting metadata columns."""
+    defaults = {
+        "slotting_category": lit("satisfactory"),
+        "is_hvcre": lit(False),
+        "sl_type": lit("project_finance"),
+        "is_pre_operational": lit(False),
+    }
+    return [expr.alias(name) for name, expr in defaults.items() if name not in schema]

@@ -187,11 +187,13 @@ def _build_sa_ccr_supervisory_factors_df() -> pl.DataFrame:
     )
 
 
-@cites("CRR Art. 280a")
-@cites("CRR Art. 280b")
-@cites("CRR Art. 280c")
+@cites("CRR Art. 280")
 def _build_sa_ccr_correlations_df() -> pl.DataFrame:
     """Build SA-CCR correlation lookup DataFrame (CRR Art. 280a / 280b / 280c).
+
+    The @cites decorator points at the parent Art. 280; the sub-articles
+    280a/b/c are not yet in watchfire's bundled CRR index (tracked for the
+    follow-up batch). Per-row article attribution is preserved below.
 
     Returns a 5-row DataFrame with columns
     ``["asset_class", "sub_class", "correlation"]``:

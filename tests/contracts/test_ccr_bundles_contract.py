@@ -1,29 +1,40 @@
-"""Contract tests for CCR data-transfer bundles (P8.1).
+"""Contract tests for CCR data-transfer bundles (P8.1) and CCRCalculator Protocol (P8.3).
 
 Verifies that TradeBundle, NettingSetBundle, MarginAgreementBundle, and
 CCRCollateralBundle satisfy the frozen-dataclass bundle contract required
 by the CCR pipeline. These are pure structural / protocol checks — they
 do NOT test calculation behaviour or column schemas (those are P8.5).
 
+Also verifies the CCRCalculator Protocol (P8.3):
+- Existence in rwa_calc.contracts.protocols
+- runtime_checkable, Protocol subclass
+- compute_ead method with correct parameter names and string annotations
+- Structural isinstance checks (positive + negative)
+
 References:
 - CRR Art. 272 definitions (trades, netting sets, margin agreements)
 - CRR Art. 295-297 netting recognition
+- CRR Art. 274-280 SA-CCR EAD calculation
 """
 
 from __future__ import annotations
 
 import dataclasses
+import inspect
+import typing
 
 import polars as pl
 import pytest
 
 # ---------------------------------------------------------------------------
-# Import the module under test at module scope — this always succeeds
-# because rwa_calc.contracts.bundles already exists.  Individual classes are
-# fetched via getattr() inside each test so that a missing class surfaces as
-# an AssertionError rather than an ImportError at collection time.
+# Import the modules under test at module scope — these always succeed
+# because rwa_calc.contracts.bundles and rwa_calc.contracts.protocols both
+# exist.  Individual classes are fetched via getattr() inside each test so
+# that a missing class surfaces as an AssertionError rather than an
+# ImportError at collection time.
 # ---------------------------------------------------------------------------
 import rwa_calc.contracts.bundles as bundles
+import rwa_calc.contracts.protocols as protocols
 
 # ---------------------------------------------------------------------------
 # Metadata table — drives parametric tests
@@ -498,3 +509,255 @@ def test_raw_data_bundle_accepts_ccr_keyword_argument() -> None:
     assert instance.ccr is rccr, (
         "'RawDataBundle.ccr' did not store the supplied RawCCRBundle instance"
     )
+
+
+# ===========================================================================
+# P8.3 — CCRCalculator Protocol in contracts/protocols.py
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Helper: guarded fetch — surfaces as AssertionError, not AttributeError
+# ---------------------------------------------------------------------------
+
+
+def _get_ccr_calculator() -> type:
+    """Return the CCRCalculator class from protocols, or fail with a clear AssertionError."""
+    cls = getattr(protocols, "CCRCalculator", None)
+    assert cls is not None, (
+        "rwa_calc.contracts.protocols does not expose 'CCRCalculator'. "
+        "Add the @runtime_checkable Protocol class to "
+        "src/rwa_calc/contracts/protocols.py (P8.3)."
+    )
+    return cls  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# A. Existence
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_protocol_exists_in_protocols_module() -> None:
+    """CCRCalculator must be importable from rwa_calc.contracts.protocols."""
+    # Arrange — module imported at top of file
+
+    # Act
+    cls = getattr(protocols, "CCRCalculator", None)
+
+    # Assert
+    assert cls is not None, (
+        "rwa_calc.contracts.protocols does not expose 'CCRCalculator'. "
+        "Add the @runtime_checkable Protocol class (P8.3)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# B. Is a typing.Protocol subclass
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_is_protocol_subclass() -> None:
+    """CCRCalculator must be a subclass of typing.Protocol."""
+    # Arrange
+    cls = _get_ccr_calculator()
+
+    # Act + Assert — Protocol subclasses have _is_protocol = True (CPython implementation detail
+    # stable since Python 3.8; the alternative issubclass(cls, typing.Protocol) also works)
+    assert getattr(cls, "_is_protocol", False) is True, (
+        "'CCRCalculator' must be a typing.Protocol subclass. "
+        "Decorate with 'class CCRCalculator(Protocol):'."
+    )
+
+
+# ---------------------------------------------------------------------------
+# C. Is @runtime_checkable
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_is_runtime_checkable() -> None:
+    """CCRCalculator must be decorated with @runtime_checkable."""
+    # Arrange
+    cls = _get_ccr_calculator()
+
+    # Act + Assert — @runtime_checkable sets _is_runtime_protocol = True
+    assert getattr(cls, "_is_runtime_protocol", False) is True, (
+        "'CCRCalculator' must be decorated with @runtime_checkable so that "
+        "isinstance() checks work at runtime."
+    )
+
+
+# ---------------------------------------------------------------------------
+# D. Has compute_ead method
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_has_compute_ead_method() -> None:
+    """CCRCalculator must expose a compute_ead method."""
+    # Arrange
+    cls = _get_ccr_calculator()
+
+    # Act + Assert
+    assert hasattr(cls, "compute_ead"), (
+        "'CCRCalculator' must define a 'compute_ead' method. "
+        "Add 'def compute_ead(self, data: RawCCRBundle, config: CCRConfig) -> pl.LazyFrame: ...'."
+    )
+
+
+# ---------------------------------------------------------------------------
+# E. compute_ead has exactly three parameters: self, data, config
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_compute_ead_has_three_parameters_in_order() -> None:
+    """compute_ead must have exactly three parameters: self, data, config."""
+    # Arrange
+    cls = _get_ccr_calculator()
+    assert hasattr(cls, "compute_ead"), "'CCRCalculator.compute_ead' not found — run test D first"
+
+    # Act
+    sig = inspect.signature(cls.compute_ead)
+    param_names = list(sig.parameters.keys())
+
+    # Assert — exactly three parameters
+    assert len(param_names) == 3, (
+        f"'CCRCalculator.compute_ead' must have exactly 3 parameters "
+        f"(self, data, config), got {param_names}"
+    )
+
+    # Assert — correct names in declared order
+    assert param_names == ["self", "data", "config"], (
+        f"'CCRCalculator.compute_ead' parameters must be ['self', 'data', 'config'] "
+        f"in that order, got {param_names}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# F. data parameter is annotated RawCCRBundle (string form)
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_compute_ead_data_param_annotated_raw_ccr_bundle() -> None:
+    """compute_ead's 'data' parameter must be annotated RawCCRBundle."""
+    # Arrange
+    cls = _get_ccr_calculator()
+    assert hasattr(cls, "compute_ead"), "'CCRCalculator.compute_ead' not found — run test D first"
+
+    # Act — with from __future__ import annotations the annotation is stored as a string
+    sig = inspect.signature(cls.compute_ead)
+    data_annotation = sig.parameters["data"].annotation
+
+    # Assert — the string "RawCCRBundle" appears in the annotation
+    assert "RawCCRBundle" in str(data_annotation), (
+        f"'CCRCalculator.compute_ead' 'data' parameter must be annotated 'RawCCRBundle', "
+        f"got {data_annotation!r}. "
+        f"With 'from __future__ import annotations' the annotation is a string."
+    )
+
+
+# ---------------------------------------------------------------------------
+# G. config parameter is annotated CCRConfig (string form — P8.6 not yet landed)
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_compute_ead_config_param_annotated_ccr_config() -> None:
+    """compute_ead's 'config' parameter must be annotated CCRConfig.
+
+    CCRConfig is defined in P8.6 (not yet landed).  With 'from __future__ import
+    annotations', the annotation is stored as the string 'CCRConfig' and is never
+    resolved at class-definition time, so this test is safe to run before P8.6.
+    """
+    # Arrange
+    cls = _get_ccr_calculator()
+    assert hasattr(cls, "compute_ead"), "'CCRCalculator.compute_ead' not found — run test D first"
+
+    # Act
+    sig = inspect.signature(cls.compute_ead)
+    config_annotation = sig.parameters["config"].annotation
+
+    # Assert — the string "CCRConfig" appears in the annotation
+    assert "CCRConfig" in str(config_annotation), (
+        f"'CCRCalculator.compute_ead' 'config' parameter must be annotated 'CCRConfig', "
+        f"got {config_annotation!r}. "
+        f"With 'from __future__ import annotations' the annotation is a string. "
+        f"Note: CCRConfig is owned by P8.6 — the string check is intentional."
+    )
+
+
+# ---------------------------------------------------------------------------
+# H. Return type is pl.LazyFrame (string form)
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_compute_ead_return_type_is_lazy_frame() -> None:
+    """compute_ead must declare pl.LazyFrame as its return type."""
+    # Arrange
+    cls = _get_ccr_calculator()
+    assert hasattr(cls, "compute_ead"), "'CCRCalculator.compute_ead' not found — run test D first"
+
+    # Act
+    sig = inspect.signature(cls.compute_ead)
+    return_annotation = sig.return_annotation
+
+    # Assert — "LazyFrame" appears in the return annotation string
+    assert "LazyFrame" in str(return_annotation), (
+        f"'CCRCalculator.compute_ead' must declare return type 'pl.LazyFrame', "
+        f"got {return_annotation!r}."
+    )
+
+
+# ---------------------------------------------------------------------------
+# I. Structural isinstance: compliant stub passes
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_protocol_accepts_compliant_stub() -> None:
+    """A class with compute_ead(self, data, config) must satisfy isinstance(obj, CCRCalculator).
+
+    This is the critical test — it proves @runtime_checkable is wired correctly.
+    The stub has no type annotations on its method because @runtime_checkable Protocol
+    only checks for method *names*, not their type hints.
+    """
+    # Arrange
+    cls = _get_ccr_calculator()
+
+    class _StubCalculator:
+        def compute_ead(self, data, config):  # noqa: ANN001, ANN201
+            return pl.LazyFrame()
+
+    # Act + Assert
+    assert isinstance(_StubCalculator(), cls), (
+        "A class with 'compute_ead(self, data, config)' must satisfy "
+        "isinstance(obj, CCRCalculator). "
+        "Ensure CCRCalculator is decorated with @runtime_checkable."
+    )
+
+
+# ---------------------------------------------------------------------------
+# J. Negative structural isinstance: non-compliant stub is rejected
+# ---------------------------------------------------------------------------
+
+
+def test_ccr_calculator_protocol_rejects_noncompliant_stub() -> None:
+    """A class without compute_ead must NOT satisfy isinstance(obj, CCRCalculator).
+
+    This proves the Protocol is doing meaningful structural work, not accepting everything.
+    """
+    # Arrange
+    cls = _get_ccr_calculator()
+
+    class _Empty:
+        pass
+
+    # Act + Assert
+    assert not isinstance(_Empty(), cls), (
+        "A class without 'compute_ead' must NOT satisfy isinstance(obj, CCRCalculator). "
+        "The Protocol structural check is not working correctly."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bonus: typing.get_type_hints is not used here intentionally — CCRConfig
+# doesn't exist yet (P8.6), so get_type_hints would raise NameError trying
+# to resolve the forward reference.  All annotation checks use
+# inspect.signature() which returns the raw string under PEP 563.
+# ---------------------------------------------------------------------------
+_ = typing  # keep the import from being removed by the formatter

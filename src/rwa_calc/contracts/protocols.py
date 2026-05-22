@@ -32,10 +32,11 @@ if TYPE_CHECKING:
         ComparisonBundle,
         CRMAdjustedBundle,
         EquityResultBundle,
+        RawCCRBundle,
         RawDataBundle,
         ResolvedHierarchyBundle,
     )
-    from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
+    from rwa_calc.contracts.config import CalculationConfig, CCRConfig, OutputFloorConfig
     from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
 
 
@@ -180,6 +181,84 @@ class ClassifierProtocol(Protocol):
 
         Returns:
             ClassifiedExposuresBundle with exposures split by approach
+        """
+        ...
+
+
+@runtime_checkable
+class CCRCalculator(Protocol):
+    """
+    Protocol for the Counterparty Credit Risk EAD calculator.
+
+    Responsible for:
+    - Computing the per-netting-set Replacement Cost (RC) per Art. 275.
+    - Computing the per-netting-set Potential Future Exposure (PFE)
+      per Art. 278 (aggregate add-on x multiplier).
+    - Producing the SA-CCR EAD = alpha * (RC + PFE) per Art. 274(2),
+      with alpha = 1.4 default or firm-specific alpha under PRA permission.
+
+    First-batch scope: SA-CCR only (unmargined, single-trade netting
+    sets for CCR-A1). Simplified SA-CCR and OEM are deferred to v2.0;
+    IMM (Art. 283-294) is deferred to v2.0.
+
+    Pipeline position:
+        Classifier -> CCRCalculator -> CRMProcessor (P8.20 wiring)
+
+    The CCR EAD output is joined onto the unified exposure frame on
+    ``netting_set_id`` so downstream SA / IRB stages see a single
+    ``ead_pre_crm`` column regardless of whether the EAD came from
+    on-balance-sheet drawn/contingent rows or from SA-CCR.
+
+    Input: RawCCRBundle (the four P8.1 leaf bundles, composed in P8.2).
+    Output: LazyFrame keyed by ``netting_set_id`` with columns
+        ``rc``, ``pfe``, ``alpha``, ``ead_ccr``, ``ccr_method``.
+
+    References:
+    - CRR Art. 271 (scope), Art. 272 (definitions)
+    - PRA Rulebook CCR (CRR) Part Art. 274(2) (alpha factor)
+    - PRA Rulebook CCR (CRR) Part Art. 275(1)-(2) (RC formula)
+    - PRA Rulebook CCR (CRR) Part Art. 278 (PFE multiplier)
+    - BCBS CRE52.1-52.43
+    """
+
+    def compute_ead(
+        self,
+        data: RawCCRBundle,
+        config: CCRConfig,
+    ) -> pl.LazyFrame:
+        """Compute per-netting-set SA-CCR EAD.
+
+        Args:
+            data: CCR input bundle. The four leaf LazyFrames
+                (``trades``, ``netting_sets``, ``margin_agreements``,
+                ``ccr_collateral``) may each be empty (zero rows,
+                schema present) -- e.g. CCR-A1 has empty
+                ``margin_agreements``.
+            config: CCR-specific configuration (alpha factor, method
+                selection, MPOR overrides). Owned by P8.6.
+
+        Returns:
+            LazyFrame with one row per netting set, schema:
+
+            - ``netting_set_id`` (pl.String): primary key, mirrors
+              ``RawCCRBundle.netting_sets`` ordering.
+            - ``rc`` (pl.Float64): Replacement Cost per Art. 275.
+              Non-negative.
+            - ``pfe`` (pl.Float64): Potential Future Exposure per
+              Art. 278. Non-negative.
+            - ``alpha`` (pl.Float64): alpha factor per Art. 274(2).
+              Sourced from ``config`` (default 1.4).
+            - ``ead_ccr`` (pl.Float64): alpha * (RC + PFE).
+              Non-negative.
+            - ``ccr_method`` (pl.String): method discriminator.
+              First batch returns ``"sa_ccr"`` for every row;
+              future values include ``"simplified_sa_ccr"``,
+              ``"oem"``, ``"imm"``.
+
+        The method does not raise on data-quality issues; row-level
+        errors are accumulated on the leaf bundles' ``errors`` lists
+        by upstream stages (loader, P8.5). Bundle-wide wiring errors
+        live on ``RawCCRBundle.errors``.
         """
         ...
 

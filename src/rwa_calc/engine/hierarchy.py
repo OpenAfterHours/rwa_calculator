@@ -28,6 +28,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.contracts.bundles import (
     CounterpartyLookup,
@@ -58,7 +59,6 @@ from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.domain.enums import CQS, ErrorCategory, ErrorSeverity, ExposureClass
 from rwa_calc.engine.fx_converter import FXConverter
 from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
-from watchfire import cites
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

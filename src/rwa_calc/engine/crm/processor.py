@@ -590,6 +590,7 @@ class CRMProcessor:
             collateral_allocation=(
                 self._build_collateral_allocation(exposures) if collateral_applied else None
             ),
+            securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )
 
@@ -665,6 +666,7 @@ class CRMProcessor:
             collateral_allocation=(
                 self._build_collateral_allocation(exposures) if collateral_applied else None
             ),
+            securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )
 

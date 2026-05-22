@@ -55,6 +55,7 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
+    SECURITISATION_ALLOCATION_SCHEMA,
     SPECIALISED_LENDING_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
@@ -181,6 +182,7 @@ class DataSourceConfig:
     specialised_lending_file: Path | None = None
     fx_rates_file: Path | None = None
     model_permissions_file: Path | None = None
+    securitisation_allocations_file: Path | None = None
 
     @classmethod
     def from_registry(
@@ -219,6 +221,7 @@ class DataSourceConfig:
             specialised_lending_file=get_p("specialised_lending"),
             fx_rates_file=get_p("fx_rates"),
             model_permissions_file=get_p("model_permissions"),
+            securitisation_allocations_file=get_p("securitisation_allocations"),
         )
 
 
@@ -366,6 +369,11 @@ def _build_bundle(
         fx_rates=_opt("fx_rates", config.fx_rates_file, FX_RATES_SCHEMA),
         model_permissions=_opt(
             "model_permissions", config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
+        ),
+        securitisation_allocations=_opt(
+            "securitisation_allocations",
+            config.securitisation_allocations_file,
+            SECURITISATION_ALLOCATION_SCHEMA,
         ),
     )
     validation_errors = _run_bundle_validation(bundle)

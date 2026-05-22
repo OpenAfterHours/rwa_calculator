@@ -39,6 +39,11 @@ from rwa_calc.engine.aggregator._crm_reporting import (
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._equity_prep import prepare_equity_results
 from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_of_adj
+from rwa_calc.engine.aggregator._securitisation import (
+    apply_residual_multiplier,
+    generate_securitisation_audit,
+    generate_securitisation_summary,
+)
 from rwa_calc.engine.aggregator._summaries import (
     generate_summary_by_approach,
     generate_summary_by_class,
@@ -69,6 +74,7 @@ class OutputAggregator:
         slotting_results: pl.LazyFrame,
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
+        securitisation_audit: pl.LazyFrame | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.
@@ -79,19 +85,46 @@ class OutputAggregator:
             slotting_results: Slotting branch results.
             equity_bundle: Equity result bundle (optional, separate path).
             config: Calculation configuration.
+            securitisation_audit: Resolved securitisation lookup from the
+                allocator stage (one row per securitised exposure carrying
+                residual_pct + pool_allocations + audit_status). None when
+                no allocations were supplied.
 
         Returns:
             AggregatedResultBundle with all summaries and adjustments.
         """
-        # Combine for summaries (data already materialised — cheap concat)
-        combined = pl.concat([sa_results, irb_results, slotting_results], how="diagonal_relaxed")
+        # Combine for summaries (data already materialised — cheap concat).
+        # ``combined_unmultiplied`` retains the full ead_final / rwa_final
+        # values so the per-pool securitisation summary can multiply by each
+        # pool's allocation_pct against the un-multiplied parent total. The
+        # main ``combined`` then gets the residual multiplier applied so the
+        # existing summaries (by class, by approach, floor, EL, supporting
+        # factors) naturally reflect the on-balance-sheet residual only --
+        # ``ead_final × (1 - securitisation_pct)`` in the user's words.
+        combined_unmultiplied = pl.concat(
+            [sa_results, irb_results, slotting_results], how="diagonal_relaxed"
+        )
 
         # Concat equity if present
         equity_results = None
         if equity_bundle and equity_bundle.results is not None:
             equity_prepared = prepare_equity_results(equity_bundle.results)
-            combined = pl.concat([combined, equity_prepared], how="diagonal_relaxed")
+            combined_unmultiplied = pl.concat(
+                [combined_unmultiplied, equity_prepared], how="diagonal_relaxed"
+            )
             equity_results = equity_bundle.results
+
+        # Build the per-pool summary and the per-exposure reconciliation
+        # BEFORE applying the residual multiplier -- the pool slice needs
+        # the un-multiplied parent EAD.
+        securitisation_summary = generate_securitisation_summary(combined_unmultiplied)
+        sec_audit_view = generate_securitisation_audit(combined_unmultiplied, securitisation_audit)
+
+        # Apply the residual multiplier in-place so every downstream
+        # summary, floor calc, and EL roll-up reflects only the on-balance-
+        # sheet portion. When no allocations are present, the multiplier
+        # column is a uniform 1.0 and this is a no-op.
+        combined = apply_residual_multiplier(combined_unmultiplied)
 
         # Generate CRM reporting views
         pre_crm_summary = generate_pre_crm_summary(combined)
@@ -112,7 +145,15 @@ class OutputAggregator:
         # (which are unaffected by the floor applied to `combined` above),
         # NOT the floored `combined` LazyFrame.  Using post-floor TREA would
         # also create a circular dependency with the OF-ADJ formula.
-        el_summary = compute_el_portfolio_summary(irb_results, slotting_results)
+        #
+        # Securitisation: feed the residual-multiplied views so EL / PoolB /
+        # T2 cap arithmetic reflects only the on-balance-sheet portion. The
+        # IRB EL formula scales linearly with EAD, so this is equivalent to
+        # multiplying the final EL summary by the residual fraction.
+        el_summary = compute_el_portfolio_summary(
+            apply_residual_multiplier(irb_results),
+            apply_residual_multiplier(slotting_results),
+        )
 
         # Apply portfolio-level output floor if applicable (Art. 92 para 2A)
         # Floor only applies to specific (institution_type, reporting_basis)
@@ -185,5 +226,7 @@ class OutputAggregator:
             post_crm_detailed=post_crm_detailed,
             post_crm_summary=post_crm_summary,
             el_summary=el_summary,
+            securitisation_summary=securitisation_summary,
+            securitisation_audit=sec_audit_view,
             errors=[],
         )

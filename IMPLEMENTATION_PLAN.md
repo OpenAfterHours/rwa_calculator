@@ -153,7 +153,7 @@ These items are docstring / code-comment / structural-organisation corrections o
 - **P7.1** [ ] Stress testing integration (M4.3)
 - **P7.2** [ ] Portfolio-level concentration metrics (M4.4)
 - **P7.3** [ ] REST API (M4.5)
-- **P7.4** [ ] Additional exposure classes: securitisation, CIU beyond fallback, purchased receivables, dilution risk
+- **P7.4** [partial] Additional exposure classes — phase 1 securitisation FLAG + EXCLUDE shipped (`SecuritisationAllocator` stage + aggregator residual multiplier + per-pool summary + per-exposure audit; CRR Art. 109 / 244-246; PRA PS1/26 Art. 147A(1)(j)). Spec at `docs/specifications/securitisation-pool-allocation.md`. **Still open**: SEC-SA / SEC-IRBA / SEC-ERBA RWA framework (CRR Art. 259-264), significant risk transfer assessment (Art. 244-246 conditions), tranche-level capital, shared-collateral CRM re-allocation; CIU beyond fallback, purchased receivables, dilution risk.
 - **P7.5** [ ] **NEW** — Additional CRM methods not in scope: Art. 217 basket credit derivatives, Art. 219 on-balance-sheet netting, Art. 214 counter-guarantees by sovereigns, Art. 215(2) mutual guarantee schemes, Art. 222(5) derivative cash collateral 0%, Art. 230(3) UK IRB 50% RW property option, Art. 197(4) unrated bond eligibility route
 - **P7.5** [ ] **NEW** — Art. 150(1A) materiality/immateriality thresholds for IRB firms using SA for immaterial classes. Currently only in COREP templates, not in the engine. **Effort: M**
 - **P7.6** [ ] **NEW** — Art. 147B roll-out class tracking in the classification engine (currently only in COREP reporting). **Effort: M**

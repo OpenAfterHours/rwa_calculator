@@ -95,6 +95,12 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # tests/unit/test_p6_26_qrre_coupling_constant.py. Moving it to
     # data/schemas.py would split the rule from the code that enforces it.
     "engine/hierarchy.py": {"_FACILITY_QRRE_COUPLED_COLUMNS"},
+    # Per-row money columns the securitisation residual multiplier scales.
+    # These are engine-internal column names (the calculators' own output
+    # columns), not input-domain validation enums. Pinned to the aggregator
+    # because moving them to data/schemas.py would split the rule from the
+    # code that enforces it.
+    "engine/aggregator/_securitisation.py": {"MONEY_COLS"},
 }
 
 # Engine modules exempt from the check-8 "must declare a module logger" rule.

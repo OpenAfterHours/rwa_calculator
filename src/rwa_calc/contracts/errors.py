@@ -217,6 +217,15 @@ ERROR_RE_ZERO_EFFECTIVE_CAP = "RE002"
 ERROR_RE_MIXED_PROPERTY_TYPES = "RE003"
 ERROR_RE_CRR_RENTAL_COVERAGE_FAILED = "RE004"
 
+# Securitisation allocator validation codes (phase 1: flag + exclude).
+# References: CRR Art. 109, Art. 244-246 (significant risk transfer);
+# PRA PS1/26 Art. 147A(1)(j).
+ERROR_SEC_OVER_ALLOCATED = "SEC001"
+ERROR_SEC_INVALID_PCT = "SEC002"
+ERROR_SEC_UNKNOWN_REFERENCE = "SEC003"
+ERROR_SEC_DUPLICATE = "SEC004"
+ERROR_SEC_FULLY_SECURITISED = "SEC005"
+
 # Configuration error codes
 ERROR_INVALID_CONFIG = "CFG001"
 ERROR_MISSING_PERMISSION = "CFG002"
@@ -334,6 +343,34 @@ def classification_warning(
         message=message,
         severity=ErrorSeverity.WARNING,
         category=ErrorCategory.CLASSIFICATION,
+        regulatory_reference=regulatory_reference,
+    )
+
+
+def securitisation_warning(
+    code: str,
+    message: str,
+    exposure_reference: str | None = None,
+    regulatory_reference: str | None = None,
+    severity: ErrorSeverity = ErrorSeverity.WARNING,
+) -> CalculationError:
+    """Create a securitisation-allocator informational warning or error.
+
+    Used by the SecuritisationAllocator stage to surface validation issues
+    on the user-supplied ``securitisation_allocations`` input table:
+    over-allocation (sum > 1), invalid pct, orphan exposure_reference,
+    duplicate (exposure, pool) pair, or fully securitised exposure.
+
+    References:
+    - CRR Art. 109, Art. 244-246
+    - PRA PS1/26 Art. 147A(1)(j)
+    """
+    return CalculationError(
+        code=code,
+        message=message,
+        severity=severity,
+        category=ErrorCategory.DATA_QUALITY,
+        exposure_reference=exposure_reference,
         regulatory_reference=regulatory_reference,
     )
 

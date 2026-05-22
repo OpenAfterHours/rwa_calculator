@@ -57,6 +57,9 @@ class RawDataBundle:
         equity_exposures: Equity exposure details
         fx_rates: FX rates for currency conversion (optional)
         model_permissions: Per-model IRB permissions (optional, overrides org-wide IRBPermissions)
+        securitisation_allocations: Raw user-supplied mapping of exposures to
+            securitisation pools (many rows per exposure). Resolved by the
+            SecuritisationAllocator stage; see CRR Art. 244-246.
         errors: Validation errors found during loading
     """
 
@@ -76,6 +79,7 @@ class RawDataBundle:
     ciu_holdings: pl.LazyFrame | None = None
     fx_rates: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
+    securitisation_allocations: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -133,6 +137,12 @@ class ResolvedHierarchyBundle:
     ciu_holdings: pl.LazyFrame | None = None
     specialised_lending: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
+    # Per-exposure resolved securitisation lookup emitted by the
+    # SecuritisationAllocator stage. One row per (exposure_reference,
+    # exposure_type) carrying residual_pct, pool_allocations struct list,
+    # and audit metadata. Joined onto the unified exposures frame so the
+    # columns ride downstream to the aggregator.
+    securitisation_audit: pl.LazyFrame | None = None
     hierarchy_errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -169,6 +179,9 @@ class ClassifiedExposuresBundle:
     provisions: pl.LazyFrame | None = None
     counterparty_lookup: CounterpartyLookup | None = None
     classification_audit: pl.LazyFrame | None = None
+    # Pass-through of the resolved securitisation lookup from
+    # ResolvedHierarchyBundle. Untouched by the classifier.
+    securitisation_audit: pl.LazyFrame | None = None
     classification_errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -207,6 +220,11 @@ class CRMAdjustedBundle:
     # original exposure that was split, with parent EAD, secured/residual
     # split, effective threshold, target class, and triggering regime.
     re_split_audit: pl.LazyFrame | None = None
+    # Pass-through of the resolved securitisation lookup originally emitted
+    # by the SecuritisationAllocator stage. Carried downstream so the
+    # aggregator can derive the per-pool summary and per-parent
+    # reconciliation views.
+    securitisation_audit: pl.LazyFrame | None = None
     crm_errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -437,6 +455,13 @@ class AggregatedResultBundle:
         post_crm_detailed: Post-CRM detailed view (split rows for guarantees)
         post_crm_summary: Post-CRM summary (net view by effective class)
         el_summary: Portfolio-level EL summary with T2 credit cap (IRB only)
+        securitisation_summary: Per-pool EAD/RWA summary derived from each
+            row's ``securitisation_pool_allocations`` (phase 1: placeholder
+            RWA = standard RWA × allocation_pct; SEC-SA/SEC-IRBA out of
+            scope). Null when no securitisation allocations were supplied.
+        securitisation_audit: Per-exposure reconciliation showing the parent
+            EAD, residual portion, sum of pool slices, and any validation
+            status flags from the allocator stage (CRR Art. 244-246).
         errors: All errors accumulated throughout pipeline
     """
 
@@ -454,6 +479,8 @@ class AggregatedResultBundle:
     post_crm_detailed: pl.LazyFrame | None = None
     post_crm_summary: pl.LazyFrame | None = None
     el_summary: ELPortfolioSummary | None = None
+    securitisation_summary: pl.LazyFrame | None = None
+    securitisation_audit: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -590,6 +617,7 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
         provisions=None,
         ratings=None,
         fx_rates=None,
+        securitisation_allocations=None,
     )
 
 

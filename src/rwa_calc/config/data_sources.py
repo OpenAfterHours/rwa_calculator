@@ -144,6 +144,17 @@ DATA_SOURCES = [
         requirement=RequirementLevel.OPTIONAL,
         description="Per-model IRB permissions (overrides org-wide IRBPermissions when present)",
     ),
+    # Securitisation
+    DataSourceFile(
+        id="securitisation_allocations",
+        relative_path=Path("securitisation/securitisation_allocations"),
+        requirement=RequirementLevel.OPTIONAL,
+        description=(
+            "User-supplied flag mapping originated exposures to securitisation pools. "
+            "Phase 1: flag and exclude securitised portions from standard credit-risk "
+            "RWA totals (CRR Art. 244-246 / PS1/26 Art. 147A(1)(j))."
+        ),
+    ),
 ]
 
 

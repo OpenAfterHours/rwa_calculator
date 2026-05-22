@@ -52,6 +52,7 @@ from rwa_calc.contracts.protocols import (
     OutputAggregatorProtocol,
     RealEstateSplitterProtocol,
     SACalculatorProtocol,
+    SecuritisationAllocatorProtocol,
     SlottingCalculatorProtocol,
 )
 from rwa_calc.domain.enums import PermissionMode
@@ -125,6 +126,7 @@ class PipelineOrchestrator:
     def __init__(
         self,
         loader: LoaderProtocol | None = None,
+        securitisation_allocator: SecuritisationAllocatorProtocol | None = None,
         hierarchy_resolver: HierarchyResolverProtocol | None = None,
         classifier: ClassifierProtocol | None = None,
         crm_processor: CRMProcessorProtocol | None = None,
@@ -156,6 +158,7 @@ class PipelineOrchestrator:
                 ``RealEstateSplitter`` is created.
         """
         self._loader = loader
+        self._securitisation_allocator = securitisation_allocator
         self._hierarchy_resolver = hierarchy_resolver
         self._classifier = classifier
         self._crm_processor = crm_processor
@@ -165,6 +168,9 @@ class PipelineOrchestrator:
         self._slotting_calculator = slotting_calculator
         self._equity_calculator = equity_calculator
         self._output_aggregator = output_aggregator
+        # Per-run scratch — set by ``_run_securitisation_allocator`` and
+        # consumed when wiring the resolved lookup into ResolvedHierarchyBundle.
+        self._securitisation_resolved: pl.LazyFrame | None = None
         self._errors: list[PipelineError] = []
 
     # =========================================================================
@@ -283,6 +289,12 @@ class PipelineOrchestrator:
                     )
                 )
 
+            # Stage 1b: Securitisation allocator. Resolves the user-supplied
+            # securitisation_allocations table into a per-exposure lookup
+            # carrying residual_pct + pool_allocations. Pure no-op when no
+            # allocations were supplied (lookup left as None).
+            data = self._run_securitisation_allocator(data, config)
+
             # Stage 2: Resolve hierarchies
             resolved = self._run_hierarchy_resolver(data, config)
             if resolved is None:
@@ -351,8 +363,11 @@ class PipelineOrchestrator:
         from rwa_calc.engine.irb.calculator import IRBCalculator
         from rwa_calc.engine.re_splitter import RealEstateSplitter
         from rwa_calc.engine.sa.calculator import SACalculator
+        from rwa_calc.engine.securitisation.allocator import SecuritisationAllocator
         from rwa_calc.engine.slotting.calculator import SlottingCalculator
 
+        if self._securitisation_allocator is None:
+            self._securitisation_allocator = SecuritisationAllocator()
         if self._hierarchy_resolver is None:
             self._hierarchy_resolver = HierarchyResolver()
         if self._classifier is None:
@@ -379,15 +394,79 @@ class PipelineOrchestrator:
     # Private Methods - Stage Execution
     # =========================================================================
 
+    def _run_securitisation_allocator(
+        self,
+        data: RawDataBundle,
+        config: CalculationConfig,
+    ) -> RawDataBundle:
+        """Run the securitisation pool allocator stage.
+
+        Resolves ``data.securitisation_allocations`` into a per-exposure
+        lookup keyed by (exposure_reference, exposure_type). The lookup is
+        stashed on ``self._securitisation_resolved`` for the hierarchy
+        resolver wiring step; the raw bundle is returned unchanged.
+
+        Stage is a no-op when no allocations were supplied -- the lookup
+        stays at None and downstream stages receive the canonical default
+        (residual_pct = 1.0, empty pool_allocations).
+
+        Validation errors (SEC001-SEC005) are appended to ``data.errors``
+        verbatim -- the loader-validation channel -- so the original error
+        codes survive into the final ``AggregatedResultBundle``.
+        """
+        if self._securitisation_allocator is None:
+            self._securitisation_resolved = None
+            return data
+        try:
+            with stage_timer(logger, "securitisation_allocator"):
+                new_data, resolved, errors = self._securitisation_allocator.allocate(data, config)
+            self._securitisation_resolved = resolved
+            if errors:
+                # Attach to the bundle's errors list so the SEC### codes
+                # survive verbatim into AggregatedResultBundle.errors. The
+                # pipeline-level ``_errors`` channel rewrites codes to
+                # ``PIPELINE_*`` which would mask the original validation
+                # signal.
+                combined = list(new_data.errors) + errors
+                return replace(new_data, errors=combined)
+            return new_data
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="securitisation_allocator",
+                    error_type="allocation_error",
+                    message=str(e),
+                )
+            )
+            self._securitisation_resolved = None
+            return data
+
     def _run_hierarchy_resolver(
         self,
         data: RawDataBundle,
         config: CalculationConfig,
     ) -> ResolvedHierarchyBundle | None:
-        """Run hierarchy resolution stage."""
+        """Run hierarchy resolution stage and attach the securitisation lookup."""
+        from rwa_calc.engine.securitisation.allocator import attach_securitisation_lookup
+
         try:
             with stage_timer(logger, "hierarchy_resolver"):
                 result = self._hierarchy_resolver.resolve(data, config)
+
+            # Join the resolved securitisation lookup onto the unified
+            # exposures frame so residual_pct + pool_allocations ride
+            # through CRM and the calculators. When no allocations were
+            # supplied, the helper still adds the columns at their
+            # canonical defaults (1.0, []), keeping the downstream
+            # contract uniform.
+            new_exposures = attach_securitisation_lookup(
+                result.exposures, self._securitisation_resolved
+            )
+            result = replace(
+                result,
+                exposures=new_exposures,
+                securitisation_audit=self._securitisation_resolved,
+            )
             # Accumulate hierarchy errors
             if result.hierarchy_errors:
                 for error in result.hierarchy_errors:
@@ -621,7 +700,14 @@ class PipelineOrchestrator:
                 equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
                 # Aggregate from already-collected DataFrames
-                return self._aggregate_results(sa_df, irb_df, slotting_df, equity_bundle, config)
+                return self._aggregate_results(
+                    sa_df,
+                    irb_df,
+                    slotting_df,
+                    equity_bundle,
+                    config,
+                    crm_adjusted.securitisation_audit,
+                )
         except Exception as e:
             self._errors.append(
                 PipelineError(
@@ -639,6 +725,7 @@ class PipelineOrchestrator:
         slotting_df: pl.DataFrame,
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
+        securitisation_audit: pl.LazyFrame | None = None,
     ) -> AggregatedResultBundle:
         """Aggregate results from collect_all DataFrames."""
         try:
@@ -649,6 +736,7 @@ class PipelineOrchestrator:
                     slotting_results=slotting_df.lazy(),
                     equity_bundle=equity_bundle,
                     config=config,
+                    securitisation_audit=securitisation_audit,
                 )
         except Exception as e:
             self._errors.append(

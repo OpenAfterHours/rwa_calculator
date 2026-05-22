@@ -73,6 +73,52 @@ class LoaderProtocol(Protocol):
 
 
 @runtime_checkable
+class SecuritisationAllocatorProtocol(Protocol):
+    """
+    Protocol for the securitisation-pool allocator stage.
+
+    Resolves the user-supplied ``securitisation_allocations`` table into
+    a per-exposure lookup carrying ``securitisation_residual_pct`` and
+    ``securitisation_pool_allocations`` (a list-of-struct column). The
+    resolved frame is also the audit trail consumed by downstream
+    aggregator reporting.
+
+    Phase 1 scope: flag and exclude securitised portions from standard
+    credit-risk RWA totals. The securitisation RWA framework itself
+    (SEC-SA, SEC-IRBA — CRR Art. 259-264) is out of scope.
+
+    Input: RawDataBundle (reads ``securitisation_allocations`` if present).
+    Output: RawDataBundle with ``securitisation_allocations`` left as-is
+    and a per-exposure resolved lookup returned alongside via a tuple, or
+    propagated through the ResolvedHierarchyBundle.securitisation_audit
+    field once the hierarchy resolver joins it onto unified exposures.
+
+    References:
+    - CRR Art. 109, Art. 244-246 (significant risk transfer)
+    - PRA PS1/26 Art. 147A(1)(j)
+    """
+
+    def allocate(
+        self,
+        data: RawDataBundle,
+        config: CalculationConfig,
+    ) -> tuple[RawDataBundle, pl.LazyFrame | None, list[CalculationError]]:
+        """Resolve allocations and emit the per-exposure lookup.
+
+        Args:
+            data: Raw data bundle from loader.
+            config: Calculation configuration.
+
+        Returns:
+            Tuple of (raw bundle unchanged, resolved lookup LazyFrame
+            keyed by (exposure_reference, exposure_type), validation
+            errors). The lookup is None when no allocations were
+            supplied or the input frame was empty.
+        """
+        ...
+
+
+@runtime_checkable
 class HierarchyResolverProtocol(Protocol):
     """
     Protocol for hierarchy resolution components.
@@ -503,6 +549,7 @@ class OutputAggregatorProtocol(Protocol):
         slotting_results: pl.LazyFrame,
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
+        securitisation_audit: pl.LazyFrame | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.

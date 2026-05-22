@@ -594,6 +594,47 @@ MODEL_PERMISSIONS_SCHEMA: dict[str, ColumnSpec] = {
 
 
 # =============================================================================
+# SECURITISATION ALLOCATIONS SCHEMA
+# =============================================================================
+# User-supplied flag mapping originated exposures to securitisation pools.
+# Phase 1 scope: flag + exclude from standard credit-risk RWA totals. The
+# securitisation RWA framework itself (SEC-SA, SEC-IRBA, SEC-ERBA — CRR
+# Art. 259-264 / PS1/26 Art. 261-264) is out of scope.
+#
+# Many-to-one with exposures: a single exposure_reference may have multiple
+# rows when the exposure is split across more than one pool. The sum of
+# allocation_pct values for the same exposure must satisfy
+# ``sum(pct) <= 1.0``; the residual (1 - sum) flows on-balance-sheet.
+#
+# References:
+# - CRR Art. 109: gateway to securitisation framework
+# - CRR Art. 244-246: significant risk transfer (originator's right to exclude)
+# - PRA PS1/26 Art. 147A(1)(j): securitisation positions restricted from IRB
+SECURITISATION_ALLOCATION_SCHEMA: dict[str, ColumnSpec] = {
+    # Native key on the source table (loan_reference / contingent_reference /
+    # facility_reference). Discriminated by ``exposure_type``.
+    "exposure_reference": ColumnSpec(pl.String),
+    # One of {"loan", "contingent", "facility"}. Validated by
+    # COLUMN_VALUE_CONSTRAINTS["securitisation_allocations"]["exposure_type"].
+    "exposure_type": ColumnSpec(pl.String),
+    # Free-text pool / SPV identifier. No enum — pool universes are firm-
+    # specific and may include synthetic / traditional pools of varying types.
+    "pool_reference": ColumnSpec(pl.String),
+    # Fraction of the exposure transferred to this pool. Each row must be in
+    # ``(0, 1]``; per-exposure sums must be in ``[0, 1]``.
+    "allocation_pct": ColumnSpec(pl.Float64),
+    # CRR Art. 244 (traditional) vs Art. 245 (synthetic). Carried for future
+    # use by the securitisation RWA framework — not consumed in phase 1.
+    "transfer_type": ColumnSpec(pl.String, default="traditional", required=False),
+    # SRT assertion by the firm. Phase 1 trusts this flag — the engine does
+    # not validate the Art. 244-246 conditions. When False, exposure carve-out
+    # is still applied (firm's responsibility to set correctly).
+    "significant_risk_transfer": ColumnSpec(pl.Boolean, default=True, required=False),
+    "effective_date": ColumnSpec(pl.Date, required=False),
+}
+
+
+# =============================================================================
 # Valid value sets for categorical input columns.
 # Used by validate_bundle_values() to catch invalid values at input time.
 
@@ -832,6 +873,14 @@ VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting
 
 VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
 
+# CRR Art. 244 (traditional) vs Art. 245 (synthetic) — see
+# SECURITISATION_ALLOCATION_SCHEMA. Carried for future use; phase 1 trusts
+# the firm's classification without validation of the underlying transfer.
+VALID_TRANSFER_TYPES = {"traditional", "synthetic"}
+
+# Native source table per exposure_reference on securitisation_allocations.
+VALID_SECURITISATION_EXPOSURE_TYPES = {"loan", "contingent", "facility"}
+
 # Registry: maps table_name -> {column_name -> valid_values_set}
 # Used by validate_bundle_values() for input validation.
 COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
@@ -892,6 +941,10 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "model_permissions": {
         "approach": VALID_MODEL_PERMISSION_APPROACHES,
+    },
+    "securitisation_allocations": {
+        "exposure_type": VALID_SECURITISATION_EXPOSURE_TYPES,
+        "transfer_type": VALID_TRANSFER_TYPES,
     },
 }
 

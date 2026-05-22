@@ -208,6 +208,7 @@ class RealEstateSplitter:
             crm_audit=data.crm_audit,
             collateral_allocation=data.collateral_allocation,
             re_split_audit=audit,
+            securitisation_audit=data.securitisation_audit,
             crm_errors=list(data.crm_errors) + errors,
         )
 

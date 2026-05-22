@@ -328,6 +328,7 @@ class ExposureClassifier:
             provisions=data.provisions,
             counterparty_lookup=data.counterparty_lookup,
             classification_audit=classification_audit,
+            securitisation_audit=data.securitisation_audit,
             classification_errors=classification_errors,
         )
 

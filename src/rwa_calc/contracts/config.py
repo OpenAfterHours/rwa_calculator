@@ -826,6 +826,32 @@ class Pillar3CapitalRatioOverrides:
 
 
 @dataclass(frozen=True)
+class CCRConfig:
+    """
+    Configuration for the Counterparty Credit Risk calculator.
+
+    Placeholder shape shipped under P8.3 so the ``CCRCalculator`` protocol
+    in ``contracts/protocols.py`` can type-resolve its ``config`` parameter.
+    P8.6 populates the fields and wires factory methods on
+    ``CalculationConfig.crr()`` / ``.basel_3_1()``. Planned fields per
+    plan item P8.6:
+
+    - ``method``: Literal["sa_ccr"] — first batch; "simplified_sa_ccr"
+      and "oem" deferred to v2.0.
+    - ``alpha``: Decimal — α factor for SA-CCR EAD = α × (RC + PFE).
+      Default Decimal("1.4") per PRA Rulebook CCR (CRR) Part Art. 274(2);
+      firm-specific α under PRA permission.
+    - ``enable_ccp_exposures``: bool — gate QCCP / non-QCCP routing.
+    - ``mpor_floor_days``: int — MPOR floor per Art. 285.
+    - ``recognise_im``: bool — independent-margin recognition switch.
+
+    References:
+    - PRA Rulebook CCR (CRR) Part Art. 274(2) (α factor)
+    - PRA Rulebook CCR (CRR) Part Art. 285 (MPOR)
+    """
+
+
+@dataclass(frozen=True)
 class CalculationConfig:
     """
     Master configuration for RWA calculations.

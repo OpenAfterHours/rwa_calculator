@@ -29,6 +29,22 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
+# Constants
+# =============================================================================
+
+_SA_APPROACHES = ["SA", "standardised"]
+_IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB"]
+_SLOTTING_APPROACHES = ["SLOTTING", "slotting"]
+
+_EMPTY_SUMMARY = SummaryStatistics(
+    total_ead=Decimal("0"),
+    total_rwa=Decimal("0"),
+    exposure_count=0,
+    average_risk_weight=Decimal("0"),
+)
+
+
+# =============================================================================
 # Result Formatter
 # =============================================================================
 
@@ -227,68 +243,37 @@ class ResultFormatter:
         Returns:
             Tuple of (SummaryStatistics, exposure_count)
         """
+        exposure_count = len(results_df)
+        if exposure_count == 0:
+            return _EMPTY_SUMMARY, 0
+
         schema = results_df.schema
         ead_col = self._find_column_in_schema(schema, ["ead_final", "ead", "exposure_at_default"])
         rwa_col = self._find_column_in_schema(schema, ["rwa_final", "rwa", "risk_weighted_assets"])
         has_approach = "approach_applied" in schema.names()
 
-        exposure_count = len(results_df)
-        if exposure_count == 0:
-            return SummaryStatistics(
-                total_ead=Decimal("0"),
-                total_rwa=Decimal("0"),
-                exposure_count=0,
-                average_risk_weight=Decimal("0"),
-            ), 0
-
-        total_ead = Decimal(str(results_df[ead_col].sum() or 0)) if ead_col else Decimal("0")
-        total_rwa = Decimal(str(results_df[rwa_col].sum() or 0)) if rwa_col else Decimal("0")
+        total_ead = _column_sum_decimal(results_df, ead_col)
+        total_rwa = _column_sum_decimal(results_df, rwa_col)
         avg_rw = total_rwa / total_ead if total_ead > 0 else Decimal("0")
 
-        # Per-approach aggregations
-        sa_approaches = ["SA", "standardised"]
-        irb_approaches = ["foundation_irb", "advanced_irb", "FIRB"]
-        slotting_approaches = ["SLOTTING", "slotting"]
-
-        def _approach_sum(col: str | None, approaches: list[str]) -> Decimal:
-            if not col or not has_approach:
-                return Decimal("0")
-            mask = results_df["approach_applied"].is_in(approaches)
-            return Decimal(str(results_df.filter(mask)[col].sum() or 0))
-
-        # Floor impact
-        floor_applied = False
-        floor_impact_value = Decimal("0")
-        if floor_impact is not None:
-            try:
-                floor_df: pl.DataFrame = floor_impact.collect()
-                if "floor_binding" in floor_df.columns:
-                    floor_applied = floor_df["floor_binding"].any()
-                if "floor_add_on" in floor_df.columns:
-                    floor_impact_value = Decimal(str(floor_df["floor_add_on"].sum() or 0))
-            except Exception:
-                pass
-
-        # EL summary fields (ELPortfolioSummary stores Decimal natively)
-        el_shortfall = Decimal("0")
-        el_excess = Decimal("0")
-        t2_credit = Decimal("0")
-        if el_summary is not None:
-            el_shortfall = el_summary.total_el_shortfall
-            el_excess = el_summary.total_el_excess
-            t2_credit = el_summary.t2_credit
+        floor_applied, floor_impact_value = _extract_floor_impact(floor_impact)
+        el_shortfall, el_excess, t2_credit = _extract_el_fields(el_summary)
 
         summary = SummaryStatistics(
             total_ead=total_ead,
             total_rwa=total_rwa,
             exposure_count=exposure_count,
             average_risk_weight=avg_rw,
-            total_ead_sa=_approach_sum(ead_col, sa_approaches),
-            total_ead_irb=_approach_sum(ead_col, irb_approaches),
-            total_ead_slotting=_approach_sum(ead_col, slotting_approaches),
-            total_rwa_sa=_approach_sum(rwa_col, sa_approaches),
-            total_rwa_irb=_approach_sum(rwa_col, irb_approaches),
-            total_rwa_slotting=_approach_sum(rwa_col, slotting_approaches),
+            total_ead_sa=_approach_sum(results_df, ead_col, _SA_APPROACHES, has_approach),
+            total_ead_irb=_approach_sum(results_df, ead_col, _IRB_APPROACHES, has_approach),
+            total_ead_slotting=_approach_sum(
+                results_df, ead_col, _SLOTTING_APPROACHES, has_approach
+            ),
+            total_rwa_sa=_approach_sum(results_df, rwa_col, _SA_APPROACHES, has_approach),
+            total_rwa_irb=_approach_sum(results_df, rwa_col, _IRB_APPROACHES, has_approach),
+            total_rwa_slotting=_approach_sum(
+                results_df, rwa_col, _SLOTTING_APPROACHES, has_approach
+            ),
             floor_applied=floor_applied,
             floor_impact=floor_impact_value,
             total_el_shortfall=el_shortfall,
@@ -318,3 +303,54 @@ class ResultFormatter:
             if col in names:
                 return col
         return None
+
+
+# =============================================================================
+# Private summary helpers
+# =============================================================================
+
+
+def _column_sum_decimal(df: pl.DataFrame, col: str | None) -> Decimal:
+    """Sum a column as Decimal, returning 0 when the column is missing."""
+    if not col:
+        return Decimal("0")
+    return Decimal(str(df[col].sum() or 0))
+
+
+def _approach_sum(
+    df: pl.DataFrame,
+    col: str | None,
+    approaches: list[str],
+    has_approach: bool,
+) -> Decimal:
+    """Sum a column over rows whose `approach_applied` is in `approaches`."""
+    if not col or not has_approach:
+        return Decimal("0")
+    mask = df["approach_applied"].is_in(approaches)
+    return Decimal(str(df.filter(mask)[col].sum() or 0))
+
+
+def _extract_floor_impact(floor_impact: pl.LazyFrame | None) -> tuple[bool, Decimal]:
+    """Materialise the floor-impact frame and return (applied, add_on)."""
+    if floor_impact is None:
+        return False, Decimal("0")
+    try:
+        floor_df: pl.DataFrame = floor_impact.collect()
+    except Exception:
+        return False, Decimal("0")
+    applied = (
+        bool(floor_df["floor_binding"].any()) if "floor_binding" in floor_df.columns else False
+    )
+    add_on = (
+        Decimal(str(floor_df["floor_add_on"].sum() or 0))
+        if "floor_add_on" in floor_df.columns
+        else Decimal("0")
+    )
+    return applied, add_on
+
+
+def _extract_el_fields(el_summary: ELPortfolioSummary | None) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (shortfall, excess, t2_credit) from the EL summary or zeros."""
+    if el_summary is None:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    return el_summary.total_el_shortfall, el_summary.total_el_excess, el_summary.t2_credit

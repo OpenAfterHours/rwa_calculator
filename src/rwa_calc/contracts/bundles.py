@@ -229,6 +229,117 @@ class CRMAdjustedBundle:
 
 
 @dataclass(frozen=True)
+class TradeBundle:
+    """
+    Trade-level input for SA-CCR.
+
+    Holds the per-derivative-trade LazyFrame consumed by the CCR
+    calculator stage. One row per OTC derivative or long-settlement
+    transaction; SFTs flow through the same bundle with the
+    schema-level ``risk_type`` discriminator (P8.5 extends
+    ``VALID_RISK_TYPES_INPUT`` with ``CCR_DERIVATIVE`` and
+    ``CCR_SFT``).
+
+    The row schema is enforced by ``TRADE_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in P8.5). Required columns:
+    ``trade_id``, ``netting_set_id``, ``asset_class``,
+    ``transaction_type``, ``notional``, ``currency``,
+    ``maturity_date``, ``start_date``, ``delta``, ``is_long``,
+    ``mtm_value``. Optional: ``underlying_reference``,
+    ``option_strike``, ``payment_leg_index_id``.
+
+    References:
+    - CRR Art. 272 (definitions)
+    - PRA Rulebook CCR (CRR) Part Art. 277(3), 279a-c, 280
+    - BCBS CRE52.30-52.43
+    """
+
+    trades: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class NettingSetBundle:
+    """
+    Netting-set-level input for SA-CCR.
+
+    Holds the per-netting-set LazyFrame keyed by ``netting_set_id``.
+    Carries the legal-enforceability flag (CRR Art. 295-297) and
+    the denormalised margin-agreement parameters consumed by the
+    Replacement Cost formula (CRR Art. 275). For the first batch
+    (CCR-A1) every netting set is single-trade, unmargined, and
+    legally enforceable; the threshold / MTA / NICA / MPOR columns
+    are null but schema-present so margined Replacement Cost (P8.11)
+    and margined Maturity Factor (P8.14) can read them without
+    schema change.
+
+    Row schema enforced by ``NETTING_SET_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in P8.5).
+
+    References:
+    - CRR Art. 272(4) (netting set), 272(7) (margin agreement),
+      272(9) (margin period of risk)
+    - CRR Art. 295, 296, 297 (recognition of contractual netting)
+    - PRA Rulebook CCR (CRR) Part Art. 275(1)-(2), 279c
+    - BCBS CRE52.10-52.18, CRE52.51-52
+    """
+
+    netting_sets: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MarginAgreementBundle:
+    """
+    Margin-agreement-level input for SA-CCR.
+
+    Holds the per-margin-agreement LazyFrame. Separate from
+    ``NettingSetBundle`` so a single ISDA CSA covering multiple
+    netting sets can be represented without denormalisation.
+    For CCR-A1 this bundle's LazyFrame is empty (zero rows,
+    schema present) — the four denormalised columns on
+    ``NettingSetBundle`` cover the single-netting-set case.
+
+    Row schema enforced by ``MARGIN_AGREEMENT_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in P8.5).
+
+    References:
+    - CRR Art. 272(7) (margin agreement)
+    - PRA Rulebook CCR (CRR) Part Art. 275(2), 285(5)
+    - BCBS CRE52.17, CRE52.51
+    """
+
+    margin_agreements: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CCRCollateralBundle:
+    """
+    CCR-specific collateral input for SA-CCR.
+
+    Holds collateral keyed by ``netting_set_id``, which is
+    structurally different from ``RawDataBundle.collateral``
+    (which is keyed by ``beneficiary_type`` / ``beneficiary_reference``
+    against the SA / IRB exposure model). Kept separate so the
+    existing collateral-resolution pipeline is untouched.
+    Haircut lookup reuses the supervisory haircut tables in
+    ``engine/crm/`` (CRR Art. 224); no duplicate table.
+
+    Row schema enforced by ``CCR_COLLATERAL_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in P8.5).
+
+    References:
+    - CRR Art. 275(1)-(2) (net collateral C in RC formula)
+    - CRR Art. 224 (supervisory haircuts)
+    - CRR Art. 285(3a)-(c) (segregated initial margin)
+    """
+
+    ccr_collateral: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class SAResultBundle:
     """
     Output from the SA calculator component.

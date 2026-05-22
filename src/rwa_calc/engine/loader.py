@@ -31,15 +31,24 @@ from pathlib import Path
 import polars as pl
 
 from rwa_calc.config.data_sources import DataSourceRegistry
-from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.bundles import (
+    CCRCollateralBundle,
+    MarginAgreementBundle,
+    NettingSetBundle,
+    RawCCRBundle,
+    RawDataBundle,
+    TradeBundle,
+)
 from rwa_calc.contracts.errors import CalculationError, optional_file_load_error
 from rwa_calc.contracts.protocols import LoaderProtocol
 from rwa_calc.data.column_spec import (
     ColumnSpec,
     apply_boolean_column_defaults,
+    dtypes_of,
     ensure_columns,
 )
 from rwa_calc.data.schemas import (
+    CCR_COLLATERAL_SCHEMA,
     CIU_HOLDINGS_SCHEMA,
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
@@ -51,12 +60,15 @@ from rwa_calc.data.schemas import (
     GUARANTEE_SCHEMA,
     LENDING_MAPPING_SCHEMA,
     LOAN_SCHEMA,
+    MARGIN_AGREEMENT_SCHEMA,
     MODEL_PERMISSIONS_SCHEMA,
+    NETTING_SET_SCHEMA,
     ORG_MAPPING_SCHEMA,
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
     SECURITISATION_ALLOCATION_SCHEMA,
     SPECIALISED_LENDING_SCHEMA,
+    TRADE_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
 
@@ -183,6 +195,15 @@ class DataSourceConfig:
     fx_rates_file: Path | None = None
     model_permissions_file: Path | None = None
     securitisation_allocations_file: Path | None = None
+    # CCR inputs (P8.5) — composed into ``RawCCRBundle`` and attached to
+    # ``RawDataBundle.ccr``. All four are optional at the firm level; firms
+    # without derivative or SFT books leave them at None and the CCR stage
+    # no-ops. Empty (zero-row) parquets are valid — they round-trip as
+    # empty LazyFrames inside the leaf bundles (NOT collapsed to None).
+    ccr_trades_file: Path | None = None
+    ccr_netting_sets_file: Path | None = None
+    ccr_margin_agreements_file: Path | None = None
+    ccr_collateral_file: Path | None = None
 
     @classmethod
     def from_registry(
@@ -222,6 +243,10 @@ class DataSourceConfig:
             fx_rates_file=get_p("fx_rates"),
             model_permissions_file=get_p("model_permissions"),
             securitisation_allocations_file=get_p("securitisation_allocations"),
+            ccr_trades_file=get_p("ccr_trades"),
+            ccr_netting_sets_file=get_p("ccr_netting_sets"),
+            ccr_margin_agreements_file=get_p("ccr_margin_agreements"),
+            ccr_collateral_file=get_p("ccr_collateral"),
         )
 
 
@@ -306,6 +331,135 @@ def _load_file_optional(
         return None
 
 
+def _load_ccr_file_optional(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    errors: list[CalculationError],
+    field_name: str,
+    relative_path: str | Path | None,
+    schema: dict[str, ColumnSpec],
+) -> pl.LazyFrame | None:
+    """Load a CCR optional file with zero-row tolerance.
+
+    Differs from ``_load_file_optional`` in three ways tailored to the CCR
+    composite bundle:
+
+    1. A zero-row parquet returns an EMPTY LazyFrame (schema applied), not
+       ``None``. The CCR pipeline composes four leaf bundles into
+       ``RawCCRBundle`` — an empty ``margin_agreements`` / ``ccr_collateral``
+       table is the canonical CCR-A1 case and must round-trip as a frame.
+    2. ``None`` is returned only for ``relative_path is None`` (caller's
+       responsibility to translate to DQ007 if other CCR files are present).
+    3. ``FileNotFoundError`` returns ``None`` with a DEBUG log — same as the
+       generic helper.
+
+    Any other failure (corrupt parquet, OSError, ComputeError) emits one
+    DQ007 ``CalculationError`` and returns ``None``.
+    """
+    if relative_path is None:
+        return None
+    try:
+        lf = normalize_columns(scan_fn(base_path / relative_path))
+        # Force schema resolution so corrupt parquet / scan failures
+        # surface here rather than being swallowed downstream.
+        lf.collect_schema()
+        if enforce_schemas:
+            lf = enforce_schema(lf, schema, strict=False)
+        return lf
+    except FileNotFoundError:
+        logger.debug("optional CCR input %s not present; treating as absent", relative_path)
+        return None
+    except Exception as exc:
+        logger.warning(
+            "optional CCR input %s could not be loaded (%s: %s); treating as absent",
+            relative_path,
+            type(exc).__name__,
+            exc,
+        )
+        errors.append(
+            optional_file_load_error(relative_path=relative_path, field_name=field_name, exc=exc)
+        )
+        return None
+
+
+def _empty_ccr_lazyframe(schema: dict[str, ColumnSpec]) -> pl.LazyFrame:
+    """Return an empty LazyFrame conforming to ``schema``.
+
+    Used by ``_build_raw_ccr_bundle`` to fill in a leaf frame when the
+    corresponding CCR file is unconfigured but another CCR file IS present
+    (the partial-files case — DQ007 errors are accumulated separately by
+    the caller).
+    """
+    return pl.LazyFrame(schema=dtypes_of(schema))
+
+
+def _build_raw_ccr_bundle(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    config: DataSourceConfig,
+    load_errors: list[CalculationError],
+) -> RawCCRBundle | None:
+    """Compose ``RawCCRBundle`` from the four CCR file paths on *config*.
+
+    Returns ``None`` when none of the four ccr_*_file fields are set — the
+    legitimate "no CCR scope" case. Otherwise constructs a ``RawCCRBundle``
+    with one leaf bundle per CCR input:
+
+    - A populated file yields a leaf bundle around a non-empty LazyFrame.
+    - A zero-row file yields a leaf bundle around an empty LazyFrame.
+    - A ``None`` path (partial-files case) yields a leaf bundle around an
+      empty LazyFrame AND appends a DQ007 error to *load_errors* so the
+      missing input is visible in the audit trail.
+    """
+    ccr_paths: dict[str, tuple[Path | None, dict[str, ColumnSpec]]] = {
+        "ccr_trades": (config.ccr_trades_file, TRADE_SCHEMA),
+        "ccr_netting_sets": (config.ccr_netting_sets_file, NETTING_SET_SCHEMA),
+        "ccr_margin_agreements": (config.ccr_margin_agreements_file, MARGIN_AGREEMENT_SCHEMA),
+        "ccr_collateral": (config.ccr_collateral_file, CCR_COLLATERAL_SCHEMA),
+    }
+    if all(path is None for path, _ in ccr_paths.values()):
+        return None
+
+    leaf_frames: dict[str, pl.LazyFrame] = {}
+    for field_name, (path, schema) in ccr_paths.items():
+        if path is None:
+            # Partial-files case: another CCR file is set, but this one is
+            # not. Emit DQ007 (matches optional_file_load_error wording) and
+            # carry an empty LazyFrame so the leaf bundle stays schema-shaped.
+            load_errors.append(
+                optional_file_load_error(
+                    relative_path=f"<missing {field_name}>",
+                    field_name=field_name,
+                    exc=FileNotFoundError(
+                        f"CCR file '{field_name}' not configured but other CCR files are present"
+                    ),
+                )
+            )
+            leaf_frames[field_name] = _empty_ccr_lazyframe(schema)
+            continue
+        lf = _load_ccr_file_optional(
+            base_path,
+            scan_fn,
+            enforce_schemas,
+            load_errors,
+            field_name,
+            path,
+            schema,
+        )
+        leaf_frames[field_name] = lf if lf is not None else _empty_ccr_lazyframe(schema)
+
+    return RawCCRBundle(
+        trades=TradeBundle(trades=leaf_frames["ccr_trades"]),
+        netting_sets=NettingSetBundle(netting_sets=leaf_frames["ccr_netting_sets"]),
+        margin_agreements=MarginAgreementBundle(
+            margin_agreements=leaf_frames["ccr_margin_agreements"]
+        ),
+        ccr_collateral=CCRCollateralBundle(ccr_collateral=leaf_frames["ccr_collateral"]),
+    )
+
+
 def _run_bundle_validation(bundle: RawDataBundle) -> list[CalculationError]:
     """Validate categorical column values in a loaded bundle.
 
@@ -328,13 +482,19 @@ def _build_bundle(
         pl.LazyFrame | None,
     ],
     config: DataSourceConfig,
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
 ) -> RawDataBundle:
     """Build a RawDataBundle — single implementation shared by all loaders.
 
     Optional-file load failures (corrupt parquet, OSError, etc.) are
     accumulated into ``load_errors`` via ``_load_file_optional`` and
     merged with the categorical-validation errors before constructing
-    the final bundle.
+    the final bundle. The CCR composite bundle (P8.5) is wired via
+    ``_build_raw_ccr_bundle`` which uses *base_path* / *scan_fn* directly
+    because it needs zero-row tolerance — generic ``_load_file_optional``
+    collapses empty frames to ``None``.
     """
     load_errors: list[CalculationError] = []
 
@@ -344,6 +504,8 @@ def _build_bundle(
         schema: dict[str, pl.DataType] | None,
     ) -> pl.LazyFrame | None:
         return load_optional(load_errors, field_name, relative_path, schema)
+
+    ccr_bundle = _build_raw_ccr_bundle(base_path, scan_fn, enforce_schemas, config, load_errors)
 
     bundle = RawDataBundle(
         facilities=load(config.facilities_file, FACILITY_SCHEMA),
@@ -375,6 +537,7 @@ def _build_bundle(
             config.securitisation_allocations_file,
             SECURITISATION_ALLOCATION_SCHEMA,
         ),
+        ccr=ccr_bundle,
     )
     validation_errors = _run_bundle_validation(bundle)
     combined = load_errors + validation_errors
@@ -443,7 +606,14 @@ class ParquetLoader(LoaderProtocol):
         load_opt = partial(
             _load_file_optional, self.base_path, pl.scan_parquet, self.enforce_schemas
         )
-        return _build_bundle(load, load_opt, self.config)
+        return _build_bundle(
+            load,
+            load_opt,
+            self.config,
+            self.base_path,
+            pl.scan_parquet,
+            self.enforce_schemas,
+        )
 
 
 class CSVLoader(LoaderProtocol):
@@ -506,7 +676,14 @@ class CSVLoader(LoaderProtocol):
         load_opt = partial(
             _load_file_optional, self.base_path, self._scan_csv, self.enforce_schemas
         )
-        return _build_bundle(load, load_opt, self.config)
+        return _build_bundle(
+            load,
+            load_opt,
+            self.config,
+            self.base_path,
+            self._scan_csv,
+            self.enforce_schemas,
+        )
 
 
 def create_test_loader(fixture_path: str | Path | None = None) -> ParquetLoader:

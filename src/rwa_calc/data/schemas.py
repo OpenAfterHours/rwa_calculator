@@ -635,6 +635,123 @@ SECURITISATION_ALLOCATION_SCHEMA: dict[str, ColumnSpec] = {
 
 
 # =============================================================================
+# COUNTERPARTY CREDIT RISK (CCR) INPUT SCHEMAS — P8.5
+# =============================================================================
+# Four parquet-backed input tables consumed by the SA-CCR pipeline (P8.20+).
+# Held under ``RawDataBundle.ccr`` as a ``RawCCRBundle`` composite; entirely
+# optional at the firm level — firms without derivative or SFT books leave
+# ``RawDataBundle.ccr = None`` and the CCR stage no-ops.
+#
+# References:
+# - CRR Art. 271 (CCR scope — derivatives, repos, SFTs, long-settlement)
+# - CRR Art. 272(4) (netting set), 272(7) (margin agreement), 272(9) (MPOR)
+# - CRR Art. 275(1)-(2) (replacement cost — V, C)
+# - CRR Art. 285(2)(b) (10 business-day MPOR minimum)
+# - CRR Art. 295-297 (contractual netting recognition)
+
+#: Trade-level input for SA-CCR. One row per OTC derivative / long-settlement
+#: trade or SFT (discriminated by ``transaction_type``). Consumed by the
+#: CCR calculator stage.
+TRADE_SCHEMA: dict[str, ColumnSpec] = {
+    # Required (8) — primary key + core economic terms.
+    "trade_id": ColumnSpec(pl.String),
+    "netting_set_id": ColumnSpec(pl.String),
+    # "interest_rate" | "fx" | "credit" | "equity" | "commodity"
+    "asset_class": ColumnSpec(pl.String),
+    # "derivative" | "sft"
+    "transaction_type": ColumnSpec(pl.String),
+    "notional": ColumnSpec(pl.Float64),
+    "currency": ColumnSpec(pl.String),
+    "maturity_date": ColumnSpec(pl.Date),
+    "start_date": ColumnSpec(pl.Date),
+    # Optional with defaults (3).
+    # CRR Art. 279a(1) supervisory delta — defaults to 1.0 for non-option
+    # directional trades. Options carry a separate computed delta.
+    "delta": ColumnSpec(pl.Float64, default=1.0, required=False),
+    "is_long": ColumnSpec(pl.Boolean, default=True, required=False),
+    # CRR Art. 275 replacement cost: V (current market value). Defaulted to
+    # 0.0 (at-par trade) — conservative for typical IRS / vanilla derivatives.
+    "mtm_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # Optional with default (4th) — long-settlement flag.
+    "is_long_settlement": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Optional nullable (3) — schema-present for richer trade types added later.
+    "underlying_reference": ColumnSpec(pl.String, required=False),
+    "option_strike": ColumnSpec(pl.Float64, required=False),
+    "payment_leg_index_id": ColumnSpec(pl.String, required=False),
+}
+
+#: Netting-set-level input for SA-CCR. One row per netting set keyed by
+#: ``netting_set_id``. Carries legal-enforceability flag (Art. 295) and the
+#: denormalised margin parameters consumed by the margined Replacement Cost
+#: formula (P8.11) — null in the unmargined CCR-A1 case.
+NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
+    # Required (2).
+    "netting_set_id": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String),
+    # Optional with defaults (2).
+    # CRR Art. 295: a netting set is only recognised for capital relief if
+    # the bank can demonstrate legal enforceability in each relevant
+    # jurisdiction. Conservative default: False (no netting benefit until
+    # legality confirmed).
+    "is_legally_enforceable": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_margined": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Optional nullable (6) — margined RC / MF parameters; null when
+    # ``is_margined`` is False.
+    "netting_agreement_type": ColumnSpec(pl.String, required=False),
+    "margin_threshold": ColumnSpec(pl.Float64, required=False),
+    "minimum_transfer_amount": ColumnSpec(pl.Float64, required=False),
+    "nica": ColumnSpec(pl.Float64, required=False),
+    "mpor_days": ColumnSpec(pl.Int32, required=False),
+    "margin_agreement_id": ColumnSpec(pl.String, required=False),
+}
+
+#: Margin-agreement-level (CSA) input for SA-CCR. Separate from
+#: ``NETTING_SET_SCHEMA`` so a single ISDA CSA covering multiple netting
+#: sets can be represented without denormalisation. Empty (zero-row) frame
+#: is the unmargined case.
+MARGIN_AGREEMENT_SCHEMA: dict[str, ColumnSpec] = {
+    # Required (2).
+    "margin_agreement_id": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String),
+    # Optional with defaults (5).
+    "margin_threshold": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "minimum_transfer_amount": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "nica": ColumnSpec(pl.Float64, default=0.0, required=False),
+    # CRR Art. 285(2)(b): minimum Margin Period of Risk for standard margined
+    # netting sets is 10 business days. Default to the regulatory minimum so
+    # SA-CCR PFE add-on uses it when ``mpor_days`` is not explicitly supplied.
+    "mpor_days": ColumnSpec(pl.Int32, default=10, required=False),
+    "is_segregated_im": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Optional nullable (3).
+    "remargining_frequency_days": ColumnSpec(pl.Int32, required=False),
+    "dispute_count_qtr": ColumnSpec(pl.Int32, required=False),
+    "governing_law": ColumnSpec(pl.String, required=False),
+}
+
+#: CCR-specific collateral input. Keyed by ``netting_set_id`` (structurally
+#: different from ``COLLATERAL_SCHEMA`` which is keyed by beneficiary). Haircut
+#: lookup reuses the supervisory haircut tables in ``engine/crm/`` (Art. 224).
+CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
+    # Required (3).
+    "ccr_collateral_reference": ColumnSpec(pl.String),
+    "netting_set_id": ColumnSpec(pl.String),
+    "collateral_type": ColumnSpec(pl.String),
+    # Optional with defaults (3).
+    # CRR Art. 275(1) replacement cost: C (net collateral). Conservative
+    # default: 0.0 (no collateral credit when value unknown).
+    "market_value": ColumnSpec(pl.Float64, default=0.0, required=False),
+    "is_posted_by_firm": ColumnSpec(pl.Boolean, default=False, required=False),
+    "is_segregated": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Optional nullable (5).
+    "currency": ColumnSpec(pl.String, required=False),
+    "issuer_cqs": ColumnSpec(pl.Int8, required=False),
+    "issuer_type": ColumnSpec(pl.String, required=False),
+    "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    "haircut_override": ColumnSpec(pl.Float64, required=False),
+}
+
+
+# =============================================================================
 # Valid value sets for categorical input columns.
 # Used by validate_bundle_values() to catch invalid values at input time.
 
@@ -857,7 +974,11 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
-VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR"}
+# P8.5 extension: "CCR_DERIVATIVE" / "CCR_SFT" tag exposures originated by
+# the SA-CCR pipeline (CRR Art. 271). They flow through the same exposure
+# row model as on-balance-sheet items but are routed into the dedicated CCR
+# stages downstream.
+VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR", "CCR_DERIVATIVE", "CCR_SFT"}
 
 VALID_BS_TYPES = {"ONB", "OFB"}
 

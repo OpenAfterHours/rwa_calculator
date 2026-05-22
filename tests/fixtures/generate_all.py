@@ -279,6 +279,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_36",
             _generate_p236,
         ),
+        (
+            "P8.5 CCR minimal (loader integration: trades/netting_sets/margin_agreements/ccr_collateral)",
+            "ccr",
+            _generate_p85_ccr_minimal,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1357,6 +1362,19 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_36", None)
+
+
+def _generate_p85_ccr_minimal(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P8.5 CCR minimal fixtures (loader integration — four CCR parquet files)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from generate_p8_5_minimal import save_p85_minimal_fixtures
+
+        saved = save_p85_minimal_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("generate_p8_5_minimal", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

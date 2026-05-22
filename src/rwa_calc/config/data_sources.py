@@ -155,6 +155,35 @@ DATA_SOURCES = [
             "RWA totals (CRR Art. 244-246 / PS1/26 Art. 147A(1)(j))."
         ),
     ),
+    # Counterparty Credit Risk (CCR) — P8.5
+    # Four optional parquet-backed tables consumed by the SA-CCR pipeline
+    # (CRR Art. 271-272). Composed into ``RawCCRBundle`` and attached to
+    # ``RawDataBundle.ccr``. Firms without derivative or SFT books leave all
+    # four absent and the CCR stage no-ops.
+    DataSourceFile(
+        id="ccr_trades",
+        relative_path=Path("ccr/trades"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="OTC derivative and SFT trade-level inputs for SA-CCR (CRR Art. 271-272).",
+    ),
+    DataSourceFile(
+        id="ccr_netting_sets",
+        relative_path=Path("ccr/netting_sets"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Netting-set-level inputs for SA-CCR (CRR Art. 272(4), 295-297).",
+    ),
+    DataSourceFile(
+        id="ccr_margin_agreements",
+        relative_path=Path("ccr/margin_agreements"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Margin-agreement (CSA) inputs for SA-CCR (CRR Art. 272(7), 285).",
+    ),
+    DataSourceFile(
+        id="ccr_collateral",
+        relative_path=Path("ccr/ccr_collateral"),
+        requirement=RequirementLevel.OPTIONAL,
+        description="Netting-set-keyed collateral inputs for SA-CCR (CRR Art. 275(1)).",
+    ),
 ]
 
 

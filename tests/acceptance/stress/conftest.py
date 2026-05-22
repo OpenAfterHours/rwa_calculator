@@ -20,7 +20,7 @@ from tests.fixtures.irb_test_helpers import (
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.column_spec import dtypes_of, ensure_columns
 from rwa_calc.data.schemas import (
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -137,8 +137,9 @@ def generate_stress_counterparties(n: int, seed: int = 42) -> pl.LazyFrame:
                 "is_core_market_participant": np.zeros(n, dtype=bool),
             }
         )
-        .cast(dtypes_of(COUNTERPARTY_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, COUNTERPARTY_SCHEMA)
+        .cast(dtypes_of(COUNTERPARTY_SCHEMA))
     )
 
 
@@ -235,8 +236,9 @@ def generate_stress_loans(
                 ),
             }
         )
-        .cast(dtypes_of(LOAN_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, LOAN_SCHEMA)
+        .cast(dtypes_of(LOAN_SCHEMA))
     )
 
 
@@ -293,8 +295,9 @@ def generate_stress_facilities(
                 "purchased_receivables_subtype": pl.Series([None] * n, dtype=pl.String),
             }
         )
-        .cast(dtypes_of(FACILITY_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, FACILITY_SCHEMA)
+        .cast(dtypes_of(FACILITY_SCHEMA))
     )
 
 
@@ -340,8 +343,9 @@ def generate_stress_ratings(
                 "scope_id": pl.Series([None] * n_rated, dtype=pl.String),
             }
         )
-        .cast(dtypes_of(RATINGS_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, RATINGS_SCHEMA)
+        .cast(dtypes_of(RATINGS_SCHEMA))
     )
 
 
@@ -377,8 +381,9 @@ def generate_stress_org_mappings(
                 "child_counterparty_reference": cp_refs[child_indices],
             }
         )
-        .cast(dtypes_of(ORG_MAPPING_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, ORG_MAPPING_SCHEMA)
+        .cast(dtypes_of(ORG_MAPPING_SCHEMA))
     )
 
 
@@ -409,8 +414,9 @@ def generate_stress_facility_mappings(
                 "child_type": ["loan"] * n_mapped,
             }
         )
-        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, FACILITY_MAPPING_SCHEMA)
+        .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
     )
 
 
@@ -476,8 +482,9 @@ def generate_stress_contingents(
                 ),
             }
         )
-        .cast(dtypes_of(CONTINGENTS_SCHEMA))
         .lazy()
+        .pipe(ensure_columns, CONTINGENTS_SCHEMA)
+        .cast(dtypes_of(CONTINGENTS_SCHEMA))
     )
 
 

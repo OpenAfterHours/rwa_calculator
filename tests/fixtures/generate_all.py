@@ -280,9 +280,9 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p236,
         ),
         (
-            "P8.5 CCR minimal (loader integration: trades/netting_sets/margin_agreements/ccr_collateral)",
+            "CCR-A1 golden (single 10y GBP IR swap, unmargined)",
             "ccr",
-            _generate_p85_ccr_minimal,
+            _generate_ccr_golden,
         ),
     ]
 
@@ -1364,17 +1364,27 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p2_36", None)
 
 
-def _generate_p85_ccr_minimal(output_dir: Path) -> list[tuple[str, int]]:
-    """Generate P8.5 CCR minimal fixtures (loader integration — four CCR parquet files)."""
-    sys.path.insert(0, str(output_dir))
+def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A1 golden fixtures (single 10y GBP IR swap, unmargined)."""
+    # golden_ccr_a1 uses relative imports (from .margin_builder etc.), so we must load
+    # it as part of the 'ccr' package.  Insert the fixtures root (parent of ccr/) so that
+    # 'from ccr.golden_ccr_a1 import …' resolves the sibling builders correctly.
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
     try:
-        from generate_p8_5_minimal import save_p85_minimal_fixtures
+        from ccr.golden_ccr_a1 import save_golden_fixtures
 
-        saved = save_p85_minimal_fixtures(output_dir)
+        saved = save_golden_fixtures(output_dir)
         return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
     finally:
-        sys.path.remove(str(output_dir))
-        sys.modules.pop("generate_p8_5_minimal", None)
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a1",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

@@ -60,6 +60,10 @@ class RawDataBundle:
         securitisation_allocations: Raw user-supplied mapping of exposures to
             securitisation pools (many rows per exposure). Resolved by the
             SecuritisationAllocator stage; see CRR Art. 244-246.
+        ccr: Optional Counterparty Credit Risk inputs (trade /
+            netting set / margin agreement / CCR collateral). None
+            when the firm has no CCR scope; the CCR stage no-ops in
+            that case. See CRR Art. 271-272.
         errors: Validation errors found during loading
     """
 
@@ -80,6 +84,7 @@ class RawDataBundle:
     fx_rates: pl.LazyFrame | None = None
     model_permissions: pl.LazyFrame | None = None
     securitisation_allocations: pl.LazyFrame | None = None
+    ccr: RawCCRBundle | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -336,6 +341,52 @@ class CCRCollateralBundle:
     """
 
     ccr_collateral: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RawCCRBundle:
+    """
+    Aggregate CCR input bundle — composes the four P8.1 leaf bundles.
+
+    Structurally analogous to ``RawDataBundle``: a frozen composite of
+    the per-domain input frames plus a bundle-level ``errors`` list.
+    Held as an optional field on ``RawDataBundle`` so firms without
+    derivative or SFT books continue to construct valid pipelines —
+    the CCR stage (P8.20) no-ops when ``raw.ccr is None``.
+
+    Composition mirrors the CRR Chapter 6 input model:
+    - ``trades``: per-derivative-trade rows (CRR Art. 271(1), 272(2))
+    - ``netting_sets``: per-netting-set rows (CRR Art. 272(4))
+    - ``margin_agreements``: per-CSA rows (CRR Art. 272(7))
+    - ``ccr_collateral``: netting-set-keyed collateral (CRR Art. 275(1))
+
+    Each leaf bundle's LazyFrame may be empty (zero rows, schema
+    present) when the firm has no instances of that domain — e.g.
+    unmargined single-trade netting sets in CCR-A1 produce an empty
+    ``margin_agreements`` frame. Optionality lives one level up at
+    ``RawDataBundle.ccr``, not inside this bundle.
+
+    Attributes:
+        trades: Trade-level inputs for SA-CCR
+        netting_sets: Netting-set-level inputs for SA-CCR
+        margin_agreements: Margin-agreement (CSA) inputs for SA-CCR
+        ccr_collateral: Netting-set-keyed collateral inputs
+        errors: Bundle-level wiring errors (e.g. missing leaf file,
+            cross-leaf consistency failures). Row-level data-quality
+            errors live on the individual leaf bundles.
+
+    References:
+    - CRR Art. 271 (scope of CCR — derivatives, repos, SFTs,
+      long-settlement, margin lending)
+    - CRR Art. 272(4) (netting set), 272(7) (margin agreement),
+      272(9) (margin period of risk)
+    """
+
+    trades: TradeBundle
+    netting_sets: NettingSetBundle
+    margin_agreements: MarginAgreementBundle
+    ccr_collateral: CCRCollateralBundle
     errors: list[CalculationError] = field(default_factory=list)
 
 

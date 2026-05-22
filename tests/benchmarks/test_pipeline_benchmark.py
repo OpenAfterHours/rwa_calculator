@@ -274,42 +274,6 @@ class TestPipelineBenchmark1M:
 
 
 # =============================================================================
-# 10M SCALE PIPELINE BENCHMARKS (Production scale, very slow)
-# =============================================================================
-
-
-@pytest.mark.benchmark
-@pytest.mark.scale_10m
-@pytest.mark.slow
-class TestPipelineBenchmark10M:
-    """Full pipeline benchmarks at 10M counterparty scale (very slow)."""
-
-    def test_full_pipeline_sa_10m(
-        self,
-        benchmark,
-        dataset_10m: dict[str, pl.LazyFrame],
-    ):
-        """
-        Benchmark full SA pipeline at 10M scale.
-
-        Target: < 20 minutes
-        """
-        raw_data = create_raw_data_bundle(dataset_10m)
-        config = CalculationConfig.crr(BENCHMARK_REPORTING_DATE)
-
-        pipeline = create_pipeline(raw_data)
-
-        result = benchmark.pedantic(
-            lambda: pipeline.run(config),
-            rounds=1,
-            warmup_rounds=0,
-            iterations=1,
-        )
-
-        assert result is not None
-
-
-# =============================================================================
 # INDIVIDUAL COMPONENT BENCHMARKS
 # =============================================================================
 

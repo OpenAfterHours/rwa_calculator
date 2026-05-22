@@ -374,59 +374,6 @@ class TestHierarchyBenchmark1M:
 
 
 # =============================================================================
-# 10M SCALE BENCHMARKS (Production scale, very slow)
-# =============================================================================
-
-
-@pytest.mark.benchmark
-@pytest.mark.scale_10m
-@pytest.mark.slow
-class TestHierarchyBenchmark10M:
-    """Hierarchy resolver benchmarks at 10M counterparty scale (very slow)."""
-
-    def test_full_resolve_10m(
-        self,
-        benchmark,
-        dataset_10m: dict[str, pl.LazyFrame],
-    ):
-        """
-        Benchmark full hierarchy resolution at 10M scale.
-
-        Target: < 10 minutes
-        """
-        raw_data = RawDataBundle(
-            counterparties=dataset_10m["counterparties"],
-            facilities=dataset_10m["facilities"],
-            loans=dataset_10m["loans"],
-            contingents=dataset_10m["contingents"],
-            collateral=dataset_10m["collateral"],
-            guarantees=pl.LazyFrame(schema={"guarantee_reference": pl.String}),
-            provisions=pl.LazyFrame(schema={"provision_reference": pl.String}),
-            ratings=dataset_10m["ratings"],
-            facility_mappings=dataset_10m["facility_mappings"],
-            org_mappings=dataset_10m["org_mappings"],
-            lending_mappings=pl.LazyFrame(
-                schema={
-                    "parent_counterparty_reference": pl.String,
-                    "child_counterparty_reference": pl.String,
-                }
-            ),
-        )
-        config = CalculationConfig.crr(BENCHMARK_REPORTING_DATE)
-
-        resolver = HierarchyResolver()
-
-        result = benchmark.pedantic(
-            lambda: resolver.resolve(raw_data, config),
-            rounds=1,
-            warmup_rounds=0,
-            iterations=1,
-        )
-
-        assert result is not None
-
-
-# =============================================================================
 # MEMORY BENCHMARKS
 # =============================================================================
 

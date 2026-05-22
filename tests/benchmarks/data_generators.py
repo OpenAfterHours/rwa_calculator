@@ -1307,7 +1307,7 @@ def get_dataset_path(scale: str, data_dir: Path | None = None) -> Path:
     Get the path for a cached dataset.
 
     Args:
-        scale: Scale identifier (e.g., "10k", "100k", "1m", "10m")
+        scale: Scale identifier (e.g., "10k", "100k", "1m")
         data_dir: Optional custom data directory
 
     Returns:
@@ -1327,7 +1327,7 @@ def save_benchmark_dataset(
 
     Args:
         dataset: Dictionary of LazyFrames from generate_benchmark_dataset
-        scale: Scale identifier (e.g., "10k", "100k", "1m", "10m")
+        scale: Scale identifier (e.g., "10k", "100k", "1m")
         data_dir: Optional custom data directory
 
     Returns:
@@ -1353,7 +1353,7 @@ def load_benchmark_dataset(
     Load a benchmark dataset from parquet files.
 
     Args:
-        scale: Scale identifier (e.g., "10k", "100k", "1m", "10m")
+        scale: Scale identifier (e.g., "10k", "100k", "1m")
         data_dir: Optional custom data directory
 
     Returns:
@@ -1409,7 +1409,7 @@ def get_or_create_dataset(
     the cached datasets when the data generation logic changes.
 
     Args:
-        scale: Scale identifier (e.g., "10k", "100k", "1m", "10m")
+        scale: Scale identifier (e.g., "10k", "100k", "1m")
         n_counterparties: Number of counterparties (used if generating)
         hierarchy_depth: Hierarchy depth (used if generating)
         seed: Random seed (used if generating)

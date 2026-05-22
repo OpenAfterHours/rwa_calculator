@@ -113,11 +113,12 @@ pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --benchmark-disable -m 'not slow and not stress' -n auto --dist=loadfile"
+addopts = "-v --tb=short --benchmark-disable -m 'not slow and not stress and not scale_1m' -n auto --dist=loadfile"
 markers = [
     "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
-    "slow: mark test as slow (10M+ scale, may take several minutes)",
+    "slow: mark test as slow (1M scale, may take several minutes)",
     "stress: mark test as a correctness-at-scale validation (10K+ rows, opt-in; CI runs with -m 'not slow')",
+    "scale_1m: benchmark at 1M counterparty scale (opt-in via -m scale_1m; ~60s+ run, ~1.5 GB peak memory)",
 ]
 
 [tool.coverage.run]

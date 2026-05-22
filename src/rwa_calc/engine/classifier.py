@@ -73,6 +73,7 @@ from rwa_calc.domain.enums import (
     PermissionMode,
     SpecialisedLendingType,
 )
+from rwa_calc.engine.materialise import materialise_barrier
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -152,9 +153,6 @@ class ExposureClassifier:
         classification_errors = self._collect_input_warnings(data, schema_names, config)
 
         classified = self._derive_independent_flags(exposures, config, schema_names)
-        classification_errors.extend(
-            self._collect_beel_on_non_defaulted_warnings(classified, schema_names)
-        )
         classified = self._classify_exposure_subtypes(classified, config, schema_names)
         classified = self._reclassify_corporate_to_retail(classified, config, schema_names)
         classified = self._flag_property_reclassification_candidates(
@@ -162,17 +160,33 @@ class ExposureClassifier:
         )
         classified = self._sync_irb_exposure_class(classified)
 
-        classified, perm_diagnostics = self._resolve_model_permissions_if_present(
-            classified, data.model_permissions, schema_names
-        )
-        classification_errors.extend(perm_diagnostics)
+        has_model_permissions = data.model_permissions is not None
+        if has_model_permissions:
+            classified = self._resolve_model_permissions(
+                classified, data.model_permissions, schema_names
+            )
 
         classified = self._assign_approach(
             classified,
             config,
             schema_names,
-            has_model_permissions=data.model_permissions is not None,
+            has_model_permissions=has_model_permissions,
         )
+
+        # Single materialisation barrier — both diagnostic emits below run
+        # against in-memory data instead of re-executing the upstream lazy
+        # plan, and the bundle returned downstream (CRMProcessor) reuses the
+        # same materialised data instead of paying upstream cost a third time.
+        # At 100K scale this saves ~880 ms / ~14 % of total pipeline time
+        # vs the previous "emit-then-materialise-later" arrangement.
+        classified = materialise_barrier(classified, config, "classifier_output")
+
+        classification_errors.extend(
+            self._collect_beel_on_non_defaulted_warnings(classified, schema_names)
+        )
+        if has_model_permissions:
+            classification_errors.extend(self._emit_model_permission_diagnostics(classified))
+            classified = classified.drop("_model_permission_diagnostic")
 
         return self._build_bundle(classified, data, classification_errors)
 
@@ -223,45 +237,33 @@ class ExposureClassifier:
             .alias("exposure_class_irb")
         )
 
-    def _resolve_model_permissions_if_present(
-        self,
-        exposures: pl.LazyFrame,
-        model_permissions: pl.LazyFrame | None,
-        schema_names: set[str],
-    ) -> tuple[pl.LazyFrame, list[CalculationError]]:
-        """Resolve per-row IRB permissions when ``model_permissions`` is supplied.
+    @staticmethod
+    def _emit_model_permission_diagnostics(
+        classified: pl.LazyFrame,
+    ) -> list[CalculationError]:
+        """Emit CLS006 warnings for IRB-eligible exposures that failed model match.
 
-        When present, joins exposures with the permissions table, sets
-        ``model_airb_permitted`` / ``model_firb_permitted`` /
-        ``model_slotting_permitted`` columns, and emits CLS006 diagnostics
-        for IRB-eligible exposures that failed to match (grouped by cause:
-        ``null_model_id``, ``unmatched_model_id``, ``filter_rejected``).
+        Reads ``_model_permission_diagnostic`` (added by
+        ``_resolve_model_permissions``) and rolls up the failure causes
+        (``null_model_id`` / ``unmatched_model_id`` / ``filter_rejected``)
+        into one warning per cause. The caller must drop the diagnostic
+        column from the frame after this returns.
 
-        Returns the (possibly augmented) frame plus the diagnostic warnings.
-        When ``model_permissions`` is None, returns the input unchanged with
-        an empty warning list — ``_assign_approach`` falls back to org-wide
-        permissions.
+        This runs **after** the classifier's single materialise barrier so
+        the underlying ``.collect()`` reads in-memory data rather than
+        re-executing the upstream join plan. See ``classify()``.
         """
-        if model_permissions is None:
-            return exposures, []
-
-        exposures = self._resolve_model_permissions(exposures, model_permissions, schema_names)
-        # Diagnostic roll-up: count IRB-eligible exposures (internal_pd
-        # non-null) that failed to receive a model permission match, grouped
-        # by cause. One cheap ``.collect()`` over a narrow projection.
         diagnostic_counts = (
-            exposures.filter(pl.col("internal_pd").is_not_null())
+            classified.filter(pl.col("internal_pd").is_not_null())
             .filter(pl.col("_model_permission_diagnostic").is_not_null())
             .group_by("_model_permission_diagnostic")
             .agg(pl.len().alias("n"))
             .collect()
         )
-        diagnostics = [
+        return [
             _build_model_permission_warning(row["_model_permission_diagnostic"], row["n"])
             for row in diagnostic_counts.iter_rows(named=True)
         ]
-        exposures = exposures.drop("_model_permission_diagnostic")
-        return exposures, diagnostics
 
     @staticmethod
     def _collect_beel_on_non_defaulted_warnings(

@@ -2,10 +2,14 @@
 Benchmark test fixtures and configuration.
 
 Provides pytest fixtures for benchmark testing at various scales:
-- 10K: Quick validation (~1s)
-- 100K: Standard benchmark (~5s)
-- 1M: Large scale (~60s)
-- 10M: Production scale (~10min, slow marker)
+- 10K: Quick validation (~1s) — runs untimed in dev-loop for regression detection
+- 100K: Standard benchmark (~5s) — runs untimed in dev-loop for regression detection
+- 1M: Large scale (~60s) — gated behind `-m scale_1m`; not in default run
+
+The 10M production-scale benchmarks have been removed: they cannot run on
+developer laptops (data generation alone OOMs) and the only useful signal
+they produced is also produced by 100K + plan inspection via
+`profile_plan.py`.
 
 Dataset Caching:
 - Datasets are cached to parquet files in tests/benchmarks/data/
@@ -22,6 +26,9 @@ Usage:
 
     # Force regenerate specific scale
     uv run pytest tests/benchmarks/ --benchmark-only --benchmark-regenerate-scale=100k
+
+    # Opt into 1M (warning: ~60s+ run, ~1.5 GB peak memory)
+    uv run pytest tests/benchmarks/ --benchmark-only -m scale_1m
 """
 
 import gc
@@ -57,7 +64,7 @@ def pytest_addoption(parser):
         "--benchmark-regenerate-scale",
         action="store",
         default=None,
-        help="Force regeneration of a specific scale (10k, 100k, 1m, 10m)",
+        help="Force regeneration of a specific scale (10k, 100k, 1m)",
     )
 
 
@@ -112,17 +119,6 @@ def benchmark_config_1m() -> BenchmarkDataConfig:
     """Configuration for 1M counterparty benchmark (large scale)."""
     return BenchmarkDataConfig(
         n_counterparties=1_000_000,
-        hierarchy_depth=4,
-        loans_per_counterparty=3,
-        seed=42,
-    )
-
-
-@pytest.fixture(scope="session")
-def benchmark_config_10m() -> BenchmarkDataConfig:
-    """Configuration for 10M counterparty benchmark (production scale)."""
-    return BenchmarkDataConfig(
-        n_counterparties=10_000_000,
         hierarchy_depth=4,
         loans_per_counterparty=3,
         seed=42,
@@ -214,34 +210,6 @@ def dataset_1m_stats(dataset_1m: dict[str, pl.LazyFrame]) -> dict:
 
 
 # =============================================================================
-# DATASET FIXTURES - 10M Scale (requires --benchmark-enable-slow)
-# =============================================================================
-
-
-@pytest.fixture(scope="session")
-def dataset_10m(
-    benchmark_config_10m: BenchmarkDataConfig,
-    force_regenerate: bool,
-    regenerate_scale: str | None,
-) -> dict[str, pl.LazyFrame]:
-    """Load or generate 10M scale benchmark dataset."""
-    regenerate = should_regenerate(force_regenerate, regenerate_scale, "10m")
-    return get_or_create_dataset(
-        scale="10m",
-        n_counterparties=benchmark_config_10m.n_counterparties,
-        hierarchy_depth=benchmark_config_10m.hierarchy_depth,
-        seed=benchmark_config_10m.seed,
-        force_regenerate=regenerate,
-    )
-
-
-@pytest.fixture(scope="session")
-def dataset_10m_stats(dataset_10m: dict[str, pl.LazyFrame]) -> dict:
-    """Statistics for 10M dataset."""
-    return get_dataset_statistics(dataset_10m)
-
-
-# =============================================================================
 # HELPER FIXTURES
 # =============================================================================
 
@@ -302,7 +270,7 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "slow: mark test as slow (10M+ scale, may take several minutes)",
+        "slow: mark test as slow (1M+ scale, may take several minutes)",
     )
     config.addinivalue_line(
         "markers",
@@ -314,9 +282,5 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "scale_1m: benchmark at 1M counterparty scale",
-    )
-    config.addinivalue_line(
-        "markers",
-        "scale_10m: benchmark at 10M counterparty scale",
+        "scale_1m: benchmark at 1M counterparty scale (opt-in via -m scale_1m)",
     )

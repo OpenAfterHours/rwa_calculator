@@ -48,6 +48,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.tables.ccf import (
+    OC_SHORT_MATURITY_CCF,
+    OC_SHORT_MATURITY_THRESHOLD_DAYS,
+    build_firb_ccf_expr,
+    build_sa_ccf_expr,
+)
 from rwa_calc.domain.enums import ApproachType
 
 if TYPE_CHECKING:
@@ -85,105 +91,23 @@ def sa_ccf_expression(
     risk_type_col: str = "risk_type",
     is_basel_3_1: bool = False,
 ) -> pl.Expr:
+    """Polars expression mapping risk_type to SA CCFs.
+
+    Thin wrapper over ``data.tables.ccf.build_sa_ccf_expr``. The values
+    themselves (CRR Art. 111 and PRA PS1/26 Table A1) live in the data
+    layer; this wrapper preserves the historical engine-side import path
+    and citation attribution.
     """
-    Return a Polars expression that maps risk_type to SA CCFs.
-
-    CRR (Art. 111):
-    - FR / full_risk: 100% (Row 1 — credit substitutes, guarantees)
-    - FRC / full_risk_commitment: 100% (Row 2 — repos, factoring, forward deposits)
-    - MR / medium_risk: 50%
-    - MLR / medium_low_risk: 20%
-    - OC / other_commit: 50% conservative default (CRR: 50% if >1yr, 20% if <=1yr)
-    - LR / low_risk: 0%
-
-    Basel 3.1 (PRA Art. 111 Table A1):
-    - FRC / full_risk_commitment: 100% (Row 2 — certain drawdown commitments)
-    - OC / other_commit: 40% (new category — Row 5)
-    - LR (unconditionally cancellable): 10% (Row 6)
-
-    Args:
-        risk_type_col: Name of the risk_type column (default "risk_type")
-        is_basel_3_1: Whether to apply Basel 3.1 CCF values
-
-    Returns:
-        Polars expression resolving to Float64 SA CCF values
-    """
-    normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
-    # Basel 3.1: SA UCC/LR gets 10% instead of 0% (PRA Art. 111 Table A1 Row 6)
-    lr_ccf = 0.10 if is_basel_3_1 else 0.0
-    # Basel 3.1: "Other commitments" gets 40% (Table A1 Row 5); CRR: 50%
-    # conservative default (maturity-dependent override to 20% in _compute_ccf
-    # for <=1yr). Under CRR, OC mapped to MR (50%) or MLR (20%) by maturity.
-    oc_ccf = 0.40 if is_basel_3_1 else 0.50
-    return (
-        pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
-        .then(pl.lit(1.0))
-        .when(normalized.is_in(["mr", "medium_risk"]))
-        .then(pl.lit(0.5))
-        .when(normalized.is_in(["oc", "other_commit"]))
-        .then(pl.lit(oc_ccf))
-        .when(normalized.is_in(["mlr", "medium_low_risk"]))
-        .then(pl.lit(0.2))
-        .when(normalized.is_in(["lr", "low_risk"]))
-        .then(pl.lit(lr_ccf))
-        .otherwise(pl.lit(0.5))  # Default to MR (50%) for SA
-    )
+    return build_sa_ccf_expr(risk_type_col, is_basel_3_1)
 
 
 @cites("CRR Art. 166")
 def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
-    """Return CRR F-IRB CCF expression for a given risk_type column.
+    """Polars expression for CRR F-IRB CCFs (Art. 166(8) + (10)).
 
-    Implements both F-IRB CCF clauses of CRR Article 166:
-
-    Art. 166(8) bespoke CCFs (selected when ``is_obs_commitment=True`` and
-    matching the listed commitment type):
-        (a) UCC credit lines (LR risk_type) -> 0%
-        (b) Short-term trade LCs (MLR + is_short_term_trade_lc) -> 20%
-        (d) Other credit lines / NIFs / RUFs (MR/MLR/OC commitments) -> 75%
-
-    Art. 166(10) residual fallback (selected when ``is_obs_commitment=False``,
-    i.e. the row is an issued OBS item not in scope of Art. 166(8)):
-        (a) Full risk -> 100%; (b) Medium-risk -> 50%;
-        (c) Medium/low-risk -> 20%; (d) Low-risk -> 0%.
-
-    FR / FRC and LR converge to the same value under either path, so they are
-    handled before the commitment/issued split. The Art. 166(8)(b) trade-LC
-    carve-out also wins over the issued/commitment split (it is more specific
-    than either Art. 166(8)(d) or Art. 166(10)(c)).
-
-    This helper is reused by Art. 111(1)(c) commitment-to-issue lower-of via
-    ``underlying_risk_type``; in that path the underlying item is treated as
-    a commitment (the historical default) because no separate
-    ``underlying_is_obs_commitment`` column exists.
+    Thin wrapper over ``data.tables.ccf.build_firb_ccf_expr``.
     """
-    normalized = pl.col(risk_type_col).fill_null("").str.to_lowercase()
-    is_commitment = pl.col("is_obs_commitment").fill_null(True)
-    is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
-    is_mlr = normalized.is_in(["mlr", "medium_low_risk"])
-    is_mr_or_oc = normalized.is_in(["mr", "medium_risk", "oc", "other_commit"])
-    return (
-        # FR / FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
-        pl.when(normalized.is_in(["fr", "full_risk", "frc", "full_risk_commitment"]))
-        .then(pl.lit(1.0))
-        # LR -> 0% under both Art. 166(8)(a) and Art. 166(10)(d)
-        .when(normalized.is_in(["lr", "low_risk"]))
-        .then(pl.lit(0.0))
-        # Art. 166(8)(b): short-term trade LC carve-out wins over both buckets
-        .when(is_mlr & is_trade_lc)
-        .then(pl.lit(0.2))
-        # Art. 166(8)(d): credit lines / NIFs / RUFs -> 75%
-        .when(is_commitment & (is_mr_or_oc | is_mlr))
-        .then(pl.lit(0.75))
-        # Art. 166(10)(b): MR / OC issued items -> 50%
-        .when(is_mr_or_oc)
-        .then(pl.lit(0.5))
-        # Art. 166(10)(c): MLR issued items -> 20%
-        .when(is_mlr)
-        .then(pl.lit(0.2))
-        # Conservative MR-equivalent fallback for unrecognised risk_type values
-        .otherwise(pl.lit(0.5))
-    )
+    return build_firb_ccf_expr(risk_type_col)
 
 
 class CCFCalculator:
@@ -363,11 +287,11 @@ class CCFCalculator:
                     (
                         pl.col("maturity_date").cast(pl.Date) - pl.lit(config.reporting_date)
                     ).dt.total_days()
-                    <= 365
+                    <= OC_SHORT_MATURITY_THRESHOLD_DAYS
                 )
                 exposures = exposures.with_columns(
                     pl.when(is_oc & is_short_maturity)
-                    .then(pl.lit(0.2))
+                    .then(pl.lit(float(OC_SHORT_MATURITY_CCF)))
                     .otherwise(pl.col("_sa_ccf_from_risk_type"))
                     .alias("_sa_ccf_from_risk_type"),
                 )
@@ -403,6 +327,7 @@ class CCFCalculator:
             # facilities whose SA CCF is not 100% (Table A1 Row 2 carve-out).
             # Non-revolving A-IRB must use SA CCFs from Table A1.
             # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
+            # TODO: move CRE32.27 0.5 floor multiplier to data/tables/airb_floors.py
             airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
                 pl.col("_sa_ccf_from_risk_type") * 0.5,
@@ -472,6 +397,7 @@ class CCFCalculator:
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
+            # TODO: move Art. 166D(5)(b) 0.5 floor multiplier to data/tables/airb_floors.py
             floor_b = (
                 pl.col("on_bs_for_ead")
                 + pl.col("nominal_after_provision") * pl.col("_sa_ccf_from_risk_type") * 0.5

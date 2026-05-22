@@ -859,6 +859,26 @@ VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
 VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR"}
 
+# Lowercase synonyms accepted on input for the risk_type column. Maps every
+# permitted spelling (short code or full name) to its canonical uppercase
+# form in VALID_RISK_TYPES_INPUT. Consumed by the CCF builders in
+# data/tables/ccf.py so risk_type matching is case-insensitive and accepts
+# both "FR" and "full_risk" style inputs.
+RISK_TYPE_SYNONYMS: dict[str, str] = {
+    "fr": "FR",
+    "full_risk": "FR",
+    "frc": "FRC",
+    "full_risk_commitment": "FRC",
+    "mr": "MR",
+    "medium_risk": "MR",
+    "oc": "OC",
+    "other_commit": "OC",
+    "mlr": "MLR",
+    "medium_low_risk": "MLR",
+    "lr": "LR",
+    "low_risk": "LR",
+}
+
 VALID_BS_TYPES = {"ONB", "OFB"}
 
 VALID_CHILD_TYPES = {"facility", "loan", "contingent"}

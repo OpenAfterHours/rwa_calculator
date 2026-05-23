@@ -30,17 +30,9 @@ import logging
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.schemas import ASSET_CLASS_SHORT_CODE
+
 logger = logging.getLogger(__name__)
-
-
-# Asset-class short codes used in the composite ``hedging_set_id`` string.
-_ASSET_CLASS_SHORT: dict[str, str] = {
-    "interest_rate": "IR",
-    "foreign_exchange": "FX",
-    "credit": "CR",
-    "equity": "EQ",
-    "commodity": "CO",
-}
 
 
 @cites("CRR Art. 277")
@@ -110,7 +102,7 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
     trades = assign_ir_maturity_bucket(trades)
 
     asset_short = pl.col("asset_class").replace_strict(
-        _ASSET_CLASS_SHORT, default=None, return_dtype=pl.Utf8
+        ASSET_CLASS_SHORT_CODE, default=None, return_dtype=pl.Utf8
     )
 
     hedging_set_id = (

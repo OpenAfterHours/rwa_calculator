@@ -775,6 +775,19 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
 }
 
 
+# Short-code mapping for the five SA-CCR asset classes used to compose the
+# stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
+# Keys mirror the canonical ``TRADE_SCHEMA.asset_class`` input strings
+# (see line 659 above). Values are the BCBS / CRR conventional short codes.
+ASSET_CLASS_SHORT_CODE: dict[str, str] = {
+    "interest_rate": "IR",
+    "foreign_exchange": "FX",
+    "credit": "CR",
+    "equity": "EQ",
+    "commodity": "CO",
+}
+
+
 # =============================================================================
 # Valid value sets for categorical input columns.
 # Used by validate_bundle_values() to catch invalid values at input time.

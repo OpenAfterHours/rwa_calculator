@@ -100,6 +100,27 @@ PFE_MULTIPLIER_FLOOR_F: Decimal = Decimal("0.05")
 
 
 # =============================================================================
+# ADJUSTED NOTIONAL — IR SUPERVISORY DURATION (CRR Art. 279b(1)(a))
+#
+# Supervisory duration SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05
+# with start date S floored at 10 business days under the 250-business-day
+# year convention (BCBS CRE52.40 footnote).
+# =============================================================================
+
+# CRR Art. 279b(1)(a) supervisory duration rate: SD(S,E) = (exp(-0.05*S) - exp(-0.05*E))/0.05
+SA_CCR_SUPERVISORY_DURATION_RATE: Decimal = Decimal("0.05")
+
+# CRR Art. 279b(1)(a): start-date S floored at 10 business days
+SA_CCR_START_FLOOR_BD: int = 10
+
+# BCBS CRE52.40 footnote: 250-business-day year convention
+SA_CCR_BUSINESS_DAYS_PER_YEAR: int = 250
+
+# Derived: 10/250 = 0.04 year fraction floor for S
+SA_CCR_START_FLOOR_YEARS: Decimal = Decimal("10") / Decimal("250")
+
+
+# =============================================================================
 # INTERNAL DATAFRAME-BUILD HELPERS
 #
 # Each ``_build_*_df`` helper derives its numeric values from the constant

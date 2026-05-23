@@ -31,6 +31,7 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 
@@ -61,11 +62,11 @@ class CCRNamespace:
 
         return compute_rc_unmargined(self._lf)
 
-    def adjusted_notional_ir(self) -> pl.LazyFrame:
+    def adjusted_notional_ir(self, reporting_date: date) -> pl.LazyFrame:
         """Delegate to :func:`compute_adjusted_notional_ir`."""
         from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_ir
 
-        return compute_adjusted_notional_ir(self._lf)
+        return compute_adjusted_notional_ir(self._lf, reporting_date)
 
     def supervisory_delta_linear(self) -> pl.LazyFrame:
         """Delegate to :func:`compute_supervisory_delta_linear`."""

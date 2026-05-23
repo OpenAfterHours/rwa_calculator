@@ -279,30 +279,6 @@ def test_compute_supervisory_delta_linear_raises_not_implemented() -> None:
 
 
 # ===========================================================================
-# 8. compute_adjusted_notional_ir — NotImplementedError (stub, P8.12)
-# ===========================================================================
-
-
-def test_compute_adjusted_notional_ir_raises_not_implemented() -> None:
-    """compute_adjusted_notional_ir must raise NotImplementedError (stub until P8.12)."""
-    # Arrange
-    try:
-        from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_ir
-    except (ImportError, ModuleNotFoundError) as exc:
-        pytest.fail(
-            f"Cannot import compute_adjusted_notional_ir from "
-            f"rwa_calc.engine.ccr.adjusted_notional: {exc}. "
-            "Add the stub in P8.4."
-        )
-
-    lf = pl.LazyFrame({"trade_id": ["T-001"]})
-
-    # Act + Assert
-    with pytest.raises(NotImplementedError):
-        compute_adjusted_notional_ir(lf)
-
-
-# ===========================================================================
 # 9. compute_maturity_factor_unmargined — NotImplementedError (stub, P8.14)
 # ===========================================================================
 

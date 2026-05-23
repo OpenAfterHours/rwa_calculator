@@ -255,30 +255,6 @@ def test_compute_rc_unmargined_clamps_at_zero() -> None:
 
 
 # ===========================================================================
-# 7. compute_supervisory_delta_linear — NotImplementedError (stub, P8.13)
-# ===========================================================================
-
-
-def test_compute_supervisory_delta_linear_raises_not_implemented() -> None:
-    """compute_supervisory_delta_linear must raise NotImplementedError (stub until P8.13)."""
-    # Arrange
-    try:
-        from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_linear
-    except (ImportError, ModuleNotFoundError) as exc:
-        pytest.fail(
-            f"Cannot import compute_supervisory_delta_linear from "
-            f"rwa_calc.engine.ccr.supervisory_delta: {exc}. "
-            "Add the stub in P8.4."
-        )
-
-    lf = pl.LazyFrame({"trade_id": ["T-001"]})
-
-    # Act + Assert
-    with pytest.raises(NotImplementedError):
-        compute_supervisory_delta_linear(lf)
-
-
-# ===========================================================================
 # 9. compute_maturity_factor_unmargined — NotImplementedError (stub, P8.14)
 # ===========================================================================
 

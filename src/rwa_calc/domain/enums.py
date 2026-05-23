@@ -239,6 +239,10 @@ class ErrorCategory(StrEnum):
     CLASSIFICATION = "classification"
     """Exposure classification issues"""
 
+    CCR_LEGAL = "ccr_legal"
+    """CCR legal-enforceability issues — non-enforceable netting set falls
+    back to single-trade NS treatment (CRR Art. 272(4); Art. 295-297)."""
+
 
 class SlottingCategory(StrEnum):
     """

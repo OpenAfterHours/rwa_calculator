@@ -294,6 +294,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p815,
         ),
+        (
+            "P8.18 (CRR Art. 272(4) legal-enforceability gate — 2 trades, 1 non-enforceable NS)",
+            "ccr",
+            _generate_p818,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1443,6 +1448,103 @@ def _generate_p815(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.hedging_sets_ir_builder",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p818(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.18 builder imports (Python-only builder — no persistent parquet output).
+
+    P8.18 tests the legal-enforceability gate (CRR Art. 272(4) second subparagraph):
+    when a netting set has ``is_legally_enforceable=False``, each trade must be
+    expanded into its own single-trade synthetic netting set.  The fixture is a
+    Python-only builder that constructs in-memory DataFrames typed against the
+    canonical TRADE_SCHEMA / NETTING_SET_SCHEMA from schemas.py.
+
+    This function smoke-checks the import, constructs the four frames, and
+    verifies the critical invariants the test-writer will assert.
+    """
+    # p8_18_non_enforceable uses relative imports, so load it as part of the
+    # 'ccr' package from the fixtures root (parent of ccr/).
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p8_18_non_enforceable import (  # noqa: PLC0415
+            NS_Q1_ID,
+            NS_Q1_IS_LEGALLY_ENFORCEABLE,
+            SPLIT_NS_ID_T_A,
+            SPLIT_NS_ID_T_B,
+            T_A_ID,
+            T_B_ID,
+            make_p818_frames,
+        )
+
+        frames = make_p818_frames()
+
+        # Invariant 1: trades DataFrame has exactly 2 rows with the correct trade IDs.
+        trades_df = frames["trades"]
+        if trades_df.height != 2:
+            raise AssertionError(f"P8.18: trades must have 2 rows (got {trades_df.height})")
+        trade_ids = set(trades_df["trade_id"].to_list())
+        if trade_ids != {T_A_ID, T_B_ID}:
+            raise AssertionError(f"P8.18: expected trade_ids {{T_A, T_B}}, got {trade_ids}")
+
+        # Invariant 2: netting_sets DataFrame has exactly 1 row with NS_Q1.
+        ns_df = frames["netting_sets"]
+        if ns_df.height != 1:
+            raise AssertionError(f"P8.18: netting_sets must have 1 row (got {ns_df.height})")
+        if ns_df["netting_set_id"][0] != NS_Q1_ID:
+            raise AssertionError(
+                f"P8.18: netting_set_id must be {NS_Q1_ID!r} (got {ns_df['netting_set_id'][0]!r})"
+            )
+
+        # Invariant 3: is_legally_enforceable must be False on NS_Q1.
+        if ns_df["is_legally_enforceable"][0] is not False:
+            raise AssertionError(
+                "P8.18: NS_Q1.is_legally_enforceable must be False (Art. 272(4) gate trigger)"
+            )
+        if NS_Q1_IS_LEGALLY_ENFORCEABLE is not False:
+            raise AssertionError(
+                "P8.18: module constant NS_Q1_IS_LEGALLY_ENFORCEABLE must be False"
+            )
+
+        # Invariant 4: both trades belong to NS_Q1.
+        ns_ids_on_trades = set(trades_df["netting_set_id"].to_list())
+        if ns_ids_on_trades != {NS_Q1_ID}:
+            raise AssertionError(
+                f"P8.18: all trades must belong to {NS_Q1_ID!r} (got {ns_ids_on_trades})"
+            )
+
+        # Invariant 5: expected synthetic split IDs are formed correctly.
+        expected_t_a = f"{NS_Q1_ID}__split__{T_A_ID}"
+        expected_t_b = f"{NS_Q1_ID}__split__{T_B_ID}"
+        if expected_t_a != SPLIT_NS_ID_T_A:
+            raise AssertionError(
+                f"P8.18: SPLIT_NS_ID_T_A must be {expected_t_a!r} (got {SPLIT_NS_ID_T_A!r})"
+            )
+        if expected_t_b != SPLIT_NS_ID_T_B:
+            raise AssertionError(
+                f"P8.18: SPLIT_NS_ID_T_B must be {expected_t_b!r} (got {SPLIT_NS_ID_T_B!r})"
+            )
+
+        # Invariant 6: margin_agreements is empty (unmargined scenario).
+        if frames["margin_agreements"].height != 0:
+            raise AssertionError("P8.18: margin_agreements must be empty (unmargined scenario)")
+
+        # Invariant 7: ccr_collateral is empty (no posted/received collateral).
+        if frames["ccr_collateral"].height != 0:
+            raise AssertionError("P8.18: ccr_collateral must be empty (no collateral)")
+
+        # No parquet files written — report zero files, zero records.
+        return [("(python-only builder — no parquet)", 0)]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p8_18_non_enforceable",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

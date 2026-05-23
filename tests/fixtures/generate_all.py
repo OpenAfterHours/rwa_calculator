@@ -299,6 +299,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p818,
         ),
+        (
+            "P8.16 (SA-CCR PFE multiplier Art. 278(3) — under-collateralised + cap sub-test)",
+            "ccr",
+            _generate_p816,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1548,6 +1553,34 @@ def _generate_p818(output_dir: Path) -> list[tuple[str, int]]:
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p816(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.16 builder imports (Python-only builder — no persistent parquet output).
+
+    P8.16 tests the SA-CCR PFE multiplier formula (CRR Art. 278(3)):
+        multiplier = min(1, F + (1 − F) × exp((V − C) / (2 × (1 − F) × AddOn_aggregate)))
+
+    Two scenarios are smoke-checked:
+        Scenario A (NS-CCR-A2-01): v_net=-2_000_000, c_net=+500_000 → multiplier ≈ 0.853 < 1.
+        Scenario B (NS-CCR-A2-02): v_net=+3_000_000, c_net=+500_000 → multiplier = 1.0 (capped).
+
+    The builder is Python-only; test-writer imports the LazyFrame factories directly.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.pfe_multiplier_builder import save_pfe_multiplier_fixtures
+
+        return save_pfe_multiplier_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.pfe_multiplier_builder",
+            "ccr.netting_set_builder",
         ):
             sys.modules.pop(mod, None)
 

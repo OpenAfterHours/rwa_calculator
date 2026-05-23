@@ -28,7 +28,10 @@ import logging
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.data.tables.sa_ccr_factors import (
+    PFE_AGGREGATE_DENOM_COEFF,
+    PFE_MULTIPLIER_FLOOR_F,
     SA_CCR_IR_BUCKET_CORRELATION_12,
     SA_CCR_IR_BUCKET_CORRELATION_13,
     SA_CCR_IR_BUCKET_CORRELATION_23,
@@ -36,6 +39,68 @@ from rwa_calc.data.tables.sa_ccr_factors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@cites("CRR Art. 278")
+def compute_pfe(
+    netting_sets: pl.LazyFrame,
+    config: CCRConfig | None = None,
+) -> pl.LazyFrame:
+    """SA-CCR PFE multiplier and aggregate PFE per CRR Art. 278(3).
+
+    Implements the netting-set-grain PFE composition layer:
+
+        multiplier = min(1, F + (1 − F) × exp((V − C) / (2 × (1 − F) × AddOn_agg)))
+        pfe_addon  = multiplier × AddOn_aggregate          (Art. 278(1))
+        rc_unmarg  = max(V_net − C_net, 0)                 (Art. 275(1))
+        ead_ccr    = α × (rc_unmarg + pfe_addon)           (Art. 274(2))
+
+    where ``F = 0.05`` (``PFE_MULTIPLIER_FLOOR_F``) and the ``2`` in the
+    denominator is ``PFE_AGGREGATE_DENOM_COEFF``. The ``min(1, ...)`` cap
+    binds whenever ``V − C ≥ 0`` (over-collateralised / in-the-money).
+
+    Args:
+        netting_sets: LazyFrame at netting-set grain with at minimum
+            ``v_net: Float64``, ``c_net: Float64`` and
+            ``addon_aggregate: Float64`` columns.
+        config: Optional CCRConfig; when provided ``config.alpha`` overrides
+            the default α=1.4 (CRR Art. 274(2)).
+
+    Returns:
+        Input LazyFrame with four new columns:
+
+        - ``pfe_multiplier: Float64`` — Art. 278(3) multiplier.
+        - ``pfe_addon: Float64``      — Art. 278(1) PFE.
+        - ``rc_unmargined: Float64``  — Art. 275(1) replacement cost.
+        - ``ead_ccr: Float64``        — Art. 274(2) EAD at α = 1.4.
+
+    References:
+        CRR Art. 274(2); CRR Art. 275(1); CRR Art. 278(1)-(3);
+        BCBS CRE52.20-23.
+    """
+    alpha_value = float(config.alpha) if config is not None else 1.4
+    floor_f = float(PFE_MULTIPLIER_FLOOR_F)
+    denom_coeff = float(PFE_AGGREGATE_DENOM_COEFF)
+    one_minus_f = 1.0 - floor_f
+
+    v_minus_c = pl.col("v_net") - pl.col("c_net")
+    denom = denom_coeff * one_minus_f * pl.col("addon_aggregate")
+    uncapped = floor_f + one_minus_f * (v_minus_c / denom).exp()
+
+    return (
+        netting_sets.with_columns(
+            pl.min_horizontal(pl.lit(1.0), uncapped).alias("pfe_multiplier"),
+        )
+        .with_columns(
+            [
+                (pl.col("pfe_multiplier") * pl.col("addon_aggregate")).alias("pfe_addon"),
+                pl.max_horizontal(v_minus_c, pl.lit(0.0)).alias("rc_unmargined"),
+            ]
+        )
+        .with_columns(
+            (pl.lit(alpha_value) * (pl.col("rc_unmargined") + pl.col("pfe_addon"))).alias("ead_ccr")
+        )
+    )
 
 
 @cites("CRR Art. 278")

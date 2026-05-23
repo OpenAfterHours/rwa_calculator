@@ -113,6 +113,10 @@ MF_MARGINED_DISPUTE_MULTIPLIER: int = 2
 
 PFE_MULTIPLIER_FLOOR_F: Decimal = Decimal("0.05")
 
+# CRR Art. 278(3): the ``2`` in the denominator ``2 × (1 − F) × AddOn_aggregate``
+# of the PFE multiplier exponent.
+PFE_AGGREGATE_DENOM_COEFF: Decimal = Decimal("2")
+
 
 # =============================================================================
 # SUPERVISORY OPTION VOLATILITY (CRR Art. 279a(2) / BCBS CRE52.47 Table 3)

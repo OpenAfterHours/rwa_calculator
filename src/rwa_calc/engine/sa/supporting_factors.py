@@ -244,12 +244,15 @@ class SupportingFactorCalculator:
 
         # Build the drawn (on-balance-sheet) expression for tier calculation.
         # Use drawn_amount + interest when available; fall back to ead_final.
+        # fill_nan before clip/sum — a single NaN in the group would otherwise
+        # poison the windowed sum and zero out the supporting factor.
         if has_drawn:
-            drawn_expr = pl.col("drawn_amount").clip(lower_bound=0.0) + pl.col(
-                "interest"
-            ).fill_null(0.0)
+            drawn_expr = (
+                pl.col("drawn_amount").fill_nan(0.0).fill_null(0.0).clip(lower_bound=0.0)
+                + pl.col("interest").fill_nan(0.0).fill_null(0.0)
+            )
         else:
-            drawn_expr = pl.col("ead_final")
+            drawn_expr = pl.col("ead_final").fill_nan(0.0).fill_null(0.0)
 
         # Build SME factor expression with group-of-connected-clients aggregation.
         # CRR Art. 501 defines E* as the total amount owed across the SME's group

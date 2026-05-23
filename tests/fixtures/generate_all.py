@@ -314,6 +314,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p825,
         ),
+        (
+            "P8.27 (CRR Art. 291 WWR identification — specific WWR break-out + LGD=100% override)",
+            "ccr",
+            _generate_p827,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1866,6 +1871,36 @@ def _generate_p825(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.qccp_builder",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p827(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.27 builder (Python-only — no persistent parquet output).
+
+    P8.27 exercises the specific-WWR identification gate (CRR Art. 291(4)-(5)):
+    trade T_WWR_01 (equity derivative, underlying issued by counterparty CP_WWR_01)
+    has ``is_specific_wwr=True`` and must be broken out into a synthetic netting
+    set ``NS_WWR_01__wwr__T_WWR_01`` with ``wwr_lgd_override=1.0`` (Art. 291(5)(c)).
+    Trade T_NORMAL_01 (IR derivative) remains in the residual NS_WWR_01.
+    One CCR010 warning is emitted per original NS containing WWR trades; zero
+    CCR011 (has_general_wwr_flag=False).  The builder is Python-only; test-writer
+    imports the LazyFrame factories directly rather than reading parquet.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.wwr_builder import save_p827_fixtures
+
+        return save_p827_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.wwr_builder",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

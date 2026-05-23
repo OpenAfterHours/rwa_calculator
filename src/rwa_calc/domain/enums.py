@@ -243,6 +243,16 @@ class ErrorCategory(StrEnum):
     """CCR legal-enforceability issues — non-enforceable netting set falls
     back to single-trade NS treatment (CRR Art. 272(4); Art. 295-297)."""
 
+    CCR_WWR_SPECIFIC = "ccr_wwr_specific"
+    """CCR specific wrong-way risk — trade with ``is_specific_wwr=True`` is
+    broken out into a synthetic single-trade netting set with LGD=100%
+    (CRR Art. 291(1)(b), 291(4)-(5))."""
+
+    CCR_WWR_GENERAL = "ccr_wwr_general"
+    """CCR general wrong-way risk — netting set carries
+    ``has_general_wwr_flag=True`` indicating positive correlation between
+    counterparty PD and exposure size (CRR Art. 291(1)(a), 291(6))."""
+
 
 class SlottingCategory(StrEnum):
     """

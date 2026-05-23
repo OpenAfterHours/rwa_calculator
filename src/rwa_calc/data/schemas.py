@@ -698,6 +698,11 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # because Art. 307 keys on the trade's clearing relationship. Defaults to
     # False so pre-existing fixtures route to the proprietary/non-QCCP branch.
     "is_client_cleared": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 291(1)(b)/(4)-(5): specific wrong-way risk flag. When True,
+    # ``engine/ccr/wwr.py::apply_wwr_gate`` breaks the trade out into its own
+    # single-trade synthetic netting set (id ``<original>__wwr__<trade_id>``)
+    # and assigns ``wwr_lgd_override = 1.0`` to that synthetic NS.
+    "is_specific_wwr": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -738,6 +743,14 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     "has_illiquid_collateral_or_hard_to_replace_otc": ColumnSpec(
         pl.Boolean, default=False, required=False
     ),
+    # CRR Art. 291(1)(a) / 291(6): general wrong-way risk flag. Conservative
+    # default False — flips ``engine/ccr/wwr.py::apply_wwr_gate`` into emitting
+    # a CCR011 WARNING for the netting set.
+    "has_general_wwr_flag": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 291(5)(c): LGD override applied by the WWR gate to synthetic
+    # single-trade netting sets carved out for specific WWR. Null on regular
+    # netting sets; set to 1.0 by the gate on the synthetic NS row.
+    "wwr_lgd_override": ColumnSpec(pl.Float64, default=None, required=False),
 }
 
 #: Margin-agreement-level (CSA) input for SA-CCR. Separate from

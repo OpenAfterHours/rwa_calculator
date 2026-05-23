@@ -41,7 +41,11 @@ from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargin
 from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton  # noqa: E402
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined  # noqa: E402
 from rwa_calc.engine.ccr.sa_ccr import compute_ead  # noqa: E402
-from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_linear  # noqa: E402
+from rwa_calc.engine.ccr.supervisory_delta import (  # noqa: E402
+    compute_supervisory_delta_cdo_tranche,
+    compute_supervisory_delta_linear,
+    compute_supervisory_delta_option,
+)
 
 __all__ = [
     "compute_adjusted_notional_ir",
@@ -50,5 +54,7 @@ __all__ = [
     "compute_pfe_ir_singleton",
     "compute_rc_margined",
     "compute_rc_unmargined",
+    "compute_supervisory_delta_cdo_tranche",
     "compute_supervisory_delta_linear",
+    "compute_supervisory_delta_option",
 ]

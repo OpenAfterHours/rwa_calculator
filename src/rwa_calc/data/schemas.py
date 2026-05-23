@@ -677,6 +677,15 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # Optional nullable (3) — schema-present for richer trade types added later.
     "underlying_reference": ColumnSpec(pl.String, required=False),
     "option_strike": ColumnSpec(pl.Float64, required=False),
+    # Optional nullable (4) — option/CDO supervisory delta inputs (CRR Art. 279a(2)/(3)).
+    # option_type: "call" | "put" — null for non-option trades.
+    # option_underlying_price: current price of the underlying (P in Black-Scholes Φ(d1)).
+    # cdo_attachment: attachment point A of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    # cdo_detachment: detachment point D of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    "option_type": ColumnSpec(pl.String, required=False),
+    "option_underlying_price": ColumnSpec(pl.Float64, required=False),
+    "cdo_attachment": ColumnSpec(pl.Float64, required=False),
+    "cdo_detachment": ColumnSpec(pl.Float64, required=False),
     "payment_leg_index_id": ColumnSpec(pl.String, required=False),
 }
 

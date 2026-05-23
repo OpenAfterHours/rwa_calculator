@@ -100,6 +100,23 @@ PFE_MULTIPLIER_FLOOR_F: Decimal = Decimal("0.05")
 
 
 # =============================================================================
+# SUPERVISORY OPTION VOLATILITY (CRR Art. 279a(2) / BCBS CRE52.47 Table 3)
+#
+# Used by the Black-Scholes Phi(d1) supervisory delta for European options:
+#     d1 = (ln(P/K) + 0.5 * sigma^2 * T) / (sigma * sqrt(T))
+# =============================================================================
+
+SA_CCR_OPTION_VOLATILITY_IR: Decimal = Decimal("0.50")
+SA_CCR_OPTION_VOLATILITY_FX: Decimal = Decimal("0.15")
+SA_CCR_OPTION_VOLATILITY_CREDIT_SN: Decimal = Decimal("1.00")
+SA_CCR_OPTION_VOLATILITY_CREDIT_IDX: Decimal = Decimal("0.80")
+SA_CCR_OPTION_VOLATILITY_EQUITY_SN: Decimal = Decimal("1.20")
+SA_CCR_OPTION_VOLATILITY_EQUITY_IDX: Decimal = Decimal("0.75")
+SA_CCR_OPTION_VOLATILITY_COMMODITY_ELECTRICITY: Decimal = Decimal("1.50")
+SA_CCR_OPTION_VOLATILITY_COMMODITY_OTHER: Decimal = Decimal("0.70")
+
+
+# =============================================================================
 # ADJUSTED NOTIONAL — IR SUPERVISORY DURATION (CRR Art. 279b(1)(a))
 #
 # Supervisory duration SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05

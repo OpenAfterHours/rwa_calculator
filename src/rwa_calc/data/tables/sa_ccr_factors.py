@@ -117,6 +117,18 @@ SA_CCR_OPTION_VOLATILITY_COMMODITY_OTHER: Decimal = Decimal("0.70")
 
 
 # =============================================================================
+# CDO TRANCHE SUPERVISORY DELTA (CRR Art. 279a(3) / BCBS CRE52.43)
+#
+# Closed-form |delta| = 15 / ((1 + 14 * A) * (1 + 14 * D)) where A and D are
+# the tranche attachment and detachment points respectively.
+# =============================================================================
+
+# CRR Art. 279a(3) / BCBS CRE52.43 — CDO tranche supervisory delta closed-form
+SA_CCR_CDO_TRANCHE_NUMERATOR: Decimal = Decimal("15")
+SA_CCR_CDO_TRANCHE_COEFFICIENT: Decimal = Decimal("14")
+
+
+# =============================================================================
 # ADJUSTED NOTIONAL — IR SUPERVISORY DURATION (CRR Art. 279b(1)(a))
 #
 # Supervisory duration SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05

@@ -25,6 +25,8 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.tables.sa_ccr_factors import (
+    SA_CCR_CDO_TRANCHE_COEFFICIENT,
+    SA_CCR_CDO_TRANCHE_NUMERATOR,
     SA_CCR_OPTION_VOLATILITY_CREDIT_IDX,
     SA_CCR_OPTION_VOLATILITY_CREDIT_SN,
     SA_CCR_OPTION_VOLATILITY_EQUITY_IDX,
@@ -51,11 +53,6 @@ _OPTION_VOLATILITY_BY_ASSET_CLASS: dict[str, float] = {
     "equity_sn": float(SA_CCR_OPTION_VOLATILITY_EQUITY_SN),
     "equity_idx": float(SA_CCR_OPTION_VOLATILITY_EQUITY_IDX),
 }
-
-#: CDO-tranche supervisory delta closed form per CRR Art. 279a(3) /
-#: BCBS CRE52.43: |delta| = 15 / ((1 + 14*A) * (1 + 14*D)).
-_CDO_TRANCHE_NUMERATOR: float = 15.0
-_CDO_TRANCHE_COEFFICIENT: float = 14.0
 
 
 @cites("CRR Art. 279a")
@@ -211,9 +208,10 @@ def compute_supervisory_delta_cdo_tranche(trades: pl.LazyFrame) -> pl.LazyFrame:
     a = pl.col("cdo_attachment")
     d = pl.col("cdo_detachment")
 
-    magnitude = _CDO_TRANCHE_NUMERATOR / (
-        (1.0 + _CDO_TRANCHE_COEFFICIENT * a) * (1.0 + _CDO_TRANCHE_COEFFICIENT * d)
-    )
+    numerator = float(SA_CCR_CDO_TRANCHE_NUMERATOR)
+    coefficient = float(SA_CCR_CDO_TRANCHE_COEFFICIENT)
+
+    magnitude = numerator / ((1.0 + coefficient * a) * (1.0 + coefficient * d))
 
     cdo_delta = pl.when(pl.col("is_long")).then(magnitude).otherwise(-magnitude)
     linear_delta = pl.when(pl.col("is_long")).then(1.0).otherwise(-1.0)

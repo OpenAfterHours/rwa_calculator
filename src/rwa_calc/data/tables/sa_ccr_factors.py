@@ -78,6 +78,13 @@ SA_CCR_CORRELATION_EQUITY_SN: Decimal = Decimal("0.50")
 SA_CCR_CORRELATION_EQUITY_IDX: Decimal = Decimal("0.80")
 SA_CCR_CORRELATION_COMMODITY: Decimal = Decimal("0.40")
 
+# CRR Art. 277a(1)(a): cross-bucket correlations for the IR asset class.
+# Buckets are LT_1Y (B1), 1Y_5Y (B2), GT_5Y (B3). Adjacent buckets correlate
+# at 0.70; non-adjacent (B1, B3) correlate at 0.30.
+SA_CCR_IR_BUCKET_CORRELATION_12: Decimal = Decimal("0.7")
+SA_CCR_IR_BUCKET_CORRELATION_23: Decimal = Decimal("0.7")
+SA_CCR_IR_BUCKET_CORRELATION_13: Decimal = Decimal("0.3")
+
 
 # =============================================================================
 # MATURITY FACTOR CONSTANTS (CRR Art. 279c, Art. 285(2)-(3))

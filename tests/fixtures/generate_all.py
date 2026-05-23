@@ -289,6 +289,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p814_margined,
         ),
+        (
+            "P8.15 (IR hedging-set partition + asset-class add-on, Art. 277/277a/280a, GBP)",
+            "ccr",
+            _generate_p815,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1409,6 +1414,35 @@ def _generate_p814_margined(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.margined_mf_builder",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p815(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.15 builder (Python-only — no persistent parquet output).
+
+    P8.15 exercises IR hedging-set partition (Art. 277) and the intra-asset-class
+    add-on aggregation formula (Art. 277a/280a) with two GBP IR swaps in netting
+    set NS-IR-01: T1 (10y, GT_5Y bucket, delta=+1) and T2 (3y, 1Y_5Y bucket,
+    delta=-1).  The builder is Python-only; test-writer imports the LazyFrame
+    factories directly rather than reading parquet.
+    """
+    fixtures_root = str(output_dir.parent)
+    import sys
+
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.hedging_sets_ir_builder import save_p815_fixtures
+
+        return save_p815_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.hedging_sets_ir_builder",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

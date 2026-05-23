@@ -345,6 +345,31 @@ class CCRCollateralBundle:
 
 
 @dataclass(frozen=True)
+class FailedTradesBundle:
+    """
+    Failed-trade (settlement-risk) input for CRR Title V (Art. 378-380).
+
+    Holds the per-failed-settlement LazyFrame consumed by the
+    ``engine/ccr/failed_trades.py`` calculator. One row per failed DvP
+    settlement or non-DvP free-delivery transaction, discriminated by
+    the schema-level ``settlement_type`` field
+    (``"dvp"`` vs ``"non_dvp_free_delivery"``).
+
+    Row schema enforced by ``FAILED_TRADE_SCHEMA`` in
+    ``rwa_calc.data.schemas`` (added in P8.24).
+
+    References:
+    - CRR Art. 378 + Table 1 (DvP multiplier ladder)
+    - CRR Art. 379(1) + Table 2 (non-DvP free-delivery exposure)
+    - CRR Art. 379(2)-(3), Art. 380 (electives — schema reserves
+      the flags; engine currently treats them as no-op false)
+    """
+
+    failed_trades: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class RawCCRBundle:
     """
     Aggregate CCR input bundle — composes the four P8.1 leaf bundles.
@@ -360,6 +385,7 @@ class RawCCRBundle:
     - ``netting_sets``: per-netting-set rows (CRR Art. 272(4))
     - ``margin_agreements``: per-CSA rows (CRR Art. 272(7))
     - ``ccr_collateral``: netting-set-keyed collateral (CRR Art. 275(1))
+    - ``failed_trades``: optional failed-settlement rows (Art. 378-380)
 
     Each leaf bundle's LazyFrame may be empty (zero rows, schema
     present) when the firm has no instances of that domain — e.g.
@@ -367,11 +393,17 @@ class RawCCRBundle:
     ``margin_agreements`` frame. Optionality lives one level up at
     ``RawDataBundle.ccr``, not inside this bundle.
 
+    ``failed_trades`` is itself optional: firms without any failed
+    settlements leave it as ``None`` and the failed-trade calculator is
+    skipped entirely. Backward-compatible with all existing CCR-bundle
+    constructions (P8.5 onwards).
+
     Attributes:
         trades: Trade-level inputs for SA-CCR
         netting_sets: Netting-set-level inputs for SA-CCR
         margin_agreements: Margin-agreement (CSA) inputs for SA-CCR
         ccr_collateral: Netting-set-keyed collateral inputs
+        failed_trades: Optional failed-settlement inputs (Art. 378-380)
         errors: Bundle-level wiring errors (e.g. missing leaf file,
             cross-leaf consistency failures). Row-level data-quality
             errors live on the individual leaf bundles.
@@ -381,12 +413,14 @@ class RawCCRBundle:
       long-settlement, margin lending)
     - CRR Art. 272(4) (netting set), 272(7) (margin agreement),
       272(9) (margin period of risk)
+    - CRR Art. 378-380 (settlement risk — failed trades)
     """
 
     trades: TradeBundle
     netting_sets: NettingSetBundle
     margin_agreements: MarginAgreementBundle
     ccr_collateral: CCRCollateralBundle
+    failed_trades: FailedTradesBundle | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 

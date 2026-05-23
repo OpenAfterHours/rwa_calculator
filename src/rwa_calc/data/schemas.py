@@ -775,6 +775,52 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
 }
 
 
+# =============================================================================
+# FAILED-TRADE (SETTLEMENT RISK) INPUT SCHEMA — P8.24
+# =============================================================================
+# One row per failed settlement (DvP or non-DvP free delivery) consumed by
+# ``engine/ccr/failed_trades.py``. Held under an optional leaf bundle on
+# ``RawCCRBundle.failed_trades``; absent when the firm has no failed trades.
+#
+# References:
+# - CRR Art. 378 + Table 1: DvP multiplier ladder.
+# - CRR Art. 379(1) + Table 2: non-DvP free-delivery treatment.
+# - CRR Art. 379(2)-(3): immateriality / CET1-deduction electives (schema
+#   reserves the flags; engine currently treats them as no-op false).
+# - CRR Art. 380: system-wide failure waiver (schema reserves the flag).
+
+#: Failed-trade input schema. ``settlement_type`` discriminates the two
+#: branches: ``"dvp"`` rows require ``agreed_settlement_price`` +
+#: ``current_market_value``; ``"non_dvp_free_delivery"`` rows require
+#: ``value_transferred`` + ``current_positive_exposure``. Optional booleans
+#: default False per Art. 378-380 scope rules.
+FAILED_TRADE_SCHEMA: dict[str, ColumnSpec] = {
+    # Required (5) — primary key + core settlement attributes.
+    "failed_trade_id": ColumnSpec(pl.String),
+    "counterparty_reference": ColumnSpec(pl.String),
+    # "dvp" | "non_dvp_free_delivery"
+    "settlement_type": ColumnSpec(pl.String),
+    "working_days_past_due": ColumnSpec(pl.Int32),
+    # "debt" | "equity" | "fx" | "commodity"
+    "instrument_class": ColumnSpec(pl.String),
+    # DvP-only (Art. 378 Table 1 inputs) — null for non-DvP rows.
+    "agreed_settlement_price": ColumnSpec(pl.Float64, required=False),
+    "current_market_value": ColumnSpec(pl.Float64, required=False),
+    # Non-DvP-only (Art. 379(1) Table 2 inputs) — null for DvP rows.
+    "value_transferred": ColumnSpec(pl.Float64, required=False),
+    "current_positive_exposure": ColumnSpec(pl.Float64, required=False),
+    # Optional boolean flags — Art. 378-380 scope and election gates.
+    # Art. 378 first paragraph: repo / sec-lending exclusion.
+    "is_repo_or_sec_lending": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 379(2): immateriality carve-out (100% RW alternative).
+    "is_immaterial": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 379(3): CET1 deduction election.
+    "elect_cet1_deduction": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Art. 380: system-wide failure waiver.
+    "system_wide_failure_waiver": ColumnSpec(pl.Boolean, default=False, required=False),
+}
+
+
 # Short-code mapping for the five SA-CCR asset classes used to compose the
 # stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
 # Keys mirror the canonical ``TRADE_SCHEMA.asset_class`` input strings

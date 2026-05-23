@@ -829,7 +829,7 @@ Last generated: 2026-05-23.
 
 ??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:169"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:169:373"
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:169:376"
     ```
 
 

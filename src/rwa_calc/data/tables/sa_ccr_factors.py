@@ -78,6 +78,13 @@ SA_CCR_CORRELATION_EQUITY_SN: Decimal = Decimal("0.50")
 SA_CCR_CORRELATION_EQUITY_IDX: Decimal = Decimal("0.80")
 SA_CCR_CORRELATION_COMMODITY: Decimal = Decimal("0.40")
 
+# CRR Art. 277a(1)(a): cross-bucket correlations for the IR asset class.
+# Buckets are LT_1Y (B1), 1Y_5Y (B2), GT_5Y (B3). Adjacent buckets correlate
+# at 0.70; non-adjacent (B1, B3) correlate at 0.30.
+SA_CCR_IR_BUCKET_CORRELATION_12: Decimal = Decimal("0.7")
+SA_CCR_IR_BUCKET_CORRELATION_23: Decimal = Decimal("0.7")
+SA_CCR_IR_BUCKET_CORRELATION_13: Decimal = Decimal("0.3")
+
 
 # =============================================================================
 # MATURITY FACTOR CONSTANTS (CRR Art. 279c, Art. 285(2)-(3))
@@ -91,12 +98,49 @@ MF_MARGINED_FLOOR_DAYS_REPO_SFT: int = 5
 MF_MARGINED_FLOOR_DAYS_OTC: int = 10
 MF_MARGINED_FLOOR_DAYS_LARGE_OR_ILLIQUID: int = 20
 
+# CRR Art. 285(3)(a): >5000 trades in netting set triggers 20-BD MPOR floor.
+MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT: int = 5000
+
+# CRR Art. 285(4): more than two disputes in the prior two quarters doubles
+# the MPOR base period.
+MF_MARGINED_DISPUTE_THRESHOLD: int = 2
+MF_MARGINED_DISPUTE_MULTIPLIER: int = 2
+
 
 # =============================================================================
 # PFE MULTIPLIER FLOOR (CRR Art. 278(3))
 # =============================================================================
 
 PFE_MULTIPLIER_FLOOR_F: Decimal = Decimal("0.05")
+
+
+# =============================================================================
+# SUPERVISORY OPTION VOLATILITY (CRR Art. 279a(2) / BCBS CRE52.47 Table 3)
+#
+# Used by the Black-Scholes Phi(d1) supervisory delta for European options:
+#     d1 = (ln(P/K) + 0.5 * sigma^2 * T) / (sigma * sqrt(T))
+# =============================================================================
+
+SA_CCR_OPTION_VOLATILITY_IR: Decimal = Decimal("0.50")
+SA_CCR_OPTION_VOLATILITY_FX: Decimal = Decimal("0.15")
+SA_CCR_OPTION_VOLATILITY_CREDIT_SN: Decimal = Decimal("1.00")
+SA_CCR_OPTION_VOLATILITY_CREDIT_IDX: Decimal = Decimal("0.80")
+SA_CCR_OPTION_VOLATILITY_EQUITY_SN: Decimal = Decimal("1.20")
+SA_CCR_OPTION_VOLATILITY_EQUITY_IDX: Decimal = Decimal("0.75")
+SA_CCR_OPTION_VOLATILITY_COMMODITY_ELECTRICITY: Decimal = Decimal("1.50")
+SA_CCR_OPTION_VOLATILITY_COMMODITY_OTHER: Decimal = Decimal("0.70")
+
+
+# =============================================================================
+# CDO TRANCHE SUPERVISORY DELTA (CRR Art. 279a(3) / BCBS CRE52.43)
+#
+# Closed-form |delta| = 15 / ((1 + 14 * A) * (1 + 14 * D)) where A and D are
+# the tranche attachment and detachment points respectively.
+# =============================================================================
+
+# CRR Art. 279a(3) / BCBS CRE52.43 — CDO tranche supervisory delta closed-form
+SA_CCR_CDO_TRANCHE_NUMERATOR: Decimal = Decimal("15")
+SA_CCR_CDO_TRANCHE_COEFFICIENT: Decimal = Decimal("14")
 
 
 # =============================================================================

@@ -6,15 +6,15 @@ Pipeline position:
 
 Key responsibilities:
 - Assign the linear-instrument supervisory delta (+/- 1) per CRR Art. 279a(1).
-
-This batch (P8.13) ships the linear (+/- 1) sub-piece of Art. 279a(1).
-The European-option Black-Scholes Phi(d1) branch (Art. 279a(2),
-``option_strike.is_not_null()`` rows) and the CDO-tranche formula are
-deferred to a future P-item — option rows currently fall through to the
-linear placeholder.
+- Assign the Black-Scholes Phi(d1) supervisory delta for European options per
+  CRR Art. 279a(2).
+- Assign the closed-form CDO-tranche supervisory delta per CRR Art. 279a(3) /
+  BCBS CRE52.43.
 
 References:
 - CRR Art. 279a: Supervisory delta
+- BCBS CRE52.42 (option delta), CRE52.43 (CDO-tranche delta),
+  CRE52.47 (supervisory option volatility table).
 """
 
 from __future__ import annotations
@@ -24,12 +24,37 @@ import logging
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.tables.sa_ccr_factors import (
+    SA_CCR_CDO_TRANCHE_COEFFICIENT,
+    SA_CCR_CDO_TRANCHE_NUMERATOR,
+    SA_CCR_OPTION_VOLATILITY_CREDIT_IDX,
+    SA_CCR_OPTION_VOLATILITY_CREDIT_SN,
+    SA_CCR_OPTION_VOLATILITY_EQUITY_IDX,
+    SA_CCR_OPTION_VOLATILITY_EQUITY_SN,
+    SA_CCR_OPTION_VOLATILITY_FX,
+    SA_CCR_OPTION_VOLATILITY_IR,
+)
+from rwa_calc.engine.irb.stats_backend import normal_cdf
+
 logger = logging.getLogger(__name__)
 
 
-# NOTE: The option Phi(d1) branch (rows where ``option_strike`` is not null)
-# and the CDO-tranche formula are deferred. The linear +/- 1 expression below
-# is applied to all rows until the option sub-piece lands.
+# Map TRADE_SCHEMA ``asset_class`` strings to the supervisory option volatility
+# from CRR Art. 279a(2) / BCBS CRE52.47. The fixture only carries the coarse
+# class (no single-name / index distinction); equity and credit default to the
+# index volatility (lower, matches the P8.13 OPT_003 expected value).
+_OPTION_VOLATILITY_BY_ASSET_CLASS: dict[str, float] = {
+    "interest_rate": float(SA_CCR_OPTION_VOLATILITY_IR),
+    "fx": float(SA_CCR_OPTION_VOLATILITY_FX),
+    "credit": float(SA_CCR_OPTION_VOLATILITY_CREDIT_IDX),
+    "credit_sn": float(SA_CCR_OPTION_VOLATILITY_CREDIT_SN),
+    "credit_idx": float(SA_CCR_OPTION_VOLATILITY_CREDIT_IDX),
+    "equity": float(SA_CCR_OPTION_VOLATILITY_EQUITY_IDX),
+    "equity_sn": float(SA_CCR_OPTION_VOLATILITY_EQUITY_SN),
+    "equity_idx": float(SA_CCR_OPTION_VOLATILITY_EQUITY_IDX),
+}
+
+
 @cites("CRR Art. 279a")
 def compute_supervisory_delta_linear(trades: pl.LazyFrame) -> pl.LazyFrame:
     """Supervisory delta for non-option directional trades per CRR Art. 279a(1).
@@ -37,9 +62,10 @@ def compute_supervisory_delta_linear(trades: pl.LazyFrame) -> pl.LazyFrame:
     delta = +1 for long positions in the primary risk driver
     delta = -1 for short positions in the primary risk driver
 
-    The European-option Black-Scholes Phi(d1) branch (for rows where
-    ``option_strike`` is not null) and the CDO-tranche formula are
-    explicitly deferred to the next batch after CCR-A1.
+    The European-option Black-Scholes Phi(d1) branch (rows where
+    ``option_strike`` is not null) and the CDO-tranche formula are handled by
+    :func:`compute_supervisory_delta_option` and
+    :func:`compute_supervisory_delta_cdo_tranche` respectively.
 
     Args:
         trades: LazyFrame containing an ``is_long`` Boolean column.
@@ -52,4 +78,148 @@ def compute_supervisory_delta_linear(trades: pl.LazyFrame) -> pl.LazyFrame:
     """
     return trades.with_columns(
         pl.when(pl.col("is_long")).then(1.0).otherwise(-1.0).alias("supervisory_delta")
+    )
+
+
+@cites("CRR Art. 279a")
+def compute_supervisory_delta_option(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """Supervisory delta for European options per CRR Art. 279a(2).
+
+    For rows that carry ``option_strike`` AND ``option_underlying_price``,
+    apply the Black-Scholes Phi(d1) formula:
+
+        d1 = (ln(P/K) + 0.5 * sigma^2 * T) / (sigma * sqrt(T))
+
+        long  call:  delta = +Phi(d1)
+        short call:  delta = -Phi(d1)
+        long  put:   delta = -Phi(-d1)
+        short put:   delta = +Phi(-d1)
+
+    where:
+        P  = ``option_underlying_price``
+        K  = ``option_strike``
+        T  = (maturity_date - start_date).days / 365  (calendar-day basis)
+        sigma = supervisory option volatility from
+            ``SA_CCR_OPTION_VOLATILITY_*`` keyed off ``asset_class``.
+
+    Rows where ``option_strike`` is null fall back to the linear +/- 1 delta
+    per Art. 279a(1), preserving the behaviour of
+    :func:`compute_supervisory_delta_linear`.
+
+    Args:
+        trades: LazyFrame with ``is_long``, ``asset_class``, ``option_type``,
+            ``option_strike``, ``option_underlying_price``, ``start_date``,
+            and ``maturity_date`` columns.
+
+    Returns:
+        The input LazyFrame with a new ``supervisory_delta: Float64`` column.
+
+    References:
+        CRR Art. 279a(2); BCBS CRE52.42; BCBS CRE52.47 (supervisory volatility).
+    """
+    # Asset-class -> sigma lookup as a small in-memory frame for join.
+    sigma_lookup = pl.LazyFrame(
+        {
+            "asset_class": list(_OPTION_VOLATILITY_BY_ASSET_CLASS.keys()),
+            "_option_sigma": list(_OPTION_VOLATILITY_BY_ASSET_CLASS.values()),
+        },
+        schema={"asset_class": pl.Utf8, "_option_sigma": pl.Float64},
+    )
+
+    is_option = (
+        pl.col("option_strike").is_not_null() & pl.col("option_underlying_price").is_not_null()
+    )
+
+    # T = calendar days / 365 between start_date and maturity_date. The fixture
+    # encodes T via maturity = start + round(T_nominal * 365) so this recovers
+    # T_nominal exactly when reporting_date == start_date.
+    t_years = (pl.col("maturity_date") - pl.col("start_date")).dt.total_days().cast(
+        pl.Float64
+    ) / 365.0
+
+    sigma = pl.col("_option_sigma")
+    p = pl.col("option_underlying_price")
+    k = pl.col("option_strike")
+
+    d1 = ((p / k).log() + 0.5 * sigma * sigma * t_years) / (sigma * t_years.sqrt())
+
+    phi_d1 = normal_cdf(d1)
+    phi_neg_d1 = normal_cdf(-d1)
+
+    is_call = pl.col("option_type") == "call"
+    is_long = pl.col("is_long")
+
+    # Sign rule per CRR Art. 279a(2):
+    #   long  call -> +Phi(d1)
+    #   short call -> -Phi(d1)
+    #   long  put  -> -Phi(-d1)
+    #   short put  -> +Phi(-d1)
+    option_delta = (
+        pl.when(is_call & is_long)
+        .then(phi_d1)
+        .when(is_call & ~is_long)
+        .then(-phi_d1)
+        .when(~is_call & is_long)
+        .then(-phi_neg_d1)
+        .otherwise(phi_neg_d1)
+    )
+
+    linear_delta = pl.when(is_long).then(1.0).otherwise(-1.0)
+
+    return (
+        trades.join(sigma_lookup, on="asset_class", how="left")
+        .with_columns(
+            pl.when(is_option)
+            .then(option_delta)
+            .otherwise(linear_delta)
+            .cast(pl.Float64)
+            .alias("supervisory_delta")
+        )
+        .drop("_option_sigma")
+    )
+
+
+@cites("CRR Art. 279a")
+def compute_supervisory_delta_cdo_tranche(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """Supervisory delta for CDO tranches per CRR Art. 279a(3).
+
+    For rows that carry ``cdo_attachment`` AND ``cdo_detachment``, apply the
+    closed-form:
+
+        |delta| = 15 / ((1 + 14 * A) * (1 + 14 * D))
+
+    with sign +1 for long tranches and -1 for short tranches.
+
+    Rows where ``cdo_attachment`` is null fall back to the linear +/- 1 delta
+    per Art. 279a(1).
+
+    Args:
+        trades: LazyFrame with ``is_long``, ``cdo_attachment``, and
+            ``cdo_detachment`` columns.
+
+    Returns:
+        The input LazyFrame with a new ``supervisory_delta: Float64`` column.
+
+    References:
+        CRR Art. 279a(3); BCBS CRE52.43.
+    """
+    is_cdo = pl.col("cdo_attachment").is_not_null() & pl.col("cdo_detachment").is_not_null()
+
+    a = pl.col("cdo_attachment")
+    d = pl.col("cdo_detachment")
+
+    numerator = float(SA_CCR_CDO_TRANCHE_NUMERATOR)
+    coefficient = float(SA_CCR_CDO_TRANCHE_COEFFICIENT)
+
+    magnitude = numerator / ((1.0 + coefficient * a) * (1.0 + coefficient * d))
+
+    cdo_delta = pl.when(pl.col("is_long")).then(magnitude).otherwise(-magnitude)
+    linear_delta = pl.when(pl.col("is_long")).then(1.0).otherwise(-1.0)
+
+    return trades.with_columns(
+        pl.when(is_cdo)
+        .then(cdo_delta)
+        .otherwise(linear_delta)
+        .cast(pl.Float64)
+        .alias("supervisory_delta")
     )

@@ -677,6 +677,15 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # Optional nullable (3) — schema-present for richer trade types added later.
     "underlying_reference": ColumnSpec(pl.String, required=False),
     "option_strike": ColumnSpec(pl.Float64, required=False),
+    # Optional nullable (4) — option/CDO supervisory delta inputs (CRR Art. 279a(2)/(3)).
+    # option_type: "call" | "put" — null for non-option trades.
+    # option_underlying_price: current price of the underlying (P in Black-Scholes Φ(d1)).
+    # cdo_attachment: attachment point A of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    # cdo_detachment: detachment point D of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    "option_type": ColumnSpec(pl.String, required=False),
+    "option_underlying_price": ColumnSpec(pl.Float64, required=False),
+    "cdo_attachment": ColumnSpec(pl.Float64, required=False),
+    "cdo_detachment": ColumnSpec(pl.Float64, required=False),
     "payment_leg_index_id": ColumnSpec(pl.String, required=False),
 }
 
@@ -703,6 +712,21 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     "nica": ColumnSpec(pl.Float64, required=False),
     "mpor_days": ColumnSpec(pl.Int32, required=False),
     "margin_agreement_id": ColumnSpec(pl.String, required=False),
+    # Optional with defaults (2) — consumed by the margined maturity-factor
+    # (Art. 279c(2)) MPOR cascade (Art. 285(3)(b) and Art. 285(4)).
+    # ``number_of_trades``: netting-set trade count used to determine whether
+    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(b):
+    # threshold > 5000 trades).  Null-safe default 0 means no large-NS uplift
+    # when the count is unknown, consistent with the conservative-default
+    # pattern elsewhere in this schema.
+    "number_of_trades": ColumnSpec(pl.Int32, default=0, required=False),
+    # ``has_illiquid_collateral_or_hard_to_replace_otc``: True when the
+    # netting set contains illiquid collateral or hard-to-replace OTC trades
+    # per Art. 285(3)(b), triggering the 20-day MPOR floor regardless of
+    # trade count.  Conservative default: False (no uplift when unknown).
+    "has_illiquid_collateral_or_hard_to_replace_otc": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
 }
 
 #: Margin-agreement-level (CSA) input for SA-CCR. Separate from
@@ -748,6 +772,19 @@ CCR_COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "issuer_type": ColumnSpec(pl.String, required=False),
     "residual_maturity_years": ColumnSpec(pl.Float64, required=False),
     "haircut_override": ColumnSpec(pl.Float64, required=False),
+}
+
+
+# Short-code mapping for the five SA-CCR asset classes used to compose the
+# stable ``hedging_set_id`` per CRR Art. 277(1) (e.g. "IR-NS-IR-01-GBP-GT_5Y").
+# Keys mirror the canonical ``TRADE_SCHEMA.asset_class`` input strings
+# (see line 659 above). Values are the BCBS / CRR conventional short codes.
+ASSET_CLASS_SHORT_CODE: dict[str, str] = {
+    "interest_rate": "IR",
+    "foreign_exchange": "FX",
+    "credit": "CR",
+    "equity": "EQ",
+    "commodity": "CO",
 }
 
 

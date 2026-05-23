@@ -17,6 +17,8 @@ References:
     - CRR Art. 271 (CCR scope — OTC derivatives, SFTs)
     - CRR Art. 272(2) (transaction definition)
     - CRR Art. 279a(1) (supervisory delta for non-option trades)
+    - CRR Art. 279a(2) (Black-Scholes option supervisory delta)
+    - CRR Art. 279a(3) (CDO-tranche supervisory delta)
     - CRR Art. 275 (replacement cost: V = mtm_value)
     - src/rwa_calc/data/schemas.py — TRADE_SCHEMA
 """
@@ -75,6 +77,15 @@ class Trade:
     # Optional nullable (3) — null when not applicable.
     underlying_reference: str | None = None
     option_strike: float | None = None
+    # Optional nullable (4) — option/CDO supervisory delta inputs (CRR Art. 279a(2)/(3)).
+    # option_type: "call" | "put" — null for non-option trades.
+    # option_underlying_price: current price of the underlying (P in Black-Scholes Φ(d1)).
+    # cdo_attachment: attachment point A of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    # cdo_detachment: detachment point D of a CDO tranche (0 ≤ A < D ≤ 1); null if not CDO.
+    option_type: str | None = None
+    option_underlying_price: float | None = None
+    cdo_attachment: float | None = None
+    cdo_detachment: float | None = None
     payment_leg_index_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -94,6 +105,10 @@ class Trade:
             "is_long_settlement": self.is_long_settlement,
             "underlying_reference": self.underlying_reference,
             "option_strike": self.option_strike,
+            "option_type": self.option_type,
+            "option_underlying_price": self.option_underlying_price,
+            "cdo_attachment": self.cdo_attachment,
+            "cdo_detachment": self.cdo_detachment,
             "payment_leg_index_id": self.payment_leg_index_id,
         }
 
@@ -133,6 +148,10 @@ def make_trade(**overrides: Any) -> Trade:
         "is_long_settlement": False,
         "underlying_reference": None,
         "option_strike": None,
+        "option_type": None,
+        "option_underlying_price": None,
+        "cdo_attachment": None,
+        "cdo_detachment": None,
         "payment_leg_index_id": None,
     }
     defaults.update(overrides)

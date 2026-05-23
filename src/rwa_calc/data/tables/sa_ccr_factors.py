@@ -91,6 +91,14 @@ MF_MARGINED_FLOOR_DAYS_REPO_SFT: int = 5
 MF_MARGINED_FLOOR_DAYS_OTC: int = 10
 MF_MARGINED_FLOOR_DAYS_LARGE_OR_ILLIQUID: int = 20
 
+# CRR Art. 285(3)(a): >5000 trades in netting set triggers 20-BD MPOR floor.
+MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT: int = 5000
+
+# CRR Art. 285(4): more than two disputes in the prior two quarters doubles
+# the MPOR base period.
+MF_MARGINED_DISPUTE_THRESHOLD: int = 2
+MF_MARGINED_DISPUTE_MULTIPLIER: int = 2
+
 
 # =============================================================================
 # PFE MULTIPLIER FLOOR (CRR Art. 278(3))

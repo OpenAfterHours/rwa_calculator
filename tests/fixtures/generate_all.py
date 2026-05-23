@@ -284,6 +284,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_golden,
         ),
+        (
+            "P8.14-marg (margined MF = 3/2 x sqrt(MPOR_eff/250), Art. 279c(2) + Art. 285 cascade)",
+            "ccr",
+            _generate_p814_margined,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1380,6 +1385,30 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_a1",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p814_margined(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P8.14 margined MF fixtures (Art. 279c(2) + Art. 285 MPOR cascade)."""
+    # margined_mf_builder uses relative imports from the ccr package, so load it
+    # as part of the 'ccr' package — same pattern as _generate_ccr_golden.
+    fixtures_root = str(output_dir.parent)
+    import sys
+
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.margined_mf_builder import save_margined_mf_fixtures
+
+        saved = save_margined_mf_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.margined_mf_builder",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

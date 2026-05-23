@@ -86,6 +86,12 @@ class CCRNamespace:
 
         return compute_maturity_factor_unmargined(self._lf)
 
+    def maturity_factor_margined(self) -> pl.LazyFrame:
+        """Delegate to :func:`compute_maturity_factor_margined`."""
+        from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_margined
+
+        return compute_maturity_factor_margined(self._lf)
+
     def pfe_ir_singleton(self) -> pl.LazyFrame:
         """Delegate to :func:`rwa_calc.engine.ccr.pfe.compute_pfe_ir_singleton`."""
         from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton

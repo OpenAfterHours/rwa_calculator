@@ -15,8 +15,9 @@ Key responsibilities:
 
 References:
     - CRR Art. 272(4) (netting set definition)
+    - CRR Art. 279c(2) (margined maturity factor — MF = 3/2 × sqrt(MPOR/250))
+    - CRR Art. 285(2)-(4) (MPOR floors: 5/10/20 days, dispute doubling)
     - CRR Art. 295 (conditions for netting agreement recognition)
-    - CRR Art. 285(2)(b) (10-day minimum MPOR for standard margined sets)
     - src/rwa_calc/data/schemas.py — NETTING_SET_SCHEMA
 """
 
@@ -68,6 +69,14 @@ class NettingSet:
     mpor_days: int | None = None
     margin_agreement_id: str | None = None
 
+    # Optional with defaults (2) — margined MF MPOR cascade (Art. 279c(2) / Art. 285).
+    # ``number_of_trades``: used by Art. 285(3)(b) large-netting-set 20-day floor
+    # (threshold > 5000).  Default 0 is conservative (no uplift when unknown).
+    number_of_trades: int = 0
+    # ``has_illiquid_collateral_or_hard_to_replace_otc``: True triggers the 20-day
+    # MPOR floor per Art. 285(3)(b).  Default False (conservative — no uplift).
+    has_illiquid_collateral_or_hard_to_replace_otc: bool = False
+
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dict suitable for ``pl.DataFrame`` construction."""
         return {
@@ -81,6 +90,8 @@ class NettingSet:
             "nica": self.nica,
             "mpor_days": self.mpor_days,
             "margin_agreement_id": self.margin_agreement_id,
+            "number_of_trades": self.number_of_trades,
+            "has_illiquid_collateral_or_hard_to_replace_otc": self.has_illiquid_collateral_or_hard_to_replace_otc,
         }
 
 
@@ -114,6 +125,8 @@ def make_netting_set(**overrides: Any) -> NettingSet:
         "nica": None,
         "mpor_days": None,
         "margin_agreement_id": None,
+        "number_of_trades": 0,
+        "has_illiquid_collateral_or_hard_to_replace_otc": False,
     }
     defaults.update(overrides)
     return NettingSet(**defaults)

@@ -712,6 +712,21 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     "nica": ColumnSpec(pl.Float64, required=False),
     "mpor_days": ColumnSpec(pl.Int32, required=False),
     "margin_agreement_id": ColumnSpec(pl.String, required=False),
+    # Optional with defaults (2) — consumed by the margined maturity-factor
+    # (Art. 279c(2)) MPOR cascade (Art. 285(3)(b) and Art. 285(4)).
+    # ``number_of_trades``: netting-set trade count used to determine whether
+    # the large-netting-set 20-day MPOR floor applies (Art. 285(3)(b):
+    # threshold > 5000 trades).  Null-safe default 0 means no large-NS uplift
+    # when the count is unknown, consistent with the conservative-default
+    # pattern elsewhere in this schema.
+    "number_of_trades": ColumnSpec(pl.Int32, default=0, required=False),
+    # ``has_illiquid_collateral_or_hard_to_replace_otc``: True when the
+    # netting set contains illiquid collateral or hard-to-replace OTC trades
+    # per Art. 285(3)(b), triggering the 20-day MPOR floor regardless of
+    # trade count.  Conservative default: False (no uplift when unknown).
+    "has_illiquid_collateral_or_hard_to_replace_otc": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
 }
 
 #: Margin-agreement-level (CSA) input for SA-CCR. Separate from

@@ -4,15 +4,11 @@ Contract tests for the CCR engine subpackage scaffold (P8.4).
 Pins the required module structure, logger declarations, Polars namespace
 registration, and public function signatures for ``rwa_calc.engine.ccr``.
 
-Most scaffold tests are expected to FAIL until the engine-implementer wave
-delivers the 8 module files described in the scenario proposal.  Exceptions
-are tests for already-implemented items: P8.5 (RC), P8.14 (maturity factor).
+P8.4 scaffold is fully implemented; per-formula bodies (P8.12, P8.13, P8.14,
+P8.17) have landed in subsequent batches with dedicated test files alongside.
 
 Deferred stubs (still raise NotImplementedError until their P-item lands):
-    - compute_supervisory_delta_linear  (P8.13)
-    - compute_adjusted_notional_ir      (P8.12)
     - compute_pfe_ir_singleton          (P8.16)
-    - compute_ead                       (P8.17)
 
 References:
     - CRR Art. 274-280: SA-CCR EAD calculation
@@ -324,23 +320,23 @@ def test_compute_pfe_ir_singleton_raises_not_implemented() -> None:
 
 
 # ===========================================================================
-# 11. compute_ead — NotImplementedError (stub, P8.17)
+# 11. compute_ead — returns LazyFrame with ead_ccr column (P8.17)
 # ===========================================================================
 
 
-def test_compute_ead_raises_not_implemented() -> None:
-    """compute_ead must raise NotImplementedError (stub until P8.17)."""
-    # Arrange
-    try:
-        from rwa_calc.engine.ccr.sa_ccr import compute_ead
-    except (ImportError, ModuleNotFoundError) as exc:
-        pytest.fail(
-            f"Cannot import compute_ead from rwa_calc.engine.ccr.sa_ccr: {exc}. "
-            "Add the stub in P8.4."
-        )
+def test_compute_ead_returns_lazyframe_with_ead_column() -> None:
+    """P8.17 — compute_ead now returns LazyFrame with ead_ccr column; α=1.4 default."""
+    from rwa_calc.engine.ccr.sa_ccr import compute_ead
 
-    lf = pl.LazyFrame({"netting_set_id": ["NS-001"]})
-
-    # Act + Assert
-    with pytest.raises(NotImplementedError):
-        compute_ead(lf)
+    lf = pl.LazyFrame(
+        {
+            "netting_set_id": ["NS-A"],
+            "rc_unmargined": [100.0],
+            "pfe_addon": [50.0],
+        }
+    )
+    result = compute_ead(lf)
+    assert isinstance(result, pl.LazyFrame)
+    collected = result.collect()
+    assert "ead_ccr" in collected.columns
+    assert collected["ead_ccr"][0] == pytest.approx(1.4 * 150.0, rel=1e-9)

@@ -31,6 +31,7 @@ from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
+    NON_FINANCIAL_COLLATERAL_TYPES,
     REAL_ESTATE_COLLATERAL_TYPES,
     RECEIVABLE_COLLATERAL_TYPES,
 )
@@ -185,13 +186,23 @@ class HaircutCalculator:
             )
         )
 
-        # Apply FX haircut (also subject to liquidation period scaling per Art. 224 Table 4).
+        # Apply FX haircut (Art. 224 Table 4, scaled per Art. 226).
         # Compare pre-FX-conversion currencies: after `FXConverter.convert_*` has
         # rebased values to the reporting currency, the `currency` column is the
         # reporting currency on both sides and a raw comparison would always be
         # false (P1.135). `original_currency` on collateral and `exposure_currency`
         # (sourced from the exposure's `original_currency` in the processor) both
         # carry the true pre-conversion currency pair.
+        #
+        # Scope: H_fx is the comprehensive-method volatility adjustment for
+        # *financial* collateral (Art. 224 Table 4). Funded non-financial
+        # collateral (real_estate, receivables, other_physical) is recognised
+        # under Art. 230 (Foundation Collateral Method), whose LGD* formula uses
+        # the raw collateral value C against C* / C** thresholds with no FX
+        # adjustment. Art. 233 H_fx is unfunded-protection only (guarantees /
+        # CDS — see engine/crm/guarantees.py). FX risk on Art. 230 collateral
+        # is captured upstream by the spot-rate FXConverter rebasing.
+        #
         # Art. 227: zero-haircut repos waive ALL volatility adjustments including H_fx.
         fx_base = float(FX_HAIRCUT)
         schema_names = collateral.collect_schema().names()
@@ -200,8 +211,11 @@ class HaircutCalculator:
         # Art. 226(1) symmetry: FX haircut is also subject to the non-daily-
         # revaluation scaling — apply ``reval_factor`` after the Art. 226(2)
         # liquidation-period factor, mirroring the collateral haircut path.
+        is_financial = ~pl.col("collateral_type").is_in(NON_FINANCIAL_COLLATERAL_TYPES)
         fx_expr = (
-            pl.when(pl.col(coll_ccy_col) != pl.col("exposure_currency"))
+            pl.when(
+                (pl.col(coll_ccy_col) != pl.col("exposure_currency")) & is_financial
+            )
             .then(pl.lit(fx_base) * scaling_factor * reval_factor)
             .otherwise(pl.lit(0.0))
         )

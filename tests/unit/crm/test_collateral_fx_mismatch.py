@@ -386,3 +386,179 @@ class TestProcessorUsesPreConversionExposureCurrency:
         ).collect()
 
         assert joined["exposure_currency"][0] == "USD"
+
+
+def _non_financial_collateral_lf(
+    *,
+    collateral_type: str,
+    collateral_currency: str,
+    exposure_currency: str,
+    original_currency: str | None,
+    market_value: float = 100_000.0,
+    liquidation_period_days: int = 10,
+) -> pl.LazyFrame:
+    """Build a non-financial collateral LazyFrame (real_estate / receivables /
+    other_physical) shaped for ``HaircutCalculator.apply_haircuts``.
+
+    Non-financial collateral is recognised under CRR Art. 230 (Foundation
+    Collateral Method) — not the Art. 224 supervisory-haircut comprehensive
+    method — so it carries ``is_eligible_financial_collateral=False`` and the
+    test asserts both the H_c column and the H_fx column are 0.0 regardless of
+    currency mismatch.
+    """
+    data: dict[str, list[object]] = {
+        "collateral_reference": ["COLL_NF"],
+        "collateral_type": [collateral_type],
+        "currency": [collateral_currency],
+        "market_value": [market_value],
+        "nominal_value": [market_value],
+        "issuer_cqs": [None],
+        "residual_maturity_years": [None],
+        "exposure_currency": [exposure_currency],
+        "liquidation_period_days": [liquidation_period_days],
+        "is_eligible_financial_collateral": [False],
+        "is_eligible_irb_collateral": [True],
+    }
+    if original_currency is not None:
+        data["original_currency"] = [original_currency]
+    return pl.LazyFrame(data)
+
+
+class TestNonFinancialCollateralNoFxHaircut:
+    """Non-financial funded collateral (Art. 230) must NOT receive H_fx.
+
+    CRR Art. 233 (the source of the 8% FX volatility adjustment) sits in
+    Sub-Section 2 — Unfunded credit protection. Its scope is guarantees and
+    credit derivatives, not funded collateral. CRR Arts. 229–230 (the funded
+    non-financial collateral path covering immovable property, receivables and
+    other physical collateral) make no mention of H_fx — the LGD* formula uses
+    the raw collateral value C against C* / C** thresholds, with FX risk
+    handled upstream by the spot-rate ``FXConverter``.
+
+    PRA PS1/26 inherits CRR's silence, so the fix is framework-agnostic.
+
+    Pre-fix the engine applied the 8% × √(T_m/10) charge uniformly across all
+    collateral types whenever ``original_currency != exposure_currency`` —
+    overstating the FX charge for non-financial collateral on a basis the
+    regulation does not authorise. These tests pin the corrected behaviour.
+
+    References:
+        CRR Art. 229–230: Foundation Collateral Method (no H_fx in formula)
+        CRR Art. 233 / 233(3): unfunded credit protection scope of H_fx
+        IMPLEMENTATION_PLAN.md: H_fx scope correction for Art. 230 collateral
+    """
+
+    @pytest.mark.parametrize(
+        "collateral_type",
+        ["real_estate", "receivables", "other_physical"],
+    )
+    def test_non_financial_collateral_fx_haircut_is_zero_on_mismatch(
+        self,
+        crr_config: CalculationConfig,
+        collateral_type: str,
+    ) -> None:
+        """EUR non-financial collateral securing a GBP exposure must yield
+        ``fx_haircut == 0.0`` — Art. 230 does not invoke H_fx.
+
+        Pre-fix engine returns ≈ 0.08 (10-day) or ≈ 0.1131 (20-day) here.
+        """
+        collateral = _non_financial_collateral_lf(
+            collateral_type=collateral_type,
+            collateral_currency="EUR",
+            exposure_currency="GBP",
+            original_currency="EUR",
+            liquidation_period_days=10,
+        )
+        calc = HaircutCalculator(is_basel_3_1=False)
+        result = calc.apply_haircuts(collateral, crr_config).collect()
+
+        assert result["fx_haircut"][0] == pytest.approx(0.0), (
+            f"Non-financial collateral type '{collateral_type}' received "
+            f"fx_haircut={result['fx_haircut'][0]!r}; CRR Art. 230 does not "
+            f"authorise an FX volatility adjustment for funded non-financial "
+            f"collateral. Art. 233 H_fx is scoped to unfunded credit protection."
+        )
+
+    @pytest.mark.parametrize(
+        "collateral_type",
+        ["real_estate", "receivables", "other_physical"],
+    )
+    def test_non_financial_collateral_fx_haircut_is_zero_basel_3_1(
+        self,
+        collateral_type: str,
+    ) -> None:
+        """Framework-agnostic: PS1/26 inherits CRR Art. 230 silence on H_fx."""
+        b31_config = CalculationConfig.basel_3_1(reporting_date=date(2027, 12, 31))
+        collateral = _non_financial_collateral_lf(
+            collateral_type=collateral_type,
+            collateral_currency="EUR",
+            exposure_currency="GBP",
+            original_currency="EUR",
+            liquidation_period_days=10,
+        )
+        calc = HaircutCalculator(is_basel_3_1=True)
+        result = calc.apply_haircuts(collateral, b31_config).collect()
+
+        assert result["fx_haircut"][0] == pytest.approx(0.0), (
+            f"Basel 3.1 non-financial collateral type '{collateral_type}' "
+            f"received fx_haircut={result['fx_haircut'][0]!r}; PS1/26 Art. 230 "
+            f"does not authorise H_fx for funded non-financial collateral."
+        )
+
+    @pytest.mark.parametrize(
+        ("collateral_type", "synonym"),
+        [
+            ("real_estate", "cre"),
+            ("real_estate", "commercial_re"),
+            ("real_estate", "residential_property"),
+            ("receivables", "trade_receivables"),
+            ("other_physical", "equipment"),
+            ("other_physical", "inventory"),
+        ],
+    )
+    def test_non_financial_collateral_synonyms_also_skip_fx_haircut(
+        self,
+        crr_config: CalculationConfig,
+        collateral_type: str,
+        synonym: str,
+    ) -> None:
+        """The engine accepts synonym strings for non-financial categories
+        (see REAL_ESTATE_COLLATERAL_TYPES etc. in data/schemas.py). All synonyms
+        must skip H_fx, not just the canonical name."""
+        collateral = _non_financial_collateral_lf(
+            collateral_type=synonym,
+            collateral_currency="EUR",
+            exposure_currency="GBP",
+            original_currency="EUR",
+            liquidation_period_days=10,
+        )
+        calc = HaircutCalculator(is_basel_3_1=False)
+        result = calc.apply_haircuts(collateral, crr_config).collect()
+
+        assert result["fx_haircut"][0] == pytest.approx(0.0), (
+            f"Synonym '{synonym}' for {collateral_type} received "
+            f"fx_haircut={result['fx_haircut'][0]!r}; all entries in the "
+            f"non-financial collateral list must skip H_fx."
+        )
+
+    def test_cash_collateral_still_receives_fx_haircut_regression_guard(
+        self,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """Regression guard: financial collateral (cash) MUST keep receiving
+        H_fx — the fix narrows scope, it does not remove the charge for the
+        Art. 224 comprehensive-method path."""
+        collateral = _cash_collateral_lf(
+            collateral_currency="EUR",
+            exposure_currency="GBP",
+            original_currency="EUR",
+            liquidation_period_days=10,
+        )
+        calc = HaircutCalculator(is_basel_3_1=False)
+        result = calc.apply_haircuts(collateral, crr_config).collect()
+
+        assert result["fx_haircut"][0] == pytest.approx(0.08), (
+            "Financial collateral (cash) must still receive the Art. 224 Table 4 "
+            "FX haircut — the Art. 230 narrowing must not leak into the "
+            "comprehensive-method path."
+        )

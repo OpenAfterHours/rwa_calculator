@@ -103,7 +103,7 @@ CQS 4–6 corporate/institution bonds are **ineligible** (Art. 197(1)(d)).
 
 ### FX Mismatch Haircut
 
-Unchanged: **8%** (10-day base liquidation period).
+Unchanged from CRR: **8%** (10-day base liquidation period).
 
 Scaled for other liquidation periods via:
 
@@ -116,6 +116,12 @@ H_fx_scaled = H_fx x sqrt(T_m / 10)
 | 5-day (repo) | 5.66% |
 | 10-day (capital market) | 8.00% |
 | 20-day (secured lending) | 11.31% |
+
+**Scope (unchanged from CRR — PS1/26 inherits the Art. 224 / Art. 230 / Art. 233 split):**
+
+- **Financial collateral (Art. 224 comprehensive method)** — H_fx applies via Art. 224 Table 4.
+- **Unfunded credit protection (Art. 233(3))** — H_fx applies to guarantees and credit derivatives. Article 232 cross-references Art. 233(3) (PS1/26 also pulls in Art. 233(4)) for life insurance / credit-linked notes.
+- **Funded non-financial collateral (Arts. 229–230 — receivables, real estate, other physical)** — H_fx does **not** apply. The LGD\* formula uses the raw collateral value `C` against the C\* / C\*\* thresholds with no FX adjustment; FX risk is captured upstream by the spot-rate `FXConverter`. The engine gate (`engine/crm/haircuts.py`) excludes these types via `data/schemas.py:NON_FINANCIAL_COLLATERAL_TYPES`.
 
 ---
 

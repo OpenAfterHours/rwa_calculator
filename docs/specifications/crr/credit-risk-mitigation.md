@@ -135,9 +135,17 @@ Key B31 changes: the 5-band split **raises the longest-tenor haircuts** material
 
 Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values within the LGD* formula. See [F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161) below for the per-framework values.
 
-### FX Mismatch Haircut (CRR Art. 233)
+### FX Mismatch Haircut (CRR Art. 224 Table 4 / Art. 233(3))
 
-When collateral currency differs from exposure currency: **8%** additional haircut.
+When *financial* collateral or *unfunded* credit protection is denominated in a currency different from the exposure: **8%** base haircut (10-day liquidation), scaled by Art. 226(2) for other liquidation periods and by Art. 226(1) for non-daily revaluation.
+
+The H_fx scope is asymmetric and follows the regulatory text exactly:
+
+- **Financial collateral (Art. 224 comprehensive method)** — H_fx applies via Art. 224 Table 4 to cash, gold, bonds, equity, and other instruments listed in Tables 1–4. Implemented in `engine/crm/haircuts.py:apply_haircuts`.
+- **Unfunded credit protection (Art. 233(3))** — H_fx applies to guarantees and credit derivatives where G* = G(1 − H_fx). Implemented separately in `engine/crm/guarantees.py`. Article 232 explicitly cross-references Art. 233(3) for life insurance / credit-linked notes.
+- **Funded non-financial collateral (Arts. 229–230)** — H_fx does **not** apply. Article 233 is unambiguously located in Sub-Section 2 *Unfunded credit protection*, and Art. 229 ("Valuation") plus Art. 230 ("Calculating risk-weighted exposure amounts…") for immovable property, receivables, and other physical collateral make no reference to H_fx. The LGD* formula compares the raw collateral value `C` (rebased to the reporting currency upstream by `FXConverter`) against the C\* / C\*\* thresholds in Table 5. The engine implements this exclusion by gating the H_fx Polars expression on `~collateral_type.is_in(NON_FINANCIAL_COLLATERAL_TYPES)` — see `data/schemas.py:NON_FINANCIAL_COLLATERAL_TYPES`.
+
+PS1/26 inherits CRR's position on all three scopes; the engine behaviour is framework-agnostic.
 
 ### Zero-Haircut Conditions (CRR Art. 227)
 
@@ -242,7 +250,12 @@ Where:
 - `EU` = unsecured portion: `EU = E(1+HE) - ES`
 - `LGDU` = unsecured LGD (CRR: 45% uniform; B31: 40% non-FSE / 45% FSE per Art. 161(1))
 - `LGDS` = secured LGD per framework (see F-IRB LGDS table above)
-- `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut (8% if currencies differ)
+- `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut
+
+Scope of the H_FX term in the formula above:
+
+- **Financial collateral** — `HFX` = 8% × √(T_m/10) × Art. 226(1) multiplier when collateral currency ≠ exposure currency, per Art. 224 Table 4.
+- **Funded non-financial collateral (receivables, real estate, other physical)** — `HFX = 0` regardless of currency mismatch. CRR Arts. 229–230 contain no FX volatility adjustment for Art. 230 collateral, and Art. 233 (the source of the 8%) sits in the unfunded-protection sub-section. The collateral value `C` is the market / mortgage-lending value per Art. 229, rebased to the reporting currency upstream by `FXConverter` at the spot rate. PS1/26 inherits this scope.
 
 Note: The simplified formula `LGD* = LGD × (E*/E)` where `E* = max(0, E(1+HE) - C(1-HC-HFX))` only works when LGDS = LGDU. For non-financial collateral (LGDS ≠ LGDU), the blended formula above is required.
 
@@ -1103,7 +1116,9 @@ waterfall sequencing.
 | Govt bond CQS 1, >5yr | 4% | Art. 224 Table 1 |
 | Equity (main index) | 15% | Art. 224 Table 3 |
 | Equity (other listed) | 25% | Art. 224 Table 3 |
-| FX mismatch | 8% | Art. 233 |
+| FX mismatch — financial collateral | 8% | Art. 224 Table 4 |
+| FX mismatch — unfunded protection (guarantees / CDS) | 8% | Art. 233(3) |
+| FX mismatch — funded non-financial collateral (Art. 230) | 0% | Arts. 229–230 (silent on H_fx) |
 | CDS restructuring exclusion | 40% reduction | Art. 233(2) / Art. 216(1) |
 
 ## Acceptance Tests

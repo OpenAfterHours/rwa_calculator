@@ -963,6 +963,26 @@ COLLATERAL_TYPE_CATEGORY: dict[str, str] = {
     **dict.fromkeys(LIFE_INSURANCE_COLLATERAL_TYPES, "life_insurance"),
 }
 
+# Non-financial funded collateral types recognised under CRR Art. 230
+# (Foundation Collateral Method). These types are NOT subject to the Art. 224
+# Table 4 FX volatility haircut (H_fx) — Art. 233 H_fx is scoped to unfunded
+# credit protection (guarantees / CDS), and Arts. 229–230 (the funded
+# non-financial path) make no mention of an FX adjustment. FX risk on these
+# collateral values is captured upstream by the spot-rate ``FXConverter``.
+#
+# Used by ``engine/crm/haircuts.py`` to gate the H_fx expression so that the
+# Art. 230 LGD* formula receives the raw (FX-rebased) collateral value C
+# without an additional volatility charge.
+#
+# References:
+#   CRR Art. 229–230: Foundation Collateral Method (no H_fx in formula)
+#   CRR Art. 233:    Unfunded credit protection scope of H_fx
+NON_FINANCIAL_COLLATERAL_TYPES: list[str] = [
+    *RECEIVABLE_COLLATERAL_TYPES,
+    *REAL_ESTATE_COLLATERAL_TYPES,
+    *OTHER_PHYSICAL_COLLATERAL_TYPES,
+]
+
 
 VALID_PROPERTY_TYPES = {"residential", "commercial", "adc"}
 

@@ -45,6 +45,9 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.sa import SACalculator
 from tests.fixtures.p1_94a.p1_94a import (
     CURRENCY_MISMATCH_MULTIPLIER,
     RW_HEDGED,
@@ -54,9 +57,6 @@ from tests.fixtures.p1_94a.p1_94a import (
     SA_RETAIL_BASE_RW,
 )
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
-
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.sa import SACalculator
 
 # ---------------------------------------------------------------------------
 # Shared constants

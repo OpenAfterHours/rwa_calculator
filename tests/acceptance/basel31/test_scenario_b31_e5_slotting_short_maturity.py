@@ -30,6 +30,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+
 from tests.acceptance.basel31.conftest import (
     assert_risk_weight_match,
     assert_rwa_within_tolerance,

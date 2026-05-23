@@ -53,6 +53,12 @@ from typing import cast
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_122a.p1_122a import (
     EXPECTED_GUARANTOR_RW_B31,
     EXPECTED_GUARANTOR_RW_CRR,
@@ -60,12 +66,6 @@ from tests.fixtures.p1_122a.p1_122a import (
     EXPECTED_RWA_CRR,
     LOAN_REF,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, LENDING_MAPPING_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture path

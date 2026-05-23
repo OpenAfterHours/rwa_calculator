@@ -24,6 +24,9 @@ from datetime import date
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.aggregator import OutputAggregator
 from tests.fixtures.p1_146.p1_146 import (
     EXP_NULL_REF,
     POST_CRM_CORPORATE_EXPOSURE_COUNT,
@@ -32,9 +35,6 @@ from tests.fixtures.p1_146.p1_146 import (
     PRE_CRM_TOTAL_EAD,
     build_sa_results,
 )
-
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.aggregator import OutputAggregator
 
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
 

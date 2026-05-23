@@ -53,6 +53,17 @@ from typing import cast
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import (
+    FACILITY_MAPPING_SCHEMA,
+    FACILITY_SCHEMA,
+    LENDING_MAPPING_SCHEMA,
+    RATINGS_SCHEMA,
+)
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_95.p1_95 import (
     EAD,
     EXPECTED_RW_BORROWER,
@@ -71,17 +82,6 @@ from tests.fixtures.p1_95.p1_95 import (
     LOAN_REF_C,
     LOAN_REF_NULL,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import (
-    FACILITY_MAPPING_SCHEMA,
-    FACILITY_SCHEMA,
-    LENDING_MAPPING_SCHEMA,
-    RATINGS_SCHEMA,
-)
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

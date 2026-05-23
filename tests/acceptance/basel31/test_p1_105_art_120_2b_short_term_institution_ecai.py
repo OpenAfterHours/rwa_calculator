@@ -48,16 +48,16 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_105.p1_105 import (
     EXPECTED_RISK_WEIGHT,
     FACILITY_REF,
     LOAN_REF,
     TABLE4_FALLBACK_RISK_WEIGHT,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

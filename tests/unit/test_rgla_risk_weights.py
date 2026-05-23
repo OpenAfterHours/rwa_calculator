@@ -28,7 +28,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
@@ -44,6 +43,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
 )
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa import SACalculator
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================
 # FIXTURES

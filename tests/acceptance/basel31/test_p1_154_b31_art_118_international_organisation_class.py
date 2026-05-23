@@ -57,6 +57,12 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.data.column_spec import dtypes_of
+from rwa_calc.data.schemas import LOAN_SCHEMA
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_154_b31.p1_154_b31 import (
     EXPECTED_RW_INTERNATIONAL_ORG,
     EXPECTED_RW_MDB_CQS2_B31,
@@ -65,12 +71,6 @@ from tests.fixtures.p1_154_b31.p1_154_b31 import (
     IMF_LIMIT,
     MDB_LIMIT,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.column_spec import dtypes_of
-from rwa_calc.data.schemas import LOAN_SCHEMA
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

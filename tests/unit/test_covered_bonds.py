@@ -24,7 +24,6 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
-from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions, RegulatoryFramework
 from rwa_calc.data.tables.b31_risk_weights import (
@@ -46,6 +45,7 @@ from rwa_calc.data.tables.entity_class_mapping import (
 from rwa_calc.domain.enums import CQS, ApproachType, ExposureClass
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.templates import SA_EXPOSURE_CLASS_ROWS
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================
 # FIXTURES

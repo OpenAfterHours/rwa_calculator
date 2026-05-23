@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
 from tests.fixtures.ccr.margined_mf_builder import (
     EXPECTED_MF,
     make_margined_mf_margin_agreements,

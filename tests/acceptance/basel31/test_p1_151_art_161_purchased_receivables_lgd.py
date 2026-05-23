@@ -66,6 +66,10 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_151.p1_151 import (
     DRAWN_DILUTION,
     DRAWN_SENIOR,
@@ -79,10 +83,6 @@ from tests.fixtures.p1_151.p1_151 import (
     PD,
     REPORTING_DATE,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

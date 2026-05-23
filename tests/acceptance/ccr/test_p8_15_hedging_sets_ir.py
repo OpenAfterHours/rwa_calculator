@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
 from tests.fixtures.ccr.hedging_sets_ir_builder import (
     P815_CURRENCY,
     P815_NETTING_SET_ID,

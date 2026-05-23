@@ -39,15 +39,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
-from tests.fixtures.p1_145.p1_145 import (
-    EXPOSURE_REF,
-    INTERNAL_PD,
-    MODEL_ID,
-    build_model_permissions_airb_first,
-    build_model_permissions_sa_first,
-    create_p1145_counterparty,
-    create_p1145_loan,
-)
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -57,6 +48,15 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.p1_145.p1_145 import (
+    EXPOSURE_REF,
+    INTERNAL_PD,
+    MODEL_ID,
+    build_model_permissions_airb_first,
+    build_model_permissions_sa_first,
+    create_p1145_counterparty,
+    create_p1145_loan,
+)
 
 if TYPE_CHECKING:
     pass

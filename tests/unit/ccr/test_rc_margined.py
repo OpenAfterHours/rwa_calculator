@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
 from tests.fixtures.ccr.rc_margined_builder import (
     EXPECTED_RC,
     NS_A_ID,

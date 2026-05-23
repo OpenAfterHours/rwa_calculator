@@ -28,7 +28,6 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
-from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
@@ -45,6 +44,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     lookup_b31_residential_rw,
 )
 from rwa_calc.engine.sa.calculator import SACalculator
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 
 @pytest.fixture

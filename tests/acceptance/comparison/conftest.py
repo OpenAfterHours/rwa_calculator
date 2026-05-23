@@ -129,9 +129,8 @@ def irb_raw_data_bundle(load_test_fixtures):
 
 def _make_irb_bundle(fixtures, model_permissions):
     """Build RawDataBundle with enriched ratings and given model_permissions."""
-    from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
-
     from rwa_calc.contracts.bundles import RawDataBundle
+    from tests.fixtures.irb_test_helpers import enrich_ratings_with_model_id
 
     return RawDataBundle(
         facilities=fixtures.facilities,

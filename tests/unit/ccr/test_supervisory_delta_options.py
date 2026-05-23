@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
 from tests.fixtures.ccr.option_delta_builder import (
     make_cdo_trades_only,
     make_linear_trade,

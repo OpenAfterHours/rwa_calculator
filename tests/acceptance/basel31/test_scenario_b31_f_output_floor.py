@@ -19,6 +19,7 @@ Regulatory References:
 
 import polars as pl
 import pytest
+
 from tests.acceptance.basel31.conftest import (
     get_result_for_exposure,
 )

@@ -35,7 +35,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import B31_HIGH_RISK_RW
@@ -46,6 +45,7 @@ from rwa_calc.data.tables.entity_class_mapping import (
 )
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.sa import SACalculator
+from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================
 # FIXTURES

@@ -57,11 +57,49 @@ INSTRUMENTS: list[tuple[str, str]] = [
 # deliberately not cited. Articles outside this range render sparsely (only
 # those with ``@cites`` decorators).
 CRR_DENSE_RANGE: tuple[str, ...] = (
-    "111", "112", "113", "114", "115", "116", "117", "118", "119", "120",
-    "121", "122", "123", "124", "125", "126", "127", "128", "129", "130",
-    "131", "132", "133", "134", "135", "136", "137", "138", "139", "140",
-    "141", "142", "143", "144", "145", "146", "147", "147A", "148", "149",
-    "150", "151", "152",
+    "111",
+    "112",
+    "113",
+    "114",
+    "115",
+    "116",
+    "117",
+    "118",
+    "119",
+    "120",
+    "121",
+    "122",
+    "123",
+    "124",
+    "125",
+    "126",
+    "127",
+    "128",
+    "129",
+    "130",
+    "131",
+    "132",
+    "133",
+    "134",
+    "135",
+    "136",
+    "137",
+    "138",
+    "139",
+    "140",
+    "141",
+    "142",
+    "143",
+    "144",
+    "145",
+    "146",
+    "147",
+    "147A",
+    "148",
+    "149",
+    "150",
+    "151",
+    "152",
 )
 
 # CRR articles in ``CRR_DENSE_RANGE`` that are deliberately not cited. Each row
@@ -85,8 +123,7 @@ CRR_COVERAGE_NOTES: dict[str, tuple[str, str]] = {
         "Chapters 1-4 only.",
     ),
     "132": (
-        "Exposures in the form of units or shares in collective investment "
-        "undertakings (CIUs)",
+        "Exposures in the form of units or shares in collective investment undertakings (CIUs)",
         "UK CRR omitted Art. 132; PRA reintroduced CIU treatment via "
         "PS1/26 paragraph 132. Implementation lives at "
         "`engine/equity/calculator.py::_append_ciu_branches` and is cited "
@@ -245,17 +282,14 @@ def _render_coverage_note(article: str, title: str, reason: str) -> str:
     each ``CRR_COVERAGE_NOTES`` entry chooses its own framing (out-of-scope,
     UK-omitted, definitional, deferred, etc.).
     """
-    return (
-        f"### CRR Art. {article} — {title}\n\n"
-        f"*{reason}*\n\n"
-    )
+    return f"### CRR Art. {article} — {title}\n\n*{reason}*\n\n"
 
 
 def _crr_article_key(entry_key: str) -> str | None:
     """Extract the article suffix from a watchfire key like ``CRR Art. 134``."""
     prefix = "CRR Art. "
     if entry_key.startswith(prefix):
-        return entry_key[len(prefix):].strip()
+        return entry_key[len(prefix) :].strip()
     return None
 
 

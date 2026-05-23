@@ -38,6 +38,7 @@ from typing import Any
 
 import polars as pl
 import pytest
+
 from tests.acceptance.basel31.conftest import (
     assert_rwa_within_tolerance,
     get_result_for_exposure,

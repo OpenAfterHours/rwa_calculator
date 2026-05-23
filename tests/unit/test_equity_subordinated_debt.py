@@ -21,7 +21,6 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
-from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_equity_rw import (
@@ -37,6 +36,7 @@ from rwa_calc.data.tables.crr_equity_rw import (
 )
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
+from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 # =============================================================================
 # Data Table Constants

@@ -73,6 +73,11 @@ from datetime import date
 
 import polars as pl
 import pytest
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ApproachType, PermissionMode
+from rwa_calc.engine.crm.processor import CRMProcessor
 from tests.fixtures.p1_160.p1_160 import (
     AMOUNT_COVERED,
     BORROWER_REF,
@@ -86,11 +91,6 @@ from tests.fixtures.p1_160.p1_160 import (
     PD_GUARANTOR,
     PERCENTAGE_COVERED,
 )
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ApproachType, PermissionMode
-from rwa_calc.engine.crm.processor import CRMProcessor
 
 # =============================================================================
 # Scenario expected values (from hand-calculation in module docstring above)

@@ -71,6 +71,11 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
+from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p2_43.p2_43 import (
     EAD,
     EXPECTED_LGD_BORROWER,
@@ -80,11 +85,6 @@ from tests.fixtures.p2_43.p2_43 import (
     PD_BORROWER,
     PD_GUARANTOR,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # =============================================================================
 # Scenario expected values (hand-calculation in module docstring above)

@@ -64,6 +64,9 @@ from datetime import date
 
 import polars as pl
 import pytest
+
+import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
+from rwa_calc.contracts.config import CalculationConfig
 from tests.fixtures.p1_157.p1_157 import (
     AMOUNT_COVERED,
     EAD_FACILITY,
@@ -76,9 +79,6 @@ from tests.fixtures.p1_157.p1_157 import (
     PD_GUARANTOR_RAW,
     PERCENTAGE_COVERED,
 )
-
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
-from rwa_calc.contracts.config import CalculationConfig
 
 # =============================================================================
 # Scenario expected values (from hand-calculation in tmp/scenario-P1.157.md)

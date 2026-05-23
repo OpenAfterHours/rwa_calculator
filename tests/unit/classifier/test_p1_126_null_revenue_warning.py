@@ -22,16 +22,16 @@ from datetime import date
 
 import polars as pl
 import pytest
-from tests.fixtures.p1_126.p1_126 import (
-    make_scenario_a_bundle,
-    make_scenario_b_bundle,
-    make_scenario_c_bundle,
-)
 
 from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ErrorCategory, ErrorSeverity
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.p1_126.p1_126 import (
+    make_scenario_a_bundle,
+    make_scenario_b_bundle,
+    make_scenario_c_bundle,
+)
 
 # =============================================================================
 # Helpers

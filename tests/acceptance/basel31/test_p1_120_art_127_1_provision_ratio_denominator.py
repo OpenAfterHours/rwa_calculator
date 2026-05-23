@@ -51,6 +51,10 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_120.p1_120 import (
     BUGGY_PROVISION_RATIO,
     BUGGY_RWA,
@@ -63,10 +67,6 @@ from tests.fixtures.p1_120.p1_120 import (
     PROVISION_AMOUNT,
     PROVISION_RATIO,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

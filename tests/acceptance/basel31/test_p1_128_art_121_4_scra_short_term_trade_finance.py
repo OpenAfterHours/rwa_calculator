@@ -50,6 +50,10 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+
+from rwa_calc.contracts.bundles import RawDataBundle
+from rwa_calc.contracts.config import CalculationConfig, PermissionMode
+from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_128.p1_128 import (
     EXPECTED_EAD,
     EXPECTED_K,
@@ -59,10 +63,6 @@ from tests.fixtures.p1_128.p1_128 import (
     SCRA_LONG_TERM_FALLBACK_RISK_WEIGHT,
     SCRA_LONG_TERM_FALLBACK_RWA,
 )
-
-from rwa_calc.contracts.bundles import RawDataBundle
-from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
 # Fixture paths

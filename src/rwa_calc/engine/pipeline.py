@@ -37,6 +37,7 @@ import polars as pl
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     ClassifiedExposuresBundle,
+    CounterpartyLookup,
     CRMAdjustedBundle,
     EquityResultBundle,
     RawDataBundle,
@@ -536,6 +537,17 @@ class PipelineOrchestrator:
                 ccr_exposure_rows = ccr_rows_to_exposures(
                     raw_ccr_gated, config.ccr, config.reporting_date
                 )
+                # Inherit the resolved counterparty rating columns onto each
+                # CCR synthetic row so the downstream SA Institution lookup
+                # (CRR Art. 120(1) Table 3, keyed off ``cqs``) and any IRB
+                # routing (keyed off ``internal_pd``) see the same rating
+                # that ``hierarchy._attach_counterparty_rating`` joined onto
+                # traditional lending rows. Without this enrichment, CCR rows
+                # arrive at the SA calculator with ``cqs=None`` and fall
+                # through to the 100% unrated-institution fallback.
+                ccr_exposure_rows = self._enrich_ccr_rows_with_ratings(
+                    ccr_exposure_rows, resolved.counterparty_lookup
+                )
                 new_exposures = pl.concat(
                     [resolved.exposures, ccr_exposure_rows],
                     how="diagonal_relaxed",
@@ -550,6 +562,34 @@ class PipelineOrchestrator:
                 )
             )
             return None
+
+    @staticmethod
+    def _enrich_ccr_rows_with_ratings(
+        ccr_exposure_rows: pl.LazyFrame,
+        counterparty_lookup: CounterpartyLookup,
+    ) -> pl.LazyFrame:
+        """Join the resolved counterparty rating columns onto CCR rows.
+
+        Mirrors the per-exposure rating attach performed by
+        ``hierarchy._attach_counterparty_rating`` for traditional lending
+        rows. The CCR pipeline adapter runs AFTER hierarchy resolution and
+        appends synthetic rows via ``diagonal_relaxed`` concat, so without
+        this enrichment those rows reach the SA calculator with
+        ``cqs=None`` / ``external_cqs=None`` / ``internal_pd=None`` and the
+        institution risk-weight lookup falls through to its unrated 100%
+        fallback (CRR Art. 121(1)) instead of the rated CQS table
+        (CRR Art. 120(1) Table 3).
+        """
+        cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
+        rating_cols = [c for c in ("cqs", "pd", "internal_pd", "external_cqs") if c in cp_schema]
+        if not rating_cols:
+            return ccr_exposure_rows
+        cp_select = [pl.col("counterparty_reference"), *(pl.col(c) for c in rating_cols)]
+        return ccr_exposure_rows.join(
+            counterparty_lookup.counterparties.select(cp_select),
+            on="counterparty_reference",
+            how="left",
+        )
 
     def _run_classifier(
         self,

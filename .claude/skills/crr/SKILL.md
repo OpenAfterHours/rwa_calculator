@@ -57,7 +57,7 @@ acceptance test results:
 | Art. 111 | CCFs for off-balance sheet items |
 | Art. 112-134 | SA exposure classes and risk weights |
 | Art. 114 | Sovereign risk weights |
-| Art. 120-121 | Institution risk weights (UK CQS 2 = 30%) |
+| Art. 120-121 | Institution risk weights (CQS 2 = 50%; 30% is the Basel 3.1 / PRA PS1/26 ECRA value, not CRR) |
 | Art. 122 | Corporate risk weights |
 | Art. 123 | Retail risk weights (75%) |
 | Art. 125 | Residential mortgage risk weights (35%) |

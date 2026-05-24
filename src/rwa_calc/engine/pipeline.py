@@ -300,6 +300,17 @@ class PipelineOrchestrator:
             if resolved is None:
                 return self._create_error_result()
 
+            # Stage 2b: SA-CCR pipeline adapter (P8.20).
+            # Translates ``data.ccr`` (RawCCRBundle) into one synthetic
+            # exposure row per netting set with drawn_amount = EAD_CCR
+            # (alpha * (RC + PFE)), then appends to resolved.exposures so
+            # the Classifier routes the row via the existing
+            # counterparty-class lookup (e.g. CP_001 institution CQS 2 ->
+            # SA 50% RW). No-op when data.ccr is None.
+            resolved = self._run_ccr_stage(resolved, data, config)
+            if resolved is None:
+                return self._create_error_result()
+
             # Stage 3: Classify exposures
             classified = self._run_classifier(resolved, config)
             if classified is None:
@@ -484,6 +495,57 @@ class PipelineOrchestrator:
                 PipelineError(
                     stage="hierarchy_resolver",
                     error_type="resolution_error",
+                    message=str(e),
+                )
+            )
+            return None
+
+    def _run_ccr_stage(
+        self,
+        resolved: ResolvedHierarchyBundle,
+        data: RawDataBundle,
+        config: CalculationConfig,
+    ) -> ResolvedHierarchyBundle | None:
+        """Run the SA-CCR pipeline adapter (P8.20).
+
+        Translates the optional ``data.ccr`` bundle into one synthetic
+        exposure row per netting set with ``drawn_amount = EAD_CCR``
+        (CRR Art. 274(2): EAD = alpha * (RC + PFE)) and appends those
+        rows to ``resolved.exposures`` via ``diagonal_relaxed`` concat
+        so the unified pipeline (Classifier -> CRM -> SA Calculator)
+        consumes them without any CCR-aware special-casing downstream.
+
+        No-op when ``data.ccr is None`` (firm has no derivatives book).
+
+        References:
+            CRR Art. 271 (CCR scope); CRR Art. 272(4) (netting set);
+            CRR Art. 274(2) (alpha * (RC + PFE)).
+        """
+        if data.ccr is None:
+            logger.debug("no CCR inputs - skipping SA-CCR stage")
+            return resolved
+
+        from rwa_calc.engine.ccr import apply_legal_enforceability_gate, ccr_rows_to_exposures
+
+        try:
+            with stage_timer(logger, "ccr_sa_ccr"):
+                # Apply the Art. 272(4) legal-enforceability gate first so
+                # non-enforceable netting sets are split into single-trade
+                # synthetic NSes before the EAD chain runs.
+                raw_ccr_gated = apply_legal_enforceability_gate(data.ccr)
+                ccr_exposure_rows = ccr_rows_to_exposures(
+                    raw_ccr_gated, config.ccr, config.reporting_date
+                )
+                new_exposures = pl.concat(
+                    [resolved.exposures, ccr_exposure_rows],
+                    how="diagonal_relaxed",
+                )
+                return replace(resolved, exposures=new_exposures)
+        except Exception as e:
+            self._errors.append(
+                PipelineError(
+                    stage="ccr_sa_ccr",
+                    error_type="ccr_error",
                     message=str(e),
                 )
             )

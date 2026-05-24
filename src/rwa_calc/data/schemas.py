@@ -1341,6 +1341,11 @@ RAW_EXPOSURE_SCHEMA = {
     "original_currency": pl.String,  # Currency before FX conversion
     "original_amount": pl.Float64,  # Amount before FX conversion (drawn + interest + nominal)
     "fx_rate_applied": pl.Float64,  # Rate used (null if no conversion needed)
+    # CCR provenance (CRR Art. 271). Populated only on synthetic exposure rows
+    # appended by the SA-CCR pipeline stage (engine/ccr/pipeline_adapter.py);
+    # null on traditional lending / contingent / facility-undrawn rows.
+    "source_netting_set_id": pl.String,
+    "ccr_method": pl.String,
 }
 
 # Schema for exposures after hierarchy resolution
@@ -1385,6 +1390,9 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "lending_group_adjusted_exposure": pl.Float64,  # Excludes residential RE for retail threshold
     "residential_collateral_value": pl.Float64,  # Residential RE collateral securing this exposure
     "exposure_for_retail_threshold": pl.Float64,  # This exposure's contribution (excl. residential RE)
+    # CCR provenance (CRR Art. 271); null for traditional lending rows.
+    "source_netting_set_id": pl.String,
+    "ccr_method": pl.String,
 }
 
 # Schema for exposures after classification
@@ -1421,6 +1429,9 @@ CLASSIFIED_EXPOSURE_SCHEMA = {
     # Entity flags carried forward
     "is_sme": pl.Boolean,  # SME classification flag
     "is_retail_eligible": pl.Boolean,  # Meets retail criteria
+    # CCR provenance (CRR Art. 271); null for traditional lending rows.
+    "source_netting_set_id": pl.String,
+    "ccr_method": pl.String,
 }
 
 # Schema for exposures after CRM application
@@ -1461,6 +1472,9 @@ CRM_ADJUSTED_SCHEMA = {
     "lgd_value": pl.Float64,  # LGD for calculation
     "lgd_floor": pl.Float64,  # Applicable floor (Basel 3.1)
     "lgd_floored": pl.Float64,  # max(lgd_value, lgd_floor)
+    # CCR provenance (CRR Art. 271); null for traditional lending rows.
+    "source_netting_set_id": pl.String,
+    "ccr_method": pl.String,
 }
 
 # Pre/Post CRM columns for regulatory reporting

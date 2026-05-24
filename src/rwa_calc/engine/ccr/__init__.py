@@ -49,6 +49,7 @@ from rwa_calc.engine.ccr.pfe import (  # noqa: E402
     compute_addon_per_asset_class,
     compute_pfe_ir_singleton,
 )
+from rwa_calc.engine.ccr.pipeline_adapter import ccr_rows_to_exposures  # noqa: E402
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined  # noqa: E402
 from rwa_calc.engine.ccr.sa_ccr import (  # noqa: E402
     apply_legal_enforceability_gate,
@@ -64,6 +65,7 @@ __all__ = [
     "apply_legal_enforceability_gate",
     "assign_hedging_set",
     "assign_ir_maturity_bucket",
+    "ccr_rows_to_exposures",
     "compute_addon_per_asset_class",
     "compute_adjusted_notional_ir",
     "compute_ead",

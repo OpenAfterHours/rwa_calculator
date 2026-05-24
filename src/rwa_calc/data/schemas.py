@@ -1,10 +1,18 @@
 """
-This module contains all the schemas for all data inputs for the rwa_calc.
+Input schemas, categorical constraints, and reference-data tables for rwa_calc.
 
 Supports both UK CRR (Basel 3.0, until Dec 2026) and PRA PS1/26 (Basel 3.1, from Jan 2027).
 
-Also defines COLUMN_VALUE_CONSTRAINTS — valid value sets for categorical columns,
-used by validate_bundle_values to catch invalid input values early.
+Pipeline position:
+    DataSource -> Loader (validates against these schemas) -> HierarchyResolver
+
+Key responsibilities:
+- Declare frozen ColumnSpec schemas for every input bundle (Loan, Facility, ...)
+- Declare COLUMN_VALUE_CONSTRAINTS — single source of truth for input-domain
+  string enums (per arch_check check 6); used by validate_bundle_values to
+  catch invalid input values early
+- Publish reference-data tables (risk weights, CCFs, haircuts, LGD/PD floors)
+- Declare the Calculation_output schema (full RWA audit trail)
 
 Key Data Inputs:
 - Loan                      # Drawn exposures (leaf nodes in exposure hierarchy)
@@ -49,6 +57,18 @@ Output Schemas:
                             # Includes: classification, EAD breakdown, CRM impact, risk weights,
                             # IRB parameters, hierarchy tracing, floor impact, and data quality flags
 
+References:
+- CRR Art. 110: Treatment of credit risk adjustments (basis for Provision schema)
+- CRR Art. 111: Exposure value and CCF basis (basis for Contingents schema)
+- CRR Art. 112-134: SA exposure classes (basis for exposure-class enums)
+- CRR Art. 147-153: IRB approach assignment (basis for approach/permission enums)
+- CRR Art. 153(5): Specialised-lending slotting categories (PF, OF, CF, IPRE)
+- CRR Art. 197-200: Eligible collateral types (basis for collateral_type enum)
+- CRR Art. 213-217: Eligible guarantor types (basis for guarantor_type enum)
+- CRR Art. 223-230: Collateral valuation / supervisory haircut categories
+- CRR Art. 501 / 501a: SME and infrastructure supporting-factor eligibility fields
+- PRA PS1/26 (Basel 3.1): LTV bands, ADC flag, IPRE flags, equity SA-only treatment
+  (CRE20.58-62), and revised SA input fields effective 1 Jan 2027
 """
 
 from __future__ import annotations

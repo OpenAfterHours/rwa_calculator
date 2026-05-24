@@ -1,7 +1,27 @@
 """
-Pre/post-CRM regulatory reporting views.
+Pre/post-CRM regulatory reporting views (COREP C07 counterparty CRM).
 
 Internal module — not part of the public API.
+
+Pipeline position:
+    OutputAggregator -> _crm_reporting (pre/post-CRM summary + detailed views)
+
+Key responsibilities:
+- Produce pre-CRM summary grouped by ORIGINAL exposure class (before
+  guarantee substitution)
+- Produce post-CRM detailed view that splits guaranteed exposures into
+  unguaranteed and guarantor-substituted rows
+- Surface guarantor counterparty and guarantor exposure class on the
+  substituted leg for COREP C07 reporting
+
+References:
+- CRR Art. 108: Application of credit risk mitigation techniques
+- CRR Art. 109: Principles for the recognition of CRM
+- CRR Art. 110: Treatment of credit risk adjustments
+- CRR Art. 111: Exposure value of credit-equivalent items
+- CRR Art. 213-217: Eligible unfunded credit protection (guarantor types)
+- CRR Art. 218-236: Calculation of effects of credit risk mitigation
+- CRR Art. 237-239: Maturity mismatches and guarantee substitution effects
 """
 
 from __future__ import annotations

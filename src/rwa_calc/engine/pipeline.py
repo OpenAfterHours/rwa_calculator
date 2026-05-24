@@ -22,6 +22,13 @@ Usage:
 
     # Or with pre-loaded data:
     result = pipeline.run_with_data(raw_data, config)
+
+References:
+- CRR Art. 92: Own funds requirements (the 8% multiplier the pipeline serves)
+- CRR Art. 107: Approaches to credit risk (selects SA vs IRB stage wiring)
+- CRR Art. 110: Treatment of credit risk adjustments (provision accumulation)
+- PRA PS1/26 (Basel 3.1): Output floor wiring (CRR Art. 92(3a)) and revised
+  SA/IRB stage order effective 1 Jan 2027
 """
 
 from __future__ import annotations

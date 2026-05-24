@@ -31,6 +31,23 @@ Basel 3.1 A-IRB restrictions (PRA PS1/26 Art. 166D):
 CCF is part of exposure measurement, not credit risk mitigation.
 It converts nominal/notional amounts to credit-equivalent EAD.
 
+Pipeline position:
+    HierarchyResolver -> Classifier -> CCFCalculator -> CRMProcessor
+
+Key responsibilities:
+- Convert nominal/notional OBS amounts to credit-equivalent EAD via regulatory CCFs
+- Apply SA CCFs from CRR Art. 111 (Annex I categories)
+- Apply F-IRB bespoke CCFs from Art. 166(8) and Annex I fallback from Art. 166(10)
+- Enforce PS1/26 Art. 166D A-IRB own-estimate restrictions and EAD floor tests
+- Apply the Art. 111(1)(c) commitment-to-issue lower-of cap
+
+References:
+- CRR Art. 111: SA exposure value and CCF categories (Annex I)
+- CRR Art. 166: IRB exposure value (F-IRB bespoke and Annex I fallback CCFs)
+- PRA PS1/26 Art. 166D (Basel 3.1): A-IRB own-estimate CCF restrictions and
+  the three EAD floor tests (CCF floor, facility-level floor, fully-drawn floor)
+- BCBS CRE32.27: 50% of SA CCF floor for own-estimate CCFs
+
 Classes:
     CCFCalculator: Calculator for credit conversion factors
 

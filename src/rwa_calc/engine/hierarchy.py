@@ -12,6 +12,25 @@ The resolver unifies three exposure types:
 - contingent: Off-balance sheet items (guarantees, LCs)
 - facility_undrawn: Undrawn facility headroom (for CCF conversion)
 
+Pipeline position:
+    Loader -> HierarchyResolver -> Classifier
+
+Key responsibilities:
+- Resolve counterparty hierarchies and inherit ratings from parents
+- Aggregate connected counterparties into lending groups (retail threshold test)
+- Unify drawn loans, contingent OBS items, and undrawn facility headroom into
+  a single exposure frame keyed by facility/counterparty
+- Surface short-term rating overrides and external-rating mappings to the
+  classifier
+
+References:
+- CRR Art. 131: Short-term rating override for institutional exposures
+- CRR Art. 135: Use of external credit assessments (ECAIs)
+- CRR Art. 136: Mapping of ECAI ratings to credit quality steps
+- CRR Art. 138: Issuer / issue credit assessment
+- CRR Art. 139: Short-term assessments
+- CRR Art. 140: Use of unsolicited ratings
+
 Classes:
     HierarchyResolver: Main resolver implementing HierarchyResolverProtocol
 

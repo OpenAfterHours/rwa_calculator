@@ -25,6 +25,32 @@ Key Data Inputs:
 - Ratings                   # Internal and external credit ratings
 - Specialised_lending       # Slotting approach for PF, OF, CF, IPRE (CRE33)
 - Equity_exposure           # Equity holdings - SA only under Basel 3.1 (CRE20.58-62)
+- CIU_holdings              # Fund look-through holdings for the CIU look-through approach (Art. 132)
+- FX_rates                  # Currency conversion table (currency_from, currency_to, rate)
+
+Counterparty Credit Risk (CCR) Inputs:
+- Trade                     # OTC derivative / long-settlement / SFT row for SA-CCR (Art. 271-279a)
+                            # Carries asset_class, notional, MtM, supervisory delta, option / CDO
+                            # inputs, QCCP client-clearing flag, and specific-WWR flag
+- Netting_set               # Per-netting-set row with legal-enforceability flag (Art. 295),
+                            # margined / unmargined toggle, large-NS / illiquid-collateral MPOR
+                            # cascade inputs (Art. 285), and general-WWR flag
+- Margin_agreement          # ISDA CSA-level row (threshold, MTA, NICA, MPOR, segregation) —
+                            # separable from netting set so one CSA can cover multiple sets
+- CCR_collateral            # CCR-specific collateral keyed by netting_set_id (vs the
+                            # exposure-keyed Collateral schema); haircut lookup via Art. 224
+
+Settlement Risk Inputs:
+- Failed_trade              # One row per failed DvP or non-DvP free-delivery settlement
+                            # (Art. 378 Table 1 / Art. 379 Table 2); reserves Art. 379(2)-(3)
+                            # and Art. 380 elective flags (immateriality, CET1 deduction,
+                            # system-wide failure waiver)
+
+Securitisation:
+- Securitisation_allocation # Many-to-one flag mapping originated exposures to securitisation
+                            # pools; allocated portion is excluded from standard credit-risk
+                            # RWA totals (Art. 244-246 significant risk transfer); SEC-SA /
+                            # SEC-IRBA / SEC-ERBA framework itself remains out of scope
 
 Mappings:
 - Facility_mappings         # Mappings between Facilities, Loans and Contingents
@@ -50,6 +76,9 @@ Reference/Lookup Data:
 
 Configuration:
 - IRB_permissions           # Which exposure classes can use IRB (SA/FIRB/AIRB)
+- Model_permissions         # Per-model approach + geography / book-code scoping
+                            # (model_id, exposure_class, approach, country_codes,
+                            # excluded_book_codes)
 - Calculation_config        # Basel version toggle (3.0 vs 3.1), reporting date
 
 Output Schemas:
@@ -57,15 +86,29 @@ Output Schemas:
                             # Includes: classification, EAD breakdown, CRM impact, risk weights,
                             # IRB parameters, hierarchy tracing, floor impact, and data quality flags
 
+Intermediate Pipeline-Stage Schemas (emitted mid-pipeline; consumed downstream
+via ``ensure_columns``; not user inputs):
+- Hierarchy_output          # ``cp_*`` columns joined from counterparty data during hierarchy resolution
+- CRM_output                # Collateral buckets + provision allocations after the CRM stage (Art. 111(2), 127)
+- Classifier_output         # SME / retail / RE / SL flags + LTV + RE loan-split candidate flags
+- RE_splitter_output        # ``split_parent_id`` + ``re_split_role`` rows from the real-estate splitter
+
 References:
 - CRR Art. 110: Treatment of credit risk adjustments (basis for Provision schema)
 - CRR Art. 111: Exposure value and CCF basis (basis for Contingents schema)
 - CRR Art. 112-134: SA exposure classes (basis for exposure-class enums)
+- CRR Art. 132: CIU look-through approach (basis for CIU_holdings schema)
 - CRR Art. 147-153: IRB approach assignment (basis for approach/permission enums)
 - CRR Art. 153(5): Specialised-lending slotting categories (PF, OF, CF, IPRE)
 - CRR Art. 197-200: Eligible collateral types (basis for collateral_type enum)
 - CRR Art. 213-217: Eligible guarantor types (basis for guarantor_type enum)
 - CRR Art. 223-230: Collateral valuation / supervisory haircut categories
+- CRR Art. 244-246: Securitisation significant risk transfer (basis for Securitisation_allocation)
+- CRR Art. 271-279a: SA-CCR scope and exposure-value methodology (basis for Trade schema)
+- CRR Art. 285, 295: MPOR cascade and netting-set legal enforceability (basis for Netting_set schema)
+- CRR Art. 291: Wrong-way risk flags (general + specific) on Trade / Netting_set
+- CRR Art. 306-307: QCCP proprietary vs client-cleared routing (``is_client_cleared``)
+- CRR Art. 378-380: Settlement risk treatment (basis for Failed_trade schema)
 - CRR Art. 501 / 501a: SME and infrastructure supporting-factor eligibility fields
 - PRA PS1/26 (Basel 3.1): LTV bands, ADC flag, IPRE flags, equity SA-only treatment
   (CRE20.58-62), and revised SA input fields effective 1 Jan 2027

@@ -247,10 +247,9 @@ class SupportingFactorCalculator:
         # fill_nan before clip/sum — a single NaN in the group would otherwise
         # poison the windowed sum and zero out the supporting factor.
         if has_drawn:
-            drawn_expr = (
-                pl.col("drawn_amount").fill_nan(0.0).fill_null(0.0).clip(lower_bound=0.0)
-                + pl.col("interest").fill_nan(0.0).fill_null(0.0)
-            )
+            drawn_expr = pl.col("drawn_amount").fill_nan(0.0).fill_null(0.0).clip(
+                lower_bound=0.0
+            ) + pl.col("interest").fill_nan(0.0).fill_null(0.0)
         else:
             drawn_expr = pl.col("ead_final").fill_nan(0.0).fill_null(0.0)
 

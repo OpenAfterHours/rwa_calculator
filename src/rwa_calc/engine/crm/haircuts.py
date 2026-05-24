@@ -213,9 +213,7 @@ class HaircutCalculator:
         # liquidation-period factor, mirroring the collateral haircut path.
         is_financial = ~pl.col("collateral_type").is_in(NON_FINANCIAL_COLLATERAL_TYPES)
         fx_expr = (
-            pl.when(
-                (pl.col(coll_ccy_col) != pl.col("exposure_currency")) & is_financial
-            )
+            pl.when((pl.col(coll_ccy_col) != pl.col("exposure_currency")) & is_financial)
             .then(pl.lit(fx_base) * scaling_factor * reval_factor)
             .otherwise(pl.lit(0.0))
         )

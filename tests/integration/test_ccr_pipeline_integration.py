@@ -353,11 +353,24 @@ def test_stage_timer_emits_ccr_sa_ccr_record(
     config = _crr_config
     orchestrator = PipelineOrchestrator()
 
-    # Act — run with caplog capturing INFO on the pipeline logger
-    caplog.set_level(logging.INFO, logger=_PIPELINE_LOGGER)
-    caplog.handler.addFilter(RunIdFilter())
-    with caplog.at_level(logging.INFO, logger=_PIPELINE_LOGGER):
-        orchestrator.run_with_data(data, config)
+    # Act — run with caplog capturing INFO on the pipeline logger.
+    # rwa_calc.observability.configure_logging() (called by any earlier
+    # CreditRiskCalc.calculate() test that shares the xdist worker) sets
+    # propagate=False on the rwa_calc namespace logger, which severs it
+    # from caplog's root-attached handler. Temporarily re-enable
+    # propagation so caplog captures the stage_timer record. Mirrors the
+    # pattern in tests/unit/test_loader_optional_error_handling.py and
+    # tests/unit/test_fx_rate_sync.py.
+    namespace_logger = logging.getLogger("rwa_calc")
+    saved_propagate = namespace_logger.propagate
+    namespace_logger.propagate = True
+    try:
+        caplog.set_level(logging.INFO, logger=_PIPELINE_LOGGER)
+        caplog.handler.addFilter(RunIdFilter())
+        with caplog.at_level(logging.INFO, logger=_PIPELINE_LOGGER):
+            orchestrator.run_with_data(data, config)
+    finally:
+        namespace_logger.propagate = saved_propagate
 
     # Find records with stage='ccr_sa_ccr' and 'completed' in message
     ccr_stage_records = [

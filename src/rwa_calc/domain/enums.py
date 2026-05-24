@@ -436,6 +436,27 @@ class RiskType(StrEnum):
     -- Unconditionally cancellable commitments
     """
 
+    # CCR provenance tags (CRR Art. 271). Surface members so consumers can
+    # reference RiskType.CCR_DERIVATIVE / RiskType.CCR_SFT instead of bare
+    # strings. The literal values match VALID_RISK_TYPES_INPUT in
+    # data/schemas.py exactly so existing input validation keeps working.
+    CCR_DERIVATIVE = "CCR_DERIVATIVE"
+    """
+    Counterparty Credit Risk - OTC derivative.
+
+    Synthetic-exposure tag emitted by the SA-CCR pipeline stage for one row
+    per netting set. drawn_amount carries the SA-CCR EAD (alpha x (RC + PFE))
+    directly; no CCF conversion applies.
+    """
+
+    CCR_SFT = "CCR_SFT"
+    """
+    Counterparty Credit Risk - securities financing transaction.
+
+    Synthetic-exposure tag emitted by the CCR pipeline stage for SFTs
+    (repos, securities lending). Placeholder pending SFT-specific EAD wiring.
+    """
+
 
 class PermissionMode(StrEnum):
     """

@@ -387,11 +387,13 @@ def test_raw_ccr_bundle_errors_default_factory_produces_distinct_lists() -> None
     NettingSetBundle = getattr(bundles, "NettingSetBundle", None)
     MarginAgreementBundle = getattr(bundles, "MarginAgreementBundle", None)
     CCRCollateralBundle = getattr(bundles, "CCRCollateralBundle", None)
-    # Guard — if P8.1 prerequisites missing, fail with clear AssertionError
-    assert all(
-        x is not None
-        for x in [TradeBundle, NettingSetBundle, MarginAgreementBundle, CCRCollateralBundle]
-    ), "P8.1 leaf bundles not found — P8.1 prerequisite missing"
+    # Guard — if P8.1 prerequisites missing, fail with clear AssertionError.
+    # Per-variable asserts (not assert all(...)) so the type-checker can narrow
+    # each name from `Any | None` to `Any` before the construction below.
+    assert TradeBundle is not None, "P8.1 leaf bundle 'TradeBundle' not found"
+    assert NettingSetBundle is not None, "P8.1 leaf bundle 'NettingSetBundle' not found"
+    assert MarginAgreementBundle is not None, "P8.1 leaf bundle 'MarginAgreementBundle' not found"
+    assert CCRCollateralBundle is not None, "P8.1 leaf bundle 'CCRCollateralBundle' not found"
 
     def _make_instance() -> object:
         return RawCCRBundle(
@@ -492,10 +494,12 @@ def test_raw_data_bundle_accepts_ccr_keyword_argument() -> None:
     NettingSetBundle = getattr(bundles, "NettingSetBundle", None)
     MarginAgreementBundle = getattr(bundles, "MarginAgreementBundle", None)
     CCRCollateralBundle = getattr(bundles, "CCRCollateralBundle", None)
-    assert all(
-        x is not None
-        for x in [TradeBundle, NettingSetBundle, MarginAgreementBundle, CCRCollateralBundle]
-    ), "P8.1 leaf bundles not found — P8.1 prerequisite missing"
+    # Per-variable asserts (not assert all(...)) so the type-checker can narrow
+    # each name from `Any | None` to `Any` before the construction below.
+    assert TradeBundle is not None, "P8.1 leaf bundle 'TradeBundle' not found"
+    assert NettingSetBundle is not None, "P8.1 leaf bundle 'NettingSetBundle' not found"
+    assert MarginAgreementBundle is not None, "P8.1 leaf bundle 'MarginAgreementBundle' not found"
+    assert CCRCollateralBundle is not None, "P8.1 leaf bundle 'CCRCollateralBundle' not found"
 
     rccr = RawCCRBundle(
         trades=TradeBundle(trades=pl.LazyFrame()),

@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-05-23.
+Last generated: 2026-05-25.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -23,14 +23,14 @@ Last generated: 2026-05-23.
     --8<-- "src/rwa_calc/data/tables/ccf.py:126:157"
     ```
 
-??? quote "`sa_ccf_expression` — src/rwa_calc/engine/ccf.py:89"
+??? quote "`sa_ccf_expression` — src/rwa_calc/engine/ccf.py:106"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:89:101"
+    --8<-- "src/rwa_calc/engine/ccf.py:106:118"
     ```
 
-??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:138"
+??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:155"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:138:187"
+    --8<-- "src/rwa_calc/engine/ccf.py:155:204"
     ```
 
 ??? quote "`resolve_provisions` — src/rwa_calc/engine/crm/provisions.py:31"
@@ -212,9 +212,9 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 131 — Exposures to institutions and corporates with a short-term credit assessment
 
-??? quote "`_apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy.py:2237"
+??? quote "`_apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy.py:2256"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2237:2324"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2256:2343"
     ```
 
 
@@ -251,17 +251,17 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 135 — Use of credit assessments by ECAIs
 
-??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2188"
+??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2207"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2188:2235"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2207:2254"
     ```
 
 
 ### CRR Art. 136 — Mapping of ECAI's credit assessments
 
-??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2189"
+??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2208"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2188:2235"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2207:2254"
     ```
 
 
@@ -280,25 +280,25 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 138 — General requirements
 
-??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2190"
+??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2209"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2188:2235"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2207:2254"
     ```
 
 
 ### CRR Art. 139 — Issuer and issue credit assessment
 
-??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2191"
+??? quote "`_attach_counterparty_rating` — src/rwa_calc/engine/hierarchy.py:2210"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2188:2235"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2207:2254"
     ```
 
 
 ### CRR Art. 140 — Long-term and short-term credit assessments
 
-??? quote "`_apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy.py:2238"
+??? quote "`_apply_short_term_rating_override` — src/rwa_calc/engine/hierarchy.py:2257"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:2237:2324"
+    --8<-- "src/rwa_calc/engine/hierarchy.py:2256:2343"
     ```
 
 
@@ -489,9 +489,9 @@ Last generated: 2026-05-23.
     --8<-- "src/rwa_calc/data/tables/firb_lgd.py:452:474"
     ```
 
-??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:420"
+??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:427"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:420:532"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:539"
     ```
 
 ??? quote "`_parametric_irb_risk_weight_expr` — src/rwa_calc/engine/irb/formulas.py:811"
@@ -561,14 +561,14 @@ Last generated: 2026-05-23.
     --8<-- "src/rwa_calc/data/tables/ccf.py:160:213"
     ```
 
-??? quote "`_firb_ccf_for_col` — src/rwa_calc/engine/ccf.py:104"
+??? quote "`_firb_ccf_for_col` — src/rwa_calc/engine/ccf.py:121"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:104:110"
+    --8<-- "src/rwa_calc/engine/ccf.py:121:127"
     ```
 
-??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:139"
+??? quote "`apply_ccf` — src/rwa_calc/engine/ccf.py:156"
     ```python
-    --8<-- "src/rwa_calc/engine/ccf.py:138:187"
+    --8<-- "src/rwa_calc/engine/ccf.py:155:204"
     ```
 
 
@@ -582,17 +582,17 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:477"
+??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:487"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:477:498"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:487:508"
     ```
 
 
 ### CRR Art. 195 — On-balance sheet netting
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:142"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:143"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:142:301"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:302"
     ```
 
 
@@ -637,14 +637,14 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 223 — Financial Collateral Comprehensive Method
 
-??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:143"
+??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:144"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:142:301"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:302"
     ```
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:304"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:305"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:304:417"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:305:424"
     ```
 
 
@@ -662,15 +662,15 @@ Last generated: 2026-05-23.
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:109"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:109:278"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:109:276"
     ```
 
 
 ### CRR Art. 230 — Calculating risk-weighted exposure amounts and expected loss amounts for other eligible collateral under the IRB Approach
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:305"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:306"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:304:417"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:305:424"
     ```
 
 
@@ -689,17 +689,17 @@ Last generated: 2026-05-23.
 
 ### CRR Art. 237 — Maturity mismatch
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:613"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:611"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:613:718"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:611:716"
     ```
 
 
 ### CRR Art. 238 — Maturity of credit protection
 
-??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:614"
+??? quote "`apply_maturity_mismatch` — src/rwa_calc/engine/crm/haircuts.py:612"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircuts.py:613:718"
+    --8<-- "src/rwa_calc/engine/crm/haircuts.py:611:716"
     ```
 
 
@@ -822,22 +822,22 @@ Last generated: 2026-05-23.
     --8<-- "src/rwa_calc/engine/sa/namespace.py:2081:2104"
     ```
 
-??? quote "`calculate_sme_factor` — src/rwa_calc/engine/sa/supporting_factors.py:75"
+??? quote "`calculate_sme_factor` — src/rwa_calc/engine/sa/supporting_factors.py:80"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:75:112"
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:80:117"
     ```
 
-??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:169"
+??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:174"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:169:376"
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:174:398"
     ```
 
 
 ### CRR Art. 501a — Adjustment to own funds requirements for credit risk for exposures to entities that operate or finance physical structures or facilities, systems and networks that provide or support essential public services
 
-??? quote "`calculate_infrastructure_factor` — src/rwa_calc/engine/sa/supporting_factors.py:114"
+??? quote "`calculate_infrastructure_factor` — src/rwa_calc/engine/sa/supporting_factors.py:119"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:114:131"
+    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:119:136"
     ```
 
 

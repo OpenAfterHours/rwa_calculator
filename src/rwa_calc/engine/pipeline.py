@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -246,6 +247,7 @@ class PipelineOrchestrator:
 
         run_id, run_id_token = new_run_id()
         run_start = time.perf_counter()
+        started_at = datetime.now(UTC)
         try:
             logger.info(
                 "pipeline run starting (framework=%s, permission_mode=%s)",
@@ -359,6 +361,17 @@ class PipelineOrchestrator:
                     "error_count": len(result.errors),
                 },
             )
+
+            # Opt-in audit cache: persist aggregated summary frames and write
+            # a manifest.json. No-op unless config.audit_cache_dir is set.
+            _persist_audit_artifacts(
+                result,
+                config,
+                run_id=run_id,
+                started_at=started_at,
+                elapsed_ms=total_ms,
+            )
+
             return result
         finally:
             # Clean up any temp parquet files created during materialization
@@ -466,6 +479,7 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> ResolvedHierarchyBundle | None:
         """Run hierarchy resolution stage and attach the securitisation lookup."""
+        from rwa_calc.engine.materialise import sink_audit
         from rwa_calc.engine.securitisation.allocator import attach_securitisation_lookup
 
         try:
@@ -497,6 +511,14 @@ class PipelineOrchestrator:
                             context=getattr(error, "context", {}),
                         )
                     )
+
+            # Opt-in audit cache: dual-track best-rating resolution per CP.
+            sink_audit(
+                result.counterparty_lookup.rating_inheritance,
+                config,
+                "rating_inheritance",
+            )
+
             return result
         except Exception as e:
             self._errors.append(
@@ -604,6 +626,8 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> ClassifiedExposuresBundle | None:
         """Run classification stage."""
+        from rwa_calc.engine.materialise import sink_audit
+
         try:
             with stage_timer(logger, "classifier"):
                 result = self._classifier.classify(data, config)
@@ -618,6 +642,11 @@ class PipelineOrchestrator:
                             context=getattr(error, "context", {}),
                         )
                     )
+
+            # Opt-in audit cache: per-exposure classification reason trail.
+            if result.classification_audit is not None:
+                sink_audit(result.classification_audit, config, "classification_audit")
+
             return result
         except Exception as e:
             self._errors.append(
@@ -635,6 +664,8 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
+        from rwa_calc.engine.materialise import sink_audit
+
         try:
             with stage_timer(logger, "equity_calculator"):
                 result = self._equity_calculator.get_equity_result_bundle(data, config)
@@ -648,6 +679,11 @@ class PipelineOrchestrator:
                             message=getattr(error, "message", str(error)),
                         )
                     )
+
+            # Opt-in audit cache: CIU look-through vs fallback rationale per row.
+            if result.calculation_audit is not None:
+                sink_audit(result.calculation_audit, config, "equity_calculation_audit")
+
             return result
         except Exception as e:
             self._errors.append(
@@ -698,6 +734,8 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> CRMAdjustedBundle | None:
         """Run the real estate loan-splitter stage."""
+        from rwa_calc.engine.materialise import sink_audit
+
         try:
             with stage_timer(logger, "re_splitter"):
                 result = self._re_splitter.split(crm_adjusted, config)
@@ -715,6 +753,12 @@ class PipelineOrchestrator:
                             message=error.message,
                         )
                     )
+
+            # Opt-in audit cache: per-parent secured/residual split reconciliation.
+            # Only present when at least one exposure triggered RE splitting.
+            if result.re_split_audit is not None:
+                sink_audit(result.re_split_audit, config, "re_split_audit")
+
             return result
         except Exception as e:
             self._errors.append(
@@ -936,3 +980,106 @@ def create_test_pipeline() -> PipelineOrchestrator:
     from rwa_calc.engine.loader import create_test_loader
 
     return PipelineOrchestrator(loader=create_test_loader())
+
+
+# =============================================================================
+# Audit cache helpers
+# =============================================================================
+
+
+def _persist_audit_artifacts(
+    result: AggregatedResultBundle,
+    config: CalculationConfig,
+    *,
+    run_id: str,
+    started_at: datetime,
+    elapsed_ms: float,
+) -> None:
+    """Sink aggregated summary frames and write the per-run manifest.
+
+    No-op when ``config.audit_cache_dir`` is None — the audit cache is opt-in.
+    Mirrors the per-stage ``sink_audit`` calls in ``CRMProcessor`` so the
+    final on-disk layout under ``<audit_cache_dir>/<run_id>/`` contains both
+    CRM intermediates and the aggregator's pre/post-CRM summary views.
+
+    Failures are logged at WARNING and swallowed — audit caching must never
+    break a real run.
+    """
+    import json as _json
+
+    from rwa_calc.engine.materialise import prune_audit_cache as _prune_audit_cache
+    from rwa_calc.engine.materialise import sink_audit as _sink_audit
+
+    if config.audit_cache_dir is None:
+        return
+
+    summary_frames: dict[str, pl.LazyFrame | None] = {
+        "pre_crm_summary": result.pre_crm_summary,
+        "post_crm_summary": result.post_crm_summary,
+        "post_crm_detailed": result.post_crm_detailed,
+        "summary_by_class": result.summary_by_class,
+        "summary_by_approach": result.summary_by_approach,
+        "results": result.results,
+        # Pre-floor per-approach views — diff against ``results`` to attribute
+        # output-floor uplift back to a specific approach branch.
+        "sa_results": result.sa_results,
+        "irb_results": result.irb_results,
+        "slotting_results": result.slotting_results,
+        "equity_results": result.equity_results,
+        # Per-exposure output-floor impact (Basel 3.1 only; None under CRR).
+        "floor_impact": result.floor_impact,
+        # Per-exposure SME / infrastructure factor impact (CRR only).
+        "supporting_factor_impact": result.supporting_factor_impact,
+        # Securitisation per-pool summary + per-exposure reconciliation
+        # (both None unless ``securitisation_allocations`` was supplied).
+        "securitisation_summary": result.securitisation_summary,
+        "securitisation_audit": result.securitisation_audit,
+    }
+    for name, frame in summary_frames.items():
+        if frame is not None:
+            _sink_audit(frame, config, name)
+
+    run_dir = Path(config.audit_cache_dir) / run_id
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        artifacts: list[dict[str, object]] = []
+        if run_dir.exists():
+            for parquet_path in sorted(run_dir.glob("*.parquet")):
+                try:
+                    artifacts.append(
+                        {
+                            "name": parquet_path.name,
+                            "bytes": parquet_path.stat().st_size,
+                        }
+                    )
+                except OSError:
+                    continue
+
+        finished_at = datetime.now(UTC)
+        manifest = {
+            "run_id": run_id,
+            "framework": config.framework.value,
+            "reporting_date": config.reporting_date.isoformat(),
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "elapsed_ms": elapsed_ms,
+            "config": {
+                "permission_mode": config.permission_mode.value,
+                "base_currency": config.base_currency,
+                "collect_engine": config.collect_engine,
+                "crm_collateral_method": config.crm_collateral_method.value,
+            },
+            "artifacts": artifacts,
+            "error_count": len(result.errors),
+        }
+        manifest_path = run_dir / "manifest.json"
+        tmp_path = run_dir / "manifest.json.tmp"
+        tmp_path.write_text(_json.dumps(manifest, indent=2), encoding="utf-8")
+        tmp_path.replace(manifest_path)
+        logger.info("wrote audit manifest %s", manifest_path)
+    except Exception as exc:
+        logger.warning("audit manifest write failed: %s", exc)
+
+    # Trim oldest runs AFTER this one's artifacts are committed so the cap
+    # applies including the just-written run (max_runs total, not max_runs+1).
+    _prune_audit_cache(config)

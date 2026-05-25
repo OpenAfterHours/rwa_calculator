@@ -113,6 +113,9 @@ Implications:
   cleanly.
 - Worker processes / `multiprocessing` do not inherit the id; future worker
   code must call `new_run_id()` on entry.
+- The opt-in [audit cache](audit-cache.md) partitions its on-disk artifacts
+  by the same `run_id`, so a parquet under `<audit_cache_dir>/<run_id>/`
+  always lines up with the bracketed id on the matching log lines.
 
 ## Reference stage skeleton
 

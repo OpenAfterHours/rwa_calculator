@@ -78,6 +78,8 @@ class CreditRiskCalc:
         cache_dir: Path | None = None,
         log_level: str = "INFO",
         log_format: Literal["text", "json"] = "text",
+        audit_cache_dir: Path | None = None,
+        audit_cache_max_runs: int | None = None,
     ) -> None:
         self.data_path = Path(data_path)
         self.framework = framework
@@ -88,6 +90,8 @@ class CreditRiskCalc:
         self.eur_gbp_rate = eur_gbp_rate
         self.log_level = log_level
         self.log_format = log_format
+        self.audit_cache_dir = audit_cache_dir
+        self.audit_cache_max_runs = audit_cache_max_runs
 
         if cache_dir is None:
             import tempfile
@@ -186,6 +190,8 @@ class CreditRiskCalc:
                 eur_gbp_rate=self.eur_gbp_rate,
                 log_level=self.log_level,
                 log_format=self.log_format,
+                audit_cache_dir=self.audit_cache_dir,
+                audit_cache_max_runs=self.audit_cache_max_runs,
             )
         else:
             return CalculationConfig.basel_3_1(
@@ -194,6 +200,8 @@ class CreditRiskCalc:
                 base_currency=self.base_currency,
                 log_level=self.log_level,
                 log_format=self.log_format,
+                audit_cache_dir=self.audit_cache_dir,
+                audit_cache_max_runs=self.audit_cache_max_runs,
             )
 
     def _create_loader(self) -> LoaderProtocol:

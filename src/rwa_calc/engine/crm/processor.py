@@ -59,7 +59,7 @@ from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
-from rwa_calc.engine.materialise import materialise_barrier
+from rwa_calc.engine.materialise import materialise_barrier, sink_audit
 from rwa_calc.engine.utils import has_required_columns
 
 if TYPE_CHECKING:
@@ -589,6 +589,18 @@ class CRMProcessor:
         )
         slotting_exposures = exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value)
 
+        crm_audit = self._build_crm_audit(exposures)
+        collateral_allocation = (
+            self._build_collateral_allocation(exposures) if collateral_applied else None
+        )
+
+        # Opt-in audit cache: persist the exposure-level audit and per-type
+        # allocation frames for offline inspection. No-op unless
+        # config.audit_cache_dir is set.
+        sink_audit(crm_audit, config, "crm_audit")
+        if collateral_allocation is not None:
+            sink_audit(collateral_allocation, config, "collateral_allocation")
+
         return CRMAdjustedBundle(
             exposures=exposures,
             sa_exposures=sa_exposures,
@@ -596,10 +608,8 @@ class CRMProcessor:
             slotting_exposures=slotting_exposures,
             equity_exposures=data.equity_exposures,  # Pass through equity (no CRM)
             ciu_holdings=data.ciu_holdings,
-            crm_audit=self._build_crm_audit(exposures),
-            collateral_allocation=(
-                self._build_collateral_allocation(exposures) if collateral_applied else None
-            ),
+            crm_audit=crm_audit,
+            collateral_allocation=collateral_allocation,
             securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )
@@ -665,6 +675,19 @@ class CRMProcessor:
         exposures = self._finalize_ead(exposures)
         exposures = self._add_crm_audit(exposures)
 
+        collateral_allocation = (
+            self._build_collateral_allocation(exposures) if collateral_applied else None
+        )
+        if collateral_allocation is not None:
+            sink_audit(collateral_allocation, config, "collateral_allocation")
+
+        # Surface the per-exposure CRM audit projection when the audit cache is
+        # opted in. Unified-path bundles normally leave crm_audit=None to avoid
+        # a redundant projection on hot runs; sinking only fires when the user
+        # has explicitly requested artifacts via config.audit_cache_dir.
+        if config.audit_cache_dir is not None:
+            sink_audit(self._build_crm_audit(exposures), config, "crm_audit")
+
         return CRMAdjustedBundle(
             exposures=exposures,
             sa_exposures=pl.LazyFrame(),
@@ -673,9 +696,7 @@ class CRMProcessor:
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
             crm_audit=None,  # Audit computed at collect time if needed
-            collateral_allocation=(
-                self._build_collateral_allocation(exposures) if collateral_applied else None
-            ),
+            collateral_allocation=collateral_allocation,
             securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )

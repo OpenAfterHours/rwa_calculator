@@ -42,6 +42,7 @@ from rwa_calc.engine.crm.expressions import (
     supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.engine.materialise import sink_audit
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -406,6 +407,12 @@ def apply_collateral(
 
     # Apply maturity mismatch using actual exposure maturity (Art. 238)
     adjusted_collateral = haircut_calculator.apply_maturity_mismatch(adjusted_collateral, config)
+
+    # Opt-in audit cache: persist the per-collateral haircut frame for inspection.
+    # No-op unless config.audit_cache_dir is set. Surfaces fx_haircut /
+    # collateral_haircut / value_after_haircut / value_after_maturity_adj — the
+    # diagnostic columns users need to confirm whether H_fx is firing on a row.
+    sink_audit(adjusted_collateral, config, "collateral_haircuts")
 
     return _apply_collateral_unified(
         exposures,

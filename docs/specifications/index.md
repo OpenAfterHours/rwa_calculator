@@ -56,6 +56,7 @@ See also the [CRR vs Basel 3.1](../framework-comparison/index.md) section for co
 | [Output & Reporting](output-reporting.md) | Aggregation, output floor, COREP, export |
 | [Interfaces](interfaces.md) | Python API, Marimo UI, CLI |
 | [Observability](observability.md) | Logging contract, correlation IDs, format, enforcement |
+| [Audit cache](audit-cache.md) | Opt-in per-run parquet snapshots of CRM intermediate frames + manifest |
 | [NFRs](nfr.md) | Performance, correctness, reliability targets |
 | [Milestones](milestones.md) | Release plan, risks |
 | [Regulatory Compliance](regulatory-compliance.md) | CRR + Basel 3.1 compliance matrix, acceptance tests |

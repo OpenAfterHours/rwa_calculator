@@ -924,6 +924,15 @@ class CalculationConfig:
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
     log_level: str = "INFO"  # stdlib logging level for the rwa_calc namespace
     log_format: Literal["text", "json"] = "text"  # "text" for humans, "json" for audit ingestion
+    # Opt-in audit cache (see docs/specifications/audit-cache.md). When set, the
+    # pipeline persists intermediate CRM frames as parquet under
+    # ``<audit_cache_dir>/<run_id>/`` so users can diff or grep ``fx_haircut``,
+    # ``collateral_haircut`` and the per-row ``value_after_haircut`` without
+    # re-running ``HaircutCalculator`` manually. Default ``None`` = feature off,
+    # zero overhead. ``audit_cache_max_runs`` (optional) retains only the N most
+    # recent run subdirectories, deleting older ones at the start of each run.
+    audit_cache_dir: Path | None = None
+    audit_cache_max_runs: int | None = None
 
     def __post_init__(self) -> None:
         """Derive internal irb_permissions from permission_mode and framework.
@@ -985,6 +994,8 @@ class CalculationConfig:
         spill_dir: Path | None = None,
         log_level: str = "INFO",
         log_format: Literal["text", "json"] = "text",
+        audit_cache_dir: Path | None = None,
+        audit_cache_max_runs: int | None = None,
         ccr_alpha: Decimal = Decimal("1.4"),
         enable_ccp_exposures: bool = True,
         mpor_floor_days: int = 10,
@@ -1040,6 +1051,8 @@ class CalculationConfig:
             spill_dir=spill_dir,
             log_level=log_level,
             log_format=log_format,
+            audit_cache_dir=audit_cache_dir,
+            audit_cache_max_runs=audit_cache_max_runs,
         )
 
     @classmethod
@@ -1062,6 +1075,8 @@ class CalculationConfig:
         spill_dir: Path | None = None,
         log_level: str = "INFO",
         log_format: Literal["text", "json"] = "text",
+        audit_cache_dir: Path | None = None,
+        audit_cache_max_runs: int | None = None,
         ccr_alpha: Decimal = Decimal("1.4"),
         enable_ccp_exposures: bool = True,
         mpor_floor_days: int = 10,
@@ -1143,4 +1158,6 @@ class CalculationConfig:
             spill_dir=spill_dir,
             log_level=log_level,
             log_format=log_format,
+            audit_cache_dir=audit_cache_dir,
+            audit_cache_max_runs=audit_cache_max_runs,
         )

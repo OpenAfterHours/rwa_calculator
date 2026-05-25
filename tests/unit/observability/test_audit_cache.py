@@ -46,7 +46,7 @@ def _reset_namespace_logger() -> Iterator[None]:
 
     def _reset() -> None:
         namespace_logger = logging.getLogger(_NAMESPACE)
-        for handler in list(namespace_logger.handlers):
+        for handler in namespace_logger.handlers:
             namespace_logger.removeHandler(handler)
         namespace_logger.filters.clear()
         namespace_logger.propagate = True

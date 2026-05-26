@@ -486,7 +486,7 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     # the only rows are non-commodity with None). Coerce to Utf8 so the
     # downstream join against sf_cm_lookup's String key resolves cleanly.
     schema = trades.collect_schema()
-    if "commodity_type" not in schema.names():
+    if "commodity_type" not in schema.names():  # arch-exempt: defensive injection for IR/FX/equity-only callers
         trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("commodity_type"))
     elif schema["commodity_type"] != pl.Utf8:
         trades = trades.with_columns(pl.col("commodity_type").cast(pl.Utf8))

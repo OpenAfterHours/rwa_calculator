@@ -106,7 +106,7 @@ Sovereign / Central Bank, Institution, Corporate, Corporate SME, PSE, MDB, RGLA,
 
 ## Documentation
 
-Comprehensive documentation is available at **[OpenAfterHours.github.io/rwa_calculator](https://OpenAfterHours.github.io/rwa_calculator/)**
+Comprehensive documentation is available at **[OpenAfterHours.club/rwa_calculator](https://OpenAfterHours.club/rwa_calculator/)**
 
 | Section | Description |
 |---------|-------------|

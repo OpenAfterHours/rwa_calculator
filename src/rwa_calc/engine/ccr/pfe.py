@@ -32,6 +32,7 @@ from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.data.tables.sa_ccr_factors import (
     PFE_AGGREGATE_DENOM_COEFF,
     PFE_MULTIPLIER_FLOOR_F,
+    SA_CCR_CORRELATION_COMMODITY,
     SA_CCR_CORRELATION_CREDIT_IDX,
     SA_CCR_CORRELATION_CREDIT_SN,
     SA_CCR_CORRELATION_EQUITY_IDX,
@@ -43,6 +44,7 @@ from rwa_calc.data.tables.sa_ccr_factors import (
     SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN,
     SA_CCR_SUPERVISORY_FACTOR_FX,
     SA_CCR_SUPERVISORY_FACTOR_IR,
+    SA_CCR_SUPERVISORY_FACTORS_COMMODITY,
     SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX,
     SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN,
 )
@@ -152,6 +154,10 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
       Art. 277a + Art. 280a via :func:`_compute_addon_credit`.
     - ``equity``: single hedging set per NS with SN/IDX sub-class aggregation
       per Art. 277a + Art. 280b via :func:`_compute_addon_equity`.
+    - ``commodity``: five commodity buckets (ELECTRICITY / OIL_GAS / METALS /
+      AGRICULTURAL / OTHER) with within-bucket correlation ρ=0.40
+      (Art. 280c) and no cross-bucket correlation (CRE52.69) via
+      :func:`_compute_addon_commodity`.
 
     Args:
         trades: LazyFrame at trade grain with at minimum ``netting_set_id``,
@@ -168,8 +174,9 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 277a(1)(a) (IR); CRR Art. 277(3)(a) + BCBS CRE52.55 (FX);
         CRR Art. 277(2)(c) + Art. 277a + Art. 280a (credit);
         CRR Art. 277(2)(d) + Art. 280b (equity);
-        CRR Art. 280 Table 1 (SF_IR=0.5%, SF_FX=4%, SF_EQ_SN=32%, SF_EQ_IDX=20%);
-        CRR Art. 280 Table 2 (credit).
+        CRR Art. 277(3)(b) + Art. 280c + BCBS CRE52.67-69 (commodity);
+        CRR Art. 280 Table 1/2 (SF_IR=0.5%, SF_FX=4%, SF_EQ_SN=32%, SF_EQ_IDX=20%,
+            SF_CR by quality/index, SF_CM per bucket).
     """
     keys = trades.select(["netting_set_id", "asset_class"]).unique()
 
@@ -177,18 +184,21 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
     fx_addon = _compute_addon_fx(trades).rename({"asset_class_addon": "_fx_addon"})
     credit_addon = _compute_addon_credit(trades).rename({"asset_class_addon": "_credit_addon"})
     eq_addon = _compute_addon_equity(trades).rename({"asset_class_addon": "_eq_addon"})
+    co_addon = _compute_addon_commodity(trades).rename({"asset_class_addon": "_co_addon"})
 
     return (
         keys.join(ir_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(fx_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(credit_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(eq_addon, on=["netting_set_id", "asset_class"], how="left")
+        .join(co_addon, on=["netting_set_id", "asset_class"], how="left")
         .with_columns(
             pl.coalesce(
                 pl.col("_ir_addon"),
                 pl.col("_fx_addon"),
                 pl.col("_credit_addon"),
                 pl.col("_eq_addon"),
+                pl.col("_co_addon"),
             ).alias("asset_class_addon")
         )
         .select(["netting_set_id", "asset_class", "asset_class_addon"])
@@ -379,8 +389,7 @@ def _compute_addon_credit(trades: pl.LazyFrame) -> pl.LazyFrame:
         ["netting_set_id", "asset_class", "reference_entity", "credit_quality", "is_index"]
     ).agg(pl.col("effective_notional_trade").sum().alias("en_entity"))
 
-    # SF_CR by (is_index, credit_quality). Order matters: index branches first so
-    # ``is_index == True`` (Boolean) routes to IDX lookups; otherwise SN.
+    # SF_CR by (is_index, credit_quality).
     sf_cr = (
         pl.when(pl.col("is_index").fill_null(False) & (pl.col("credit_quality") == "IG"))
         .then(pl.lit(sf_idx_ig))
@@ -423,6 +432,100 @@ def _compute_addon_credit(trades: pl.LazyFrame) -> pl.LazyFrame:
     return per_ns.with_columns(
         (pl.col("_sys_inner") ** 2 + pl.col("_idiosyncratic")).sqrt().alias("asset_class_addon")
     ).select(["netting_set_id", "asset_class", "asset_class_addon"])
+
+
+def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """Commodity asset-class add-on per CRR Art. 277(3)(b) + Art. 277a + Art. 280c.
+
+    Per-bucket aggregation across the five commodity buckets
+    (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER):
+
+        e_i           = δ_i × d_i × MF_i                          (per trade)
+        D_b           = sum_i e_i within bucket b                 (signed sum)
+        sum_e2_b      = sum_i e_i²
+        AddOn_b       = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_e2_b)
+        AddOn_commod  = sqrt(sum_b AddOn_b²)                      (CRE52.69)
+
+    where ρ = 0.40 within-bucket (Art. 280c / CRE52.68) and SF_CM[b] is the
+    bucket-specific supervisory factor from Art. 280 Table 2
+    (ELECTRICITY=0.40, OIL_GAS/METALS/AGRICULTURAL/OTHER=0.18).
+
+    Critical: ``commodity_type`` values are UPPER-CASE per the schema enum at
+    ``schemas.py`` COLUMN_VALUE_CONSTRAINTS. Rows with null commodity_type are
+    filtered out (no implicit fallback to the OTHER bucket) — that means a
+    netting set whose only commodity rows have null commodity_type emits a
+    null asset_class_addon.
+
+    Returns:
+        LazyFrame keyed on (``netting_set_id``, ``asset_class="commodity"``)
+        with ``asset_class_addon: Float64``. Non-commodity rows are filtered out.
+
+    References:
+        CRR Art. 277(3)(b) (5 buckets); CRR Art. 277a(1) (intra-class agg);
+        CRR Art. 280c (within-bucket ρ=0.40, no cross-bucket); CRR Art. 280
+        Table 2 (SF_CM per bucket); BCBS CRE52.67-69.
+    """
+    rho = float(SA_CCR_CORRELATION_COMMODITY)
+    rho2 = rho * rho
+    one_minus_rho2 = 1.0 - rho2
+
+    # Build SF_CM lookup as a LazyFrame keyed on commodity_type (UPPER-CASE
+    # bucket names) so we can join rather than chain when/then ladders.
+    sf_cm_lookup = pl.LazyFrame(
+        {
+            "commodity_type": list(SA_CCR_SUPERVISORY_FACTORS_COMMODITY.keys()),
+            "_sf_cm": [
+                float(v) for v in SA_CCR_SUPERVISORY_FACTORS_COMMODITY.values()
+            ],
+        },
+        schema={"commodity_type": pl.Utf8, "_sf_cm": pl.Float64},
+    )
+
+    # Defensive: upstream IR / FX / equity callers may pass frames without a
+    # commodity_type column or with the column inferred as null dtype (when
+    # the only rows are non-commodity with None). Coerce to Utf8 so the
+    # downstream join against sf_cm_lookup's String key resolves cleanly.
+    schema = trades.collect_schema()
+    if "commodity_type" not in schema.names():
+        trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("commodity_type"))
+    elif schema["commodity_type"] != pl.Utf8:
+        trades = trades.with_columns(pl.col("commodity_type").cast(pl.Utf8))
+
+    # Commodity rows with a populated commodity_type only — null commodity_type
+    # does not fall back to OTHER per the regulatory contract.
+    co_trades = trades.filter(
+        (pl.col("asset_class") == "commodity") & pl.col("commodity_type").is_not_null()
+    )
+
+    # Per-trade effective notional e_i = δ × d × MF (Art. 277a(1)).
+    trade_terms = co_trades.with_columns(
+        (
+            pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
+        ).alias("effective_notional_trade")
+    )
+
+    # Bucket-level aggregates D_b (signed sum) and sum_e2_b (sum of squares).
+    d_b = trade_terms.group_by(["netting_set_id", "asset_class", "commodity_type"]).agg(
+        [
+            pl.col("effective_notional_trade").sum().alias("d_bucket"),
+            (pl.col("effective_notional_trade") ** 2).sum().alias("sum_e2_bucket"),
+        ]
+    )
+
+    # AddOn_b = SF_CM[b] × sqrt(ρ² × D_b² + (1−ρ²) × sum_e2_b).
+    with_sf = d_b.join(sf_cm_lookup, on="commodity_type", how="left").with_columns(
+        (
+            pl.col("_sf_cm")
+            * (rho2 * pl.col("d_bucket") ** 2 + one_minus_rho2 * pl.col("sum_e2_bucket")).sqrt()
+        ).alias("addon_bucket")
+    )
+
+    # AddOn_commodity = sqrt(sum_b AddOn_b²) — no cross-bucket correlation.
+    return (
+        with_sf.group_by(["netting_set_id", "asset_class"])
+        .agg((pl.col("addon_bucket") ** 2).sum().sqrt().alias("asset_class_addon"))
+        .select(["netting_set_id", "asset_class", "asset_class_addon"])
+    )
 
 
 def _compute_addon_equity(trades: pl.LazyFrame) -> pl.LazyFrame:

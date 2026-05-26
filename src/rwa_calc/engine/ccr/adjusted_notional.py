@@ -339,3 +339,54 @@ def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
         out = out.rename({"_eq_adjusted_notional": "adjusted_notional"})
 
     return out.drop("_eq_adjusted_notional", strict=False)
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for commodity trades per CRR Art. 279b(1)(c).
+
+    For ``asset_class == "commodity"``:
+
+        d = market_price × number_of_units
+
+    The product is in the trade currency; no FX conversion is required because
+    ``market_price`` is already denominated in the same currency as the trade.
+    Direction lives on ``is_long`` / ``delta`` — the adjusted-notional value
+    itself is the unsigned product per Art. 279b(1)(c).
+
+    Coalesce-safe overlay: when the input already carries an
+    ``adjusted_notional`` column from a prior IR / FX / credit / equity branch,
+    non-null values on non-commodity rows are preserved.
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``market_price`` and ``number_of_units``.
+
+    Returns:
+        The input LazyFrame with a (possibly overlaid) ``adjusted_notional:
+        Float64`` column populated for ``asset_class == "commodity"`` rows
+        only; null on non-commodity rows when no prior branch populated them.
+
+    References:
+        - CRR Art. 279b(1)(c)
+        - BCBS CRE52.46-48
+    """
+    co_adjusted = pl.col("market_price") * pl.col("number_of_units")
+
+    out = trades.with_columns(
+        pl.when(pl.col("asset_class") == "commodity")
+        .then(co_adjusted)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias("_co_adjusted_notional")
+    )
+
+    if "adjusted_notional" in trades.collect_schema().names():
+        out = out.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), pl.col("_co_adjusted_notional")).alias(
+                "adjusted_notional"
+            )
+        )
+    else:
+        out = out.rename({"_co_adjusted_notional": "adjusted_notional"})
+
+    return out.drop("_co_adjusted_notional", strict=False)

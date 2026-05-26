@@ -362,15 +362,17 @@ def test_mixed_equity_and_fx_emit_independent_asset_class_rows() -> None:
 
 
 # ===========================================================================
-# 7. Credit and commodity rows still emit null addon (regression)
+# 7. Credit and commodity rows now emit populated addon (post P8.35/P8.37 merge)
 # ===========================================================================
 
 
-def test_credit_and_commodity_asset_class_rows_still_emit_null_addon() -> None:
-    """Credit / commodity rows must still emit null asset_class_addon (regression).
+def test_credit_and_commodity_asset_class_rows_emit_non_null_addon() -> None:
+    """Credit / commodity rows emit populated asset_class_addon after P8.35/P8.37.
 
-    Adding the equity branch must not break the contract for not-yet-implemented
-    asset classes; credit and commodity rows should remain null.
+    Post-batch-20260526-ccr2 merge: all 5 asset-class branches (IR / FX / credit
+    / equity / commodity) are implemented. This test pins the dispatcher
+    contract that every asset class returns a populated addon for a row with
+    valid inputs.
     """
     # Arrange — one credit row, one commodity row (no FX / IR / equity).
     trades = pl.LazyFrame(
@@ -389,6 +391,7 @@ def test_credit_and_commodity_asset_class_rows_still_emit_null_addon() -> None:
                 "years_to_maturity": 5.0,
                 "reference_entity": "GB00B16GWD56",
                 "is_index": False,
+                "credit_quality": "IG",
                 "maturity_bucket": None,
                 "commodity_type": None,
             },
@@ -406,6 +409,7 @@ def test_credit_and_commodity_asset_class_rows_still_emit_null_addon() -> None:
                 "years_to_maturity": 2.0,
                 "reference_entity": None,
                 "is_index": None,
+                "credit_quality": None,
                 "maturity_bucket": None,
                 "commodity_type": "OIL_GAS",
             },
@@ -416,18 +420,18 @@ def test_credit_and_commodity_asset_class_rows_still_emit_null_addon() -> None:
     # Act
     result = compute_addon_per_asset_class(with_hs).collect()
 
-    # Assert — credit row null.
+    # Assert — credit row populated (SF_SN_IG × EN = 0.0046 × 50m = 230_000).
     cr_row = result.filter(pl.col("asset_class") == "credit")
     assert cr_row.height == 1, "Credit row must be anchored in the output."
-    assert cr_row["asset_class_addon"][0] is None, (
-        f"Credit asset_class_addon must be null (deferred), "
+    assert cr_row["asset_class_addon"][0] is not None and cr_row["asset_class_addon"][0] > 0, (
+        f"Credit asset_class_addon must be populated, "
         f"got {cr_row['asset_class_addon'][0]!r}."
     )
 
-    # Assert — commodity row null.
+    # Assert — commodity row populated (SF_CM_OIL × EN = 0.18 × 10m = 1_800_000).
     co_row = result.filter(pl.col("asset_class") == "commodity")
     assert co_row.height == 1, "Commodity row must be anchored in the output."
-    assert co_row["asset_class_addon"][0] is None, (
-        f"Commodity asset_class_addon must be null (deferred), "
+    assert co_row["asset_class_addon"][0] is not None and co_row["asset_class_addon"][0] > 0, (
+        f"Commodity asset_class_addon must be populated, "
         f"got {co_row['asset_class_addon'][0]!r}."
     )

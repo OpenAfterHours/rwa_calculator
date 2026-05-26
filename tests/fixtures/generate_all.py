@@ -1405,30 +1405,47 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
 
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
-    """Generate CCR golden fixtures: CCR-A1 (10y GBP IR swap) + CCR-A3 (5y GBP credit CDS)."""
-    # golden_ccr_a1 / golden_ccr_a3 use relative imports (from .margin_builder etc.), so we
-    # must load them as part of the 'ccr' package.  Insert the fixtures root (parent of ccr/)
-    # so that 'from ccr.golden_ccr_a1 import …' resolves the sibling builders correctly.
+    """Generate CCR golden fixtures: CCR-A1 (IR swap), CCR-A3 (credit CDS),
+    CCR-A7 (oil forward), CCR-A8 (electricity swap).
+
+    All golden scenarios are written to the same ``ccr/`` output directory.
+    golden_ccr_a* modules use relative imports (from .margin_builder etc.),
+    so they are loaded as part of the 'ccr' package.  Insert the fixtures
+    root (parent of ccr/) so that 'from ccr.golden_ccr_a* import …' resolves
+    the sibling builders correctly.
+    """
     fixtures_root = str(output_dir.parent)
     sys.path.insert(0, fixtures_root)
     try:
         from ccr.golden_ccr_a1 import save_golden_fixtures
         from ccr.golden_ccr_a3 import save_ccr_a3_fixtures
+        from ccr.golden_ccr_a7 import save_ccr_a7_fixtures
+        from ccr.golden_ccr_a8 import save_ccr_a8_fixtures
 
         results: list[tuple[str, int]] = []
 
-        # CCR-A1: writes trades.parquet, netting_sets.parquet, margin_agreements.parquet,
-        #         ccr_collateral.parquet (canonical names used by test_ccr_fixture_builders.py)
+        # CCR-A1: writes canonical trades/netting_sets/margin_agreements/ccr_collateral parquets.
         saved_a1 = save_golden_fixtures(output_dir)
         results.extend(
             (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a1.items()
         )
 
-        # CCR-A3: writes ccr_a3_trades.parquet, ccr_a3_netting_sets.parquet,
-        #         ccr_a3_margin_agreements.parquet, ccr_a3_ccr_collateral.parquet
+        # CCR-A3: writes ccr_a3_* parquets.
         saved_a3 = save_ccr_a3_fixtures(output_dir)
         results.extend(
             (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a3.items()
+        )
+
+        # CCR-A7: writes ccr_a7_* parquets (oil forward).
+        saved_a7 = save_ccr_a7_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a7.items()
+        )
+
+        # CCR-A8: writes ccr_a8_* parquets (electricity swap).
+        saved_a8 = save_ccr_a8_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a8.items()
         )
 
         return results
@@ -1437,6 +1454,8 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
         for mod in (
             "ccr.golden_ccr_a1",
             "ccr.golden_ccr_a3",
+            "ccr.golden_ccr_a7",
+            "ccr.golden_ccr_a8",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

@@ -39,6 +39,7 @@ import polars as pl
 from rwa_calc.contracts.bundles import RawCCRBundle
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.engine.ccr.adjusted_notional import (
+    compute_adjusted_notional_commodity,
     compute_adjusted_notional_credit,
     compute_adjusted_notional_equity,
     compute_adjusted_notional_fx,
@@ -147,6 +148,9 @@ def ccr_rows_to_exposures(
     # Equity adjusted notional per Art. 279b(1)(c) — overlays the equity branch
     # on top of any prior IR/FX/credit result via coalesce; no-op for non-equity rows.
     trades_enriched = compute_adjusted_notional_equity(trades_enriched)
+    # Commodity adjusted notional per Art. 279b(1)(c) — coalesce-safe overlay,
+    # no-op for non-commodity rows.
+    trades_enriched = compute_adjusted_notional_commodity(trades_enriched)
     trades_enriched = compute_supervisory_delta_linear(trades_enriched)
     trades_enriched = compute_maturity_factor_unmargined(trades_enriched)
     trades_enriched = assign_hedging_set(trades_enriched)

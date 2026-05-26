@@ -95,14 +95,14 @@ class Trade:
 
     # P8.33 — equity / credit / commodity asset-class hedging-set columns.
     # All nullable: only populated for the relevant asset_class.
-    # CRR Art. 279b(1)(c): equity adjusted notional d = market_price × number_of_units.
+    # CRR Art. 279b(1)(c): equity & commodity adjusted notional d = market_price × number_of_units.
     market_price: float | None = None
     number_of_units: float | None = None
-    # CRR Art. 277(2)(c)-(d): partitioning by issuer reference for credit & equity.
+    # CRR Art. 277(2)(c)-(d): credit & equity hedging-set issuer reference / index ticker.
     reference_entity: str | None = None
     # CRR Art. 277(3)(b): commodity bucket — ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER.
     commodity_type: str | None = None
-    # CRR Art. 280a / 280b: single-name (False) vs index (True) for credit & equity.
+    # CRR Art. 280a / 280b: single-name vs index discriminator for credit / equity.
     is_index: bool | None = None
 
     # P8.35 — credit asset class: investment-grade discriminator for SF lookup.
@@ -364,6 +364,64 @@ def make_equity_trade(**overrides: Any) -> Trade:
         "commodity_type": None,
         "is_index": False,
         "credit_quality": None,
+    }
+    defaults.update(overrides)
+    return Trade(**defaults)
+
+
+def make_commodity_trade(**overrides: Any) -> Trade:
+    """
+    Return a ``Trade`` with CCR-A7 (oil forward) golden defaults.
+
+    Default values represent the canonical CCR-A7 single-trade scenario:
+    a 2-year GBP oil forward, delta=1.0 (non-option), is_long=True,
+    MtM=0.0, market_price=50.0 GBP/bbl, number_of_units=20_000.0 bbl,
+    commodity_type="OIL_GAS".
+
+    The adjusted notional is computed by the engine as
+    ``d = market_price × number_of_units = 50.0 × 20_000.0 = 1_000_000.0``
+    per CRR Art. 279b(1)(c); the ``notional`` field here acts as a sentinel
+    for schema-level validation only (set equal to the expected d value).
+
+    Args:
+        **overrides: Any ``Trade`` field keyword arguments. The caller only
+            needs to supply fields that differ from the golden defaults.
+
+    Returns:
+        A frozen ``Trade`` instance with ``asset_class == "commodity"``.
+
+    References:
+        - CRR Art. 279b(1)(c) (commodity adjusted notional d = mp × units)
+        - CRR Art. 277(3)(b) (5 commodity buckets — UPPER-CASE)
+        - CRR Art. 280 Table 2 (SF_CM: OIL_GAS=0.18, ELECTRICITY=0.40)
+    """
+    defaults: dict[str, Any] = {
+        "trade_id": "T_CO_OIL_001",
+        "netting_set_id": "NS_CO_001",
+        "asset_class": "commodity",
+        "transaction_type": "derivative",
+        "notional": 1_000_000.0,
+        "currency": "GBP",
+        "maturity_date": date(2028, 1, 15),
+        "start_date": date(2026, 1, 15),
+        "delta": 1.0,
+        "is_long": True,
+        "mtm_value": 0.0,
+        "is_long_settlement": False,
+        "underlying_reference": None,
+        "option_strike": None,
+        "option_type": None,
+        "option_underlying_price": None,
+        "cdo_attachment": None,
+        "cdo_detachment": None,
+        "payment_leg_index_id": None,
+        "notional_leg2": None,
+        "currency_leg2": None,
+        "market_price": 50.0,
+        "number_of_units": 20_000.0,
+        "reference_entity": None,
+        "commodity_type": "OIL_GAS",
+        "is_index": None,
     }
     defaults.update(overrides)
     return Trade(**defaults)

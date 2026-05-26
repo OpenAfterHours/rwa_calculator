@@ -7,7 +7,7 @@
 
 A high-performance Risk-Weighted Assets (RWA) calculator for UK CR & CCR, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
 
-**Documentation:** [https://OpenAfterHours.github.io/rwa_calculator/](https://OpenAfterHours.github.io/rwa_calculator/)
+**Documentation:** [https://OpenAfterHours.club/rwa_calculator/](https://OpenAfterHours.club/rwa_calculator/)
 
 ## Installation
 

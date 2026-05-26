@@ -93,29 +93,20 @@ class Trade:
     notional_leg2: float | None = None
     currency_leg2: str | None = None
 
-    # P8.33 — equity asset class: adjusted notional = market_price × number_of_units.
-    # CRR Art. 279b(1)(c) / CRE52.45: null for non-equity rows.
+    # P8.33 — equity / credit / commodity asset-class hedging-set columns.
+    # All nullable: only populated for the relevant asset_class.
+    # CRR Art. 279b(1)(c): equity adjusted notional d = market_price × number_of_units.
     market_price: float | None = None
     number_of_units: float | None = None
-
-    # CRR Art. 277(2)(c) / CRE52.60: credit hedging-set partition by issuer LEI.
-    # Null for non-credit rows. Also used by equity (Art. 277(2)(d)).
+    # CRR Art. 277(2)(c)-(d): partitioning by issuer reference for credit & equity.
     reference_entity: str | None = None
-
-    # CRR Art. 277(3)(b) / CRE52.67: commodity bucket discriminator.
-    # Valid values: "ELECTRICITY" | "OIL_GAS" | "METALS" | "AGRICULTURAL" | "OTHER".
-    # Null for non-commodity rows.
+    # CRR Art. 277(3)(b): commodity bucket — ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER.
     commodity_type: str | None = None
-
-    # CRR Art. 280a / 280b / CRE52.61: single-name vs index discriminator.
-    # Null means "not applicable" (IR / FX / commodity rows).
+    # CRR Art. 280a / 280b: single-name (False) vs index (True) for credit & equity.
     is_index: bool | None = None
 
     # P8.35 — credit asset class: investment-grade discriminator for SF lookup.
     # Valid values: "IG" | "HY" | "NON_RATED". Null for non-credit rows.
-    # Added to TRADE_SCHEMA by Wave 4 (engine-implementer). Included here so
-    # the fixture dataclass is ready; create_trades() silently drops it until
-    # TRADE_SCHEMA is extended.
     credit_quality: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -275,8 +266,6 @@ def make_credit_trade(**overrides: Any) -> Trade:
         - is_index=False — single-name flag; discriminates SF and rho lookups
           (SF_SN_IG = 0.0046, rho_SN = 0.50 per CRR Art. 280 Table 2 + 280a).
         - credit_quality="IG" — investment-grade discriminator for the SF table.
-          Note: credit_quality is NOT yet in TRADE_SCHEMA (Wave 4 adds it);
-          create_trades() silently drops it until the schema is extended.
 
     Args:
         **overrides: Any ``Trade`` field keyword arguments. The caller only
@@ -319,6 +308,62 @@ def make_credit_trade(**overrides: Any) -> Trade:
         "commodity_type": None,
         "is_index": False,
         "credit_quality": "IG",
+    }
+    defaults.update(overrides)
+    return Trade(**defaults)
+
+
+def make_equity_trade(**overrides: Any) -> Trade:
+    """
+    Return a ``Trade`` with CCR-A5 (equity TRS) golden defaults.
+
+    Default values represent the canonical CCR-A5 single-trade scenario:
+    a 1-year GBP single-name equity TRS (T_EQ_001) in netting set NS_EQ_001.
+    The adjusted notional is derived from market_price × number_of_units
+    (CRR Art. 279b(1)(c)); the ``notional`` field is 0.0 as a placeholder
+    (the equity branch ignores it).
+
+    Args:
+        **overrides: Any ``Trade`` field keyword arguments. The caller only
+            needs to supply fields that differ from the golden defaults.
+
+    Returns:
+        A frozen ``Trade`` instance with ``asset_class == "equity"``.
+
+    References:
+        - CRR Art. 277(2)(d) (equity hedging set = one per asset class per NS)
+        - CRR Art. 279a(1) (supervisory delta = 1.0 for linear long)
+        - CRR Art. 279b(1)(c) (equity adjusted notional d = market_price × units)
+        - CRR Art. 280b (SF_EQ = 32% SN / 20% IDX; rho = 0.50 SN / 0.80 IDX)
+    """
+    defaults: dict[str, Any] = {
+        "trade_id": "T_EQ_001",
+        "netting_set_id": "NS_EQ_001",
+        "asset_class": "equity",
+        "transaction_type": "derivative",
+        "notional": 0.0,  # placeholder — equity branch uses market_price × number_of_units
+        "currency": "GBP",
+        "maturity_date": date(2027, 1, 15),
+        "start_date": date(2026, 1, 15),
+        "delta": 1.0,
+        "is_long": True,
+        "mtm_value": 0.0,
+        "is_long_settlement": False,
+        "underlying_reference": None,
+        "option_strike": None,
+        "option_type": None,
+        "option_underlying_price": None,
+        "cdo_attachment": None,
+        "cdo_detachment": None,
+        "payment_leg_index_id": None,
+        "notional_leg2": None,
+        "currency_leg2": None,
+        "market_price": 50.0,
+        "number_of_units": 1_000_000.0,
+        "reference_entity": "GB00B16GWD56",
+        "commodity_type": None,
+        "is_index": False,
+        "credit_quality": None,
     }
     defaults.update(overrides)
     return Trade(**defaults)

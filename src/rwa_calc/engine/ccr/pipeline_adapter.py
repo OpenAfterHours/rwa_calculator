@@ -40,6 +40,7 @@ from rwa_calc.contracts.bundles import RawCCRBundle
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_credit,
+    compute_adjusted_notional_equity,
     compute_adjusted_notional_fx,
     compute_adjusted_notional_ir,
 )
@@ -143,6 +144,9 @@ def ccr_rows_to_exposures(
     # duration kernel and overlays via coalesce; no gate needed (no-op for
     # non-credit rows).
     trades_enriched = compute_adjusted_notional_credit(trades_enriched, reporting_date)
+    # Equity adjusted notional per Art. 279b(1)(c) — overlays the equity branch
+    # on top of any prior IR/FX/credit result via coalesce; no-op for non-equity rows.
+    trades_enriched = compute_adjusted_notional_equity(trades_enriched)
     trades_enriched = compute_supervisory_delta_linear(trades_enriched)
     trades_enriched = compute_maturity_factor_unmargined(trades_enriched)
     trades_enriched = assign_hedging_set(trades_enriched)

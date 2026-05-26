@@ -287,3 +287,55 @@ def compute_adjusted_notional_credit(
             pl.coalesce(pl.col("adjusted_notional"), credit_adjusted).alias("adjusted_notional")
         )
     return trades.with_columns(credit_adjusted.alias("adjusted_notional"))
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for equity trades per CRR Art. 279b(1)(c).
+
+    For ``asset_class == "equity"``:
+
+        d = abs(market_price * number_of_units)
+
+    Direction lives on ``is_long`` / ``supervisory_delta``; the adjusted-notional
+    value itself is taken in absolute terms per the regulatory rule. Null
+    ``market_price`` or null ``number_of_units`` propagate as null
+    ``adjusted_notional`` — the orchestrator surfaces the CCR data-quality
+    error at the pipeline-adapter boundary.
+
+    When the input frame already carries an ``adjusted_notional`` column from a
+    prior IR / FX branch, this function coalesces — non-null upstream values
+    are preserved and the equity result only overlays where the upstream value
+    is null (equity rows).
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``market_price`` and ``number_of_units``.
+
+    Returns:
+        The input LazyFrame with an ``adjusted_notional: Float64`` column
+        populated for ``asset_class == "equity"`` rows; existing non-null
+        values from upstream branches are preserved.
+
+    References:
+        - CRR Art. 279b(1)(c): equity adjusted notional d = market_price × units.
+    """
+    equity_adjusted = (pl.col("market_price") * pl.col("number_of_units")).abs()
+
+    out = trades.with_columns(
+        pl.when(pl.col("asset_class") == "equity")
+        .then(equity_adjusted)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias("_eq_adjusted_notional")
+    )
+
+    if "adjusted_notional" in trades.collect_schema().names():
+        out = out.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), pl.col("_eq_adjusted_notional")).alias(
+                "adjusted_notional"
+            )
+        )
+    else:
+        out = out.rename({"_eq_adjusted_notional": "adjusted_notional"})
+
+    return out.drop("_eq_adjusted_notional", strict=False)

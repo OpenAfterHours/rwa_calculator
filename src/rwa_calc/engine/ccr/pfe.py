@@ -34,9 +34,13 @@ from rwa_calc.data.tables.sa_ccr_factors import (
     PFE_MULTIPLIER_FLOOR_F,
     SA_CCR_CORRELATION_CREDIT_IDX,
     SA_CCR_CORRELATION_CREDIT_SN,
+    SA_CCR_CORRELATION_EQUITY_IDX,
+    SA_CCR_CORRELATION_EQUITY_SN,
     SA_CCR_IR_BUCKET_CORRELATION_12,
     SA_CCR_IR_BUCKET_CORRELATION_13,
     SA_CCR_IR_BUCKET_CORRELATION_23,
+    SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX,
+    SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN,
     SA_CCR_SUPERVISORY_FACTOR_FX,
     SA_CCR_SUPERVISORY_FACTOR_IR,
     SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX,
@@ -146,6 +150,8 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
     - ``credit``: per-entity effective notionals aggregated inside a single
       credit hedging set via the supervisory-correlation formula per
       Art. 277a + Art. 280a via :func:`_compute_addon_credit`.
+    - ``equity``: single hedging set per NS with SN/IDX sub-class aggregation
+      per Art. 277a + Art. 280b via :func:`_compute_addon_equity`.
 
     Args:
         trades: LazyFrame at trade grain with at minimum ``netting_set_id``,
@@ -161,23 +167,28 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
     References:
         CRR Art. 277a(1)(a) (IR); CRR Art. 277(3)(a) + BCBS CRE52.55 (FX);
         CRR Art. 277(2)(c) + Art. 277a + Art. 280a (credit);
-        CRR Art. 280 Table 1 (SF_IR=0.5%, SF_FX=4%); CRR Art. 280 Table 2 (credit).
+        CRR Art. 277(2)(d) + Art. 280b (equity);
+        CRR Art. 280 Table 1 (SF_IR=0.5%, SF_FX=4%, SF_EQ_SN=32%, SF_EQ_IDX=20%);
+        CRR Art. 280 Table 2 (credit).
     """
     keys = trades.select(["netting_set_id", "asset_class"]).unique()
 
     ir_addon = _compute_addon_ir(trades).rename({"asset_class_addon": "_ir_addon"})
     fx_addon = _compute_addon_fx(trades).rename({"asset_class_addon": "_fx_addon"})
     credit_addon = _compute_addon_credit(trades).rename({"asset_class_addon": "_credit_addon"})
+    eq_addon = _compute_addon_equity(trades).rename({"asset_class_addon": "_eq_addon"})
 
     return (
         keys.join(ir_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(fx_addon, on=["netting_set_id", "asset_class"], how="left")
         .join(credit_addon, on=["netting_set_id", "asset_class"], how="left")
+        .join(eq_addon, on=["netting_set_id", "asset_class"], how="left")
         .with_columns(
             pl.coalesce(
                 pl.col("_ir_addon"),
                 pl.col("_fx_addon"),
                 pl.col("_credit_addon"),
+                pl.col("_eq_addon"),
             ).alias("asset_class_addon")
         )
         .select(["netting_set_id", "asset_class", "asset_class_addon"])
@@ -412,3 +423,106 @@ def _compute_addon_credit(trades: pl.LazyFrame) -> pl.LazyFrame:
     return per_ns.with_columns(
         (pl.col("_sys_inner") ** 2 + pl.col("_idiosyncratic")).sqrt().alias("asset_class_addon")
     ).select(["netting_set_id", "asset_class", "asset_class_addon"])
+
+
+def _compute_addon_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """Equity asset-class add-on per CRR Art. 277a + Art. 280b.
+
+    Per Art. 277(2)(d) there is one hedging set per asset class per netting
+    set. Within that hedging set, single-name (``is_index=False``) and index
+    (``is_index=True``) trades form two sub-classes; per Art. 280b there is
+    no cross-sub-class correlation, so the two sub-class add-ons are summed.
+
+    Within each (``netting_set_id``, ``is_index``) sub-class:
+
+        EN_i  = supervisory_delta_i * adjusted_notional_i * MF_i  (per trade)
+        D_k   = sum of EN_i for each distinct ``reference_entity`` k
+        sum_D = sum_k D_k
+        sum_D_sq = sum_k D_k^2
+
+        AddOn_HS = SF * sqrt((rho * sum_D)^2 + (1 - rho^2) * sum_D_sq)
+
+    where:
+
+        is_index=False: SF = SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN  (0.32)
+                        rho = SA_CCR_CORRELATION_EQUITY_SN        (0.50)
+        is_index=True:  SF = SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX (0.20)
+                        rho = SA_CCR_CORRELATION_EQUITY_IDX       (0.80)
+
+    Mixed SN + IDX in the same NS sums two sub-class add-ons.
+
+    Returns:
+        LazyFrame keyed on (``netting_set_id``, ``asset_class="equity"``)
+        with ``asset_class_addon: Float64``. Non-equity rows are filtered out.
+
+    References:
+        CRR Art. 277(2)(d); CRR Art. 277a; CRR Art. 280 Table 2;
+        CRR Art. 280b; BCBS CRE52.65-66.
+    """
+    sf_sn = float(SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN)
+    sf_idx = float(SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX)
+    rho_sn = float(SA_CCR_CORRELATION_EQUITY_SN)
+    rho_idx = float(SA_CCR_CORRELATION_EQUITY_IDX)
+
+    # Defensive: upstream frames that pre-date the equity branch (e.g. FX/IR-
+    # only acceptance tests) may not carry ``is_index`` / ``reference_entity``.
+    # Both columns are required only for equity rows; treat missing ones as
+    # all-null so the equity filter below resolves to an empty frame for the
+    # non-equity workloads. Polars evaluates the dispatch ladder eagerly at
+    # plan-resolve time, so the columns must exist on the schema.
+    schema_names = trades.collect_schema().names()
+    if "is_index" not in schema_names:
+        trades = trades.with_columns(pl.lit(None, dtype=pl.Boolean).alias("is_index"))
+    if "reference_entity" not in schema_names:
+        trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("reference_entity"))
+
+    eq_trades = trades.filter(pl.col("asset_class") == "equity")
+
+    # Per-trade effective notional EN_i = delta * d * MF.
+    trade_terms = eq_trades.with_columns(
+        (
+            pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
+        ).alias("effective_notional_trade")
+    )
+
+    # D_k per (netting_set_id, is_index, reference_entity): collapse same-entity
+    # trades into a single signed sum before the sqrt step (Art. 277a entity
+    # aggregation).
+    d_k = trade_terms.group_by(
+        ["netting_set_id", "asset_class", "is_index", "reference_entity"]
+    ).agg(pl.col("effective_notional_trade").sum().alias("d_k"))
+
+    # Per (NS, is_index) sub-class: sum_D, sum_D_sq, and the supervisory
+    # factor / correlation selected by ``is_index``.
+    sf_expr = (
+        pl.when(pl.col("is_index")).then(pl.lit(sf_idx)).otherwise(pl.lit(sf_sn))
+    )
+    rho_expr = (
+        pl.when(pl.col("is_index")).then(pl.lit(rho_idx)).otherwise(pl.lit(rho_sn))
+    )
+
+    sub_class = d_k.group_by(["netting_set_id", "asset_class", "is_index"]).agg(
+        [
+            pl.col("d_k").sum().alias("sum_d"),
+            (pl.col("d_k") ** 2).sum().alias("sum_d_sq"),
+        ]
+    )
+
+    sub_class_addon = sub_class.with_columns(
+        [sf_expr.alias("_sf"), rho_expr.alias("_rho")]
+    ).with_columns(
+        (
+            pl.col("_sf")
+            * (
+                (pl.col("_rho") * pl.col("sum_d")) ** 2
+                + (1.0 - pl.col("_rho") ** 2) * pl.col("sum_d_sq")
+            ).sqrt()
+        ).alias("addon_sub_class")
+    )
+
+    # AddOn_EQ = sum over sub-classes (SN + IDX) within each NS — Art. 280b.
+    return (
+        sub_class_addon.group_by(["netting_set_id", "asset_class"])
+        .agg(pl.col("addon_sub_class").sum().alias("asset_class_addon"))
+        .select(["netting_set_id", "asset_class", "asset_class_addon"])
+    )

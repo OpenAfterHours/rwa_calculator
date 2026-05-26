@@ -11,15 +11,18 @@ A high-performance Risk-Weighted Assets (RWA) calculator for UK CR & CCR, suppor
 
 ## Installation
 
+*Install using pip*
 ```bash
-# Install from PyPI
 pip install rwa-calc
-
-# Or with uv
+```
+**Or with uv**
+```bash
 uv add rwa-calc
+```
 
-# With UI support (web-based calculator interface)
-pip install rwa-calc[ui]
+*With UI support (web-based calculator interface)*
+```bash
+uv add rwa-calc[ui]
 ```
 
 ### Optional Dependencies

@@ -1,0 +1,19 @@
+{
+  "scenario_id": "CCR-A5",
+  "framework": "crr",
+  "reporting_date": "2026-01-15",
+  "exposure_reference": "ccr__NS_EQ_001",
+  "source_netting_set_id": "NS_EQ_001",
+  "ccr_method": "sa_ccr",
+  "risk_type": "CCR_DERIVATIVE",
+  "rc_unmargined": 0.0,
+  "addon_aggregate": 15994523.295317,
+  "pfe_multiplier": 1.0,
+  "pfe_addon": 15994523.295317,
+  "ead_ccr": 22392332.613444,
+  "ead_final": 22392332.613444,
+  "exposure_class": "institution",
+  "approach_applied": "standardised",
+  "risk_weight": 0.50,
+  "rwa_final": 11196166.306722
+}

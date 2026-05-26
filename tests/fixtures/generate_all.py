@@ -319,6 +319,16 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p827,
         ),
+        (
+            "CCR-A5 golden (single-name equity TRS, 1y, unmargined)",
+            "ccr",
+            _generate_ccr_a5,
+        ),
+        (
+            "CCR-A10 golden (mixed-asset-class netting set — one trade per asset class)",
+            "ccr",
+            _generate_ccr_a10,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1400,21 +1410,66 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
 
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
-    """Generate CCR-A1 golden fixtures (single 10y GBP IR swap, unmargined)."""
-    # golden_ccr_a1 uses relative imports (from .margin_builder etc.), so we must load
-    # it as part of the 'ccr' package.  Insert the fixtures root (parent of ccr/) so that
-    # 'from ccr.golden_ccr_a1 import …' resolves the sibling builders correctly.
+    """Generate CCR golden fixtures: CCR-A1 (IR swap), CCR-A3 (credit CDS),
+    CCR-A7 (oil forward), CCR-A8 (electricity swap), CCR-A9 (multi-bucket
+    commodity netting set — OIL_GAS + METALS + ELECTRICITY).
+
+    All golden scenarios are written to the same ``ccr/`` output directory.
+    golden_ccr_a* modules use relative imports (from .margin_builder etc.),
+    so they are loaded as part of the 'ccr' package.  Insert the fixtures
+    root (parent of ccr/) so that 'from ccr.golden_ccr_a* import …' resolves
+    the sibling builders correctly.
+    """
     fixtures_root = str(output_dir.parent)
     sys.path.insert(0, fixtures_root)
     try:
         from ccr.golden_ccr_a1 import save_golden_fixtures
+        from ccr.golden_ccr_a3 import save_ccr_a3_fixtures
+        from ccr.golden_ccr_a7 import save_ccr_a7_fixtures
+        from ccr.golden_ccr_a8 import save_ccr_a8_fixtures
+        from ccr.golden_ccr_a9 import save_ccr_a9_fixtures
 
-        saved = save_golden_fixtures(output_dir)
-        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+        results: list[tuple[str, int]] = []
+
+        # CCR-A1: writes canonical trades/netting_sets/margin_agreements/ccr_collateral parquets.
+        saved_a1 = save_golden_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a1.items()
+        )
+
+        # CCR-A3: writes ccr_a3_* parquets.
+        saved_a3 = save_ccr_a3_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a3.items()
+        )
+
+        # CCR-A7: writes ccr_a7_* parquets (oil forward).
+        saved_a7 = save_ccr_a7_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a7.items()
+        )
+
+        # CCR-A8: writes ccr_a8_* parquets (electricity swap).
+        saved_a8 = save_ccr_a8_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a8.items()
+        )
+
+        # CCR-A9: writes ccr_a9_* parquets (multi-bucket commodity, cross-bucket sqrt aggregation).
+        saved_a9 = save_ccr_a9_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a9.items()
+        )
+
+        return results
     finally:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_a1",
+            "ccr.golden_ccr_a3",
+            "ccr.golden_ccr_a7",
+            "ccr.golden_ccr_a8",
+            "ccr.golden_ccr_a9",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",
@@ -1901,6 +1956,53 @@ def _generate_p827(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.wwr_builder",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a5(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A5 golden fixtures (single-name equity TRS, 1y, unmargined)."""
+    # golden_ccr_a5 uses relative imports from the ccr package, so load it as
+    # part of the 'ccr' package — same pattern as _generate_ccr_golden.
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a5 import save_ccr_a5_fixtures
+
+        saved = save_ccr_a5_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a5",
+            "ccr.golden_ccr_a1",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a10(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A10 golden fixtures (mixed-asset-class netting set, 5 trades, unmargined)."""
+    # golden_ccr_a10 uses relative imports from the ccr package, so load it as
+    # part of the 'ccr' package — same pattern as _generate_ccr_golden.
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a10 import save_ccr_a10_fixtures
+
+        saved = save_ccr_a10_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a10",
+            "ccr.golden_ccr_a1",
+            "ccr.golden_ccr_a2",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

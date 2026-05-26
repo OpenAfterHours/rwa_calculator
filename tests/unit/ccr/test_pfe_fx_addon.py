@@ -285,14 +285,19 @@ def test_mixed_ir_and_fx_emit_independent_asset_class_rows() -> None:
 # ===========================================================================
 
 
-def test_credit_asset_class_row_emits_null_addon() -> None:
-    """Credit / equity / commodity rows must still emit null asset_class_addon.
+def test_credit_asset_class_row_emits_non_null_addon() -> None:
+    """Credit rows must emit a populated (non-null) asset_class_addon after P8.35.
 
-    These asset classes are deferred to subsequent batches; the dispatcher's
-    contract is to anchor every (NS, asset_class) combination present in the
-    input and leave non-implemented branches null.
+    Contract flip (P8.35): before P8.35, the dispatcher deferred credit rows
+    and left asset_class_addon null. After P8.35 lands, the credit branch of
+    _compute_addon_credit is wired into compute_addon_per_asset_class and credit
+    rows must carry a concrete numerical add-on.
+
+    This test is intentionally written to FAIL until the engine-implementer
+    (Wave 4) wires the credit branch — the old assertion (is None) has been
+    inverted to (is not None) to reflect the new contract.
     """
-    # Arrange — single credit-derivative row, no FX / IR.
+    # Arrange — single credit-derivative row with credit_quality for SF lookup.
     trades = pl.LazyFrame(
         [
             {
@@ -303,6 +308,9 @@ def test_credit_asset_class_row_emits_null_addon() -> None:
                 "currency": "GBP",
                 "notional_leg2": None,
                 "currency_leg2": None,
+                "reference_entity": "SOME_ENTITY_LEI",
+                "is_index": False,
+                "credit_quality": "IG",
                 "adjusted_notional": 50_000_000.0,
                 "supervisory_delta": 1.0,
                 "maturity_factor": 1.0,
@@ -315,10 +323,11 @@ def test_credit_asset_class_row_emits_null_addon() -> None:
     # Act
     result = compute_addon_per_asset_class(with_hs).collect()
 
-    # Assert
+    # Assert — P8.35 contract: credit add-on must be non-null.
     cr_row = result.filter(pl.col("asset_class") == "credit")
     assert cr_row.height == 1, "Credit row must still be anchored in the output."
-    assert cr_row["asset_class_addon"][0] is None, (
-        f"Credit asset-class add-on must be null (deferred), "
-        f"got {cr_row['asset_class_addon'][0]!r}."
+    assert cr_row["asset_class_addon"][0] is not None, (
+        f"Credit asset-class add-on must be non-null after P8.35 (credit branch wired). "
+        f"Got {cr_row['asset_class_addon'][0]!r}. "
+        "Wave 4 engine-implementer must add _compute_addon_credit to the dispatcher."
     )

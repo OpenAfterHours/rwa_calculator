@@ -1,4 +1,4 @@
-"""Contract tests for CCR input schemas (P8.5).
+"""Contract tests for CCR input schemas (P8.5 / P8.33 / P8.35).
 
 Verifies that the four CCR schema objects in ``rwa_calc.data.schemas`` exist
 with the architect's exact column list and dtypes.  These are pure
@@ -9,7 +9,9 @@ Each schema object is a ``dict[str, ColumnSpec]`` following the same
 conventions as ``FACILITY_SCHEMA``, ``LOAN_SCHEMA``, etc.
 
 Schemas tested (P8.5 architect's specification):
-    TRADE_SCHEMA              — 14 columns per architect
+    TRADE_SCHEMA              — 14 columns per architect (23 after FX/CCR extensions,
+                                28 after P8.33 adds equity/credit/commodity hedging-set columns,
+                                29 after P8.35 adds credit_quality)
     NETTING_SET_SCHEMA        — 10 columns per architect (fixture has 8)
     MARGIN_AGREEMENT_SCHEMA   — 10 columns per architect (fixture has 7)
     CCR_COLLATERAL_SCHEMA     — 11 columns per architect (fixture has 8)
@@ -21,6 +23,10 @@ Named-column dtype/default assertions are exact.
 References:
     - CRR Art. 272(4) (netting set), 272(7) (margin agreement), 272(9) (MPOR)
     - CRR Art. 275(1)-(2) (replacement cost — MtM value V, collateral C)
+    - CRR Art. 277(2)(c)-(d) — credit / equity hedging set composition (reference_entity)
+    - CRR Art. 277(3)(b) — commodity 5-bucket partition (commodity_type)
+    - CRR Art. 279b(1)(c) — equity / commodity adjusted notional (market_price × number_of_units)
+    - CRR Art. 280a / 280b — is_index discriminator for single-name vs index
     - CRR Art. 285(2)(b) — 10 business-day MPOR minimum for margined sets
     - CRR Art. 295-297 (contractual netting recognition)
 """
@@ -367,4 +373,239 @@ def test_valid_risk_types_input_length_is_eight() -> None:
     assert count == 8, (
         f"VALID_RISK_TYPES_INPUT must contain exactly 8 values after P8.5 extension "
         f"(original 6 + CCR_DERIVATIVE + CCR_SFT), got {count}: {sorted(valid_set)}"
+    )
+
+
+# ===========================================================================
+# P8.33 — TRADE_SCHEMA equity / credit / commodity hedging-set columns
+# ===========================================================================
+# Five new nullable columns added to TRADE_SCHEMA per P8.33:
+#   market_price, number_of_units, reference_entity, commodity_type, is_index
+#
+# All five are required=False with default=None so that the existing CCR-A1
+# (IR swap) and CCR-A2 (FX forward) fixtures continue to round-trip unchanged.
+#
+# References:
+#   CRR Art. 279b(1)(c) — equity / commodity adjusted notional
+#   CRR Art. 277(2)(c)-(d) — credit / equity hedging set composition
+#   CRR Art. 277(3)(b) — commodity 5-bucket partition
+#   CRR Art. 280a / 280b — is_index discriminator
+# ===========================================================================
+
+_P8_35_EXPECTED_COLUMN_COUNT = 29  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality)
+_P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
+
+
+def test_trade_schema_market_price_is_nullable_float64() -> None:
+    """TRADE_SCHEMA.market_price must be pl.Float64, required=False, default=None.
+
+    CRR Art. 279b(1)(c): equity / commodity adjusted notional uses
+    ``d = market_price * number_of_units``.  Null for IR / FX rows.
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Act
+    spec = schema.get("market_price")
+
+    # Assert
+    assert spec is not None, (
+        "TRADE_SCHEMA must have 'market_price' column (P8.33 — CRR Art. 279b(1)(c))"
+    )
+    assert isinstance(spec, ColumnSpec), "'market_price' entry must be a ColumnSpec"
+    assert spec.dtype == pl.Float64, (
+        f"TRADE_SCHEMA.market_price must be pl.Float64, got {spec.dtype}"
+    )
+    assert spec.required is False, (
+        "TRADE_SCHEMA.market_price must be required=False (nullable — absent for IR/FX rows)"
+    )
+    assert spec.default is None, (
+        f"TRADE_SCHEMA.market_price must default to None, got {spec.default!r}"
+    )
+
+
+def test_trade_schema_number_of_units_is_nullable_float64() -> None:
+    """TRADE_SCHEMA.number_of_units must be pl.Float64, required=False, default=None.
+
+    CRR Art. 279b(1)(c): second factor of ``d = market_price * number_of_units``
+    for equity share count or commodity unit count.
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Act
+    spec = schema.get("number_of_units")
+
+    # Assert
+    assert spec is not None, (
+        "TRADE_SCHEMA must have 'number_of_units' column (P8.33 — CRR Art. 279b(1)(c))"
+    )
+    assert isinstance(spec, ColumnSpec), "'number_of_units' entry must be a ColumnSpec"
+    assert spec.dtype == pl.Float64, (
+        f"TRADE_SCHEMA.number_of_units must be pl.Float64, got {spec.dtype}"
+    )
+    assert spec.required is False, (
+        "TRADE_SCHEMA.number_of_units must be required=False (nullable — absent for IR/FX rows)"
+    )
+    assert spec.default is None, (
+        f"TRADE_SCHEMA.number_of_units must default to None, got {spec.default!r}"
+    )
+
+
+def test_trade_schema_reference_entity_is_nullable_string() -> None:
+    """TRADE_SCHEMA.reference_entity must be pl.String, required=False, default=None.
+
+    CRR Art. 277(2)(c)-(d): single-name issuer LEI or index ticker used as the
+    composition key for the credit hedging set (Art. 277(2)(c)) and equity
+    hedging set (Art. 277(2)(d)).  Open-string (free-form LEI / ticker) — no
+    categorical constraint.
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Act
+    spec = schema.get("reference_entity")
+
+    # Assert
+    assert spec is not None, (
+        "TRADE_SCHEMA must have 'reference_entity' column (P8.33 — CRR Art. 277(2)(c)-(d))"
+    )
+    assert isinstance(spec, ColumnSpec), "'reference_entity' entry must be a ColumnSpec"
+    assert spec.dtype == pl.String, (
+        f"TRADE_SCHEMA.reference_entity must be pl.String, got {spec.dtype}"
+    )
+    assert spec.required is False, (
+        "TRADE_SCHEMA.reference_entity must be required=False (nullable — absent for IR/FX rows)"
+    )
+    assert spec.default is None, (
+        f"TRADE_SCHEMA.reference_entity must default to None, got {spec.default!r}"
+    )
+
+
+def test_trade_schema_commodity_type_is_nullable_string() -> None:
+    """TRADE_SCHEMA.commodity_type must be pl.String, required=False, default=None.
+
+    CRR Art. 277(3)(b): commodity hedging-set partition into 5 buckets
+    (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL / OTHER).  Null for
+    non-commodity rows (IR / FX / credit / equity).
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Act
+    spec = schema.get("commodity_type")
+
+    # Assert
+    assert spec is not None, (
+        "TRADE_SCHEMA must have 'commodity_type' column (P8.33 — CRR Art. 277(3)(b))"
+    )
+    assert isinstance(spec, ColumnSpec), "'commodity_type' entry must be a ColumnSpec"
+    assert spec.dtype == pl.String, (
+        f"TRADE_SCHEMA.commodity_type must be pl.String, got {spec.dtype}"
+    )
+    assert spec.required is False, (
+        "TRADE_SCHEMA.commodity_type must be required=False (nullable — absent for non-commodity rows)"
+    )
+    assert spec.default is None, (
+        f"TRADE_SCHEMA.commodity_type must default to None, got {spec.default!r}"
+    )
+
+
+def test_trade_schema_is_index_is_nullable_boolean() -> None:
+    """TRADE_SCHEMA.is_index must be pl.Boolean, required=False, default=None.
+
+    CRR Art. 280a / 280b: discriminates single-name vs index for credit /
+    equity supervisory factor and correlation lookup at the per-asset-class
+    add-on stage.  Deliberately defaults to None (not False) because False
+    would be a load-bearing claim ("this is a single-name trade") for credit /
+    equity rows.  Null means "discriminator not applicable" (IR / FX /
+    commodity rows).
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Act
+    spec = schema.get("is_index")
+
+    # Assert
+    assert spec is not None, (
+        "TRADE_SCHEMA must have 'is_index' column (P8.33 — CRR Art. 280a / 280b)"
+    )
+    assert isinstance(spec, ColumnSpec), "'is_index' entry must be a ColumnSpec"
+    assert spec.dtype == pl.Boolean, (
+        f"TRADE_SCHEMA.is_index must be pl.Boolean, got {spec.dtype}"
+    )
+    assert spec.required is False, (
+        "TRADE_SCHEMA.is_index must be required=False (nullable — IR/FX/commodity rows carry null)"
+    )
+    assert spec.default is None, (
+        f"TRADE_SCHEMA.is_index must default to None (not False — null means 'not applicable'), "
+        f"got {spec.default!r}"
+    )
+
+
+def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None:
+    """COLUMN_VALUE_CONSTRAINTS['trades']['commodity_type'] must equal the 5 UPPER-CASE buckets.
+
+    The bucket keys must match SA_CCR_SUPERVISORY_FACTORS_COMMODITY in
+    ``src/rwa_calc/data/tables/sa_ccr_factors.py`` (lines 60-66), which uses
+    UPPER-CASE strings.  A lower-case mismatch would silently skip the
+    supervisory-factor lookup at the P8.37 add-on stage.
+
+    CRR Art. 277(3)(b); CRE52.67.
+    """
+    # Arrange
+    constraints = getattr(schemas, "COLUMN_VALUE_CONSTRAINTS", None)
+    assert constraints is not None, (
+        "rwa_calc.data.schemas does not expose 'COLUMN_VALUE_CONSTRAINTS'"
+    )
+
+    # Act
+    trades_constraints = constraints.get("trades")
+
+    # Assert
+    assert trades_constraints is not None, (
+        "COLUMN_VALUE_CONSTRAINTS must have a 'trades' entry (P8.33). "
+        "Add: \"trades\": {\"commodity_type\": {\"ELECTRICITY\", \"OIL_GAS\", "
+        "\"METALS\", \"AGRICULTURAL\", \"OTHER\"}}"
+    )
+    actual_buckets = trades_constraints.get("commodity_type")
+    assert actual_buckets is not None, (
+        "COLUMN_VALUE_CONSTRAINTS['trades'] must have a 'commodity_type' key (P8.33 — "
+        "CRR Art. 277(3)(b) commodity hedging-set partition)"
+    )
+    assert actual_buckets == _P8_33_COMMODITY_BUCKETS, (
+        f"COLUMN_VALUE_CONSTRAINTS['trades']['commodity_type'] must be exactly "
+        f"{_P8_33_COMMODITY_BUCKETS!r} (UPPER-CASE to match SA_CCR_SUPERVISORY_FACTORS_COMMODITY "
+        f"keys in sa_ccr_factors.py), got {actual_buckets!r}"
+    )
+
+
+def test_trade_schema_column_count_includes_credit_quality() -> None:
+    """TRADE_SCHEMA must have exactly 29 columns after P8.35 adds credit_quality.
+
+    Baseline (pre-P8.33): 23 columns.
+    P8.33 adds: market_price, number_of_units, reference_entity, commodity_type, is_index.
+    P8.35 adds: credit_quality.
+    Expected total: 29.
+    """
+    # Arrange
+    schema = _get_schema("TRADE_SCHEMA")
+
+    # Assert — credit_quality column is present.
+    assert "credit_quality" in schema, (
+        "TRADE_SCHEMA must have 'credit_quality' column (P8.35 — CRR Art. 280 Table 2 "
+        "SF lookup requires IG/HY/NON_RATED for credit derivatives). "
+        f"Current columns: {list(schema.keys())}"
+    )
+
+    # Act
+    col_count = len(schema)
+
+    # Assert — total column count.
+    assert col_count == _P8_35_EXPECTED_COLUMN_COUNT, (
+        f"TRADE_SCHEMA must have exactly {_P8_35_EXPECTED_COLUMN_COUNT} columns after P8.35 "
+        f"(23 pre-P8.33 + 5 P8.33: market_price, number_of_units, reference_entity, "
+        f"commodity_type, is_index + 1 P8.35: credit_quality), "
+        f"got {col_count}: {list(schema.keys())}"
     )

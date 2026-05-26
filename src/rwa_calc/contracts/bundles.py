@@ -251,12 +251,21 @@ class TradeBundle:
     ``transaction_type``, ``notional``, ``currency``,
     ``maturity_date``, ``start_date``, ``delta``, ``is_long``,
     ``mtm_value``. Optional: ``underlying_reference``,
-    ``option_strike``, ``payment_leg_index_id``.
+    ``option_strike``, ``payment_leg_index_id``,
+    ``notional_leg2``, ``currency_leg2`` (FX second leg),
+    and the P8.33 equity / credit / commodity columns
+    ``market_price``, ``number_of_units`` (Art. 279b(1)(c)
+    adjusted notional inputs), ``reference_entity``
+    (Art. 277(2)(c)-(d) single-name LEI / index ticker),
+    ``commodity_type`` (Art. 277(3)(b) 5-bucket partition —
+    one of ``ELECTRICITY`` / ``OIL_GAS`` / ``METALS`` /
+    ``AGRICULTURAL`` / ``OTHER``), and ``is_index``
+    (Art. 280a / 280b single-name vs index discriminator).
 
     References:
     - CRR Art. 272 (definitions)
     - PRA Rulebook CCR (CRR) Part Art. 277(3), 279a-c, 280
-    - BCBS CRE52.30-52.43
+    - BCBS CRE52.30-52.43, CRE52.45, CRE52.60-52.67
     """
 
     trades: pl.LazyFrame

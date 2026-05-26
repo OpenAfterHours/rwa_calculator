@@ -773,6 +773,36 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # trades (interest_rate uses the single ``notional`` / ``currency`` pair).
     "notional_leg2": ColumnSpec(pl.Float64, required=False),
     "currency_leg2": ColumnSpec(pl.String, required=False),
+    # P8.33 — equity / credit / commodity asset-class hedging-set columns.
+    # All nullable: only populated for the relevant asset_class; null for
+    # interest_rate / fx rows. Consumed downstream by P8.34-P8.37 (per-asset-class
+    # add-on calculators) — see ``data/tables/sa_ccr_factors.py`` for the
+    # supervisory factor / correlation lookups keyed by these columns.
+    #
+    # CRR Art. 279b(1)(c) / CRE52.45: equity & commodity adjusted notional is
+    # ``d = market_price × number_of_units`` (current spot price times share or
+    # unit count) rather than the IR / FX notional convention.
+    "market_price": ColumnSpec(pl.Float64, required=False),
+    "number_of_units": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 277(2)(c)-(d) / CRE52.60: credit & equity hedging sets are
+    # partitioned by issuer reference (single-name LEI) or index ticker. Used
+    # by the per-entity correlation step (Art. 280a / 280b).
+    "reference_entity": ColumnSpec(pl.String, required=False),
+    # CRR Art. 277(3)(b) / CRE52.67: commodity hedging sets are partitioned
+    # into 5 fixed buckets — ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL /
+    # OTHER. UPPER-CASE to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``
+    # keys in ``data/tables/sa_ccr_factors.py``. See COLUMN_VALUE_CONSTRAINTS.
+    "commodity_type": ColumnSpec(pl.String, required=False),
+    # CRR Art. 280a / 280b / CRE52.61: discriminator for single-name vs index
+    # in credit / equity asset classes. Default None (not False) — null means
+    # "not applicable" (IR / FX / commodity rows); False would be a load-bearing
+    # "single-name" claim for credit / equity rows.
+    "is_index": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 280 Table 2: credit-quality discriminator for the credit asset
+    # class supervisory factor lookup. Valid values {"IG", "HY", "NON_RATED"};
+    # null for non-credit rows (IR / FX / equity / commodity). Keyed by
+    # COLUMN_VALUE_CONSTRAINTS["trades"]["credit_quality"] for input validation.
+    "credit_quality": ColumnSpec(pl.String, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1283,6 +1313,17 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "securitisation_allocations": {
         "exposure_type": VALID_SECURITISATION_EXPOSURE_TYPES,
         "transfer_type": VALID_TRANSFER_TYPES,
+    },
+    # P8.33 — CRR Art. 277(3)(b) / CRE52.67 commodity hedging-set partition.
+    # UPPER-CASE bucket keys to match ``SA_CCR_SUPERVISORY_FACTORS_COMMODITY``
+    # in ``data/tables/sa_ccr_factors.py`` — load-bearing for the P8.37
+    # supervisory-factor join.
+    "trades": {
+        "commodity_type": {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"},
+        # P8.35 — CRR Art. 280 Table 2 credit-quality discriminator: keyed off
+        # ``SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN`` / ``..._CREDIT_IDX`` in
+        # ``data/tables/sa_ccr_factors.py``.
+        "credit_quality": {"IG", "HY", "NON_RATED"},
     },
 }
 

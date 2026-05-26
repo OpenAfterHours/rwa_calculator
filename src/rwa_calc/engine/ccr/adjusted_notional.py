@@ -1,5 +1,5 @@
 """
-Per-trade adjusted notional for SA-CCR (interest-rate and FX asset classes).
+Per-trade adjusted notional for SA-CCR (interest-rate, FX, and credit asset classes).
 
 Pipeline position:
     Classifier -> CCRCalculator (adjusted notional) -> ...
@@ -18,9 +18,12 @@ Key responsibilities:
   ``currency_to == base_currency``. Missing rate joins produce a null
   ``adjusted_notional`` for that row; the orchestrator surfaces a
   ``CalculationError`` at the pipeline-adapter boundary.
+- Credit (``compute_adjusted_notional_credit``): same supervisory-duration
+  kernel as IR — Art. 279b(1)(a) covers both asset classes. Gated on
+  ``asset_class == "credit"`` and coalesce-safe with the IR / FX branches.
 
 References:
-- CRR Art. 279b(1)(a): Adjusted notional amount (IR)
+- CRR Art. 279b(1)(a): Adjusted notional amount (IR and credit derivatives)
 - CRR Art. 279b(1)(b)(i)/(ii): Adjusted notional amount (FX)
 - BCBS CRE52.40: 250-business-day year convention for the start-date floor
 """
@@ -217,3 +220,173 @@ def compute_adjusted_notional_fx(
     return out.drop("_rate_leg1", "_rate_leg2", strict=False).drop(
         "_fx_adjusted_notional", strict=False
     )
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_credit(
+    trades: pl.LazyFrame,
+    reporting_date: date,
+) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for credit derivatives per CRR Art. 279b(1)(a).
+
+    For ``asset_class == "credit"``:
+
+        d = notional * SD(S, E)
+        SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05
+
+    where ``S`` is the years-to-start floored at 10 business days
+    (10/250 = 0.04y) and ``E`` is the years-to-maturity. The supervisory-
+    duration kernel is shared with the interest-rate asset class — Art. 279b(1)(a)
+    covers both. Coalesce-safe with the IR / FX branches when run in sequence:
+    the credit branch only overlays rows where ``asset_class == "credit"``.
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``notional``, ``start_date``, ``maturity_date``.
+        reporting_date: As-of date for the calculation; used to compute the
+            year fractions ``S`` (start) and ``E`` (maturity).
+
+    Returns:
+        The input LazyFrame with a new (or coalesced) ``adjusted_notional: Float64``
+        column. Non-credit rows preserve any existing value from a prior branch
+        (IR / FX) or remain null.
+
+    References:
+        - CRR Art. 279b(1)(a)
+        - BCBS CRE52.41-43 (supervisory duration shared with IR)
+    """
+    rate = float(SA_CCR_SUPERVISORY_DURATION_RATE)
+    s_floor = float(SA_CCR_START_FLOOR_YEARS)
+    # SA_CCR_BUSINESS_DAYS_PER_YEAR is the basis of the derived ``s_floor``
+    # constant; touching it here keeps the import meaningful.
+    _ = SA_CCR_BUSINESS_DAYS_PER_YEAR
+
+    # Calendar-day -> year fraction. 365.25 is the standard SA-CCR convention
+    # for year fractions; the 250-business-day year applies only to the
+    # 10-BD start-date floor, which is pre-computed into ``s_floor`` above.
+    years_to_start = (pl.col("start_date") - pl.lit(reporting_date)).dt.total_days() / 365.25
+    years_to_maturity = (pl.col("maturity_date") - pl.lit(reporting_date)).dt.total_days() / 365.25
+
+    # S floored at 10 BD = 10/250 = 0.04y per Art. 279b(1)(a).
+    s_floored = pl.max_horizontal(years_to_start, pl.lit(s_floor))
+
+    # SD(S, E) = (exp(-rate*S) - exp(-rate*E)) / rate
+    sd = ((-rate * s_floored).exp() - (-rate * years_to_maturity).exp()) / rate
+    d = pl.col("notional") * sd
+
+    credit_adjusted = (
+        pl.when(pl.col("asset_class") == "credit")
+        .then(d)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+
+    # Preserve any existing adjusted_notional column from upstream IR / FX
+    # branches via coalesce; otherwise emit a fresh column.
+    if "adjusted_notional" in trades.collect_schema().names():
+        return trades.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), credit_adjusted).alias("adjusted_notional")
+        )
+    return trades.with_columns(credit_adjusted.alias("adjusted_notional"))
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for equity trades per CRR Art. 279b(1)(c).
+
+    For ``asset_class == "equity"``:
+
+        d = abs(market_price * number_of_units)
+
+    Direction lives on ``is_long`` / ``supervisory_delta``; the adjusted-notional
+    value itself is taken in absolute terms per the regulatory rule. Null
+    ``market_price`` or null ``number_of_units`` propagate as null
+    ``adjusted_notional`` — the orchestrator surfaces the CCR data-quality
+    error at the pipeline-adapter boundary.
+
+    When the input frame already carries an ``adjusted_notional`` column from a
+    prior IR / FX branch, this function coalesces — non-null upstream values
+    are preserved and the equity result only overlays where the upstream value
+    is null (equity rows).
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``market_price`` and ``number_of_units``.
+
+    Returns:
+        The input LazyFrame with an ``adjusted_notional: Float64`` column
+        populated for ``asset_class == "equity"`` rows; existing non-null
+        values from upstream branches are preserved.
+
+    References:
+        - CRR Art. 279b(1)(c): equity adjusted notional d = market_price × units.
+    """
+    equity_adjusted = (pl.col("market_price") * pl.col("number_of_units")).abs()
+
+    out = trades.with_columns(
+        pl.when(pl.col("asset_class") == "equity")
+        .then(equity_adjusted)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias("_eq_adjusted_notional")
+    )
+
+    if "adjusted_notional" in trades.collect_schema().names():
+        out = out.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), pl.col("_eq_adjusted_notional")).alias(
+                "adjusted_notional"
+            )
+        )
+    else:
+        out = out.rename({"_eq_adjusted_notional": "adjusted_notional"})
+
+    return out.drop("_eq_adjusted_notional", strict=False)
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for commodity trades per CRR Art. 279b(1)(c).
+
+    For ``asset_class == "commodity"``:
+
+        d = market_price × number_of_units
+
+    The product is in the trade currency; no FX conversion is required because
+    ``market_price`` is already denominated in the same currency as the trade.
+    Direction lives on ``is_long`` / ``delta`` — the adjusted-notional value
+    itself is the unsigned product per Art. 279b(1)(c).
+
+    Coalesce-safe overlay: when the input already carries an
+    ``adjusted_notional`` column from a prior IR / FX / credit / equity branch,
+    non-null values on non-commodity rows are preserved.
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``market_price`` and ``number_of_units``.
+
+    Returns:
+        The input LazyFrame with a (possibly overlaid) ``adjusted_notional:
+        Float64`` column populated for ``asset_class == "commodity"`` rows
+        only; null on non-commodity rows when no prior branch populated them.
+
+    References:
+        - CRR Art. 279b(1)(c)
+        - BCBS CRE52.46-48
+    """
+    co_adjusted = pl.col("market_price") * pl.col("number_of_units")
+
+    out = trades.with_columns(
+        pl.when(pl.col("asset_class") == "commodity")
+        .then(co_adjusted)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias("_co_adjusted_notional")
+    )
+
+    if "adjusted_notional" in trades.collect_schema().names():
+        out = out.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), pl.col("_co_adjusted_notional")).alias(
+                "adjusted_notional"
+            )
+        )
+    else:
+        out = out.rename({"_co_adjusted_notional": "adjusted_notional"})
+
+    return out.drop("_co_adjusted_notional", strict=False)

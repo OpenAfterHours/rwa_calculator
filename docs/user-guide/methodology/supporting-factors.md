@@ -86,15 +86,20 @@ Adjusted_RWA = 6,400,000 × 0.826 = £5,286,400
 
 ### SME Definition
 
-An entity qualifies as an SME if:
-- Annual turnover ≤ EUR 50m (~GBP 43.7m), OR
-- Total assets ≤ EUR 43m (~GBP 37.6m)
+CRR Art. 4(1)(128D) imports the SME definition from Commission Recommendation 2003/361/EC Art. 2 ("medium-sized" tier). For **general SME classification** (sub-class, retail-pool eligibility, IRB Art. 153(4) correlation), an entity qualifies as an SME if:
+
+- Annual turnover ≤ EUR 50m (~GBP 43.7m), **OR**
+- Total assets ≤ EUR 43m (~GBP 37.6m) — used only when `annual_revenue` is null.
+
+For the **Art. 501 supporting factor itself**, the rule is narrower. Art. 501(2)(c) reads: *"only the annual turnover shall be taken into account"*. The total-assets fallback therefore does **not** apply to the supporting factor — a counterparty identified as SME via assets receives the `CORPORATE_SME` exposure class and the IRB correlation reduction, but `supporting_factor = 1.0` (no Art. 501 capital relief).
 
 **Turnover Source:**
 1. Audited financial statements (preferred)
 2. Management accounts
 3. Tax returns
 4. Estimated based on relationship data
+
+**Total-assets fallback:** When `annual_revenue` is null on the counterparty row, the classifier reads `total_assets` and applies the Commission Rec 2003/361/EC balance-sheet threshold instead. The decision is recorded on the exposure frame as `sme_size_source` ∈ {`turnover`, `assets`, `null`}. The IRB SME correlation adjustment under CRR Art. 153(4) third subparagraph correspondingly substitutes total assets for `S` in the formula when annual sales are not a meaningful indicator.
 
 ## Infrastructure Supporting Factor
 

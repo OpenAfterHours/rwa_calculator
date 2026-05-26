@@ -218,11 +218,32 @@ def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[p
         exprs.extend(_build_maturity_exprs(config, names))
 
     if "turnover_m" not in names:
-        turnover_expr = (
-            (pl.col("cp_annual_revenue") / 1_000_000.0)
-            if "cp_annual_revenue" in names
-            else pl.lit(None).cast(pl.Float64)
+        # CRR Art. 153(4) third subparagraph: substitute total assets of the
+        # consolidated group for total annual sales when sales are not a
+        # meaningful indicator of firm size. The classifier derives
+        # ``sme_size_metric_gbp = coalesce(cp_annual_revenue, cp_total_assets)``
+        # and sets ``is_sme`` per the size test (turnover < EUR 50m OR
+        # balance-sheet total < EUR 43m). The IRB correlation reads
+        # turnover_m and re-derives its own SME gate at the EUR 50m / GBP 44m
+        # boundary, so we restrict the value carried into the formula to
+        # counterparties the classifier already flagged as SME — otherwise a
+        # corporate with assets in the band (EUR 43m, EUR 50m equivalent) would
+        # receive the IRB SME correlation reduction despite not being SME-classed.
+        size_metric = (
+            pl.col("sme_size_metric_gbp")
+            if "sme_size_metric_gbp" in names
+            else (pl.col("cp_annual_revenue") if "cp_annual_revenue" in names else None)
         )
+        if size_metric is None:
+            turnover_expr = pl.lit(None).cast(pl.Float64)
+        elif "is_sme" in names:
+            turnover_expr = (
+                pl.when(pl.col("is_sme").cast(pl.Boolean).fill_null(False))
+                .then(size_metric / 1_000_000.0)
+                .otherwise(pl.lit(None).cast(pl.Float64))
+            )
+        else:
+            turnover_expr = size_metric / 1_000_000.0
         exprs.append(turnover_expr.alias("turnover_m"))
 
     if "exposure_class" not in names:

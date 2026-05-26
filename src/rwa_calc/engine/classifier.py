@@ -348,12 +348,23 @@ class ExposureClassifier:
 
         Joins exposures with counterparty data to get:
         - entity_type (single source of truth for exposure class)
-        - annual_revenue (for SME check)
-        - total_assets (for large financial sector entity threshold)
+        - annual_revenue (primary SME size signal — CRR Art. 4(1)(128D))
+        - total_assets (SME size fallback when annual_revenue is null;
+          also feeds the LFSE threshold and equity NAV check)
         - default_status
         - country_code
         - apply_fi_scalar (for FI scalar - LFSE/unregulated FSE)
         - is_managed_as_retail (for SME retail treatment)
+
+        Also derives the consolidated SME size metric used by every
+        classification gate (corporate-SME, retail-SME, SL-SME, Art. 123
+        reclassification, Art. 123A retail qualification, Art. 147A(1)(d)
+        large-corporate F-IRB restriction) and by the IRB Art. 153(4)
+        correlation adjustment:
+        - sme_size_metric_gbp = coalesce(cp_annual_revenue, cp_total_assets)
+        - sme_size_source     = "turnover" | "assets" | null
+        Art. 501 supporting factor deliberately ignores this column and
+        keys off cp_annual_revenue directly (Art. 501(2)(c)).
         """
         cp_schema = counterparties.collect_schema()
         cp_col_names = cp_schema.names()
@@ -431,6 +442,26 @@ class ExposureClassifier:
         joined = ensure_columns(
             joined,
             {"cp_is_managed_as_retail": ColumnSpec(pl.Boolean, required=False)},
+        )
+
+        # SME size metric (CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC):
+        # turnover when present, total assets otherwise. Every SME
+        # classification gate downstream reads sme_size_metric_gbp together
+        # with sme_size_source so the threshold can be turnover- or
+        # balance-sheet-keyed without re-reading the raw cp_ columns.
+        # Null on both fields → null metric → no SME treatment.
+        joined = joined.with_columns(
+            [
+                pl.coalesce([pl.col("cp_annual_revenue"), pl.col("cp_total_assets")]).alias(
+                    "sme_size_metric_gbp"
+                ),
+                pl.when(pl.col("cp_annual_revenue").is_not_null())
+                .then(pl.lit("turnover"))
+                .when(pl.col("cp_total_assets").is_not_null())
+                .then(pl.lit("assets"))
+                .otherwise(pl.lit(None, dtype=pl.String))
+                .alias("sme_size_source"),
+            ]
         )
         return joined
 
@@ -538,26 +569,37 @@ class ExposureClassifier:
         # Art. 147A(1)(d): null annual_revenue triggers the conservative
         # large-corp F-IRB restriction — emit CLS008 to flag the conservatism.
         # Corporate-only count to avoid spurious warnings for non-corporate
-        # entity types where annual_revenue is genuinely irrelevant.
+        # entity types where annual_revenue is genuinely irrelevant. The
+        # warning is suppressed when total_assets is populated AND below the
+        # SME balance-sheet threshold (CRR Art. 4(1)(128D) / Commission Rec
+        # 2003/361/EC Art. 2 fallback) — in that case the counterparty is
+        # definitively SME-sized and the restriction is not applied.
         if config.is_basel_3_1 and "annual_revenue" in cp_columns:
-            null_revenue_count = (
-                data.counterparty_lookup.counterparties.filter(
-                    (pl.col("entity_type").fill_null("") == "corporate")
-                    & pl.col("annual_revenue").is_null()
+            balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+            unresolved_filter = (pl.col("entity_type").fill_null("") == "corporate") & pl.col(
+                "annual_revenue"
+            ).is_null()
+            if "total_assets" in cp_columns:
+                unresolved_filter = unresolved_filter & (
+                    pl.col("total_assets").is_null()
+                    | (pl.col("total_assets") >= balance_sheet_threshold)
                 )
+            unresolved_count = (
+                data.counterparty_lookup.counterparties.filter(unresolved_filter)
                 .select(pl.len())
                 .collect()
                 .item()
             )
-            if null_revenue_count > 0:
+            if unresolved_count > 0:
                 errors.append(
                     CalculationError(
                         code=ERROR_LARGE_CORP_REVENUE_NULL,
                         message=(
                             f"Art. 147A(1)(d) large-corporate F-IRB restriction applied "
-                            f"conservatively for {null_revenue_count} corporate counterparty "
-                            f"row(s) with null annual_revenue — could not confirm revenue is "
-                            f"below the GBP 440m threshold."
+                            f"conservatively for {unresolved_count} corporate counterparty "
+                            f"row(s) with null annual_revenue and no SME-confirming "
+                            f"total_assets — could not confirm size is below the GBP 440m "
+                            f"threshold."
                         ),
                         severity=ErrorSeverity.WARNING,
                         category=ErrorCategory.CLASSIFICATION,
@@ -715,6 +757,33 @@ class ExposureClassifier:
         ).drop(["_sa_class", "_irb_class", "_pt_upper"])
 
     # =========================================================================
+    # SME size-test helper (shared by every SME-classification gate)
+    # =========================================================================
+
+    @staticmethod
+    def _is_sme_by_size_expr(config: CalculationConfig) -> pl.Expr:
+        """
+        Return an expression that flags a counterparty as SME-sized.
+
+        Reads ``sme_size_metric_gbp`` (= coalesce(annual_revenue, total_assets))
+        and ``sme_size_source`` ("turnover" | "assets" | null), comparing
+        against the appropriate threshold for each source. Implements CRR
+        Art. 4(1)(128D) / Commission Recommendation 2003/361/EC Art. 2:
+        annual turnover < EUR 50m OR balance-sheet total < EUR 43m. Returns
+        False when both fields are null.
+
+        CRR Art. 501 supporting factor (Art. 501(2)(c)) is keyed on annual
+        turnover only and is gated separately in sa/supporting_factors.py.
+        """
+        turnover_threshold = float(config.thresholds.sme_turnover_threshold)
+        balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+        metric = pl.col("sme_size_metric_gbp")
+        source = pl.col("sme_size_source")
+        turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
+        assets_branch = (source == "assets") & (metric > 0) & (metric < balance_sheet_threshold)
+        return turnover_branch | assets_branch
+
+    # =========================================================================
     # Exposure subtype classification (1 .with_columns — 5 expressions)
     # =========================================================================
 
@@ -736,8 +805,8 @@ class ExposureClassifier:
 
         Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
         """
-        sme_threshold_gbp = float(config.thresholds.sme_turnover_threshold)
         qrre_max_limit = float(config.thresholds.qrre_max_limit)
+        is_sme_by_size = self._is_sme_by_size_expr(config)
 
         # PRA PS1/26 Art. 124(3) / Art. 124K: ADC exposures retain the CORPORATE
         # class and route to the 150% Art. 124K(1) ADC RW — they must not be
@@ -745,29 +814,28 @@ class ExposureClassifier:
         # ``_derive_independent_flags``.
         is_adc = pl.col("is_adc").fill_null(False)
 
-        # Conditions reused across expressions (reading the independent-flag columns)
+        # Conditions reused across expressions. ``is_sme_by_size`` evaluates
+        # CRR Art. 4(1)(128D) / Commission Rec 2003/361/EC using turnover when
+        # present and total assets as a fallback. Art. 501 supporting factor
+        # eligibility is handled separately in sa/supporting_factors.py and
+        # remains turnover-only per Art. 501(2)(c).
         is_corporate_sme = (
-            (pl.col("exposure_class") == ExposureClass.CORPORATE.value)
-            & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
-            & (pl.col("cp_annual_revenue") > 0)
-            & ~is_adc
+            (pl.col("exposure_class") == ExposureClass.CORPORATE.value) & is_sme_by_size & ~is_adc
         )
         is_retail_sme = (
             (pl.col("exposure_class") == ExposureClass.RETAIL_OTHER.value)
             & (pl.col("qualifies_as_retail") == False)  # noqa: E712
-            & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
-            & (pl.col("cp_annual_revenue") > 0)
+            & is_sme_by_size
         )
-        # Specialised lending is a corporate sub-type (Art. 112(1)(g)) and
-        # qualifies for the SME supporting factor (Art. 501) when the
-        # counterparty meets the SME turnover threshold. The exposure_class
-        # must remain SPECIALISED_LENDING so approach assignment routes it to
-        # the slotting calculator; only the is_sme flag is set.
+        # Specialised lending is a corporate sub-type (Art. 112(1)(g)) and is
+        # flagged as SME when the counterparty meets the size test. The
+        # exposure_class must remain SPECIALISED_LENDING so approach assignment
+        # routes it to the slotting calculator; only the is_sme flag is set.
+        # Art. 501 supporting-factor eligibility is gated separately on
+        # turnover non-null in sa/supporting_factors.py.
         is_sl_sme = (
-            (pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value)
-            & (pl.col("cp_annual_revenue") < sme_threshold_gbp)
-            & (pl.col("cp_annual_revenue") > 0)
-        )
+            pl.col("exposure_class") == ExposureClass.SPECIALISED_LENDING.value
+        ) & is_sme_by_size
 
         # QRRE qualification: revolving, retail, under QRRE limit (CRR Art. 147(5))
         has_revolving = "is_revolving" in schema_names
@@ -851,13 +919,14 @@ class ExposureClassifier:
         1. Managed as part of a retail pool (is_managed_as_retail=True)
         2. Aggregated exposure < EUR 1m (qualifies_as_retail=True)
         3. Has internally modelled LGD (lgd IS NOT NULL)
-        4. Turnover < EUR 50m (SME definition per CRR Art. 501)
+        4. Counterparty is SME-sized (CRR Art. 4(1)(128D) — turnover <
+           EUR 50m OR balance-sheet total < EUR 43m when turnover null)
 
         Reclassification is an exposure-class decision, independent of
         approach permissions. The approach (AIRB/FIRB/SA) is determined
         later by _assign_approach using model_permissions.
         """
-        sme_turnover_threshold = float(config.thresholds.sme_turnover_threshold)
+        is_sme_by_size = self._is_sme_by_size_expr(config)
 
         # Reclassification eligibility expression (inlined — not a column ref)
         reclassification_expr = (
@@ -872,8 +941,7 @@ class ExposureClassifier:
             & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
             & (pl.col("qualifies_as_retail") == True)  # noqa: E712
             & (pl.col("lgd").is_not_null())
-            & (pl.col("cp_annual_revenue") < sme_turnover_threshold)
-            & (pl.col("cp_annual_revenue") > 0)
+            & is_sme_by_size
         )
 
         # Has property collateral expression (inlined)
@@ -1625,18 +1693,26 @@ class ExposureClassifier:
         # Art. 147A(1)(d): the large-corporate F-IRB restriction applies ONLY
         # to counterparties of entity_type == "corporate". Non-corporate
         # entity types are governed by their own Art. 147A sub-clauses and
-        # must never trip this branch. Within the corporate slice, null
-        # annual_revenue is treated conservatively (assumed large) so the
-        # F-IRB restriction is applied; CLS008 is emitted in parallel to
-        # flag the missing data.
+        # must never trip this branch. Within the corporate slice:
+        #   - When annual_revenue is non-null, compare to the large-corp
+        #     threshold (GBP 440m).
+        #   - When annual_revenue is null but total_assets indicates the
+        #     counterparty is SME-sized (assets < EUR 43m per Commission
+        #     Rec 2003/361/EC Art. 2), it is definitively not large.
+        #   - Otherwise (both fields null, or null revenue with assets that
+        #     don't resolve the question) treat conservatively as large;
+        #     CLS008 is emitted to flag the missing data.
+        balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
         is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
         is_large_corp = is_corporate_cp & (
-            pl.when(pl.col("cp_annual_revenue").is_null())
-            .then(pl.lit(True))
-            .otherwise(
+            pl.when(pl.col("cp_annual_revenue").is_not_null())
+            .then(
                 pl.col("cp_annual_revenue")
                 > float(config.thresholds.large_corporate_revenue_threshold)
             )
+            .when(pl.col("cp_total_assets").is_not_null())
+            .then(pl.col("cp_total_assets") >= balance_sheet_threshold)
+            .otherwise(pl.lit(True))
         )
         # Art. 147A(1)(b): Institution (including RGLAs/PSEs treated as
         # institutions per Art. 147(4)(b)) → F-IRB only. Key on
@@ -1940,13 +2016,11 @@ class ExposureClassifier:
                 .alias("qualifies_as_retail")
             )
 
-        # Basel 3.1: Art. 123A two-path qualifying criteria
-        sme_threshold = float(config.thresholds.sme_turnover_threshold)
-
-        # Art. 123A(1)(a): SME auto-qualification — revenue > 0 and < threshold
-        is_sme_for_art_123a = (pl.col("cp_annual_revenue").fill_null(0.0) > 0) & (
-            pl.col("cp_annual_revenue") < sme_threshold
-        )
+        # Basel 3.1: Art. 123A two-path qualifying criteria.
+        # Art. 123A(1)(a): SME auto-qualification — counterparty meets the
+        # Art. 4(1)(128D) SME size test (turnover < EUR 50m OR balance-sheet
+        # total < EUR 43m when turnover null).
+        is_sme_for_art_123a = ExposureClassifier._is_sme_by_size_expr(config)
 
         expr = (
             pl.when(threshold_fail)

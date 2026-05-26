@@ -361,11 +361,30 @@ class SupportingFactorCalculator:
             is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
             # Defaulted exposures are excluded from SME factor (CRR Art. 501)
             is_defaulted = pl.col("is_defaulted") if has_defaulted else pl.lit(False)
+            # Art. 501(2)(c): the SME supporting factor is keyed on annual
+            # turnover only — the Commission Rec 2003/361/EC total-assets
+            # fallback (used by other SME-classification gates and by the
+            # IRB Art. 153(4) correlation adjustment) does NOT apply here.
+            # Counterparties identified as SME via assets receive the
+            # CORPORATE_SME class and IRB correlation benefit but
+            # supporting_factor=1.0. The check is conditional on the column
+            # being present so test harnesses that build minimal LazyFrames
+            # without cp_annual_revenue still hit the legacy is_sme-only
+            # predicate; production pipelines always project this column via
+            # the classifier so the gate fires there.
+            has_revenue = "cp_annual_revenue" in schema.names()
+            turnover_eligible = (
+                (pl.col("cp_annual_revenue").is_not_null() & (pl.col("cp_annual_revenue") > 0))
+                if has_revenue
+                else pl.lit(True)
+            )
+
+            sme_eligible = pl.col("is_sme") & turnover_eligible & ~is_btl & ~is_defaulted
 
             sme_factor_expr = (
-                pl.when(pl.col("is_sme") & (ead_for_tier > 0) & ~is_btl & ~is_defaulted)
+                pl.when(sme_eligible & (ead_for_tier > 0))
                 .then((tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier)
-                .when(pl.col("is_sme") & (ead_for_tier <= 0) & ~is_btl & ~is_defaulted)
+                .when(sme_eligible & (ead_for_tier <= 0))
                 .then(
                     # Zero drawn = all within tier 1 → pure 0.7619
                     pl.lit(factor_tier1)

@@ -591,7 +591,8 @@ class PostModelAdjustmentConfig:
 # These are the official EUR amounts from CRR (EU 575/2013).
 # GBP equivalents are derived at construction time via the EUR/GBP rate.
 # =============================================================================
-_CRR_SME_TURNOVER_EUR = Decimal("50000000")  # EUR 50m — CRR Art. 501
+_CRR_SME_TURNOVER_EUR = Decimal("50000000")  # EUR 50m — CRR Art. 501 / Art. 4(1)(128D)
+_CRR_SME_BALANCE_SHEET_EUR = Decimal("43000000")  # EUR 43m — Commission Rec 2003/361/EC Art. 2
 _CRR_SME_EXPOSURE_EUR = Decimal("2500000")  # EUR 2.5m — CRR2 Art. 501
 _CRR_RETAIL_EXPOSURE_EUR = Decimal("1000000")  # EUR 1m — CRR Art. 123(c)
 _CRR_QRRE_LIMIT_EUR = Decimal("100000")  # EUR 100k — CRR Art. 123
@@ -614,7 +615,13 @@ class RegulatoryThresholds:
     """
 
     # SME classification
-    sme_turnover_threshold: Decimal  # GBP: SME eligibility boundary
+    sme_turnover_threshold: Decimal  # GBP: SME eligibility boundary (turnover)
+    # SME eligibility fallback: total balance-sheet boundary used when annual
+    # turnover is null/zero. Derived from Commission Recommendation 2003/361/EC
+    # Art. 2 (the "medium-sized" tier) referenced by CRR Art. 4(1)(128D). Used
+    # for all SME classification gates EXCEPT the CRR Art. 501 supporting
+    # factor itself, which Art. 501(2)(c) restricts to annual turnover only.
+    sme_balance_sheet_threshold: Decimal  # GBP: SME eligibility fallback (total assets)
     sme_exposure_threshold: Decimal  # GBP: tiered supporting factor boundary (CRR Art. 501)
 
     # Corporate classification (Basel 3.1 only; Decimal("0") under CRR)
@@ -637,6 +644,7 @@ class RegulatoryThresholds:
         """
         return cls(
             sme_turnover_threshold=_CRR_SME_TURNOVER_EUR * eur_gbp_rate,
+            sme_balance_sheet_threshold=_CRR_SME_BALANCE_SHEET_EUR * eur_gbp_rate,
             sme_exposure_threshold=_CRR_SME_EXPOSURE_EUR * eur_gbp_rate,
             large_corporate_revenue_threshold=Decimal("0"),  # Not applicable under CRR
             retail_max_exposure=_CRR_RETAIL_EXPOSURE_EUR * eur_gbp_rate,
@@ -645,9 +653,17 @@ class RegulatoryThresholds:
         )
 
     @classmethod
-    def basel_3_1(cls) -> RegulatoryThresholds:
+    def basel_3_1(cls, eur_gbp_rate: Decimal = Decimal("0.8732")) -> RegulatoryThresholds:
         """
         Basel 3.1 thresholds (PRA PS1/26 GBP-native values).
+
+        The SME balance-sheet fallback is FX-derived from Commission Rec
+        2003/361/EC (EUR 43m) since PS1/26 does not restate it in GBP.
+
+        Args:
+            eur_gbp_rate: EUR/GBP exchange rate used only to derive
+                sme_balance_sheet_threshold; all other thresholds are
+                PRA-native GBP values.
 
         References:
             Art. 153(4): SME turnover GBP 44m
@@ -657,6 +673,7 @@ class RegulatoryThresholds:
         """
         return cls(
             sme_turnover_threshold=Decimal("44000000"),  # GBP 44m
+            sme_balance_sheet_threshold=_CRR_SME_BALANCE_SHEET_EUR * eur_gbp_rate,
             sme_exposure_threshold=Decimal("0"),  # Not applicable under Basel 3.1
             large_corporate_revenue_threshold=Decimal("440000000"),  # GBP 440m
             retail_max_exposure=Decimal("880000"),  # GBP 880k
@@ -1146,11 +1163,11 @@ class CalculationConfig:
                 mpor_floor_days=mpor_floor_days,
                 recognise_im=recognise_im,
             ),
-            thresholds=RegulatoryThresholds.basel_3_1(),
+            thresholds=RegulatoryThresholds.basel_3_1(eur_gbp_rate=Decimal("0.8732")),
             permission_mode=permission_mode,
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             scaling_factor=Decimal("1.0"),  # Removed under Basel 3.1 (PRA PS1/26)
-            eur_gbp_rate=Decimal("0.8732"),  # Not used for Basel 3.1 (GBP thresholds)
+            eur_gbp_rate=Decimal("0.8732"),  # Used only to derive sme_balance_sheet_threshold
             use_investment_grade_assessment=use_investment_grade_assessment,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,

@@ -99,13 +99,17 @@ def make_counterparty_null_revenue(
     Args:
         counterparty_reference: Override the counterparty ID (default CP_NULL_REV_P1126).
     """
+    # total_assets is None so the SME assets-fallback (CRR Art. 4(1)(128D))
+    # cannot resolve the size question — both turnover and assets are missing,
+    # preserving the original CLS008 scenario where the conservative large-corp
+    # default fires under PS1/26 Art. 147A(1)(d).
     return pl.LazyFrame(
         {
             "counterparty_reference": [counterparty_reference],
             "entity_type": ["corporate"],
             "country_code": ["GB"],
             "annual_revenue": [None],
-            "total_assets": [10_000_000.0],
+            "total_assets": [None],
             "default_status": [False],
             "apply_fi_scalar": [False],
             "is_financial_sector_entity": [False],

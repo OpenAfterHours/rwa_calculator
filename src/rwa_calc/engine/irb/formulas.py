@@ -571,13 +571,19 @@ def _correlation_expr_from_pd(
     turnover_float = pl.col("turnover_m").cast(pl.Float64)
 
     if is_b31:
-        # Basel 3.1: use GBP turnover directly with PRA-mandated thresholds
+        # Basel 3.1: use GBP turnover directly with PRA-mandated thresholds.
+        # turnover_m is sourced from sme_size_metric_gbp (= coalesce(annual_
+        # revenue, total_assets)) so the S value automatically picks up the
+        # assets fallback per PS1/26 Art. 153(4) third subparagraph.
         s_clamped = turnover_float.clip(_b31_sme_floor_m, _b31_sme_threshold_m)
         sme_adjustment = 0.04 * (1.0 - (s_clamped - _b31_sme_floor_m) / _b31_sme_range)
         has_valid_turnover = turnover_float.is_not_null() & turnover_float.is_finite()
         is_sme = has_valid_turnover & (turnover_float < _b31_sme_threshold_m)
     else:
-        # CRR: convert GBP turnover to EUR, then apply EUR thresholds
+        # CRR: convert GBP turnover to EUR, then apply EUR thresholds.
+        # turnover_m is sourced from sme_size_metric_gbp (= coalesce(annual_
+        # revenue, total_assets)) so the S value automatically picks up the
+        # assets fallback per CRR Art. 153(4) third subparagraph.
         # turnover_eur = turnover_gbp / eur_gbp_rate
         # s = max(5, min(turnover_eur, 50))
         # adjustment = 0.04 × (1 - (s - 5) / 45)

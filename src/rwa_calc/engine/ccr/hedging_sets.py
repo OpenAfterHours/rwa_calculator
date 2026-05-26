@@ -16,17 +16,29 @@ Key responsibilities:
   credit / commodity batches; FX has no maturity sub-bucketing — its hedging
   set is keyed on the currency pair instead).
 - Compose a stable ``hedging_set_id`` per Art. 277(1):
-    * IR:  ``"<asset_short>-<netting_set_id>-<currency>-<maturity_bucket>"``
-           — one per (currency, maturity bucket).
-    * FX:  ``"FX-<netting_set_id>-<pair>"`` where ``<pair>`` is the
-           order-independent ``min(currency, currency_leg2)/max(...)`` —
-           one hedging set per currency pair (Art. 277(3)(a)).
+    * IR:        ``"<asset_short>-<netting_set_id>-<currency>-<maturity_bucket>"``
+                 — one per (currency, maturity bucket).
+    * FX:        ``"FX-<netting_set_id>-<pair>"`` where ``<pair>`` is the
+                 order-independent ``min(currency, currency_leg2)/max(...)`` —
+                 one hedging set per currency pair (Art. 277(3)(a)).
+    * Credit:    ``"CR-<netting_set_id>"``               — Art. 277(2)(c)
+    * Equity:    ``"EQ-<netting_set_id>"``               — Art. 277(2)(d)
+    * Commodity: ``"CO-<netting_set_id>-<bucket>"``      — Art. 277(3)(b)
+
+  Single-name vs index discrimination for credit / equity is deferred to
+  the aggregation step (Art. 277a + Art. 280a/b) and does not partition
+  the hedging set here.
 
 References:
 - CRR Art. 277(1): hedging-set definition (one per currency within IR).
 - CRR Art. 277(2): IR maturity bucket thresholds LT_1Y / 1Y_5Y / GT_5Y.
+- CRR Art. 277(2)(c)-(d): credit / equity — one hedging set per asset
+  class per netting set.
 - CRR Art. 277(3)(a) / BCBS CRE52.34: FX hedging set = currency pair, no
   maturity sub-bucketing.
+- CRR Art. 277(3)(b) / BCBS CRE52.67: commodity hedging set keyed on
+  commodity_type bucket (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL /
+  OTHER).
 """
 
 from __future__ import annotations
@@ -107,6 +119,15 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
     """
     trades = assign_ir_maturity_bucket(trades)
 
+    # Defensive: upstream stages that pre-date the credit/equity/commodity
+    # branches may pass frames without ``commodity_type``. The column is
+    # required only by the commodity branch and may be safely treated as
+    # all-null when absent — Polars evaluates the dispatch ladder eagerly
+    # at plan-resolve time, so the column must exist on the schema.
+    schema_names = trades.collect_schema().names()
+    if "commodity_type" not in schema_names:
+        trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("commodity_type"))
+
     asset_short = pl.col("asset_class").replace_strict(
         ASSET_CLASS_SHORT_CODE, default=None, return_dtype=pl.Utf8
     )
@@ -137,11 +158,34 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
         separator="-",
     )
 
+    credit_hs = pl.concat_str(
+        [pl.lit("CR"), pl.col("netting_set_id")],
+        separator="-",
+    )
+
+    equity_hs = pl.concat_str(
+        [pl.lit("EQ"), pl.col("netting_set_id")],
+        separator="-",
+    )
+
+    commodity_hs = pl.concat_str(
+        [pl.lit("CO"), pl.col("netting_set_id"), pl.col("commodity_type")],
+        separator="-",
+    )
+
     hedging_set_id = (
         pl.when(pl.col("asset_class") == "interest_rate")
         .then(pl.when(pl.col("maturity_bucket").is_not_null()).then(ir_hs).otherwise(None))
         .when(pl.col("asset_class") == "fx")
         .then(fx_hs)
+        .when(pl.col("asset_class") == "credit")
+        .then(credit_hs)
+        .when(pl.col("asset_class") == "equity")
+        .then(equity_hs)
+        .when(pl.col("asset_class") == "commodity")
+        .then(
+            pl.when(pl.col("commodity_type").is_not_null()).then(commodity_hs).otherwise(None)
+        )
         .otherwise(pl.lit(None, dtype=pl.Utf8))
         .alias("hedging_set_id")
     )

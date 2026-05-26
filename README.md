@@ -1,11 +1,11 @@
 > [!IMPORTANT]
 > *This package is still in development and is not production ready*
 
-# UK Credit Risk RWA Calculator
+# UK Credit Risk (CR) & Counterparty Credit Risk (CCR) RWA Calculator
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://OpenAfterHours.github.io/rwa_calculator/)
 
-A high-performance Risk-Weighted Assets (RWA) calculator for UK credit risk, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
+A high-performance Risk-Weighted Assets (RWA) calculator for UK CR & CCR, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
 
 **Documentation:** [https://OpenAfterHours.github.io/rwa_calculator/](https://OpenAfterHours.github.io/rwa_calculator/)
 

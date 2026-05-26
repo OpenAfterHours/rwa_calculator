@@ -1,18 +1,27 @@
 """
-Per-trade adjusted notional for SA-CCR (interest-rate asset class).
+Per-trade adjusted notional for SA-CCR (interest-rate and FX asset classes).
 
 Pipeline position:
     Classifier -> CCRCalculator (adjusted notional) -> ...
 
 Key responsibilities:
-- Compute the interest-rate adjusted notional ``d_i`` per CRR Art. 279b(1)(a),
-  i.e. the trade notional scaled by the supervisory duration factor
-  ``SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05`` where ``S`` is the
-  years-to-start floored at 10 business days (= 10/250 = 0.04y) and ``E`` is
-  the years-to-maturity.
+- IR (``compute_adjusted_notional_ir``): trade notional scaled by the supervisory
+  duration factor ``SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05`` where
+  ``S`` is the years-to-start floored at 10 business days (= 10/250 = 0.04y)
+  and ``E`` is the years-to-maturity. Per CRR Art. 279b(1)(a).
+- FX (``compute_adjusted_notional_fx``): both legs converted to the reporting
+  currency (``CalculationConfig.base_currency``) at the prevailing spot rate;
+  when one leg already equals the reporting currency, the non-reporting leg's
+  converted notional is taken (Art. 279b(1)(b)(i)); when both legs differ from
+  the reporting currency, the larger of the two converted notionals is taken
+  (Art. 279b(1)(b)(ii)). FX rates source: ``FX_RATES_SCHEMA`` rows joined on
+  ``currency_to == base_currency``. Missing rate joins produce a null
+  ``adjusted_notional`` for that row; the orchestrator surfaces a
+  ``CalculationError`` at the pipeline-adapter boundary.
 
 References:
 - CRR Art. 279b(1)(a): Adjusted notional amount (IR)
+- CRR Art. 279b(1)(b)(i)/(ii): Adjusted notional amount (FX)
 - BCBS CRE52.40: 250-business-day year convention for the start-date floor
 """
 
@@ -90,4 +99,121 @@ def compute_adjusted_notional_ir(
         .then(d)
         .otherwise(pl.lit(None, dtype=pl.Float64))
         .alias("adjusted_notional")
+    )
+
+
+@cites("CRR Art. 279")
+def compute_adjusted_notional_fx(
+    trades: pl.LazyFrame,
+    base_currency: str,
+    fx_rates: pl.LazyFrame,
+) -> pl.LazyFrame:
+    """SA-CCR adjusted notional for FX trades per CRR Art. 279b(1)(b).
+
+    For ``asset_class == "fx"``:
+
+    - If at least one leg is in the reporting (base) currency
+      (Art. 279b(1)(b)(i)): adjusted_notional = the *other* leg's notional
+      converted to the base currency at spot.
+    - If both legs are in non-base currencies (Art. 279b(1)(b)(ii)):
+      adjusted_notional = max(|notional_leg1|, |notional_leg2|) after each
+      leg is converted to the base currency at spot.
+
+    Direction lives on ``is_long`` / ``delta``; the adjusted-notional value
+    itself is taken in absolute terms per the regulatory comparison rule.
+
+    FX rates are sourced from ``FX_RATES_SCHEMA`` rows where
+    ``currency_to == base_currency``; an identity row
+    ``{currency_from: base_currency, rate: 1.0}`` is added so a leg already
+    in the base currency converts trivially. Rows where a required rate is
+    missing produce a null ``adjusted_notional`` — the orchestrator is
+    responsible for surfacing the CCR data-quality error.
+
+    Args:
+        trades: LazyFrame at trade grain with columns ``asset_class``,
+            ``notional``, ``currency``, ``notional_leg2``, ``currency_leg2``.
+        base_currency: ISO-4217 reporting currency (e.g. ``"GBP"``) — typically
+            ``CalculationConfig.base_currency``.
+        fx_rates: LazyFrame conforming to ``FX_RATES_SCHEMA`` with columns
+            ``currency_from``, ``currency_to``, ``rate``.
+
+    Returns:
+        The input LazyFrame with a new ``adjusted_notional: Float64`` column
+        populated for ``asset_class == "fx"`` rows only; null elsewhere.
+
+    References:
+        - CRR Art. 279b(1)(b)(i): one-leg-is-base case.
+        - CRR Art. 279b(1)(b)(ii): both-legs-foreign max-of-converted case.
+    """
+    # Build the leg-currency -> base-currency lookup with an identity row so
+    # legs already in the base currency convert at 1.0.
+    fx_to_base = fx_rates.filter(pl.col("currency_to") == pl.lit(base_currency)).select(
+        pl.col("currency_from"),
+        pl.col("rate").alias("rate_to_base"),
+    )
+    identity = pl.LazyFrame(
+        {"currency_from": [base_currency], "rate_to_base": [1.0]},
+        schema={"currency_from": pl.String, "rate_to_base": pl.Float64},
+    )
+    rate_lookup = pl.concat([fx_to_base, identity], how="vertical_relaxed")
+
+    # Join twice — once for each leg currency. Use left-joins so missing rates
+    # propagate as nulls (the orchestrator emits the CCR error downstream).
+    enriched = (
+        trades.join(
+            rate_lookup.rename({"rate_to_base": "_rate_leg1"}),
+            left_on="currency",
+            right_on="currency_from",
+            how="left",
+        )
+        .join(
+            rate_lookup.rename({"rate_to_base": "_rate_leg2"}),
+            left_on="currency_leg2",
+            right_on="currency_from",
+            how="left",
+        )
+    )
+
+    # Converted absolute notionals per leg.
+    abs_leg1 = pl.col("notional").abs() * pl.col("_rate_leg1")
+    abs_leg2 = pl.col("notional_leg2").abs() * pl.col("_rate_leg2")
+
+    one_leg_is_base = (pl.col("currency") == pl.lit(base_currency)) | (
+        pl.col("currency_leg2") == pl.lit(base_currency)
+    )
+
+    # Art. 279b(1)(b)(i): when one leg is the base currency, take the *other*
+    # leg converted (which equals its absolute notional × spot). When leg1 is
+    # the base, take abs_leg2; when leg2 is the base, take abs_leg1.
+    one_leg_value = (
+        pl.when(pl.col("currency") == pl.lit(base_currency)).then(abs_leg2).otherwise(abs_leg1)
+    )
+
+    # Art. 279b(1)(b)(ii): both legs foreign — take max of converted notionals.
+    both_foreign_value = pl.max_horizontal(abs_leg1, abs_leg2)
+
+    fx_adjusted = pl.when(one_leg_is_base).then(one_leg_value).otherwise(both_foreign_value)
+
+    # Gate on asset_class == "fx"; preserve any existing adjusted_notional from
+    # the IR branch via coalesce — callers may have run the IR branch first.
+    out = enriched.with_columns(
+        pl.when(pl.col("asset_class") == "fx")
+        .then(fx_adjusted)
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+        .alias("_fx_adjusted_notional")
+    )
+
+    # If the input already has an adjusted_notional column (e.g. from the IR
+    # branch), preserve non-null values and overlay FX where applicable.
+    if "adjusted_notional" in trades.collect_schema().names():
+        out = out.with_columns(
+            pl.coalesce(pl.col("adjusted_notional"), pl.col("_fx_adjusted_notional")).alias(
+                "adjusted_notional"
+            )
+        )
+    else:
+        out = out.rename({"_fx_adjusted_notional": "adjusted_notional"})
+
+    return out.drop("_rate_leg1", "_rate_leg2", strict=False).drop(
+        "_fx_adjusted_notional", strict=False
     )

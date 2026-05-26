@@ -88,6 +88,11 @@ class Trade:
     cdo_detachment: float | None = None
     payment_leg_index_id: str | None = None
 
+    # CRR Art. 279b(1)(b): FX-derivative second-leg notional + currency.
+    # Required when asset_class == "fx"; null otherwise.
+    notional_leg2: float | None = None
+    currency_leg2: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dict suitable for ``pl.DataFrame`` construction."""
         return {
@@ -110,6 +115,8 @@ class Trade:
             "cdo_attachment": self.cdo_attachment,
             "cdo_detachment": self.cdo_detachment,
             "payment_leg_index_id": self.payment_leg_index_id,
+            "notional_leg2": self.notional_leg2,
+            "currency_leg2": self.currency_leg2,
         }
 
 
@@ -153,6 +160,56 @@ def make_trade(**overrides: Any) -> Trade:
         "cdo_attachment": None,
         "cdo_detachment": None,
         "payment_leg_index_id": None,
+        "notional_leg2": None,
+        "currency_leg2": None,
+    }
+    defaults.update(overrides)
+    return Trade(**defaults)
+
+
+def make_fx_trade(**overrides: Any) -> Trade:
+    """
+    Return a ``Trade`` with CCR-A2 (FX-forward) golden defaults.
+
+    Default values represent the canonical CCR-A2 single-trade scenario:
+    a 1-year GBP/USD outright forward, buy USD 100m / sell GBP 80m
+    (implies forward USD/GBP = 1.25), at-par (MtM=0), unmargined, delta=1.0.
+
+    The leg1 fields (``notional`` / ``currency``) carry the bought-currency
+    side; ``notional_leg2`` / ``currency_leg2`` carry the sold-currency side.
+    CRR Art. 279b(1)(b) is symmetric in legs — sign convention lives in
+    ``is_long`` / ``delta`` — so the choice of which side is "leg1" is
+    purely conventional.
+
+    Args:
+        **overrides: Any ``Trade`` field keyword arguments. The caller only
+            needs to supply fields that differ from the golden defaults.
+
+    Returns:
+        A frozen ``Trade`` instance with ``asset_class == "fx"``.
+    """
+    defaults: dict[str, Any] = {
+        "trade_id": "T_FX_001",
+        "netting_set_id": "NS_FX_001",
+        "asset_class": "fx",
+        "transaction_type": "derivative",
+        "notional": 100_000_000.0,
+        "currency": "USD",
+        "maturity_date": date(2027, 1, 15),
+        "start_date": date(2026, 1, 15),
+        "delta": 1.0,
+        "is_long": True,
+        "mtm_value": 0.0,
+        "is_long_settlement": False,
+        "underlying_reference": None,
+        "option_strike": None,
+        "option_type": None,
+        "option_underlying_price": None,
+        "cdo_attachment": None,
+        "cdo_detachment": None,
+        "payment_leg_index_id": None,
+        "notional_leg2": 80_000_000.0,
+        "currency_leg2": "GBP",
     }
     defaults.update(overrides)
     return Trade(**defaults)

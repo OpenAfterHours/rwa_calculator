@@ -38,7 +38,10 @@ import polars as pl
 
 from rwa_calc.contracts.bundles import RawCCRBundle
 from rwa_calc.contracts.config import CCRConfig
-from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_ir
+from rwa_calc.engine.ccr.adjusted_notional import (
+    compute_adjusted_notional_fx,
+    compute_adjusted_notional_ir,
+)
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
@@ -56,6 +59,9 @@ def ccr_rows_to_exposures(
     raw_ccr: RawCCRBundle,
     config_ccr: CCRConfig,
     reporting_date: date,
+    *,
+    base_currency: str = "GBP",
+    fx_rates: pl.LazyFrame | None = None,
 ) -> pl.LazyFrame:
     """Shape SA-CCR netting-set EADs into synthetic exposure rows.
 
@@ -97,6 +103,15 @@ def ccr_rows_to_exposures(
         reporting_date: As-of date for the calculation; used to compute
             ``years_to_maturity`` and ``adjusted_notional`` per Art. 279b
             and is written to the synthetic exposure row's ``value_date``.
+        base_currency: Reporting currency for FX adjusted notional per
+            Art. 279b(1)(b); typically ``CalculationConfig.base_currency``.
+            Used only when ``fx_rates`` is supplied and the trade book contains
+            ``asset_class == "fx"`` rows. Defaults to ``"GBP"``.
+        fx_rates: Optional FX-rates LazyFrame conforming to ``FX_RATES_SCHEMA``
+            (``currency_from``, ``currency_to``, ``rate``). When None the FX
+            adjusted-notional branch is skipped — FX trades will have null
+            ``adjusted_notional`` and therefore no PFE contribution, matching
+            the pre-P8.9 behaviour for firms with no derivatives FX book.
 
     Returns:
         LazyFrame at netting-set grain with one synthetic exposure row per
@@ -117,6 +132,12 @@ def ccr_rows_to_exposures(
         )
     )
     trades_enriched = compute_adjusted_notional_ir(trades_enriched, reporting_date)
+    # FX adjusted notional per Art. 279b(1)(b) — overlays the FX branch on top
+    # of the IR output via coalesce so non-FX rows pass through unchanged.
+    if fx_rates is not None:
+        trades_enriched = compute_adjusted_notional_fx(
+            trades_enriched, base_currency, fx_rates
+        )
     trades_enriched = compute_supervisory_delta_linear(trades_enriched)
     trades_enriched = compute_maturity_factor_unmargined(trades_enriched)
     trades_enriched = assign_hedging_set(trades_enriched)

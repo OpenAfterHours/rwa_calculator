@@ -12,15 +12,21 @@ Key responsibilities:
       LT_1Y    : residual maturity M < 1 year
       1Y_5Y    : 1 year <= M <= 5 years
       GT_5Y    : M > 5 years
-  For non-IR asset classes the bucket is left null (deferred to FX/equity/
-  credit/commodity batches).
-- Compose a stable ``hedging_set_id`` per Art. 277(1) of the form
-  ``"<asset_short>-<netting_set_id>-<currency>-<maturity_bucket>"`` so that
-  the downstream add-on aggregator can group D_b sums by bucket.
+  For non-IR asset classes the bucket is left null (deferred to equity /
+  credit / commodity batches; FX has no maturity sub-bucketing — its hedging
+  set is keyed on the currency pair instead).
+- Compose a stable ``hedging_set_id`` per Art. 277(1):
+    * IR:  ``"<asset_short>-<netting_set_id>-<currency>-<maturity_bucket>"``
+           — one per (currency, maturity bucket).
+    * FX:  ``"FX-<netting_set_id>-<pair>"`` where ``<pair>`` is the
+           order-independent ``min(currency, currency_leg2)/max(...)`` —
+           one hedging set per currency pair (Art. 277(3)(a)).
 
 References:
 - CRR Art. 277(1): hedging-set definition (one per currency within IR).
 - CRR Art. 277(2): IR maturity bucket thresholds LT_1Y / 1Y_5Y / GT_5Y.
+- CRR Art. 277(3)(a) / BCBS CRE52.34: FX hedging set = currency pair, no
+  maturity sub-bucketing.
 """
 
 from __future__ import annotations
@@ -105,19 +111,37 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
         ASSET_CLASS_SHORT_CODE, default=None, return_dtype=pl.Utf8
     )
 
+    # Order-independent currency pair for FX hedging-set keying (Art. 277(3)(a)).
+    # ``min/max`` of the two ISO-4217 strings collapses EUR/USD and USD/EUR
+    # into a single hedging set per netting set.
+    fx_pair = pl.concat_str(
+        [
+            pl.min_horizontal(pl.col("currency"), pl.col("currency_leg2")),
+            pl.lit("/"),
+            pl.max_horizontal(pl.col("currency"), pl.col("currency_leg2")),
+        ]
+    )
+
+    ir_hs = pl.concat_str(
+        [
+            asset_short,
+            pl.col("netting_set_id"),
+            pl.col("currency"),
+            pl.col("maturity_bucket"),
+        ],
+        separator="-",
+    )
+
+    fx_hs = pl.concat_str(
+        [pl.lit("FX"), pl.col("netting_set_id"), fx_pair],
+        separator="-",
+    )
+
     hedging_set_id = (
-        pl.when(pl.col("maturity_bucket").is_not_null())
-        .then(
-            pl.concat_str(
-                [
-                    asset_short,
-                    pl.col("netting_set_id"),
-                    pl.col("currency"),
-                    pl.col("maturity_bucket"),
-                ],
-                separator="-",
-            )
-        )
+        pl.when(pl.col("asset_class") == "interest_rate")
+        .then(pl.when(pl.col("maturity_bucket").is_not_null()).then(ir_hs).otherwise(None))
+        .when(pl.col("asset_class") == "fx")
+        .then(fx_hs)
         .otherwise(pl.lit(None, dtype=pl.Utf8))
         .alias("hedging_set_id")
     )

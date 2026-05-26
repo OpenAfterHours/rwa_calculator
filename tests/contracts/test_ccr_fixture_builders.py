@@ -448,6 +448,101 @@ def test_golden_ccr_a1_round_trips_through_raw_ccr_bundle_via_loader(
 # ===========================================================================
 
 
+# ===========================================================================
+# 11. make_fx_trade() golden defaults match CCR-A2 scenario (Art. 279b(1)(b))
+# ===========================================================================
+
+
+def test_make_fx_trade_defaults_match_ccr_a2_scenario() -> None:
+    """make_fx_trade() must produce the CCR-A2 1y USD/GBP outright-forward defaults.
+
+    CCR-A2 inputs (CRR Art. 279b(1)(b) FX adjusted-notional acceptance):
+        asset_class="fx", currency="USD"/notional=100m (leg1 = bought currency),
+        currency_leg2="GBP"/notional_leg2=80m (leg2 = sold currency),
+        1-year forward, at-par (MtM=0), delta=1.0.
+    """
+    # Arrange + Act
+    from tests.fixtures.ccr.trade_builder import make_fx_trade
+
+    t = make_fx_trade()
+
+    # Assert — asset_class is "fx" so the engine routes to the FX branch
+    assert t.asset_class == "fx", (
+        f"make_fx_trade().asset_class expected 'fx', got {t.asset_class!r}"
+    )
+
+    # Assert — leg1 = bought currency (USD 100m)
+    assert t.currency == "USD", f"leg1 currency expected 'USD', got {t.currency!r}"
+    assert t.notional == 100_000_000.0, (
+        f"leg1 notional expected 100m, got {t.notional!r}"
+    )
+
+    # Assert — leg2 = sold currency (GBP 80m). Forward rate = 100m USD / 80m GBP = 1.25.
+    assert t.currency_leg2 == "GBP", (
+        f"leg2 currency expected 'GBP', got {t.currency_leg2!r}"
+    )
+    assert t.notional_leg2 == 80_000_000.0, (
+        f"leg2 notional expected 80m, got {t.notional_leg2!r}"
+    )
+
+    # Assert — at-par delta=1.0, MtM=0 (RC=0 expected at reporting_date=start_date)
+    assert t.delta == 1.0, f"delta expected 1.0, got {t.delta!r}"
+    assert t.mtm_value == 0.0, f"mtm_value expected 0.0, got {t.mtm_value!r}"
+
+
+def test_make_fx_trade_round_trips_through_pl_dataframe() -> None:
+    """make_fx_trade() output must serialise into TRADE_SCHEMA via create_trades()."""
+    # Arrange
+    from tests.fixtures.ccr.trade_builder import create_trades, make_fx_trade
+
+    from rwa_calc.data.column_spec import dtypes_of
+    from rwa_calc.data.schemas import TRADE_SCHEMA
+
+    expected_schema = dtypes_of(TRADE_SCHEMA)
+
+    # Act
+    df = create_trades([make_fx_trade()])
+
+    # Assert — single row, schema matches, leg2 columns populated
+    assert df.height == 1, f"Expected 1 row, got {df.height}"
+    for col_name, expected_dtype in expected_schema.items():
+        assert col_name in df.columns, f"Column '{col_name}' missing from FX-trade DataFrame."
+        assert df.schema[col_name] == expected_dtype, (
+            f"Column '{col_name}': expected dtype {expected_dtype}, "
+            f"got {df.schema[col_name]}"
+        )
+
+    # Assert — leg2 columns populated with the CCR-A2 values
+    assert df["notional_leg2"][0] == 80_000_000.0
+    assert df["currency_leg2"][0] == "GBP"
+
+
+def test_make_trade_ir_leaves_leg2_columns_null() -> None:
+    """make_trade() (IR default) must emit null leg2 fields so non-FX trades stay clean.
+
+    The validator at the FX adjusted-notional consumption point (P8.9) requires
+    leg2 fields populated only when ``asset_class == "fx"``; for IR rows they
+    must be null so the schema accommodates a mixed trade book.
+    """
+    # Arrange + Act
+    from tests.fixtures.ccr.trade_builder import create_trades, make_trade
+
+    df = create_trades([make_trade()])
+
+    # Assert — IR row has null leg2 fields
+    assert df["notional_leg2"][0] is None, (
+        f"IR trade must have null notional_leg2, got {df['notional_leg2'][0]!r}"
+    )
+    assert df["currency_leg2"][0] is None, (
+        f"IR trade must have null currency_leg2, got {df['currency_leg2'][0]!r}"
+    )
+
+
+# ===========================================================================
+# 12. Legacy generate_p8_5_minimal shim exports expected names
+# ===========================================================================
+
+
 def test_legacy_p8_5_module_constants_still_exported() -> None:
     """generate_p8_5_minimal must export TRADE_ID, NETTING_SET_ID, COUNTERPARTY_REF,
     and save_p85_minimal_fixtures cleanly — protects test_ccr_loader.py's shim layer."""

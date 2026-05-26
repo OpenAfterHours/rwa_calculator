@@ -564,7 +564,11 @@ class PipelineOrchestrator:
                 # synthetic NSes before the EAD chain runs.
                 raw_ccr_gated = apply_legal_enforceability_gate(data.ccr)
                 ccr_exposure_rows = ccr_rows_to_exposures(
-                    raw_ccr_gated, config.ccr, config.reporting_date
+                    raw_ccr_gated,
+                    config.ccr,
+                    config.reporting_date,
+                    base_currency=config.base_currency,
+                    fx_rates=data.fx_rates,
                 )
                 # Inherit the resolved counterparty rating columns onto each
                 # CCR synthetic row so the downstream SA Institution lookup

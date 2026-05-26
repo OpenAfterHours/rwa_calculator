@@ -766,6 +766,13 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # single-trade synthetic netting set (id ``<original>__wwr__<trade_id>``)
     # and assigns ``wwr_lgd_override = 1.0`` to that synthetic NS.
     "is_specific_wwr": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 279b(1)(b): FX-derivative second-leg notional and ISO-4217
+    # currency. Required when ``asset_class == "fx"`` — the FX adjusted-notional
+    # branch converts both legs to ``CalculationConfig.base_currency`` at spot
+    # and applies the one-leg-is-base / max(both-foreign) rule. Null for non-FX
+    # trades (interest_rate uses the single ``notional`` / ``currency`` pair).
+    "notional_leg2": ColumnSpec(pl.Float64, required=False),
+    "currency_leg2": ColumnSpec(pl.String, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by

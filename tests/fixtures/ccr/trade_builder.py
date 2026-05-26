@@ -93,6 +93,31 @@ class Trade:
     notional_leg2: float | None = None
     currency_leg2: str | None = None
 
+    # P8.33 — equity asset class: adjusted notional = market_price × number_of_units.
+    # CRR Art. 279b(1)(c) / CRE52.45: null for non-equity rows.
+    market_price: float | None = None
+    number_of_units: float | None = None
+
+    # CRR Art. 277(2)(c) / CRE52.60: credit hedging-set partition by issuer LEI.
+    # Null for non-credit rows. Also used by equity (Art. 277(2)(d)).
+    reference_entity: str | None = None
+
+    # CRR Art. 277(3)(b) / CRE52.67: commodity bucket discriminator.
+    # Valid values: "ELECTRICITY" | "OIL_GAS" | "METALS" | "AGRICULTURAL" | "OTHER".
+    # Null for non-commodity rows.
+    commodity_type: str | None = None
+
+    # CRR Art. 280a / 280b / CRE52.61: single-name vs index discriminator.
+    # Null means "not applicable" (IR / FX / commodity rows).
+    is_index: bool | None = None
+
+    # P8.35 — credit asset class: investment-grade discriminator for SF lookup.
+    # Valid values: "IG" | "HY" | "NON_RATED". Null for non-credit rows.
+    # Added to TRADE_SCHEMA by Wave 4 (engine-implementer). Included here so
+    # the fixture dataclass is ready; create_trades() silently drops it until
+    # TRADE_SCHEMA is extended.
+    credit_quality: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dict suitable for ``pl.DataFrame`` construction."""
         return {
@@ -117,6 +142,12 @@ class Trade:
             "payment_leg_index_id": self.payment_leg_index_id,
             "notional_leg2": self.notional_leg2,
             "currency_leg2": self.currency_leg2,
+            "market_price": self.market_price,
+            "number_of_units": self.number_of_units,
+            "reference_entity": self.reference_entity,
+            "commodity_type": self.commodity_type,
+            "is_index": self.is_index,
+            "credit_quality": self.credit_quality,
         }
 
 
@@ -162,6 +193,12 @@ def make_trade(**overrides: Any) -> Trade:
         "payment_leg_index_id": None,
         "notional_leg2": None,
         "currency_leg2": None,
+        "market_price": None,
+        "number_of_units": None,
+        "reference_entity": None,
+        "commodity_type": None,
+        "is_index": None,
+        "credit_quality": None,
     }
     defaults.update(overrides)
     return Trade(**defaults)
@@ -210,6 +247,78 @@ def make_fx_trade(**overrides: Any) -> Trade:
         "payment_leg_index_id": None,
         "notional_leg2": 80_000_000.0,
         "currency_leg2": "GBP",
+        "market_price": None,
+        "number_of_units": None,
+        "reference_entity": None,
+        "commodity_type": None,
+        "is_index": None,
+        "credit_quality": None,
+    }
+    defaults.update(overrides)
+    return Trade(**defaults)
+
+
+def make_credit_trade(**overrides: Any) -> Trade:
+    """
+    Return a ``Trade`` with CCR-A3 (single-name IG CDS) golden defaults.
+
+    Default values represent the canonical CCR-A3 single-trade scenario:
+    a 5-year GBP single-name investment-grade CDS, notional GBP 100m, at-par
+    (MtM=0), delta=1.0 (non-option long), unmargined.
+
+    Key economic parameters (CCR-A3):
+        - asset_class="credit" — routes to the credit adjusted-notional branch
+          (CRR Art. 279b(1)(a) supervisory-duration formula, shared with IR).
+        - reference_entity="ACME_LEI_5493001A" — single-name CDS issuer LEI,
+          used by the credit hedging-set per-entity correlation step
+          (CRR Art. 277(2)(c) + Art. 280a).
+        - is_index=False — single-name flag; discriminates SF and rho lookups
+          (SF_SN_IG = 0.0046, rho_SN = 0.50 per CRR Art. 280 Table 2 + 280a).
+        - credit_quality="IG" — investment-grade discriminator for the SF table.
+          Note: credit_quality is NOT yet in TRADE_SCHEMA (Wave 4 adds it);
+          create_trades() silently drops it until the schema is extended.
+
+    Args:
+        **overrides: Any ``Trade`` field keyword arguments. The caller only
+            needs to supply fields that differ from the golden defaults.
+
+    Returns:
+        A frozen ``Trade`` instance with ``asset_class == "credit"``.
+
+    References:
+        - CRR Art. 279b(1)(a): supervisory duration d = N × SD(S, E)
+        - CRR Art. 277(2)(c): one hedging set per NS for credit
+        - CRR Art. 280 Table 2: SF_CR_SN_IG = 0.0046
+        - CRR Art. 280a: rho = 0.50 for single-name credit
+    """
+    defaults: dict[str, Any] = {
+        "trade_id": "T_CR_001",
+        "netting_set_id": "NS_CR_001",
+        "asset_class": "credit",
+        "transaction_type": "derivative",
+        "notional": 100_000_000.0,
+        "currency": "GBP",
+        "maturity_date": date(2031, 1, 15),
+        "start_date": date(2026, 1, 15),
+        "delta": 1.0,
+        "is_long": True,
+        "mtm_value": 0.0,
+        "is_long_settlement": False,
+        "underlying_reference": None,
+        "option_strike": None,
+        "option_type": None,
+        "option_underlying_price": None,
+        "cdo_attachment": None,
+        "cdo_detachment": None,
+        "payment_leg_index_id": None,
+        "notional_leg2": None,
+        "currency_leg2": None,
+        "market_price": None,
+        "number_of_units": None,
+        "reference_entity": "ACME_LEI_5493001A",
+        "commodity_type": None,
+        "is_index": False,
+        "credit_quality": "IG",
     }
     defaults.update(overrides)
     return Trade(**defaults)

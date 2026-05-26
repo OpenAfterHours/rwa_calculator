@@ -798,6 +798,11 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # "not applicable" (IR / FX / commodity rows); False would be a load-bearing
     # "single-name" claim for credit / equity rows.
     "is_index": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 280 Table 2: credit-quality discriminator for the credit asset
+    # class supervisory factor lookup. Valid values {"IG", "HY", "NON_RATED"};
+    # null for non-credit rows (IR / FX / equity / commodity). Keyed by
+    # COLUMN_VALUE_CONSTRAINTS["trades"]["credit_quality"] for input validation.
+    "credit_quality": ColumnSpec(pl.String, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1315,6 +1320,10 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     # supervisory-factor join.
     "trades": {
         "commodity_type": {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"},
+        # P8.35 — CRR Art. 280 Table 2 credit-quality discriminator: keyed off
+        # ``SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN`` / ``..._CREDIT_IDX`` in
+        # ``data/tables/sa_ccr_factors.py``.
+        "credit_quality": {"IG", "HY", "NON_RATED"},
     },
 }
 

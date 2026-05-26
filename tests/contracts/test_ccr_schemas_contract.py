@@ -1,4 +1,4 @@
-"""Contract tests for CCR input schemas (P8.5 / P8.33).
+"""Contract tests for CCR input schemas (P8.5 / P8.33 / P8.35).
 
 Verifies that the four CCR schema objects in ``rwa_calc.data.schemas`` exist
 with the architect's exact column list and dtypes.  These are pure
@@ -10,7 +10,8 @@ conventions as ``FACILITY_SCHEMA``, ``LOAN_SCHEMA``, etc.
 
 Schemas tested (P8.5 architect's specification):
     TRADE_SCHEMA              — 14 columns per architect (23 after FX/CCR extensions,
-                                28 after P8.33 adds equity/credit/commodity hedging-set columns)
+                                28 after P8.33 adds equity/credit/commodity hedging-set columns,
+                                29 after P8.35 adds credit_quality)
     NETTING_SET_SCHEMA        — 10 columns per architect (fixture has 8)
     MARGIN_AGREEMENT_SCHEMA   — 10 columns per architect (fixture has 7)
     CCR_COLLATERAL_SCHEMA     — 11 columns per architect (fixture has 8)
@@ -391,7 +392,7 @@ def test_valid_risk_types_input_length_is_eight() -> None:
 #   CRR Art. 280a / 280b — is_index discriminator
 # ===========================================================================
 
-_P8_33_EXPECTED_COLUMN_COUNT = 28  # 23 pre-P8.33 + 5 new columns
+_P8_35_EXPECTED_COLUMN_COUNT = 29  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality)
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
 
@@ -580,22 +581,31 @@ def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None
     )
 
 
-def test_trade_schema_column_count_increased_by_five() -> None:
-    """TRADE_SCHEMA must have exactly 28 columns after P8.33 adds 5 new nullable columns.
+def test_trade_schema_column_count_includes_credit_quality() -> None:
+    """TRADE_SCHEMA must have exactly 29 columns after P8.35 adds credit_quality.
 
     Baseline (pre-P8.33): 23 columns.
     P8.33 adds: market_price, number_of_units, reference_entity, commodity_type, is_index.
-    Expected total: 28.
+    P8.35 adds: credit_quality.
+    Expected total: 29.
     """
     # Arrange
     schema = _get_schema("TRADE_SCHEMA")
 
+    # Assert — credit_quality column is present.
+    assert "credit_quality" in schema, (
+        "TRADE_SCHEMA must have 'credit_quality' column (P8.35 — CRR Art. 280 Table 2 "
+        "SF lookup requires IG/HY/NON_RATED for credit derivatives). "
+        f"Current columns: {list(schema.keys())}"
+    )
+
     # Act
     col_count = len(schema)
 
-    # Assert
-    assert col_count == _P8_33_EXPECTED_COLUMN_COUNT, (
-        f"TRADE_SCHEMA must have exactly {_P8_33_EXPECTED_COLUMN_COUNT} columns after P8.33 "
-        f"(23 pre-P8.33 + 5 new: market_price, number_of_units, reference_entity, "
-        f"commodity_type, is_index), got {col_count}: {list(schema.keys())}"
+    # Assert — total column count.
+    assert col_count == _P8_35_EXPECTED_COLUMN_COUNT, (
+        f"TRADE_SCHEMA must have exactly {_P8_35_EXPECTED_COLUMN_COUNT} columns after P8.35 "
+        f"(23 pre-P8.33 + 5 P8.33: market_price, number_of_units, reference_entity, "
+        f"commodity_type, is_index + 1 P8.35: credit_quality), "
+        f"got {col_count}: {list(schema.keys())}"
     )

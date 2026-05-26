@@ -48,7 +48,7 @@ from rwa_calc.engine.ccr.adjusted_notional import (
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
-from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_linear
+from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,12 @@ def ccr_rows_to_exposures(
     # Commodity adjusted notional per Art. 279b(1)(c) — coalesce-safe overlay,
     # no-op for non-commodity rows.
     trades_enriched = compute_adjusted_notional_commodity(trades_enriched)
-    trades_enriched = compute_supervisory_delta_linear(trades_enriched)
+    # Supervisory delta per CRR Art. 279a: the option branch applies the
+    # Black-Scholes Phi(d1) formula (Art. 279a(2)) when a trade carries both
+    # ``option_strike`` and ``option_underlying_price`` and falls back to the
+    # linear +/- 1 delta (Art. 279a(1)) for non-option rows. This single call
+    # therefore covers both directional and option trades in the book.
+    trades_enriched = compute_supervisory_delta_option(trades_enriched)
     trades_enriched = compute_maturity_factor_unmargined(trades_enriched)
     trades_enriched = assign_hedging_set(trades_enriched)
 

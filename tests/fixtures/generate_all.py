@@ -1406,7 +1406,8 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
     """Generate CCR golden fixtures: CCR-A1 (IR swap), CCR-A3 (credit CDS),
-    CCR-A7 (oil forward), CCR-A8 (electricity swap).
+    CCR-A7 (oil forward), CCR-A8 (electricity swap), CCR-A9 (multi-bucket
+    commodity netting set — OIL_GAS + METALS + ELECTRICITY).
 
     All golden scenarios are written to the same ``ccr/`` output directory.
     golden_ccr_a* modules use relative imports (from .margin_builder etc.),
@@ -1421,6 +1422,7 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
         from ccr.golden_ccr_a3 import save_ccr_a3_fixtures
         from ccr.golden_ccr_a7 import save_ccr_a7_fixtures
         from ccr.golden_ccr_a8 import save_ccr_a8_fixtures
+        from ccr.golden_ccr_a9 import save_ccr_a9_fixtures
 
         results: list[tuple[str, int]] = []
 
@@ -1448,6 +1450,12 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
             (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a8.items()
         )
 
+        # CCR-A9: writes ccr_a9_* parquets (multi-bucket commodity, cross-bucket sqrt aggregation).
+        saved_a9 = save_ccr_a9_fixtures(output_dir)
+        results.extend(
+            (f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved_a9.items()
+        )
+
         return results
     finally:
         sys.path.remove(fixtures_root)
@@ -1456,6 +1464,7 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
             "ccr.golden_ccr_a3",
             "ccr.golden_ccr_a7",
             "ccr.golden_ccr_a8",
+            "ccr.golden_ccr_a9",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

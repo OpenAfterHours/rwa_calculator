@@ -532,9 +532,7 @@ def test_trade_schema_is_index_is_nullable_boolean() -> None:
         "TRADE_SCHEMA must have 'is_index' column (P8.33 — CRR Art. 280a / 280b)"
     )
     assert isinstance(spec, ColumnSpec), "'is_index' entry must be a ColumnSpec"
-    assert spec.dtype == pl.Boolean, (
-        f"TRADE_SCHEMA.is_index must be pl.Boolean, got {spec.dtype}"
-    )
+    assert spec.dtype == pl.Boolean, f"TRADE_SCHEMA.is_index must be pl.Boolean, got {spec.dtype}"
     assert spec.required is False, (
         "TRADE_SCHEMA.is_index must be required=False (nullable — IR/FX/commodity rows carry null)"
     )
@@ -566,8 +564,8 @@ def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None
     # Assert
     assert trades_constraints is not None, (
         "COLUMN_VALUE_CONSTRAINTS must have a 'trades' entry (P8.33). "
-        "Add: \"trades\": {\"commodity_type\": {\"ELECTRICITY\", \"OIL_GAS\", "
-        "\"METALS\", \"AGRICULTURAL\", \"OTHER\"}}"
+        'Add: "trades": {"commodity_type": {"ELECTRICITY", "OIL_GAS", '
+        '"METALS", "AGRICULTURAL", "OTHER"}}'
     )
     actual_buckets = trades_constraints.get("commodity_type")
     assert actual_buckets is not None, (

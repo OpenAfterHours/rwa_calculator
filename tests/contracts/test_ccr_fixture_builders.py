@@ -473,17 +473,11 @@ def test_make_fx_trade_defaults_match_ccr_a2_scenario() -> None:
 
     # Assert — leg1 = bought currency (USD 100m)
     assert t.currency == "USD", f"leg1 currency expected 'USD', got {t.currency!r}"
-    assert t.notional == 100_000_000.0, (
-        f"leg1 notional expected 100m, got {t.notional!r}"
-    )
+    assert t.notional == 100_000_000.0, f"leg1 notional expected 100m, got {t.notional!r}"
 
     # Assert — leg2 = sold currency (GBP 80m). Forward rate = 100m USD / 80m GBP = 1.25.
-    assert t.currency_leg2 == "GBP", (
-        f"leg2 currency expected 'GBP', got {t.currency_leg2!r}"
-    )
-    assert t.notional_leg2 == 80_000_000.0, (
-        f"leg2 notional expected 80m, got {t.notional_leg2!r}"
-    )
+    assert t.currency_leg2 == "GBP", f"leg2 currency expected 'GBP', got {t.currency_leg2!r}"
+    assert t.notional_leg2 == 80_000_000.0, f"leg2 notional expected 80m, got {t.notional_leg2!r}"
 
     # Assert — at-par delta=1.0, MtM=0 (RC=0 expected at reporting_date=start_date)
     assert t.delta == 1.0, f"delta expected 1.0, got {t.delta!r}"
@@ -508,8 +502,7 @@ def test_make_fx_trade_round_trips_through_pl_dataframe() -> None:
     for col_name, expected_dtype in expected_schema.items():
         assert col_name in df.columns, f"Column '{col_name}' missing from FX-trade DataFrame."
         assert df.schema[col_name] == expected_dtype, (
-            f"Column '{col_name}': expected dtype {expected_dtype}, "
-            f"got {df.schema[col_name]}"
+            f"Column '{col_name}': expected dtype {expected_dtype}, got {df.schema[col_name]}"
         )
 
     # Assert — leg2 columns populated with the CCR-A2 values

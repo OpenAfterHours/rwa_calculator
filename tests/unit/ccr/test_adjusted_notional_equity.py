@@ -15,11 +15,8 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -277,6 +274,5 @@ def test_equity_branch_returns_lazyframe() -> None:
     trades = _equity_trade_row()
     result = compute_adjusted_notional_equity(trades)
     assert isinstance(result, pl.LazyFrame), (
-        f"compute_adjusted_notional_equity must return pl.LazyFrame, "
-        f"got {type(result).__name__!r}."
+        f"compute_adjusted_notional_equity must return pl.LazyFrame, got {type(result).__name__!r}."
     )

@@ -67,13 +67,11 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 from rwa_calc.engine.irb.stats_backend import normal_cdf
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.ccr.golden_ccr_a6 import (
     CCR_A6_ADJUSTED_NOTIONAL,
     CCR_A6_EXPOSURE_CLASS,
-    CCR_A6_IS_INDEX,
     CCR_A6_MATURITY_DATE,
     CCR_A6_MONETARY_REL_TOLERANCE,
     CCR_A6_MULTIPLIER_ABS_TOLERANCE,
@@ -112,8 +110,7 @@ _D1: float = (
 # Phi(d1) computed via the live polars-normal-stats backend — same function
 # the engine uses, so both sides use the identical CDF implementation.
 _PHI_D1: float = float(
-    pl.DataFrame({"d1": [_D1]})
-    .with_columns(normal_cdf(pl.col("d1")).alias("phi"))["phi"][0]
+    pl.DataFrame({"d1": [_D1]}).with_columns(normal_cdf(pl.col("d1")).alias("phi"))["phi"][0]
 )
 
 # Maturity factor: MF = sqrt(min(T_mf, 1.0)) where T_mf = days/365.25 (pipeline convention)
@@ -127,9 +124,7 @@ _EN: float = _PHI_D1 * CCR_A6_ADJUSTED_NOTIONAL * _MF
 # rho_IDX = 0.80 → sqrt((0.80·EN)² + (1−0.64)·EN²) = EN·sqrt(0.64+0.36) = EN
 _SF_IDX: float = 0.20
 _RHO_IDX: float = 0.80
-_ADDON_AGGREGATE: float = _SF_IDX * math.sqrt(
-    (_RHO_IDX * _EN) ** 2 + (1.0 - _RHO_IDX**2) * _EN**2
-)
+_ADDON_AGGREGATE: float = _SF_IDX * math.sqrt((_RHO_IDX * _EN) ** 2 + (1.0 - _RHO_IDX**2) * _EN**2)
 
 # PFE = multiplier × AddOn = 1.0 × AddOn  (Art. 278(1))
 _PFE_ADDON: float = _ADDON_AGGREGATE  # multiplier = 1.0

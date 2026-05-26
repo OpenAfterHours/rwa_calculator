@@ -42,7 +42,6 @@ import pytest
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class
 
-
 # Scalars from Art. 280 Table 2 + Art. 280a — mirrored here so each assertion
 # can show the regulatory derivation inline.
 _SF_SN_IG: float = 0.0046
@@ -158,8 +157,7 @@ def test_credit_addon_single_name_hy_uses_1_3_pct_sf() -> None:
     actual = cr_row["asset_class_addon"][0]
 
     assert actual == pytest.approx(expected, rel=1e-6), (
-        f"SN HY: expected AddOn ≈ {expected:,.1f} (SF=0.013), "
-        f"got {actual!r}. CRR Art. 280 Table 2."
+        f"SN HY: expected AddOn ≈ {expected:,.1f} (SF=0.013), got {actual!r}. CRR Art. 280 Table 2."
     )
 
 
@@ -208,9 +206,7 @@ def test_credit_addon_index_ig_uses_0_38_pct_sf_and_0_80_rho() -> None:
     AddOn = 0.0038 × 438,349,124.271 ≈ 1,665,726.7
     """
     # Arrange — index=True so the IDX SF and rho apply.
-    trades = pl.LazyFrame(
-        [_enriched_credit_trade(is_index=True, credit_quality="IG")]
-    )
+    trades = pl.LazyFrame([_enriched_credit_trade(is_index=True, credit_quality="IG")])
     with_hs = assign_hedging_set(trades)
 
     # Act
@@ -240,9 +236,7 @@ def test_credit_addon_index_hy_uses_1_06_pct_sf() -> None:
     AddOn = 0.0106 × 438,349,124.271 ≈ 4,646,500.7
     """
     # Arrange
-    trades = pl.LazyFrame(
-        [_enriched_credit_trade(is_index=True, credit_quality="HY")]
-    )
+    trades = pl.LazyFrame([_enriched_credit_trade(is_index=True, credit_quality="HY")])
     with_hs = assign_hedging_set(trades)
 
     # Act
@@ -430,21 +424,16 @@ def test_credit_addon_emits_one_row_per_ns_credit() -> None:
 
     # Assert — exactly one credit row (for NS_CR), exactly one IR row (for NS_IR).
     cr_rows = result.filter(pl.col("asset_class") == "credit")
-    assert cr_rows.height == 1, (
-        f"Expected 1 credit row (NS_CR), got {cr_rows.height}."
-    )
+    assert cr_rows.height == 1, f"Expected 1 credit row (NS_CR), got {cr_rows.height}."
     assert cr_rows["netting_set_id"][0] == "NS_CR", (
         f"Credit row must be keyed on NS_CR, got {cr_rows['netting_set_id'][0]!r}."
     )
 
     ir_rows = result.filter(pl.col("asset_class") == "interest_rate")
-    assert ir_rows.height == 1, (
-        f"Expected 1 IR row (NS_IR), got {ir_rows.height}."
-    )
+    assert ir_rows.height == 1, f"Expected 1 IR row (NS_IR), got {ir_rows.height}."
 
     # Credit add-on must be populated (not null) after P8.35 lands.
     cr_addon = cr_rows["asset_class_addon"][0]
     assert cr_addon is not None, (
-        f"Credit asset_class_addon must not be null after P8.35. "
-        f"Got {cr_addon!r}."
+        f"Credit asset_class_addon must not be null after P8.35. Got {cr_addon!r}."
     )

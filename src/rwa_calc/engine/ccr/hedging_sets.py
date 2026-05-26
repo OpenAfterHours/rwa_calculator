@@ -183,9 +183,7 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
         .when(pl.col("asset_class") == "equity")
         .then(equity_hs)
         .when(pl.col("asset_class") == "commodity")
-        .then(
-            pl.when(pl.col("commodity_type").is_not_null()).then(commodity_hs).otherwise(None)
-        )
+        .then(pl.when(pl.col("commodity_type").is_not_null()).then(commodity_hs).otherwise(None))
         .otherwise(pl.lit(None, dtype=pl.Utf8))
         .alias("hedging_set_id")
     )

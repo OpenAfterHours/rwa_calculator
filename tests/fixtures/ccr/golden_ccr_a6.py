@@ -142,18 +142,18 @@ CCR_A6_ASSET_CLASS: str = "equity"
 CCR_A6_TRANSACTION_TYPE: str = "derivative"
 
 # Equity option inputs (Art. 279a(2) + Art. 279b(1)(c)).
-CCR_A6_MARKET_PRICE: float = 100.0          # GBP per unit (= underlying spot price)
+CCR_A6_MARKET_PRICE: float = 100.0  # GBP per unit (= underlying spot price)
 CCR_A6_NUMBER_OF_UNITS: float = 500_000.0
 CCR_A6_REFERENCE_ENTITY: str = "UKX_INDEX"
-CCR_A6_IS_INDEX: bool = True               # equity index (not single-name)
+CCR_A6_IS_INDEX: bool = True  # equity index (not single-name)
 
 # Black-Scholes supervisory delta inputs (CRR Art. 279a(2)).
 CCR_A6_OPTION_TYPE: str = "call"
-CCR_A6_OPTION_STRIKE: float = 110.0         # OTM call (K > P)
+CCR_A6_OPTION_STRIKE: float = 110.0  # OTM call (K > P)
 CCR_A6_OPTION_UNDERLYING_PRICE: float = 100.0  # spot price P
 
 CCR_A6_MTM: float = 0.0
-CCR_A6_DELTA: float = 1.0   # placeholder — engine overwrites with Phi(d1)
+CCR_A6_DELTA: float = 1.0  # placeholder — engine overwrites with Phi(d1)
 CCR_A6_IS_LONG: bool = True
 
 # 1-year tenor: 2026-01-15 start, 2027-01-15 maturity.
@@ -371,10 +371,7 @@ def main() -> None:
         f" option_type={CCR_A6_OPTION_TYPE!r}, K={CCR_A6_OPTION_STRIKE},"
         f" P={CCR_A6_OPTION_UNDERLYING_PRICE}, is_index={CCR_A6_IS_INDEX})"
     )
-    print(
-        f"  Market:      market_price={CCR_A6_MARKET_PRICE},"
-        f" units={CCR_A6_NUMBER_OF_UNITS:,.0f}"
-    )
+    print(f"  Market:      market_price={CCR_A6_MARKET_PRICE}, units={CCR_A6_NUMBER_OF_UNITS:,.0f}")
     print(
         f"  Netting set: {CCR_A6_NETTING_SET_ID} -> {CCR_A6_COUNTERPARTY_REF}"
         f" (enforceable={CCR_A6_IS_LEGALLY_ENFORCEABLE},"

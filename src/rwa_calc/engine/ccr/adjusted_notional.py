@@ -162,19 +162,16 @@ def compute_adjusted_notional_fx(
 
     # Join twice — once for each leg currency. Use left-joins so missing rates
     # propagate as nulls (the orchestrator emits the CCR error downstream).
-    enriched = (
-        trades.join(
-            rate_lookup.rename({"rate_to_base": "_rate_leg1"}),
-            left_on="currency",
-            right_on="currency_from",
-            how="left",
-        )
-        .join(
-            rate_lookup.rename({"rate_to_base": "_rate_leg2"}),
-            left_on="currency_leg2",
-            right_on="currency_from",
-            how="left",
-        )
+    enriched = trades.join(
+        rate_lookup.rename({"rate_to_base": "_rate_leg1"}),
+        left_on="currency",
+        right_on="currency_from",
+        how="left",
+    ).join(
+        rate_lookup.rename({"rate_to_base": "_rate_leg2"}),
+        left_on="currency_leg2",
+        right_on="currency_from",
+        how="left",
     )
 
     # Converted absolute notionals per leg.
@@ -275,9 +272,7 @@ def compute_adjusted_notional_credit(
     d = pl.col("notional") * sd
 
     credit_adjusted = (
-        pl.when(pl.col("asset_class") == "credit")
-        .then(d)
-        .otherwise(pl.lit(None, dtype=pl.Float64))
+        pl.when(pl.col("asset_class") == "credit").then(d).otherwise(pl.lit(None, dtype=pl.Float64))
     )
 
     # Preserve any existing adjusted_notional column from upstream IR / FX

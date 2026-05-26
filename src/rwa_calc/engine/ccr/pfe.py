@@ -406,9 +406,7 @@ def _compute_addon_credit(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     # rho by single-name vs index (Art. 280a).
     rho = (
-        pl.when(pl.col("is_index").fill_null(False))
-        .then(pl.lit(rho_idx))
-        .otherwise(pl.lit(rho_sn))
+        pl.when(pl.col("is_index").fill_null(False)).then(pl.lit(rho_idx)).otherwise(pl.lit(rho_sn))
     )
 
     # AddOn_entity = SF_CR * EN_entity (signed).
@@ -474,9 +472,7 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     sf_cm_lookup = pl.LazyFrame(
         {
             "commodity_type": list(SA_CCR_SUPERVISORY_FACTORS_COMMODITY.keys()),
-            "_sf_cm": [
-                float(v) for v in SA_CCR_SUPERVISORY_FACTORS_COMMODITY.values()
-            ],
+            "_sf_cm": [float(v) for v in SA_CCR_SUPERVISORY_FACTORS_COMMODITY.values()],
         },
         schema={"commodity_type": pl.Utf8, "_sf_cm": pl.Float64},
     )
@@ -486,7 +482,9 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     # the only rows are non-commodity with None). Coerce to Utf8 so the
     # downstream join against sf_cm_lookup's String key resolves cleanly.
     schema = trades.collect_schema()
-    if "commodity_type" not in schema.names():  # arch-exempt: defensive injection for IR/FX/equity-only callers
+    if (
+        "commodity_type" not in schema.names()
+    ):  # arch-exempt: defensive injection for IR/FX/equity-only callers
         trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("commodity_type"))
     elif schema["commodity_type"] != pl.Utf8:
         trades = trades.with_columns(pl.col("commodity_type").cast(pl.Utf8))
@@ -597,12 +595,8 @@ def _compute_addon_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     # Per (NS, is_index) sub-class: sum_D, sum_D_sq, and the supervisory
     # factor / correlation selected by ``is_index``.
-    sf_expr = (
-        pl.when(pl.col("is_index")).then(pl.lit(sf_idx)).otherwise(pl.lit(sf_sn))
-    )
-    rho_expr = (
-        pl.when(pl.col("is_index")).then(pl.lit(rho_idx)).otherwise(pl.lit(rho_sn))
-    )
+    sf_expr = pl.when(pl.col("is_index")).then(pl.lit(sf_idx)).otherwise(pl.lit(sf_sn))
+    rho_expr = pl.when(pl.col("is_index")).then(pl.lit(rho_idx)).otherwise(pl.lit(rho_sn))
 
     sub_class = d_k.group_by(["netting_set_id", "asset_class", "is_index"]).agg(
         [

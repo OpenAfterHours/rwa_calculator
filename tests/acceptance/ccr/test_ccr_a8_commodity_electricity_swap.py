@@ -170,9 +170,7 @@ class TestCCRA8CommodityElectricitySwap:
             "RWA = EAD × RW (CRR Art. 120(1) Table 3, CQS 2 institution = 50%)."
         )
 
-    def test_electricity_sf_is_distinct_from_other_buckets(
-        self, ccr_a8_result: dict
-    ) -> None:
+    def test_electricity_sf_is_distinct_from_other_buckets(self, ccr_a8_result: dict) -> None:
         """LOAD-BEARING: ELECTRICITY SF = 0.40 produces RWA strictly greater than
         the degenerate value (126_000.0) that would result if ELECTRICITY were
         incorrectly routed to the 0.18 OIL_GAS catch-all.

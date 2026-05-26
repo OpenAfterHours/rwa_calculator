@@ -89,7 +89,7 @@ _EXPECTED = json.loads(_EXPECTED_OUTPUTS_PATH.read_text())
 _EXPOSURE_REF: str = _EXPECTED["exposure_reference"]  # "ccr__NS_CO_003"
 
 # Anti-degenerate thresholds (see test docstrings below for rationale).
-_LINEAR_SUM: float = 940_000.0       # degenerate: simple sum of all three bucket add-ons
+_LINEAR_SUM: float = 940_000.0  # degenerate: simple sum of all three bucket add-ons
 _MAX_SINGLE_BUCKET: float = 400_000.0  # degenerate: largest single-bucket add-on (ELECTRICITY)
 _DEGENERATE_THRESHOLD: float = 100_000.0  # distance tolerance for anti-degenerate assertions
 

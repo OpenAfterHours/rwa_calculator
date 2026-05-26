@@ -21,11 +21,8 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
-
 
 # ===========================================================================
 # 1. Oil forward: d = 50.0 × 20_000.0 = 1_000_000.0 (CCR-A7 hand-calc)

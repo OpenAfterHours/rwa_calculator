@@ -302,9 +302,7 @@ class TestCCRA10MixedAssetClass:
         expected_breakdown = _EXPECTED["addon_breakdown"]
         breakdown = ccr_a10_result.get("addon_by_asset_class") or {}
         # Act / Assert
-        assert breakdown.get("fx") == pytest.approx(
-            expected_breakdown["fx"], rel=1e-6
-        ), (
+        assert breakdown.get("fx") == pytest.approx(expected_breakdown["fx"], rel=1e-6), (
             f"CCR-A10: expected addon_by_asset_class['fx'] ≈ "
             f"{expected_breakdown['fx']:,.3f} GBP, got {breakdown.get('fx')}. "
             "Should reproduce the CCR-A2 golden add-on (1y USD/GBP forward, 100M USD notional)."
@@ -316,9 +314,7 @@ class TestCCRA10MixedAssetClass:
         expected_breakdown = _EXPECTED["addon_breakdown"]
         breakdown = ccr_a10_result.get("addon_by_asset_class") or {}
         # Act / Assert
-        assert breakdown.get("credit") == pytest.approx(
-            expected_breakdown["credit"], rel=1e-6
-        ), (
+        assert breakdown.get("credit") == pytest.approx(expected_breakdown["credit"], rel=1e-6), (
             f"CCR-A10: expected addon_by_asset_class['credit'] ≈ "
             f"{expected_breakdown['credit']:,.3f} GBP, got {breakdown.get('credit')}. "
             "Should reproduce the CCR-A3 golden add-on (5y IG single-name CDS, 100M GBP)."
@@ -330,9 +326,7 @@ class TestCCRA10MixedAssetClass:
         expected_breakdown = _EXPECTED["addon_breakdown"]
         breakdown = ccr_a10_result.get("addon_by_asset_class") or {}
         # Act / Assert
-        assert breakdown.get("equity") == pytest.approx(
-            expected_breakdown["equity"], rel=1e-6
-        ), (
+        assert breakdown.get("equity") == pytest.approx(expected_breakdown["equity"], rel=1e-6), (
             f"CCR-A10: expected addon_by_asset_class['equity'] ≈ "
             f"{expected_breakdown['equity']:,.6f} GBP, got {breakdown.get('equity')}. "
             "Should reproduce the CCR-A5 golden add-on (1y equity TRS, 1M units at GBP 50)."

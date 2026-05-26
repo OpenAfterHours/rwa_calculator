@@ -155,12 +155,17 @@ def test_fx_addon_two_pairs_sum_across_hedging_sets_no_correlation() -> None:
     trades = pl.LazyFrame(
         [
             _enriched_fx_trade(
-                trade_id="T_A", currency="USD", currency_leg2="GBP",
+                trade_id="T_A",
+                currency="USD",
+                currency_leg2="GBP",
                 adjusted_notional=80_000_000.0,
             ),
             _enriched_fx_trade(
-                trade_id="T_B", currency="EUR", currency_leg2="GBP",
-                notional=50_000_000.0, notional_leg2=42_500_000.0,
+                trade_id="T_B",
+                currency="EUR",
+                currency_leg2="GBP",
+                notional=50_000_000.0,
+                notional_leg2=42_500_000.0,
                 adjusted_notional=50_000_000.0,
             ),
         ]
@@ -202,11 +207,15 @@ def test_fx_addon_currency_pair_is_order_independent() -> None:
     trades = pl.LazyFrame(
         [
             _enriched_fx_trade(
-                trade_id="T_A", currency="EUR", currency_leg2="USD",
+                trade_id="T_A",
+                currency="EUR",
+                currency_leg2="USD",
                 adjusted_notional=80_000_000.0,
             ),
             _enriched_fx_trade(
-                trade_id="T_B", currency="USD", currency_leg2="EUR",
+                trade_id="T_B",
+                currency="USD",
+                currency_leg2="EUR",
                 adjusted_notional=80_000_000.0,
             ),
         ]

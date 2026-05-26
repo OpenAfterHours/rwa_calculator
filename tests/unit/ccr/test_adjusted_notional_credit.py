@@ -23,7 +23,6 @@ from datetime import date
 import polars as pl
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Subject under test — imported inside tests to convert ImportError to
 # assertion failure (not collection error), per test-writer convention.
@@ -123,7 +122,7 @@ def test_adjusted_notional_credit_start_floor_applies() -> None:
     # Arrange — start 1 day after reporting date (sub-floor).
     reporting = date(2026, 1, 15)
     lf = _credit_trade_row(
-        start_date=date(2026, 1, 16),   # S_raw = 1/365.25 ≈ 0.00274
+        start_date=date(2026, 1, 16),  # S_raw = 1/365.25 ≈ 0.00274
         maturity_date=date(2029, 1, 15),  # E = 3y
     )
 
@@ -136,6 +135,7 @@ def test_adjusted_notional_credit_start_floor_applies() -> None:
     # If floor did NOT apply, SD(0.00274, 3y) would be slightly larger.
     # The key invariant is: result == SD(0.04, E) × N — the floor clamps S.
     import math
+
     s_floored = 0.04
     e = (date(2029, 1, 15) - reporting).days / 365.25
     rate = 0.05
@@ -153,11 +153,10 @@ def test_adjusted_notional_credit_start_floor_applies() -> None:
         f"got {actual!r}. CRR Art. 279b(1)(a) floor."
     )
     # Sanity: without-floor would give a different answer.
-    assert not pytest.approx(expected_without_floor, rel=1e-6) == actual or abs(
-        expected_with_floor - expected_without_floor
-    ) < 1.0, (
-        "Floor and non-floor values are unexpectedly equal — test is not discriminating."
-    )
+    assert (
+        not pytest.approx(expected_without_floor, rel=1e-6) == actual
+        or abs(expected_with_floor - expected_without_floor) < 1.0
+    ), "Floor and non-floor values are unexpectedly equal — test is not discriminating."
 
 
 # ===========================================================================
@@ -178,8 +177,9 @@ def test_adjusted_notional_credit_forward_start() -> None:
 
     References: CRR Art. 279b(1)(a).
     """
-    from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_credit
     import math
+
+    from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_credit
 
     reporting = date(2026, 1, 15)
     lf = _credit_trade_row(
@@ -266,6 +266,5 @@ def test_adjusted_notional_credit_returns_lazyframe() -> None:
     lf = _credit_trade_row()
     result = compute_adjusted_notional_credit(lf, reporting_date=date(2026, 1, 15))
     assert isinstance(result, pl.LazyFrame), (
-        f"compute_adjusted_notional_credit must return pl.LazyFrame, "
-        f"got {type(result).__name__!r}."
+        f"compute_adjusted_notional_credit must return pl.LazyFrame, got {type(result).__name__!r}."
     )

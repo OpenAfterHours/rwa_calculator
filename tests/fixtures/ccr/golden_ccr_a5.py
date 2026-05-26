@@ -116,10 +116,10 @@ CCR_A5_ASSET_CLASS: str = "equity"
 CCR_A5_TRANSACTION_TYPE: str = "derivative"
 
 # Equity adjusted notional inputs (Art. 279b(1)(c)).
-CCR_A5_MARKET_PRICE: float = 50.0          # GBP per unit
+CCR_A5_MARKET_PRICE: float = 50.0  # GBP per unit
 CCR_A5_NUMBER_OF_UNITS: float = 1_000_000.0
 CCR_A5_REFERENCE_ENTITY: str = "GB00B16GWD56"
-CCR_A5_IS_INDEX: bool = False              # single-name (not index)
+CCR_A5_IS_INDEX: bool = False  # single-name (not index)
 
 CCR_A5_MTM: float = 0.0
 CCR_A5_DELTA: float = 1.0

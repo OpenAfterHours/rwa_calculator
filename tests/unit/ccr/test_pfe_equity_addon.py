@@ -139,9 +139,7 @@ def test_equity_addon_index_single_trade_uses_20pct_sf_and_080_rho() -> None:
     different supervisory factors (CRR Art. 280 Table 2 + Art. 280b).
     """
     # Arrange — same EN as CCR-A5 but is_index=True.
-    trades = pl.LazyFrame(
-        [_enriched_equity_trade(trade_id="T_IDX", is_index=True)]
-    )
+    trades = pl.LazyFrame([_enriched_equity_trade(trade_id="T_IDX", is_index=True)])
     with_hs = assign_hedging_set(trades)
 
     # Act
@@ -178,7 +176,7 @@ def test_equity_addon_two_distinct_entities_diversifies_under_rho() -> None:
                 trade_id="T_EQ_001",
                 reference_entity="GB00B16GWD56",
                 adjusted_notional=50_000_000.0,
-                maturity_factor=1.0,   # simpler: MF=1 so EN=d exactly.
+                maturity_factor=1.0,  # simpler: MF=1 so EN=d exactly.
             ),
             _enriched_equity_trade(
                 trade_id="T_EQ_002",
@@ -315,8 +313,10 @@ def test_mixed_equity_and_fx_emit_independent_asset_class_rows() -> None:
     """
     # Arrange — one equity trade, one FX trade, same netting set NS_MIX.
     eq_trade = _enriched_equity_trade(
-        trade_id="T_EQ", netting_set_id="NS_MIX",
-        adjusted_notional=50_000_000.0, maturity_factor=1.0,
+        trade_id="T_EQ",
+        netting_set_id="NS_MIX",
+        adjusted_notional=50_000_000.0,
+        maturity_factor=1.0,
     )
     fx_trade = {
         "trade_id": "T_FX",
@@ -424,14 +424,12 @@ def test_credit_and_commodity_asset_class_rows_emit_non_null_addon() -> None:
     cr_row = result.filter(pl.col("asset_class") == "credit")
     assert cr_row.height == 1, "Credit row must be anchored in the output."
     assert cr_row["asset_class_addon"][0] is not None and cr_row["asset_class_addon"][0] > 0, (
-        f"Credit asset_class_addon must be populated, "
-        f"got {cr_row['asset_class_addon'][0]!r}."
+        f"Credit asset_class_addon must be populated, got {cr_row['asset_class_addon'][0]!r}."
     )
 
     # Assert — commodity row populated (SF_CM_OIL × EN = 0.18 × 10m = 1_800_000).
     co_row = result.filter(pl.col("asset_class") == "commodity")
     assert co_row.height == 1, "Commodity row must be anchored in the output."
     assert co_row["asset_class_addon"][0] is not None and co_row["asset_class_addon"][0] > 0, (
-        f"Commodity asset_class_addon must be populated, "
-        f"got {co_row['asset_class_addon'][0]!r}."
+        f"Commodity asset_class_addon must be populated, got {co_row['asset_class_addon'][0]!r}."
     )

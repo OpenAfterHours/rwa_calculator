@@ -125,7 +125,7 @@ CCR_A10_FX_ASSET_CLASS: str = "fx"
 CCR_A10_FX_TRANSACTION_TYPE: str = "derivative"
 CCR_A10_FX_NOTIONAL_LEG1: float = 100_000_000.0  # USD 100m (buy)
 CCR_A10_FX_CURRENCY_LEG1: str = "USD"
-CCR_A10_FX_NOTIONAL_LEG2: float = 80_000_000.0   # GBP 80m (sell)
+CCR_A10_FX_NOTIONAL_LEG2: float = 80_000_000.0  # GBP 80m (sell)
 CCR_A10_FX_CURRENCY_LEG2: str = "GBP"
 CCR_A10_FX_START_DATE: _date = _date(2026, 1, 15)
 CCR_A10_FX_MATURITY_DATE: _date = _date(2027, 1, 15)  # 1y tenor
@@ -152,7 +152,7 @@ CCR_A10_CR_CREDIT_QUALITY: str = "IG"
 CCR_A10_TRADE_EQ_ID: str = "T_MIX_EQ_001"
 CCR_A10_EQ_ASSET_CLASS: str = "equity"
 CCR_A10_EQ_TRANSACTION_TYPE: str = "derivative"
-CCR_A10_EQ_MARKET_PRICE: float = 50.0          # GBP per unit
+CCR_A10_EQ_MARKET_PRICE: float = 50.0  # GBP per unit
 CCR_A10_EQ_NUMBER_OF_UNITS: float = 1_000_000.0
 CCR_A10_EQ_REFERENCE_ENTITY: str = "GB00B16GWD56"
 CCR_A10_EQ_IS_INDEX: bool = False
@@ -167,9 +167,9 @@ CCR_A10_TRADE_CO_ID: str = "T_MIX_CO_001"
 CCR_A10_CO_ASSET_CLASS: str = "commodity"
 CCR_A10_CO_TRANSACTION_TYPE: str = "derivative"
 CCR_A10_CO_COMMODITY_TYPE: str = "OIL_GAS"  # UPPER-CASE per COLUMN_VALUE_CONSTRAINTS
-CCR_A10_CO_NOTIONAL: float = 1_000_000.0    # sentinel = expected d
+CCR_A10_CO_NOTIONAL: float = 1_000_000.0  # sentinel = expected d
 CCR_A10_CO_CURRENCY: str = "GBP"
-CCR_A10_CO_MARKET_PRICE: float = 50.0       # GBP per bbl
+CCR_A10_CO_MARKET_PRICE: float = 50.0  # GBP per bbl
 CCR_A10_CO_NUMBER_OF_UNITS: float = 20_000.0  # bbl
 CCR_A10_CO_START_DATE: _date = _date(2026, 1, 15)
 CCR_A10_CO_MATURITY_DATE: _date = _date(2028, 1, 15)  # 2y tenor
@@ -186,11 +186,11 @@ CCR_A10_CO_MTM: float = 0.0
 CCR_A10_RC_UNMARGINED: float = 0.0
 
 # Per-class add-ons (cloned from single-asset scenarios — see proposal section 3).
-CCR_A10_ADDON_IR: float = 3_914_298.228         # CCR-A1 golden
-CCR_A10_ADDON_FX: float = 3_198_904.672         # CCR-A2 golden
-CCR_A10_ADDON_CREDIT: float = 2_016_405.972     # CCR-A3 golden
+CCR_A10_ADDON_IR: float = 3_914_298.228  # CCR-A1 golden
+CCR_A10_ADDON_FX: float = 3_198_904.672  # CCR-A2 golden
+CCR_A10_ADDON_CREDIT: float = 2_016_405.972  # CCR-A3 golden
 CCR_A10_ADDON_EQUITY: float = 15_994_523.295317  # CCR-A5 golden
-CCR_A10_ADDON_COMMODITY: float = 180_000.0      # CCR-A7 golden
+CCR_A10_ADDON_COMMODITY: float = 180_000.0  # CCR-A7 golden
 
 # CRR Art. 278(2): AddOn_aggregate = linear sum (no cross-class correlation).
 CCR_A10_ADDON_AGGREGATE: float = 25_304_132.167317
@@ -462,7 +462,9 @@ def main() -> None:
     print(f"                {CCR_A10_TRADE_FX_ID}  (FX,        add-on={CCR_A10_ADDON_FX:,.3f})")
     print(f"                {CCR_A10_TRADE_CR_ID}  (credit,    add-on={CCR_A10_ADDON_CREDIT:,.3f})")
     print(f"                {CCR_A10_TRADE_EQ_ID}  (equity,    add-on={CCR_A10_ADDON_EQUITY:,.6f})")
-    print(f"                {CCR_A10_TRADE_CO_ID}  (commodity, add-on={CCR_A10_ADDON_COMMODITY:,.0f})")
+    print(
+        f"                {CCR_A10_TRADE_CO_ID}  (commodity, add-on={CCR_A10_ADDON_COMMODITY:,.0f})"
+    )
     print(f"  addon_aggregate : {CCR_A10_ADDON_AGGREGATE:,.6f}")
     print(f"  EAD (final)     : {CCR_A10_EAD_FINAL:,.6f}")
     print(f"  RWA (final)     : {CCR_A10_RWA_FINAL:,.6f}")

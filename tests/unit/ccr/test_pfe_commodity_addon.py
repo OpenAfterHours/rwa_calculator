@@ -100,13 +100,15 @@ def test_oil_gas_single_trade_matches_ccr_a7_hand_calc() -> None:
 
     # Arrange
     trades = pl.LazyFrame(
-        [_enriched_commodity_trade(
-            trade_id="T_CO_OIL_001",
-            commodity_type="OIL_GAS",
-            adjusted_notional=1_000_000.0,
-            supervisory_delta=1.0,
-            maturity_factor=1.0,
-        )]
+        [
+            _enriched_commodity_trade(
+                trade_id="T_CO_OIL_001",
+                commodity_type="OIL_GAS",
+                adjusted_notional=1_000_000.0,
+                supervisory_delta=1.0,
+                maturity_factor=1.0,
+            )
+        ]
     )
     with_hs = assign_hedging_set(trades)
 
@@ -150,15 +152,17 @@ def test_electricity_single_trade_matches_ccr_a8_hand_calc() -> None:
 
     # Arrange
     trades = pl.LazyFrame(
-        [_enriched_commodity_trade(
-            trade_id="T_CO_ELEC_001",
-            netting_set_id="NS_CO_002",
-            commodity_type="ELECTRICITY",
-            adjusted_notional=1_000_000.0,
-            supervisory_delta=1.0,
-            maturity_factor=mf_ccr_a8,
-            years_to_maturity=365 / 365.25,
-        )]
+        [
+            _enriched_commodity_trade(
+                trade_id="T_CO_ELEC_001",
+                netting_set_id="NS_CO_002",
+                commodity_type="ELECTRICITY",
+                adjusted_notional=1_000_000.0,
+                supervisory_delta=1.0,
+                maturity_factor=mf_ccr_a8,
+                years_to_maturity=365 / 365.25,
+            )
+        ]
     )
     with_hs = assign_hedging_set(trades)
 
@@ -202,7 +206,7 @@ def test_two_trades_same_bucket_apply_within_bucket_correlation() -> None:
     from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class
 
     e = 1_000_000.0
-    rho2 = _RHO ** 2
+    rho2 = _RHO**2
     one_minus_rho2 = 1.0 - rho2
 
     # Arrange — two OIL_GAS trades in the same netting set.
@@ -317,8 +321,8 @@ def test_three_buckets_no_cross_bucket_correlation() -> None:
     assert co_row.height == 1, f"Expected 1 commodity row, got {co_row.height}"
 
     # Single-trade collapse per bucket: AddOn_b = SF[b] × e.
-    addon_oil = _SF_OIL_GAS * e      # = 0.18e
-    addon_metals = _SF_METALS * e    # = 0.18e
+    addon_oil = _SF_OIL_GAS * e  # = 0.18e
+    addon_metals = _SF_METALS * e  # = 0.18e
     addon_elec = _SF_ELECTRICITY * e  # = 0.40e
 
     # LOAD-BEARING: no cross-bucket correlation (Art. 280c / CRE52.69).

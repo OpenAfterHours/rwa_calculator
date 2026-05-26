@@ -21,13 +21,10 @@ References:
 
 from __future__ import annotations
 
-from datetime import date
-
 import polars as pl
 import pytest
 
 from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_fx
-
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -79,8 +76,9 @@ def test_fx_adjusted_notional_leg2_is_base_takes_leg1_converted() -> None:
     converted to GBP at spot: 100m USD × 0.80 USD→GBP = 80m GBP.
     """
     # Arrange
-    trades = _fx_trade_row(currency="USD", notional=100_000_000.0,
-                            currency_leg2="GBP", notional_leg2=80_000_000.0)
+    trades = _fx_trade_row(
+        currency="USD", notional=100_000_000.0, currency_leg2="GBP", notional_leg2=80_000_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp()).collect()
@@ -99,8 +97,9 @@ def test_fx_adjusted_notional_leg1_is_base_takes_leg2_converted() -> None:
     Should produce the same answer as the previous test up to the leg ordering.
     """
     # Arrange — same trade with legs swapped: sell GBP 80m / buy USD 100m.
-    trades = _fx_trade_row(currency="GBP", notional=80_000_000.0,
-                            currency_leg2="USD", notional_leg2=100_000_000.0)
+    trades = _fx_trade_row(
+        currency="GBP", notional=80_000_000.0, currency_leg2="USD", notional_leg2=100_000_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp()).collect()
@@ -127,8 +126,9 @@ def test_fx_adjusted_notional_both_legs_foreign_takes_max() -> None:
     max = 85m GBP (EUR leg dominates).
     """
     # Arrange
-    trades = _fx_trade_row(currency="EUR", notional=100_000_000.0,
-                            currency_leg2="USD", notional_leg2=80_000_000.0)
+    trades = _fx_trade_row(
+        currency="EUR", notional=100_000_000.0, currency_leg2="USD", notional_leg2=80_000_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp()).collect()
@@ -154,8 +154,9 @@ def test_fx_adjusted_notional_uses_absolute_value() -> None:
     through ``supervisory_delta`` further down the pipeline.
     """
     # Arrange — short USD leg (negative notional) should still convert as 80m GBP.
-    trades = _fx_trade_row(currency="USD", notional=-100_000_000.0,
-                            currency_leg2="GBP", notional_leg2=80_000_000.0)
+    trades = _fx_trade_row(
+        currency="USD", notional=-100_000_000.0, currency_leg2="GBP", notional_leg2=80_000_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp()).collect()
@@ -257,8 +258,9 @@ def test_fx_missing_rate_yields_null_adjusted_notional() -> None:
     emits the CCR data-quality error — this function stays LazyFrame-pure.
     """
     # Arrange — JPY/SGD pair with no rates supplied to the base currency.
-    trades = _fx_trade_row(currency="JPY", notional=1_000_000.0,
-                            currency_leg2="SGD", notional_leg2=10_000.0)
+    trades = _fx_trade_row(
+        currency="JPY", notional=1_000_000.0, currency_leg2="SGD", notional_leg2=10_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp()).collect()
@@ -281,6 +283,5 @@ def test_fx_branch_returns_lazyframe() -> None:
     trades = _fx_trade_row()
     result = compute_adjusted_notional_fx(trades, "GBP", _fx_rates_to_gbp())
     assert isinstance(result, pl.LazyFrame), (
-        f"compute_adjusted_notional_fx must return pl.LazyFrame, "
-        f"got {type(result).__name__!r}."
+        f"compute_adjusted_notional_fx must return pl.LazyFrame, got {type(result).__name__!r}."
     )

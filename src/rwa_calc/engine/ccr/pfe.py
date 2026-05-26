@@ -35,6 +35,7 @@ from rwa_calc.data.tables.sa_ccr_factors import (
     SA_CCR_IR_BUCKET_CORRELATION_12,
     SA_CCR_IR_BUCKET_CORRELATION_13,
     SA_CCR_IR_BUCKET_CORRELATION_23,
+    SA_CCR_SUPERVISORY_FACTOR_FX,
     SA_CCR_SUPERVISORY_FACTOR_IR,
 )
 
@@ -124,29 +125,26 @@ def compute_pfe_ir_singleton(netting_sets: pl.LazyFrame) -> pl.LazyFrame:
 # docstring (mirrors the P8.7 fix-commit pattern for Art. 280a/b/c).
 @cites("CRR Art. 277")
 def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
-    """Per-asset-class SA-CCR add-on aggregated from bucket effective notionals.
+    """Per-asset-class SA-CCR add-on aggregated from per-trade effective notionals.
 
-    Implements CRR Art. 277a(1)(a) for the interest-rate asset class:
+    Dispatches to asset-class-specific helpers and unions the results onto a
+    keys frame that anchors every ``(netting_set_id, asset_class)`` combination
+    present in the input. Asset classes without an implementation (credit /
+    equity / commodity) keep their ``asset_class_addon`` as null — that's the
+    contract callers downstream depend on.
 
-        D_b      = sum_i ( delta_i * d_i * MF_i )  over trades in bucket b
-        AddOn_IR = SF_IR * sqrt(
-                        D_B1^2 + D_B2^2 + D_B3^2
-                        + 2 * rho_12 * D_B1 * D_B2
-                        + 2 * rho_23 * D_B2 * D_B3
-                        + 2 * rho_13 * D_B1 * D_B3
-                   )
+    Implemented asset classes:
 
-    where ``B1=LT_1Y``, ``B2=1Y_5Y``, ``B3=GT_5Y``; ``rho_12 = rho_23 = 0.7``
-    and ``rho_13 = 0.3`` are the supervisory cross-bucket correlations.
-
-    Non-IR asset classes are currently emitted with a null
-    ``asset_class_addon`` and will be filled by the FX / credit / equity /
-    commodity batches.
+    - ``interest_rate``: three IR maturity buckets aggregated per Art. 277a(1)(a)
+      via :func:`_compute_addon_ir`.
+    - ``fx``: per-currency-pair hedging sets summed with no cross-set
+      correlation per BCBS CRE52.55 via :func:`_compute_addon_fx`.
 
     Args:
         trades: LazyFrame at trade grain with at minimum ``netting_set_id``,
-            ``asset_class``, ``maturity_bucket``, ``supervisory_delta``,
-            ``adjusted_notional`` and ``maturity_factor`` columns.
+            ``asset_class``, ``hedging_set_id``, ``maturity_bucket``,
+            ``supervisory_delta``, ``adjusted_notional`` and ``maturity_factor``
+            columns.
 
     Returns:
         LazyFrame with one row per (``netting_set_id``, ``asset_class``)
@@ -154,15 +152,51 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
         ``asset_class_addon: Float64``.
 
     References:
-        CRR Art. 277a(1)(a); CRR Art. 280 Table 1 (SF_IR = 0.5%); BCBS CRE52.55-58.
+        CRR Art. 277a(1)(a) (IR); CRR Art. 277(3)(a) + BCBS CRE52.55 (FX);
+        CRR Art. 280 Table 1 (SF_IR=0.5%, SF_FX=4%).
+    """
+    keys = trades.select(["netting_set_id", "asset_class"]).unique()
+
+    ir_addon = _compute_addon_ir(trades).rename({"asset_class_addon": "_ir_addon"})
+    fx_addon = _compute_addon_fx(trades).rename({"asset_class_addon": "_fx_addon"})
+
+    return (
+        keys.join(ir_addon, on=["netting_set_id", "asset_class"], how="left")
+        .join(fx_addon, on=["netting_set_id", "asset_class"], how="left")
+        .with_columns(
+            pl.coalesce(pl.col("_ir_addon"), pl.col("_fx_addon")).alias("asset_class_addon")
+        )
+        .select(["netting_set_id", "asset_class", "asset_class_addon"])
+    )
+
+
+def _compute_addon_ir(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """IR asset-class add-on per CRR Art. 277a(1)(a).
+
+    Aggregates per-trade effective notionals ``delta * d * MF`` into per-bucket
+    sums ``D_b``, then composes the asset-class add-on via the three-bucket
+    correlation matrix:
+
+        AddOn_IR = SF_IR * sqrt(
+            D_B1^2 + D_B2^2 + D_B3^2
+            + 2 * rho_12 * D_B1 * D_B2
+            + 2 * rho_23 * D_B2 * D_B3
+            + 2 * rho_13 * D_B1 * D_B3
+        )
+
+    Returns:
+        LazyFrame keyed on (``netting_set_id``, ``asset_class="interest_rate"``)
+        with ``asset_class_addon: Float64``. Non-IR rows are filtered out.
     """
     rho_12 = float(SA_CCR_IR_BUCKET_CORRELATION_12)
     rho_23 = float(SA_CCR_IR_BUCKET_CORRELATION_23)
     rho_13 = float(SA_CCR_IR_BUCKET_CORRELATION_13)
     sf_ir = float(SA_CCR_SUPERVISORY_FACTOR_IR)
 
+    ir_trades = trades.filter(pl.col("asset_class") == "interest_rate")
+
     # Per-trade effective notional = delta * d * MF (Art. 277a(1)(a)).
-    trade_terms = trades.with_columns(
+    trade_terms = ir_trades.with_columns(
         (
             pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
         ).alias("effective_notional_trade")
@@ -184,9 +218,7 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
         ["netting_set_id", "asset_class", pl.col("d_bucket").alias("d_b3")]
     )
 
-    # Base keys: every (netting_set_id, asset_class) that appears in the input,
-    # so that asset classes with no IR buckets still emit a row (currently null).
-    keys = trades.select(["netting_set_id", "asset_class"]).unique()
+    keys = ir_trades.select(["netting_set_id", "asset_class"]).unique()
 
     joined = (
         keys.join(d_lt_1y, on=["netting_set_id", "asset_class"], how="left")
@@ -210,11 +242,47 @@ def compute_addon_per_asset_class(trades: pl.LazyFrame) -> pl.LazyFrame:
         + 2.0 * rho_13 * pl.col("d_b1") * pl.col("d_b3")
     )
 
-    addon_ir = sf_ir * inner.sqrt()
+    return joined.with_columns((sf_ir * inner.sqrt()).alias("asset_class_addon")).select(
+        ["netting_set_id", "asset_class", "asset_class_addon"]
+    )
 
-    return joined.with_columns(
-        pl.when(pl.col("asset_class") == "interest_rate")
-        .then(addon_ir)
-        .otherwise(pl.lit(None, dtype=pl.Float64))
-        .alias("asset_class_addon")
-    ).select(["netting_set_id", "asset_class", "asset_class_addon"])
+
+def _compute_addon_fx(trades: pl.LazyFrame) -> pl.LazyFrame:
+    """FX asset-class add-on per CRR Art. 277a + BCBS CRE52.55.
+
+    For each FX hedging set (one per currency pair within a netting set):
+
+        D_HS     = sum_i ( delta_i * d_i * MF_i )  (signed within the HS)
+        AddOn_HS = SF_FX * |D_HS|
+        AddOn_FX = sum over HS of AddOn_HS              (no cross-HS correlation)
+
+    Returns:
+        LazyFrame keyed on (``netting_set_id``, ``asset_class="fx"``) with
+        ``asset_class_addon: Float64``. Non-FX rows are filtered out.
+
+    References:
+        CRR Art. 277(3)(a) (FX hedging set = currency pair); CRR Art. 277a(2);
+        BCBS CRE52.55 (FX asset-class aggregation is a simple sum).
+    """
+    sf_fx = float(SA_CCR_SUPERVISORY_FACTOR_FX)
+
+    fx_trades = trades.filter(pl.col("asset_class") == "fx")
+
+    trade_terms = fx_trades.with_columns(
+        (
+            pl.col("supervisory_delta") * pl.col("adjusted_notional") * pl.col("maturity_factor")
+        ).alias("effective_notional_trade")
+    )
+
+    # D_HS = signed sum within hedging set (no internal cancellation across pairs).
+    d_hs = trade_terms.group_by(["netting_set_id", "asset_class", "hedging_set_id"]).agg(
+        pl.col("effective_notional_trade").sum().alias("d_hs")
+    )
+
+    # AddOn_HS = SF_FX * |D_HS|; sum across hedging sets to get AddOn_FX.
+    return (
+        d_hs.with_columns((sf_fx * pl.col("d_hs").abs()).alias("addon_hs"))
+        .group_by(["netting_set_id", "asset_class"])
+        .agg(pl.col("addon_hs").sum().alias("asset_class_addon"))
+        .select(["netting_set_id", "asset_class", "asset_class_addon"])
+    )

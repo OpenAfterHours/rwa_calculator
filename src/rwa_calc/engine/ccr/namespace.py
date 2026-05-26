@@ -74,6 +74,16 @@ class CCRNamespace:
 
         return compute_adjusted_notional_ir(self._lf, reporting_date)
 
+    def adjusted_notional_fx(
+        self,
+        base_currency: str,
+        fx_rates: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Delegate to :func:`compute_adjusted_notional_fx`."""
+        from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_fx
+
+        return compute_adjusted_notional_fx(self._lf, base_currency, fx_rates)
+
     def supervisory_delta_linear(self) -> pl.LazyFrame:
         """Delegate to :func:`compute_supervisory_delta_linear`."""
         from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_linear

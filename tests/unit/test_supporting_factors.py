@@ -24,7 +24,7 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_SME_MISSING_COUNTERPARTY_REF, CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
-from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
+from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
 
 @pytest.fixture()

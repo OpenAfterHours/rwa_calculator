@@ -513,7 +513,7 @@ def create_sa_calculator() -> SACalculator:
     """Create an SA calculator instance."""
 ```
 
-### Module: `rwa_calc.engine.sa.supporting_factors`
+### Module: `rwa_calc.engine.supporting_factors`
 
 ```python
 def calculate_sme_factor(

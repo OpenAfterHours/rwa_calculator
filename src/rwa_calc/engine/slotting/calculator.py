@@ -46,7 +46,7 @@ from watchfire import cites
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
+from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

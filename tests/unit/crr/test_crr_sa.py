@@ -28,7 +28,7 @@ from tests.fixtures.single_exposure import calculate_single_sa_exposure
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa import SACalculator, create_sa_calculator
-from rwa_calc.engine.sa.supporting_factors import (
+from rwa_calc.engine.supporting_factors import (
     SupportingFactorCalculator,
     create_supporting_factor_calculator,
 )

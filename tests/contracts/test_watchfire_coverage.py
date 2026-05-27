@@ -81,10 +81,10 @@ WHITELIST: list[tuple[str, str, tuple[str, ...]]] = [
     ("rwa_calc.engine.sa.namespace", "_crr_append_real_estate_branches", ("CRR Art. 124",)),
     ("rwa_calc.engine.sa.namespace", "_b31_append_real_estate_branches",
      ("PS1/26, paragraph 124",)),
-    # --- SA supporting factors ---
-    ("rwa_calc.engine.sa.supporting_factors",
+    # --- Supporting factors (cross-approach: SA / IRB / slotting) ---
+    ("rwa_calc.engine.supporting_factors",
      "SupportingFactorCalculator.calculate_sme_factor", ("CRR Art. 501",)),
-    ("rwa_calc.engine.sa.supporting_factors",
+    ("rwa_calc.engine.supporting_factors",
      "SupportingFactorCalculator.apply_factors", ("CRR Art. 501",)),
     # --- CRM ---
     ("rwa_calc.engine.crm.collateral", "generate_netting_collateral",

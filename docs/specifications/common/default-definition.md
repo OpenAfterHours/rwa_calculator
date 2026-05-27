@@ -340,7 +340,7 @@ drives the following downstream treatments:
 | **SA calculator** (`engine/sa/namespace.py`) | Exposure routed to Art. 127 defaulted branch (provision-coverage 100%/150% split; RESI RE non-income flat 100% under B31) | CRR/B31 Art. 127 |
 | **IRB F-IRB** (`engine/irb/namespace.py`) | `K = 0`; RW driven by `max(0, 12.5 × (LGD − BEEL))` | Art. 153(1)(ii) |
 | **IRB A-IRB** (`engine/irb/namespace.py`) | `K = max(0, LGD − BEEL)` using own LGD estimate | Art. 154(1)(i) |
-| **SA supporting factors** (`engine/sa/supporting_factors.py:295,300`) | Defaulted exposures **excluded** from SME supporting factor (0.7619) | CRR Art. 501 |
+| **Supporting factors** (`engine/supporting_factors.py:295,300`) | Defaulted exposures **excluded** from SME supporting factor (0.7619) | CRR Art. 501 |
 | **EL vs provisions** (`engine/aggregator/_el_summary.py:90–96`) | `is_defaulted` partitions Pool A (non-defaulted) and Pool C/D (defaulted) for Art. 159(3) two-branch rule | CRR/B31 Art. 159 |
 | **COREP reporting** (`reporting/corep/generator.py`) | Defaulted rows in C 07.00 / C 08.01 / C 08.02 / C 09.01 | PS1/26 Annex II |
 | **Pillar III reporting** (`reporting/pillar3/generator.py`) | CR1 credit-quality rows; CR5 defaulted 300% bucket; CR6 defaulted PD band; CMS1/CMS2 defaulted columns | PS1/26 Annex XXII/XXIV |

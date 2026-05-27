@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-05-26.
+Last generated: 2026-05-27.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -489,9 +489,9 @@ Last generated: 2026-05-26.
     --8<-- "src/rwa_calc/data/tables/firb_lgd.py:452:474"
     ```
 
-??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:427"
+??? quote "`apply_firb_supervisory_lgd_no_collateral` — src/rwa_calc/engine/crm/collateral.py:449"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:427:539"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:449:561"
     ```
 
 ??? quote "`_parametric_irb_risk_weight_expr` — src/rwa_calc/engine/irb/formulas.py:817"
@@ -592,7 +592,7 @@ Last generated: 2026-05-26.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:143"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:302"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:324"
     ```
 
 
@@ -639,12 +639,12 @@ Last generated: 2026-05-26.
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:144"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:302"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:143:324"
     ```
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:305"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:327"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:305:424"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:327:446"
     ```
 
 
@@ -668,9 +668,9 @@ Last generated: 2026-05-26.
 
 ### CRR Art. 230 — Calculating risk-weighted exposure amounts and expected loss amounts for other eligible collateral under the IRB Approach
 
-??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:306"
+??? quote "`apply_collateral` — src/rwa_calc/engine/crm/collateral.py:328"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/collateral.py:305:424"
+    --8<-- "src/rwa_calc/engine/crm/collateral.py:327:446"
     ```
 
 
@@ -842,22 +842,27 @@ Last generated: 2026-05-26.
     --8<-- "src/rwa_calc/engine/sa/namespace.py:2081:2104"
     ```
 
-??? quote "`calculate_sme_factor` — src/rwa_calc/engine/sa/supporting_factors.py:80"
+??? quote "`calculate_sme_factor` — src/rwa_calc/engine/supporting_factors.py:86"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:80:117"
+    --8<-- "src/rwa_calc/engine/supporting_factors.py:86:123"
     ```
 
-??? quote "`apply_factors` — src/rwa_calc/engine/sa/supporting_factors.py:174"
+??? quote "`apply_factors` — src/rwa_calc/engine/supporting_factors.py:180"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:174:417"
+    --8<-- "src/rwa_calc/engine/supporting_factors.py:180:441"
+    ```
+
+??? quote "`compute_e_star_group_drawn` — src/rwa_calc/engine/supporting_factors.py:449"
+    ```python
+    --8<-- "src/rwa_calc/engine/supporting_factors.py:449:562"
     ```
 
 
 ### CRR Art. 501a — Adjustment to own funds requirements for credit risk for exposures to entities that operate or finance physical structures or facilities, systems and networks that provide or support essential public services
 
-??? quote "`calculate_infrastructure_factor` — src/rwa_calc/engine/sa/supporting_factors.py:119"
+??? quote "`calculate_infrastructure_factor` — src/rwa_calc/engine/supporting_factors.py:125"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py:119:136"
+    --8<-- "src/rwa_calc/engine/supporting_factors.py:125:142"
     ```
 
 

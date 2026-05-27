@@ -14,10 +14,10 @@ These tests assert the new field names exist on the dataclass and that the
 arithmetic is correct given the hand-calc reference from the architect proposal.
 
 Hand-calc reference (4-row combined frame):
-  SA1   : approach_applied="SA",       rwa_final=100.0, sa_rwa=100.0
-  IRB1  : approach_applied="FIRB",     rwa_final=200.0, sa_rwa=S_IRB
-  SLOT1 : approach_applied="slotting", rwa_final=50.0,  sa_rwa=S_SLOT
-  EQ1   : approach_applied="EQUITY",   rwa_final=30.0,  sa_rwa=0.0
+  SA1   : approach_applied="standardised", rwa_final=100.0, sa_rwa=100.0
+  IRB1  : approach_applied="FIRB",         rwa_final=200.0, sa_rwa=S_IRB
+  SLOT1 : approach_applied="slotting",     rwa_final=50.0,  sa_rwa=S_SLOT
+  EQ1   : approach_applied="equity",       rwa_final=30.0,  sa_rwa=0.0
 
   Modelled (U-TREA) = 200 + 50 = 250.0
   S-TREA chosen so floor binds: pick S_IRB + S_SLOT such that
@@ -76,7 +76,7 @@ def _make_combined() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
             "exposure_reference": ["SA1", "IRB1", "SLOT1", "EQ1"],
-            "approach_applied": ["SA", "FIRB", "slotting", "EQUITY"],
+            "approach_applied": ["standardised", "FIRB", "slotting", "equity"],
             "exposure_class": ["CORPORATE", "CORPORATE", "SPECIALISED_LENDING", "EQUITY"],
             "ead_final": [100.0, 200.0, 50.0, 30.0],
             "risk_weight": [1.0, 1.0, 1.0, 1.0],
@@ -236,7 +236,7 @@ class TestTotalRwaPostFloorSumsAllComponents:
         combined_modelled_only = pl.LazyFrame(
             {
                 "exposure_reference": ["IRB1", "SLOT1"],
-                "approach_applied": ["FIRB", "slotting"],
+                "approach_applied": ["FIRB", "slotting"],  # canonical/fallback IRB labels
                 "exposure_class": ["CORPORATE", "SPECIALISED_LENDING"],
                 "ead_final": [200.0, 50.0],
                 "risk_weight": [1.0, 1.0],

@@ -616,6 +616,7 @@ def generate_loans(
             "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
             "due_diligence_override_rw": np.full(n_loans, None),  # Art. 110A override RW (B31 only)
             "is_hedged": np.full(n_loans, None),  # P1.94a B31 currency-mismatch gate
+            "hedge_coverage_ratio": np.zeros(n_loans),  # P1.94b 90%-coverage hedge gate
             "effective_maturity": np.full(n_loans, None),  # Art. 162(3) numeric M override
             "purchased_receivables_subtype": pl.Series([None] * n_loans, dtype=pl.String),
             "exposure_collateral_type": pl.Series([None] * n_loans, dtype=pl.String),

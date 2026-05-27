@@ -29,6 +29,8 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.config import CCRConfig
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import TRADE_SCHEMA
 from rwa_calc.data.tables.sa_ccr_factors import (
     PFE_AGGREGATE_DENOM_COEFF,
     PFE_MULTIPLIER_FLOOR_F,
@@ -481,12 +483,9 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     # commodity_type column or with the column inferred as null dtype (when
     # the only rows are non-commodity with None). Coerce to Utf8 so the
     # downstream join against sf_cm_lookup's String key resolves cleanly.
+    trades = ensure_columns(trades, {"commodity_type": TRADE_SCHEMA["commodity_type"]})
     schema = trades.collect_schema()
-    if (
-        "commodity_type" not in schema.names()
-    ):  # arch-exempt: defensive injection for IR/FX/equity-only callers
-        trades = trades.with_columns(pl.lit(None, dtype=pl.Utf8).alias("commodity_type"))
-    elif schema["commodity_type"] != pl.Utf8:
+    if schema["commodity_type"] != pl.Utf8:
         trades = trades.with_columns(pl.col("commodity_type").cast(pl.Utf8))
 
     # Commodity rows with a populated commodity_type only — null commodity_type

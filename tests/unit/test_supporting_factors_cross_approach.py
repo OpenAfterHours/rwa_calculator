@@ -28,7 +28,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.sa.supporting_factors import (
+from rwa_calc.engine.supporting_factors import (
     SupportingFactorCalculator,
     compute_e_star_group_drawn,
 )

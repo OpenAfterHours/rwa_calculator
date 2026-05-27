@@ -101,7 +101,7 @@ SA allows several CRM techniques — financial collateral (simple and comprehens
 
 ## Supporting Factors (CRR Only)
 
-Supporting factors are implemented in [`sa/supporting_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/sa/supporting_factors.py).
+Supporting factors are implemented in [`engine/supporting_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/supporting_factors.py) (a cross-approach stage module shared by SA, IRB, and slotting).
 
 ### SME Supporting Factor
 
@@ -126,7 +126,7 @@ if turnover <= EUR_50m and is_sme:
 
 ??? example "Actual Implementation (supporting_factors.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/sa/supporting_factors.py"
+    --8<-- "src/rwa_calc/engine/supporting_factors.py"
     ```
 
 ### Infrastructure Factor

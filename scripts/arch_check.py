@@ -123,7 +123,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/crm/life_insurance.py",
     "engine/crm/provisions.py",
     "engine/crm/simple_method.py",
-    "engine/sa/supporting_factors.py",
+    "engine/supporting_factors.py",
     "engine/irb/adjustments.py",
     "engine/irb/formulas.py",
     "engine/irb/guarantee.py",

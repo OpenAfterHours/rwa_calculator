@@ -249,7 +249,7 @@ config = CalculationConfig.basel_3_1(
 ### Calculating Factors
 
 ```python
-from rwa_calc.engine.sa.supporting_factors import (
+from rwa_calc.engine.supporting_factors import (
     SupportingFactorCalculator,
     create_supporting_factor_calculator,
 )

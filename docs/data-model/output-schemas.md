@@ -449,7 +449,7 @@ SME or infrastructure.
 !!! note "Column rename — generic `supporting_factor_applied`"
     Earlier releases emitted `sme_supporting_factor_applied`. The column was renamed to
     the generic `supporting_factor_applied` when the Art. 501a infrastructure factor was
-    added to the same code path (`engine/sa/supporting_factors.py`,
+    added to the same code path (`engine/supporting_factors.py`,
     `engine/aggregator/_supporting_factors.py`) — the flag now signals whichever factor
     was binding. The legacy `sme_supporting_factor_applied` and
     `infrastructure_factor_applied` keys are still defined in
@@ -475,7 +475,7 @@ SME or infrastructure.
 | `regulatory_framework` | `String` | `"CRR"` |
 | `crr_effective_date` | `Date` | Regulation effective date |
 | `sme_supporting_factor_eligible` | `Boolean` | Turnover < EUR 50m (CRR Art. 501) |
-| `supporting_factor_applied` | `Boolean` | **Generic** flag — `True` whenever any factor (Art. 501 SME or Art. 501a infrastructure) was applied. Emitted by `engine/sa/supporting_factors.py`; replaces the legacy `sme_supporting_factor_applied` / `infrastructure_factor_applied` pair (which remain in `CRR_OUTPUT_SCHEMA_ADDITIONS` as legacy aliases for COREP back-compat). |
+| `supporting_factor_applied` | `Boolean` | **Generic** flag — `True` whenever any factor (Art. 501 SME or Art. 501a infrastructure) was applied. Emitted by `engine/supporting_factors.py`; replaces the legacy `sme_supporting_factor_applied` / `infrastructure_factor_applied` pair (which remain in `CRR_OUTPUT_SCHEMA_ADDITIONS` as legacy aliases for COREP back-compat). |
 | `sme_supporting_factor_value` | `Float64` | 0.7619 below threshold / 0.85 above (CRR Art. 501) |
 | `rwa_before_sme_factor` | `Float64` | RWA before SME factor |
 | `rwa_sme_factor_benefit` | `Float64` | RWA reduction from SME factor |

@@ -41,7 +41,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     LazyFrameResult,
 )
-from rwa_calc.engine.sa.supporting_factors import SupportingFactorCalculator
+from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

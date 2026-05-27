@@ -71,7 +71,7 @@ from rwa_calc.engine.materialise import (
     materialise_barrier,
     materialise_branches,
 )
-from rwa_calc.engine.sa.supporting_factors import compute_e_star_group_drawn
+from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 
 if TYPE_CHECKING:

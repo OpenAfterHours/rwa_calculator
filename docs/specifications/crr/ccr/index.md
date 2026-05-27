@@ -84,9 +84,9 @@ RWA into the firm-level totals.
 | `rc-calculation.md` | Unmargined `RC = max(V − C, 0)`; margined `RC = max(V − C, TH + MTA − NICA, 0)` | Art. 275 | Pending |
 | `pfe-multiplier.md` | PFE add-on aggregation and the multiplier `min(1, 0.05 + 0.95·exp((V−C)/(2·AddOn)))` | Art. 278 | Pending |
 | `ead-composition.md` | EAD = α·(RC + PFE) with α = 1.4; SA-CCR → unified exposure ladder via `pipeline_adapter` | Art. 274 | Pending |
-| `legal-enforceability.md` | Netting-set recognition gate; single-trade synthetic-NS fallback for non-enforceable agreements | Art. 272(4), 295–297 | Pending |
-| `wrong-way-risk.md` | Specific WWR (legal connection ⇒ LGD = 100% override); general WWR α multiplier | Art. 291 | Pending |
-| `ccp-exposures.md` | QCCP 2% trade-leg RW; default-fund contribution treatment; non-QCCP fallback | Art. 306–311 | Pending |
+| [Legal enforceability](legal-enforceability.md) | Netting-set recognition gate; single-trade synthetic-NS fallback for non-enforceable agreements | Art. 272(4), 295–297 | Live |
+| [Wrong-way risk](wrong-way-risk.md) | Specific WWR (legal connection ⇒ LGD = 100% override); general WWR α multiplier | Art. 291 | Live (IR + FX) |
+| [CCP exposures](ccp-exposures.md) | QCCP 2% trade-leg RW; default-fund contribution treatment; non-QCCP fallback | Art. 306–311 | Live |
 | `failed-trades.md` | Unsettled DvP transactions and free deliveries; multiplier ladder by business-day delay | Art. 378–380 | Pending |
 
 The "Pending" pages will land as the SA-CCR engine batches P8.35–P8.38

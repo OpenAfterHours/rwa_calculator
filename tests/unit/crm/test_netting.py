@@ -610,3 +610,121 @@ class TestNettingMissingColumn:
         df = _run_crm(processor, sa_config, rows)
         assert len(df) == 1
         assert df["ead_final"][0] == pytest.approx(1000.0)
+
+
+# =============================================================================
+# Tests: Drawn-only scope (CRR Art. 219)
+# =============================================================================
+
+
+class TestNettingDrawnOnlyScope:
+    """CRR Art. 219: OBS netting is drawn-on-drawn cash netting only.
+
+    Contingents and synthetic facility_undrawn rows are off-balance-sheet
+    and ineligible to receive the netting benefit. Pro-rata allocation among
+    eligible loan siblings is by drawn portion (on_bs_for_ead), not by
+    ead_for_crm.
+    """
+
+    def test_contingent_excluded_from_netting(self, processor: CRMProcessor):
+        """Contingent off-BS rows must NOT receive netting benefit."""
+        # Mirrors post-classifier state: exposure_type + on_bs_for_ead present.
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["NEG01", "LOAN01", "CONT01"],
+                "drawn_amount": [-300.0, 600.0, 0.0],
+                "interest": [0.0, 0.0, 0.0],
+                "on_bs_for_ead": [0.0, 600.0, 0.0],
+                "ead_for_crm": [0.0, 600.0, 400.0],
+                "ead_gross": [0.0, 600.0, 400.0],
+                "exposure_type": ["loan", "loan", "contingent"],
+                "parent_facility_reference": ["FAC_01", "FAC_01", "FAC_01"],
+                "currency": ["GBP", "GBP", "GBP"],
+                "maturity_date": [None, None, None],
+                "has_netting_agreement": [True, False, False],
+            }
+        )
+        result = processor._generate_netting_collateral(exposures)
+        df = result.collect()
+        # Pool = 300; only LOAN01 is an eligible beneficiary.
+        assert len(df) == 1
+        row = df.row(0, named=True)
+        assert row["beneficiary_reference"] == "LOAN01"
+        assert row["market_value"] == pytest.approx(300.0)
+
+    def test_facility_undrawn_excluded_from_netting(self, processor: CRMProcessor):
+        """Synthetic facility_undrawn rows must NOT receive netting benefit."""
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["NEG01", "LOAN01", "FAC_UNDRAWN_01"],
+                "drawn_amount": [-200.0, 500.0, 0.0],
+                "interest": [0.0, 0.0, 0.0],
+                "on_bs_for_ead": [0.0, 500.0, 0.0],
+                "ead_for_crm": [0.0, 500.0, 1000.0],  # large off-BS headroom
+                "ead_gross": [0.0, 500.0, 750.0],
+                "exposure_type": ["loan", "loan", "facility_undrawn"],
+                "parent_facility_reference": ["FAC_01", "FAC_01", "FAC_01"],
+                "currency": ["GBP", "GBP", "GBP"],
+                "maturity_date": [None, None, None],
+                "has_netting_agreement": [True, False, False],
+            }
+        )
+        result = processor._generate_netting_collateral(exposures)
+        df = result.collect()
+        # Pool = 200; full benefit to LOAN01, facility_undrawn excluded.
+        assert len(df) == 1
+        row = df.row(0, named=True)
+        assert row["beneficiary_reference"] == "LOAN01"
+        assert row["market_value"] == pytest.approx(200.0)
+
+    def test_pro_rata_uses_drawn_not_ead_for_crm(self, processor: CRMProcessor):
+        """Pro-rata basis is on_bs_for_ead, not ead_for_crm."""
+        # LOAN_A: 400 drawn, no off-BS.   LOAN_B: 100 drawn, 900 off-BS nominal.
+        # OLD (buggy) basis ead_for_crm = 400 vs 1000 -> 57.14 / 142.86
+        # NEW (correct) basis on_bs_for_ead = 400 vs 100 -> 160 / 40
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["NEG01", "LOAN_A", "LOAN_B"],
+                "drawn_amount": [-200.0, 400.0, 100.0],
+                "interest": [0.0, 0.0, 0.0],
+                "on_bs_for_ead": [0.0, 400.0, 100.0],
+                "ead_for_crm": [0.0, 400.0, 1000.0],
+                "ead_gross": [0.0, 400.0, 775.0],
+                "exposure_type": ["loan", "loan", "loan"],
+                "parent_facility_reference": ["FAC_01", "FAC_01", "FAC_01"],
+                "currency": ["GBP", "GBP", "GBP"],
+                "maturity_date": [None, None, None],
+                "has_netting_agreement": [True, False, False],
+            }
+        )
+        result = processor._generate_netting_collateral(exposures)
+        df = result.collect().sort("beneficiary_reference")
+        loan_a = df.filter(pl.col("beneficiary_reference") == "LOAN_A")["market_value"][0]
+        loan_b = df.filter(pl.col("beneficiary_reference") == "LOAN_B")["market_value"][0]
+        assert loan_a == pytest.approx(160.0)
+        assert loan_b == pytest.approx(40.0)
+
+    def test_mixed_facility_only_drawn_loan_benefits(self, processor: CRMProcessor):
+        """Facility mixing all three exposure types: only the drawn loan benefits."""
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["NEG01", "LOAN01", "CONT01", "FAC_U_01"],
+                "drawn_amount": [-300.0, 500.0, 0.0, 0.0],
+                "interest": [0.0, 0.0, 0.0, 0.0],
+                "on_bs_for_ead": [0.0, 500.0, 0.0, 0.0],
+                "ead_for_crm": [0.0, 500.0, 800.0, 1200.0],
+                "ead_gross": [0.0, 500.0, 400.0, 600.0],
+                "exposure_type": ["loan", "loan", "contingent", "facility_undrawn"],
+                "parent_facility_reference": ["FAC_01"] * 4,
+                "currency": ["GBP"] * 4,
+                "maturity_date": [None] * 4,
+                "has_netting_agreement": [True, False, False, False],
+            }
+        )
+        result = processor._generate_netting_collateral(exposures)
+        df = result.collect()
+        # Pool = 300; only LOAN01 eligible. Contingent + facility_undrawn excluded.
+        assert len(df) == 1
+        row = df.row(0, named=True)
+        assert row["beneficiary_reference"] == "LOAN01"
+        assert row["market_value"] == pytest.approx(300.0)

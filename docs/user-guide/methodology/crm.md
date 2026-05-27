@@ -410,16 +410,18 @@ adjustment = (3 - 0.25) / (5 - 0.25) = 2.75 / 4.75 = 0.579
 > for the full eligibility gates, the Art. 238(1A) list of in-scope CRM
 > methods, and the Basel 3.1 (PS1/26) carry-forward note.
 
-## On-Balance Sheet Netting (CRR Art. 195)
+## On-Balance Sheet Netting (CRR Art. 195 / Art. 219)
 
 When a legally enforceable netting agreement exists, mutual claims between the firm and the counterparty can be netted. In practice, this means a negative drawn amount (credit balance / deposit) on one loan can reduce sibling exposures within the same facility.
+
+CRR Art. 219 limits on-balance-sheet netting to **drawn loans and deposits** — it is a cash-on-cash mechanism. Off-balance-sheet items (contingent exposures and synthetic facility-undrawn rows representing unused commitment headroom) are **not eligible** to receive the netting benefit.
 
 ### How It Works
 
 The calculator implements netting as **synthetic cash collateral**:
 
 1. Loans with `has_netting_agreement = True` and `drawn_amount < 0` contribute their absolute drawn amount to a **netting pool** per `(netting_facility, currency)`, where the netting facility is determined by priority: `netting_facility_reference` → `root_facility_reference` → `parent_facility_reference`
-2. The pool is allocated **pro-rata by `ead_gross`** to all positive-drawn siblings in the same netting facility — siblings benefit regardless of their own `has_netting_agreement` flag
+2. The pool is allocated **pro-rata by drawn portion (`on_bs_for_ead`)** to positive-drawn **loan** siblings in the same netting facility — contingents and facility-undrawn rows are excluded per Art. 219; eligible loan siblings benefit regardless of their own `has_netting_agreement` flag
 3. Each allocation becomes a synthetic cash collateral row fed into the existing collateral pipeline
 
 This reuses the full collateral mechanics:
@@ -449,6 +451,21 @@ Optionally set `netting_facility_reference` to explicitly control which facility
 # Result (SA):
 # Loan A EAD = 0 (floored)
 # Loan B EAD = 1000 - 200 = 800 (reduced by synthetic cash collateral)
+```
+
+A mixed facility containing a drawn loan, a contingent guarantee, and an undrawn commitment receives the full netting benefit on the drawn loan only:
+
+```python
+# Facility FAC_01 with:
+# Loan A: drawn = -300 (deposit), has_netting_agreement = True
+# Loan B: drawn = 500 (drawn loan)
+# Contingent C: nominal = 1000 (off-balance-sheet guarantee)
+# Facility undrawn: undrawn = 2000 (synthetic row for unused headroom)
+
+# Result (SA): the full 300 nets against Loan B only.
+# Loan B EAD = 500 - 300 = 200
+# Contingent C EAD = unchanged from its CCF-based value
+# Facility undrawn EAD = unchanged from its CCF-based value
 ```
 
 ## Cross-Approach CCF Substitution

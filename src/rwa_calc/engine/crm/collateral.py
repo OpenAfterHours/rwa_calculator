@@ -161,31 +161,46 @@ def generate_netting_collateral(
     2. root_facility_reference (top-level facility in hierarchy)
     3. parent_facility_reference (direct parent, fallback)
 
-    The synthetic collateral rows are allocated pro-rata by ead_for_crm to positive
-    siblings within the netting facility (CRR Art. 223(4): off-BS items at CCF=100%
-    for CRM purposes). Netting pools are grouped by (netting_facility, currency) so
-    the haircut pipeline can apply FX haircuts when the pool currency differs from
-    the sibling's currency.
+    CRR Art. 219 limits on-balance-sheet netting to drawn loans and deposits
+    (cash-on-cash). Synthetic cash collateral is allocated pro-rata by the
+    drawn portion (`on_bs_for_ead`) to positive-drawn LOAN siblings in the same
+    netting facility — contingents and synthetic facility_undrawn rows are
+    off-balance-sheet and excluded from the beneficiary set. Netting pools are
+    grouped by (netting_facility, currency) so the haircut pipeline can apply
+    FX haircuts when the pool currency differs from the sibling's currency.
 
     Args:
-        exposures: Exposures with ead_for_crm and ead_gross initialised
+        exposures: Exposures with ead_for_crm, on_bs_for_ead, exposure_type set
 
     Returns:
         LazyFrame of synthetic collateral rows, or None if no netting applies
     """
     schema = exposures.collect_schema()
-    if "has_netting_agreement" not in schema.names():
+    schema_names = set(schema.names())
+    if "has_netting_agreement" not in schema_names:
         return None
-    if "parent_facility_reference" not in schema.names():
+    if "parent_facility_reference" not in schema_names:
         return None
 
     # Graceful fallback for direct unit-test callers (production always
-    # supplies ead_for_crm via _initialize_ead).
-    if "ead_for_crm" not in schema.names():
+    # supplies ead_for_crm via _initialize_ead, on_bs_for_ead via _compute_ead,
+    # and exposure_type via hierarchy).
+    if "ead_for_crm" not in schema_names:
         exposures = exposures.with_columns(pl.col("ead_gross").alias("ead_for_crm"))
+    if "on_bs_for_ead" not in schema_names:
+        interest_expr = (
+            pl.col("interest").fill_null(0.0).clip(lower_bound=0.0)
+            if "interest" in schema_names
+            else pl.lit(0.0)
+        )
+        exposures = exposures.with_columns(
+            (pl.col("drawn_amount").clip(lower_bound=0.0) + interest_expr).alias("on_bs_for_ead")
+        )
+    if "exposure_type" not in schema_names:
+        exposures = exposures.with_columns(pl.lit("loan").alias("exposure_type"))
 
-    has_root = "root_facility_reference" in schema.names()
-    has_netting_ref = "netting_facility_reference" in schema.names()
+    has_root = "root_facility_reference" in schema_names
+    has_netting_ref = "netting_facility_reference" in schema_names
 
     # Pool netting group: explicit reference > root > direct parent
     pool_group_parts = [pl.col("parent_facility_reference")]
@@ -214,18 +229,22 @@ def generate_netting_collateral(
         .rename({"currency": "_pool_currency"})
     )
 
-    # All positive-drawn exposures that could benefit from netting.
+    # CRR Art. 219: drawn-on-drawn cash netting. Synthetic cash collateral may
+    # only benefit the drawn portion of loan exposures — contingents and
+    # facility_undrawn synthetic rows are off-balance-sheet and ineligible.
     # A sibling matches a pool if the pool's netting group equals its
     # parent_facility_reference OR root_facility_reference.
     positive_siblings = exposures.filter(
-        (pl.col("ead_for_crm") > 0) & pl.col("parent_facility_reference").is_not_null()
+        (pl.col("exposure_type") == "loan")
+        & (pl.col("on_bs_for_ead") > 0)
+        & pl.col("parent_facility_reference").is_not_null()
     )
 
     sibling_cols = [
         "exposure_reference",
         "parent_facility_reference",
         "currency",
-        "ead_for_crm",
+        "on_bs_for_ead",
         "maturity_date",
     ]
     if has_root:
@@ -254,10 +273,13 @@ def generate_netting_collateral(
     else:
         matched = match_parent
 
-    # Total EAD per pool for pro-rata allocation (recompute after matching).
-    # Uses ead_for_crm (CCF=100% per Art. 223(4)) to mirror the rest of CRM.
+    # Total drawn EAD per pool for pro-rata allocation. CRR Art. 219 nets cash
+    # against drawn loans, so the pro-rata basis is the on-BS (drawn) portion,
+    # NOT ead_for_crm (which includes the off-BS nominal at CCF=100% per
+    # Art. 223(4) — that override is for collateral valuation, not for OBS
+    # netting allocation basis).
     facility_totals = matched.group_by("_pool_currency", "netting_pool").agg(
-        pl.col("ead_for_crm").sum().alias("_facility_total_ead"),
+        pl.col("on_bs_for_ead").sum().alias("_facility_total_drawn"),
     )
 
     # Join totals back for pro-rata
@@ -265,11 +287,11 @@ def generate_netting_collateral(
         facility_totals,
         on=["_pool_currency", "netting_pool"],
         how="left",
-    ).filter(pl.col("_facility_total_ead") > 0)
+    ).filter(pl.col("_facility_total_drawn") > 0)
 
-    # Pro-rata market_value per sibling (CCF=100% basis per Art. 223(4))
+    # Pro-rata market_value per sibling by drawn portion (Art. 219).
     allocated = allocated.with_columns(
-        (pl.col("netting_pool") * pl.col("ead_for_crm") / pl.col("_facility_total_ead")).alias(
+        (pl.col("netting_pool") * pl.col("on_bs_for_ead") / pl.col("_facility_total_drawn")).alias(
             "market_value"
         ),
     )

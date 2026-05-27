@@ -38,6 +38,8 @@ The pipeline implements this with two parallel EAD bases on the exposures frame:
 
 For pure on-balance-sheet rows the two EAD bases are equal by construction.
 
+> **On-balance-sheet netting (Art. 219) note.** The Art. 223(4) override applies to *collateral* valuation. **OBS netting under Art. 219 is its own drawn-only mechanism**: the synthetic cash collateral generated from a negative-drawn loan is allocated pro-rata across positive-drawn loan siblings by `on_bs_for_ead` (the drawn portion), not by `ead_for_crm`. Off-balance-sheet rows (contingents, synthetic `facility_undrawn` rows) are excluded from the OBS-netting beneficiary set.
+
 ### Worked example (FIRB cash collateral)
 
 100m off-BS FIRB exposure, 75% CCF (Art. 166(8)(d) medium-risk commitment), 50m cash collateral; senior unsecured (LGDU=45%), cash LGDS=0%:

@@ -20,7 +20,11 @@ A tiered discount applied to RWA for qualifying SME exposures.
 - Turnover < EUR 50m (converted from GBP at the configured FX rate)
 - E* aggregated across the SME's group of connected clients
   (`lending_group_reference`), with fallback to `counterparty_reference` when
-  no lending group is mapped, per CRR Art. 501
+  no lending group is mapped, per CRR Art. 501. **The aggregation runs on
+  the unified frame before the SA / IRB / slotting branch split**, so
+  siblings under any approach contribute to E* — a lending group containing
+  both SA-treated and slotting- or IRB-treated members is summed correctly
+  for the tier threshold.
 - Claims secured on residential property collateral (e.g. BTL) are netted
   from E* per the Art. 501 carve-out: each row's contribution to E* is
   reduced by `residential_collateral_value` (capped at drawn so the

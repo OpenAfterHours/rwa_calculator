@@ -20,7 +20,13 @@ The tier threshold is applied to drawn (on-balance-sheet) amounts only,
 not the full post-CRM EAD which includes CCF-adjusted undrawn commitments.
 Drawn amounts are aggregated across the SME's group of connected clients
 (``lending_group_reference``), with fallback to ``counterparty_reference``
-when no lending group is mapped. The Art. 501 residential carve-out
+when no lending group is mapped. The aggregation runs on the **unified
+frame before the SA / IRB / slotting branch split** (via the module-level
+helper ``compute_e_star_group_drawn`` called from the pipeline orchestrator),
+so siblings under any approach contribute to E*. Each branch's
+``apply_factors`` then reads the pre-computed ``e_star_group_drawn`` column;
+the legacy per-branch window sum remains as a fallback for test harnesses
+that bypass the pipeline. The Art. 501 residential carve-out
 ("excluding claims or contingent claims secured on residential property
 collateral") is applied per row by subtracting ``residential_collateral_value``
 (capped at drawn) from each row's contribution to E*, mirroring the
@@ -185,15 +191,19 @@ class SupportingFactorCalculator:
         The SME supporting factor threshold (EUR 2.5m) is applied to E*,
         which CRR Art. 501 defines as the total drawn amount owed by the SME's
         group of connected clients, excluding claims secured on residential
-        property collateral. The implementation aggregates drawn amounts over
-        ``lending_group_reference`` first and falls back to
-        ``counterparty_reference`` when no lending group is mapped (mirroring
-        the retail aggregation pattern). The residential carve-out is applied
-        per row by subtracting ``residential_collateral_value`` (capped at
-        drawn) from each row's contribution to E*, mirroring the retail-
-        threshold logic in ``engine/hierarchy.py`` (Art. 123(c)). BTL rows
-        receive factor=1.0 via a separate eligibility gate. The resulting
-        blended factor is applied to each SME row's full RWA.
+        property collateral. Aggregation runs on the unified frame **before**
+        the pipeline's SA / IRB / slotting branch split via
+        ``compute_e_star_group_drawn``; this method reads the pre-computed
+        ``e_star_group_drawn`` column when present (production path) and
+        falls back to a local windowed sum over ``lending_group_reference``
+        (with fallback to ``counterparty_reference``) when the column is
+        absent (test harnesses that bypass the pipeline). The residential
+        carve-out is applied per row by subtracting
+        ``residential_collateral_value`` (capped at drawn) from each row's
+        contribution to E*, mirroring the retail-threshold logic in
+        ``engine/hierarchy.py`` (Art. 123(c)). BTL rows receive factor=1.0
+        via a separate eligibility gate. The resulting blended factor is
+        applied to each SME row's full RWA.
 
         The tier calculation uses drawn_amount + interest ("amount owed"),
         NOT ead_final which includes CCF-adjusted undrawn commitments.
@@ -210,6 +220,10 @@ class SupportingFactorCalculator:
         - residential_collateral_value: float (optional, netted from E* per
           Art. 501 residential carve-out)
         - is_buy_to_let: bool (optional, factor=1.0 eligibility gate)
+        - e_star_group_drawn: float (optional, pre-computed unified-frame E*
+          from ``compute_e_star_group_drawn`` — when present, the per-branch
+          windowed sum is bypassed and this column is used directly so the
+          tier threshold honours cross-approach siblings)
 
         Adds columns:
         - supporting_factor: float
@@ -267,24 +281,34 @@ class SupportingFactorCalculator:
         # Build SME factor expression with group-of-connected-clients aggregation.
         # CRR Art. 501 defines E* as the total amount owed across the SME's group
         # of connected clients, excluding claims secured on residential property.
-        # We use lending_group_reference as the codebase's connected-clients
-        # identifier, falling back to counterparty_reference (mirrors the retail
-        # aggregation pattern in engine/hierarchy.py).
+        # The unified-frame helper ``compute_e_star_group_drawn`` (called by the
+        # pipeline orchestrator before the approach split) populates
+        # ``e_star_group_drawn`` across SA / IRB / slotting rows so the tier
+        # calculation honours the full cross-approach group. When that column is
+        # absent (test harnesses that bypass the pipeline) we fall back to the
+        # legacy per-branch windowed sum.
+        has_e_star_pre_computed = "e_star_group_drawn" in schema.names()
         if has_sme:
-            if has_lending_group and has_counterparty:
-                group_key_expr = (
-                    pl.when(pl.col("lending_group_reference").is_not_null())
-                    .then(pl.col("lending_group_reference"))
-                    .otherwise(pl.col("counterparty_reference"))
-                ).alias("_sme_group_key")
-            elif has_lending_group:
-                group_key_expr = pl.col("lending_group_reference").alias("_sme_group_key")
-            elif has_counterparty:
-                group_key_expr = pl.col("counterparty_reference").alias("_sme_group_key")
-            else:
-                group_key_expr = None
+            if has_e_star_pre_computed:
+                # Pre-computed unified-frame E* (CRR Art. 501 cross-approach).
+                # Mirror to ``total_cp_drawn`` so downstream consumers and the
+                # output schema stay stable.
+                exposures = exposures.with_columns(
+                    pl.col("e_star_group_drawn").alias("total_cp_drawn")
+                )
+                ead_for_tier = pl.col("total_cp_drawn")
+            elif has_lending_group or has_counterparty:
+                if has_lending_group and has_counterparty:
+                    group_key_expr = (
+                        pl.when(pl.col("lending_group_reference").is_not_null())
+                        .then(pl.col("lending_group_reference"))
+                        .otherwise(pl.col("counterparty_reference"))
+                    ).alias("_sme_group_key")
+                elif has_lending_group:
+                    group_key_expr = pl.col("lending_group_reference").alias("_sme_group_key")
+                else:
+                    group_key_expr = pl.col("counterparty_reference").alias("_sme_group_key")
 
-            if group_key_expr is not None:
                 exposures = exposures.with_columns([group_key_expr])
 
                 # Art. 501 carve-out: "excluding claims or contingent claims
@@ -420,3 +444,119 @@ class SupportingFactorCalculator:
 def create_supporting_factor_calculator() -> SupportingFactorCalculator:
     """Create a SupportingFactorCalculator instance."""
     return SupportingFactorCalculator()
+
+
+@cites("CRR Art. 501")
+def compute_e_star_group_drawn(
+    exposures: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    errors: list[CalculationError] | None = None,
+) -> pl.LazyFrame:
+    """
+    Compute Art. 501 E* across the unified frame before the approach split.
+
+    The SME supporting factor's EUR 2.5m / GBP 2.2m tier threshold is defined
+    by CRR Art. 501 against the total amount owed by the SME's *group of
+    connected clients*, regardless of which regulatory approach (SA, IRB,
+    slotting) each member is treated under. Running the windowed sum inside
+    each branch after the pipeline splits by approach (the historical
+    behaviour) under-counts E* whenever a lending group spans multiple
+    approaches.
+
+    This helper runs once on the unified frame, before the split in
+    ``engine/pipeline.py``, so SA / IRB / slotting siblings all contribute.
+    The resulting ``e_star_group_drawn`` column is then read by
+    ``apply_factors`` in each branch.
+
+    Population rules (mirroring the existing ``apply_factors`` logic):
+    - per-row contribution = ``drawn_amount + interest`` (clipped at zero),
+      minus ``min(residential_collateral_value, contribution)``
+      (Art. 501 residential carve-out)
+    - aggregation key = ``lending_group_reference`` if not null, else
+      ``counterparty_reference`` (mirrors the connected-clients pattern)
+    - written to every row (SME and non-SME) in a partition so all three
+      branch calculators can read it
+
+    No-ops:
+    - if supporting factors are disabled (Basel 3.1), returns the frame
+      unchanged — column is not added
+    - if neither ``lending_group_reference`` nor ``counterparty_reference``
+      is present, emits the existing ``SF001`` warning and returns unchanged
+
+    Args:
+        exposures: Unified-frame LazyFrame post-CRM, pre-branch-split
+        config: Calculation configuration
+        errors: Optional error accumulator for data-quality warnings
+
+    Returns:
+        LazyFrame with ``e_star_group_drawn`` column added
+    """
+    if not config.supporting_factors.enabled:
+        return exposures
+
+    schema = exposures.collect_schema()
+    names = schema.names()
+
+    has_counterparty = "counterparty_reference" in names
+    has_lending_group = "lending_group_reference" in names
+
+    if not has_counterparty and not has_lending_group:
+        if errors is not None:
+            errors.append(
+                CalculationError(
+                    code=ERROR_SME_MISSING_COUNTERPARTY_REF,
+                    message=(
+                        "SME supporting factor: neither counterparty_reference "
+                        "nor lending_group_reference is available on the unified "
+                        "frame. Cross-approach E* (CRR Art. 501) cannot be "
+                        "computed; the tier threshold will fall back to per-branch "
+                        "aggregation and may under-count exposures."
+                    ),
+                    severity=ErrorSeverity.WARNING,
+                    category=ErrorCategory.DATA_QUALITY,
+                    regulatory_reference="CRR Art. 501",
+                    field_name="counterparty_reference",
+                )
+            )
+        return exposures
+
+    has_drawn = "drawn_amount" in names
+    has_interest = "interest" in names
+    has_res_coll = "residential_collateral_value" in names
+
+    drawn_principal = (
+        pl.col("drawn_amount").fill_nan(0.0).fill_null(0.0).clip(lower_bound=0.0)
+        if has_drawn
+        else pl.lit(0.0)
+    )
+    interest_expr = pl.col("interest").fill_nan(0.0).fill_null(0.0) if has_interest else pl.lit(0.0)
+    drawn_expr = drawn_principal + interest_expr
+
+    if has_res_coll:
+        res_coll_expr = (
+            pl.col("residential_collateral_value")
+            .fill_nan(0.0)
+            .fill_null(0.0)
+            .clip(lower_bound=0.0)
+        )
+        drawn_in_e_star = drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
+    else:
+        drawn_in_e_star = drawn_expr
+
+    if has_lending_group and has_counterparty:
+        group_key_expr = (
+            pl.when(pl.col("lending_group_reference").is_not_null())
+            .then(pl.col("lending_group_reference"))
+            .otherwise(pl.col("counterparty_reference"))
+        )
+    elif has_lending_group:
+        group_key_expr = pl.col("lending_group_reference")
+    else:
+        group_key_expr = pl.col("counterparty_reference")
+
+    exposures = exposures.with_columns(group_key_expr.alias("_sme_group_key"))
+    exposures = exposures.with_columns(
+        drawn_in_e_star.sum().over("_sme_group_key").alias("e_star_group_drawn")
+    )
+    return exposures.drop("_sme_group_key")

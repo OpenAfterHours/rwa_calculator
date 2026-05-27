@@ -71,6 +71,7 @@ from rwa_calc.engine.materialise import (
     materialise_barrier,
     materialise_branches,
 )
+from rwa_calc.engine.sa.supporting_factors import compute_e_star_group_drawn
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 
 if TYPE_CHECKING:
@@ -799,6 +800,14 @@ class PipelineOrchestrator:
                 # that collect_all would re-evaluate it per branch without this.
                 # In streaming mode, spills to disk instead of loading into memory.
                 exposures = materialise_barrier(exposures, config, "pipeline_pre_branch")
+
+                # Compute Art. 501 E* (SME tier threshold input) across the full
+                # unified frame so SA / IRB / slotting siblings in the same
+                # lending group all contribute. Without this, each branch's
+                # apply_factors would compute the window sum on its own subset
+                # and under-count E* whenever a group spans multiple approaches.
+                # No-op when supporting factors are disabled (Basel 3.1).
+                exposures = compute_e_star_group_drawn(exposures, config)
 
                 # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
                 if config.output_floor.enabled:

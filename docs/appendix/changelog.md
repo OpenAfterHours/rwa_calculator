@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **SA-CCR per-article spec pages (D2.71 / D2.72 / D2.73).** Three new pages under `docs/specifications/crr/ccr/` close the discoverability gap between the shipped `src/rwa_calc/engine/ccr/` modules and the spec set: `supervisory-delta.md` documents Art. 279a (linear ±1, Black-Scholes Φ(d1) option delta with the long/short × call/put sign rule, and the Art. 279a(3) CDO-tranche attachment/detachment formula); `maturity-factor.md` documents Art. 279c unmargined `√(min(M,1y)/1y)` with the 10 BD floor and Art. 285 margined `1.5·√(MPOR_eff/250)` plus the MPOR cascade (5 BD SFT / 10 BD OTC base, 20 BD large-or-illiquid upgrade, dispute doubling, remargining-frequency adjustment); `hedging-sets.md` documents the Art. 277 per-asset-class partition (IR three maturity buckets per currency, FX per currency pair, credit single name, equity single issuer, commodity five buckets) and the Art. 277a inter-bucket correlation parameters. IR + FX worked examples land now; credit / equity / commodity worked examples placeholder-flagged on engine batch P8.35–P8.38. The `crr/ccr/index.md` status table flipped three rows from "Pending" to "Live". Ref: PRA PS1/26 Art. 277, 277a, 279a, 279c, 285.
 
 ### Changed
 - (Next release changes will go here)

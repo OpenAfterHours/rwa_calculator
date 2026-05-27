@@ -78,9 +78,9 @@ RWA into the firm-level totals.
 |------|-------|----------------------|--------|
 | [Adjusted notional](adjusted-notional.md) | Per-asset-class notional adjustments (`d`); IR supervisory duration; FX leg conversion at spot | Art. 279b | Live (IR + FX) |
 | [FX treatment](fx-treatment.md) | Two-leg trade schema, FX hedging set, asset-class add-on, CCR-A2 worked example | Art. 277(3)(a), 279b(1)(b), 277a(2) | Live |
-| `supervisory-delta.md` | Linear ±1 delta for forwards/swaps; Black-Scholes Φ(d1) for options; CDO tranche attachment-point delta | Art. 279a(1)–(3) | Pending |
-| `maturity-factor.md` | Unmargined MF = √(min(M, 1)); margined MF with MPOR + remargining frequency | Art. 279c, 285 | Pending |
-| `hedging-sets.md` | Per-asset-class hedging-set partition rules and intra/cross-HS correlation (ρ) | Art. 277, 277a | Pending |
+| [Supervisory delta](supervisory-delta.md) | Linear ±1 delta for forwards/swaps; Black-Scholes Φ(d1) for options; CDO tranche attachment-point delta | Art. 279a(1)–(3) | Live (IR + FX) |
+| [Maturity factor](maturity-factor.md) | Unmargined MF = √(min(M, 1)); margined MF with MPOR + remargining frequency | Art. 279c, 285 | Live |
+| [Hedging sets](hedging-sets.md) | Per-asset-class hedging-set partition rules and intra/cross-HS correlation (ρ) | Art. 277, 277a | Live (IR + FX) |
 | `rc-calculation.md` | Unmargined `RC = max(V − C, 0)`; margined `RC = max(V − C, TH + MTA − NICA, 0)` | Art. 275 | Pending |
 | `pfe-multiplier.md` | PFE add-on aggregation and the multiplier `min(1, 0.05 + 0.95·exp((V−C)/(2·AddOn)))` | Art. 278 | Pending |
 | `ead-composition.md` | EAD = α·(RC + PFE) with α = 1.4; SA-CCR → unified exposure ladder via `pipeline_adapter` | Art. 274 | Pending |

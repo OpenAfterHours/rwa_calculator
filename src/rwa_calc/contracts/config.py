@@ -851,13 +851,20 @@ class CCRConfig:
     Counterparty Credit Risk configuration.
 
     References:
+    - CRR Art. 271(2) — SFT EAD routing (FCCM, not SA-CCR Art. 274)
     - CRR Art. 274(2) — α = 1.4 default for SA-CCR EAD formula
     - CRR Art. 285(2)(b) — 10 business day MPOR floor for non-SFT netting sets
     - CRR Art. 285(1)(b)(ii) — initial margin recognition
     - CRR Art. 273a — small/non-complex derivatives portfolio carve-out
+
+    ``sft_method`` selects the EAD method for SFT trades per CRR Art. 271(2).
+    Only the Financial Collateral Comprehensive Method ("fccm", Art. 220-223)
+    is implemented today; the ``"var"`` (Art. 221) and ``"imm"`` (Art. 283)
+    method literals are reserved for future expansion.
     """
 
     method: Literal["sa_ccr"] = "sa_ccr"
+    sft_method: Literal["fccm", "var", "imm"] = "fccm"
     alpha: Decimal = Decimal("1.4")
     enable_ccp_exposures: bool = True
     mpor_floor_days: int = 10

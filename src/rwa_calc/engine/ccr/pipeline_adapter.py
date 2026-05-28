@@ -36,7 +36,12 @@ from datetime import date
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import RawCCRBundle
+from rwa_calc.contracts.bundles import (
+    CCRCollateralBundle,
+    NettingSetBundle,
+    RawCCRBundle,
+    TradeBundle,
+)
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_commodity,
@@ -48,6 +53,7 @@ from rwa_calc.engine.ccr.adjusted_notional import (
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
+from rwa_calc.engine.ccr.sft_fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 
 logger = logging.getLogger(__name__)
@@ -125,6 +131,107 @@ def ccr_rows_to_exposures(
 
     References:
         CRR Art. 271; CRR Art. 274; CRR Art. 277-279c; CRR Art. 278.
+    """
+    # SFT vs derivative split (CRR Art. 271(2)). Trades flagged as ``"sft"``
+    # exit the SA-CCR Art. 274 chain and are routed through the FCCM SFT
+    # branch (Art. 220-223). The two sub-bundles are processed independently
+    # and their synthetic exposure rows are stitched back together via a
+    # ``diagonal_relaxed`` concat so the SA-CCR component columns
+    # (rc_unmargined, pfe_addon, ...) are filled with nulls on SFT rows.
+    derivative_bundle, sft_bundle = _split_ccr_bundle_by_transaction_type(raw_ccr)
+    derivative_rows = _derivative_rows_to_exposures(
+        derivative_bundle,
+        config_ccr,
+        reporting_date,
+        base_currency=base_currency,
+        fx_rates=fx_rates,
+    )
+    if config_ccr.sft_method == "fccm":
+        sft_rows = sft_rows_to_exposures(sft_bundle, reporting_date)
+        return pl.concat([derivative_rows, sft_rows], how="diagonal_relaxed")
+    return derivative_rows
+
+
+def _split_ccr_bundle_by_transaction_type(
+    raw_ccr: RawCCRBundle,
+) -> tuple[RawCCRBundle, RawCCRBundle]:
+    """Partition a CCR bundle into derivative-only and SFT-only sub-bundles.
+
+    The split is keyed on ``trades.transaction_type``. Each side carries the
+    netting sets and netting-set-keyed CCR collateral whose ``netting_set_id``
+    appears in its trade set (so an SFT-only NS is not seen by the SA-CCR
+    derivative chain and vice versa).
+
+    Margin agreements ride along on both sides — they are CSA-level (Art.
+    272(7)) and may cover trades on either side; downstream consumers join
+    on ``margin_agreement_id`` so the duplication is harmless.
+
+    References:
+        CRR Art. 271(2) — SFT EAD via FCCM, not SA-CCR Art. 274.
+    """
+    trades_lf = raw_ccr.trades.trades
+    netting_sets_lf = raw_ccr.netting_sets.netting_sets
+    ccr_collateral_lf = raw_ccr.ccr_collateral.ccr_collateral
+
+    is_sft = pl.col("transaction_type") == SFT_TRANSACTION_TYPE
+    sft_trades = trades_lf.filter(is_sft)
+    derivative_trades = trades_lf.filter(~is_sft)
+
+    # Materialise per-side NS-id lists so the netting-set / collateral filters
+    # are simple ``is_in`` predicates. Trade frames are firm-scale; this is
+    # cheap compared to a self-join.
+    sft_ns_ids = (
+        sft_trades.select(pl.col("netting_set_id").unique()).collect()["netting_set_id"].to_list()
+    )
+    deriv_ns_ids = (
+        derivative_trades.select(pl.col("netting_set_id").unique())
+        .collect()["netting_set_id"]
+        .to_list()
+    )
+
+    sft_bundle = RawCCRBundle(
+        trades=TradeBundle(trades=sft_trades),
+        netting_sets=NettingSetBundle(
+            netting_sets=netting_sets_lf.filter(pl.col("netting_set_id").is_in(sft_ns_ids)),
+        ),
+        margin_agreements=raw_ccr.margin_agreements,
+        ccr_collateral=CCRCollateralBundle(
+            ccr_collateral=ccr_collateral_lf.filter(pl.col("netting_set_id").is_in(sft_ns_ids)),
+        ),
+        failed_trades=raw_ccr.failed_trades,
+        errors=list(raw_ccr.errors),
+    )
+    derivative_bundle = RawCCRBundle(
+        trades=TradeBundle(trades=derivative_trades),
+        netting_sets=NettingSetBundle(
+            netting_sets=netting_sets_lf.filter(pl.col("netting_set_id").is_in(deriv_ns_ids)),
+        ),
+        margin_agreements=raw_ccr.margin_agreements,
+        ccr_collateral=CCRCollateralBundle(
+            ccr_collateral=ccr_collateral_lf.filter(pl.col("netting_set_id").is_in(deriv_ns_ids)),
+        ),
+        failed_trades=raw_ccr.failed_trades,
+        errors=list(raw_ccr.errors),
+    )
+    return derivative_bundle, sft_bundle
+
+
+def _derivative_rows_to_exposures(
+    raw_ccr: RawCCRBundle,
+    config_ccr: CCRConfig,
+    reporting_date: date,
+    *,
+    base_currency: str,
+    fx_rates: pl.LazyFrame | None,
+) -> pl.LazyFrame:
+    """Drive the SA-CCR chain over derivative trades only.
+
+    Identical to the original :func:`ccr_rows_to_exposures` body; extracted
+    so the public entry point can apply the Art. 271(2) SFT / derivative
+    routing without touching the derivative chain.
+
+    References:
+        CRR Art. 274; CRR Art. 277-279c; CRR Art. 278.
     """
     trades_lf = raw_ccr.trades.trades
     netting_sets_lf = raw_ccr.netting_sets.netting_sets

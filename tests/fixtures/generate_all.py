@@ -344,6 +344,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_a10,
         ),
+        (
+            "P8.38 CCR-A11/A12 (SA-CCR SFT FCCM EAD - uncollateralised + cash-collateralised)",
+            "ccr",
+            _generate_ccr_a11_a12,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2063,6 +2068,31 @@ def _generate_ccr_a10(output_dir: Path) -> list[tuple[str, int]]:
             "ccr.golden_ccr_a10",
             "ccr.golden_ccr_a1",
             "ccr.golden_ccr_a2",
+            "ccr.trade_builder",
+            "ccr.netting_set_builder",
+            "ccr.margin_builder",
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_a11_a12(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate CCR-A11/A12 golden fixtures (SA-CCR SFT FCCM EAD branch, Art. 271(2)).
+
+    CCR-A11: uncollateralised SFT — EAD = E·(1+HE).
+    CCR-A12: cash-collateralised SFT — EAD = max(0, E·(1+HE) − CVA).
+    Both: counterparty CP_INST_001 (institution, CQS 2, GB) → 50% SA RW.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_a11_a12 import save_ccr_a11_a12_fixtures
+
+        saved = save_ccr_a11_a12_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_a11_a12",
             "ccr.trade_builder",
             "ccr.netting_set_builder",
             "ccr.margin_builder",

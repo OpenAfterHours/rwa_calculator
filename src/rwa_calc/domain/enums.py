@@ -454,7 +454,10 @@ class RiskType(StrEnum):
     Counterparty Credit Risk - securities financing transaction.
 
     Synthetic-exposure tag emitted by the CCR pipeline stage for SFTs
-    (repos, securities lending). Placeholder pending SFT-specific EAD wiring.
+    (repos, securities lending). EAD is computed via the Financial Collateral
+    Comprehensive Method (FCCM) per CRR Art. 271(2) and Art. 220-223:
+    ``E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))``. The ``ccr_method`` column
+    carries the ``"fccm_sft"`` discriminator on rows tagged with CCR_SFT.
     """
 
 

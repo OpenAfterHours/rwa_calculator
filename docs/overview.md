@@ -1,6 +1,6 @@
-# UK Credit Risk RWA Calculator
+# UK Credit Risk + Counterparty Credit Risk RWA Calculator
 
-Welcome to the documentation for the **UK Credit Risk RWA Calculator** - a high-performance system for calculating Risk-Weighted Assets (RWA) for UK credit risk exposures.
+Welcome to the documentation for the **UK Credit Risk + Counterparty Credit Risk RWA Calculator** - a high-performance system for calculating Risk-Weighted Assets (RWA) for UK credit risk and counterparty credit risk exposures. Derivative and SFT exposures are measured via the **Standardised Approach for Counterparty Credit Risk (SA-CCR)** under CRR Art. 271-311, producing an EAD that feeds the same SA / IRB exposure ladder as on-balance-sheet credit risk.
 
 !!! warning "Development Status"
     This package is still in development and is not yet production ready. APIs may change between versions.
@@ -18,13 +18,14 @@ This calculator supports both current and forthcoming UK regulatory frameworks:
 | **CRR (Basel 3.0)** | Active | Until 31 December 2026 |
 | **Basel 3.1 (PRA PS1/26)** | Planned | From 1 January 2027 |
 
-The system provides accurate, auditable RWA calculations across all major exposure classes using both the Standardised Approach (SA) and Internal Ratings-Based (IRB) approaches.
+The system provides accurate, auditable RWA calculations across all major exposure classes using both the Standardised Approach (SA) and Internal Ratings-Based (IRB) approaches, and computes Counterparty Credit Risk EAD for derivative and SFT portfolios via SA-CCR.
 
 ## Key Features
 
 - **Dual-Framework Support**: Single codebase supporting both CRR and Basel 3.1 regulations
 - **High Performance**: Built on Polars LazyFrames for vectorized operations, achieving 50-100x performance improvements
 - **Full Regulatory Coverage**: Implements all exposure classes including Central Govt / Central Bank, Institution, Corporate, Retail, and Specialised Lending
+- **Counterparty Credit Risk (SA-CCR)**: Derivative EAD via CRR Art. 271-311 using `EAD = α · (RC + PFE)` with `α = 1.4` per Art. 274(2); RC (Art. 275), PFE add-on (Art. 278) including the FX asset class, hedging-set aggregation, supervisory deltas, and the Art. 272(4) legal-enforceability netting gate are all in scope. See the [SA-CCR specifications](specifications/crr/ccr/index.md).
 - **Credit Risk Mitigation**: Complete CRM support including collateral, guarantees, and provisions
 - **Audit Trail**: Error accumulation and full traceability for regulatory compliance
 - **Extensible Architecture**: Protocol-based design enabling easy customization
@@ -44,6 +45,7 @@ This documentation serves multiple audiences:
 - [**Regulatory Frameworks**](user-guide/regulatory/index.md) - Detailed coverage of CRR and Basel 3.1 requirements
 - [**Calculation Methodology**](user-guide/methodology/index.md) - How RWAs are calculated
 - [**Exposure Classes**](user-guide/exposure-classes/index.md) - Classification and treatment of exposures
+- [**SA-CCR Specifications**](specifications/crr/ccr/index.md) - Counterparty credit risk EAD for derivatives and SFTs (CRR Art. 271-311)
 
 ### For Business Users
 
@@ -87,6 +89,14 @@ This documentation serves multiple audiences:
 
     [:octicons-arrow-right-24: API Docs](api/index.md)
 
+-   :material-swap-horizontal:{ .lg .middle } **Counterparty Credit Risk**
+
+    ---
+
+    SA-CCR EAD for derivatives and SFTs (CRR Art. 271-311)
+
+    [:octicons-arrow-right-24: SA-CCR Specs](specifications/crr/ccr/index.md)
+
 </div>
 
 ## Calculation Pipeline Overview
@@ -106,6 +116,7 @@ The RWA calculator processes exposures through a six-stage pipeline: Load → Hi
 | **Advanced IRB (A-IRB)** | Bank-estimated PD, LGD, and EAD | CRR, Basel 3.1 |
 | **Slotting** | Category-based approach for specialised lending | CRR, Basel 3.1 |
 | **Equity** | Risk weights for equity holdings (Art. 133 SA / Art. 155 IRB Simple) | CRR, Basel 3.1 |
+| **SA-CCR** | Counterparty credit risk EAD for derivatives and SFTs: `EAD = α · (RC + PFE)` with `α = 1.4` (Art. 271-311) | CRR, Basel 3.1 |
 
 ### By Exposure Class
 

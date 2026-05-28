@@ -21,6 +21,7 @@ This section contains the formal specifications for the RWA Calculator. These sp
 | [Slotting Approach](crr/slotting-approach.md) | Specialised lending categories | CRR Art. 147(8), 153(5) |
 | [Provisions](crr/provisions.md) | Provision treatment and EL comparison | CRR Art. 159; PRA Rulebook Art. 158 |
 | [Equity Approach](crr/equity-approach.md) | SA equity (Art. 133), IRB Simple (Art. 155), CIU treatment | CRR Art. 132-133, 155 |
+| [SA-CCR (Counterparty Credit Risk)](crr/ccr/index.md) | EAD = α·(RC + PFE) for derivatives; adjusted notional ([adjusted-notional.md](crr/ccr/adjusted-notional.md)), FX hedging-set treatment ([fx-treatment.md](crr/ccr/fx-treatment.md)), supervisory delta, maturity factor, RC/PFE, WWR, CCP exposures, failed trades | PRA PS1/26 Part Three Title II Chapter 6 (Art. 271–311) |
 
 ### Basel 3.1 Framework (From January 2027)
 
@@ -140,6 +141,24 @@ Covers equity exposure treatment:
 - CIU treatment — mandate-based, look-through, fallback (CRR Art. 132)
 - RWA arithmetic validation
 
+### Group CCR: Counterparty Credit Risk (SA-CCR)
+Covers the Standardised Approach for Counterparty Credit Risk on derivative transactions
+(PRA PS1/26 Part Three Title II Chapter 6, Art. 271–311). The pipeline computes
+`EAD = α · (RC + PFE)` with α = 1.4 and feeds the resulting exposure into the SA / IRB
+credit risk calculators alongside on-balance-sheet exposures:
+
+- **EAD aggregation formula** (Art. 274) — `EAD = 1.4 · (RC + PFE)`
+- **Replacement Cost** (Art. 275) — margined vs unmargined RC, threshold + MTA
+- **PFE multiplier** (Art. 278) — over-collateralisation / negative-MtM dampener
+- **Adjusted notional** (Art. 280–280f) — asset-class specific notional adjustments
+- **Supervisory delta** (Art. 279a) — directional adjustment for options and CDOs
+- **Maturity factor** (Art. 279c, 285) — unmargined cap and margined MPOR scaling
+- **Hedging-set partition** (Art. 277, 277a) — IR (per currency), FX (per pair), credit/equity (per reference), commodity (per type)
+- **Wrong-way risk** (Art. 291) — specific WWR (legal connection) and general WWR alpha multiplier
+- **CCP exposures** (Art. 306–307) — QCCP trade leg 2% RW + default fund contribution treatment
+- **Failed trades** (Art. 378–380) — unsettled transactions and free deliveries
+- **Legal-enforceability gate** (Art. 272(4), 295–297) — netting set recognition criteria
+
 ### Basel 3.1 Groups
 Basel 3.1 scenarios mirror the CRR structure with additional framework-specific tests:
 
@@ -180,6 +199,7 @@ Each scenario is tagged with an identifier for traceability:
 | `CRR-H` | H1, H3 | CRR Complex/Combined |
 | `CRR-I` | I1–I3 | CRR Defaulted Exposures |
 | `CRR-J` | J1–J20 | CRR Equity |
+| `CCR-A` | TBD (pending engine batch P8.35–P8.38) | Counterparty Credit Risk — SA-CCR (Art. 271–311) |
 | `B31-A` | A1–A11 | Basel 3.1 Standardised Approach |
 | `B31-B` | B1–B7 | Basel 3.1 Foundation IRB |
 | `B31-C` | C1–C3 | Basel 3.1 Advanced IRB |

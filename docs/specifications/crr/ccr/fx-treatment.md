@@ -4,6 +4,18 @@ This page covers FX derivatives end-to-end through the SA-CCR pipeline:
 input schema, hedging-set partition, asset-class add-on aggregation, and the
 worked **CCR-A2** acceptance scenario.
 
+Part of the [SA-CCR specification set](index.md); see also
+[adjusted-notional.md](adjusted-notional.md),
+[supervisory-delta.md](supervisory-delta.md),
+[maturity-factor.md](maturity-factor.md),
+[hedging-sets.md](hedging-sets.md),
+[ead-composition.md](ead-composition.md),
+[rc-calculation.md](rc-calculation.md),
+[pfe-multiplier.md](pfe-multiplier.md),
+[legal-enforceability.md](legal-enforceability.md),
+[wrong-way-risk.md](wrong-way-risk.md), and
+[ccp-exposures.md](ccp-exposures.md).
+
 ## Input — two-leg trade schema
 
 FX forwards / FX swaps / cross-currency basis swaps carry two currency legs.

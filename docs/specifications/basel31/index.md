@@ -25,6 +25,7 @@ of the Basel III final reforms. Where rules are unchanged from CRR, the correspo
 | [Defaulted Exposures](defaulted-exposures.md) | Provision-coverage split (100%/150%), RESI RE exception, IRB defaulted | Art. 127, 153(1), 154(1) | B31-K |
 | [Equity Approach](equity-approach.md) | New SA equity regime (250%/400%), IRB equity removal, transitional phase-in, CIU | Art. 133, 147A, Rules 4.1–4.8 | B31-L |
 | [Model Permissions](model-permissions.md) | Art. 147A approach restrictions: FSE, large corporate, institution, equity routing | Art. 147A; PS1/26 Glossary (LFSE, CRR Art. 142(1)(4)) | B31-M |
+| [Counterparty Credit Risk (SA-CCR)](ccr.md) | Inheritance from CRR — α-factor carve-out (Art. 274(2)) and output-floor S-TREA inclusion (Art. 92(2A)); no separate per-article specs | Art. 271–311 (inheritance), 274(2), 92(2A) | CCR-A |
 
 ## Relationship to CRR Specifications
 

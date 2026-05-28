@@ -1007,6 +1007,8 @@ def _build_guarantor_rw_expr(
 # ---------------------------------------------------------------------------
 
 
+@cites("PS1/26, paragraph 139")
+@cites("PS1/26, paragraph 122")
 def _prepare_risk_weight_lookup(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -1074,6 +1076,26 @@ def _prepare_risk_weight_lookup(
         .otherwise(pl.col("cqs"))
         .alias("cqs")
     )
+
+    # PRA PS1/26 Art. 139(2B): for the purposes of Art. 122B(1) (the SA
+    # specialised-lending routing), inferred / issuer-level (non-issue-specific)
+    # ECAI assessments are disapplied. An SL exposure whose only resolved
+    # external rating is not issue-specific must be treated as unrated, so we
+    # null its CQS here. This re-routes it through the unrated SL override
+    # (``b31_sa_sl_rw_expr``) instead of the rated-corporate CQS table. Scoped
+    # to Basel 3.1 SL exposures only — ordinary rated corporates (Art. 122(2))
+    # are untouched.
+    if config.is_basel_3_1:
+        is_sl_exposure = pl.col("sl_type").fill_null("").str.len_chars() > 0
+        rating_not_issue_specific = (
+            pl.col("external_rating_is_issue_specific").fill_null(True) == False  # noqa: E712
+        )
+        exposures = exposures.with_columns(
+            pl.when(is_sl_exposure & rating_not_issue_specific)
+            .then(pl.lit(None, dtype=pl.Int8))
+            .otherwise(pl.col("cqs"))
+            .alias("cqs")
+        )
 
     exposures = exposures.with_columns(
         [

@@ -285,6 +285,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p243,
         ),
         (
+            "P2.44 (SA-SL inferred-rating fallback suppression Art. 139(2B) object-finance 100%)",
+            "p2_44",
+            _generate_p244,
+        ),
+        (
             "P1.122(a) (IRB borrower + null-PD corporate guarantor → SA-fallback branch)",
             "p1_122a",
             _generate_p1122a,
@@ -1450,6 +1455,19 @@ def _generate_p243(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_43", None)
+
+
+def _generate_p244(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.44 fixtures (SA-SL inferred-rating fallback suppression Art. 139(2B))."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_44 import save_p244_fixtures
+
+        saved = save_p244_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_44", None)
 
 
 def _generate_p1122a(output_dir: Path) -> list[tuple[str, int]]:

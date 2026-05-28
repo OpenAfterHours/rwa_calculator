@@ -503,6 +503,14 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     "is_short_term": ColumnSpec(pl.Boolean, default=False, required=False),
     "scope_type": ColumnSpec(pl.String, required=False),
     "scope_id": ColumnSpec(pl.String, required=False),
+    # PRA PS1/26 Art. 139(2B): inferred / issuer-level (non-issue-specific) ECAI
+    # assessments are disapplied for the SA specialised-lending routing under
+    # Art. 122B(1). These provenance flags let the engine distinguish a directly
+    # applicable issue-specific rating from one inferred from a related entity.
+    # Defaults preserve legacy behaviour: existing ratings are treated as
+    # directly applicable (issue-specific) and not inferred.
+    "rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
+    "rating_is_inferred": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
@@ -1384,6 +1392,11 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     # propagated from COUNTERPARTY_SCHEMA. Used by the FCSM SFT carve-out
     # (Art. 222(4)) to select 0% RW (True) vs 10% RW (False).
     "cp_is_core_market_participant": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 139(2B): whether the Art. 138-resolved external rating came
+    # from an issue-specific assessment. False signals an inferred / issuer-level
+    # rating, which is disapplied for the SA specialised-lending routing under
+    # Art. 122B(1). Default True preserves legacy behaviour (directly applicable).
+    "external_rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
 }
 
 # Columns produced by the CRM stage: collateral value buckets and provision

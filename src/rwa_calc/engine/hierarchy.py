@@ -882,6 +882,7 @@ class HierarchyResolver:
                 "ead_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
                 "is_obs_commitment": pl.Boolean,
+                "is_uk_residential_mortgage_commitment": pl.Boolean,
                 "is_payroll_loan": pl.Boolean,
                 "is_buy_to_let": pl.Boolean,
                 "is_under_construction": pl.Boolean,
@@ -1190,6 +1191,10 @@ class HierarchyResolver:
             # synthesised to True and null-filled by the entry-point normalisation,
             # so we can read it directly here.
             pl.col("is_obs_commitment"),
+            # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential-property
+            # commitment flag carried through to the CCF stage so the 50%
+            # override fires under Basel 3.1. Defaults False when absent.
+            col_or_false("is_uk_residential_mortgage_commitment"),
             col_or_false("is_payroll_loan"),
             col_or_false("is_buy_to_let"),
             # PRA PS1/26 Art. 124(3) / Art. 124K: under-construction flag drives
@@ -1789,6 +1794,11 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_obs_commitment"),  # N/A for drawn loans
             (
+                pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+                if "is_uk_residential_mortgage_commitment" in loan_cols
+                else pl.lit(False).alias("is_uk_residential_mortgage_commitment")
+            ),
+            (
                 pl.col("is_payroll_loan").fill_null(False)
                 if "is_payroll_loan" in loan_cols
                 else pl.lit(False).alias("is_payroll_loan")
@@ -1959,6 +1969,17 @@ class HierarchyResolver:
                     else pl.lit(False)
                 )
                 .alias("is_obs_commitment"),
+                # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential-property
+                # commitment flag. Meaningful only for undrawn (OFB) contingents;
+                # nullified for drawn (ONB) rows, mirroring is_obs_commitment.
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(
+                    pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+                    if "is_uk_residential_mortgage_commitment" in cont_cols
+                    else pl.lit(False)
+                )
+                .alias("is_uk_residential_mortgage_commitment"),
                 pl.lit(False).alias(
                     "is_payroll_loan"
                 ),  # Payroll loans are term loans, not contingents

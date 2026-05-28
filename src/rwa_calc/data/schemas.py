@@ -147,6 +147,15 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Facilities default to True because a facility row is, by construction, a
     # commitment / credit line.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=True, required=False),
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
+    # secured by residential property attract a 50% CCF. When True under Basel
+    # 3.1 the CCF engine overrides the otherwise-resolved SA CCF to the MR /
+    # Row 4(b) rate (50%), unless that CCF is already 10% or 100% (the Row 4(b)
+    # "not subject to a 10% or 100% conversion factor" carve-out). No effect
+    # under CRR (Table A1 is Basel 3.1 only).
+    "is_uk_residential_mortgage_commitment": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. When True, the exposure is routed
@@ -262,6 +271,12 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Override to True for genuine commitment-style contingents (e.g., an
     # NIF / RUF booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
+    # secured by residential property attract a 50% CCF. Mirrored from
+    # FACILITY_SCHEMA for parity; see the FACILITY_SCHEMA notes for full detail.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
     # CRR Art. 178 row-level default flag. See FACILITY_SCHEMA for full notes.
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
     # PRA PS1/26 Art. 124(3) / Art. 124K: True when the financed property is

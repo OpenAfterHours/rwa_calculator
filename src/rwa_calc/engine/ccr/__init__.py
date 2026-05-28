@@ -11,9 +11,9 @@ Key responsibilities:
   potential future exposure (PFE), per-trade adjusted notional, supervisory
   delta, and maturity factor.
 
-This batch (P8.4) only delivers the scaffold and ``compute_rc_unmargined``;
-all other formula bodies stub via ``NotImplementedError`` and will be filled
-by P8.10 / P8.12 / P8.13 / P8.14 / P8.17 in subsequent batches.
+The SA-CCR formula bodies (replacement cost, adjusted notional, supervisory
+delta, maturity factor, per-asset-class add-on, and final EAD) are implemented
+across the ``rwa_calc.engine.ccr`` submodules.
 
 Importing this package triggers registration of the ``ccr`` Polars LazyFrame
 namespace via the sibling ``namespace`` module.
@@ -45,10 +45,7 @@ from rwa_calc.engine.ccr.maturity_factor import (  # noqa: E402
     compute_maturity_factor_margined,
     compute_maturity_factor_unmargined,
 )
-from rwa_calc.engine.ccr.pfe import (  # noqa: E402
-    compute_addon_per_asset_class,
-    compute_pfe_ir_singleton,
-)
+from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class  # noqa: E402
 from rwa_calc.engine.ccr.pipeline_adapter import ccr_rows_to_exposures  # noqa: E402
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined  # noqa: E402
 from rwa_calc.engine.ccr.sa_ccr import (  # noqa: E402
@@ -71,7 +68,6 @@ __all__ = [
     "compute_ead",
     "compute_maturity_factor_margined",
     "compute_maturity_factor_unmargined",
-    "compute_pfe_ir_singleton",
     "compute_rc_margined",
     "compute_rc_unmargined",
     "compute_supervisory_delta_cdo_tranche",

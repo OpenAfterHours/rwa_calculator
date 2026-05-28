@@ -116,22 +116,6 @@ def compute_pfe(
     )
 
 
-@cites("CRR Art. 278")
-def compute_pfe_ir_singleton(netting_sets: pl.LazyFrame) -> pl.LazyFrame:
-    """Potential Future Exposure for the single-trade IR path (stub).
-
-    Args:
-        netting_sets: LazyFrame at netting-set grain.
-
-    Raises:
-        NotImplementedError: Full PFE body lands in P8.16; the per-trade
-            sub-pieces (P8.10-P8.14) must be in place first.
-    """
-    raise NotImplementedError(
-        "P8.10-P8.14 sub-pieces required first; full PFE per Art. 278 is P8.16"
-    )
-
-
 # Watchfire's bundled CRR index does not yet contain Art. 277a; collapse the
 # ``@cites`` to the parent Art. 277 and preserve sub-article attribution in the
 # docstring (mirrors the P8.7 fix-commit pattern for Art. 280a/b/c).

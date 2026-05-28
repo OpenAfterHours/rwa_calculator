@@ -350,6 +350,12 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "apply_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_natural_person": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 124E(1)(b): count of residential properties securing the
+    # borrower's total residential RE exposure (including the financed one). When
+    # this count exceeds the three-property limit, the owner-occupied preferential
+    # treatment is disapplied and the exposure routes to the income-producing
+    # residential track (Art. 124G). Null = unknown (no income-producing re-route).
+    "qualifying_property_count": ColumnSpec(pl.Int32, required=False),
     "is_social_housing": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_financial_sector_entity": ColumnSpec(pl.Boolean, default=False, required=False),
     "scra_grade": ColumnSpec(pl.String, required=False),

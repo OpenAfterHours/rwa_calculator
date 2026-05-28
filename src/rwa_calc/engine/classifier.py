@@ -63,6 +63,7 @@ from rwa_calc.data.tables.entity_class_mapping import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
+from rwa_calc.data.tables.b31_risk_weights import B31_RRE_THREE_PROPERTY_LIMIT
 from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
@@ -388,6 +389,13 @@ class ExposureClassifier:
         if "is_natural_person" in cp_col_names:
             select_cols.append(pl.col("is_natural_person").alias("cp_is_natural_person"))
 
+        # Three-property limit count — PRA PS1/26 Art. 124E(1)(b): drives the
+        # income-producing re-route for natural-person RRE (optional in input data).
+        if "qualifying_property_count" in cp_col_names:
+            select_cols.append(
+                pl.col("qualifying_property_count").alias("cp_qualifying_property_count")
+            )
+
         # Social housing flag — Art. 124L RRE residual RW routing (optional in input data)
         if "is_social_housing" in cp_col_names:
             select_cols.append(pl.col("is_social_housing").alias("cp_is_social_housing"))
@@ -695,7 +703,7 @@ class ExposureClassifier:
         sl_sa_class = pl.lit(ExposureClass.CORPORATE.value)
 
         # Batch 2: Derive all flags from pre-computed intermediates.
-        return exposures.with_columns(
+        exposures = exposures.with_columns(
             [
                 # --- Exposure class mappings (SL table overrides entity_type) ---
                 # SA class: SL is a corporate sub-type (Art. 112(1)(g))
@@ -755,6 +763,17 @@ class ExposureClassifier:
                 .alias("retail_threshold_exclusion_applied"),
             ]
         ).drop(["_sa_class", "_irb_class", "_pt_upper"])
+
+        # PRA PS1/26 Art. 124E(1)(b)/(2) — Basel 3.1 only: re-route natural-person
+        # residential exposures to the income-producing whole-loan track (Art. 124G)
+        # when the borrower breaches the three-property limit. An explicit upstream
+        # income flag still wins (coalesce precedence). CRR routing is untouched.
+        if config.is_basel_3_1 and "has_income_cover" in schema_names:
+            exposures = exposures.with_columns(
+                self._build_has_income_cover_expr(schema_names),
+            )
+
+        return exposures
 
     # =========================================================================
     # SME size-test helper (shared by every SME-classification gate)
@@ -1924,6 +1943,46 @@ class ExposureClassifier:
         if "is_adc" in schema_names:
             return pl.coalesce(pl.col("is_adc"), derived).fill_null(False).alias("is_adc")
         return derived.alias("is_adc")
+
+    @staticmethod
+    @cites("PS1/26, paragraph 124E")
+    def _build_has_income_cover_expr(schema_names: set[str]) -> pl.Expr:
+        """Build ``has_income_cover`` with the Art. 124E three-property re-route.
+
+        PRA PS1/26 Art. 124E(1)(b) restricts the owner-occupied preferential
+        residential treatment (Art. 124F loan-split / Art. 124L) to natural-person
+        borrowers whose total residential RE exposure is secured on no more than
+        three residential properties. When the count strictly exceeds three
+        (``cp_qualifying_property_count > B31_RRE_THREE_PROPERTY_LIMIT``), the
+        exposure is materially dependent on property cash flows (Art. 124E(2))
+        and routes to the income-producing whole-loan track (Art. 124G).
+
+        Boundary: the comparison is strict ``> 3`` — count=3 stays owner-occupied,
+        count=4 re-routes.
+
+        Coalesce precedence: any explicit upstream ``has_income_cover=True`` (set
+        from collateral ``is_income_producing`` in the hierarchy stage) wins, so a
+        caller-supplied income flag is never overridden by a low property count.
+
+        Returns a ``pl.Expr`` aliased ``has_income_cover`` (Boolean). When the
+        gating columns are absent the existing ``has_income_cover`` passes through
+        unchanged.
+        """
+        if "cp_qualifying_property_count" not in schema_names:
+            return pl.col("has_income_cover").fill_null(False).alias("has_income_cover")
+
+        is_natural_person = (
+            pl.col("cp_is_natural_person").fill_null(False)
+            if "cp_is_natural_person" in schema_names
+            else pl.lit(False)
+        )
+        # Strict > 3: count=3 stays owner-occupied; count=4 re-routes (Art. 124E(1)(b)).
+        breaches_limit = pl.col("cp_qualifying_property_count") > B31_RRE_THREE_PROPERTY_LIMIT
+        materially_dependent = is_natural_person & breaches_limit
+
+        explicit = pl.col("has_income_cover").fill_null(False)
+        # Explicit upstream income flag wins; otherwise the derived re-route applies.
+        return (explicit | materially_dependent).alias("has_income_cover")
 
     @staticmethod
     @cites("CRR Art. 178")

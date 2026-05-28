@@ -240,6 +240,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1140,
         ),
         (
+            "P1.142 (B31 Art. 124E three-property limit → income-producing RE routing)",
+            "p1_142",
+            _generate_p1142,
+        ),
+        (
             "P1.161 (PRA Art. 191A(2)(e)(i) funded-only look-through two-layer protection)",
             "p1_161",
             _generate_p1161,
@@ -1337,6 +1342,19 @@ def _generate_p1140(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_140", None)
+
+
+def _generate_p1142(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.142 fixtures (B31 Art. 124E three-property limit → income-producing RE routing)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_142 import save_p1142_fixtures
+
+        saved = save_p1142_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_142", None)
 
 
 def _generate_p1161(output_dir: Path) -> list[tuple[str, int]]:

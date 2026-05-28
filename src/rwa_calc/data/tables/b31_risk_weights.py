@@ -56,6 +56,13 @@ from rwa_calc.domain.enums import PropertyType
 B31_RESIDENTIAL_GENERAL_SECURED_RW = Decimal("0.20")
 B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO = Decimal("0.55")  # 55% of property value
 
+# PRA PS1/26 Art. 124E(1)(b): the owner-occupied preferential RRE treatment is
+# only available where the borrower's total residential RE exposure is secured on
+# no more than three residential properties (including the financed one). When the
+# count strictly exceeds three, the exposure is treated as materially dependent on
+# property cash flows and routed to the income-producing track (Art. 124G).
+B31_RRE_THREE_PROPERTY_LIMIT = 3
+
 # Art. 124L — Counterparty type table for RRE residual risk weight
 B31_RRE_RESIDUAL_RW_NATURAL_PERSON = Decimal("0.75")  # Art. 124L(a): natural person
 B31_RRE_RESIDUAL_RW_RETAIL_SME = Decimal("0.75")  # Art. 124L(a): retail-qualifying SME

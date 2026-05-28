@@ -85,6 +85,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1157,
         ),
         (
+            "P1.139 (B31 CIU look-through equity transitional floor Rules 4.7-4.8 higher-of)",
+            "p1_139",
+            _generate_p1139,
+        ),
+        (
             "P1.182 (long-established PE/VC 250% vs 400% business-age split)",
             "p1_182",
             _generate_p1182,
@@ -799,6 +804,19 @@ def _generate_p1182(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_182", None)
+
+
+def _generate_p1139(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.139 fixtures (B31 CIU look-through equity transitional floor Rules 4.7-4.8)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_139 import save_p1139_fixtures
+
+        saved = save_p1139_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_139", None)
 
 
 def _generate_p1100(output_dir: Path) -> list[tuple[str, int]]:

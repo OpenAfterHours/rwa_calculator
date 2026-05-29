@@ -928,6 +928,11 @@ class CalculationConfig:
     # Set False to force the passed-in / default rate regardless of input data.
     sync_eur_gbp_rate_from_fx_table: bool = True
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
+    # CRR Art. 155(3): when True and the firm has IRB permissions under CRR,
+    # equity exposures use the PD/LGD approach (Art. 165 supervisory parameters)
+    # instead of the Art. 155(2) IRB Simple risk weights. Ignored under Basel 3.1
+    # (Art. 147A removes IRB equity — all equity uses SA).
+    equity_pd_lgd: bool = False
     use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
     # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
     # or para 6 (65%/135% IG assessment) for unrated corporates. This choice

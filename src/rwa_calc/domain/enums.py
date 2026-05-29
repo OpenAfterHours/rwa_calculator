@@ -554,6 +554,15 @@ class EquityApproach(StrEnum):
     - 370% for other equity
     """
 
+    PD_LGD = "pd_lgd"
+    """
+    Article 155(3) PD/LGD approach (CRR only):
+    Risk-weighted exposure amounts use the corporate IRB K formula (Art. 153(1))
+    with supervisory parameters from Art. 165 — PD floors (165(1)), LGD 65%/90%
+    (165(2)), and fixed M = 5 years (165(3)). A 1.5x scaling applies where the
+    institution lacks Art. 178 default-definition data (155(3)).
+    """
+
 
 class InstitutionType(StrEnum):
     """

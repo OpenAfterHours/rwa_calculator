@@ -230,6 +230,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p219,
         ),
         (
+            "P1.153 (CRR Art. 155(3) PD/LGD equity approach — exchange-traded, no 1.5x)",
+            "p1_153",
+            _generate_p1153,
+        ),
+        (
             "P1.123 (CRR Art. 223(5) FCCM exposure volatility haircut HE for SFT exposures)",
             "p1_123",
             _generate_p1123,
@@ -1331,6 +1336,19 @@ def _generate_p219(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_19", None)
+
+
+def _generate_p1153(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.153 fixtures (CRR Art. 155(3) PD/LGD equity approach — exchange-traded)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_153 import save_p1153_fixtures
+
+        saved = save_p1153_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_153", None)
 
 
 def _generate_p1123(output_dir: Path) -> list[tuple[str, int]]:

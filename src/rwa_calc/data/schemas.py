@@ -568,6 +568,11 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 133(4)): unlisted PE with business_age_years < 5.0 (or null,
     # treated conservatively) routes to 400%; >= 5.0 routes to standard 250%.
     "business_age_years": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 155(3): True -> institution has sufficient Art. 178 default-
+    # definition data, so the 1.5x PD/LGD scaling does NOT apply. False/null ->
+    # the 1.5x scaling applies. Default True is the non-conservative branch, so
+    # the 1.5x edge case must set this explicitly False.
+    "has_default_definition_info": ColumnSpec(pl.Boolean, default=True, required=False),
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 

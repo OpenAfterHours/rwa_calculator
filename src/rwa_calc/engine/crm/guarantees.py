@@ -491,6 +491,10 @@ def _apply_guarantee_splits(
         "_effective_amount",
         "_total_effective",
         "amount_covered",
+        # CRR Art. 234 tranching points are consumed inside the remainder
+        # builder and must not leak downstream.
+        "attachment_amount",
+        "detachment_amount",
     ]
     if "percentage_covered" in guar_cols:
         transient.append("percentage_covered")
@@ -530,6 +534,9 @@ def _build_guarantee_agg_exprs(guar_cols: list[str]) -> list[pl.Expr]:
         "guarantor_seniority",
         "guarantee_fx_haircut",
         "guarantee_restructuring_haircut",
+        # CRR Art. 234 mezzanine tranching attachment/detachment points.
+        "attachment_amount",
+        "detachment_amount",
     ):
         if col in guar_cols:
             agg_exprs.append(pl.col(col).first().alias(col))
@@ -548,6 +555,9 @@ def _build_guarantee_select_cols(guar_cols: list[str]) -> list[str]:
         "guarantor_seniority",
         "guarantee_fx_haircut",
         "guarantee_restructuring_haircut",
+        # CRR Art. 234 mezzanine tranching attachment/detachment points.
+        "attachment_amount",
+        "detachment_amount",
     )
     return base + [c for c in optional if c in guar_cols]
 
@@ -657,15 +667,93 @@ def _build_guarantor_sub_rows(multi_joined: pl.LazyFrame) -> pl.LazyFrame:
     return multi_joined.with_columns(guar_stock_splits)
 
 
+@cites("CRR Art. 234")
 def _build_remainder_sub_rows(multi_joined: pl.LazyFrame) -> pl.LazyFrame:
-    """Build the per-exposure remainder sub-rows (uncovered portion)."""
-    rem_ratio = (pl.col("ead_after_collateral") - pl.col("_total_effective")) / pl.col(
-        "ead_after_collateral"
+    """
+    Build the borrower-retained remainder sub-rows (uncovered portion).
+
+    Default (first-loss attach, CRR Art. 235): the protection covers loss band
+    ``[0, G*)`` and the borrower retains a single senior remainder ``[G*, EAD]``
+    emitted as one ``__REM`` row.
+
+    CRR Art. 234 (tranched coverage): when the guarantee carries an
+    ``attachment_amount`` (a) and ``detachment_amount`` (d), the protection
+    attaches to the mezzanine band ``[a, d)`` instead of first loss. The
+    borrower then retains TWO tranches at its own obligor risk weight:
+    a first-loss tranche ``[0, a)`` (``__REM_FL``) and a senior tranche
+    ``[d, EAD]`` (``__REM_SEN``). Both retained tranches carry a null
+    ``guarantor_reference`` so downstream SA/IRB risk-weight the obligor.
+
+    Tranche widths compose AFTER the existing FX / restructuring / maturity
+    mismatch haircuts have reduced ``amount_covered`` to G* (the protected
+    width on the guarantor sub-row); ``_total_effective`` is that post-haircut
+    capped coverage. When ``attachment_amount`` is null behaviour is unchanged.
+
+    References:
+        CRR Art. 234: tranching of credit protection (attachment/detachment).
+        CRR Art. 235: SA risk-weight substitution on the protected tranche.
+    """
+    remainder = (
+        multi_joined.sort("parent_exposure_reference", "guarantor")
+        .group_by("parent_exposure_reference", maintain_order=True)
+        .first()
+    )
+    schema_names = remainder.collect_schema().names()
+    has_tranching = "attachment_amount" in schema_names
+
+    # Total borrower-retained EAD (uncovered portion across all guarantors).
+    retained_total = pl.col("ead_after_collateral") - pl.col("_total_effective")
+
+    if not has_tranching:
+        return _retained_tranche_rows(remainder, schema_names, retained_total, "__REM")
+
+    # CRR Art. 234: attachment a (null/0 => first-loss). Detachment d defaults to
+    # a + protected width so a null detachment collapses to the legacy split.
+    attach = pl.col("attachment_amount").fill_null(0.0)
+    detach = pl.col("detachment_amount").fill_null(attach + pl.col("_total_effective"))
+
+    # First-loss tranche [0, a) and senior tranche [d, EAD]. Clip widths to the
+    # exposure EAD to guard against attachment/detachment overshoot.
+    first_loss_width = attach.clip(lower_bound=0.0, upper_bound=pl.col("ead_after_collateral"))
+    senior_width = (pl.col("ead_after_collateral") - detach).clip(lower_bound=0.0)
+
+    is_tranched = pl.col("attachment_amount").is_not_null() & (
+        pl.col("attachment_amount") > 0.0
+    )
+
+    legacy_rows = _retained_tranche_rows(
+        remainder.filter(~is_tranched), schema_names, retained_total, "__REM"
+    )
+    first_loss_rows = _retained_tranche_rows(
+        remainder.filter(is_tranched), schema_names, first_loss_width, "__REM_FL"
+    )
+    senior_rows = _retained_tranche_rows(
+        remainder.filter(is_tranched), schema_names, senior_width, "__REM_SEN"
+    )
+    return pl.concat([legacy_rows, first_loss_rows, senior_rows], how="diagonal_relaxed")
+
+
+def _retained_tranche_rows(
+    remainder: pl.LazyFrame,
+    schema_names: list[str],
+    tranche_ead: pl.Expr,
+    suffix: str,
+) -> pl.LazyFrame:
+    """
+    Project one borrower-retained tranche of the given EAD width and suffix.
+
+    Stock columns are split proportionally to this tranche's share of the
+    parent EAD so downstream per-counterparty aggregations stay consistent.
+    """
+    tranche_ratio = (
+        pl.when(pl.col("ead_after_collateral") > 0)
+        .then(tranche_ead / pl.col("ead_after_collateral"))
+        .otherwise(pl.lit(0.0))
     )
     rem_exprs: list[pl.Expr] = [
         pl.lit(0.0).alias("guaranteed_portion"),
-        (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("unguaranteed_portion"),
-        (pl.col("ead_after_collateral") - pl.col("_total_effective")).alias("ead_after_collateral"),
+        tranche_ead.alias("unguaranteed_portion"),
+        tranche_ead.alias("ead_after_collateral"),
         pl.lit(0.0).alias("guarantee_amount"),
         pl.lit(0.0).alias("original_guarantee_amount"),
         pl.lit(None).cast(pl.String).alias("guarantor_reference"),
@@ -676,17 +764,11 @@ def _build_remainder_sub_rows(multi_joined: pl.LazyFrame) -> pl.LazyFrame:
         pl.lit(0.0).alias("guarantee_fx_haircut"),
         pl.lit(0.0).alias("guarantee_restructuring_haircut"),
         pl.concat_str(
-            [pl.col("parent_exposure_reference"), pl.lit("__REM")],
+            [pl.col("parent_exposure_reference"), pl.lit(suffix)],
         ).alias("exposure_reference"),
     ]
-    remainder = (
-        multi_joined.sort("parent_exposure_reference", "guarantor")
-        .group_by("parent_exposure_reference", maintain_order=True)
-        .first()
-    )
-    schema_names = remainder.collect_schema().names()
     rem_exprs.extend(
-        (pl.col(c) * rem_ratio).alias(c) for c in _stock_split_cols() if c in schema_names
+        (pl.col(c) * tranche_ratio).alias(c) for c in _stock_split_cols() if c in schema_names
     )
     return remainder.with_columns(rem_exprs)
 
@@ -1040,7 +1122,9 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
 
     # Classify row types
     is_sub_row = pl.col("parent_exposure_reference") != pl.col("exposure_reference")
-    is_remainder = pl.col("exposure_reference").str.ends_with("__REM")
+    # Art. 234 tranching emits two retained sub-rows ("__REM_FL"/"__REM_SEN")
+    # alongside the legacy single "__REM" row, so match the "__REM" stem anywhere.
+    is_remainder = pl.col("exposure_reference").str.contains("__REM")
     is_guarantor_sub = is_sub_row & ~is_remainder
 
     # Check if any parent group has mixed beneficial/non-beneficial sub-rows.

@@ -384,6 +384,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_ccr_a11_a12,
         ),
+        (
+            "P1.30(e) (CRR Art. 234 mezzanine partial-protection tranching attachment/detachment)",
+            "p1_30e",
+            _generate_p130e,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2224,6 +2229,19 @@ def _generate_ccr_a11_a12(output_dir: Path) -> list[tuple[str, int]]:
             "ccr.margin_builder",
         ):
             sys.modules.pop(mod, None)
+
+
+def _generate_p130e(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.30(e) fixtures (CRR Art. 234 mezzanine partial-protection tranching)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_30e import save_p130e_fixtures
+
+        saved = save_p130e_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_30e", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

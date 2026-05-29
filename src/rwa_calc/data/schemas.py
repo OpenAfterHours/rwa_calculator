@@ -480,6 +480,15 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     #   "both"        — out of scope for the current implementation; treated
     #                   as "none" with a CRM warning.
     "look_through_election": ColumnSpec(pl.String, default="none", required=False),
+    # CRR Art. 234: tranching of credit protection. When a guarantee protects a
+    # mezzanine loss band rather than first loss, ``attachment_amount`` (a) marks
+    # where protection begins and ``detachment_amount`` (d) where it ends. The
+    # obligor retains a first-loss tranche [0, a) and a senior tranche [d, EAD]
+    # at its own risk weight, while [a, d) is substituted to the guarantor. Null
+    # on both => first-loss attach (a = 0), preserving legacy single-remainder
+    # behaviour.
+    "attachment_amount": ColumnSpec(pl.Float64, required=False),
+    "detachment_amount": ColumnSpec(pl.Float64, required=False),
 }
 
 PROVISION_SCHEMA: dict[str, ColumnSpec] = {

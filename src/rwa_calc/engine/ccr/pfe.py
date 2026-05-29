@@ -100,6 +100,13 @@ def compute_pfe(
     denom = denom_coeff * one_minus_f * pl.col("addon_aggregate")
     uncapped = floor_f + one_minus_f * (v_minus_c / denom).exp()
 
+    # EAD consumes a unified replacement cost. When the caller has already
+    # supplied an ``rc`` column (e.g. the SA-CCR adapter coalescing margined
+    # RC per Art. 275(2) over unmargined RC per Art. 275(1)) the EAD step
+    # honours it; otherwise it falls back to the unmargined RC computed here.
+    has_unified_rc = "rc" in netting_sets.collect_schema().names()
+    rc_for_ead = pl.col("rc") if has_unified_rc else pl.col("rc_unmargined")
+
     return (
         netting_sets.with_columns(
             pl.min_horizontal(pl.lit(1.0), uncapped).alias("pfe_multiplier"),
@@ -111,7 +118,7 @@ def compute_pfe(
             ]
         )
         .with_columns(
-            (pl.lit(alpha_value) * (pl.col("rc_unmargined") + pl.col("pfe_addon"))).alias("ead_ccr")
+            (pl.lit(alpha_value) * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr")
         )
     )
 

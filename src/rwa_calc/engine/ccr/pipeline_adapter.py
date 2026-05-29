@@ -53,6 +53,7 @@ from rwa_calc.engine.ccr.adjusted_notional import (
 from rwa_calc.engine.ccr.hedging_sets import assign_hedging_set
 from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_unmargined
 from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
+from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
 from rwa_calc.engine.ccr.sft_fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
 
@@ -98,6 +99,8 @@ def ccr_rows_to_exposures(
         pfe_multiplier        = Art. 278(3) multiplier
         pfe_addon             = Art. 278(1) PFE
         rc_unmargined         = Art. 275(1) replacement cost
+        rc_margined           = Art. 275(2) replacement cost (null if unmargined)
+        rc                    = unified RC (margined where applicable) feeding EAD
         ead_ccr               = Art. 274(2) EAD at alpha
 
     The downstream concat in the orchestrator uses ``how="diagonal_relaxed"``
@@ -344,6 +347,20 @@ def _derivative_rows_to_exposures(
         )
     )
 
+    # Replacement cost. Unmargined sets follow CRR Art. 275(1):
+    #   RC = max(V - C, 0).
+    # Margined sets follow CRR Art. 275(2):
+    #   RC = max(V - C, TH + MTA - NICA, 0)
+    # using the threshold / minimum-transfer-amount / NICA carried on the
+    # netting set (NETTING_SET_SCHEMA). Both are surfaced for audit; the
+    # unified ``rc`` selects the margined form for margined sets and feeds
+    # EAD = alpha * (rc + PFE) inside compute_pfe.
+    ns_frame = compute_rc_unmargined(ns_frame)
+    ns_frame = compute_rc_margined(ns_frame)
+    ns_frame = ns_frame.with_columns(
+        pl.coalesce(pl.col("rc_margined"), pl.col("rc_unmargined")).alias("rc")
+    )
+
     ns_with_ead = compute_pfe(ns_frame, config_ccr)
 
     # 6) Shape into synthetic exposure rows. drawn_amount = ead_ccr so that
@@ -374,6 +391,8 @@ def _derivative_rows_to_exposures(
             pl.col("pfe_multiplier"),
             pl.col("pfe_addon"),
             pl.col("rc_unmargined"),
+            pl.col("rc_margined"),
+            pl.col("rc"),
             pl.col("ead_ccr"),
         ]
     )

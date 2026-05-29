@@ -68,6 +68,7 @@ from watchfire import cites
 from rwa_calc.data.tables.ccf import (
     OC_SHORT_MATURITY_CCF,
     OC_SHORT_MATURITY_THRESHOLD_DAYS,
+    SA_CCF_B31,
     build_firb_ccf_expr,
     build_sa_ccf_expr,
 )
@@ -238,6 +239,13 @@ class CCFCalculator:
             ("interest", pl.lit(0.0).alias("interest")),
             ("is_revolving", pl.lit(False).alias("is_revolving")),
             ("ead_modelled", pl.lit(None).cast(pl.Float64).alias("ead_modelled")),
+            # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): default False so the
+            # residential-property commitment override is a no-op when callers
+            # (e.g. unit tests) construct exposures without the flag.
+            (
+                "is_uk_residential_mortgage_commitment",
+                pl.lit(False).alias("is_uk_residential_mortgage_commitment"),
+            ),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -262,6 +270,7 @@ class CCFCalculator:
 
         return exposures, added
 
+    @cites("PS1/26, paragraph 111")
     def _compute_ccf(
         self,
         exposures: pl.LazyFrame,
@@ -271,6 +280,11 @@ class CCFCalculator:
 
         Determines SA and F-IRB CCFs from risk_type, then selects the final CCF
         based on the exposure's approach (SA/F-IRB/A-IRB).
+
+        Applies the PRA PS1/26 Art. 111(1) Table A1 Row 4(b) override: a UK
+        residential-property commitment (``is_uk_residential_mortgage_commitment``)
+        gets a 50% SA CCF under Basel 3.1, except where the otherwise-resolved
+        CCF is 10% (Row 6 UCC) or 100% (Row 2) — the Row 4(b) carve-out.
         """
         is_b31 = config.is_basel_3_1
 
@@ -312,6 +326,27 @@ class CCFCalculator:
                     .otherwise(pl.col("_sa_ccf_from_risk_type"))
                     .alias("_sa_ccf_from_risk_type"),
                 )
+
+        # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
+        # secured by residential property attract a 50% CCF — "to the extent
+        # that they are not subject to a conversion factor of 10% or 100%". When
+        # the flag is set under Basel 3.1, override the otherwise-resolved SA CCF
+        # to the MR / Row 4(b) rate (50%), unless that CCF is already 10% (Row 6
+        # UCC) or 100% (Row 2), in which case the carve-out leaves it untouched.
+        # No effect under CRR (Table A1 is Basel 3.1 only) — see the gate below.
+        if is_b31:
+            row_4b_ccf = float(SA_CCF_B31["MR"])
+            carve_out_ccfs = (float(SA_CCF_B31["LR"]), float(SA_CCF_B31["FR"]))
+            is_resi_commitment = pl.col(
+                "is_uk_residential_mortgage_commitment"
+            ).fill_null(False)
+            sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
+            exposures = exposures.with_columns(
+                pl.when(is_resi_commitment & sa_not_in_carve_out)
+                .then(pl.lit(row_4b_ccf))
+                .otherwise(pl.col("_sa_ccf_from_risk_type"))
+                .alias("_sa_ccf_from_risk_type"),
+            )
 
         # Art. 111(1)(c): commitment-to-issue lower-of rule.
         # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.

@@ -7,8 +7,8 @@ registration, and public function signatures for ``rwa_calc.engine.ccr``.
 P8.4 scaffold is fully implemented; per-formula bodies (P8.12, P8.13, P8.14,
 P8.17) have landed in subsequent batches with dedicated test files alongside.
 
-Deferred stubs (still raise NotImplementedError until their P-item lands):
-    - compute_pfe_ir_singleton          (P8.16)
+All former deferred stubs have been removed:
+    - compute_pfe_ir_singleton was removed in P6.30 (dead stub, never filled).
 
 References:
     - CRR Art. 274-280: SA-CCR EAD calculation
@@ -294,26 +294,61 @@ def test_compute_maturity_factor_unmargined_three_rows() -> None:
 
 
 # ===========================================================================
-# 10. compute_pfe_ir_singleton — NotImplementedError (stub, P8.16)
+# 10. compute_pfe_ir_singleton — REMOVED in P6.30 (dead stub never filled)
 # ===========================================================================
 
 
-def test_compute_pfe_ir_singleton_raises_not_implemented() -> None:
-    """compute_pfe_ir_singleton must raise NotImplementedError (stub until P8.16)."""
-    # Arrange
-    try:
-        from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton
-    except (ImportError, ModuleNotFoundError) as exc:
-        pytest.fail(
-            f"Cannot import compute_pfe_ir_singleton from rwa_calc.engine.ccr.pfe: {exc}. "
-            "Add the stub in P8.4."
-        )
+def test_compute_pfe_ir_singleton_removed() -> None:
+    """compute_pfe_ir_singleton must no longer exist anywhere in the CCR engine (P6.30).
 
-    lf = pl.LazyFrame({"netting_set_id": ["NS-001"]})
+    The function was a dead stub that raised NotImplementedError; P6.30 removes it
+    surgically without touching the surrounding compute_pfe or namespace methods.
 
-    # Act + Assert
-    with pytest.raises(NotImplementedError):
-        compute_pfe_ir_singleton(lf)
+    Assertions (all five must hold):
+    1. ``from rwa_calc.engine.ccr import compute_pfe_ir_singleton`` raises ImportError.
+    2. ``from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton`` raises ImportError.
+    3. ``"compute_pfe_ir_singleton"`` is absent from ``rwa_calc.engine.ccr.__all__``.
+    4. The ``ccr`` Polars namespace does NOT expose ``pfe_ir_singleton``.
+    5. Positive control: ``compute_pfe`` IS importable and ``lf.ccr.sa_ccr_ead`` exists.
+    """
+    import rwa_calc.engine.ccr  # Arrange — trigger namespace registration
+
+    # -----------------------------------------------------------------------
+    # Assert 1 — symbol not re-exported from the package __init__
+    # -----------------------------------------------------------------------
+    with pytest.raises(ImportError):
+        from rwa_calc.engine.ccr import compute_pfe_ir_singleton  # noqa: F401
+
+    # -----------------------------------------------------------------------
+    # Assert 2 — symbol not defined in pfe.py
+    # -----------------------------------------------------------------------
+    with pytest.raises(ImportError):
+        from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton  # noqa: F401
+
+    # -----------------------------------------------------------------------
+    # Assert 3 — symbol absent from __all__
+    # -----------------------------------------------------------------------
+    assert "compute_pfe_ir_singleton" not in rwa_calc.engine.ccr.__all__, (
+        "'compute_pfe_ir_singleton' must be removed from rwa_calc.engine.ccr.__all__ (P6.30). "
+        f"Current __all__: {rwa_calc.engine.ccr.__all__}"
+    )
+
+    # -----------------------------------------------------------------------
+    # Assert 4 — namespace method pfe_ir_singleton is gone
+    # -----------------------------------------------------------------------
+    lf = pl.LazyFrame({"netting_set_id": pl.Series([], dtype=pl.Utf8)})
+    assert not hasattr(lf.ccr, "pfe_ir_singleton"), (
+        "``lf.ccr.pfe_ir_singleton`` must be removed from the CCRNamespace (P6.30)."
+    )
+
+    # -----------------------------------------------------------------------
+    # Assert 5 — positive control: sibling symbols are still present
+    # -----------------------------------------------------------------------
+    from rwa_calc.engine.ccr.pfe import compute_pfe  # noqa: F401 — must not raise
+
+    assert hasattr(lf.ccr, "sa_ccr_ead"), (
+        "``lf.ccr.sa_ccr_ead`` must still exist after P6.30 — only the singleton stub is removed."
+    )
 
 
 # ===========================================================================

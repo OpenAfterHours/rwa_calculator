@@ -51,7 +51,7 @@ from rwa_calc.data.tables.crr_equity_rw import (
     IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
     SA_EQUITY_RISK_WEIGHTS,
 )
-from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType
+from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType, ExposureClass
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -389,6 +389,27 @@ class EquityCalculator:
         else:
             rw_table = get_combined_cqs_risk_weights().lazy()
 
+        # Rules 4.7-4.8 higher-of for EQUITY-class look-through holdings.
+        # An equity holding carries no ECAI CQS, so the (exposure_class, cqs)
+        # join misses and risk_weight is null. When the Basel 3.1 equity
+        # transitional regime is active for the reporting date, such holdings
+        # take max(legacy Art. 155(2) simple RW, Rule 4.2/4.3 transitional SA
+        # RW) instead of the _DEFAULT_HOLDING_RW fallback (the transitional
+        # regime only applies to firms that held IRB equity permission, so
+        # equity_transitional.enabled is the correct proxy here).
+        equity_holding_fallback_rw = self._equity_holding_higher_of_rw(config)
+        if equity_holding_fallback_rw is not None:
+            holding_rw_expr = (
+                pl.when(
+                    (pl.col("exposure_class") == ExposureClass.EQUITY.value.upper())
+                    & pl.col("risk_weight").is_null()
+                )
+                .then(pl.lit(equity_holding_fallback_rw))
+                .otherwise(pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW))
+            )
+        else:
+            holding_rw_expr = pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW)
+
         # Join holdings to RW table by (exposure_class, cqs)
         # Use sentinel for null CQS to allow join
         holdings_with_rw = (
@@ -403,9 +424,7 @@ class EquityCalculator:
                 on=["exposure_class", "cqs"],
                 how="left",
             )
-            .with_columns(
-                pl.col("risk_weight").fill_null(_DEFAULT_HOLDING_RW).alias("holding_rw"),
-            )
+            .with_columns(holding_rw_expr.alias("holding_rw"))
         )
 
         # Aggregate risk-weighted sum and total holding value per fund
@@ -463,6 +482,33 @@ class EquityCalculator:
             .drop("_fund_look_through_rw")
         )
 
+    @cites("CRR Art. 155(2)")
+    @cites("PS1/26, paragraph 4.8")
+    def _equity_holding_higher_of_rw(self, config: CalculationConfig) -> float | None:
+        """Rules 4.7-4.8 higher-of RW for EQUITY-class CIU look-through holdings.
+
+        Returns ``max(legacy Art. 155(2) "other equity" simple RW, Rule 4.2/4.3
+        transitional SA RW)`` when the Basel 3.1 equity transitional regime is
+        active for the reporting date, else ``None`` (no override — holdings keep
+        the _DEFAULT_HOLDING_RW fallback).
+
+        The transitional regime only applies to firms that held IRB equity
+        permission, so ``equity_transitional.enabled`` (plus a transitional RW
+        existing for the reporting date) is the gate.
+
+        References:
+        - CRR Art. 155(2): IRB simple method equity RW ("other" = 370%).
+        - PRA PS1/26 Rule 4.8: higher-of(Art. 155(2) simple, Rule 4.2/4.3 band).
+        """
+        transitional_rw = config.equity_transitional.get_transitional_rw(
+            config.reporting_date, is_higher_risk=False
+        )
+        if transitional_rw is None:
+            return None
+
+        legacy_simple_rw = _IRB_RW[EquityType.OTHER]
+        return max(legacy_simple_rw, float(transitional_rw))
+
     def _apply_equity_weights_sa(
         self,
         exposures: pl.LazyFrame,
@@ -512,6 +558,7 @@ class EquityCalculator:
             ]
         )
 
+    @cites("PS1/26, paragraph 133")
     def _apply_b31_equity_weights_sa(
         self,
         exposures: pl.LazyFrame,
@@ -524,43 +571,72 @@ class EquityCalculator:
         1. Central bank: 0%  (sovereign treatment)
         2. Subordinated debt / non-equity own funds: 150%  (Art. 133(5))
         3. Speculative / higher risk: 400%  (Art. 133(4))
-        4. PE / VC higher-risk test (Art. 133(4) + Glossary p.5):
+        4. Higher-risk test (Art. 133(4) + Glossary p.5), for any equity that
+           is not central-bank / subordinated-debt / CIU / government-supported:
            - unlisted (NOT is_exchange_traded) AND business_age_years < 5.0
              (or null, treated conservatively) -> 400% (higher-risk)
            - otherwise -> falls through to standard 250% (Art. 133(3))
         5. CIU: approach-dependent  (Art. 132-132C)
            - CIU fallback: 1,250%  (Art. 132(2))
-        6. All other standard equity (incl. government-supported, and
-           long-established/exchange-traded PE/VC): 250%  (Art. 133(3))
+        6. All other standard equity (incl. government-supported, listed, and
+           long-established/exchange-traded equity): 250%  (Art. 133(3))
 
         Note: B31 Art. 133(6) is an exclusion clause (own funds deductions,
         Art. 89(3), Art. 48(4)) — NOT a risk weight assignment. CRR's 100%
         legislative equity (Art. 133(3)(c)) has no equivalent in B31.
         """
-        # Glossary p.5 / Art. 133(4) higher-risk PE/VC test:
-        #   unlisted AND (business_age_years < 5.0 OR business_age_years is null)
-        # Null age is treated conservatively as <5y (firm cannot claim the
-        # long-established carve-out without evidence of business age >= 5).
-        # Missing columns are treated conservatively too: callers that bypass
-        # _prepare_columns (older direct-invocation unit tests) get the prior
-        # "always higher-risk" routing for unlisted PE.
+        # Art. 133(4) / Glossary p.5 higher-risk test — unlisted equity whose
+        # underlying business has existed < 5 years. Two routings combine:
+        #
+        #   (1) PE/VC legacy routing: unlisted PE/VC with business age < 5y OR
+        #       unknown -> 400%. Null/missing age is treated conservatively as
+        #       <5y (a firm cannot claim the long-established carve-out without
+        #       evidence of business age >= 5), preserving the prior behaviour
+        #       for callers that supply no business_age_years.
+        #
+        #   (2) Generalised routing: ANY other equity that is NOT
+        #       central-bank (0%), subordinated-debt (150%, Art. 133(5)), CIU
+        #       (Art. 132 look-through/mandate/fallback) or government-supported
+        #       (standard 250%, Art. 133(3)) is higher-risk only when it has an
+        #       *evidenced* young business age (non-null AND < 5.0). Absent age
+        #       data, such equity stays at the standard 250% — listed/unlisted/
+        #       other without business-age evidence is not uplifted.
         schema_names = exposures.collect_schema().names()
         is_pe_or_pe_div = (
             pl.col("equity_type")
             .str.to_lowercase()
-            .is_in(["private_equity", "private_equity_diversified"])
+            .is_in([EquityType.PRIVATE_EQUITY, EquityType.PRIVATE_EQUITY_DIVERSIFIED])
+        )
+        is_dedicated_treatment = (
+            pl.col("equity_type")
+            .str.to_lowercase()
+            .is_in([
+                EquityType.CENTRAL_BANK,
+                EquityType.SUBORDINATED_DEBT,
+                EquityType.CIU,
+                EquityType.GOVERNMENT_SUPPORTED,
+            ])
         )
         is_unlisted = (
             ~pl.col("is_exchange_traded").fill_null(False)
             if "is_exchange_traded" in schema_names
             else pl.lit(True)
         )
+        has_age = "business_age_years" in schema_names
         is_young_or_unknown = (
             pl.col("business_age_years").is_null() | (pl.col("business_age_years") < 5.0)
-            if "business_age_years" in schema_names
+            if has_age
             else pl.lit(True)
         )
-        is_higher_risk_pe = is_pe_or_pe_div & is_unlisted & is_young_or_unknown
+        is_young_evidenced = (
+            pl.col("business_age_years").is_not_null() & (pl.col("business_age_years") < 5.0)
+            if has_age
+            else pl.lit(False)
+        )
+        is_higher_risk = is_unlisted & (
+            (is_pe_or_pe_div & is_young_or_unknown)
+            | (~is_dedicated_treatment & is_young_evidenced)
+        )
 
         return exposures.with_columns(
             [
@@ -573,10 +649,10 @@ class EquityCalculator:
                 .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
                 .when(pl.col("equity_type").str.to_lowercase() == "speculative")
                 .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
-                # Art. 133(4) + Glossary p.5: unlisted PE/VC with business age
+                # Art. 133(4) + Glossary p.5: unlisted equity with business age
                 # < 5y (or unknown) is higher-risk (400%); long-established or
-                # exchange-traded PE/VC falls through to standard 250%.
-                .when(is_higher_risk_pe)
+                # exchange-traded equity falls through to standard 250%.
+                .when(is_higher_risk)
                 .then(pl.lit(_B31_SA_RW[EquityType.PRIVATE_EQUITY]))
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)

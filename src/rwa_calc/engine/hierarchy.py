@@ -407,6 +407,15 @@ class HierarchyResolver:
             {
                 "model_id": ColumnSpec(pl.String, required=False),
                 "is_short_term": ColumnSpec(pl.Boolean, default=False, required=False),
+                # PRA PS1/26 Art. 139(2B): provenance of the ECAI assessment so the
+                # SA-SL routing path can disapply inferred / non-issue-specific
+                # ratings. Defaults preserve legacy behaviour.
+                "rating_is_issue_specific": ColumnSpec(
+                    pl.Boolean, default=True, required=False
+                ),
+                "rating_is_inferred": ColumnSpec(
+                    pl.Boolean, default=False, required=False
+                ),
             },
         )
 
@@ -448,7 +457,9 @@ class HierarchyResolver:
             .sort(sort_cols, descending=[True, True])
             .group_by(["counterparty_reference", "rating_agency"])
             .first()
-            .select(["counterparty_reference", "cqs"])
+            .select(
+                ["counterparty_reference", "cqs", "rating_is_issue_specific"]
+            )
         )
 
         # Rank CQS ascending per counterparty (lowest CQS == best rating == lowest RW).
@@ -468,6 +479,7 @@ class HierarchyResolver:
             [
                 pl.col("counterparty_reference").alias("_ext_cp"),
                 pl.col("cqs").alias("external_cqs"),
+                pl.col("rating_is_issue_specific").alias("external_rating_is_issue_specific"),
             ]
         )
 
@@ -542,6 +554,7 @@ class HierarchyResolver:
                 "internal_pd",
                 "internal_model_id",
                 "external_cqs",
+                "external_rating_is_issue_specific",
                 "cqs",
                 "pd",
             ]
@@ -679,6 +692,7 @@ class HierarchyResolver:
                         pl.col("pd"),
                         pl.col("internal_pd"),
                         pl.col("external_cqs"),
+                        pl.col("external_rating_is_issue_specific"),
                         pl.col("internal_model_id"),
                     ]
                 ),
@@ -882,6 +896,7 @@ class HierarchyResolver:
                 "ead_modelled": pl.Float64,
                 "is_short_term_trade_lc": pl.Boolean,
                 "is_obs_commitment": pl.Boolean,
+                "is_uk_residential_mortgage_commitment": pl.Boolean,
                 "is_payroll_loan": pl.Boolean,
                 "is_buy_to_let": pl.Boolean,
                 "is_under_construction": pl.Boolean,
@@ -1190,6 +1205,10 @@ class HierarchyResolver:
             # synthesised to True and null-filled by the entry-point normalisation,
             # so we can read it directly here.
             pl.col("is_obs_commitment"),
+            # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential-property
+            # commitment flag carried through to the CCF stage so the 50%
+            # override fires under Basel 3.1. Defaults False when absent.
+            col_or_false("is_uk_residential_mortgage_commitment"),
             col_or_false("is_payroll_loan"),
             col_or_false("is_buy_to_let"),
             # PRA PS1/26 Art. 124(3) / Art. 124K: under-construction flag drives
@@ -1789,6 +1808,11 @@ class HierarchyResolver:
             pl.lit(None).cast(pl.Boolean).alias("is_short_term_trade_lc"),  # N/A for drawn loans
             pl.lit(None).cast(pl.Boolean).alias("is_obs_commitment"),  # N/A for drawn loans
             (
+                pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+                if "is_uk_residential_mortgage_commitment" in loan_cols
+                else pl.lit(False).alias("is_uk_residential_mortgage_commitment")
+            ),
+            (
                 pl.col("is_payroll_loan").fill_null(False)
                 if "is_payroll_loan" in loan_cols
                 else pl.lit(False).alias("is_payroll_loan")
@@ -1959,6 +1983,17 @@ class HierarchyResolver:
                     else pl.lit(False)
                 )
                 .alias("is_obs_commitment"),
+                # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential-property
+                # commitment flag. Meaningful only for undrawn (OFB) contingents;
+                # nullified for drawn (ONB) rows, mirroring is_obs_commitment.
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(
+                    pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
+                    if "is_uk_residential_mortgage_commitment" in cont_cols
+                    else pl.lit(False)
+                )
+                .alias("is_uk_residential_mortgage_commitment"),
                 pl.lit(False).alias(
                     "is_payroll_loan"
                 ),  # Payroll loans are term loans, not contingents
@@ -2227,6 +2262,8 @@ class HierarchyResolver:
             cp_select.append(pl.col("internal_pd"))
         if "external_cqs" in cp_schema:
             cp_select.append(pl.col("external_cqs"))
+        if "external_rating_is_issue_specific" in cp_schema:
+            cp_select.append(pl.col("external_rating_is_issue_specific"))
         if "internal_model_id" in cp_schema:
             cp_select.append(pl.col("internal_model_id"))
 
@@ -2242,6 +2279,12 @@ class HierarchyResolver:
             rating_defaults.append(pl.lit(None).cast(pl.Float64).alias("internal_pd"))
         if "external_cqs" not in cp_schema:
             rating_defaults.append(pl.lit(None).cast(pl.Int8).alias("external_cqs"))
+        # PRA PS1/26 Art. 139(2B): default provenance flag when no external rating
+        # resolved — treat as issue-specific (legacy behaviour, no disapplication).
+        if "external_rating_is_issue_specific" not in cp_schema:
+            rating_defaults.append(
+                pl.lit(True).cast(pl.Boolean).alias("external_rating_is_issue_specific")
+            )
         if rating_defaults:
             exposures = exposures.with_columns(rating_defaults)
 

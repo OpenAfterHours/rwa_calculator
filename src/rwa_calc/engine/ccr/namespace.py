@@ -7,7 +7,6 @@ Provides the fluent API that drives the SA-CCR EAD pipeline:
 - ``lf.ccr.adjusted_notional_ir()``        - IR adjusted notional per Art. 279b
 - ``lf.ccr.supervisory_delta_linear()``    - Linear +/- 1 delta per Art. 279a
 - ``lf.ccr.maturity_factor_unmargined()``  - MF = sqrt(min(M,1y)/1y), Art. 279c
-- ``lf.ccr.pfe_ir_singleton()``            - PFE IR singleton per Art. 278/280
 - ``lf.ccr.sa_ccr_ead(config)``            - EAD = alpha*(RC+PFE), Art. 274
 
 Pipeline position:
@@ -101,12 +100,6 @@ class CCRNamespace:
         from rwa_calc.engine.ccr.maturity_factor import compute_maturity_factor_margined
 
         return compute_maturity_factor_margined(self._lf)
-
-    def pfe_ir_singleton(self) -> pl.LazyFrame:
-        """Delegate to :func:`rwa_calc.engine.ccr.pfe.compute_pfe_ir_singleton`."""
-        from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton
-
-        return compute_pfe_ir_singleton(self._lf)
 
     def sa_ccr_ead(self, config: object) -> pl.LazyFrame:
         """Delegate to :func:`rwa_calc.engine.ccr.sa_ccr.compute_ead`."""

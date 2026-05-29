@@ -147,6 +147,15 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Facilities default to True because a facility row is, by construction, a
     # commitment / credit line.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=True, required=False),
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
+    # secured by residential property attract a 50% CCF. When True under Basel
+    # 3.1 the CCF engine overrides the otherwise-resolved SA CCF to the MR /
+    # Row 4(b) rate (50%), unless that CCF is already 10% or 100% (the Row 4(b)
+    # "not subject to a 10% or 100% conversion factor" carve-out). No effect
+    # under CRR (Table A1 is Basel 3.1 only).
+    "is_uk_residential_mortgage_commitment": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. When True, the exposure is routed
@@ -262,6 +271,12 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # Override to True for genuine commitment-style contingents (e.g., an
     # NIF / RUF booked as a contingent), in which case Art. 166(8)(d) -> 75% applies.
     "is_obs_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
+    # secured by residential property attract a 50% CCF. Mirrored from
+    # FACILITY_SCHEMA for parity; see the FACILITY_SCHEMA notes for full detail.
+    "is_uk_residential_mortgage_commitment": ColumnSpec(
+        pl.Boolean, default=False, required=False
+    ),
     # CRR Art. 178 row-level default flag. See FACILITY_SCHEMA for full notes.
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
     # PRA PS1/26 Art. 124(3) / Art. 124K: True when the financed property is
@@ -335,6 +350,12 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "apply_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_natural_person": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 124E(1)(b): count of residential properties securing the
+    # borrower's total residential RE exposure (including the financed one). When
+    # this count exceeds the three-property limit, the owner-occupied preferential
+    # treatment is disapplied and the exposure routes to the income-producing
+    # residential track (Art. 124G). Null = unknown (no income-producing re-route).
+    "qualifying_property_count": ColumnSpec(pl.Int32, required=False),
     "is_social_housing": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_financial_sector_entity": ColumnSpec(pl.Boolean, default=False, required=False),
     "scra_grade": ColumnSpec(pl.String, required=False),
@@ -488,6 +509,14 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     "is_short_term": ColumnSpec(pl.Boolean, default=False, required=False),
     "scope_type": ColumnSpec(pl.String, required=False),
     "scope_id": ColumnSpec(pl.String, required=False),
+    # PRA PS1/26 Art. 139(2B): inferred / issuer-level (non-issue-specific) ECAI
+    # assessments are disapplied for the SA specialised-lending routing under
+    # Art. 122B(1). These provenance flags let the engine distinguish a directly
+    # applicable issue-specific rating from one inferred from a related entity.
+    # Defaults preserve legacy behaviour: existing ratings are treated as
+    # directly applicable (issue-specific) and not inferred.
+    "rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
+    "rating_is_inferred": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
@@ -1369,6 +1398,11 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     # propagated from COUNTERPARTY_SCHEMA. Used by the FCSM SFT carve-out
     # (Art. 222(4)) to select 0% RW (True) vs 10% RW (False).
     "cp_is_core_market_participant": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 139(2B): whether the Art. 138-resolved external rating came
+    # from an issue-specific assessment. False signals an inferred / issuer-level
+    # rating, which is disapplied for the SA specialised-lending routing under
+    # Art. 122B(1). Default True preserves legacy behaviour (directly applicable).
+    "external_rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
 }
 
 # Columns produced by the CRM stage: collateral value buckets and provision

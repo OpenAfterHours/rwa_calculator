@@ -85,6 +85,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1157,
         ),
         (
+            "P1.139 (B31 CIU look-through equity transitional floor Rules 4.7-4.8 higher-of)",
+            "p1_139",
+            _generate_p1139,
+        ),
+        (
             "P1.182 (long-established PE/VC 250% vs 400% business-age split)",
             "p1_182",
             _generate_p1182,
@@ -220,6 +225,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p239,
         ),
         (
+            "P2.19 (B31 Art. 133(4) unlisted equity, young business, non-speculative → 400%)",
+            "p2_19",
+            _generate_p219,
+        ),
+        (
             "P1.123 (CRR Art. 223(5) FCCM exposure volatility haircut HE for SFT exposures)",
             "p1_123",
             _generate_p1123,
@@ -228,6 +238,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P1.140 (B31 Art. 124(3)/124K ADC classification derivation via is_under_construction)",
             "p1_140",
             _generate_p1140,
+        ),
+        (
+            "P1.142 (B31 Art. 124E three-property limit → income-producing RE routing)",
+            "p1_142",
+            _generate_p1142,
         ),
         (
             "P1.161 (PRA Art. 191A(2)(e)(i) funded-only look-through two-layer protection)",
@@ -280,6 +295,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p243,
         ),
         (
+            "P2.44 (SA-SL inferred-rating fallback suppression Art. 139(2B) object-finance 100%)",
+            "p2_44",
+            _generate_p244,
+        ),
+        (
             "P1.122(a) (IRB borrower + null-PD corporate guarantor → SA-fallback branch)",
             "p1_122a",
             _generate_p1122a,
@@ -293,6 +313,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P2.36 (sovereign/institution PD floor first-class config fields)",
             "p2_36",
             _generate_p236,
+        ),
+        (
+            "P2.33 / B31-D.CCF9 (UK residential-mortgage commitment 50% CCF override)",
+            "p2_33",
+            _generate_p233,
         ),
         (
             "CCR-A1 golden (single 10y GBP IR swap, unmargined)",
@@ -786,6 +811,19 @@ def _generate_p1182(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p1_182", None)
 
 
+def _generate_p1139(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.139 fixtures (B31 CIU look-through equity transitional floor Rules 4.7-4.8)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_139 import save_p1139_fixtures
+
+        saved = save_p1139_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_139", None)
+
+
 def _generate_p1100(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P1.100 fixtures (CRR Art. 137 ECA MEIP score 2 → 20% sovereign RW)."""
     sys.path.insert(0, str(output_dir))
@@ -1267,6 +1305,19 @@ def _generate_p239(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p2_39", None)
 
 
+def _generate_p219(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.19 fixtures (B31 Art. 133(4) unlisted equity, young business → 400%)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_19 import save_p219_fixtures
+
+        saved = save_p219_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_19", None)
+
+
 def _generate_p1123(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P1.123 fixtures (CRR Art. 223(5) FCCM exposure volatility haircut HE)."""
     sys.path.insert(0, str(output_dir))
@@ -1291,6 +1342,19 @@ def _generate_p1140(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_140", None)
+
+
+def _generate_p1142(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.142 fixtures (B31 Art. 124E three-property limit → income-producing RE routing)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_142 import save_p1142_fixtures
+
+        saved = save_p1142_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_142", None)
 
 
 def _generate_p1161(output_dir: Path) -> list[tuple[str, int]]:
@@ -1429,6 +1493,19 @@ def _generate_p243(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p2_43", None)
 
 
+def _generate_p244(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.44 fixtures (SA-SL inferred-rating fallback suppression Art. 139(2B))."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_44 import save_p244_fixtures
+
+        saved = save_p244_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_44", None)
+
+
 def _generate_p1122a(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P1.122(a) fixtures (IRB borrower + null-PD corporate guarantor SA-fallback)."""
     sys.path.insert(0, str(output_dir))
@@ -1472,6 +1549,19 @@ def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_36", None)
+
+
+def _generate_p233(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.33 / B31-D.CCF9 fixtures (UK residential-mortgage commitment 50% CCF)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_33 import save_p233_fixtures
+
+        saved = save_p233_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_33", None)
 
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:

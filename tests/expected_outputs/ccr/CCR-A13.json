@@ -1,0 +1,21 @@
+{
+  "scenario_id": "CCR-A13",
+  "framework": "crr",
+  "reporting_date": "2026-01-15",
+  "exposure_reference": "ccr__NS_MGN_001",
+  "source_netting_set_id": "NS_MGN_001",
+  "ccr_method": "sa_ccr",
+  "risk_type": "CCR_DERIVATIVE",
+  "_note_pre_fix": "Under the UNFIXED engine rc_unmargined=0 (max(-4m,0)=0) so ead_ccr=3314360.39 and rwa_final=1657180.20. These are the buggy values. The test is RED until P8.19 fix applies compute_rc_margined.",
+  "rc_margined": 2250000.0,
+  "rc_unmargined": 0.0,
+  "addon_aggregate": 3914298.2277279915,
+  "pfe_multiplier": 0.6048083569079303,
+  "pfe_addon": 2367400.27955979,
+  "ead_ccr": 6464360.391383706,
+  "ead_final": 6464360.391383706,
+  "exposure_class": "institution",
+  "approach_applied": "standardised",
+  "risk_weight": 0.50,
+  "rwa_final": 3232180.195691853
+}

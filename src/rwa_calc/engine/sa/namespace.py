@@ -2011,12 +2011,41 @@ class SALazyFrame:
         is_hedged_flag = (
             pl.col("is_hedged").fill_null(False) if "is_hedged" in cols else pl.lit(False)
         )
-        hedge_coverage_ok = (
-            pl.col("hedge_coverage_ratio").fill_null(0.0)
-            >= _SA_B31_RW["currency_mismatch_hedge_floor"]
-            if "hedge_coverage_ratio" in cols
-            else pl.lit(False)
-        )
+        # Art. 123B(2A): for revolving facilities the 90%-coverage test denominator is
+        # the fully-drawn committed amount (the "instalment amount" = greater of the
+        # contractual minimum and the fully-drawn contractual amount; leg (b) here,
+        # there being no contractual-minimum field). The firm-supplied
+        # ``hedge_coverage_ratio`` measures coverage of the CURRENT drawn balance, so
+        # for revolving rows it is rescaled onto the full-draw base:
+        #     full_draw_base     = max(drawn_amount, facility_limit)
+        #     effective_coverage = (hedge_coverage_ratio * drawn_amount) / full_draw_base
+        # Non-revolving rows are unchanged (effective_coverage = hedge_coverage_ratio).
+        # is_revolving / facility_limit / drawn_amount may be absent on production SA
+        # frames — default safely so the rescale is a no-op and legacy behaviour holds.
+        if "hedge_coverage_ratio" in cols:
+            raw_coverage = pl.col("hedge_coverage_ratio").fill_null(0.0)
+            is_revolving_flag = (
+                pl.col("is_revolving").fill_null(False) if "is_revolving" in cols else pl.lit(False)
+            )
+            drawn_amount = (
+                pl.col("drawn_amount").fill_null(0.0) if "drawn_amount" in cols else pl.lit(0.0)
+            )
+            # Absent facility_limit -> use drawn_amount so full_draw_base == drawn_amount
+            # and the rescale collapses to the legacy coverage ratio.
+            facility_limit = (
+                pl.col("facility_limit").fill_null(drawn_amount)
+                if "facility_limit" in cols
+                else drawn_amount
+            )
+            full_draw_base = pl.max_horizontal(drawn_amount, facility_limit)
+            effective_coverage = (
+                pl.when(is_revolving_flag & (full_draw_base > 0.0))
+                .then((raw_coverage * drawn_amount) / full_draw_base)
+                .otherwise(raw_coverage)
+            )
+            hedge_coverage_ok = effective_coverage >= _SA_B31_RW["currency_mismatch_hedge_floor"]
+        else:
+            hedge_coverage_ok = pl.lit(False)
         waive_expr = is_hedged_flag | hedge_coverage_ok
 
         mismatch_applies = is_retail_or_re & has_mismatch & ~waive_expr

@@ -175,9 +175,14 @@ class TestComputeOfAdj:
         assert gcra_capped == pytest.approx(1_000_000.0)
 
     def test_gcra_cap_with_zero_s_trea(self) -> None:
-        """Zero S-TREA: GCRA is used as-is (cap = 0, but GCRA >= 0 always)."""
+        """Zero S-TREA: GCRA cap is 0, so gcra_capped must be 0 and OF-ADJ = 0.
+
+        GCRA = 500k, S-TREA = 0 → cap = 0 * 1.25% = 0 → gcra_capped = min(500k, 0) = 0.
+        OF-ADJ = 12.5 * (0 - 0 - 0 + 0) = 0.
+        """
         of_adj, gcra_capped = compute_of_adj(0.0, 0.0, 500_000.0, 0.0, 0.0)
-        assert gcra_capped == pytest.approx(500_000.0)
+        assert gcra_capped == pytest.approx(0.0)
+        assert of_adj == pytest.approx(0.0)
 
     def test_gcra_cap_rate_constant(self) -> None:
         """GCRA_CAP_RATE must be 1.25% = 0.0125."""

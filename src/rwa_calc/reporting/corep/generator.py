@@ -1494,6 +1494,10 @@ class COREPGenerator:
         ead_col = _pick(cols, "ead_final", "final_ead", "ead")
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa_post_factor", "rwa")
         pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        # Firm-supplied internal rating grade (COREP Annex II, C 08.02): when
+        # present, rows are keyed by the firm's obligor grade scale rather than
+        # the fixed PD bands.
+        grade_col = _pick(cols, "cp_internal_rating_grade", "internal_rating_grade")
 
         if ec_col is None or ead_col is None or rwa_col is None:
             errors.append("C08.02: Missing required columns")
@@ -1514,7 +1518,7 @@ class COREPGenerator:
         for ec in classes:
             class_df = irb_df.filter(pl.col(ec_col) == ec)
             template_df = self._generate_c08_02_for_class(
-                class_df, data_cols, ead_col, rwa_col, pd_col, framework
+                class_df, data_cols, ead_col, rwa_col, pd_col, framework, grade_col
             )
             result[ec] = template_df
 
@@ -1528,14 +1532,25 @@ class COREPGenerator:
         rwa_col: str,
         pd_col: str,
         framework: str,
+        grade_col: str | None = None,
     ) -> pl.DataFrame:
         """Generate a C 08.02 DataFrame for a single IRB exposure class.
 
-        Rows = PD bands. Each row has the same columns as C 08.01 plus
+        Rows are keyed either by the firm-supplied internal rating grade
+        (COREP Annex II, C 08.02 obligor grade scale) when ``grade_col`` is
+        present and populated for the class, or by the fixed PD bands as a
+        graceful fallback. Each row carries the same columns as C 08.01 plus
         an obligor grade identifier (col 0005) and PD (col 0010 for B3.1).
         """
         column_defs = get_c08_02_columns(framework)
         column_refs = [c.ref for c in column_defs]
+
+        if grade_col is not None and grade_col in cols:
+            graded = self._generate_c08_02_grade_rows(
+                class_data, cols, ead_col, rwa_col, grade_col, column_refs
+            )
+            if graded is not None:
+                return self._c08_02_frame_from_rows(graded, column_refs)
 
         # Assign PD bands
         band_expr = pl.lit("Unassigned")
@@ -1570,16 +1585,67 @@ class COREPGenerator:
             values["0005"] = "Unassigned"
             rows.append({"row_ref": "Unassigned", "row_name": "Unassigned", **values})
 
+        return self._c08_02_frame_from_rows(rows, column_refs)
+
+    def _generate_c08_02_grade_rows(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        ead_col: str,
+        rwa_col: str,
+        grade_col: str,
+        column_refs: list[str],
+    ) -> list[dict[str, object]] | None:
+        """Build C 08.02 rows keyed by firm internal rating grade.
+
+        Returns one row per distinct non-null grade label (col 0005 = the grade
+        string); null-grade rows fall to a single "Unassigned" residual row.
+        Returns ``None`` when every grade value for the class is null so the
+        caller can fall back to the fixed PD-band path.
+        """
+        non_null = class_data.filter(pl.col(grade_col).is_not_null())
+        if len(non_null) == 0:
+            return None
+
+        rows: list[dict[str, object]] = []
+        grade_labels = non_null[grade_col].unique().sort().to_list()
+        for label in grade_labels:
+            grade_data = non_null.filter(pl.col(grade_col) == label)
+            values = _compute_c08_values(grade_data, cols, ead_col, rwa_col, column_refs)
+            # Col 0005: obligor grade identifier = the firm grade label
+            values["0005"] = label
+            rows.append({"row_ref": label, "row_name": label, **values})
+
+        # Rows with a null grade fall to an "Unassigned" residual (do not
+        # silently re-bucket them by PD).
+        unassigned = class_data.filter(pl.col(grade_col).is_null())
+        if len(unassigned) > 0:
+            values = _compute_c08_values(unassigned, cols, ead_col, rwa_col, column_refs)
+            values["0005"] = "Unassigned"
+            rows.append({"row_ref": "Unassigned", "row_name": "Unassigned", **values})
+
+        return rows
+
+    @staticmethod
+    def _c08_02_frame_from_rows(
+        rows: list[dict[str, object]],
+        column_refs: list[str],
+    ) -> pl.DataFrame:
+        """Materialise C 08.02 rows into a typed DataFrame.
+
+        Col 0005 (obligor grade identifier) is String; remaining columns are
+        Float64. Returns an empty, correctly-typed frame when ``rows`` is empty.
+        """
         if not rows:
-            schema: dict[str, pl.DataType] = {
+            empty_schema: dict[str, pl.DataType] = {
                 "row_ref": pl.String,
                 "row_name": pl.String,
             }
-            schema.update(dict.fromkeys(column_refs, pl.Float64))
-            return pl.DataFrame(schema=schema)
+            empty_schema.update(dict.fromkeys(column_refs, pl.Float64))
+            return pl.DataFrame(schema=empty_schema)
 
         # Infer schema from column defs — 0005 is String, rest are Float64
-        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.String if ref == "0005" else pl.Float64
 

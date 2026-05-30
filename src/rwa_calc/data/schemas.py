@@ -549,6 +549,9 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     # directly applicable (issue-specific) and not inferred.
     "rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
     "rating_is_inferred": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Firm-supplied internal rating grade (COREP Annex II, C 08.02 obligor grade
+    # scale). Free-text firm master-scale label; no COLUMN_VALUE_CONSTRAINTS entry.
+    "internal_rating_grade": ColumnSpec(pl.String, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
@@ -1535,6 +1538,9 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     # rating, which is disapplied for the SA specialised-lending routing under
     # Art. 122B(1). Default True preserves legacy behaviour (directly applicable).
     "external_rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
+    # Firm-supplied internal rating grade carried through as a cp_-prefixed
+    # results column for COREP C 08.02 grade-keyed rows (Annex II, C 08.02).
+    "cp_internal_rating_grade": ColumnSpec(pl.String, required=False),
 }
 
 # Columns produced by the CRM stage: collateral value buckets and provision

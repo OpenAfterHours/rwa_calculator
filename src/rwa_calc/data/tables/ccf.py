@@ -12,7 +12,8 @@ Tables (canonical dicts, keyed by the uppercase values in
 ``data.schemas.VALID_RISK_TYPES_INPUT``):
 
 - ``SA_CCF_CRR``: CRR Art. 111 SA mapping (FR/FRC=100%, MR=50%,
-  OC=50%, MLR=20%, LR=0%). The OC=50% value is the conservative
+  MR_ISSUED=50% (Annex I Row 3 issued OBS items), OC=50%, MLR=20%,
+  LR=0%). The OC=50% value is the conservative
   default; ``engine.ccf._compute_ccf`` overrides it to 20% when
   remaining maturity ≤ ``OC_SHORT_MATURITY_THRESHOLD_DAYS`` per
   Art. 111 (OC mapped to MLR for short maturities).
@@ -61,6 +62,10 @@ SA_CCF_CRR: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 — "other" issued medium-risk OBS items. Same 50% SA
+    # CCF as Row 4 (MR) but routed via a distinct risk_type so issued
+    # contingents are separable from NIF/RUF commitments (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.50"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.00"),
@@ -72,6 +77,9 @@ SA_CCF_B31: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 issued medium-risk OBS items mirror MR (50%) under
+    # Basel 3.1 Table A1 as well (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.40"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.10"),
@@ -84,6 +92,9 @@ FIRB_OBS_FALLBACK: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 issued OBS items resolve to the same Art. 166(10)(b)
+    # 50% medium-risk fallback as MR (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.50"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.00"),
@@ -147,6 +158,10 @@ def build_sa_ccf_expr(
         .then(pl.lit(float(table["FRC"])))
         .when(canonical == "MR")
         .then(pl.lit(float(table["MR"])))
+        # CRR Annex I Row 3 issued medium-risk OBS items — explicit 50%
+        # (mirrors MR / Row 4) so EAD is provably equal, not a default fallback.
+        .when(canonical == "MR_ISSUED")
+        .then(pl.lit(float(table["MR_ISSUED"])))
         .when(canonical == "OC")
         .then(pl.lit(float(table["OC"])))
         .when(canonical == "MLR")
@@ -188,7 +203,10 @@ def build_firb_ccf_expr(risk_type_col: str = "risk_type") -> pl.Expr:
     is_commitment = pl.col("is_obs_commitment").fill_null(True)
     is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
     is_mlr = canonical == "MLR"
-    is_mr_or_oc = canonical.is_in(["MR", "OC"])
+    # MR_ISSUED (CRR Annex I Row 3 issued OBS items) mirrors MR exactly: it
+    # rides the same Art. 166(8)(d) commitment / Art. 166(10)(b) issued split,
+    # so it never diverges to the otherwise default (P2.30).
+    is_mr_or_oc = canonical.is_in(["MR", "MR_ISSUED", "OC"])
     return (
         # FR/FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
         pl.when(canonical.is_in(["FR", "FRC"]))

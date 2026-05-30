@@ -414,6 +414,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_141",
             _generate_p1141,
         ),
+        (
+            "P2.30 (Annex I Row 3 vs Row 4 CCF discrimination — MR_ISSUED vs MR risk_type)",
+            "p2_30",
+            _generate_p230,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2340,6 +2345,19 @@ def _generate_p1141(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_141", None)
+
+
+def _generate_p230(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.30 fixtures (Annex I Row 3 vs Row 4 CCF discrimination — MR_ISSUED vs MR)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_30 import save_p230_fixtures
+
+        saved = save_p230_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_30", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

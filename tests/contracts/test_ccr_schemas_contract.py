@@ -355,12 +355,13 @@ def test_valid_risk_types_input_includes_ccr_sft() -> None:
     )
 
 
-def test_valid_risk_types_input_length_is_eight() -> None:
-    """VALID_RISK_TYPES_INPUT must contain exactly 8 values after P8.5 extension.
+def test_valid_risk_types_input_length_is_nine() -> None:
+    """VALID_RISK_TYPES_INPUT must contain exactly 9 values after P2.30 extension.
 
     Original 6 values: FR, FRC, MR, OC, MLR, LR.
     P8.5 adds: CCR_DERIVATIVE, CCR_SFT.
-    Total = 8.
+    P2.30 adds: MR_ISSUED (CRR Annex I Row 3 / Row 4 discrimination).
+    Total = 9.
     """
     # Arrange
     valid_set = getattr(schemas, "VALID_RISK_TYPES_INPUT", None)
@@ -370,9 +371,9 @@ def test_valid_risk_types_input_length_is_eight() -> None:
     count = len(valid_set)
 
     # Assert
-    assert count == 8, (
-        f"VALID_RISK_TYPES_INPUT must contain exactly 8 values after P8.5 extension "
-        f"(original 6 + CCR_DERIVATIVE + CCR_SFT), got {count}: {sorted(valid_set)}"
+    assert count == 9, (
+        f"VALID_RISK_TYPES_INPUT must contain exactly 9 values after P2.30 extension "
+        f"(original 6 + CCR_DERIVATIVE + CCR_SFT + MR_ISSUED), got {count}: {sorted(valid_set)}"
     )
 
 

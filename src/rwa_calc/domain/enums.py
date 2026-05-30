@@ -412,7 +412,21 @@ class RiskType(StrEnum):
     """
     Medium Risk - 50% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
 
-    -- NIFs, RUFs, standby LCs, committed undrawn facilities
+    CRR Annex I Row 4: medium-risk *commitments* — NIFs, RUFs, standby LCs,
+    committed undrawn facilities (``is_obs_commitment=True``). Distinct from
+    Row 3 issued OBS items, which carry ``RiskType.MR_ISSUED``.
+    """
+
+    MR_ISSUED = "medium_risk_issued"
+    """
+    Medium Risk Issued - 50% CCF under SA (CRR Annex I Row 3)
+
+    CRR Annex I Row 3: "other" issued medium-risk off-balance-sheet items —
+    performance bonds, bid bonds, warranties, shipping guarantees, and standby
+    LCs that are not direct credit substitutes (``is_obs_commitment=False``).
+    Same 50% SA CCF as Row 4 (RiskType.MR) but conceptually distinct: the bank
+    has *issued* a contingent rather than *committed* to extend credit. Mirrors
+    MR's F-IRB issued-OBS behaviour (Art. 166(10)(b) -> 50%).
     """
 
     MLR = "medium_low_risk"

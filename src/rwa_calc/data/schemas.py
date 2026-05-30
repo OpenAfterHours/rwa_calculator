@@ -1274,7 +1274,22 @@ VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 # the SA-CCR pipeline (CRR Art. 271). They flow through the same exposure
 # row model as on-balance-sheet items but are routed into the dedicated CCR
 # stages downstream.
-VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR", "CCR_DERIVATIVE", "CCR_SFT"}
+# MR_ISSUED (P2.30): CRR Annex I Row 3 — "other" issued medium-risk OBS items
+# (performance bonds, bid bonds, warranties, standby LCs not direct credit
+# substitutes). Same 50% SA CCF as MR (Row 4 NIF/RUF commitments) but routed
+# separately so Row 3 issued contingents are distinguishable from Row 4
+# commitments.
+VALID_RISK_TYPES_INPUT = {
+    "FR",
+    "FRC",
+    "MR",
+    "MR_ISSUED",
+    "OC",
+    "MLR",
+    "LR",
+    "CCR_DERIVATIVE",
+    "CCR_SFT",
+}
 
 # Lowercase synonyms accepted on input for the risk_type column. Maps every
 # permitted spelling (short code or full name) to its canonical uppercase
@@ -1288,6 +1303,8 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
     "full_risk_commitment": "FRC",
     "mr": "MR",
     "medium_risk": "MR",
+    "mr_issued": "MR_ISSUED",
+    "medium_risk_issued": "MR_ISSUED",
     "oc": "OC",
     "other_commit": "OC",
     "mlr": "MLR",

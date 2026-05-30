@@ -1069,6 +1069,7 @@ class ExposureClassifier:
                 eligibility["rre_eligible"].alias("re_split_residential_eligible"),
                 eligibility["cre_eligible"].alias("re_split_commercial_eligible"),
                 primitives["cre_rental_coverage_met"].alias("re_split_cre_rental_coverage_met"),
+                eligibility["force_other_re"].alias("re_split_force_other_re"),
             ]
         )
 
@@ -1086,6 +1087,7 @@ class ExposureClassifier:
                 pl.lit(False).alias("re_split_residential_eligible"),
                 pl.lit(False).alias("re_split_commercial_eligible"),
                 pl.lit(False).alias("re_split_cre_rental_coverage_met"),
+                pl.lit(False).alias("re_split_force_other_re"),
             ]
         )
 
@@ -1099,18 +1101,39 @@ class ExposureClassifier:
         conservative default of False when ``rental_to_interest_ratio`` is
         absent).
         """
-        residential_value = (
-            pl.col("residential_collateral_value").fill_null(0.0)
-            if "residential_collateral_value" in schema_names
-            else pl.lit(0.0)
-        )
-        property_value = pl.col("property_collateral_value").fill_null(0.0)
-        commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
+        # Loan-split component values use the UNCAPPED RE collateral values
+        # (PRA PS1/26 Art. 124(4) pro-rata is by raw collateral value, and the
+        # 0.55xV cap is on raw property value). Fall back to the capped columns
+        # when the uncapped variants are absent (older fixtures / direct calls).
+        if (
+            "residential_collateral_value_uncapped" in schema_names
+            and "commercial_collateral_value_uncapped" in schema_names
+        ):
+            residential_value = pl.col("residential_collateral_value_uncapped").fill_null(0.0)
+            commercial_value = pl.col("commercial_collateral_value_uncapped").fill_null(0.0)
+            property_value = residential_value + commercial_value
+        else:
+            residential_value = (
+                pl.col("residential_collateral_value").fill_null(0.0)
+                if "residential_collateral_value" in schema_names
+                else pl.lit(0.0)
+            )
+            property_value = pl.col("property_collateral_value").fill_null(0.0)
+            commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
 
         if "rental_to_interest_ratio" in schema_names:
             cre_rental_coverage_met = pl.col("rental_to_interest_ratio").fill_null(0.0) >= 1.5
         else:
             cre_rental_coverage_met = pl.lit(False)
+
+        # PRA PS1/26 Art. 124(4): per-beneficiary flag (set by the hierarchy
+        # resolver) marking that at least one RE collateral component fails
+        # Art. 124A. Drives the all-or-nothing gate for mixed-RE exposures.
+        re_collateral_non_qualifying = (
+            pl.col("re_collateral_non_qualifying").fill_null(False)
+            if "re_collateral_non_qualifying" in schema_names
+            else pl.lit(False)
+        )
 
         return {
             "residential_value": residential_value,
@@ -1121,6 +1144,7 @@ class ExposureClassifier:
             "has_cre": commercial_value > 0.0,
             "is_residential_dominant": residential_value >= commercial_value,
             "cre_rental_coverage_met": cre_rental_coverage_met,
+            "re_collateral_non_qualifying": re_collateral_non_qualifying,
         }
 
     @staticmethod
@@ -1187,6 +1211,7 @@ class ExposureClassifier:
         }
 
     @staticmethod
+    @cites("PS1/26, paragraph 124.4")
     def _re_split_per_component_eligibility(
         primitives: dict[str, pl.Expr],
         gates: dict[str, pl.Expr],
@@ -1200,6 +1225,14 @@ class ExposureClassifier:
         requires the rental-coverage test. ``is_mixed`` flags rows where
         both components are eligible — the splitter materialises one secured
         row per eligible component plus a single residual.
+
+        Art. 124(4) all-or-nothing qualifying gate (Basel 3.1 only): the
+        preferential Art. 124F-124I tables apply to a mixed-RE exposure only
+        when BOTH components separately qualify under Art. 124A. If either
+        component fails (``re_collateral_non_qualifying``), ``force_other_re``
+        fires and the splitter routes BOTH secured rows through Art. 124J
+        (Other RE) — no partial preference. CRR has no Art. 124(4) limb, so
+        the gate is suppressed on the CRR path.
         """
         rre_eligible = gates["is_candidate"] & primitives["has_rre"]
         if config.is_basel_3_1:
@@ -1210,10 +1243,17 @@ class ExposureClassifier:
                 & primitives["has_cre"]
                 & primitives["cre_rental_coverage_met"]
             )
+        is_mixed = rre_eligible & cre_eligible
+        force_other_re = (
+            is_mixed & primitives["re_collateral_non_qualifying"]
+            if config.is_basel_3_1
+            else pl.lit(False)
+        )
         return {
             "rre_eligible": rre_eligible,
             "cre_eligible": cre_eligible,
-            "is_mixed": rre_eligible & cre_eligible,
+            "is_mixed": is_mixed,
+            "force_other_re": force_other_re,
         }
 
     @staticmethod

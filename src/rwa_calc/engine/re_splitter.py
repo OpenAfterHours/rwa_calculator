@@ -354,6 +354,26 @@ def _annotate_with_components(
         if "prior_charge_ltv" in schema_names
         else pl.lit(0.0)
     )
+    # PRA PS1/26 Art. 124(4) all-or-nothing gate: mixed-RE rows whose qualifying
+    # test failed take the Art. 124J path. The pro-rata EAD split still applies
+    # but WITHOUT the 0.55xV preferential cap — the full apportioned share lands
+    # on each secured row so no residual remains at the counterparty class.
+    force_other_re = (
+        pl.col("re_split_force_other_re").fill_null(False)
+        if "re_split_force_other_re" in schema_names
+        else pl.lit(False)
+    )
+    # Secured-row qualifying flag: when the Art. 124(4) gate fires, BOTH secured
+    # rows become non-qualifying so the SA calculator routes them to Art. 124J;
+    # otherwise the parent's existing is_qualifying_re (or null) is preserved.
+    parent_qualifying = (
+        pl.col("is_qualifying_re")
+        if "is_qualifying_re" in schema_names
+        else pl.lit(None, dtype=pl.Boolean)
+    )
+    secured_qualifying_expr = (
+        pl.when(force_other_re).then(pl.lit(False)).otherwise(parent_qualifying)
+    )
     ead_safe = pl.col(ead_col).fill_null(0.0)
     rre_secured_expr, cre_secured_expr = _allocation_exprs(
         is_basel_3_1=is_basel_3_1,
@@ -365,6 +385,7 @@ def _annotate_with_components(
         rre_eligible_expr=rre_eligible_expr,
         cre_eligible_expr=cre_eligible_expr,
         prior_charge=prior_charge,
+        force_other_re=force_other_re,
     )
     return (
         exposures.with_columns(
@@ -373,6 +394,7 @@ def _annotate_with_components(
                 cre_v_expr.alias("_re_cre_value"),
                 rre_eligible_expr.alias("_re_rre_eligible"),
                 cre_eligible_expr.alias("_re_cre_eligible"),
+                secured_qualifying_expr.alias("_re_secured_qualifying"),
             ]
         )
         .with_columns(
@@ -517,6 +539,7 @@ def _allocation_exprs(
     rre_eligible_expr: pl.Expr,
     cre_eligible_expr: pl.Expr,
     prior_charge: pl.Expr,
+    force_other_re: pl.Expr,
 ) -> tuple[pl.Expr, pl.Expr]:
     """Return (rre_secured_ead_expr, cre_secured_ead_expr) per regime.
 
@@ -529,6 +552,11 @@ def _allocation_exprs(
       × component_value), where component_share = component_v / (rre_v +
       cre_v) and cap_pct is reduced by ``prior_charge_ltv`` per
       Art. 124F(2) / 124H(2).
+    - **B3.1 Art. 124(4) all-or-nothing gate** (``force_other_re``): a
+      mixed-RE exposure with any non-qualifying component drops to Art.
+      124J. The pro-rata split still applies, but the 0.55×V preferential
+      cap is removed — each component takes its FULL apportioned share
+      (EAD × component_share) so the residual is zero.
     """
     rrep_cap_pct = float(rrep.secured_ltv_cap)
     crep_cap_pct = float(crep.secured_ltv_cap)
@@ -553,16 +581,16 @@ def _allocation_exprs(
         cre_share = pl.when(total_v > 0.0).then(cre_v_expr / total_v).otherwise(pl.lit(0.0))
         rre_alloc = ead_expr * rre_share
         cre_alloc = ead_expr * cre_share
-        rre_secured = (
-            pl.when(rre_eligible_expr)
-            .then(pl.min_horizontal(rre_alloc, rre_cap_eur))
-            .otherwise(pl.lit(0.0))
+        # Art. 124(4) all-or-nothing: full pro-rata share when the gate fires
+        # (Art. 124J path, no preferential cap); capped pro-rata otherwise.
+        rre_capped = pl.when(force_other_re).then(rre_alloc).otherwise(
+            pl.min_horizontal(rre_alloc, rre_cap_eur)
         )
-        cre_secured = (
-            pl.when(cre_eligible_expr)
-            .then(pl.min_horizontal(cre_alloc, cre_cap_eur))
-            .otherwise(pl.lit(0.0))
+        cre_capped = pl.when(force_other_re).then(cre_alloc).otherwise(
+            pl.min_horizontal(cre_alloc, cre_cap_eur)
         )
+        rre_secured = pl.when(rre_eligible_expr).then(rre_capped).otherwise(pl.lit(0.0))
+        cre_secured = pl.when(cre_eligible_expr).then(cre_capped).otherwise(pl.lit(0.0))
     else:
         # CRR sequential RRE-first: RRE first against full EAD, CRE on the remainder.
         rre_secured = (
@@ -599,6 +627,12 @@ def _secured_columns(
         pl.col(meta.component_value_col).alias("property_collateral_value"),
         _new_ltv_for_component_expr(component).alias("ltv"),
         pl.lit(meta.prop_type).alias("property_type"),
+        # PRA PS1/26 Art. 124(4) all-or-nothing gate: when the mixed-RE
+        # qualifying test fails, this secured row is forced non-qualifying
+        # (materialised upstream as ``_re_secured_qualifying``) so the SA
+        # calculator routes it through Art. 124J (Other RE) instead of the
+        # preferential Art. 124F / 124H tables.
+        pl.col("_re_secured_qualifying").alias("is_qualifying_re"),
         # CRR CRE splits set has_income_cover=True so Art. 126's
         # `(ltv <= 0.50) & has_income_cover` returns the 50% RW.
         # B3.1 + RRE always pass False so the general Art. 124F/H

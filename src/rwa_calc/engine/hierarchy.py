@@ -2428,7 +2428,10 @@ class HierarchyResolver:
                 [
                     pl.lit(0.0).alias("residential_collateral_value"),
                     pl.lit(0.0).alias("property_collateral_value"),
+                    pl.lit(0.0).alias("residential_collateral_value_uncapped"),
+                    pl.lit(0.0).alias("commercial_collateral_value_uncapped"),
                     pl.lit(False).alias("has_facility_property_collateral"),
+                    pl.lit(False).alias("re_collateral_non_qualifying"),
                     pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
                 ]
             )
@@ -2441,6 +2444,16 @@ class HierarchyResolver:
             pl.col("collateral_type").str.to_lowercase() == "real_estate"
         )
         is_residential = pl.col("property_type").str.to_lowercase() == "residential"
+        # PRA PS1/26 Art. 124(4): a single non-qualifying RE component (Art. 124A
+        # failure, e.g. valuation-independence breach) forces the WHOLE mixed-RE
+        # exposure to Art. 124J. Track per-beneficiary whether any RE collateral
+        # row fails the qualifying test so the classifier can fire the gate.
+        has_qualifying_re_col = "is_qualifying_re" in collateral_schema.names()
+        is_non_qualifying_re = (
+            pl.col("is_qualifying_re").fill_null(True) == False  # noqa: E712
+            if has_qualifying_re_col
+            else pl.lit(False)
+        )
 
         if not has_beneficiary_type:
             # Legacy: assume direct exposure linking only — one group_by, two aggregates
@@ -2451,6 +2464,7 @@ class HierarchyResolver:
                     .sum()
                     .alias("residential_collateral_value"),
                     pl.col("market_value").sum().alias("property_collateral_value"),
+                    is_non_qualifying_re.any().alias("re_collateral_non_qualifying"),
                 ]
             )
             exposures = exposures.join(
@@ -2468,14 +2482,28 @@ class HierarchyResolver:
             exposures = self._join_property_collateral_multi_level(
                 exposures,
                 all_property_collateral,
+                is_non_qualifying_re=is_non_qualifying_re,
             )
             needs_facility_flag = False
 
-        # Fill nulls, then cap at exposure amount and derive threshold
+        # Fill nulls, then cap at exposure amount and derive threshold.
+        # Preserve the UNCAPPED residential / commercial RE collateral values
+        # for the loan-splitter: the PRA PS1/26 Art. 124(4) pro-rata split is by
+        # raw collateral value (and the 0.55xV cap is also on raw property value),
+        # so the per-exposure cap applied below — which exists for the CRR retail
+        # threshold — must not distort the split shares.
         exposures = exposures.with_columns(
             [
                 pl.col("residential_collateral_value").fill_null(0.0),
                 pl.col("property_collateral_value").fill_null(0.0),
+                pl.col("re_collateral_non_qualifying").fill_null(False),
+            ]
+        ).with_columns(
+            [
+                pl.col("residential_collateral_value").alias("residential_collateral_value_uncapped"),
+                (pl.col("property_collateral_value") - pl.col("residential_collateral_value"))
+                .clip(lower_bound=0.0)
+                .alias("commercial_collateral_value_uncapped"),
             ]
         ).with_columns(
             [
@@ -2504,6 +2532,8 @@ class HierarchyResolver:
         self,
         exposures: pl.LazyFrame,
         all_property_collateral: pl.LazyFrame,
+        *,
+        is_non_qualifying_re: pl.Expr,
     ) -> pl.LazyFrame:
         """
         Join property collateral at direct/facility/counterparty levels.
@@ -2517,10 +2547,15 @@ class HierarchyResolver:
             all_property_collateral: All property collateral (residential + commercial);
                 residential rows are filtered inline via ``filter(is_residential)``
                 within the conditional ``group_by`` aggregate.
+            is_non_qualifying_re: Per-collateral-row predicate flagging RE that
+                fails Art. 124A (``is_qualifying_re == False``); aggregated to a
+                per-beneficiary ``re_collateral_non_qualifying`` flag for the
+                PRA PS1/26 Art. 124(4) all-or-nothing gate.
 
         Returns:
             Exposures with residential_collateral_value, property_collateral_value,
-            and has_facility_property_collateral columns added
+            re_collateral_non_qualifying, and has_facility_property_collateral
+            columns added
         """
         bt_lower = pl.col("beneficiary_type").str.to_lowercase()
         is_residential = pl.col("property_type").str.to_lowercase() == "residential"
@@ -2549,6 +2584,7 @@ class HierarchyResolver:
                 [
                     pl.col("market_value").filter(is_residential).sum().alias("_res"),
                     pl.col("market_value").sum().alias("_prop"),
+                    is_non_qualifying_re.any().alias("_nonqual"),
                 ]
             )
         )
@@ -2557,17 +2593,17 @@ class HierarchyResolver:
         coll_direct = (
             coll_agg.filter(pl.col("_level") == "direct")
             .drop("_level")
-            .rename({"_res": "_res_d", "_prop": "_prop_d"})
+            .rename({"_res": "_res_d", "_prop": "_prop_d", "_nonqual": "_nonqual_d"})
         )
         coll_facility = (
             coll_agg.filter(pl.col("_level") == "facility")
             .drop("_level")
-            .rename({"_res": "_res_f", "_prop": "_prop_f"})
+            .rename({"_res": "_res_f", "_prop": "_prop_f", "_nonqual": "_nonqual_f"})
         )
         coll_cp = (
             coll_agg.filter(pl.col("_level") == "counterparty")
             .drop("_level")
-            .rename({"_res": "_res_c", "_prop": "_prop_c"})
+            .rename({"_res": "_res_c", "_prop": "_prop_c", "_nonqual": "_nonqual_c"})
         )
 
         # .over() window functions for allocation weights (no self-join!).
@@ -2643,6 +2679,11 @@ class HierarchyResolver:
                     | (pl.col("_prop_f").fill_null(0.0) > 0)
                     | (pl.col("_prop_c").fill_null(0.0) > 0)
                 ).alias("has_facility_property_collateral"),
+                (
+                    pl.col("_nonqual_d").fill_null(False)
+                    | pl.col("_nonqual_f").fill_null(False)
+                    | pl.col("_nonqual_c").fill_null(False)
+                ).alias("re_collateral_non_qualifying"),
             ]
         )
 
@@ -2655,6 +2696,9 @@ class HierarchyResolver:
                 "_prop_d",
                 "_prop_f",
                 "_prop_c",
+                "_nonqual_d",
+                "_nonqual_f",
+                "_nonqual_c",
                 "facility_total",
                 "cp_total",
                 "facility_weight",

@@ -1455,6 +1455,10 @@ CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "re_split_residential_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     "re_split_commercial_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     "re_split_cre_rental_coverage_met": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 124(4) all-or-nothing gate: True for mixed-RE rows where
+    # at least one component fails Art. 124A — splitter routes BOTH secured rows
+    # through Art. 124J (Other RE) and allocates full pro-rata EAD (no 0.55xV cap).
+    "re_split_force_other_re": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 

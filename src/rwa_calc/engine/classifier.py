@@ -1402,6 +1402,7 @@ class ExposureClassifier:
                 pl.lit(False).alias("model_airb_permitted"),
                 pl.lit(False).alias("model_firb_permitted"),
                 pl.lit(False).alias("model_slotting_permitted"),
+                pl.lit(None).cast(pl.String).alias("ppu_reason"),
             )
 
         # Cast model_id to String to handle null-typed columns (all values null)
@@ -1417,6 +1418,12 @@ class ExposureClassifier:
             model_permissions = model_permissions.with_columns(
                 pl.lit(None).cast(pl.String).alias("excluded_book_codes")
             )
+        # ppu_reason is optional (CRR Art. 150(1)/Art. 148 SA-routing provenance).
+        # Absent on frames that omit it → all null (no PPU/roll-out labelling).
+        if "ppu_reason" not in mp_schema_names:
+            model_permissions = model_permissions.with_columns(
+                pl.lit(None).cast(pl.String).alias("ppu_reason")
+            )
 
         # Join exposures with model_permissions on model_id
         # Each exposure may match multiple permission rows (AIRB + FIRB for same model)
@@ -1427,6 +1434,7 @@ class ExposureClassifier:
                 pl.col("approach").alias("mp_approach"),
                 pl.col("country_codes").alias("mp_country_codes"),
                 pl.col("excluded_book_codes").alias("mp_excluded_book_codes"),
+                pl.col("ppu_reason").alias("mp_ppu_reason"),
             ),
             left_on="model_id",
             right_on="mp_model_id",
@@ -1491,10 +1499,20 @@ class ExposureClassifier:
             "_sa_block_match"
         )
 
+        # CRR Art. 150(1) PPU / Art. 148 roll-out provenance: capture the ppu_reason
+        # from the surviving SA-precedence row only. Null on non-SA rows so the
+        # max().over() roll-up below picks up the SA row's label (and stays null
+        # when no SA-routing permission applied).
+        sa_ppu_reason = (
+            pl.when(sa_block).then(pl.col("mp_ppu_reason")).otherwise(None).alias("_sa_ppu_reason")
+        )
+
         # Add match flags then aggregate: group by all original columns,
         # take max of the match flags (any valid AIRB/FIRB/slotting permission → True),
         # then AND-NOT the SA block to apply the SA-precedence rule.
-        result = joined.with_columns(airb_permitted, firb_permitted, slotting_permitted, sa_block)
+        result = joined.with_columns(
+            airb_permitted, firb_permitted, slotting_permitted, sa_block, sa_ppu_reason
+        )
 
         # Aggregate back to one row per exposure using .over() to avoid group_by.
         # SA-precedence override is applied AFTER the .max() roll-up so any SA
@@ -1502,6 +1520,7 @@ class ExposureClassifier:
         result = result.with_columns(
             pl.col("_sa_block_match").max().over("exposure_reference").alias("_sa_block"),
             pl.col("_mp_row_joined").max().over("exposure_reference").alias("_mp_joined_any"),
+            pl.col("_sa_ppu_reason").max().over("exposure_reference").alias("ppu_reason"),
         ).with_columns(
             (pl.col("_airb_match").max().over("exposure_reference") & ~pl.col("_sa_block")).alias(
                 "model_airb_permitted"
@@ -1572,6 +1591,8 @@ class ExposureClassifier:
                     "mp_approach",
                     "mp_country_codes",
                     "mp_excluded_book_codes",
+                    "mp_ppu_reason",
+                    "_sa_ppu_reason",
                     "_airb_match",
                     "_firb_match",
                     "_slotting_match",

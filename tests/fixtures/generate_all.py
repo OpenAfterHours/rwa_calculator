@@ -454,6 +454,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_38",
             _generate_p238,
         ),
+        (
+            "P2.46 (Art. 150(1) PPU provenance ppu_reason — C 07.00 rows 0050/0060 discrimination)",
+            "p2_46",
+            _generate_p246,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2557,6 +2562,19 @@ def _generate_p238(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_38", None)
+
+
+def _generate_p246(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.46 fixtures (Art. 150(1) PPU provenance ppu_reason — C 07.00 rows 0050/0060)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_46 import save_p246_fixtures
+
+        saved = save_p246_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_46", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

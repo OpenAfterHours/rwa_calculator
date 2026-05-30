@@ -750,6 +750,11 @@ MODEL_PERMISSIONS_SCHEMA: dict[str, ColumnSpec] = {
     # country_codes / excluded_book_codes absent → null (all geographies / no exclusions)
     "country_codes": ColumnSpec(pl.String, required=False),
     "excluded_book_codes": ColumnSpec(pl.String, required=False),
+    # ppu_reason absent → null. Identifies the legal basis for an SA-routed
+    # (approach="standardised") permission: any CRR Art. 150(1)(a)-(j) permanent
+    # partial use condition, or Art. 148 sequential IRB roll-out. Provenance-only
+    # — drives COREP C 07.00 / OF 07.00 Section 1 rows 0050/0060 (PpuReason enum).
+    "ppu_reason": ColumnSpec(pl.String, required=False),
 }
 
 
@@ -1378,7 +1383,33 @@ VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 # scope) are independent contracts. Null is also valid (counterparty-wide).
 VALID_RATING_SCOPE_TYPES = {"facility", "loan", "contingent"}
 
-VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
+VALID_MODEL_PERMISSION_APPROACHES = {
+    "foundation_irb",
+    "advanced_irb",
+    "slotting",
+    # "standardised" permits an IRB-permissioned firm to route an exposure class
+    # to SA under a permanent partial use (CRR Art. 150(1)) or sequential roll-out
+    # (CRR Art. 148) permission; the legal basis is carried in ``ppu_reason``.
+    "standardised",
+}
+
+# Allowed values for ``model_permissions.ppu_reason`` — the legal basis for an
+# SA-routed (approach="standardised") permission. CRR Art. 150(1)(a)-(j) permanent
+# partial use conditions plus Art. 148 sequential IRB roll-out. Mirrors the
+# PpuReason enum (domain/enums.py); null is also valid (plain SA fallback).
+VALID_PPU_REASONS = {
+    "art_150_1_a",
+    "art_150_1_b",
+    "art_150_1_c",
+    "art_150_1_d",
+    "art_150_1_e",
+    "art_150_1_f",
+    "art_150_1_g",
+    "art_150_1_h",
+    "art_150_1_i",
+    "art_150_1_j",
+    "art_148_rollout",
+}
 
 VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
 
@@ -1452,6 +1483,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "model_permissions": {
         "approach": VALID_MODEL_PERMISSION_APPROACHES,
+        "ppu_reason": VALID_PPU_REASONS,
     },
     "securitisation_allocations": {
         "exposure_type": VALID_SECURITISATION_EXPOSURE_TYPES,
@@ -1555,6 +1587,11 @@ CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     # corporate_sme -> 0296/0355, corporate_other -> 0297/0356. Populated by
     # Classifier._derive_exposure_subclass for corporate / corporate_sme rows.
     "exposure_subclass": ColumnSpec(pl.String, required=False),
+    # CRR Art. 150(1)(a)-(j) PPU / Art. 148 roll-out provenance for SA-routed
+    # exposures, carried from the surviving model_permissions row by
+    # Classifier._resolve_model_permissions. Null under CRR/B31 when no SA-routing
+    # permission applied. Drives COREP C 07.00 / OF 07.00 Section 1 rows 0050/0060.
+    "ppu_reason": ColumnSpec(pl.String, required=False),
 }
 
 

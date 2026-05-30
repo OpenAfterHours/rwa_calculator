@@ -726,3 +726,57 @@ class RatingScope(StrEnum):
 
     CONTINGENT = "contingent"
     """Rating attaches to a specific contingent (off-balance sheet) exposure."""
+
+
+class PpuReason(StrEnum):
+    """
+    Legal basis for routing an IRB-eligible exposure to the Standardised Approach.
+
+    Carried on ``model_permissions`` rows whose ``approach="standardised"`` and
+    threaded onto the classifier output. Provenance-only — it does not alter the
+    SA risk weight or RWA. Drives the COREP C 07.00 / OF 07.00 Section 1
+    "of which" split:
+
+    - any ``ART_150_1_*`` permanent partial use condition  -> row 0050
+      ("of which: Exposures under permanent partial use of SA")
+    - ``ART_148_ROLLOUT`` sequential roll-out               -> row 0060
+      ("of which: Exposures under sequential IRB implementation")
+    - null / no-match (SA fallback, no permission)          -> neither (row 0010 only)
+
+    References:
+    - CRR Art. 150(1)(a)-(j): permanent partial use (PPU) conditions
+    - CRR Art. 148: sequential IRB roll-out
+    """
+
+    ART_150_1_A = "art_150_1_a"
+    """Art. 150(1)(a): sovereign class — limited material counterparties, unduly burdensome."""
+
+    ART_150_1_B = "art_150_1_b"
+    """Art. 150(1)(b): institution class — limited material counterparties, unduly burdensome."""
+
+    ART_150_1_C = "art_150_1_c"
+    """Art. 150(1)(c): non-significant business units / immaterial exposure classes or types."""
+
+    ART_150_1_D = "art_150_1_d"
+    """Art. 150(1)(d): UK central government / Bank / RGLA / PSE with 0% RW public arrangements."""
+
+    ART_150_1_E = "art_150_1_e"
+    """Art. 150(1)(e): intra-group exposures to parent / subsidiary / sister entities."""
+
+    ART_150_1_F = "art_150_1_f"
+    """Art. 150(1)(f): inter-institution exposures meeting Art. 113(7) (IPS)."""
+
+    ART_150_1_G = "art_150_1_g"
+    """Art. 150(1)(g): equity exposures to 0% RW entities under Chapter 2."""
+
+    ART_150_1_H = "art_150_1_h"
+    """Art. 150(1)(h): equity under government subsidy programmes (<= 10% own funds)."""
+
+    ART_150_1_I = "art_150_1_i"
+    """Art. 150(1)(i): minimum-reserve exposures identified in Art. 119(4)."""
+
+    ART_150_1_J = "art_150_1_j"
+    """Art. 150(1)(j): State / State-reinsured guarantees within Art. 215(2)."""
+
+    ART_148_ROLLOUT = "art_148_rollout"
+    """Art. 148: sequential IRB roll-out — temporary SA during a PRA-approved IRB plan."""

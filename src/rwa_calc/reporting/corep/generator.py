@@ -2587,6 +2587,44 @@ def _filter_supporting_factor(data: pl.DataFrame, cols: set[str], factor_type: s
     )
 
 
+def _filter_ppu_of_sa(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to SA exposures held under permanent partial use (PPU).
+
+    C 07.00 / OF 07.00 Section 1 row 0050 ("of which: Exposures under permanent
+    partial use of SA"). An exposure qualifies when its classifier-stage
+    ``ppu_reason`` is one of the CRR Art. 150(1)(a)-(j) conditions
+    (``art_150_1_*``).
+
+    Graceful fallback: when ``ppu_reason`` is absent (CRR/pre-classifier frames
+    and any caller that does not supply model-permission provenance), returns an
+    empty subset so the caller emits a null row — preserving prior behaviour.
+
+    References:
+        CRR Art. 150(1)(a)-(j): permanent partial use conditions.
+    """
+    if "ppu_reason" not in cols:
+        return data.clear()
+    return data.filter(pl.col("ppu_reason").str.starts_with("art_150_1_"))
+
+
+def _filter_sequential_rollout(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to SA exposures held under sequential IRB roll-out.
+
+    C 07.00 / OF 07.00 Section 1 row 0060 ("of which: Exposures under sequential
+    IRB implementation"). An exposure qualifies when its classifier-stage
+    ``ppu_reason`` equals ``art_148_rollout``.
+
+    Graceful fallback: when ``ppu_reason`` is absent, returns an empty subset so
+    the caller emits a null row — preserving prior behaviour.
+
+    References:
+        CRR Art. 148: sequential IRB roll-out.
+    """
+    if "ppu_reason" not in cols:
+        return data.clear()
+    return data.filter(pl.col("ppu_reason") == "art_148_rollout")
+
+
 _SECTION3_NULL_REFS: frozenset[str] = frozenset({"0160", "0170", "0175", "0180"})
 
 
@@ -3722,6 +3760,10 @@ def _c07_section1_subset(
         return _filter_supporting_factor(class_data, cols, "sme")
     if row_ref == "0035":
         return _filter_supporting_factor(class_data, cols, "infrastructure")
+    if row_ref == "0050":
+        return _filter_ppu_of_sa(class_data, cols)
+    if row_ref == "0060":
+        return _filter_sequential_rollout(class_data, cols)
     return None
 
 

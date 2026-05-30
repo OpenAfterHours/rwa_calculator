@@ -1139,6 +1139,7 @@ def _prepare_risk_weight_lookup(
 
 
 @cites("CRR Art. 134")
+@cites("CRR Art. 137")
 def _apply_b31_risk_weight_overrides(
     exposures: pl.LazyFrame,
     uc: pl.Expr,
@@ -1163,6 +1164,16 @@ def _apply_b31_risk_weight_overrides(
     chain = (
         pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
+        # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
+        # RW when no ECAI rating is present. Takes precedence over the Art. 114
+        # unrated 100% fallback but not over the Art. 114(3)/(4) domestic 0%.
+        # Identical to the CRR arm — MEIP risk weights are unchanged under PS1/26.
+        .when(
+            uc.str.contains("CENTRAL_GOVT", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+            & pl.col("cp_eca_score").is_not_null()
+        )
+        .then(_eca_meip_rw_expr())
         # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
         .when(pl.col("cp_entity_type") == "ccp")
         .then(

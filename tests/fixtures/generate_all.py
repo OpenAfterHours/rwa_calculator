@@ -439,6 +439,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_15",
             _generate_p215,
         ),
+        (
+            "P2.47 (Basel 3.1 Art. 137 ECA MEIP score 2 → 20% sovereign RW — B31 arm)",
+            "p2_47",
+            _generate_p247,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2503,6 +2508,19 @@ def _generate_p249(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_49", None)
+
+
+def _generate_p247(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.47 fixtures (Basel 3.1 Art. 137 ECA MEIP score 2 → 20% sovereign RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_47 import save_p247_fixtures
+
+        saved = save_p247_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_47", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

@@ -1,11 +1,12 @@
 """
-P8.16 fixture builder: SA-CCR PFE multiplier (under-collateralised netting set).
+P8.16 / P6.33 fixture builder: SA-CCR PFE multiplier (under- and over-collateralised netting sets).
 
 Pipeline position:
-    fixture-builder output -> test-writer (tests/acceptance/ccr/test_p8_16_pfe_multiplier.py)
+    fixture-builder output -> test-writer (tests/acceptance/ccr/test_p8_16_pfe_multiplier.py,
+                                           tests/acceptance/ccr/test_p6_33_rc_active.py)
     -> engine-implementer (src/rwa_calc/engine/ccr/pfe.py::compute_pfe)
 
-Scenario design:
+Scenario design — CCR-A2 (P8.16):
     Single netting set NS-CCR-A2-01 (counterparty CP-CCR-A2), unmargined, legally
     enforceable (Art. 295).  The netting set carries:
 
@@ -23,6 +24,23 @@ Scenario design:
     +500_000, so V − C = +2_500_000.  The uncapped multiplier evaluates to
     ≈ 1.174, so min(1, 1.174) = 1.0.  This guards against future regressions
     that drop the ``min(1, ...)`` cap.
+
+Scenario design — P6.33 (RC-active arm):
+    Single netting set NS-P6.33-01 (counterparty CP-P6.33), unmargined, legally
+    enforceable (Art. 295).  The netting set carries:
+
+        v_net  = +2_000_000.0  (bank is in-the-money — counterparty owes bank)
+        c_net  = +1_850_000.0  (bank holds GBP 1.85M collateral)
+
+    so V − C = +150_000 > 0, giving:
+        RC = max(+150_000, 0) = 150_000   (RC is active — Art. 275(1))
+        multiplier = min(1, 0.05 + 0.95 × exp(150_000 / denom)) = 1.0  (capped)
+        PFE addon  = 1.0 × 7_830_986.18 = 7_830_986.18
+        EAD        = 1.4 × (150_000 + 7_830_986.18) = 11_173_380.652
+
+    This is load-bearing because the existing CCR-A2 Scenario A has RC = 0
+    (V − C < 0), so only this scenario exercises the non-zero RC code path
+    in EAD = α × (RC + PFE).
 
 Hand calculation — Scenario A (under-collateralised, Art. 278(3)):
     F      = 0.05
@@ -44,6 +62,16 @@ Hand calculation — Scenario B (over-collateralised cap):
     exp_arg ≈ +0.168022847
     uncapped multiplier ≈ 1.174
     multiplier = min(1, 1.174) = 1.0
+
+Hand calculation — P6.33 (RC-active):
+    V − C  = +150_000
+    denom  = 14_878_873.742
+    exp_arg = +150_000 / 14_878_873.742 ≈ +0.010082
+    uncapped multiplier = 0.05 + 0.95 × exp(0.010082) ≈ 1.0 (> 1 so capped)
+    multiplier = 1.0
+    PFE addon  = 1.0 × 7_830_986.18 = 7_830_986.18
+    RC         = max(+150_000, 0) = 150_000
+    EAD        = 1.4 × (150_000 + 7_830_986.18) = 11_173_380.652
 
 Module constants are the single source of truth for test-writer assertions.
 
@@ -68,9 +96,20 @@ Exported public names
     CCR_A2B_EXPECTED_MULTIPLIER   : float — 1.0  (capped, Scenario B)
     CCR_A2B_EXPECTED_PFE_ADDON    : float — 7_830_986.18  (= addon × 1.0)
 
-    make_ccr_a2_netting_sets()     -> pl.LazyFrame  (1 row, Scenario A)
-    make_ccr_a2b_netting_sets()    -> pl.LazyFrame  (1 row, Scenario B cap sub-test)
-    save_pfe_multiplier_fixtures() -> list[tuple[str, int]]  (smoke-check)
+    CCR_P6_33_NETTING_SET_ID      : str   — "NS-P6.33-01"
+    CCR_P6_33_COUNTERPARTY_REF    : str   — "CP-P6.33"
+    CCR_P6_33_V_NET               : float — +2_000_000.0
+    CCR_P6_33_C_NET               : float — +1_850_000.0
+    CCR_P6_33_V_MINUS_C           : float — +150_000.0
+    CCR_P6_33_EXPECTED_MULTIPLIER : float — 1.0  (capped, V−C > 0)
+    CCR_P6_33_EXPECTED_PFE_ADDON  : float — 7_830_986.18
+    CCR_P6_33_EXPECTED_RC         : float — 150_000.0
+    CCR_P6_33_EXPECTED_EAD        : float — 11_173_380.652
+
+    make_ccr_a2_netting_sets()       -> pl.LazyFrame  (1 row, Scenario A)
+    make_ccr_a2b_netting_sets()      -> pl.LazyFrame  (1 row, Scenario B cap sub-test)
+    make_ccr_p6_33_netting_sets()    -> pl.LazyFrame  (1 row, P6.33 RC-active anchor)
+    save_pfe_multiplier_fixtures()   -> list[tuple[str, int]]  (smoke-check)
 
 References:
     - CRR Art. 274(2) — EAD = α × (RC + PFE), α = 1.4
@@ -156,6 +195,41 @@ CCR_A2B_EXPECTED_PFE_ADDON: float = CCR_A2B_EXPECTED_MULTIPLIER * CCR_A2_ADDON_A
 
 
 # ---------------------------------------------------------------------------
+# P6.33 constants — RC-active anchor (V−C > 0, RC non-zero).
+# This netting set exercises the code path where max(V−C, 0) > 0 and
+# therefore EAD = α × (RC + PFE) with RC contributing a non-zero amount.
+# The existing CCR-A2 Scenario A has V−C < 0 → RC = 0; Scenario B has
+# V−C > 0 but the test focus is the multiplier cap, not the RC channel.
+# ---------------------------------------------------------------------------
+
+CCR_P6_33_NETTING_SET_ID: str = "NS-P6.33-01"
+CCR_P6_33_COUNTERPARTY_REF: str = "CP-P6.33"
+
+# Netting-set MtM and collateral (post-haircut) values, GBP.
+# CRR Art. 275(1): RC = max(V_net − C_net, 0).
+CCR_P6_33_V_NET: float = 2_000_000.0  # bank is in-the-money
+CCR_P6_33_C_NET: float = 1_850_000.0  # bank holds GBP 1.85M collateral
+
+# V − C = +150_000 > 0 → RC is active.
+CCR_P6_33_V_MINUS_C: float = CCR_P6_33_V_NET - CCR_P6_33_C_NET  # = +150_000.0
+
+# RC = max(+150_000, 0) = 150_000 (Art. 275(1)).
+CCR_P6_33_EXPECTED_RC: float = max(CCR_P6_33_V_MINUS_C, 0.0)  # = 150_000.0
+
+# AddOn_aggregate is the same two-swap IR portfolio as CCR-A2.
+# Reuse CCR_A2_ADDON_AGGREGATE rather than introducing a duplicate literal.
+# (CCR_A2_ADDON_AGGREGATE = 7_830_986.18 is defined above.)
+
+# V − C > 0 → uncapped multiplier > 1 → min(1, ...) = 1.0 (Art. 278(3)).
+CCR_P6_33_EXPECTED_MULTIPLIER: float = 1.0
+
+# PFE addon = multiplier × addon_aggregate = 1.0 × 7_830_986.18 (Art. 278(1)).
+CCR_P6_33_EXPECTED_PFE_ADDON: float = CCR_P6_33_EXPECTED_MULTIPLIER * CCR_A2_ADDON_AGGREGATE
+
+# EAD = α × (RC + PFE) = 1.4 × (150_000 + 7_830_986.18) = 11_173_380.652 (Art. 274(2)).
+CCR_P6_33_EXPECTED_EAD: float = _ALPHA * (CCR_P6_33_EXPECTED_RC + CCR_P6_33_EXPECTED_PFE_ADDON)
+
+# ---------------------------------------------------------------------------
 # Verification: confirm module constants are internally consistent.
 # ---------------------------------------------------------------------------
 
@@ -202,6 +276,25 @@ def _verify_hand_calc() -> None:
     )
     assert mul_b == 1.0, "Scenario B multiplier must equal 1.0 (cap test)"
 
+    # P6.33 — RC-active arm
+    exp_p633 = math.exp(CCR_P6_33_V_MINUS_C / denom)
+    mul_p633 = min(1.0, f + one_minus_f * exp_p633)
+    assert mul_p633 == CCR_P6_33_EXPECTED_MULTIPLIER, (
+        f"P6.33 multiplier must be 1.0 (capped, V−C > 0); got {mul_p633}"
+    )
+    rc_p633 = max(CCR_P6_33_V_MINUS_C, 0.0)
+    assert abs(rc_p633 - CCR_P6_33_EXPECTED_RC) < 1e-6, (
+        f"P6.33 RC mismatch: computed {rc_p633}, constant {CCR_P6_33_EXPECTED_RC}"
+    )
+    pfe_p633 = mul_p633 * CCR_A2_ADDON_AGGREGATE
+    assert abs(pfe_p633 - CCR_P6_33_EXPECTED_PFE_ADDON) < 1e-2, (
+        f"P6.33 pfe_addon mismatch: computed {pfe_p633}, constant {CCR_P6_33_EXPECTED_PFE_ADDON}"
+    )
+    ead_p633 = _ALPHA * (rc_p633 + pfe_p633)
+    assert abs(ead_p633 - CCR_P6_33_EXPECTED_EAD) < 1e-2, (
+        f"P6.33 EAD mismatch: computed {ead_p633}, constant {CCR_P6_33_EXPECTED_EAD}"
+    )
+
 
 # Run at import time so any constant mis-transcription surfaces immediately.
 _verify_hand_calc()
@@ -227,6 +320,16 @@ def _scenario_b_netting_set() -> NettingSet:
     return NettingSet(
         netting_set_id=CCR_A2B_NETTING_SET_ID,
         counterparty_reference=CCR_A2_COUNTERPARTY_REF,
+        is_legally_enforceable=True,
+        is_margined=False,
+    )
+
+
+def _p6_33_netting_set() -> NettingSet:
+    """Return the P6.33 netting-set (RC-active: V−C = +150_000 > 0)."""
+    return NettingSet(
+        netting_set_id=CCR_P6_33_NETTING_SET_ID,
+        counterparty_reference=CCR_P6_33_COUNTERPARTY_REF,
         is_legally_enforceable=True,
         is_margined=False,
     )
@@ -282,6 +385,37 @@ def make_ccr_a2b_netting_sets() -> pl.LazyFrame:
     ).lazy()
 
 
+def make_ccr_p6_33_netting_sets() -> pl.LazyFrame:
+    """
+    Return a 1-row netting-set LazyFrame for the P6.33 RC-active anchor.
+
+    This anchor exercises the RC-active code path in SA-CCR EAD computation
+    where V − C = +150_000 > 0, so:
+        - RC_unmargined = 150_000  (Art. 275(1) max(·,0) is non-zero)
+        - multiplier = 1.0         (V − C > 0 → uncapped value > 1, capped)
+        - PFE addon = 7_830_986.18 (same IR add-on as CCR-A2)
+        - EAD = 1.4 × (150_000 + 7_830_986.18) = 11_173_380.652
+
+    The frame matches ``NETTING_SET_SCHEMA`` exactly and carries the same
+    additional columns as the CCR-A2 builders (``v_net``, ``c_net``,
+    ``addon_aggregate``).  No ``rc`` column is included so that downstream
+    logic derives RC via the ``rc_unmargined`` formula rather than reading a
+    pre-computed value (``has_unified_rc = False``).
+
+    Returns:
+        LazyFrame with 1 row and the NETTING_SET_SCHEMA columns plus
+        ``v_net``, ``c_net``, ``addon_aggregate``.
+    """
+    base = create_netting_sets([_p6_33_netting_set()])
+    return base.with_columns(
+        [
+            pl.lit(CCR_P6_33_V_NET).alias("v_net"),
+            pl.lit(CCR_P6_33_C_NET).alias("c_net"),
+            pl.lit(CCR_A2_ADDON_AGGREGATE).alias("addon_aggregate"),
+        ]
+    ).lazy()
+
+
 # ---------------------------------------------------------------------------
 # Smoke-check entry point — called by generate_all.py
 # ---------------------------------------------------------------------------
@@ -304,12 +438,15 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
     """
     ns_a = make_ccr_a2_netting_sets().collect()
     ns_b = make_ccr_a2b_netting_sets().collect()
+    ns_p633 = make_ccr_p6_33_netting_sets().collect()
 
     # Invariant 1: each frame has exactly 1 row.
     if ns_a.height != 1:
         raise AssertionError(f"Scenario A: expected 1 netting-set row, got {ns_a.height}")
     if ns_b.height != 1:
         raise AssertionError(f"Scenario B: expected 1 netting-set row, got {ns_b.height}")
+    if ns_p633.height != 1:
+        raise AssertionError(f"P6.33: expected 1 netting-set row, got {ns_p633.height}")
 
     # Invariant 2: netting_set_id is correct on each scenario.
     if ns_a["netting_set_id"][0] != CCR_A2_NETTING_SET_ID:
@@ -368,7 +505,7 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
             f"Scenario B: counterparty_reference must be {CCR_A2_COUNTERPARTY_REF!r}"
         )
 
-    # Invariant 9: both frames are unmargined and legally enforceable.
+    # Invariant 9: both CCR-A2 frames are unmargined and legally enforceable.
     for label, df in (("A", ns_a), ("B", ns_b)):
         if df["is_margined"][0] is not False:
             raise AssertionError(f"Scenario {label}: is_margined must be False")
@@ -383,5 +520,48 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
             raise AssertionError(
                 f"Scenario {label}: missing NETTING_SET_SCHEMA columns: {sorted(missing)}"
             )
+
+    # Invariant 11: P6.33 frame has correct netting_set_id and counterparty.
+    if ns_p633["netting_set_id"][0] != CCR_P6_33_NETTING_SET_ID:
+        raise AssertionError(
+            f"P6.33: netting_set_id must be {CCR_P6_33_NETTING_SET_ID!r} "
+            f"(got {ns_p633['netting_set_id'][0]!r})"
+        )
+    if ns_p633["counterparty_reference"][0] != CCR_P6_33_COUNTERPARTY_REF:
+        raise AssertionError(
+            f"P6.33: counterparty_reference must be {CCR_P6_33_COUNTERPARTY_REF!r}"
+        )
+
+    # Invariant 12: P6.33 v_net and c_net are correct and V − C > 0.
+    if ns_p633["v_net"][0] != CCR_P6_33_V_NET:
+        raise AssertionError(
+            f"P6.33: v_net must be {CCR_P6_33_V_NET} (got {ns_p633['v_net'][0]})"
+        )
+    if ns_p633["c_net"][0] != CCR_P6_33_C_NET:
+        raise AssertionError(
+            f"P6.33: c_net must be {CCR_P6_33_C_NET} (got {ns_p633['c_net'][0]})"
+        )
+    v_minus_c_p633 = ns_p633["v_net"][0] - ns_p633["c_net"][0]
+    if v_minus_c_p633 <= 0.0:
+        raise AssertionError(
+            f"P6.33: V − C must be positive (RC-active); got {v_minus_c_p633}"
+        )
+
+    # Invariant 13: P6.33 is unmargined, legally enforceable, and has no ``rc`` column.
+    if ns_p633["is_margined"][0] is not False:
+        raise AssertionError("P6.33: is_margined must be False")
+    if ns_p633["is_legally_enforceable"][0] is not True:
+        raise AssertionError("P6.33: is_legally_enforceable must be True")
+    if "rc" in ns_p633.columns:
+        raise AssertionError(
+            "P6.33: frame must NOT carry an 'rc' column — RC is derived by the engine"
+        )
+
+    # Invariant 14: P6.33 NETTING_SET_SCHEMA columns are all present.
+    missing_p633 = required_cols - set(ns_p633.columns)
+    if missing_p633:
+        raise AssertionError(
+            f"P6.33: missing NETTING_SET_SCHEMA columns: {sorted(missing_p633)}"
+        )
 
     return [("(python-only builder — no parquet)", 0)]

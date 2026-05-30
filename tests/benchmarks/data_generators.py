@@ -880,6 +880,15 @@ def generate_ratings(
                 "rating_is_inferred": np.full(n_rated, False),
                 "scope_type": pl.Series([None] * n_rated, dtype=pl.String),
                 "scope_id": pl.Series([None] * n_rated, dtype=pl.String),
+                # P4.20 COREP C 08.02 firm-supplied internal rating grade —
+                # populated for internal ratings only, null for external ECAI rows.
+                "internal_rating_grade": pl.Series(
+                    [
+                        v if internal else None
+                        for v, internal in zip(values, is_internal, strict=True)
+                    ],
+                    dtype=pl.String,
+                ),
             }
         )
         .cast(dtypes_of(RATINGS_SCHEMA))

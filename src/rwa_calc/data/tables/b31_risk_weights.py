@@ -35,6 +35,7 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
@@ -275,6 +276,12 @@ B31_CURRENCY_MISMATCH_MULTIPLIER: Decimal = Decimal("1.5")
 B31_CURRENCY_MISMATCH_RW_CAP: Decimal = Decimal("1.50")
 B31_CURRENCY_MISMATCH_HEDGE_COVERAGE_FLOOR: Decimal = Decimal("0.90")
 """PRA PS1/26 Art. 123B(2) — currency-mismatch multiplier waived when hedge coverage >= 90%."""
+
+# PRA PS1/26 commencement date — the entire Basel 3.1 SA framework (including the
+# Art. 123B currency-mismatch multiplier) takes effect on 1 January 2027. Reporting
+# dates strictly before this fall under the pre-Basel-3.1 portfolio treatment, where
+# the multiplier is a Basel-3.1-only measure with no CRR analogue and does not apply.
+B31_EFFECTIVE_DATE: date = date(2027, 1, 1)
 
 # =============================================================================
 # SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)

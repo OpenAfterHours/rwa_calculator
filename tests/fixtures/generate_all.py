@@ -300,6 +300,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p194d,
         ),
         (
+            "P1.94e (B31 Art. 123B transitional gate — reporting_date < 2027-01-01 suppresses multiplier)",
+            "p1_94e",
+            _generate_p194e,
+        ),
+        (
             "P2.17 (CRR Art. 123 second subparagraph payroll/pension loan 35% RW)",
             "p2_17",
             _generate_p217,
@@ -1549,6 +1554,41 @@ def _generate_p194d(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_94d", None)
+
+
+def _generate_p194e(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P1.94e fixture module (Python-only; no parquet artefacts).
+
+    This fixture provides named constants for the two reporting-date config
+    runs that test the Art. 123B transitional gate.  The test drives
+    calculate_single_sa_exposure() directly with an in-memory LazyFrame;
+    no parquet is written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_94e import (
+            EAD,
+            REPORTING_DATE_B31,
+            REPORTING_DATE_PRE_2027,
+            RW_B31,
+            RW_PRE_2027,
+            RWA_B31,
+            RWA_PRE_2027,
+        )
+
+        # Sanity-check the hand-calculated scalars
+        assert RW_PRE_2027 == 0.75, f"RW_PRE_2027={RW_PRE_2027} != 0.75"
+        assert RWA_PRE_2027 == 75_000.0, f"RWA_PRE_2027={RWA_PRE_2027} != 75000"
+        assert abs(RW_B31 - 1.125) < 1e-9, f"RW_B31={RW_B31} != 1.125"
+        assert abs(RWA_B31 - 112_500.0) < 0.01, f"RWA_B31={RWA_B31} != 112500"
+        assert REPORTING_DATE_PRE_2027.year == 2026
+        assert REPORTING_DATE_B31.year == 2027
+
+        # Two virtual "rows": Run A and Run B constants
+        return [("p1_94e.py (Python-only, 2 config runs)", int(EAD // 50_000))]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_94e", None)
 
 
 def _generate_p217(output_dir: Path) -> list[tuple[str, int]]:

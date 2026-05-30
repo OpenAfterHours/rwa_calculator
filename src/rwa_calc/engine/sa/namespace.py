@@ -97,6 +97,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
+    B31_EFFECTIVE_DATE,
     B31_HIGH_RISK_RW,
     B31_RETAIL_NON_REGULATORY_RW,
     B31_RETAIL_PAYROLL_LOAN_RW,
@@ -1957,6 +1958,7 @@ class SALazyFrame:
         return exposures
 
     @cites("PS1/26, paragraph 123B")
+    @cites("PS1/26, paragraph 123B.3")
     def apply_currency_mismatch_multiplier(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
 
@@ -1965,9 +1967,22 @@ class SALazyFrame:
         exposure classes.
 
         Basel 3.1 Art. 123B / CRE20.93.
+
+        Art. 123B(3) transitional: the multiplier is a Basel-3.1-only measure that
+        commences on ``B31_EFFECTIVE_DATE`` (1 January 2027). Reporting dates strictly
+        before that fall under the pre-Basel-3.1 portfolio treatment and the frame is
+        returned unchanged. The boundary date 1 January 2027 is in scope (strict ``<``).
         """
         if not config.is_basel_3_1:
             return self._lf
+
+        # Art. 123B(3) transitional: pre-commencement reporting dates suppress the
+        # multiplier entirely. Emit the reporting column as ``False`` (consistent with
+        # the no-mismatch branch below) so downstream reporting always sees the flag.
+        if config.reporting_date < B31_EFFECTIVE_DATE:
+            return self._lf.with_columns(
+                pl.lit(False).alias("currency_mismatch_multiplier_applied")
+            )
 
         schema = self._lf.collect_schema()
         cols = schema.names()

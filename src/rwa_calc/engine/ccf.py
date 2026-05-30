@@ -246,6 +246,13 @@ class CCFCalculator:
                 "is_uk_residential_mortgage_commitment",
                 pl.lit(False).alias("is_uk_residential_mortgage_commitment"),
             ),
+            # PRA PS1/26 Art. 166E(5): default False so the revolving
+            # purchased-receivables commitment CCF routing is a no-op when
+            # callers (e.g. unit tests) construct exposures without the flag.
+            (
+                "is_purchased_receivable_commitment",
+                pl.lit(False).alias("is_purchased_receivable_commitment"),
+            ),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -348,6 +355,8 @@ class CCFCalculator:
                 .alias("_sa_ccf_from_risk_type"),
             )
 
+            exposures = self._apply_purchased_receivable_ccf(exposures)
+
         # Art. 111(1)(c): commitment-to-issue lower-of rule.
         # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.
         # "the lower of (i) the CCF applicable to the underlying OBS item and
@@ -405,6 +414,52 @@ class CCFCalculator:
             .then(pl.col("_firb_ccf_from_risk_type"))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("ccf"),
+        )
+
+    # PRA PS1/26 Art. 166E(5) — no CRR equivalent; the watchfire PS-instrument
+    # grammar only accepts numeric paragraphs, so Art. 166E para 5 is encoded as
+    # section 166.5 (see docs/development/citation-tracking.md on the PS1/26 form).
+    @cites("PS1/26, paragraph 166.5")
+    def _apply_purchased_receivable_ccf(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Apply the Art. 166E(5) revolving purchased-receivables CCF routing.
+
+        PRA PS1/26 Art. 166E(5): the undrawn purchase commitment of a *revolving*
+        purchased-receivables facility receives a fixed CCF — 40% by default
+        (Art. 111(1) Table A1 Row 5 "Other Commitments" / OC), dropping to 10%
+        where the commitment also meets the Table A1 Row 7 UCC criteria
+        (``risk_type == "LR"``). When ``is_purchased_receivable_commitment`` and
+        ``is_revolving`` are both True, the otherwise-resolved SA / F-IRB CCF is
+        overridden to this rate regardless of the row's generic risk_type bucket
+        (e.g. a flagged MR row routes to 40%, not the generic 50%).
+
+        Basel-3.1-only: callers gate this on ``config.is_basel_3_1``; there is no
+        equivalent CRR purchased-receivables undrawn-commitment CCF, so the flag
+        is a no-op under CRR.
+        """
+        oc_ccf = float(SA_CCF_B31["OC"])
+        ucc_ccf = float(SA_CCF_B31["LR"])
+
+        is_pr_commitment = (
+            pl.col("is_purchased_receivable_commitment").fill_null(False)
+            & pl.col("is_revolving").fill_null(False)
+        )
+        # Table A1 Row 7 UCC criterion: the commitment is unconditionally
+        # cancellable (LR risk_type) -> 10%; otherwise the Row 5 OC 40% default.
+        is_ucc = pl.col("risk_type").fill_null("").str.to_lowercase().is_in(["lr", "low_risk"])
+        pr_ccf = pl.when(is_ucc).then(pl.lit(ucc_ccf)).otherwise(pl.lit(oc_ccf))
+
+        return exposures.with_columns(
+            pl.when(is_pr_commitment)
+            .then(pr_ccf)
+            .otherwise(pl.col("_sa_ccf_from_risk_type"))
+            .alias("_sa_ccf_from_risk_type"),
+            pl.when(is_pr_commitment)
+            .then(pr_ccf)
+            .otherwise(pl.col("_firb_ccf_from_risk_type"))
+            .alias("_firb_ccf_from_risk_type"),
         )
 
     def _compute_ead(

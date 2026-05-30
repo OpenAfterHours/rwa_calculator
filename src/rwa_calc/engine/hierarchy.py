@@ -897,6 +897,7 @@ class HierarchyResolver:
                 "is_short_term_trade_lc": pl.Boolean,
                 "is_obs_commitment": pl.Boolean,
                 "is_uk_residential_mortgage_commitment": pl.Boolean,
+                "is_purchased_receivable_commitment": pl.Boolean,
                 "is_payroll_loan": pl.Boolean,
                 "is_buy_to_let": pl.Boolean,
                 "is_under_construction": pl.Boolean,
@@ -1210,6 +1211,10 @@ class HierarchyResolver:
             # commitment flag carried through to the CCF stage so the 50%
             # override fires under Basel 3.1. Defaults False when absent.
             col_or_false("is_uk_residential_mortgage_commitment"),
+            # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+            # purchase commitment flag carried through to the CCF stage so the
+            # OC (40%) / LR (10%) routing fires under Basel 3.1. Defaults False.
+            col_or_false("is_purchased_receivable_commitment"),
             col_or_false("is_payroll_loan"),
             col_or_false("is_buy_to_let"),
             # PRA PS1/26 Art. 124(3) / Art. 124K: under-construction flag drives
@@ -1813,6 +1818,13 @@ class HierarchyResolver:
                 if "is_uk_residential_mortgage_commitment" in loan_cols
                 else pl.lit(False).alias("is_uk_residential_mortgage_commitment")
             ),
+            # PRA PS1/26 Art. 166E(5): off-balance-sheet only; drawn loans never
+            # carry the CCF override, so emit False purely for schema alignment.
+            (
+                pl.col("is_purchased_receivable_commitment").fill_null(False)
+                if "is_purchased_receivable_commitment" in loan_cols
+                else pl.lit(False).alias("is_purchased_receivable_commitment")
+            ),
             (
                 pl.col("is_payroll_loan").fill_null(False)
                 if "is_payroll_loan" in loan_cols
@@ -1995,6 +2007,18 @@ class HierarchyResolver:
                     else pl.lit(False)
                 )
                 .alias("is_uk_residential_mortgage_commitment"),
+                # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn
+                # purchase commitment flag. Meaningful only for undrawn (OFB)
+                # contingents; nullified for drawn (ONB) rows, mirroring
+                # is_uk_residential_mortgage_commitment.
+                pl.when(is_drawn)
+                .then(pl.lit(None).cast(pl.Boolean))
+                .otherwise(
+                    pl.col("is_purchased_receivable_commitment").fill_null(False)
+                    if "is_purchased_receivable_commitment" in cont_cols
+                    else pl.lit(False)
+                )
+                .alias("is_purchased_receivable_commitment"),
                 pl.lit(False).alias(
                     "is_payroll_loan"
                 ),  # Payroll loans are term loans, not contingents

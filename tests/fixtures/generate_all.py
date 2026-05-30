@@ -335,6 +335,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p233,
         ),
         (
+            "P2.32 / B31-D.CCF10 (purchased-receivables undrawn-commitment CCF Art. 166E(5))",
+            "p2_32",
+            _generate_p232,
+        ),
+        (
             "CCR-A1 golden (single 10y GBP IR swap, unmargined)",
             "ccr",
             _generate_ccr_golden,
@@ -1636,6 +1641,19 @@ def _generate_p233(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_33", None)
+
+
+def _generate_p232(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.32 / B31-D.CCF10 fixtures (purchased-receivables undrawn-commitment CCF)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_32 import save_p232_fixtures
+
+        saved = save_p232_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_32", None)
 
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:

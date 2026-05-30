@@ -162,9 +162,7 @@ class TestP225Cr5Row9fSecured:
             f"expected {EXPECTED_9F_BAND_F:,.0f}, got {actual_band_f:,.0f}"
         )
 
-    def test_p2_25_cr5_9f_total_equals_secured_ead(
-        self, b31_bundle: Pillar3TemplateBundle
-    ) -> None:
+    def test_p2_25_cr5_9f_total_equals_secured_ead(self, b31_bundle: Pillar3TemplateBundle) -> None:
         """Row 9f Total column ('ad') must equal the secured EAD 550,000.
 
         Failure mode: assert 0.0 == 550000.0  (row absent → _scalar returns 0.0)

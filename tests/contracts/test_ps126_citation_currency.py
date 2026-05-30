@@ -41,8 +41,7 @@ def test_no_ps9_24_in_file(label: str, path: Path) -> None:
 
     # Act / Assert
     assert "PS9/24" not in text, (
-        f"{label}: found stale citation 'PS9/24' — replace with 'PS1/26' "
-        f"(full path: {path})"
+        f"{label}: found stale citation 'PS9/24' — replace with 'PS1/26' (full path: {path})"
     )
 
 

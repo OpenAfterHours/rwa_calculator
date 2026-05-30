@@ -534,18 +534,12 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
 
     # Invariant 12: P6.33 v_net and c_net are correct and V − C > 0.
     if ns_p633["v_net"][0] != CCR_P6_33_V_NET:
-        raise AssertionError(
-            f"P6.33: v_net must be {CCR_P6_33_V_NET} (got {ns_p633['v_net'][0]})"
-        )
+        raise AssertionError(f"P6.33: v_net must be {CCR_P6_33_V_NET} (got {ns_p633['v_net'][0]})")
     if ns_p633["c_net"][0] != CCR_P6_33_C_NET:
-        raise AssertionError(
-            f"P6.33: c_net must be {CCR_P6_33_C_NET} (got {ns_p633['c_net'][0]})"
-        )
+        raise AssertionError(f"P6.33: c_net must be {CCR_P6_33_C_NET} (got {ns_p633['c_net'][0]})")
     v_minus_c_p633 = ns_p633["v_net"][0] - ns_p633["c_net"][0]
     if v_minus_c_p633 <= 0.0:
-        raise AssertionError(
-            f"P6.33: V − C must be positive (RC-active); got {v_minus_c_p633}"
-        )
+        raise AssertionError(f"P6.33: V − C must be positive (RC-active); got {v_minus_c_p633}")
 
     # Invariant 13: P6.33 is unmargined, legally enforceable, and has no ``rc`` column.
     if ns_p633["is_margined"][0] is not False:
@@ -560,8 +554,6 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
     # Invariant 14: P6.33 NETTING_SET_SCHEMA columns are all present.
     missing_p633 = required_cols - set(ns_p633.columns)
     if missing_p633:
-        raise AssertionError(
-            f"P6.33: missing NETTING_SET_SCHEMA columns: {sorted(missing_p633)}"
-        )
+        raise AssertionError(f"P6.33: missing NETTING_SET_SCHEMA columns: {sorted(missing_p633)}")
 
     return [("(python-only builder — no parquet)", 0)]

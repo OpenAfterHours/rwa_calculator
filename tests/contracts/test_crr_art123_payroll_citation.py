@@ -48,8 +48,7 @@ def test_stale_art123_payroll_paragraph_absent(label: str, path: Path) -> None:
 
     # Act / Assert
     assert "123(3)(a-b)" not in text, (
-        f"{label}: found stale citation '123(3)(a-b)' — replace with '123(4)' "
-        f"(full path: {path})"
+        f"{label}: found stale citation '123(3)(a-b)' — replace with '123(4)' (full path: {path})"
     )
 
 

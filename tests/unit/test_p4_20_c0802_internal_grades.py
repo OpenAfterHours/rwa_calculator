@@ -25,8 +25,8 @@ References:
 
 from __future__ import annotations
 
-import pytest
 import polars as pl
+import pytest
 
 from rwa_calc.reporting.corep.generator import COREPGenerator
 
@@ -48,7 +48,6 @@ from tests.fixtures.p4_20.p4_20 import (
 
 # Fallback fixture reused from existing test module (do NOT modify)
 from tests.unit.test_corep import _irb_results
-
 
 # =============================================================================
 # Helpers

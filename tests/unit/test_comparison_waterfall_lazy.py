@@ -101,9 +101,7 @@ def test_compute_portfolio_waterfall_returns_lazy_frame(
     result = _compute_portfolio_waterfall(attribution_lf)
 
     # Assert
-    assert isinstance(result, pl.LazyFrame), (
-        f"Expected pl.LazyFrame, got {type(result).__name__}"
-    )
+    assert isinstance(result, pl.LazyFrame), f"Expected pl.LazyFrame, got {type(result).__name__}"
 
 
 def test_compute_portfolio_waterfall_value_invariance(
@@ -144,9 +142,7 @@ def test_compute_portfolio_waterfall_value_invariance(
     assert len(df) == 4, f"Expected 4 waterfall rows, got {len(df)}"
 
     # Assert — step numbers
-    assert df["step"].to_list() == expected_steps, (
-        f"Step order mismatch: {df['step'].to_list()}"
-    )
+    assert df["step"].to_list() == expected_steps, f"Step order mismatch: {df['step'].to_list()}"
 
     # Assert — driver labels
     assert df["driver"].to_list() == expected_drivers, (
@@ -155,14 +151,13 @@ def test_compute_portfolio_waterfall_value_invariance(
 
     # Assert — impact_rwa values
     actual_impact = df["impact_rwa"].to_list()
-    for i, (actual, expected) in enumerate(zip(actual_impact, expected_impact)):
-        assert abs(actual - expected) < 1e-9, (
-            f"impact_rwa[{i}]: expected {expected}, got {actual}"
-        )
+    for i, (actual, expected) in enumerate(zip(actual_impact, expected_impact, strict=True)):
+        assert abs(actual - expected) < 1e-9, f"impact_rwa[{i}]: expected {expected}, got {actual}"
 
     # Assert — cumulative_rwa values
     actual_cumulative = df["cumulative_rwa"].to_list()
-    for i, (actual, expected) in enumerate(zip(actual_cumulative, expected_cumulative)):
+    cumulative_pairs = zip(actual_cumulative, expected_cumulative, strict=True)
+    for i, (actual, expected) in enumerate(cumulative_pairs):
         assert abs(actual - expected) < 1e-9, (
             f"cumulative_rwa[{i}]: expected {expected}, got {actual}"
         )

@@ -29,13 +29,7 @@ import pytest
 # Paths
 # ---------------------------------------------------------------------------
 
-_CCF_ENGINE_PATH = (
-    Path(__file__).parent.parent.parent
-    / "src"
-    / "rwa_calc"
-    / "engine"
-    / "ccf.py"
-)
+_CCF_ENGINE_PATH = Path(__file__).parent.parent.parent / "src" / "rwa_calc" / "engine" / "ccf.py"
 
 _AIRB_FLOORS_MODULE = "rwa_calc.data.tables.airb_floors"
 

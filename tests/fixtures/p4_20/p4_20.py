@@ -90,9 +90,9 @@ EXPECTED_GRADE_SET: frozenset[str] = frozenset({GRADE_AAA, GRADE_BB, GRADE_D})
 
 # Load-bearing property: E1 and E2 PDs map to the SAME fixed PD bucket.
 # Confirmed against PD_BANDS = [..., (0.0075, 0.025, "0.75% - 2.50%"), ...]
-E1_PD: float = 0.01   # AAA — falls in "0.75% - 2.50%"
-E2_PD: float = 0.02   # BB  — falls in "0.75% - 2.50%"  (SAME BUCKET as E1)
-E3_PD: float = 1.0    # D   — falls in "Default (100%)"  (different bucket)
+E1_PD: float = 0.01  # AAA — falls in "0.75% - 2.50%"
+E2_PD: float = 0.02  # BB  — falls in "0.75% - 2.50%"  (SAME BUCKET as E1)
+E3_PD: float = 1.0  # D   — falls in "Default (100%)"  (different bucket)
 
 SAME_BUCKET_LABEL: str = "0.75% - 2.50%"
 E3_BUCKET_LABEL: str = "Default (100%)"
@@ -190,7 +190,7 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "approach_applied": "foundation_irb",
             "exposure_class": "corporate",
             "counterparty_reference": "CP_A",
-            "drawn_amount": 1000.0,   # drawn = ead so col 0020 = 1000
+            "drawn_amount": 1000.0,  # drawn = ead so col 0020 = 1000
             "undrawn_amount": 0.0,
             "ead_final": 1000.0,
             "rwa_final": 700.0,
@@ -206,7 +206,7 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "approach_applied": "foundation_irb",
             "exposure_class": "corporate",
             "counterparty_reference": "CP_B",
-            "drawn_amount": 2000.0,   # drawn = ead so col 0020 = 2000
+            "drawn_amount": 2000.0,  # drawn = ead so col 0020 = 2000
             "undrawn_amount": 0.0,
             "ead_final": 2000.0,
             "rwa_final": 1400.0,
@@ -222,7 +222,7 @@ def build_grade_path_irb_results_lf() -> pl.LazyFrame:
             "approach_applied": "foundation_irb",
             "exposure_class": "corporate",
             "counterparty_reference": "CP_C",
-            "drawn_amount": 500.0,    # drawn = ead so col 0020 = 500
+            "drawn_amount": 500.0,  # drawn = ead so col 0020 = 500
             "undrawn_amount": 0.0,
             "ead_final": 500.0,
             "rwa_final": 750.0,
@@ -246,7 +246,7 @@ def _verify_lf() -> None:
     """Verify the LazyFrame builds and has the expected shape and content."""
     lf = build_grade_path_irb_results_lf()
     df = lf.collect()
-    assert df.height == 3, "Expected 3 rows, got %d" % df.height
+    assert df.height == 3, f"Expected 3 rows, got {df.height}"
 
     required_cols = {
         "exposure_reference",
@@ -264,23 +264,23 @@ def _verify_lf() -> None:
         "cp_internal_rating_grade",
     }
     missing = required_cols - set(df.columns)
-    assert not missing, "Missing columns: %s" % missing
+    assert not missing, f"Missing columns: {missing}"
 
     # All three grades present
     grades = set(df["cp_internal_rating_grade"].to_list())
-    assert grades == EXPECTED_GRADE_SET, "Grade mismatch: got %s" % grades
+    assert grades == EXPECTED_GRADE_SET, f"Grade mismatch: got {grades}"
 
     # All three exposure_references unique
     refs = df["exposure_reference"].to_list()
-    assert len(set(refs)) == 3, "Exposure references not unique: %s" % refs
+    assert len(set(refs)) == 3, f"Exposure references not unique: {refs}"
 
     # Only corporate class
     classes = set(df["exposure_class"].to_list())
-    assert classes == {"corporate"}, "Unexpected exposure classes: %s" % classes
+    assert classes == {"corporate"}, f"Unexpected exposure classes: {classes}"
 
     # All foundation_irb
     approaches = set(df["approach_applied"].to_list())
-    assert approaches == {"foundation_irb"}, "Unexpected approaches: %s" % approaches
+    assert approaches == {"foundation_irb"}, f"Unexpected approaches: {approaches}"
 
     # Load-bearing PD property: E1 and E2 are in the same fixed PD bucket
     from rwa_calc.reporting.corep.templates import PD_BANDS
@@ -300,18 +300,15 @@ def _verify_lf() -> None:
     band_d = _find_band(d_row["irb_pd_floored"][0])
 
     assert band_aaa == SAME_BUCKET_LABEL, (
-        "AAA PD bucket expected %r, got %r" % (SAME_BUCKET_LABEL, band_aaa)
+        f"AAA PD bucket expected {SAME_BUCKET_LABEL!r}, got {band_aaa!r}"
     )
     assert band_bb == SAME_BUCKET_LABEL, (
-        "BB PD bucket expected %r, got %r" % (SAME_BUCKET_LABEL, band_bb)
+        f"BB PD bucket expected {SAME_BUCKET_LABEL!r}, got {band_bb!r}"
     )
     assert band_aaa == band_bb, (
-        "LOAD-BEARING: AAA and BB must be in same fixed bucket, got %r vs %r"
-        % (band_aaa, band_bb)
+        f"LOAD-BEARING: AAA and BB must be in same fixed bucket, got {band_aaa!r} vs {band_bb!r}"
     )
-    assert band_d == E3_BUCKET_LABEL, (
-        "D PD bucket expected %r, got %r" % (E3_BUCKET_LABEL, band_d)
-    )
+    assert band_d == E3_BUCKET_LABEL, f"D PD bucket expected {E3_BUCKET_LABEL!r}, got {band_d!r}"
     assert band_aaa != band_d, "AAA and D must be in different fixed buckets"
 
     # drawn = ead, undrawn = 0 (so col 0020 original-exposure equals ead)
@@ -322,13 +319,13 @@ def _verify_lf() -> None:
     # Total EAD reconciles to C 08.01 corporate total
     total_ead = df["ead_final"].sum()
     assert total_ead == EXPECTED_TOTAL_EAD, (
-        "Total EAD expected %.1f, got %.1f" % (EXPECTED_TOTAL_EAD, total_ead)
+        f"Total EAD expected {EXPECTED_TOTAL_EAD:.1f}, got {total_ead:.1f}"
     )
 
 
 def _verify_constants() -> None:
     """Verify scenario constants are internally consistent."""
-    assert EXPECTED_GRADE_SET == {GRADE_AAA, GRADE_BB, GRADE_D}, (
+    assert {GRADE_AAA, GRADE_BB, GRADE_D} == EXPECTED_GRADE_SET, (
         "EXPECTED_GRADE_SET must contain exactly AAA, BB, D"
     )
     assert E1_PD < E2_PD, "E1_PD must be less than E2_PD"
@@ -353,7 +350,7 @@ def _verify_constants() -> None:
     total = (
         float(EXPECTED_AAA["0110"])  # type: ignore[arg-type]
         + float(EXPECTED_BB["0110"])  # type: ignore[arg-type]
-        + float(EXPECTED_D["0110"])   # type: ignore[arg-type]
+        + float(EXPECTED_D["0110"])  # type: ignore[arg-type]
     )
     assert total == EXPECTED_TOTAL_EAD, "Sum of 0110 must equal EXPECTED_TOTAL_EAD"
 
@@ -364,25 +361,23 @@ if __name__ == "__main__":
     lf = build_grade_path_irb_results_lf()
     df = lf.collect()
     print("P4.20 fixture self-check passed.")
-    print("  %d rows: GR_1 (AAA), GR_2 (BB), GR_3 (D)" % df.height)
-    print("  Load-bearing: AAA+BB in same fixed PD bucket '%s'" % SAME_BUCKET_LABEL)
+    print(f"  {df.height} rows: GR_1 (AAA), GR_2 (BB), GR_3 (D)")
+    print(f"  Load-bearing: AAA+BB in same fixed PD bucket '{SAME_BUCKET_LABEL}'")
     print("  Grade-path produces 3 rows; fixed-bucket fallback produces 2 rows")
     print("  Expected C 08.02 grade-path output (CRR):")
-    print("    AAA: 0110=%.1f  0260=%.1f  0280=%.2f  0250=%.1f" % (
-        float(EXPECTED_AAA["0110"]),  # type: ignore[arg-type]
-        float(EXPECTED_AAA["0260"]),  # type: ignore[arg-type]
-        float(EXPECTED_AAA["0280"]),  # type: ignore[arg-type]
-        float(EXPECTED_AAA["0250"]),  # type: ignore[arg-type]
-    ))
-    print("    BB:  0110=%.1f  0260=%.1f  0280=%.1f  0250=%.1f" % (
-        float(EXPECTED_BB["0110"]),   # type: ignore[arg-type]
-        float(EXPECTED_BB["0260"]),   # type: ignore[arg-type]
-        float(EXPECTED_BB["0280"]),   # type: ignore[arg-type]
-        float(EXPECTED_BB["0250"]),   # type: ignore[arg-type]
-    ))
-    print("    D:   0110=%.1f   0260=%.1f  0280=%.1f  0250=%.1f" % (
-        float(EXPECTED_D["0110"]),    # type: ignore[arg-type]
-        float(EXPECTED_D["0260"]),    # type: ignore[arg-type]
-        float(EXPECTED_D["0280"]),    # type: ignore[arg-type]
-        float(EXPECTED_D["0250"]),    # type: ignore[arg-type]
-    ))
+    cols = ("0110", "0260", "0280", "0250")
+    aaa = {k: float(EXPECTED_AAA[k]) for k in cols}  # type: ignore[arg-type]
+    bb = {k: float(EXPECTED_BB[k]) for k in cols}  # type: ignore[arg-type]
+    d = {k: float(EXPECTED_D[k]) for k in cols}  # type: ignore[arg-type]
+    print(
+        f"    AAA: 0110={aaa['0110']:.1f}  0260={aaa['0260']:.1f}  "
+        f"0280={aaa['0280']:.2f}  0250={aaa['0250']:.1f}"
+    )
+    print(
+        f"    BB:  0110={bb['0110']:.1f}  0260={bb['0260']:.1f}  "
+        f"0280={bb['0280']:.1f}  0250={bb['0250']:.1f}"
+    )
+    print(
+        f"    D:   0110={d['0110']:.1f}   0260={d['0260']:.1f}  "
+        f"0280={d['0280']:.1f}  0250={d['0250']:.1f}"
+    )

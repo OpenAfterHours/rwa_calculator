@@ -157,8 +157,7 @@ def test_p6_33_rc_unmargined_is_active() -> None:
     row = result.filter(pl.col("netting_set_id") == CCR_P6_33_NETTING_SET_ID)
 
     assert row.height == 1, (
-        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, "
-        f"got {row.height}."
+        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, got {row.height}."
     )
 
     # Assert
@@ -201,8 +200,7 @@ def test_p6_33_pfe_multiplier_capped() -> None:
     row = result.filter(pl.col("netting_set_id") == CCR_P6_33_NETTING_SET_ID)
 
     assert row.height == 1, (
-        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, "
-        f"got {row.height}."
+        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, got {row.height}."
     )
 
     # Assert
@@ -244,8 +242,7 @@ def test_p6_33_pfe_addon_value() -> None:
     row = result.filter(pl.col("netting_set_id") == CCR_P6_33_NETTING_SET_ID)
 
     assert row.height == 1, (
-        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, "
-        f"got {row.height}."
+        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, got {row.height}."
     )
 
     # Assert
@@ -288,8 +285,7 @@ def test_p6_33_ead_ccr_includes_rc() -> None:
     row = result.filter(pl.col("netting_set_id") == CCR_P6_33_NETTING_SET_ID)
 
     assert row.height == 1, (
-        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, "
-        f"got {row.height}."
+        f"Expected exactly 1 row for netting_set_id={CCR_P6_33_NETTING_SET_ID!r}, got {row.height}."
     )
 
     # Assert

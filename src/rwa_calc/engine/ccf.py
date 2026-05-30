@@ -533,12 +533,9 @@ class CCFCalculator:
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
-            floor_b = (
-                pl.col("on_bs_for_ead")
-                + pl.col("nominal_after_provision")
-                * pl.col("_sa_ccf_from_risk_type")
-                * float(AIRB_OBS_FLOOR_B_MULTIPLIER)
-            )
+            floor_b = pl.col("on_bs_for_ead") + pl.col("nominal_after_provision") * pl.col(
+                "_sa_ccf_from_risk_type"
+            ) * float(AIRB_OBS_FLOOR_B_MULTIPLIER)
 
             # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
             # EAD >= on-balance-sheet EAD (ignoring Art. 166D)

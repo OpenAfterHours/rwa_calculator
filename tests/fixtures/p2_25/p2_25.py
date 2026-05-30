@@ -84,17 +84,17 @@ FRAMEWORK: str = "BASEL_3_1"
 PARENT_EAD: float = 1_000_000.0
 
 # --- Secured row (up to 55%-LTV portion, Art. 124F) ---
-SECURED_EAD: float = 550_000.0          # 0.55 × property_value 1_000_000
-SECURED_RW: float = 0.20                # Art. 124F preferential RW
+SECURED_EAD: float = 550_000.0  # 0.55 × property_value 1_000_000
+SECURED_RW: float = 0.20  # Art. 124F preferential RW
 SECURED_RWA: float = SECURED_EAD * SECURED_RW  # 110_000.0
 SECURED_EXPOSURE_CLASS: str = "residential_mortgage"
 SECURED_RE_SPLIT_ROLE: str = "secured"
 
 # --- Residual row (above-55%-LTV portion, Art. 124L) ---
-RESIDUAL_EAD: float = 450_000.0         # 1_000_000 − 550_000
-RESIDUAL_RW: float = 0.75               # natural-person counterparty RW (Art. 124L)
+RESIDUAL_EAD: float = 450_000.0  # 1_000_000 − 550_000
+RESIDUAL_RW: float = 0.75  # natural-person counterparty RW (Art. 124L)
 RESIDUAL_RWA: float = RESIDUAL_EAD * RESIDUAL_RW  # 337_500.0
-RESIDUAL_EXPOSURE_CLASS: str = "retail_other"    # original counterparty class
+RESIDUAL_EXPOSURE_CLASS: str = "retail_other"  # original counterparty class
 RESIDUAL_RE_SPLIT_ROLE: str = "residual"
 
 # Both rows: not materially dependent on the property (this triggers the loan-split path)
@@ -107,20 +107,20 @@ PROPERTY_LTV: float = 1.0
 # B31_CR5_RISK_WEIGHTS (28 bands), zero-indexed:
 #   index 5  → 0.20 (20%) → _letter_ref(5)  = "f"
 #   index 15 → 0.75 (75%) → _letter_ref(15) = "p"
-B31_COL_SECURED: str = "f"   # 20% band — secured row lands here
+B31_COL_SECURED: str = "f"  # 20% band — secured row lands here
 B31_COL_RESIDUAL: str = "p"  # 75% band — residual row lands here
 
 # --- B31 CR5 row refs for the two new sub-rows ---
-CR5_ROW_9F: str = "9f"   # "RE — secured up to 55% LTV"
-CR5_ROW_9G: str = "9g"   # "RE — above 55% LTV (residual)"
-CR5_ROW_9: str = "9"     # parent RE row (Total must still == PARENT_EAD)
+CR5_ROW_9F: str = "9f"  # "RE — secured up to 55% LTV"
+CR5_ROW_9G: str = "9g"  # "RE — above 55% LTV (residual)"
+CR5_ROW_9: str = "9"  # parent RE row (Total must still == PARENT_EAD)
 CR5_TOTAL_ROW: str = "17"  # grand total (sub-rows excluded)
 
 # --- Expected CR5 cell values ---
 
 # Row 9f: only band "f" (20%) is populated; Total equals SECURED_EAD
-EXPECTED_9F_BAND_F: float = SECURED_EAD    # 550_000.0
-EXPECTED_9F_TOTAL: float = SECURED_EAD    # 550_000.0
+EXPECTED_9F_BAND_F: float = SECURED_EAD  # 550_000.0
+EXPECTED_9F_TOTAL: float = SECURED_EAD  # 550_000.0
 
 # Row 9g: only band "p" (75%) is populated; Total equals RESIDUAL_EAD
 EXPECTED_9G_BAND_P: float = RESIDUAL_EAD  # 450_000.0
@@ -288,13 +288,21 @@ if __name__ == "__main__":
     _verify_constants()
     _verify_lf()
     print("P2.25b fixture self-check passed.")
-    print(f"  Secured row:  EAD={SECURED_EAD:,.0f}, RW={SECURED_RW:.0%}, "
-          f"class={SECURED_EXPOSURE_CLASS!r}, role={SECURED_RE_SPLIT_ROLE!r}")
-    print(f"  Residual row: EAD={RESIDUAL_EAD:,.0f}, RW={RESIDUAL_RW:.0%}, "
-          f"class={RESIDUAL_EXPOSURE_CLASS!r}, role={RESIDUAL_RE_SPLIT_ROLE!r}")
-    print(f"  Parent EAD reconciles: {SECURED_EAD:,.0f} + {RESIDUAL_EAD:,.0f} = "
-          f"{SECURED_EAD + RESIDUAL_EAD:,.0f}")
-    print(f"  B31 CR5 bands: secured → col {B31_COL_SECURED!r} (20%), "
-          f"residual → col {B31_COL_RESIDUAL!r} (75%)")
+    print(
+        f"  Secured row:  EAD={SECURED_EAD:,.0f}, RW={SECURED_RW:.0%}, "
+        f"class={SECURED_EXPOSURE_CLASS!r}, role={SECURED_RE_SPLIT_ROLE!r}"
+    )
+    print(
+        f"  Residual row: EAD={RESIDUAL_EAD:,.0f}, RW={RESIDUAL_RW:.0%}, "
+        f"class={RESIDUAL_EXPOSURE_CLASS!r}, role={RESIDUAL_RE_SPLIT_ROLE!r}"
+    )
+    print(
+        f"  Parent EAD reconciles: {SECURED_EAD:,.0f} + {RESIDUAL_EAD:,.0f} = "
+        f"{SECURED_EAD + RESIDUAL_EAD:,.0f}"
+    )
+    print(
+        f"  B31 CR5 bands: secured → col {B31_COL_SECURED!r} (20%), "
+        f"residual → col {B31_COL_RESIDUAL!r} (75%)"
+    )
     print(f"  Expected: cr5[{CR5_ROW_9F!r}][{B31_COL_SECURED!r}] == {EXPECTED_9F_BAND_F:,.0f}")
     print(f"  Expected: cr5[{CR5_ROW_9G!r}][{B31_COL_RESIDUAL!r}] == {EXPECTED_9G_BAND_P:,.0f}")

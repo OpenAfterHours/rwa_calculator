@@ -516,6 +516,7 @@ class EquityCalculator:
 
     @cites("CRR Art. 155(2)")
     @cites("PS1/26, paragraph 4.8")
+    @cites("PS1/26, paragraph 4.9")
     def _equity_holding_higher_of_rw(self, config: CalculationConfig) -> float | None:
         """Rules 4.7-4.8 higher-of RW for EQUITY-class CIU look-through holdings.
 
@@ -528,10 +529,20 @@ class EquityCalculator:
         permission, so ``equity_transitional.enabled`` (plus a transitional RW
         existing for the reporting date) is the gate.
 
+        Per Rule 4.9-4.10, a firm that has irrevocably opted out of the
+        transitional regime (``equity_transitional.opt_out``) suppresses the
+        higher-of: ``None`` is returned so the holding falls back to the
+        ``_DEFAULT_HOLDING_RW`` standard treatment. The opt-out applies jointly
+        with the direct-equity transitional floor (Rule 4.9).
+
         References:
         - CRR Art. 155(2): IRB simple method equity RW ("other" = 370%).
         - PRA PS1/26 Rule 4.8: higher-of(Art. 155(2) simple, Rule 4.2/4.3 band).
+        - PRA PS1/26 Rule 4.9-4.10: irrevocable joint opt-out suppresses higher-of.
         """
+        if config.equity_transitional.opt_out:
+            return None
+
         transitional_rw = config.equity_transitional.get_transitional_rw(
             config.reporting_date, is_higher_risk=False
         )
@@ -865,9 +876,14 @@ class EquityCalculator:
 
         For firms with prior IRB equity permission (Rules 4.4-4.6), the floor
         is the higher of the IRB model RW and the transitional SA RW.
+
+        Per Rules 4.9-4.10, a firm that has irrevocably opted out
+        (``equity_transitional.opt_out``) keeps its end-state assigned RW: the
+        floor comparison is skipped. The opt-out applies jointly with the CIU
+        underlying higher-of suppression (Rule 4.9).
         """
         eq_config = config.equity_transitional
-        if not eq_config.enabled:
+        if not eq_config.enabled or eq_config.opt_out:
             return exposures
 
         std_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=False)

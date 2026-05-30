@@ -465,11 +465,18 @@ class EquityTransitionalConfig:
     Firms transitioning from CRR to Basel 3.1 equity weights use a phase-in
     schedule. Firms with prior IRB equity permission use the higher of the
     IRB model RW and the transitional SA RW (Rules 4.4-4.6).
+
+    Per Rules 4.9-4.10 a firm may irrevocably opt out of the transitional
+    regime. When ``opt_out`` is True the opt-out applies jointly to direct
+    equity (the transitional floor is skipped) and to CIU underlyings (the
+    Rule 4.8 higher-of is suppressed), so both end-state RWs apply directly.
     """
 
     enabled: bool = False
     schedule: dict[date, tuple[Decimal, Decimal]] = field(default_factory=dict)
     # (standard_rw, higher_risk_rw) keyed by effective date
+    opt_out: bool = False
+    # PRA Rules 4.9-4.10: irrevocable joint opt-out from the equity transitional regime.
 
     def get_transitional_rw(
         self,

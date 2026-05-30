@@ -434,6 +434,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_49",
             _generate_p249,
         ),
+        (
+            "P2.15 (equity transitional irrevocable opt-out — Rules 4.9-4.10 higher-of suppression)",
+            "p2_15",
+            _generate_p215,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -1376,6 +1381,19 @@ def _generate_p219(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_19", None)
+
+
+def _generate_p215(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.15 fixtures (equity transitional irrevocable opt-out, Rules 4.9-4.10)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_15 import save_p215_fixtures
+
+        saved = save_p215_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_15", None)
 
 
 def _generate_p1153(output_dir: Path) -> list[tuple[str, int]]:

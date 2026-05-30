@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
@@ -2789,6 +2790,36 @@ def _compute_substitution_outflow(data: pl.DataFrame, cols: set[str]) -> float:
     return float(migrated[gp_col].fill_null(0.0).sum())
 
 
+# COREP Annex II §1.3: columns whose header is prefixed "(-)" carry a
+# deduction and must be reported as NEGATIVE so the DPM net-exposure
+# arithmetic reconciles when summed. The cross-column formulas (0040, 0110,
+# 0150, IRB 0090) consume the POSITIVE magnitudes; negation is applied once
+# at the emit boundary, after that arithmetic has run.
+_C07_NEGATIVE_COLS: frozenset[str] = frozenset(
+    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140"}
+)
+_C08_NEGATIVE_COLS: frozenset[str] = frozenset({"0290"})
+
+
+def _negate_deduction_cols(
+    values: dict[str, float | None], negative_cols: frozenset[str]
+) -> None:
+    """Apply the COREP Annex II §1.3 "(-)" sign convention in place.
+
+    Negates the magnitude of each "(-)"-labelled deduction column so the
+    template emits it as a negative figure. Negative-zero is normalised to
+    0.0; null stays null. Must run AFTER all cross-column arithmetic has
+    consumed the positive intermediates.
+    """
+    for ref in negative_cols:
+        magnitude = values.get(ref)
+        if magnitude is None:
+            continue
+        negated = -magnitude
+        values[ref] = 0.0 if negated == 0.0 else negated
+
+
+@cites("PS1/26, paragraph 1.3")
 def _compute_c07_values(
     data: pl.DataFrame,
     cols: set[str],
@@ -2802,6 +2833,11 @@ def _compute_c07_values(
 
     Maps pipeline columns to 4-digit COREP column refs. Columns without
     a pipeline source are set to None (to be populated in Phase 2/3).
+
+    "(-)"-labelled deduction columns (``_C07_NEGATIVE_COLS``) are emitted
+    as NEGATIVE figures per COREP Annex II §1.3, applied at the boundary
+    after the reconciliation formulas (0040, 0110, 0150) consume positive
+    magnitudes.
 
     Args:
         substitution_inflow: Pre-computed inflow of guaranteed_portion from
@@ -2854,6 +2890,10 @@ def _compute_c07_values(
 
     # --- RWEA + supporting factors + ECAI ---
     values.update(_c07_rwea_factor_cols(data, cols, rwa_col))
+
+    # COREP Annex II §1.3: emit "(-)"-labelled deduction cols as negative,
+    # after all cross-column arithmetic has consumed the positive magnitudes.
+    _negate_deduction_cols(values, _C07_NEGATIVE_COLS)
 
     # Filter to only refs present in this framework's column set
     return {ref: values.get(ref) for ref in column_refs if ref in values}
@@ -3225,10 +3265,17 @@ def _c08_rwea_factor_cols(
     return values
 
 
+@cites("PS1/26, paragraph 1.3")
 def _c08_memorandum_cols(
     data: pl.DataFrame, cols: set[str], rwa_col: str
 ) -> dict[str, float | None]:
-    """Compute C 08.01/02 memorandum columns (0280-0310)."""
+    """Compute C 08.01/02 memorandum columns (0280-0310).
+
+    Col 0290 ("(-) Value adjustments and provisions") is emitted as a
+    NEGATIVE figure per COREP Annex II §1.3; IRB col 0090 is computed
+    upstream in ``_compute_c08_values`` from the positive magnitude and is
+    not affected.
+    """
     values: dict[str, float | None] = {}
 
     el_raw = _col_sum_eager(data, cols, "irb_expected_loss")
@@ -3254,6 +3301,9 @@ def _c08_memorandum_cols(
     # — when CD-protected exposures exist, the substitution benefit is already
     # embedded in ``rwa_col``; when none exist, pre-CD RWEA == total RWEA.
     values["0310"] = _col_sum_eager(data, cols, rwa_col)
+
+    # COREP Annex II §1.3: emit "(-)"-labelled deduction col 0290 as negative.
+    _negate_deduction_cols(values, _C08_NEGATIVE_COLS)
     return values
 
 

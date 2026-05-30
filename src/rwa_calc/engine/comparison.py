@@ -749,8 +749,10 @@ def _compute_portfolio_waterfall(attribution: pl.LazyFrame) -> pl.LazyFrame:
     Produces a 4-row LazyFrame with one row per driver, showing the
     aggregate impact and cumulative RWA from CRR baseline to B31 total.
     """
-    # Aggregate each driver across the whole portfolio
-    totals: pl.DataFrame = attribution.select(
+    # Aggregate each driver across the whole portfolio. Stays lazy: no eager
+    # materialisation here, so the function returns a LazyFrame built entirely
+    # from lazy operations (LazyFrame-first convention, P6.21).
+    totals = attribution.select(
         [
             pl.col("rwa_crr").sum().alias("total_rwa_crr"),
             pl.col("scaling_factor_impact").sum().alias("total_scaling"),
@@ -759,36 +761,62 @@ def _compute_portfolio_waterfall(attribution: pl.LazyFrame) -> pl.LazyFrame:
             pl.col("methodology_impact").sum().alias("total_methodology"),
             pl.col("rwa_b31").sum().alias("total_rwa_b31"),
         ]
-    ).collect()
+    )
 
-    crr_rwa = totals["total_rwa_crr"][0]
-    scaling = totals["total_scaling"][0]
-    supporting = totals["total_supporting"][0]
-    methodology = totals["total_methodology"][0]
-    floor = totals["total_floor"][0]
-
-    # Build waterfall rows in order
-    steps = [
-        (1, _DRIVER_SCALING, scaling, crr_rwa + scaling),
-        (2, _DRIVER_SUPPORTING, supporting, crr_rwa + scaling + supporting),
-        (3, _DRIVER_METHODOLOGY, methodology, crr_rwa + scaling + supporting + methodology),
-        (4, _DRIVER_FLOOR, floor, crr_rwa + scaling + supporting + methodology + floor),
-    ]
-
-    return pl.DataFrame(
+    # 4-row literal scaffold of (step, driver) in waterfall order; cross-joined with
+    # the single-row totals so per-step impact / cumulative are expressed lazily.
+    scaffold = pl.LazyFrame(
         {
-            "step": [s[0] for s in steps],
-            "driver": [s[1] for s in steps],
-            "impact_rwa": [s[2] for s in steps],
-            "cumulative_rwa": [s[3] for s in steps],
+            "step": [1, 2, 3, 4],
+            "driver": [
+                _DRIVER_SCALING,
+                _DRIVER_SUPPORTING,
+                _DRIVER_METHODOLOGY,
+                _DRIVER_FLOOR,
+            ],
         },
-        schema={
-            "step": pl.Int32,
-            "driver": pl.String,
-            "impact_rwa": pl.Float64,
-            "cumulative_rwa": pl.Float64,
-        },
-    ).lazy()
+        schema={"step": pl.Int32, "driver": pl.String},
+    )
+
+    impact_rwa = (
+        pl.when(pl.col("step") == 1)
+        .then(pl.col("total_scaling"))
+        .when(pl.col("step") == 2)
+        .then(pl.col("total_supporting"))
+        .when(pl.col("step") == 3)
+        .then(pl.col("total_methodology"))
+        .otherwise(pl.col("total_floor"))
+    )
+
+    cumulative_rwa = (
+        pl.when(pl.col("step") == 1)
+        .then(pl.col("total_rwa_crr") + pl.col("total_scaling"))
+        .when(pl.col("step") == 2)
+        .then(pl.col("total_rwa_crr") + pl.col("total_scaling") + pl.col("total_supporting"))
+        .when(pl.col("step") == 3)
+        .then(
+            pl.col("total_rwa_crr")
+            + pl.col("total_scaling")
+            + pl.col("total_supporting")
+            + pl.col("total_methodology")
+        )
+        .otherwise(
+            pl.col("total_rwa_crr")
+            + pl.col("total_scaling")
+            + pl.col("total_supporting")
+            + pl.col("total_methodology")
+            + pl.col("total_floor")
+        )
+    )
+
+    return scaffold.join(totals, how="cross").select(
+        [
+            pl.col("step"),
+            pl.col("driver"),
+            impact_rwa.cast(pl.Float64).alias("impact_rwa"),
+            cumulative_rwa.cast(pl.Float64).alias("cumulative_rwa"),
+        ]
+    )
 
 
 def _compute_attribution_summary(

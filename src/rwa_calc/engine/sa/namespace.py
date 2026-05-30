@@ -97,6 +97,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
+    B31_EFFECTIVE_DATE,
     B31_HIGH_RISK_RW,
     B31_RETAIL_NON_REGULATORY_RW,
     B31_RETAIL_PAYROLL_LOAN_RW,
@@ -1138,6 +1139,7 @@ def _prepare_risk_weight_lookup(
 
 
 @cites("CRR Art. 134")
+@cites("CRR Art. 137")
 def _apply_b31_risk_weight_overrides(
     exposures: pl.LazyFrame,
     uc: pl.Expr,
@@ -1162,6 +1164,16 @@ def _apply_b31_risk_weight_overrides(
     chain = (
         pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
+        # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
+        # RW when no ECAI rating is present. Takes precedence over the Art. 114
+        # unrated 100% fallback but not over the Art. 114(3)/(4) domestic 0%.
+        # Identical to the CRR arm — MEIP risk weights are unchanged under PS1/26.
+        .when(
+            uc.str.contains("CENTRAL_GOVT", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+            & pl.col("cp_eca_score").is_not_null()
+        )
+        .then(_eca_meip_rw_expr())
         # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
         .when(pl.col("cp_entity_type") == "ccp")
         .then(
@@ -1957,6 +1969,7 @@ class SALazyFrame:
         return exposures
 
     @cites("PS1/26, paragraph 123B")
+    @cites("PS1/26, paragraph 123B.3")
     def apply_currency_mismatch_multiplier(self, config: CalculationConfig) -> pl.LazyFrame:
         """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
 
@@ -1965,9 +1978,22 @@ class SALazyFrame:
         exposure classes.
 
         Basel 3.1 Art. 123B / CRE20.93.
+
+        Art. 123B(3) transitional: the multiplier is a Basel-3.1-only measure that
+        commences on ``B31_EFFECTIVE_DATE`` (1 January 2027). Reporting dates strictly
+        before that fall under the pre-Basel-3.1 portfolio treatment and the frame is
+        returned unchanged. The boundary date 1 January 2027 is in scope (strict ``<``).
         """
         if not config.is_basel_3_1:
             return self._lf
+
+        # Art. 123B(3) transitional: pre-commencement reporting dates suppress the
+        # multiplier entirely. Emit the reporting column as ``False`` (consistent with
+        # the no-mismatch branch below) so downstream reporting always sees the flag.
+        if config.reporting_date < B31_EFFECTIVE_DATE:
+            return self._lf.with_columns(
+                pl.lit(False).alias("currency_mismatch_multiplier_applied")
+            )
 
         schema = self._lf.collect_schema()
         cols = schema.names()
@@ -2011,18 +2037,51 @@ class SALazyFrame:
         is_hedged_flag = (
             pl.col("is_hedged").fill_null(False) if "is_hedged" in cols else pl.lit(False)
         )
-        hedge_coverage_ok = (
-            pl.col("hedge_coverage_ratio").fill_null(0.0)
-            >= _SA_B31_RW["currency_mismatch_hedge_floor"]
-            if "hedge_coverage_ratio" in cols
-            else pl.lit(False)
-        )
+        # Art. 123B(2A): for revolving facilities the 90%-coverage test denominator is
+        # the fully-drawn committed amount (the "instalment amount" = greater of the
+        # contractual minimum and the fully-drawn contractual amount; leg (b) here,
+        # there being no contractual-minimum field). The firm-supplied
+        # ``hedge_coverage_ratio`` measures coverage of the CURRENT drawn balance, so
+        # for revolving rows it is rescaled onto the full-draw base:
+        #     full_draw_base     = max(drawn_amount, facility_limit)
+        #     effective_coverage = (hedge_coverage_ratio * drawn_amount) / full_draw_base
+        # Non-revolving rows are unchanged (effective_coverage = hedge_coverage_ratio).
+        # is_revolving / facility_limit / drawn_amount may be absent on production SA
+        # frames — default safely so the rescale is a no-op and legacy behaviour holds.
+        if "hedge_coverage_ratio" in cols:
+            raw_coverage = pl.col("hedge_coverage_ratio").fill_null(0.0)
+            is_revolving_flag = (
+                pl.col("is_revolving").fill_null(False) if "is_revolving" in cols else pl.lit(False)
+            )
+            drawn_amount = (
+                pl.col("drawn_amount").fill_null(0.0) if "drawn_amount" in cols else pl.lit(0.0)
+            )
+            # Absent facility_limit -> use drawn_amount so full_draw_base == drawn_amount
+            # and the rescale collapses to the legacy coverage ratio.
+            facility_limit = (
+                pl.col("facility_limit").fill_null(drawn_amount)
+                if "facility_limit" in cols
+                else drawn_amount
+            )
+            full_draw_base = pl.max_horizontal(drawn_amount, facility_limit)
+            effective_coverage = (
+                pl.when(is_revolving_flag & (full_draw_base > 0.0))
+                .then((raw_coverage * drawn_amount) / full_draw_base)
+                .otherwise(raw_coverage)
+            )
+            hedge_coverage_ok = effective_coverage >= _SA_B31_RW["currency_mismatch_hedge_floor"]
+        else:
+            hedge_coverage_ok = pl.lit(False)
         waive_expr = is_hedged_flag | hedge_coverage_ok
 
         mismatch_applies = is_retail_or_re & has_mismatch & ~waive_expr
 
         return self._lf.with_columns(
             [
+                # Snapshot pre-multiplier RW for audit/reporting (mirrors the
+                # pre_fcsm_risk_weight pattern). For non-mismatch rows this equals
+                # the unchanged risk_weight; CR5 buckets EAD on this column.
+                pl.col("risk_weight").alias("risk_weight_pre_currency_mismatch"),
                 pl.when(mismatch_applies)
                 .then(
                     (pl.col("risk_weight") * _SA_B31_RW["currency_mismatch_multiplier"]).clip(

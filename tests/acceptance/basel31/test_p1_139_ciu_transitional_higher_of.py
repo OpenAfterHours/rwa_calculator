@@ -161,16 +161,13 @@ class TestP1139CiuTransitionalHigherOf:
         # (bundle and config constructed via fixtures)
 
         # Act
-        bundle_result = equity_calculator.get_equity_result_bundle(
-            ciu_bundle, b31_2027_config
-        )
+        bundle_result = equity_calculator.get_equity_result_bundle(ciu_bundle, b31_2027_config)
         result_df = bundle_result.results.collect()
         row = result_df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
 
         # Assert
         assert len(row) == 1, (
-            f"Expected exactly 1 row for exposure_reference={EXPOSURE_REF!r}, "
-            f"got {len(row)}"
+            f"Expected exactly 1 row for exposure_reference={EXPOSURE_REF!r}, got {len(row)}"
         )
         actual_lt_rw = row["ciu_look_through_rw"][0]
         assert actual_lt_rw == pytest.approx(EXPECTED_CIU_LT_RW, abs=1e-4), (
@@ -203,9 +200,7 @@ class TestP1139CiuTransitionalHigherOf:
         # (bundle and config constructed via fixtures)
 
         # Act
-        bundle_result = equity_calculator.get_equity_result_bundle(
-            ciu_bundle, b31_2027_config
-        )
+        bundle_result = equity_calculator.get_equity_result_bundle(ciu_bundle, b31_2027_config)
         result_df = bundle_result.results.collect()
         row = result_df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
 
@@ -239,9 +234,7 @@ class TestP1139CiuTransitionalHigherOf:
         # (bundle and config constructed via fixtures)
 
         # Act
-        bundle_result = equity_calculator.get_equity_result_bundle(
-            ciu_bundle, b31_2027_config
-        )
+        bundle_result = equity_calculator.get_equity_result_bundle(ciu_bundle, b31_2027_config)
         result_df = bundle_result.results.collect()
         row = result_df.filter(pl.col("exposure_reference") == EXPOSURE_REF)
 

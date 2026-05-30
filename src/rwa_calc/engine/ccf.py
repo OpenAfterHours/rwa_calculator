@@ -70,6 +70,7 @@ from rwa_calc.data.tables.ccf import (
     OC_SHORT_MATURITY_THRESHOLD_DAYS,
     SA_CCF_B31,
     build_firb_ccf_expr,
+    build_product_to_risk_type_expr,
     build_sa_ccf_expr,
 )
 from rwa_calc.domain.enums import ApproachType
@@ -221,6 +222,10 @@ class CCFCalculator:
         defaults: list[tuple[str, pl.Expr]] = [
             ("risk_type", pl.lit("").alias("risk_type")),
             ("underlying_risk_type", pl.lit("").alias("underlying_risk_type")),
+            # CRR Annex I / Art. 111(1): optional concrete OBS product key. Default
+            # empty so the obs_product -> risk_type fill is a no-op when callers
+            # (e.g. unit tests) construct exposures without it.
+            ("obs_product", pl.lit("").alias("obs_product")),
             ("approach", pl.lit("sa").alias("approach")),
             ("ccf_modelled", pl.lit(None).cast(pl.Float64).alias("ccf_modelled")),
             (
@@ -246,6 +251,13 @@ class CCFCalculator:
                 "is_uk_residential_mortgage_commitment",
                 pl.lit(False).alias("is_uk_residential_mortgage_commitment"),
             ),
+            # PRA PS1/26 Art. 166E(5): default False so the revolving
+            # purchased-receivables commitment CCF routing is a no-op when
+            # callers (e.g. unit tests) construct exposures without the flag.
+            (
+                "is_purchased_receivable_commitment",
+                pl.lit(False).alias("is_purchased_receivable_commitment"),
+            ),
         ]
         for col_name, default_expr in defaults:
             if col_name not in names:
@@ -270,6 +282,9 @@ class CCFCalculator:
 
         return exposures, added
 
+    # CRR Annex I product bands take effect via Art. 111(1); the obs_product fill
+    # is attributed to Art. 111 (watchfire requires an article-based citation).
+    @cites("CRR Art. 111")
     @cites("PS1/26, paragraph 111")
     def _compute_ccf(
         self,
@@ -281,11 +296,32 @@ class CCFCalculator:
         Determines SA and F-IRB CCFs from risk_type, then selects the final CCF
         based on the exposure's approach (SA/F-IRB/A-IRB).
 
+        CRR Annex I / Art. 111(1) obs_product fill: before resolving CCFs, any row
+        whose ``risk_type`` is null/empty has its ``risk_type`` resolved from the
+        concrete ``obs_product`` key via ANNEX1_PRODUCT_RISK_TYPE (framework-
+        invariant). An explicit ``risk_type`` always wins — the fill is gated on
+        the existing value being null/empty.
+
         Applies the PRA PS1/26 Art. 111(1) Table A1 Row 4(b) override: a UK
         residential-property commitment (``is_uk_residential_mortgage_commitment``)
         gets a 50% SA CCF under Basel 3.1, except where the otherwise-resolved
         CCF is 10% (Row 6 UCC) or 100% (Row 2) — the Row 4(b) carve-out.
         """
+        # CRR Annex I / Art. 111(1): resolve risk_type from the concrete OBS
+        # product when (and only when) no explicit risk_type was supplied. Explicit
+        # risk_type always wins; an unmapped/null product yields null and leaves
+        # risk_type unchanged.
+        risk_type_is_blank = (
+            pl.col("risk_type").cast(pl.Utf8, strict=False).fill_null("").str.len_chars() == 0
+        )
+        product_risk_type = build_product_to_risk_type_expr("obs_product")
+        exposures = exposures.with_columns(
+            pl.when(risk_type_is_blank & product_risk_type.is_not_null())
+            .then(product_risk_type)
+            .otherwise(pl.col("risk_type"))
+            .alias("risk_type"),
+        )
+
         is_b31 = config.is_basel_3_1
 
         if is_b31:
@@ -337,9 +373,7 @@ class CCFCalculator:
         if is_b31:
             row_4b_ccf = float(SA_CCF_B31["MR"])
             carve_out_ccfs = (float(SA_CCF_B31["LR"]), float(SA_CCF_B31["FR"]))
-            is_resi_commitment = pl.col(
-                "is_uk_residential_mortgage_commitment"
-            ).fill_null(False)
+            is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
             sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
             exposures = exposures.with_columns(
                 pl.when(is_resi_commitment & sa_not_in_carve_out)
@@ -347,6 +381,8 @@ class CCFCalculator:
                 .otherwise(pl.col("_sa_ccf_from_risk_type"))
                 .alias("_sa_ccf_from_risk_type"),
             )
+
+            exposures = self._apply_purchased_receivable_ccf(exposures)
 
         # Art. 111(1)(c): commitment-to-issue lower-of rule.
         # When underlying_risk_type is specified, cap CCFs at the underlying item's CCF.
@@ -405,6 +441,51 @@ class CCFCalculator:
             .then(pl.col("_firb_ccf_from_risk_type"))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("ccf"),
+        )
+
+    # PRA PS1/26 Art. 166E(5) — no CRR equivalent; the watchfire PS-instrument
+    # grammar only accepts numeric paragraphs, so Art. 166E para 5 is encoded as
+    # section 166.5 (see docs/development/citation-tracking.md on the PS1/26 form).
+    @cites("PS1/26, paragraph 166.5")
+    def _apply_purchased_receivable_ccf(
+        self,
+        exposures: pl.LazyFrame,
+    ) -> pl.LazyFrame:
+        """Apply the Art. 166E(5) revolving purchased-receivables CCF routing.
+
+        PRA PS1/26 Art. 166E(5): the undrawn purchase commitment of a *revolving*
+        purchased-receivables facility receives a fixed CCF — 40% by default
+        (Art. 111(1) Table A1 Row 5 "Other Commitments" / OC), dropping to 10%
+        where the commitment also meets the Table A1 Row 7 UCC criteria
+        (``risk_type == "LR"``). When ``is_purchased_receivable_commitment`` and
+        ``is_revolving`` are both True, the otherwise-resolved SA / F-IRB CCF is
+        overridden to this rate regardless of the row's generic risk_type bucket
+        (e.g. a flagged MR row routes to 40%, not the generic 50%).
+
+        Basel-3.1-only: callers gate this on ``config.is_basel_3_1``; there is no
+        equivalent CRR purchased-receivables undrawn-commitment CCF, so the flag
+        is a no-op under CRR.
+        """
+        oc_ccf = float(SA_CCF_B31["OC"])
+        ucc_ccf = float(SA_CCF_B31["LR"])
+
+        is_pr_commitment = pl.col("is_purchased_receivable_commitment").fill_null(False) & pl.col(
+            "is_revolving"
+        ).fill_null(False)
+        # Table A1 Row 7 UCC criterion: the commitment is unconditionally
+        # cancellable (LR risk_type) -> 10%; otherwise the Row 5 OC 40% default.
+        is_ucc = pl.col("risk_type").fill_null("").str.to_lowercase().is_in(["lr", "low_risk"])
+        pr_ccf = pl.when(is_ucc).then(pl.lit(ucc_ccf)).otherwise(pl.lit(oc_ccf))
+
+        return exposures.with_columns(
+            pl.when(is_pr_commitment)
+            .then(pr_ccf)
+            .otherwise(pl.col("_sa_ccf_from_risk_type"))
+            .alias("_sa_ccf_from_risk_type"),
+            pl.when(is_pr_commitment)
+            .then(pr_ccf)
+            .otherwise(pl.col("_firb_ccf_from_risk_type"))
+            .alias("_firb_ccf_from_risk_type"),
         )
 
     def _compute_ead(

@@ -465,11 +465,18 @@ class EquityTransitionalConfig:
     Firms transitioning from CRR to Basel 3.1 equity weights use a phase-in
     schedule. Firms with prior IRB equity permission use the higher of the
     IRB model RW and the transitional SA RW (Rules 4.4-4.6).
+
+    Per Rules 4.9-4.10 a firm may irrevocably opt out of the transitional
+    regime. When ``opt_out`` is True the opt-out applies jointly to direct
+    equity (the transitional floor is skipped) and to CIU underlyings (the
+    Rule 4.8 higher-of is suppressed), so both end-state RWs apply directly.
     """
 
     enabled: bool = False
     schedule: dict[date, tuple[Decimal, Decimal]] = field(default_factory=dict)
     # (standard_rw, higher_risk_rw) keyed by effective date
+    opt_out: bool = False
+    # PRA Rules 4.9-4.10: irrevocable joint opt-out from the equity transitional regime.
 
     def get_transitional_rw(
         self,
@@ -928,6 +935,19 @@ class CalculationConfig:
     # Set False to force the passed-in / default rate regardless of input data.
     sync_eur_gbp_rate_from_fx_table: bool = True
     enable_double_default: bool = False  # CRR Art. 153(3) double default treatment
+    # CRR Art. 155(3): when True and the firm has IRB permissions under CRR,
+    # equity exposures use the PD/LGD approach (Art. 165 supervisory parameters)
+    # instead of the Art. 155(2) IRB Simple risk weights. Ignored under Basel 3.1
+    # (Art. 147A removes IRB equity — all equity uses SA).
+    equity_pd_lgd: bool = False
+    # PRA PS1/26 Art. 123A(1)(b)(ii) / BCBS CRE20.66: the 0.2%-of-portfolio
+    # granularity sub-condition for regulatory-retail qualification (Basel 3.1
+    # only). When True (default) an obligor whose aggregate exceeds 0.2% of the
+    # total candidate-retail portfolio is re-routed to CORPORATE. Set False to
+    # suppress the limb — e.g. when granularity is assessed by another method
+    # under CRE20.66's national-discretion clause, or to isolate the other
+    # Art. 123A limbs in tests. No effect under CRR (the limb is Basel-3.1 only).
+    enforce_retail_granularity: bool = True
     use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
     # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
     # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
@@ -1014,6 +1034,7 @@ class CalculationConfig:
         eur_gbp_rate: Decimal = Decimal("0.8732"),
         enable_double_default: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
+        airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -1071,6 +1092,7 @@ class CalculationConfig:
             eur_gbp_rate=eur_gbp_rate,
             enable_double_default=enable_double_default,
             crm_collateral_method=crm_collateral_method,
+            airb_collateral_method=airb_collateral_method,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,
@@ -1095,6 +1117,7 @@ class CalculationConfig:
         skip_transitional_floor: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
+        enforce_retail_granularity: bool = True,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -1139,6 +1162,11 @@ class CalculationConfig:
                 schedule (60%/65%/70%/72.5%) and apply the full 72.5% floor from
                 day one. Art. 92 para 5 says institutions "may apply" the transitional
                 rates — they are permissive, not mandatory.
+            enforce_retail_granularity: Art. 123A(1)(b)(ii) / CRE20.66 — when True
+                (default) the 0.2%-of-portfolio retail granularity limb is applied
+                and concentrated obligors are re-routed to CORPORATE. Set False to
+                suppress the limb (granularity assessed by another method, or to
+                isolate the other Art. 123A limbs in tests).
             collect_engine: Polars engine for .collect() - 'cpu' (default) for
                 in-memory processing, 'streaming' for batched lower-memory execution.
 
@@ -1178,6 +1206,7 @@ class CalculationConfig:
             use_investment_grade_assessment=use_investment_grade_assessment,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
+            enforce_retail_granularity=enforce_retail_granularity,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,

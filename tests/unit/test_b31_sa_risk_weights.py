@@ -3390,6 +3390,68 @@ class TestCurrencyMismatchMultiplier:
         )
         assert float(result["risk_weight"]) == pytest.approx(1.50)
 
+    def test_p1_94g_namespace_emits_risk_weight_pre_currency_mismatch(
+        self,
+        b31_config: CalculationConfig,
+    ) -> None:
+        """P1.94g: apply_currency_mismatch_multiplier must emit risk_weight_pre_currency_mismatch.
+
+        Why: The CR5 bucketing fix (DELIV1) and OF 02.00 memo row (DELIV2) both
+        depend on the SA namespace emitting a snapshot of risk_weight BEFORE the
+        1.5× Art. 123B multiplier is applied (mirroring the pre_fcsm_risk_weight
+        pattern). This test proves the column is present in the result frame after
+        a firing mismatch row, with the correct pre-multiplier value.
+
+        Arrange: Minimal retail_other row with EUR exposure, GBP income currency,
+                 base risk_weight=0.75, B31 framework.
+        Act:     Call apply_currency_mismatch_multiplier via the .sa namespace.
+        Assert:
+            - risk_weight_pre_currency_mismatch == 0.75 (pre-multiplier base RW)
+            - risk_weight == 1.125 (0.75 × 1.5 = post-multiplier RW)
+
+        Pre-fix failure: ColumnNotFoundError — the column does not exist yet in
+        the SA namespace output. This is an acceptable RED failure mode (genuine
+        missing-column failure, not an ImportError or collection error).
+
+        References:
+        - PRA PS1/26 Art. 123B: 1.5× currency mismatch multiplier for retail/RE
+        - src/rwa_calc/engine/sa/namespace.py pre_fcsm_risk_weight pattern (line ~1793)
+        """
+        import rwa_calc.engine.sa.namespace  # noqa: F401 — register .sa namespace
+
+        # Arrange: minimal retail_other frame with currency mismatch
+        lf = pl.LazyFrame(
+            {
+                "exposure_reference": ["TEST_MISMATCH"],
+                "exposure_class": ["retail_other"],
+                "risk_weight": [0.75],
+                "currency": ["EUR"],
+                "borrower_income_currency": ["GBP"],
+                "ead_final": [100_000.0],
+            }
+        )
+
+        # Act
+        result_lf = lf.sa.apply_currency_mismatch_multiplier(b31_config)
+        result = result_lf.collect()
+
+        # Assert: post-multiplier risk_weight is correct (prerequisite)
+        assert result["risk_weight"][0] == pytest.approx(0.75 * 1.5), (
+            f"risk_weight after mismatch multiplier should be {0.75 * 1.5}, "
+            f"got {result['risk_weight'][0]}."
+        )
+
+        # Assert: the new pre-mismatch column must exist and hold the base RW
+        assert "risk_weight_pre_currency_mismatch" in result.columns, (
+            "Column 'risk_weight_pre_currency_mismatch' not found in SA namespace output. "
+            "The engine-implementer must add this column in apply_currency_mismatch_multiplier "
+            "(mirroring the pre_fcsm_risk_weight pattern at namespace.py:1793)."
+        )
+        assert result["risk_weight_pre_currency_mismatch"][0] == pytest.approx(0.75), (
+            f"risk_weight_pre_currency_mismatch should be 0.75 (pre-multiplier base RW), "
+            f"got {result['risk_weight_pre_currency_mismatch'][0]}."
+        )
+
 
 # =============================================================================
 # DEFAULTED RESI RE — ALWAYS 100% (PRA PS1/26 Art. 127 / CRE20.88)

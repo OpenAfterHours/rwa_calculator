@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.reporting.corep.templates import (
@@ -848,6 +849,19 @@ class COREPGenerator:
         if is_b31:
             _c02_00_apply_b31_cols(row_values, sa_equiv_rwa, floor_rwa)
 
+        # B31 memo row 0500 (PRA PS1/26 Art. 123B): portfolio-total RWEA of all
+        # rows that fired the 1.5x currency-mismatch multiplier. Memo-only — only
+        # col 0010 is populated (0020/0030 stay None via the build .get()), and
+        # the row is excluded from the TREA total. Absent under CRR (the row is
+        # not in CRR_C02_00_ROW_SECTIONS, so the build step never emits it).
+        if is_b31 and "currency_mismatch_multiplier_applied" in cols:
+            mismatch_rwea = float(
+                results.filter(pl.col("currency_mismatch_multiplier_applied").fill_null(False))
+                .select(pl.col(rwa_col).fill_null(0.0).sum().alias("rwea"))
+                .collect()["rwea"][0]
+            )
+            row_values["0500"] = {"0010": mismatch_rwea}
+
         # Build DataFrame rows
         rows = _c02_00_build_rows(row_values, row_sections, column_refs)
 
@@ -958,16 +972,37 @@ class COREPGenerator:
             pl.col(ec_col).alias("_ec"),
             pl.col(rwa_col).fill_null(0.0).alias("_rwa"),
         ]
+        # The classifier-derived ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)(e)/(f))
+        # is the canonical corporate split signal: ``corporate_financial_large``
+        # (FSE OR revenue > GBP 440m) -> row 0295, ``corporate_sme`` -> 0296/0355,
+        # ``corporate_other`` -> 0297/0356. When it is absent (e.g. CRR frames or
+        # pre-classifier inputs) fall back to the is_sme / FSE-flag heuristic.
+        has_subclass = "exposure_subclass" in cols
         has_sme = "is_sme" in cols
-        has_fse = "apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
+        has_fse = (
+            has_subclass or "apply_fi_scalar" in cols or "cp_is_financial_sector_entity" in cols
+        )
         has_pt = "property_type" in cols
-        if has_sme:
-            sub_select.append(pl.col("is_sme").fill_null(False).alias("_sme"))
+        if has_sme or has_subclass:
+            has_sme = True
+            if has_subclass:
+                sme_expr = pl.col("exposure_subclass") == "corporate_sme"
+                if "is_sme" in cols:
+                    sme_expr = sme_expr | pl.col("is_sme").fill_null(False)
+            else:
+                sme_expr = pl.col("is_sme").fill_null(False)
+            sub_select.append(sme_expr.alias("_sme"))
         if has_fse:
-            fse_col = (
-                "apply_fi_scalar" if "apply_fi_scalar" in cols else "cp_is_financial_sector_entity"
-            )
-            sub_select.append(pl.col(fse_col).fill_null(False).alias("_fse"))
+            if has_subclass:
+                fse_expr = pl.col("exposure_subclass") == "corporate_financial_large"
+            else:
+                fse_col = (
+                    "apply_fi_scalar"
+                    if "apply_fi_scalar" in cols
+                    else "cp_is_financial_sector_entity"
+                )
+                fse_expr = pl.col(fse_col).fill_null(False)
+            sub_select.append(fse_expr.alias("_fse"))
         if has_pt:
             sub_select.append(pl.col("property_type").alias("_pt"))
 
@@ -2563,6 +2598,44 @@ def _filter_supporting_factor(data: pl.DataFrame, cols: set[str], factor_type: s
     )
 
 
+def _filter_ppu_of_sa(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to SA exposures held under permanent partial use (PPU).
+
+    C 07.00 / OF 07.00 Section 1 row 0050 ("of which: Exposures under permanent
+    partial use of SA"). An exposure qualifies when its classifier-stage
+    ``ppu_reason`` is one of the CRR Art. 150(1)(a)-(j) conditions
+    (``art_150_1_*``).
+
+    Graceful fallback: when ``ppu_reason`` is absent (CRR/pre-classifier frames
+    and any caller that does not supply model-permission provenance), returns an
+    empty subset so the caller emits a null row — preserving prior behaviour.
+
+    References:
+        CRR Art. 150(1)(a)-(j): permanent partial use conditions.
+    """
+    if "ppu_reason" not in cols:
+        return data.clear()
+    return data.filter(pl.col("ppu_reason").str.starts_with("art_150_1_"))
+
+
+def _filter_sequential_rollout(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
+    """Filter to SA exposures held under sequential IRB roll-out.
+
+    C 07.00 / OF 07.00 Section 1 row 0060 ("of which: Exposures under sequential
+    IRB implementation"). An exposure qualifies when its classifier-stage
+    ``ppu_reason`` equals ``art_148_rollout``.
+
+    Graceful fallback: when ``ppu_reason`` is absent, returns an empty subset so
+    the caller emits a null row — preserving prior behaviour.
+
+    References:
+        CRR Art. 148: sequential IRB roll-out.
+    """
+    if "ppu_reason" not in cols:
+        return data.clear()
+    return data.filter(pl.col("ppu_reason") == "art_148_rollout")
+
+
 _SECTION3_NULL_REFS: frozenset[str] = frozenset({"0160", "0170", "0175", "0180"})
 
 
@@ -2789,6 +2862,34 @@ def _compute_substitution_outflow(data: pl.DataFrame, cols: set[str]) -> float:
     return float(migrated[gp_col].fill_null(0.0).sum())
 
 
+# COREP Annex II §1.3: columns whose header is prefixed "(-)" carry a
+# deduction and must be reported as NEGATIVE so the DPM net-exposure
+# arithmetic reconciles when summed. The cross-column formulas (0040, 0110,
+# 0150, IRB 0090) consume the POSITIVE magnitudes; negation is applied once
+# at the emit boundary, after that arithmetic has run.
+_C07_NEGATIVE_COLS: frozenset[str] = frozenset(
+    {"0030", "0035", "0050", "0060", "0070", "0080", "0090", "0130", "0140"}
+)
+_C08_NEGATIVE_COLS: frozenset[str] = frozenset({"0290"})
+
+
+def _negate_deduction_cols(values: dict[str, float | None], negative_cols: frozenset[str]) -> None:
+    """Apply the COREP Annex II §1.3 "(-)" sign convention in place.
+
+    Negates the magnitude of each "(-)"-labelled deduction column so the
+    template emits it as a negative figure. Negative-zero is normalised to
+    0.0; null stays null. Must run AFTER all cross-column arithmetic has
+    consumed the positive intermediates.
+    """
+    for ref in negative_cols:
+        magnitude = values.get(ref)
+        if magnitude is None:
+            continue
+        negated = -magnitude
+        values[ref] = 0.0 if negated == 0.0 else negated
+
+
+@cites("PS1/26, paragraph 1.3")
 def _compute_c07_values(
     data: pl.DataFrame,
     cols: set[str],
@@ -2802,6 +2903,11 @@ def _compute_c07_values(
 
     Maps pipeline columns to 4-digit COREP column refs. Columns without
     a pipeline source are set to None (to be populated in Phase 2/3).
+
+    "(-)"-labelled deduction columns (``_C07_NEGATIVE_COLS``) are emitted
+    as NEGATIVE figures per COREP Annex II §1.3, applied at the boundary
+    after the reconciliation formulas (0040, 0110, 0150) consume positive
+    magnitudes.
 
     Args:
         substitution_inflow: Pre-computed inflow of guaranteed_portion from
@@ -2854,6 +2960,10 @@ def _compute_c07_values(
 
     # --- RWEA + supporting factors + ECAI ---
     values.update(_c07_rwea_factor_cols(data, cols, rwa_col))
+
+    # COREP Annex II §1.3: emit "(-)"-labelled deduction cols as negative,
+    # after all cross-column arithmetic has consumed the positive magnitudes.
+    _negate_deduction_cols(values, _C07_NEGATIVE_COLS)
 
     # Filter to only refs present in this framework's column set
     return {ref: values.get(ref) for ref in column_refs if ref in values}
@@ -3225,10 +3335,17 @@ def _c08_rwea_factor_cols(
     return values
 
 
+@cites("PS1/26, paragraph 1.3")
 def _c08_memorandum_cols(
     data: pl.DataFrame, cols: set[str], rwa_col: str
 ) -> dict[str, float | None]:
-    """Compute C 08.01/02 memorandum columns (0280-0310)."""
+    """Compute C 08.01/02 memorandum columns (0280-0310).
+
+    Col 0290 ("(-) Value adjustments and provisions") is emitted as a
+    NEGATIVE figure per COREP Annex II §1.3; IRB col 0090 is computed
+    upstream in ``_compute_c08_values`` from the positive magnitude and is
+    not affected.
+    """
     values: dict[str, float | None] = {}
 
     el_raw = _col_sum_eager(data, cols, "irb_expected_loss")
@@ -3254,6 +3371,9 @@ def _c08_memorandum_cols(
     # — when CD-protected exposures exist, the substitution benefit is already
     # embedded in ``rwa_col``; when none exist, pre-CD RWEA == total RWEA.
     values["0310"] = _col_sum_eager(data, cols, rwa_col)
+
+    # COREP Annex II §1.3: emit "(-)"-labelled deduction col 0290 as negative.
+    _negate_deduction_cols(values, _C08_NEGATIVE_COLS)
     return values
 
 
@@ -3649,6 +3769,10 @@ def _c07_section1_subset(
         return _filter_supporting_factor(class_data, cols, "sme")
     if row_ref == "0035":
         return _filter_supporting_factor(class_data, cols, "infrastructure")
+    if row_ref == "0050":
+        return _filter_ppu_of_sa(class_data, cols)
+    if row_ref == "0060":
+        return _filter_sequential_rollout(class_data, cols)
     return None
 
 

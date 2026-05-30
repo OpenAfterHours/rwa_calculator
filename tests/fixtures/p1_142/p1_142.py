@@ -501,16 +501,28 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("Scenario: Art. 124E three-property limit → income-producing RE routing (Basel 3.1)")
     print()
     print(f"  BREACH row  ({CP_BREACH_REF}):")
-    print(f"    qualifying_property_count = {BREACH_PROPERTY_COUNT}  → limit breached (> {THREE_PROPERTY_LIMIT})")
-    print(f"    → Art. 124G whole-loan, Table 6B LTV 70-80%")
-    print(f"    EAD = {EAD_AMOUNT:,.2f}  RW = {EXPECTED_RW_BREACH:.4f}  RWA = {EXPECTED_RWA_BREACH:,.2f}")
+    print(
+        f"    qualifying_property_count = {BREACH_PROPERTY_COUNT}  → limit breached (> {THREE_PROPERTY_LIMIT})"
+    )
+    print("    → Art. 124G whole-loan, Table 6B LTV 70-80%")
+    print(
+        f"    EAD = {EAD_AMOUNT:,.2f}  RW = {EXPECTED_RW_BREACH:.4f}  RWA = {EXPECTED_RWA_BREACH:,.2f}"
+    )
     print()
     print(f"  CONTROL row ({CP_CTRL_REF}):")
-    print(f"    qualifying_property_count = {CTRL_PROPERTY_COUNT}  → limit met (<= {THREE_PROPERTY_LIMIT})")
-    print(f"    → Art. 124F loan-split track")
-    print(f"    secured_share = min(1, {ART_124F_SPLIT_THRESHOLD}/{PROPERTY_LTV}) = {CTRL_SECURED_SHARE:.5f}")
-    print(f"    blended RW = {ART_124F_SECURED_RW} x {CTRL_SECURED_SHARE:.5f} + {ART_124L_UNSECURED_RW} x {CTRL_UNSECURED_SHARE:.5f} = {EXPECTED_RW_CTRL:.5f}")
-    print(f"    EAD = {EAD_AMOUNT:,.2f}  RW = {EXPECTED_RW_CTRL:.5f}  RWA = {EXPECTED_RWA_CTRL:,.2f}")
+    print(
+        f"    qualifying_property_count = {CTRL_PROPERTY_COUNT}  → limit met (<= {THREE_PROPERTY_LIMIT})"
+    )
+    print("    → Art. 124F loan-split track")
+    print(
+        f"    secured_share = min(1, {ART_124F_SPLIT_THRESHOLD}/{PROPERTY_LTV}) = {CTRL_SECURED_SHARE:.5f}"
+    )
+    print(
+        f"    blended RW = {ART_124F_SECURED_RW} x {CTRL_SECURED_SHARE:.5f} + {ART_124L_UNSECURED_RW} x {CTRL_UNSECURED_SHARE:.5f} = {EXPECTED_RW_CTRL:.5f}"
+    )
+    print(
+        f"    EAD = {EAD_AMOUNT:,.2f}  RW = {EXPECTED_RW_CTRL:.5f}  RWA = {EXPECTED_RWA_CTRL:,.2f}"
+    )
     print()
     print("  Schema note:")
     print("    qualifying_property_count is NEW — not yet in canonical COUNTERPARTY_SCHEMA.")

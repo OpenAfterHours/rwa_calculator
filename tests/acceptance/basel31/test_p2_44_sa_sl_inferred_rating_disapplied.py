@@ -60,6 +60,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pytest
@@ -70,7 +71,6 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p2_44.p2_44 import (
     ANTI_EXPECTED_RISK_WEIGHT,
-    COUNTERPARTY_REF,
     EXPECTED_EAD,
     EXPECTED_EXPOSURE_CLASS_SA,
     EXPECTED_RISK_WEIGHT,
@@ -170,7 +170,7 @@ def p2_44_sa_results() -> pl.DataFrame:
         "SA results should not be None — check PermissionMode.STANDARDISED config "
         "and that the SL specialised-lending counterparty routes to SA."
     )
-    return results.sa_results.collect()
+    return cast(pl.DataFrame, results.sa_results.collect())
 
 
 def _get_exposure_row(df: pl.DataFrame) -> dict:
@@ -296,9 +296,7 @@ class TestP244SASLInferredRatingDisapplied:
     # Structural / exposure-class assertions
     # -------------------------------------------------------------------------
 
-    def test_p2_44_exposure_class_sa_is_corporate(
-        self, p2_44_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p2_44_exposure_class_sa_is_corporate(self, p2_44_sa_results: pl.DataFrame) -> None:
         """
         P2.44: exposure_class_sa = "corporate" (SA sub-type for SL under Art. 122B(1)).
 
@@ -321,9 +319,7 @@ class TestP244SASLInferredRatingDisapplied:
             f"(SA sub-type for SL Art. 122B(1)). Got {row['exposure_class_sa']!r}."
         )
 
-    def test_p2_44_sl_type_is_object_finance(
-        self, p2_44_sa_results: pl.DataFrame
-    ) -> None:
+    def test_p2_44_sl_type_is_object_finance(self, p2_44_sa_results: pl.DataFrame) -> None:
         """
         P2.44: sl_type = "object_finance" (load-bearing for Art. 122B(2)(a) 100% RW).
 

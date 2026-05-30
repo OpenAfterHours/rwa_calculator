@@ -117,9 +117,7 @@ def compute_pfe(
                 pl.max_horizontal(v_minus_c, pl.lit(0.0)).alias("rc_unmargined"),
             ]
         )
-        .with_columns(
-            (pl.lit(alpha_value) * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr")
-        )
+        .with_columns((pl.lit(alpha_value) * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr"))
     )
 
 

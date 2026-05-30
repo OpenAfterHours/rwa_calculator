@@ -968,13 +968,13 @@ class TestC0700:
         assert corp["0010"][0] == pytest.approx(3500.0)
 
     def test_c07_total_row_provisions(self) -> None:
-        """Provisions (col 0030) sum SCRA + GCRA amounts."""
+        """Provisions (col 0030) sum SCRA + GCRA amounts — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # Corp provisions: (10+5) + (20+10) = 45
-        assert corp["0030"][0] == pytest.approx(45.0)
+        # Corp provisions: (10+5) + (20+10) = 45; stored as negative deduction
+        assert corp["0030"][0] == pytest.approx(-45.0)
 
     def test_c07_total_row_net_exposure(self) -> None:
         """Net exposure (col 0040) = original - provisions."""
@@ -986,22 +986,22 @@ class TestC0700:
         assert corp["0040"][0] == pytest.approx(3455.0)
 
     def test_c07_total_row_guarantees(self) -> None:
-        """Guarantees (col 0050) are aggregated correctly."""
+        """Guarantees (col 0050) are aggregated correctly — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # Corp guarantees: 0 + 500 = 500
-        assert corp["0050"][0] == pytest.approx(500.0)
+        # Corp guarantees: 0 + 500 = 500; stored as negative deduction
+        assert corp["0050"][0] == pytest.approx(-500.0)
 
     def test_c07_total_row_collateral(self) -> None:
-        """Collateral (col 0130) is aggregated correctly."""
+        """Collateral (col 0130) is aggregated correctly — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # Corp collateral: 100 + 0 = 100
-        assert corp["0130"][0] == pytest.approx(100.0)
+        # Corp collateral: 100 + 0 = 100; stored as negative deduction
+        assert corp["0130"][0] == pytest.approx(-100.0)
 
     def test_c07_total_row_ead(self) -> None:
         """Exposure value (col 0200) matches EAD."""
@@ -1243,13 +1243,13 @@ class TestC0801:
         assert corp["0280"][0] == pytest.approx(25.875)
 
     def test_c0801_provisions(self) -> None:
-        """Provisions (col 0290) sums correctly."""
+        """Provisions (col 0290) sums correctly — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results())
 
         corp = _get_total_row(bundle.c08_01["corporate"])
-        # Provisions: (10+5) + (5+5) = 25
-        assert corp["0290"][0] == pytest.approx(25.0)
+        # Provisions: (10+5) + (5+5) = 25; stored as negative deduction
+        assert corp["0290"][0] == pytest.approx(-25.0)
 
     def test_c0801_obligor_count(self) -> None:
         """Obligor count (col 0300) uses distinct counterparty refs."""
@@ -2119,13 +2119,13 @@ class TestSubstitutionFlows:
     """
 
     def test_c07_outflow_populated(self) -> None:
-        """Col 0090 shows guaranteed portion leaving the class."""
+        """Col 0090 shows guaranteed portion leaving the class — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_2 has 500 guaranteed_portion migrating to institution
-        assert corp["0090"][0] == pytest.approx(500.0)
+        # SA_CORP_2 has 500 guaranteed_portion migrating to institution; stored as negative deduction
+        assert corp["0090"][0] == pytest.approx(-500.0)
 
     def test_c07_inflow_populated(self) -> None:
         """Col 0100 shows guaranteed portion arriving from other classes."""
@@ -2146,19 +2146,15 @@ class TestSubstitutionFlows:
         assert retail["0100"][0] == pytest.approx(0.0)
 
     def test_c07_net_exposure_after_substitution(self) -> None:
-        """Col 0110 = 0040 - 0050 - 0090 + 0100 (other CRM cols are None/0)."""
+        """Col 0110 = net exposure after all CRM deductions (guaranteed outflow removes 500)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_substitution())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        v_0040 = corp["0040"][0]
-        v_0050 = corp["0050"][0]
-        v_0090 = corp["0090"][0]
-        v_0100 = corp["0100"][0]
         v_0110 = corp["0110"][0]
 
-        expected = v_0040 - v_0050 - v_0090 + v_0100
-        assert v_0110 == pytest.approx(expected)
+        # Engine: 0040=3455, 0050=-500 (deduction), 0090=-500 (outflow deduction) → 0110=2455
+        assert v_0110 == pytest.approx(2455.0)
 
     def test_c07_outflow_zero_without_substitution_cols(self) -> None:
         """Without pre/post CRM columns, outflow defaults to 0."""
@@ -2282,12 +2278,12 @@ class TestOnBSNetting:
     """
 
     def test_c07_col_0035_populated_b31(self) -> None:
-        """Col 0035 shows summed on_bs_netting_amount for Basel 3.1."""
+        """Col 0035 shows summed on_bs_netting_amount for Basel 3.1 — negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_1 has 150 netting, SA_CORP_2 has 0 → total 150
-        assert corp["0035"][0] == pytest.approx(150.0)
+        # SA_CORP_1 has 150 netting, SA_CORP_2 has 0 → total 150; stored as negative deduction
+        assert corp["0035"][0] == pytest.approx(-150.0)
 
     def test_c07_col_0035_absent_crr(self) -> None:
         """Col 0035 doesn't exist under CRR (no on-BS netting column)."""
@@ -2297,15 +2293,13 @@ class TestOnBSNetting:
         assert "0035" not in corp.columns
 
     def test_c07_col_0040_includes_netting_b31(self) -> None:
-        """Col 0040 = 0010 - 0030 - 0035 (netting deducted from net exposure)."""
+        """Col 0040 is net exposure after provisions and netting deductions."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_netting(), framework="BASEL_3_1")
         corp = _get_total_row(bundle.c07_00["corporate"])
-        v_0010 = corp["0010"][0]
-        v_0030 = corp["0030"][0]
-        v_0035 = corp["0035"][0]
         v_0040 = corp["0040"][0]
-        assert v_0040 == pytest.approx(v_0010 - v_0030 - v_0035)
+        # Engine: 0010=3500, 0030=-45, 0035=-150 → 0040=3305 (3500 - 45 - 150)
+        assert v_0040 == pytest.approx(3305.0)
 
     def test_c07_zero_netting_class(self) -> None:
         """Class with no netting exposures reports 0 for col 0035."""
@@ -3009,13 +3003,13 @@ class TestCollateralMethodSplit:
 
         # 0070: Simple method not used → 0.0
         assert total["0070"][0] == pytest.approx(0.0)
-        # 0080: Other funded = RE + receivables + other_physical = 30+10+10 = 50
-        assert total["0080"][0] == pytest.approx(50.0)
+        # 0080: Other funded = RE + receivables + other_physical = 30+10+10 = 50; negative per Annex II §1.3
+        assert total["0080"][0] == pytest.approx(-50.0)
         # 0120: He = 0 for loans
         assert total["0120"][0] == pytest.approx(0.0)
 
     def test_c07_vol_mat_adjustment(self) -> None:
-        """C 07.00 col 0140 = market_value - adjusted_value."""
+        """C 07.00 col 0140 = vol/mat haircut — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_collateral_split(), framework="BASEL_3_1"
@@ -3023,11 +3017,11 @@ class TestCollateralMethodSplit:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Corporate: market_value=180, adjusted_value=150 → vol/mat adj = 30
-        assert total["0140"][0] == pytest.approx(30.0)
+        # Corporate: market_value=180, adjusted_value=150 → vol/mat adj = 30; stored as negative deduction
+        assert total["0140"][0] == pytest.approx(-30.0)
 
     def test_c07_fully_adjusted_exposure(self) -> None:
-        """C 07.00 col 0150 = max(0, 0110 - 0130)."""
+        """C 07.00 col 0150 = fully adjusted exposure value after all CRM deductions."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_collateral_split(), framework="BASEL_3_1"
@@ -3035,13 +3029,8 @@ class TestCollateralMethodSplit:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # 0110 = net after CRM substitution
-        v_0110 = total["0110"][0]
-        # 0130 = collateral adjusted value = 150
-        v_0130 = total["0130"][0]
-        # 0150 = max(0, 0110 - 0130)
-        expected = max(0.0, v_0110 - v_0130)
-        assert total["0150"][0] == pytest.approx(expected)
+        # Engine: 0110=2405, 0130=-150 (negative deduction per Annex II §1.3), 0150=2255
+        assert total["0150"][0] == pytest.approx(2255.0)
 
     def test_c08_collateral_type_breakdown(self) -> None:
         """C 08.01 cols 0180/0190/0200/0210 populated from per-type collateral values."""
@@ -3110,8 +3099,8 @@ class TestCollateralMethodSplit:
 
         # Institution has no non-financial collateral
         assert total["0080"][0] == pytest.approx(0.0)
-        # But has financial collateral
-        assert total["0130"][0] == pytest.approx(200.0)
+        # Financial collateral (col 0130) stored as negative deduction per Annex II §1.3
+        assert total["0130"][0] == pytest.approx(-200.0)
 
 
 # =============================================================================
@@ -3185,7 +3174,7 @@ class TestCreditDerivativeTracking:
     """Tests for Task 3B: credit derivative tracking for COREP reporting."""
 
     def test_c07_guarantee_and_cd_split(self) -> None:
-        """C 07.00 col 0050=guarantee only, col 0060=credit derivative only."""
+        """C 07.00 col 0050=guarantee only (negative), col 0060=credit derivative only (negative)."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_credit_derivatives(), framework="BASEL_3_1"
@@ -3193,10 +3182,10 @@ class TestCreditDerivativeTracking:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Col 0050: guarantees only = 200.0 (SA_CORP_1)
-        assert total["0050"][0] == pytest.approx(200.0)
-        # Col 0060: credit derivatives only = 300.0 (SA_CORP_2)
-        assert total["0060"][0] == pytest.approx(300.0)
+        # Col 0050: guarantees only = 200.0 (SA_CORP_1); negative deduction per Annex II §1.3
+        assert total["0050"][0] == pytest.approx(-200.0)
+        # Col 0060: credit derivatives only = 300.0 (SA_CORP_2); negative deduction per Annex II §1.3
+        assert total["0060"][0] == pytest.approx(-300.0)
 
     def test_c07_institution_no_protection(self) -> None:
         """C 07.00 cols 0050/0060 are 0 for institution with no protection."""
@@ -3211,7 +3200,7 @@ class TestCreditDerivativeTracking:
         assert total["0060"][0] == pytest.approx(0.0)
 
     def test_c07_col_0110_includes_cd_deduction(self) -> None:
-        """C 07.00 col 0110 formula deducts both guarantees and credit derivatives."""
+        """C 07.00 col 0110 deducts both guarantees and credit derivatives."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(
             _sa_results_with_credit_derivatives(), framework="BASEL_3_1"
@@ -3219,14 +3208,10 @@ class TestCreditDerivativeTracking:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        col_0040 = total["0040"][0]
-        col_0050 = total["0050"][0]
-        col_0060 = total["0060"][0]
         col_0110 = total["0110"][0]
 
-        # 0110 = 0040 - 0050 - 0060 - 0070 - 0080 - 0090 + 0100
-        # (other cols are 0 since no collateral/substitution flows)
-        assert col_0110 == pytest.approx(col_0040 - col_0050 - col_0060)
+        # Engine: 0040=4435, 0050=-200 (guarantee), 0060=-300 (credit derivative) → 0110=3935
+        assert col_0110 == pytest.approx(3935.0)
 
     def test_c08_guarantee_and_cd_split(self) -> None:
         """C 08.01 col 0040=guarantee only, col 0050=credit derivative only."""
@@ -3279,20 +3264,20 @@ class TestCreditDerivativeTracking:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        # Col 0050: all guaranteed_portion goes to guarantees = 500.0 (SA_CORP_2)
-        assert total["0050"][0] == pytest.approx(500.0)
+        # Col 0050: all guaranteed_portion goes to guarantees = 500.0 (SA_CORP_2); negative per Annex II §1.3
+        assert total["0050"][0] == pytest.approx(-500.0)
         # Col 0060: 0.0 since no protection_type column to identify credit derivatives
         assert total["0060"][0] == pytest.approx(0.0)
 
     def test_crr_framework_includes_cd_cols(self) -> None:
-        """CRR framework also has cols 0050/0060 for C 07.00."""
+        """CRR framework also has cols 0050/0060 for C 07.00 — negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_credit_derivatives(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
 
-        assert total["0050"][0] == pytest.approx(200.0)
-        assert total["0060"][0] == pytest.approx(300.0)
+        assert total["0050"][0] == pytest.approx(-200.0)
+        assert total["0060"][0] == pytest.approx(-300.0)
 
 
 # =============================================================================
@@ -3301,7 +3286,17 @@ class TestCreditDerivativeTracking:
 
 
 def _sa_results_with_currency_mismatch() -> pl.LazyFrame:
-    """SA results with currency mismatch multiplier tracking for COREP row 0380."""
+    """SA results with currency mismatch multiplier tracking for COREP row 0380.
+
+    Row order: SA_RET_1 (retail_other, mismatch), SA_RET_2 (retail_other, no mismatch),
+               SA_MORT_1 (retail_mortgage, mismatch), SA_CORP_1 (corporate, no mismatch).
+
+    P1.94g: adds risk_weight_pre_currency_mismatch column.
+        SA_RET_1:  rw_pre=0.75 (base retail RW before 1.5× multiplier)
+        SA_RET_2:  rw_pre=0.75 (no mismatch → pre == post)
+        SA_MORT_1: rw_pre=0.75 (base mortgage RW before 1.5× multiplier)
+        SA_CORP_1: rw_pre=1.0  (no mismatch → pre == post)
+    """
     return pl.LazyFrame(
         {
             "exposure_reference": ["SA_RET_1", "SA_RET_2", "SA_MORT_1", "SA_CORP_1"],
@@ -3312,6 +3307,7 @@ def _sa_results_with_currency_mismatch() -> pl.LazyFrame:
             "ead_final": [100.0, 200.0, 500.0, 3000.0],
             "rwa_final": [112.5, 150.0, 375.0, 3000.0],
             "risk_weight": [1.125, 0.75, 0.75, 1.0],
+            "risk_weight_pre_currency_mismatch": [0.75, 0.75, 0.75, 1.0],
             "sa_cqs": [None, None, None, 3],
             "currency_mismatch_multiplier_applied": [True, False, True, False],
         }
@@ -3383,6 +3379,171 @@ class TestCurrencyMismatchRow:
             row = corp.filter(pl.col("row_ref") == "0380")
             if len(row) > 0:
                 assert row["0200"][0] is None
+
+
+# =============================================================================
+# P1.94g — DELIV2: OF 02.00 memo row 0500 (currency mismatch RWEA)
+# =============================================================================
+
+
+class TestC0200CurrencyMismatchMemoRow:
+    """P1.94g DELIV2: OF 02.00 memo row 0500 for retail/RE currency mismatch RWEA.
+
+    Why: Basel 3.1 requires a memo row in OF 02.00 (Own Funds Requirements)
+    reporting the total RWEA for retail and RE exposures subject to the 1.5×
+    Art. 123B currency mismatch multiplier. Row 0500 is B31-only, memo-only
+    (col 0010 populated; cols 0020/0030 None).
+
+    Expected values from _sa_results_with_currency_mismatch():
+        SA_RET_1:  currency_mismatch_multiplier_applied=True,  rwa_final=112.5
+        SA_RET_2:  currency_mismatch_multiplier_applied=False, rwa_final=150.0
+        SA_MORT_1: currency_mismatch_multiplier_applied=True,  rwa_final=375.0
+        SA_CORP_1: currency_mismatch_multiplier_applied=False, rwa_final=3000.0
+
+    Memo row 0500 = sum rwa_final where mismatch=True = 112.5 + 375.0 = 487.5
+
+    Total (row 0010) = sum all rwa_final = 112.5 + 150.0 + 375.0 + 3000.0 = 3637.5
+    The memo row must NOT change the total.
+
+    Pre-fix failure: row_ref "0500" does not exist in OF 02.00 → empty filter
+    → IndexError or assertion on length.
+    """
+
+    def test_p1_94g_of_0200_row_0500_exists_b31(self) -> None:
+        """Row 0500 must appear in B31 OF 02.00.
+
+        Arrange: SA results with mismatch flag and risk_weight_pre_currency_mismatch.
+        Act:     COREPGenerator.generate_from_lazyframe(..., framework='BASEL_3_1').
+        Assert:  bundle.c_02_00 filtered to row_ref=='0500' has exactly 1 row.
+
+        Pre-fix failure: row 0500 not defined in B31_C02_00_ROW_SECTIONS → 0 rows.
+        """
+        # Arrange
+        gen = COREPGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        assert bundle.c_02_00 is not None
+
+        # Assert
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
+        assert len(row) == 1, (
+            f"Expected OF 02.00 row 0500 to exist in B31 framework, "
+            f"but got {len(row)} rows. Row 0500 is not yet defined in "
+            f"B31_C02_00_ROW_SECTIONS (engine-implementer must add it)."
+        )
+
+    def test_p1_94g_of_0200_row_0500_rwea_col_0010(self) -> None:
+        """Row 0500 col 0010 equals total RWEA of mismatch exposures (112.5 + 375.0 = 487.5).
+
+        Arrange/Act: as above.
+        Assert: row_0500["0010"] == pytest.approx(487.5).
+
+        Pre-fix failure: row does not exist (IndexError or empty frame).
+        """
+        # Arrange
+        gen = COREPGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        assert bundle.c_02_00 is not None
+
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
+        assert len(row) == 1, "Row 0500 absent — generator has not been updated yet"
+
+        # SA_RET_1 (rwa=112.5, mismatch=True) + SA_MORT_1 (rwa=375.0, mismatch=True)
+        expected_memo_rwa = 112.5 + 375.0  # = 487.5
+        assert row["0010"][0] == pytest.approx(expected_memo_rwa), (
+            f"OF 02.00 row 0500 col 0010 should be {expected_memo_rwa} "
+            f"(sum rwa_final where currency_mismatch_multiplier_applied), "
+            f"got {row['0010'][0]}."
+        )
+
+    def test_p1_94g_of_0200_row_0500_cols_0020_0030_none(self) -> None:
+        """Row 0500 is memo-only: cols 0020 and 0030 must be None (B31-only SA memo).
+
+        Arrange/Act: as above.
+        Assert: row_0500["0020"] is None and row_0500["0030"] is None.
+
+        Pre-fix failure: row does not exist.
+        """
+        # Arrange
+        gen = COREPGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        assert bundle.c_02_00 is not None
+
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
+        assert len(row) == 1, "Row 0500 absent — generator has not been updated yet"
+
+        # Memo-only: SA-equivalent (0020) and floor-adjusted (0030) must both be None
+        assert row["0020"][0] is None, (
+            f"OF 02.00 row 0500 col 0020 should be None (memo-only), got {row['0020'][0]}"
+        )
+        assert row["0030"][0] is None, (
+            f"OF 02.00 row 0500 col 0030 should be None (memo-only), got {row['0030'][0]}"
+        )
+
+    def test_p1_94g_of_0200_total_row_unchanged_by_memo(self) -> None:
+        """Adding row 0500 must NOT change the TREA total (row 0010).
+
+        The memo row is purely informational — it must not inflate total RWEA.
+        Total = 112.5 + 150.0 + 375.0 + 3000.0 = 3637.5.
+
+        Arrange/Act: as above.
+        Assert: row_0010["0010"] == pytest.approx(3637.5).
+
+        Pre-fix: the total row already works; this confirms memo-row addition
+        is non-destructive. This assertion passes pre-fix ONLY IF the total
+        already computes correctly — include it to guard against regressions.
+        """
+        # Arrange
+        gen = COREPGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(
+            _sa_results_with_currency_mismatch(), framework="BASEL_3_1"
+        )
+        assert bundle.c_02_00 is not None
+
+        total_row = bundle.c_02_00.filter(pl.col("row_ref") == "0010")
+        assert len(total_row) == 1
+
+        # TREA = sum of all rwa_final (SA_RET_1 + SA_RET_2 + SA_MORT_1 + SA_CORP_1)
+        expected_total = 112.5 + 150.0 + 375.0 + 3000.0  # = 3637.5
+        assert total_row["0010"][0] == pytest.approx(expected_total), (
+            f"OF 02.00 total TREA (row 0010) should be {expected_total}, "
+            f"got {total_row['0010'][0]}. "
+            f"The memo row 0500 must not be included in the total."
+        )
+
+    def test_p1_94g_of_0200_row_0500_absent_under_crr(self) -> None:
+        """Row 0500 is B31-only — must not appear under CRR framework.
+
+        Arrange/Act: same fixture, framework='CRR'.
+        Assert: c_02_00 filtered to row_ref=='0500' has 0 rows.
+
+        Pre-fix: this assertion already passes (row doesn't exist at all);
+        it ensures row 0500 is not accidentally added to CRR too.
+        """
+        # Arrange
+        gen = COREPGenerator()
+
+        # Act
+        bundle = gen.generate_from_lazyframe(_sa_results_with_currency_mismatch(), framework="CRR")
+        assert bundle.c_02_00 is not None
+
+        row = bundle.c_02_00.filter(pl.col("row_ref") == "0500")
+        assert len(row) == 0, (
+            f"OF 02.00 row 0500 must not appear under CRR (B31-only), but got {len(row)} rows."
+        )
 
 
 # =============================================================================
@@ -4008,13 +4169,13 @@ class TestSection3CalculationApproaches:
         assert row_0080["0110"][0] is None
 
     def test_section3_provisions_column(self) -> None:
-        """Row 0070 provisions (col 0290) sums correctly for sub-rows."""
+        """Row 0070 provisions (col 0290) sums correctly — emitted negative per Annex II §1.3."""
         gen = COREPGenerator()
         bundle = gen.generate_from_lazyframe(_irb_results_with_slotting())
         corp = bundle.c08_01["corporate"]
         row = _get_section3_row(corp, "0070")
-        # F-IRB provisions: (10+5) + (5+5) = 25
-        assert row["0290"][0] == pytest.approx(25.0)
+        # F-IRB provisions: (10+5) + (5+5) = 25; stored as negative deduction
+        assert row["0290"][0] == pytest.approx(-25.0)
 
     def test_b31_section3_has_0175_row(self) -> None:
         """B31 template includes row 0175 (Purchased receivables)."""
@@ -6530,8 +6691,8 @@ class TestC0200TemplateDefinitions:
         assert len(CRR_C02_00_ROW_SECTIONS) == 3
 
     def test_b31_section_count(self) -> None:
-        """Basel 3.1 has 6 sections (SA, F-IRB, A-IRB, slotting, other expanded)."""
-        assert len(B31_C02_00_ROW_SECTIONS) == 6
+        """Basel 3.1 has 7 sections (SA, F-IRB, A-IRB, slotting, other, plus Memorandum Items added in P1.94g for the Art. 123B currency-mismatch RWEA memo row 0500)."""
+        assert len(B31_C02_00_ROW_SECTIONS) == 7
 
     def test_crr_total_row_exists(self) -> None:
         """CRR has a TOTAL RISK EXPOSURE AMOUNT row."""
@@ -8968,3 +9129,300 @@ class TestEquityTransitionalColumns:
         assert collected["equity_higher_risk"][0] is False
         # Speculative
         assert collected["equity_higher_risk"][1] is True
+
+
+# =============================================================================
+# P2.26: COREP ANNEX II "(-)" COLUMN SIGN CONVENTION
+# =============================================================================
+
+
+def _sa_results_with_sign_convention_cols() -> pl.LazyFrame:
+    """Single SA corporate on-balance-sheet exposure for sign-convention tests.
+
+    Provides all columns referenced by C 07.00 "(-)" COREP cells so that
+    the generator's _compute_c07_values / _c07_crm_and_collateral_cols paths
+    are exercised end-to-end.  The guaranteed_portion migrates to a different
+    exposure class (pre != post) so that substitution outflow = 200.
+
+    Source: P2.26 scenario proposal §2.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["SA_CORP_SC1"],
+            "approach_applied": ["standardised"],
+            "exposure_class": ["corporate"],
+            # On-balance-sheet amount (no undrawn — pure on-BS loan)
+            "drawn_amount": [1000.0],
+            "undrawn_amount": [0.0],
+            "ead_final": [850.0],  # net after CRM (informational only for this fixture)
+            "rwa_final": [850.0],
+            "risk_weight": [1.0],
+            "sa_cqs": [3],
+            "counterparty_reference": ["CP_SC1"],
+            # 0030: scra_provision_amount + gcra_provision_amount = 100 + 0
+            "scra_provision_amount": [100.0],
+            "gcra_provision_amount": [0.0],
+            # 0035 (B3.1): on_bs_netting_amount = 50
+            "on_bs_netting_amount": [50.0],
+            # 0050: guaranteed_portion where protection_type="guarantee"
+            "guaranteed_portion": [200.0],
+            "protection_type": ["guarantee"],
+            # Make substitution outflow fire (pre != post → outflow = 200)
+            "pre_crm_exposure_class": ["corporate"],
+            "post_crm_exposure_class_guaranteed": ["institution"],
+            # 0070: fcsm_collateral_value (Simple method)
+            "fcsm_collateral_value": [75.0],
+            # 0080: collateral_re_value + collateral_receivables_value + collateral_other_physical_value
+            "collateral_re_value": [120.0],
+            "collateral_receivables_value": [0.0],
+            "collateral_other_physical_value": [0.0],
+            # 0130 / 0140: Cvam and market value
+            "collateral_adjusted_value": [60.0],
+            "collateral_market_value": [70.0],
+        }
+    )
+
+
+def _irb_results_with_sign_convention_cols() -> pl.LazyFrame:
+    """Single IRB corporate exposure for sign-convention tests (C 08.01 col 0290).
+
+    Source: P2.26 scenario proposal §2.
+    """
+    return pl.LazyFrame(
+        {
+            "exposure_reference": ["IRB_CORP_SC1"],
+            "approach_applied": ["foundation_irb"],
+            "exposure_class": ["corporate"],
+            "drawn_amount": [1000.0],
+            "undrawn_amount": [0.0],
+            "ead_final": [1000.0],
+            "rwa_final": [700.0],
+            "risk_weight": [0.70],
+            "irb_pd_floored": [0.005],
+            "irb_lgd_floored": [0.45],
+            "irb_maturity_m": [2.5],
+            "irb_expected_loss": [2.25],
+            "irb_capital_k": [0.056],
+            "provision_held": [45.0],
+            "el_shortfall": [0.0],
+            "el_excess": [2.75],
+            # 0290: scra_provision_amount + gcra_provision_amount = 40 + 0
+            "scra_provision_amount": [40.0],
+            "gcra_provision_amount": [0.0],
+            "counterparty_reference": ["CP_IRSC1"],
+        }
+    )
+
+
+class TestSignConvention:
+    """P2.26: COREP Annex II "(-)" column sign convention.
+
+    COREP Annex II §1.3 specifies that columns labelled "(-)" must be
+    reported as *negative* figures so that the DPM net-exposure arithmetic
+    reconciles when summed across columns.  The generator currently emits
+    positive sums; these tests will fail until the negate-at-boundary fix
+    is applied in the engine.
+
+    Columns under test (SA C 07.00 / OF 07.00):
+        0030, 0035 (B3.1 only), 0050, 0060, 0070, 0080, 0090, 0130, 0140
+
+    Column under test (IRB C 08.01 / OF 08.01):
+        0290
+
+    Invariants (must NOT be negated — no "(-)" label):
+        0040 stays positive (net of adjustments formula consumes magnitudes)
+        0110 >= 0
+        0150 >= 0
+        IRB 0090 >= 0
+
+    References:
+        - COREP Annex II §1.3 (docs/assets/ps1-26-annex-ii-reporting-instructions.pdf)
+        - templates.py L89-99, L198-217, L239-262, L554
+        - IMPLEMENTATION_PLAN.md P2.26
+    """
+
+    # ------------------------------------------------------------------
+    # Arrange helpers
+    # ------------------------------------------------------------------
+
+    def _sa_bundle_b31(self) -> COREPTemplateBundle:
+        """Generate the OF 07.00 bundle (Basel 3.1 framework)."""
+        gen = COREPGenerator()
+        return gen.generate_from_lazyframe(
+            _sa_results_with_sign_convention_cols(), framework="BASEL_3_1"
+        )
+
+    def _sa_bundle_crr(self) -> COREPTemplateBundle:
+        """Generate the C 07.00 bundle (CRR framework)."""
+        gen = COREPGenerator()
+        return gen.generate_from_lazyframe(_sa_results_with_sign_convention_cols(), framework="CRR")
+
+    def _irb_bundle_b31(self) -> COREPTemplateBundle:
+        """Generate the OF 08.01 bundle (Basel 3.1 framework)."""
+        gen = COREPGenerator()
+        return gen.generate_from_lazyframe(
+            _irb_results_with_sign_convention_cols(), framework="BASEL_3_1"
+        )
+
+    # ------------------------------------------------------------------
+    # SA "(-)" signed-value assertions (will FAIL pre-fix)
+    # ------------------------------------------------------------------
+
+    def test_c07_col_0030_negative_b31(self) -> None:
+        """C 07.00 col 0030 (-) value adjustments emits -100.0 (B3.1)."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0030"][0] == pytest.approx(-100.0)
+
+    def test_c07_col_0030_negative_crr(self) -> None:
+        """C 07.00 col 0030 (-) value adjustments emits -100.0 (CRR)."""
+        # Arrange
+        bundle = self._sa_bundle_crr()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0030"][0] == pytest.approx(-100.0)
+
+    def test_c07_col_0035_negative_b31_only(self) -> None:
+        """C 07.00 col 0035 (-) on-bs netting emits -50.0 (B3.1 variant only)."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0035"][0] == pytest.approx(-50.0)
+
+    def test_c07_col_0050_negative_b31(self) -> None:
+        """C 07.00 col 0050 (-) guarantees emits -200.0 (B3.1)."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0050"][0] == pytest.approx(-200.0)
+
+    def test_c07_col_0060_zero_no_credit_derivative(self) -> None:
+        """C 07.00 col 0060 (-) credit derivatives is 0.0 when none present (B3.1)."""
+        # Arrange — protection_type="guarantee" so no credit derivatives
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert — negative-zero normalises to 0.0 (not -0.0)
+        val = total["0060"][0]
+        assert val == pytest.approx(0.0)
+        # Confirm sign: -0.0 and 0.0 are both acceptable for "no protection"
+        assert val is not None
+
+    def test_c07_col_0070_negative_b31(self) -> None:
+        """C 07.00 col 0070 (-) simple-method financial collateral emits -75.0 (B3.1)."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0070"][0] == pytest.approx(-75.0)
+
+    def test_c07_col_0080_negative_b31(self) -> None:
+        """C 07.00 col 0080 (-) other funded credit protection emits -120.0 (B3.1)."""
+        # Arrange — collateral_re_value=120
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0080"][0] == pytest.approx(-120.0)
+
+    def test_c07_col_0090_negative_b31(self) -> None:
+        """C 07.00 col 0090 (-) substitution outflows emits -200.0 (B3.1)."""
+        # Arrange — guaranteed_portion=200 migrates to different class → outflow=200
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0090"][0] == pytest.approx(-200.0)
+
+    def test_c07_col_0130_negative_b31(self) -> None:
+        """C 07.00 col 0130 (-) Cvam collateral adjusted value emits -60.0 (B3.1)."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0130"][0] == pytest.approx(-60.0)
+
+    def test_c07_col_0140_negative_b31(self) -> None:
+        """C 07.00 col 0140 (-) vol/maturity adjustments emits -10.0 (B3.1)."""
+        # Arrange — market_value=70, adjusted_value=60 → difference=10 → signed=-10
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0140"][0] == pytest.approx(-10.0)
+
+    # ------------------------------------------------------------------
+    # IRB "(-)" signed-value assertion (will FAIL pre-fix)
+    # ------------------------------------------------------------------
+
+    def test_c08_col_0290_negative_b31(self) -> None:
+        """C 08.01 col 0290 (-) value adjustments and provisions emits -40.0 (B3.1)."""
+        # Arrange
+        bundle = self._irb_bundle_b31()
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        assert total["0290"][0] == pytest.approx(-40.0)
+
+    # ------------------------------------------------------------------
+    # Invariants: NON-"(-)" columns must stay POSITIVE (catch over-negate)
+    # These should PASS before and after the fix.
+    # ------------------------------------------------------------------
+
+    def test_c07_col_0040_stays_positive_b31(self) -> None:
+        """C 07.00 col 0040 (no (-) label) = 1000 - 100 - 50 = 850.0 — stays positive.
+
+        Verifies that the negate-at-boundary fix does NOT apply to 0040.
+        The internal formula consumes magnitudes before negation; 0040 must
+        remain positive so that 0110 arithmetic is correct.
+        """
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert: 0010=1000, 0030=100 (magnitude), 0035=50 (magnitude)
+        assert total["0040"][0] == pytest.approx(850.0)
+
+    def test_c07_col_0110_non_negative_b31(self) -> None:
+        """C 07.00 col 0110 (no (-) label) stays >= 0 — not negated."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        val = total["0110"][0]
+        assert val is not None
+        assert val >= 0.0
+
+    def test_c07_col_0150_non_negative_b31(self) -> None:
+        """C 07.00 col 0150 E* (no (-) label) stays >= 0 — not negated."""
+        # Arrange
+        bundle = self._sa_bundle_b31()
+        corp = bundle.c07_00["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        val = total["0150"][0]
+        assert val is not None
+        assert val >= 0.0
+
+    def test_c08_col_0090_non_negative_b31(self) -> None:
+        """C 08.01 col 0090 (no (-) label) stays positive — not negated."""
+        # Arrange
+        bundle = self._irb_bundle_b31()
+        corp = bundle.c08_01["corporate"]
+        total = corp.filter(pl.col("row_ref") == "0010")
+        # Act / Assert
+        val = total["0090"][0]
+        # 0090 may be None when lfse/defaulted data absent — check only when present
+        if val is not None:
+            assert val >= 0.0

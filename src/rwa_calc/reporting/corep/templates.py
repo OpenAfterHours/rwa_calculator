@@ -1458,6 +1458,19 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0680", "Additional risk exposure: fixed overheads"),
         ],
     ),
+    RowSection(
+        "Memorandum Items",
+        [
+            # PRA PS1/26 Art. 123B: portfolio-total RWEA of retail/RE exposures
+            # that received the 1.5x currency-mismatch multiplier. Memo-only
+            # (col 0010 populated; S-TREA / output floor cols left None) and not
+            # summed into the TREA total. Basel-3.1-only (absent under CRR).
+            COREPRow(
+                "0500",
+                "Of which: retail/RE subject to currency mismatch multiplier (RWEA)",
+            ),
+        ],
+    ),
 ]
 
 CRR_C02_00_COLUMN_REFS: list[str] = [c.ref for c in CRR_C02_00_COLUMNS]
@@ -1549,6 +1562,8 @@ C02_00_CREDIT_RISK_ROWS: frozenset[str] = frozenset(
         "0034",
         "0035",
         "0036",
+        # PRA PS1/26 Art. 123B currency-mismatch memo (B31 OF 02.00 row 0500).
+        "0500",
     }
 )
 

@@ -74,6 +74,17 @@ IRB_SIMPLE_EQUITY_RISK_WEIGHTS: dict[EquityType, Decimal] = {
 
 
 # =============================================================================
+# ARTICLE 155(2) - NON-TRADING-BOOK SHORT-POSITION NETTING
+# =============================================================================
+
+# CRR Art. 155(2): short cash positions and derivatives held in the
+# non-trading book may offset long positions in the same individual stock
+# provided the hedge is explicit and covers at least one year. This is the
+# minimum hedge tenor (in years) below which a short may NOT net a long.
+CRR_EQUITY_NETTING_MIN_HEDGE_YEARS: Decimal = Decimal("1.0")
+
+
+# =============================================================================
 # LOOKUP FUNCTIONS
 # =============================================================================
 

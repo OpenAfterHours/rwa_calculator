@@ -47,11 +47,22 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
+from rwa_calc.data.tables.crr_equity_pd_lgd import (
+    EQUITY_PD_FLOORS,
+    EQUITY_PD_LGD_LGD,
+    EQUITY_PD_LGD_MATURITY,
+    EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING,
+)
 from rwa_calc.data.tables.crr_equity_rw import (
     IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
     SA_EQUITY_RISK_WEIGHTS,
 )
 from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType, ExposureClass
+from rwa_calc.engine.irb.formulas import (
+    _capital_k_expr_from_params,
+    _correlation_expr_from_pd,
+    _maturity_adjustment_expr_from_pd,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -93,6 +104,9 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # Years the underlying PE/VC business has existed; used by the B31
     # Art. 133(4) higher-risk test (PRA PS1/26 Glossary p.5).
     "business_age_years": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 155(3): True -> firm has Art. 178 default-definition data so the
+    # 1.5x PD/LGD scaling does NOT apply; False/null -> 1.5x scaling applies.
+    "has_default_definition_info": ColumnSpec(pl.Boolean, default=True, required=False),
 }
 
 # Sentinel for null CQS in join operations (data processing convention)
@@ -181,6 +195,11 @@ class EquityCalculator:
 
         exposures = self._prepare_columns(exposures, config)
 
+        # Art. 155(3) PD/LGD computes RWEA inside the branch (K formula) and
+        # bypasses both the IRB Simple transitional floor and _calculate_rwa.
+        if approach == EquityApproach.PD_LGD:
+            return self._apply_equity_weights_pd_lgd(exposures, config)
+
         if approach == EquityApproach.IRB_SIMPLE:
             exposures = self._apply_equity_weights_irb_simple(exposures, config)
         else:
@@ -265,13 +284,18 @@ class EquityCalculator:
         exposures = self._prepare_columns(exposures, config)
         exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
 
-        if approach == EquityApproach.IRB_SIMPLE:
-            exposures = self._apply_equity_weights_irb_simple(exposures, config)
+        # Art. 155(3) PD/LGD computes RWEA inside the branch and bypasses both
+        # the IRB Simple transitional floor and _calculate_rwa.
+        if approach == EquityApproach.PD_LGD:
+            exposures = self._apply_equity_weights_pd_lgd(exposures, config)
         else:
-            exposures = self._apply_equity_weights_sa(exposures, config)
+            if approach == EquityApproach.IRB_SIMPLE:
+                exposures = self._apply_equity_weights_irb_simple(exposures, config)
+            else:
+                exposures = self._apply_equity_weights_sa(exposures, config)
 
-        exposures = self._apply_transitional_floor(exposures, config)
-        exposures = self._calculate_rwa(exposures)
+            exposures = self._apply_transitional_floor(exposures, config)
+            exposures = self._calculate_rwa(exposures)
 
         audit = self._build_audit(exposures, approach)
 
@@ -282,25 +306,30 @@ class EquityCalculator:
             errors=errors,
         )
 
+    @cites("CRR Art. 155(3)")
     def _determine_approach(self, config: CalculationConfig) -> EquityApproach:
         """
-        Determine SA vs IRB_SIMPLE based on config.
+        Determine SA, IRB_SIMPLE, or PD_LGD based on config.
 
         Under Basel 3.1 (CRE20.58-62): IRB for equity is removed — all equity
         exposures must use SA treatment. The IRB Simple Risk Weight Method
-        (Art. 155: 190%/290%/370%) is no longer available.
+        (Art. 155: 190%/290%/370%) and the PD/LGD approach (Art. 155(3)) are no
+        longer available; the ``equity_pd_lgd`` flag is ignored.
 
         Under CRR: If the firm has IRB permissions (FIRB or AIRB) for any
-        exposure class, they must use Article 155 IRB Simple approach for equity.
+        exposure class, equity uses either the Art. 155(3) PD/LGD approach (when
+        ``config.equity_pd_lgd`` is True) or the Art. 155(2) IRB Simple approach.
         If SA-only, use Article 133 SA approach.
 
         Args:
             config: Calculation configuration
 
         Returns:
-            EquityApproach.SA for Article 133, EquityApproach.IRB_SIMPLE for Article 155
+            EquityApproach.SA (Art. 133), EquityApproach.IRB_SIMPLE (Art. 155(2)),
+            or EquityApproach.PD_LGD (Art. 155(3))
         """
-        # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62)
+        # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62).
+        # The equity_pd_lgd flag is ignored under Basel 3.1.
         if config.is_basel_3_1:
             return EquityApproach.SA
 
@@ -312,6 +341,9 @@ class EquityCalculator:
         # Check if any exposure class has FIRB or AIRB permission
         for _exposure_class, approaches in config.irb_permissions.permissions.items():
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
+                # Art. 155(3): PD/LGD approach when the firm has elected it
+                if config.equity_pd_lgd:
+                    return EquityApproach.PD_LGD
                 return EquityApproach.IRB_SIMPLE
 
         return EquityApproach.SA
@@ -484,6 +516,7 @@ class EquityCalculator:
 
     @cites("CRR Art. 155(2)")
     @cites("PS1/26, paragraph 4.8")
+    @cites("PS1/26, paragraph 4.9")
     def _equity_holding_higher_of_rw(self, config: CalculationConfig) -> float | None:
         """Rules 4.7-4.8 higher-of RW for EQUITY-class CIU look-through holdings.
 
@@ -496,10 +529,20 @@ class EquityCalculator:
         permission, so ``equity_transitional.enabled`` (plus a transitional RW
         existing for the reporting date) is the gate.
 
+        Per Rule 4.9-4.10, a firm that has irrevocably opted out of the
+        transitional regime (``equity_transitional.opt_out``) suppresses the
+        higher-of: ``None`` is returned so the holding falls back to the
+        ``_DEFAULT_HOLDING_RW`` standard treatment. The opt-out applies jointly
+        with the direct-equity transitional floor (Rule 4.9).
+
         References:
         - CRR Art. 155(2): IRB simple method equity RW ("other" = 370%).
         - PRA PS1/26 Rule 4.8: higher-of(Art. 155(2) simple, Rule 4.2/4.3 band).
+        - PRA PS1/26 Rule 4.9-4.10: irrevocable joint opt-out suppresses higher-of.
         """
+        if config.equity_transitional.opt_out:
+            return None
+
         transitional_rw = config.equity_transitional.get_transitional_rw(
             config.reporting_date, is_higher_risk=False
         )
@@ -610,12 +653,14 @@ class EquityCalculator:
         is_dedicated_treatment = (
             pl.col("equity_type")
             .str.to_lowercase()
-            .is_in([
-                EquityType.CENTRAL_BANK,
-                EquityType.SUBORDINATED_DEBT,
-                EquityType.CIU,
-                EquityType.GOVERNMENT_SUPPORTED,
-            ])
+            .is_in(
+                [
+                    EquityType.CENTRAL_BANK,
+                    EquityType.SUBORDINATED_DEBT,
+                    EquityType.CIU,
+                    EquityType.GOVERNMENT_SUPPORTED,
+                ]
+            )
         )
         is_unlisted = (
             ~pl.col("is_exchange_traded").fill_null(False)
@@ -634,8 +679,7 @@ class EquityCalculator:
             else pl.lit(False)
         )
         is_higher_risk = is_unlisted & (
-            (is_pe_or_pe_div & is_young_or_unknown)
-            | (~is_dedicated_treatment & is_young_evidenced)
+            (is_pe_or_pe_div & is_young_or_unknown) | (~is_dedicated_treatment & is_young_evidenced)
         )
 
         return exposures.with_columns(
@@ -674,7 +718,12 @@ class EquityCalculator:
         - Private equity (diversified portfolio): 190%
         - Exchange-traded: 290%
         - Other equity: 370%
+
+        Before assigning risk weights this nets non-trading-book short positions
+        against long positions in the same individual stock per Art. 155(2)
+        (see ``_net_short_positions``).
         """
+        exposures = self._net_short_positions(exposures)
         return exposures.with_columns(
             [
                 pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
@@ -700,6 +749,191 @@ class EquityCalculator:
             ]
         )
 
+    @cites("CRR Art. 155(2)")
+    def _net_short_positions(self, exposures: pl.LazyFrame) -> pl.LazyFrame:
+        """Net non-trading-book short positions against longs (CRR Art. 155(2)).
+
+        Under the IRB Simple Risk Weight Method, short cash positions and
+        derivatives held in the non-trading book may offset long positions in
+        the *same individual stock* provided the offsetting short is an explicit
+        hedge covering at least one year. Other short positions are treated as
+        long with the relevant RW applied to their absolute value.
+
+        Mechanics (LazyFrame-first, column-absence defensive):
+        - Eligibility requires the optional inputs ``position_value`` and
+          ``issuer_reference``; absent either, ``exposures`` is returned
+          unchanged so production frames behave exactly as before.
+        - A row is netting-eligible when it carries a non-null
+          ``issuer_reference`` and ``is_explicitly_hedged`` is True (the boolean
+          encodes "explicit hedge >= 1 year", ``CRR_EQUITY_NETTING_MIN_HEDGE_YEARS``).
+        - Net long per issuer = ``max(0, sum(signed position_value))`` over the
+          eligible rows. The surviving long row(s) carry the netted EAD pro-rata
+          to their gross long value; absorbed shorts (and any rows whose group
+          nets to <= 0) collapse to ``ead_final`` 0. Net-short residual is
+          floored at 0 (out of scope here).
+        - Ineligible rows keep their existing ``ead_final`` (the absolute-value
+          ``fair_value``/``carrying_value``/``ead`` chain).
+        """
+        schema_names = exposures.collect_schema().names()
+        if "position_value" not in schema_names or "issuer_reference" not in schema_names:
+            return exposures
+
+        is_hedged = (
+            pl.col("is_explicitly_hedged").fill_null(False)
+            if "is_explicitly_hedged" in schema_names
+            else pl.lit(False)
+        )
+        # Eligible: a hedged position on a known issuer with a signed value.
+        eligible = (
+            pl.col("issuer_reference").is_not_null()
+            & pl.col("position_value").is_not_null()
+            & is_hedged
+        )
+        signed = pl.col("position_value").fill_null(0.0)
+        gross_long = pl.when(eligible & (signed > 0)).then(signed).otherwise(pl.lit(0.0))
+
+        # Per-issuer windowed aggregates over eligible rows only.
+        net_long_per_issuer = (
+            pl.when(eligible)
+            .then(signed)
+            .otherwise(pl.lit(0.0))
+            .sum()
+            .over("issuer_reference")
+            .clip(lower_bound=0.0)
+        )
+        gross_long_per_issuer = gross_long.sum().over("issuer_reference")
+
+        # Distribute the issuer's net long across its long rows pro-rata to
+        # their gross long value; eligible shorts (and longs in a net-short or
+        # fully-netted group) collapse to 0. Ineligible rows are untouched.
+        share = (
+            pl.when(gross_long_per_issuer > 0)
+            .then(gross_long / gross_long_per_issuer)
+            .otherwise(pl.lit(0.0))
+        )
+        netted_ead = net_long_per_issuer * share
+
+        return exposures.with_columns(
+            pl.when(eligible).then(netted_ead).otherwise(pl.col("ead_final")).alias("ead_final"),
+        )
+
+    @cites("CRR Art. 155(3)")
+    @cites("CRR Art. 165")
+    def _apply_equity_weights_pd_lgd(
+        self,
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+    ) -> pl.LazyFrame:
+        """
+        Apply the Article 155(3) PD/LGD equity approach.
+
+        Risk-weighted exposure amounts are calculated with the corporate IRB K
+        formula (Art. 153(1)) using supervisory parameters from Art. 165:
+
+        - PD floor (Art. 165(1)): by equity sub-type —
+            exchange-traded long-term / non-exchange regular cash flow -> 0.09%,
+            exchange-traded (incl. short positions) -> 0.40%,
+            all other equity -> 1.25%.
+        - LGD (Art. 165(2)): 65% for sufficiently-diversified private equity
+            (equity_type == "private_equity_diversified"), else 90%.
+        - M (Art. 165(3)): fixed at 5 years.
+        - Scaling (Art. 153): 1.06 for CRR.
+
+        RWEA = K x 12.5 x scaling x MA x EAD, EL = PD x LGD x EAD. Per Art. 155(3)
+        the result is capped at the individual-exposure level so that
+        ``EL x 12.5 + RWEA <= EAD x 12.5`` (equivalently RWEA <= EAD x 12.5 - EL x 12.5,
+        clamped at 0). A 1.5x scaling is applied to the risk weights where the
+        institution lacks Art. 178 default-definition data
+        (has_default_definition_info == False).
+
+        The IRB Simple transitional floor (PRA Rules 4.1-4.10) does NOT apply —
+        it is Simple-approach machinery.
+        """
+        scaling_factor = float(config.scaling_factor)
+        maturity = float(EQUITY_PD_LGD_MATURITY)
+        lgd_diversified = float(EQUITY_PD_LGD_LGD["private_equity_diversified"])
+        lgd_other = float(EQUITY_PD_LGD_LGD["other"])
+        no_default_info_scaling = float(EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING)
+        pd_floor_exchange_traded = float(EQUITY_PD_FLOORS["exchange_traded"])
+        pd_floor_other = float(EQUITY_PD_FLOORS["other"])
+
+        eq_type = pl.col("equity_type").str.to_lowercase()
+        is_exchange_traded = pl.col("is_exchange_traded").fill_null(False)
+
+        # Art. 165(1): PD floor by equity sub-type. Exchange-traded equity uses
+        # the 0.40% Art. 165(1)(c) floor; all other equity uses 1.25% (165(1)(d)).
+        pd_floored = (
+            pl.when(is_exchange_traded | (eq_type == "exchange_traded") | (eq_type == "listed"))
+            .then(pl.lit(pd_floor_exchange_traded))
+            .otherwise(pl.lit(pd_floor_other))
+        )
+
+        # Art. 165(2): supervisory LGD — 65% diversified PE, else 90%.
+        lgd = (
+            pl.when(eq_type == "private_equity_diversified")
+            .then(pl.lit(lgd_diversified))
+            .otherwise(pl.lit(lgd_other))
+        )
+
+        # Corporate IRB K formula inputs (Art. 153(1)). The shared expressions
+        # read exposure_class, turnover_m, requires_fi_scalar, maturity and
+        # has_one_day_maturity_floor — set them to the corporate-equity defaults.
+        exposures = exposures.with_columns(
+            pl.lit(ExposureClass.CORPORATE.value.upper()).alias("exposure_class"),
+            pl.lit(None).cast(pl.Float64).alias("turnover_m"),
+            pl.lit(False).alias("requires_fi_scalar"),
+            pl.lit(maturity).alias("maturity"),
+            pl.lit(False).alias("has_one_day_maturity_floor"),
+            pd_floored.alias("pd_floored"),
+            lgd.alias("lgd"),
+        )
+
+        correlation = _correlation_expr_from_pd(
+            pl.col("pd_floored"),
+            eur_gbp_rate=float(config.eur_gbp_rate),
+            is_b31=config.is_basel_3_1,
+        )
+        exposures = exposures.with_columns(correlation.alias("correlation"))
+
+        k = _capital_k_expr_from_params(pl.col("pd_floored"), pl.col("lgd"), pl.col("correlation"))
+        ma = _maturity_adjustment_expr_from_pd(pl.col("pd_floored"))
+        exposures = exposures.with_columns(
+            k.alias("k"),
+            ma.alias("maturity_adjustment"),
+            pl.lit(scaling_factor).alias("scaling_factor"),
+        )
+
+        # Art. 155(3): 1.5x scaling where the firm lacks Art. 178 default data.
+        no_default_info = ~pl.col("has_default_definition_info").fill_null(True)
+        rw_scaling = (
+            pl.when(no_default_info).then(pl.lit(no_default_info_scaling)).otherwise(pl.lit(1.0))
+        )
+
+        # Base risk weight (Art. 153(1)): K x 12.5 x scaling x MA, then 1.5x where applicable.
+        risk_weight = (
+            pl.col("k") * 12.5 * pl.col("scaling_factor") * pl.col("maturity_adjustment")
+        ) * rw_scaling
+
+        exposures = exposures.with_columns(
+            risk_weight.alias("risk_weight"),
+            (pl.col("pd_floored") * pl.col("lgd") * pl.col("ead_final")).alias("expected_loss"),
+        )
+
+        # Uncapped RWEA = RW x EAD.
+        rwea = pl.col("risk_weight") * pl.col("ead_final")
+        # Art. 155(3) cap: EL x 12.5 + RWEA <= EAD x 12.5, i.e.
+        # RWEA <= EAD x 12.5 - EL x 12.5, clamped at 0.
+        rwea_cap = (pl.col("ead_final") * 12.5 - pl.col("expected_loss") * 12.5).clip(
+            lower_bound=0.0
+        )
+        rwea_capped = pl.min_horizontal(rwea, rwea_cap)
+
+        return exposures.with_columns(
+            (rwea > rwea_cap).alias("equity_pd_lgd_cap_binds"),
+            rwea_capped.alias("rwa"),
+            rwea_capped.alias("rwa_final"),
+        )
+
     def _apply_transitional_floor(
         self,
         exposures: pl.LazyFrame,
@@ -714,9 +948,14 @@ class EquityCalculator:
 
         For firms with prior IRB equity permission (Rules 4.4-4.6), the floor
         is the higher of the IRB model RW and the transitional SA RW.
+
+        Per Rules 4.9-4.10, a firm that has irrevocably opted out
+        (``equity_transitional.opt_out``) keeps its end-state assigned RW: the
+        floor comparison is skipped. The opt-out applies jointly with the CIU
+        underlying higher-of suppression (Rule 4.9).
         """
         eq_config = config.equity_transitional
-        if not eq_config.enabled:
+        if not eq_config.enabled or eq_config.opt_out:
             return exposures
 
         std_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=False)

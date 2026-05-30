@@ -95,6 +95,36 @@ def generate_summary_by_approach(results: pl.LazyFrame) -> pl.LazyFrame:
 # =============================================================================
 
 
+def _floor_addon_expr(cols: set[str], ead_col: str | None) -> pl.Expr:
+    """Per-row output-floor add-on to fold into the reporting ``total_rwa``.
+
+    The post-CRM reporting ``total_rwa`` is ``reporting_ead * reporting_rw``,
+    which equals each row's PRE-floor RWA (the floor does not recompute
+    ``reporting_rw``).  When the portfolio output floor binds, the per-row
+    pro-rata add-on lands in ``floor_impact_rwa`` on the (possibly floored)
+    combined frame.  We add it back here so the summed ``total_rwa`` reconciles
+    with ``output_floor_summary.total_rwa_post_floor`` (PRA PS1/26 Art. 92(2A)).
+
+    The add-on is allocated by each reporting row's ``reporting_ead`` share of
+    the original ``ead_final`` so a guarantee-split exposure (two reporting
+    rows summing to ``ead_final``) does not double-count the add-on.  Rows
+    where the floor did not run, did not bind, or are not floor-eligible carry
+    ``floor_impact_rwa = 0`` (or the column is absent), so this is a no-op.
+    """
+    if "floor_impact_rwa" not in cols:
+        return pl.lit(0.0)
+
+    addon = pl.col("floor_impact_rwa").fill_null(0.0)
+    if ead_col and "ead_final" in cols and ead_col != "ead_final":
+        share = (
+            pl.when(pl.col("ead_final") != 0)
+            .then(pl.col(ead_col) / pl.col("ead_final"))
+            .otherwise(pl.lit(0.0))
+        )
+        return addon * share
+    return addon
+
+
 def _build_class_agg_exprs(
     cols: set[str],
     ead_col: str | None,
@@ -108,7 +138,11 @@ def _build_class_agg_exprs(
     ]
 
     if has_reporting and rw_col:
-        agg_exprs.append((pl.col(ead_col) * pl.col(rw_col)).sum().alias("total_rwa"))
+        agg_exprs.append(
+            (pl.col(ead_col) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
+            .sum()
+            .alias("total_rwa")
+        )
     elif "rwa_final" in cols:
         agg_exprs.append(pl.col("rwa_final").sum().alias("total_rwa"))
     else:
@@ -138,7 +172,11 @@ def _build_approach_agg_exprs(
     ]
 
     if has_reporting and rw_col:
-        agg_exprs.append((pl.col(ead_col) * pl.col(rw_col)).sum().alias("total_rwa"))
+        agg_exprs.append(
+            (pl.col(ead_col) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
+            .sum()
+            .alias("total_rwa")
+        )
     elif "rwa_final" in cols:
         agg_exprs.append(pl.col("rwa_final").sum().alias("total_rwa"))
     else:

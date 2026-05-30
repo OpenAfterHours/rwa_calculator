@@ -105,18 +105,18 @@ PROVISIONS: float = 0.0
 
 # Rating inputs (load-bearing)
 RATING_CQS: int = 3
-RATING_IS_ISSUE_SPECIFIC: bool = False   # counterparty-wide, not issue-specific
-RATING_IS_INFERRED: bool = True          # inferred rating — Art. 139(2B) suppresses fallback
+RATING_IS_ISSUE_SPECIFIC: bool = False  # counterparty-wide, not issue-specific
+RATING_IS_INFERRED: bool = True  # inferred rating — Art. 139(2B) suppresses fallback
 
 # Expected outputs (test-writer anchors)
-EXPECTED_RISK_WEIGHT: float = 1.00        # Art. 122B(2)(a) unrated object-finance
+EXPECTED_RISK_WEIGHT: float = 1.00  # Art. 122B(2)(a) unrated object-finance
 EXPECTED_EAD: float = 1_000_000.0
 EXPECTED_RWA: float = 1_000_000.0
 EXPECTED_EXPOSURE_CLASS_SA: str = "CORPORATE"
 EXPECTED_SL_TYPE: str = "object_finance"
 
 # Anti-assertion: CQS-3 corporate Basel 3.1 rated risk weight (must NOT be applied)
-ANTI_EXPECTED_RISK_WEIGHT: float = 0.75   # Art. 122(2) Table 6 CQS-3 — incorrect path
+ANTI_EXPECTED_RISK_WEIGHT: float = 0.75  # Art. 122(2) Table 6 CQS-3 — incorrect path
 
 
 # ---------------------------------------------------------------------------
@@ -406,7 +406,7 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("-" * 70)
     print("Scenario: SA-SL inferred-rating fallback suppression Art. 139(2B)")
     print(f"  Counterparty: {COUNTERPARTY_REF}  entity_type=specialised_lending  GB")
-    print(f"  SL metadata:  sl_type=object_finance  is_hvcre=False")
+    print("  SL metadata:  sl_type=object_finance  is_hvcre=False")
     print(f"  Loan:         {EXPOSURE_REF}  GBP {DRAWN_AMOUNT:,.0f}  senior  provisions=0")
     print(f"  Rating:       {RATING_REF}  AgencyA  CQS {RATING_CQS}")
     print(f"                rating_is_inferred={RATING_IS_INFERRED}")

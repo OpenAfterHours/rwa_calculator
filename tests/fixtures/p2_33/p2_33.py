@@ -348,14 +348,18 @@ def print_summary(saved: dict[str, Path]) -> None:
         if "is_uk_residential_mortgage_commitment" in cols:
             flags = df["is_uk_residential_mortgage_commitment"].to_list()
             refs = df["facility_reference"].to_list()
-            for ref, flag in zip(refs, flags):
+            for ref, flag in zip(refs, flags, strict=True):
                 print(f"    {ref}: is_uk_residential_mortgage_commitment={flag}")
     print("-" * 70)
     print(f"Scenario: {SCENARIO_ID} — UK residential-mortgage commitment 50% CCF override")
     print(f"  Flagged  ({FLAGGED_FAC_REF}): risk_type=OC, flag=True")
-    print(f"    Basel 3.1 expected ccf={EXPECTED_CCF_FLAGGED}, ead_from_ccf={EXPECTED_EAD_FROM_CCF_FLAGGED:,.0f}")
+    print(
+        f"    Basel 3.1 expected ccf={EXPECTED_CCF_FLAGGED}, ead_from_ccf={EXPECTED_EAD_FROM_CCF_FLAGGED:,.0f}"
+    )
     print(f"  Control  ({CONTROL_FAC_REF}): risk_type=OC, flag=False")
-    print(f"    Basel 3.1 expected ccf={EXPECTED_CCF_CONTROL}, ead_from_ccf={EXPECTED_EAD_FROM_CCF_CONTROL:,.0f}")
+    print(
+        f"    Basel 3.1 expected ccf={EXPECTED_CCF_CONTROL}, ead_from_ccf={EXPECTED_EAD_FROM_CCF_CONTROL:,.0f}"
+    )
     print()
     print("  Regulatory scalars (ccf.py):")
     print(f"    SA_CCF_B31['MR'] = {SA_CCF_B31_MR}  (Row 4(b) target rate)")

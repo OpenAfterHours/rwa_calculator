@@ -59,7 +59,10 @@ from rwa_calc.data.schemas import (
     B31_SOVEREIGN_LIKE_ENTITY_TYPES,
     RGLA_PSE_ENTITY_TYPES,
 )
-from rwa_calc.data.tables.b31_risk_weights import B31_RRE_THREE_PROPERTY_LIMIT
+from rwa_calc.data.tables.b31_risk_weights import (
+    B31_RETAIL_GRANULARITY_LIMIT,
+    B31_RRE_THREE_PROPERTY_LIMIT,
+)
 from rwa_calc.data.tables.entity_class_mapping import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
@@ -71,10 +74,12 @@ from rwa_calc.data.tables.eu_sovereign import (
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
+    ExposureSubclass,
     PermissionMode,
     SpecialisedLendingType,
 )
 from rwa_calc.engine.materialise import materialise_barrier
+from rwa_calc.engine.utils import partition_by_nullable
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -173,6 +178,7 @@ class ExposureClassifier:
             schema_names,
             has_model_permissions=has_model_permissions,
         )
+        classified = self._derive_exposure_subclass(classified, config, schema_names)
 
         # Single materialisation barrier — both diagnostic emits below run
         # against in-memory data instead of re-executing the upstream lazy
@@ -1065,6 +1071,7 @@ class ExposureClassifier:
                 eligibility["rre_eligible"].alias("re_split_residential_eligible"),
                 eligibility["cre_eligible"].alias("re_split_commercial_eligible"),
                 primitives["cre_rental_coverage_met"].alias("re_split_cre_rental_coverage_met"),
+                eligibility["force_other_re"].alias("re_split_force_other_re"),
             ]
         )
 
@@ -1082,6 +1089,7 @@ class ExposureClassifier:
                 pl.lit(False).alias("re_split_residential_eligible"),
                 pl.lit(False).alias("re_split_commercial_eligible"),
                 pl.lit(False).alias("re_split_cre_rental_coverage_met"),
+                pl.lit(False).alias("re_split_force_other_re"),
             ]
         )
 
@@ -1095,18 +1103,39 @@ class ExposureClassifier:
         conservative default of False when ``rental_to_interest_ratio`` is
         absent).
         """
-        residential_value = (
-            pl.col("residential_collateral_value").fill_null(0.0)
-            if "residential_collateral_value" in schema_names
-            else pl.lit(0.0)
-        )
-        property_value = pl.col("property_collateral_value").fill_null(0.0)
-        commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
+        # Loan-split component values use the UNCAPPED RE collateral values
+        # (PRA PS1/26 Art. 124(4) pro-rata is by raw collateral value, and the
+        # 0.55xV cap is on raw property value). Fall back to the capped columns
+        # when the uncapped variants are absent (older fixtures / direct calls).
+        if (
+            "residential_collateral_value_uncapped" in schema_names
+            and "commercial_collateral_value_uncapped" in schema_names
+        ):
+            residential_value = pl.col("residential_collateral_value_uncapped").fill_null(0.0)
+            commercial_value = pl.col("commercial_collateral_value_uncapped").fill_null(0.0)
+            property_value = residential_value + commercial_value
+        else:
+            residential_value = (
+                pl.col("residential_collateral_value").fill_null(0.0)
+                if "residential_collateral_value" in schema_names
+                else pl.lit(0.0)
+            )
+            property_value = pl.col("property_collateral_value").fill_null(0.0)
+            commercial_value = (property_value - residential_value).clip(lower_bound=0.0)
 
         if "rental_to_interest_ratio" in schema_names:
             cre_rental_coverage_met = pl.col("rental_to_interest_ratio").fill_null(0.0) >= 1.5
         else:
             cre_rental_coverage_met = pl.lit(False)
+
+        # PRA PS1/26 Art. 124(4): per-beneficiary flag (set by the hierarchy
+        # resolver) marking that at least one RE collateral component fails
+        # Art. 124A. Drives the all-or-nothing gate for mixed-RE exposures.
+        re_collateral_non_qualifying = (
+            pl.col("re_collateral_non_qualifying").fill_null(False)
+            if "re_collateral_non_qualifying" in schema_names
+            else pl.lit(False)
+        )
 
         return {
             "residential_value": residential_value,
@@ -1117,6 +1146,7 @@ class ExposureClassifier:
             "has_cre": commercial_value > 0.0,
             "is_residential_dominant": residential_value >= commercial_value,
             "cre_rental_coverage_met": cre_rental_coverage_met,
+            "re_collateral_non_qualifying": re_collateral_non_qualifying,
         }
 
     @staticmethod
@@ -1183,6 +1213,7 @@ class ExposureClassifier:
         }
 
     @staticmethod
+    @cites("PS1/26, paragraph 124.4")
     def _re_split_per_component_eligibility(
         primitives: dict[str, pl.Expr],
         gates: dict[str, pl.Expr],
@@ -1196,6 +1227,14 @@ class ExposureClassifier:
         requires the rental-coverage test. ``is_mixed`` flags rows where
         both components are eligible — the splitter materialises one secured
         row per eligible component plus a single residual.
+
+        Art. 124(4) all-or-nothing qualifying gate (Basel 3.1 only): the
+        preferential Art. 124F-124I tables apply to a mixed-RE exposure only
+        when BOTH components separately qualify under Art. 124A. If either
+        component fails (``re_collateral_non_qualifying``), ``force_other_re``
+        fires and the splitter routes BOTH secured rows through Art. 124J
+        (Other RE) — no partial preference. CRR has no Art. 124(4) limb, so
+        the gate is suppressed on the CRR path.
         """
         rre_eligible = gates["is_candidate"] & primitives["has_rre"]
         if config.is_basel_3_1:
@@ -1206,10 +1245,17 @@ class ExposureClassifier:
                 & primitives["has_cre"]
                 & primitives["cre_rental_coverage_met"]
             )
+        is_mixed = rre_eligible & cre_eligible
+        force_other_re = (
+            is_mixed & primitives["re_collateral_non_qualifying"]
+            if config.is_basel_3_1
+            else pl.lit(False)
+        )
         return {
             "rre_eligible": rre_eligible,
             "cre_eligible": cre_eligible,
-            "is_mixed": rre_eligible & cre_eligible,
+            "is_mixed": is_mixed,
+            "force_other_re": force_other_re,
         }
 
     @staticmethod
@@ -1356,6 +1402,7 @@ class ExposureClassifier:
                 pl.lit(False).alias("model_airb_permitted"),
                 pl.lit(False).alias("model_firb_permitted"),
                 pl.lit(False).alias("model_slotting_permitted"),
+                pl.lit(None).cast(pl.String).alias("ppu_reason"),
             )
 
         # Cast model_id to String to handle null-typed columns (all values null)
@@ -1371,6 +1418,12 @@ class ExposureClassifier:
             model_permissions = model_permissions.with_columns(
                 pl.lit(None).cast(pl.String).alias("excluded_book_codes")
             )
+        # ppu_reason is optional (CRR Art. 150(1)/Art. 148 SA-routing provenance).
+        # Absent on frames that omit it → all null (no PPU/roll-out labelling).
+        if "ppu_reason" not in mp_schema_names:
+            model_permissions = model_permissions.with_columns(
+                pl.lit(None).cast(pl.String).alias("ppu_reason")
+            )
 
         # Join exposures with model_permissions on model_id
         # Each exposure may match multiple permission rows (AIRB + FIRB for same model)
@@ -1381,6 +1434,7 @@ class ExposureClassifier:
                 pl.col("approach").alias("mp_approach"),
                 pl.col("country_codes").alias("mp_country_codes"),
                 pl.col("excluded_book_codes").alias("mp_excluded_book_codes"),
+                pl.col("ppu_reason").alias("mp_ppu_reason"),
             ),
             left_on="model_id",
             right_on="mp_model_id",
@@ -1445,10 +1499,20 @@ class ExposureClassifier:
             "_sa_block_match"
         )
 
+        # CRR Art. 150(1) PPU / Art. 148 roll-out provenance: capture the ppu_reason
+        # from the surviving SA-precedence row only. Null on non-SA rows so the
+        # max().over() roll-up below picks up the SA row's label (and stays null
+        # when no SA-routing permission applied).
+        sa_ppu_reason = (
+            pl.when(sa_block).then(pl.col("mp_ppu_reason")).otherwise(None).alias("_sa_ppu_reason")
+        )
+
         # Add match flags then aggregate: group by all original columns,
         # take max of the match flags (any valid AIRB/FIRB/slotting permission → True),
         # then AND-NOT the SA block to apply the SA-precedence rule.
-        result = joined.with_columns(airb_permitted, firb_permitted, slotting_permitted, sa_block)
+        result = joined.with_columns(
+            airb_permitted, firb_permitted, slotting_permitted, sa_block, sa_ppu_reason
+        )
 
         # Aggregate back to one row per exposure using .over() to avoid group_by.
         # SA-precedence override is applied AFTER the .max() roll-up so any SA
@@ -1456,6 +1520,7 @@ class ExposureClassifier:
         result = result.with_columns(
             pl.col("_sa_block_match").max().over("exposure_reference").alias("_sa_block"),
             pl.col("_mp_row_joined").max().over("exposure_reference").alias("_mp_joined_any"),
+            pl.col("_sa_ppu_reason").max().over("exposure_reference").alias("ppu_reason"),
         ).with_columns(
             (pl.col("_airb_match").max().over("exposure_reference") & ~pl.col("_sa_block")).alias(
                 "model_airb_permitted"
@@ -1526,6 +1591,8 @@ class ExposureClassifier:
                     "mp_approach",
                     "mp_country_codes",
                     "mp_excluded_book_codes",
+                    "mp_ppu_reason",
+                    "_sa_ppu_reason",
                     "_airb_match",
                     "_firb_match",
                     "_slotting_match",
@@ -1616,6 +1683,61 @@ class ExposureClassifier:
 
         # Step 4: align exposure_class for IRB-routed rgla_* / pse_*
         return self._align_irb_exposure_class(exposures.with_columns([approach_expr, lgd_expr]))
+
+    @staticmethod
+    @cites("PS1/26, paragraph 147A.1")
+    def _derive_exposure_subclass(
+        exposures: pl.LazyFrame,
+        config: CalculationConfig,
+        schema_names: set[str],
+    ) -> pl.LazyFrame:
+        """Derive the Basel 3.1 corporate ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)).
+
+        Basel 3.1 only — under CRR the column is null. For rows whose
+        ``exposure_class`` is corporate / corporate_sme, the three-way split is:
+
+          - ``corporate_financial_large`` — FSE (``cp_is_financial_sector_entity``)
+            OR large corporate (``cp_annual_revenue`` > the Art. 147A(1)(d) GBP 440m
+            threshold). Art. 147A(1)(e).
+          - ``corporate_sme`` — ``is_sme`` (turnover <= GBP 44m). Art. 147A(1)(f).
+          - ``corporate_other`` — otherwise. Art. 147A(1)(f).
+
+        Reuses the FSE predicate and the large-corporate revenue threshold accessor
+        (``config.thresholds.large_corporate_revenue_threshold``) shared with
+        ``_apply_b31_approach_restrictions``; non-corporate rows stay null.
+        """
+        null_subclass = pl.lit(None, dtype=pl.String).alias("exposure_subclass")
+        if not config.is_basel_3_1:
+            return exposures.with_columns(null_subclass)
+
+        is_corporate = pl.col("exposure_class").is_in(
+            [ExposureClass.CORPORATE.value, ExposureClass.CORPORATE_SME.value]
+        )
+
+        is_fse = pl.lit(False)
+        if "cp_is_financial_sector_entity" in schema_names:
+            is_fse = (pl.col("cp_is_financial_sector_entity") == True).fill_null(False)  # noqa: E712
+
+        is_large_by_revenue = pl.lit(False)
+        if "cp_annual_revenue" in schema_names:
+            is_large_by_revenue = (
+                pl.col("cp_annual_revenue")
+                > float(config.thresholds.large_corporate_revenue_threshold)
+            ).fill_null(False)
+
+        is_sme = pl.col("is_sme").fill_null(False)
+
+        subclass = (
+            pl.when(~is_corporate)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(is_fse | is_large_by_revenue)
+            .then(pl.lit(ExposureSubclass.CORPORATE_FINANCIAL_LARGE.value))
+            .when(is_sme)
+            .then(pl.lit(ExposureSubclass.CORPORATE_SME.value))
+            .otherwise(pl.lit(ExposureSubclass.CORPORATE_OTHER.value))
+            .alias("exposure_subclass")
+        )
+        return exposures.with_columns(subclass)
 
     @staticmethod
     def _build_permission_exprs(
@@ -2042,6 +2164,8 @@ class ExposureClassifier:
         return base.alias("is_mortgage")
 
     @staticmethod
+    @cites("CRR Art. 123")
+    @cites("PS1/26, paragraph 123A")
     def _build_qualifies_as_retail_expr(
         config: CalculationConfig,
         schema_names: set[str],
@@ -2054,6 +2178,12 @@ class ExposureClassifier:
         Basel 3.1 Art. 123A adds two-path qualifying criteria:
         - Art. 123A(1)(a): SME entities (revenue > 0 and < GBP 44m) auto-qualify
           without needing pool management attestation.
+        - Art. 123A(1)(b)(ii): an obligor's aggregate exposure must not exceed
+          GBP 880k (threshold limb) AND no single obligor's aggregate exposure may
+          exceed 0.2% of the total regulatory-retail portfolio (granularity limb,
+          BCBS CRE20.66). Both limbs are Basel-3.1-only. The granularity limb is
+          gated on ``config.enforce_retail_granularity`` (default True) so it can
+          be suppressed under CRE20.66's national-discretion clause.
         - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
           retail pool (cp_is_managed_as_retail=True) to qualify.  Null values
           default to True for backward compatibility.
@@ -2081,6 +2211,35 @@ class ExposureClassifier:
         # total < EUR 43m when turnover null).
         is_sme_for_art_123a = ExposureClassifier._is_sme_by_size_expr(config)
 
+        # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
+        # aggregate exposure may exceed 0.2% of the total regulatory-retail
+        # portfolio. Candidate-retail rows are the entity-type RETAIL_OTHER
+        # population (``_sa_class``); the denominator counts each obligor once by
+        # dividing the per-obligor aggregate (``lending_group_adjusted_exposure``)
+        # by the obligor's line-count, masking non-retail rows to 0, then summing.
+        granularity_limit = float(B31_RETAIL_GRANULARITY_LIMIT)
+        is_retail_candidate = pl.col("_sa_class") == ExposureClass.RETAIL_OTHER.value
+        obligor_agg = pl.col("lending_group_adjusted_exposure")
+        # Guard the nullable ``counterparty_reference`` partition: a null key would
+        # otherwise pool all unmapped rows into a single bucket (see
+        # ``partition_by_nullable`` / ``NULLABLE_PARTITION_KEYS``). Null-keyed rows
+        # count as their own single-line obligor.
+        obligor_line_count = partition_by_nullable(
+            pl.len().over("counterparty_reference"),
+            "counterparty_reference",
+            pl.lit(1),
+        )
+        portfolio_total = (
+            pl.when(is_retail_candidate)
+            .then(obligor_agg / obligor_line_count)
+            .otherwise(pl.lit(0.0))
+        ).sum()
+        granularity_fail = (
+            is_retail_candidate
+            & (portfolio_total > 0)
+            & (obligor_agg / portfolio_total > granularity_limit)
+        )
+
         expr = (
             pl.when(threshold_fail)
             .then(pl.lit(False))
@@ -2088,6 +2247,13 @@ class ExposureClassifier:
             .when(is_sme_for_art_123a)
             .then(pl.lit(True))
         )
+
+        # Art. 123A(1)(b)(ii) granularity limb: > 0.2% of the retail portfolio.
+        # Gated on config.enforce_retail_granularity (default True) so the limb
+        # can be suppressed where granularity is assessed by another method under
+        # CRE20.66's national-discretion clause, or to isolate the other limbs.
+        if config.enforce_retail_granularity:
+            expr = expr.when(granularity_fail).then(pl.lit(False))
 
         # Art. 123A(1)(b)(iii): Non-SME must be managed as retail pool
         if "cp_is_managed_as_retail" in schema_names:

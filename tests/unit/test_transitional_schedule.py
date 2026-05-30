@@ -23,11 +23,13 @@ References:
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle, TransitionalScheduleBundle
+from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.comparison import (
     _TRANSITIONAL_REPORTING_DATES,
@@ -124,16 +126,84 @@ class TestTransitionalDates:
         """PRA PS1/26 defines 4 transitional years (2027-2030)."""
         assert len(_TRANSITIONAL_REPORTING_DATES) == 4
 
-    def test_dates_are_mid_year(self):
-        """Reporting dates should be mid-year (June 30)."""
+    def test_dates_are_first_of_january(self):
+        """Reporting dates must be 1 January per PRA PS1/26 Art. 92(5)."""
+        # Arrange: the constant is imported from comparison.py
+        # Act: inspect each date in the constant
+        # Assert: every date is 1-Jan (fails under buggy June-30 HEAD)
         for d in _TRANSITIONAL_REPORTING_DATES:
-            assert d.month == 6
-            assert d.day == 30
+            assert d.month == 1, f"Expected month 1 (January), got {d.month} for date {d}"
+            assert d.day == 1, f"Expected day 1, got {d.day} for date {d}"
 
     def test_dates_span_2027_to_2030(self):
         """Dates should cover 2027 through 2030."""
         years = [d.year for d in _TRANSITIONAL_REPORTING_DATES]
         assert years == [2027, 2028, 2029, 2030]
+
+
+# =============================================================================
+# P6.23 — Transitional date correctness (1 Jan per PRA PS1/26 Art. 92(5))
+# =============================================================================
+
+
+class TestTransitionalDatesP623:
+    """Behavioural tests verifying the default-path pipeline emits 1-Jan dates.
+
+    The RED assertion: default reporting_dates=None must produce a timeline
+    whose reporting_date column contains [date(2027,1,1), date(2028,1,1),
+    date(2029,1,1), date(2030,1,1)].  Under the buggy June-30 HEAD this
+    fails with AssertionError because the column contains June-30 dates.
+    """
+
+    def test_default_path_timeline_reporting_dates_are_first_of_january(self):
+        """Default run (reporting_dates=None) must emit 1-Jan dates in timeline.
+
+        Fails RED under the buggy HEAD (comparison.py has June-30 dates).
+        Passes after engine-implementer fixes _TRANSITIONAL_REPORTING_DATES.
+
+        References:
+        - PRA PS1/26 Art. 92(5): output floor phase-in dates are 1 January
+        """
+        # Arrange
+        runner = TransitionalScheduleRunner()
+        expected_dates = [
+            date(2027, 1, 1),
+            date(2028, 1, 1),
+            date(2029, 1, 1),
+            date(2030, 1, 1),
+        ]
+
+        # Act — reporting_dates=None triggers the default constant path
+        result = runner.run(
+            data=_make_minimal_raw_data(),
+            permission_mode=PermissionMode.IRB,
+            reporting_dates=None,
+        )
+        df = result.timeline.collect()
+        actual_dates = df["reporting_date"].to_list()
+
+        # Assert — fails under buggy HEAD (June-30 dates)
+        assert actual_dates == expected_dates, (
+            f"Expected reporting_date column {expected_dates}, got {actual_dates}. "
+            "PRA PS1/26 Art. 92(5) requires 1-January dates."
+        )
+
+    def test_regulatory_intent_floor_at_2027_jan_1_is_60_pct(self):
+        """Floor for Basel 3.1 config with reporting_date=2027-01-01 is 60%.
+
+        This is the regulatory-intent guard — it passes already under the
+        buggy HEAD (CalculationConfig.get_output_floor_percentage is correct)
+        and continues to pass post-fix. Kept here to prove that the corrected
+        boundary date maps to the right floor percentage.
+        """
+        # Arrange
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+
+        # Act
+        floor_pct = config.get_output_floor_percentage()
+
+        # Assert
+        assert floor_pct == Decimal("0.60"), f"Expected floor 0.60 for 2027-01-01, got {floor_pct}"
 
 
 # =============================================================================

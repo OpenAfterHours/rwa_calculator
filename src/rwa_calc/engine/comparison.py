@@ -227,12 +227,12 @@ class CapitalImpactAnalyzer:
 # Transitional Floor Schedule (M3.3)
 # =============================================================================
 
-# PRA PS1/26 transitional dates: 1 Jan of each year, with mid-year reporting
+# PRA PS1/26 transitional dates: 1 January of each year
 _TRANSITIONAL_REPORTING_DATES = [
-    date(2027, 6, 30),  # Year 1: 60% (PRA PS1/26 Art. 92(5))
-    date(2028, 6, 30),  # Year 2: 65%
-    date(2029, 6, 30),  # Year 3: 70%
-    date(2030, 6, 30),  # Year 4: 72.5% (fully phased)
+    date(2027, 1, 1),  # Year 1: 60% from 1 January (PRA PS1/26 Art. 92(5))
+    date(2028, 1, 1),  # Year 2: 65% from 1 January
+    date(2029, 1, 1),  # Year 3: 70% from 1 January
+    date(2030, 1, 1),  # Year 4: 72.5% from 1 January (steady-state, Art. 92(2A))
 ]
 
 
@@ -270,7 +270,7 @@ class TransitionalScheduleRunner:
         Args:
             data: Pre-loaded raw data bundle (shared across all years)
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
-            reporting_dates: Optional custom reporting dates (default: 2027-2032 mid-year)
+            reporting_dates: Optional custom reporting dates (default: 2027-2030, 1 Jan)
 
         Returns:
             TransitionalScheduleBundle with year-by-year floor impact timeline

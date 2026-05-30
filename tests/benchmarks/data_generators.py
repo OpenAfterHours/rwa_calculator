@@ -406,6 +406,9 @@ def generate_facilities(
                 "is_qrre_transactor": np.full(n_facilities, False),
                 "seniority": seniority,
                 "risk_type": risk_types,
+                "obs_product": pl.Series(
+                    [None] * n_facilities, dtype=pl.String
+                ),  # P2.31 Annex I product->risk_type map; null = derive from risk_type
                 "ccf_modelled": np.full(n_facilities, None),  # No modelled CCF for benchmarks
                 "ead_modelled": np.full(n_facilities, None),  # No modelled EAD for benchmarks
                 "is_short_term_trade_lc": np.full(n_facilities, None),  # N/A for facilities
@@ -415,6 +418,9 @@ def generate_facilities(
                 "is_uk_residential_mortgage_commitment": np.full(
                     n_facilities, None
                 ),  # P2.33 Art. 111 Table A1 Row 4(b) 50% CCF; default False via schema
+                "is_purchased_receivable_commitment": np.full(
+                    n_facilities, None
+                ),  # P2.32 Art. 166E(5) revolving purchase commitment CCF; default False via schema
                 "is_defaulted": np.full(n_facilities, None),  # CRR Art. 178 row-level default flag
                 "is_under_construction": np.full(n_facilities, None),  # P1.140 ADC
                 "has_one_day_maturity_floor": np.full(n_facilities, None),  # Repo/SFT 1-day floor
@@ -973,6 +979,9 @@ def generate_contingents(
                 "beel": np.zeros(n_contingents),
                 "seniority": np.full(n_contingents, "senior"),
                 "risk_type": risk_types,
+                "obs_product": pl.Series(
+                    [None] * n_contingents, dtype=pl.String
+                ),  # P2.31 Annex I product->risk_type map; null = derive from risk_type
                 "underlying_risk_type": pl.Series([None] * n_contingents, dtype=pl.String),
                 "ccf_modelled": np.full(n_contingents, None),  # No modelled CCF for benchmarks
                 "ead_modelled": np.full(n_contingents, None),  # No modelled EAD for benchmarks
@@ -980,6 +989,9 @@ def generate_contingents(
                 "is_uk_residential_mortgage_commitment": np.full(
                     n_contingents, None
                 ),  # P2.33 Art. 111 Table A1 Row 4(b) 50% CCF; default False via schema
+                "is_purchased_receivable_commitment": np.full(
+                    n_contingents, None
+                ),  # P2.32 Art. 166E(5) revolving purchase commitment CCF; default False via schema
                 "is_obs_commitment": np.full(
                     n_contingents, None
                 ),  # Default False via schema (issued OBS)

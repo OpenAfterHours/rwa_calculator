@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
 
 from rwa_calc.reporting.pillar3.templates import (
     CMS1_COLUMNS,
@@ -51,6 +52,7 @@ from rwa_calc.reporting.pillar3.templates import (
     CR7_COLUMNS,
     CR8_COLUMNS,
     CR8_ROWS,
+    CR9_1_COLUMN_REFS,
     CR9_AIRB_CLASSES,
     CR9_APPROACH_DISPLAY,
     CR9_COLUMN_REFS,
@@ -61,6 +63,7 @@ from rwa_calc.reporting.pillar3.templates import (
     IRB_EXPOSURE_CLASSES,
     OV1_COLUMNS,
     SLOTTING_RISK_WEIGHTS,
+    CR9ClassSpec,
     P3Row,
     _letter_ref,
     get_cr4_columns,
@@ -82,6 +85,7 @@ if TYPE_CHECKING:
 
     from rwa_calc.api.export import ExportResult
     from rwa_calc.api.service import CalculationResponse
+    from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
 
 logger = logging.getLogger(__name__)
@@ -98,7 +102,7 @@ class Pillar3TemplateBundle:
 
     Single-table templates are ``pl.DataFrame | None``.
     Per-class/type templates are ``dict[str, pl.DataFrame]``.
-    CMS1/CMS2/CR9 are Basel 3.1 only — None/empty under CRR.
+    CMS1/CMS2/CR9/CR9.1 are Basel 3.1 only — None/empty under CRR.
     """
 
     ov1: pl.DataFrame | None = None
@@ -110,6 +114,7 @@ class Pillar3TemplateBundle:
     cr7a: dict[str, pl.DataFrame] = field(default_factory=dict)
     cr8: pl.DataFrame | None = None
     cr9: dict[str, pl.DataFrame] = field(default_factory=dict)
+    cr9_1: dict[str, pl.DataFrame] = field(default_factory=dict)
     cr10: dict[str, pl.DataFrame] = field(default_factory=dict)
     cms1: pl.DataFrame | None = None
     cms2: pl.DataFrame | None = None
@@ -130,10 +135,25 @@ class Pillar3Generator:
 
     # ---- public interface ----
 
-    def generate(self, response: CalculationResponse) -> Pillar3TemplateBundle:
-        """Generate all Pillar III templates from a ``CalculationResponse``."""
+    def generate(
+        self,
+        response: CalculationResponse,
+        *,
+        previous_period_results: pl.LazyFrame | None = None,
+    ) -> Pillar3TemplateBundle:
+        """Generate all Pillar III templates from a ``CalculationResponse``.
+
+        When ``previous_period_results`` (a prior-run results LazyFrame of the
+        same shape as the current results) is supplied, the CR8 RWEA flow
+        statement gains an opening balance (row 1) and a signed residual
+        (row 8); otherwise CR8 rows 1-8 stay null (unchanged behaviour).
+        """
         results_lf = response.scan_results()
-        return self.generate_from_lazyframe(results_lf, framework=response.framework)
+        return self.generate_from_lazyframe(
+            results_lf,
+            framework=response.framework,
+            previous_period_results=previous_period_results,
+        )
 
     def generate_from_lazyframe(
         self,
@@ -141,8 +161,16 @@ class Pillar3Generator:
         *,
         framework: str = "CRR",
         capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
+        previous_period_results: pl.LazyFrame | None = None,
     ) -> Pillar3TemplateBundle:
-        """Generate all Pillar III templates from a pipeline results LazyFrame."""
+        """Generate all Pillar III templates from a pipeline results LazyFrame.
+
+        ``previous_period_results`` is an optional prior-period results
+        LazyFrame (same shape as ``results``) used to populate the CR8 opening
+        balance (row 1) and signed residual (row 8). When ``None`` CR8 rows 1-8
+        stay null.
+        """
         cols = _available_columns(results)
         errors: list[str] = []
 
@@ -150,16 +178,24 @@ class Pillar3Generator:
         irb_data = _filter_irb_non_slotting(results, cols)
         slotting_data = _filter_by_approach(results, "slotting", cols)
 
+        prior_irb_data: pl.LazyFrame | None = None
+        if previous_period_results is not None:
+            prior_cols = _available_columns(previous_period_results)
+            prior_irb_data = _filter_irb_non_slotting(previous_period_results, prior_cols)
+
         return Pillar3TemplateBundle(
-            ov1=self._generate_ov1(results, cols, framework, errors, capital_ratios),
+            ov1=self._generate_ov1(
+                results, cols, framework, errors, capital_ratios, output_floor_summary
+            ),
             cr4=self._generate_cr4(sa_data, cols, framework, errors),
             cr5=self._generate_cr5(sa_data, cols, framework, errors),
             cr6=self._generate_all_cr6(irb_data, cols, framework, errors),
             cr6a=self._generate_cr6a(results, cols, framework, errors),
             cr7=self._generate_cr7(results, cols, framework, errors),
             cr7a=self._generate_all_cr7a(results, cols, framework, errors),
-            cr8=self._generate_cr8(irb_data, cols, errors),
+            cr8=self._generate_cr8(irb_data, cols, errors, prior_irb_data),
             cr9=self._generate_all_cr9(irb_data, cols, framework, errors),
+            cr9_1=self._generate_cr9_1(irb_data, cols, framework, errors),
             cr10=self._generate_all_cr10(slotting_data, cols, framework, errors),
             cms1=self._generate_cms1(results, cols, framework, errors),
             cms2=self._generate_cms2(
@@ -233,6 +269,7 @@ class Pillar3Generator:
         framework: str,
         errors: list[str],
         capital_ratios: Pillar3CapitalRatioOverrides | None = None,
+        output_floor_summary: OutputFloorSummary | None = None,
     ) -> pl.DataFrame | None:
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
         if not rwa_col:
@@ -257,6 +294,7 @@ class Pillar3Generator:
                 total_rwa=total_rwa,
                 own_funds=own_funds,
                 capital_ratios=capital_ratios,
+                output_floor_summary=output_floor_summary,
                 column_refs=column_refs,
             )
             for row_def in get_ov1_rows(framework)
@@ -563,12 +601,28 @@ class Pillar3Generator:
 
     # ---- CR8 ----
 
+    @cites("PS1/26, paragraph 147.2")
     def _generate_cr8(
         self,
         irb_data: pl.LazyFrame,
         cols: set[str],
         errors: list[str],
+        prior_irb_data: pl.LazyFrame | None = None,
     ) -> pl.DataFrame | None:
+        """Generate the CR8 RWEA flow statement for IRB credit-risk exposures.
+
+        Row 9 (closing) sums the current-period IRB (non-slotting) ``rwa_final``;
+        when ``prior_irb_data`` is supplied, row 1 (opening) sums the prior
+        period on the same like-for-like basis and row 8 (Other) carries the
+        signed residual ``closing - opening`` (positive = increase, negative =
+        decrease per PS1/26 Annex XXII §11). Rows 2-7 (per-driver flow
+        components) stay null — they need exposure-level period-over-period
+        lineage not available from two point-in-time snapshots. When
+        ``prior_irb_data`` is None, rows 1-8 stay null (unchanged behaviour).
+
+        References:
+            CRR Part 8 Art. 438(h); PRA PS1/26 Annex XXII §11.
+        """
         rwa_col = _pick(cols, "rwa_final", "final_rwa", "rwa")
         if not rwa_col:
             errors.append("CR8: missing RWA column")
@@ -577,16 +631,26 @@ class Pillar3Generator:
         data = irb_data.collect()
         column_refs = [c.ref for c in CR8_COLUMNS]
         closing_rwa = _col_sum(data, rwa_col)
-        rows_out: list[dict[str, object]] = []
 
+        opening_rwa: float | None = None
+        other_rwa: float | None = None
+        if prior_irb_data is not None:
+            opening_rwa = _col_sum(prior_irb_data.collect(), rwa_col)
+            # Row 8 (Other) = signed residual = closing - opening (rows 2-7 = 0).
+            other_rwa = (closing_rwa or 0.0) - (opening_rwa or 0.0)
+
+        rows_out: list[dict[str, object]] = []
         for row_def in CR8_ROWS:
             if row_def.ref == "9":
                 values: dict[str, object] = {"a": closing_rwa}
             elif row_def.ref == "1":
-                # Opening balance — requires prior period data
-                values = {"a": None}
+                # Opening balance — prior-period closing (None without prior data).
+                values = {"a": opening_rwa}
+            elif row_def.ref == "8":
+                # Other — signed residual delta (None without prior data).
+                values = {"a": other_rwa}
             else:
-                # Flow drivers — require multi-period comparison
+                # Flow drivers (rows 2-7) — require multi-period comparison.
                 values = {"a": None}
             rows_out.append(_make_row(row_def, values, column_refs))
 
@@ -594,6 +658,7 @@ class Pillar3Generator:
 
     # ---- CR9 — PD back-testing per exposure class (Art. 452(h)) ----
 
+    @cites("PS1/26, paragraph 147.2")
     def _generate_all_cr9(
         self,
         irb_data: pl.LazyFrame,
@@ -642,8 +707,9 @@ class Pillar3Generator:
             if approach_data.height == 0:
                 continue
 
-            for class_key, class_display in class_defs:
-                class_data = approach_data.filter(pl.col(ec_col) == class_key)
+            for class_key, class_display, spec in class_defs:
+                predicate = _cr9_class_predicate(spec, ec_col, cols)
+                class_data = approach_data.filter(predicate)
                 if class_data.height == 0:
                     continue
 
@@ -694,6 +760,115 @@ class Pillar3Generator:
         if not rows_out:
             return _cr9_empty_schema(column_refs)
         return pl.DataFrame(rows_out, schema=_cr9_schema(column_refs))
+
+    # ---- CR9.1 — ECAI-based PD back-testing (Art. 180(1)(f)) ----
+
+    @cites("PS1/26, paragraph 147.2")
+    def _generate_cr9_1(
+        self,
+        irb_data: pl.LazyFrame,
+        cols: set[str],
+        framework: str,
+        errors: list[str],
+    ) -> dict[str, pl.DataFrame]:
+        """Generate UKB CR9.1 ECAI-based PD back-testing templates.
+
+        Basel 3.1 only. Supplementary to CR9 for firms using Art. 180(1)(f)
+        ECAI-based PD estimation: obligors in scope (``ecai_pd_mapping`` truthy)
+        are grouped by their firm-grade-to-ECAI mapping
+        (``external_rating_equivalent``) rather than by the fixed CR6 PD-range
+        bands. Returns separate DataFrames per approach-class combination,
+        keyed as ``"{approach} - {class_key}"``.
+
+        References:
+            PRA PS1/26 Art. 452(h), Art. 180(1)(f), Annex XXII paras 12-15
+        """
+        if framework != "BASEL_3_1":
+            return {}
+
+        ec_col = _pick(cols, "exposure_class")
+        approach_col = _pick(cols, "approach_applied", "approach")
+        mapping_col = _pick(cols, "ecai_pd_mapping")
+        grade_col = _pick(cols, "external_rating_equivalent")
+        if not ec_col or not approach_col or not mapping_col or not grade_col:
+            return {}
+
+        report_pd_col = _pick(cols, "irb_pd_floored", "irb_pd_original")
+        if not report_pd_col:
+            errors.append("CR9.1: no PD column available — skipping ECAI backtesting")
+            return {}
+
+        data = irb_data.collect()
+        if data.height == 0:
+            return {}
+
+        # Only obligors flagged for Art. 180(1)(f) ECAI-based PD estimation.
+        data = data.filter(pl.col(mapping_col))
+        if data.height == 0:
+            return {}
+
+        result: dict[str, pl.DataFrame] = {}
+
+        for approach_val, _approach_display, class_defs in [
+            ("foundation_irb", "F-IRB", CR9_FIRB_CLASSES),
+            ("advanced_irb", "A-IRB", CR9_AIRB_CLASSES),
+        ]:
+            approach_data = data.filter(pl.col(approach_col) == approach_val)
+            if approach_data.height == 0:
+                continue
+
+            for class_key, class_display, spec in class_defs:
+                predicate = _cr9_class_predicate(spec, ec_col, cols)
+                class_data = approach_data.filter(predicate)
+                if class_data.height == 0:
+                    continue
+
+                key = f"{approach_val} - {class_key}"
+                result[key] = self._generate_cr9_1_for_class(
+                    class_data,
+                    cols,
+                    report_pd_col,
+                    grade_col,
+                    class_display,
+                )
+
+        return result
+
+    def _generate_cr9_1_for_class(
+        self,
+        class_data: pl.DataFrame,
+        cols: set[str],
+        report_pd_col: str,
+        grade_col: str,
+        class_display: str,
+    ) -> pl.DataFrame:
+        """Generate a single CR9.1 template for one exposure class.
+
+        One row per distinct ECAI grade (``external_rating_equivalent``),
+        followed by an aggregate Total row. Columns c-h reuse the CR9 value
+        computation; the dynamic ECAI column carries the grade label.
+        """
+        column_refs = CR9_1_COLUMN_REFS
+        rows_out: list[dict[str, object]] = []
+
+        for grade in class_data[grade_col].unique(maintain_order=True).to_list():
+            bucket = class_data.filter(pl.col(grade_col) == grade)
+            values = _compute_cr9_values(bucket, cols, report_pd_col)
+            values["a"] = class_display
+            values["b"] = grade
+            row = _make_row(P3Row(str(grade), str(grade)), values, column_refs)
+            row[grade_col] = grade
+            rows_out.append(row)
+
+        # Aggregate Total row across all grades.
+        total_values = _compute_cr9_values(class_data, cols, report_pd_col)
+        total_values["a"] = class_display
+        total_values["b"] = "Total"
+        total_row = _make_row(P3Row("Total", "Total", is_total=True), total_values, column_refs)
+        total_row[grade_col] = "Total"
+        rows_out.append(total_row)
+
+        return pl.DataFrame(rows_out, schema=_cr9_1_schema(column_refs, grade_col))
 
     # ---- CR10 ----
 
@@ -1006,7 +1181,18 @@ def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
 
 
 _OV1_RATIO_REFS: frozenset[str] = frozenset({"5a", "5b", "6a", "6b", "7a", "7b"})
-_OV1_EXPLICIT_NULL_REFS: frozenset[str] = frozenset({"26", "27", "11", "12", "13", "14"})
+# Floor rows whose column ``a`` is a multiplier (26) or RWA adjustment (27):
+# column ``c`` (own-funds requirement) is meaningless for these and must stay
+# null — they are excluded from the 8%-of-a auto-shim.
+_OV1_FLOOR_NO_SHIM_REFS: frozenset[str] = frozenset({"26", "27"})
+# Equity sub-approach discriminators (Basel 3.1 OV1 memo rows 11-14): each
+# filters approach_applied=="equity" AND a sub-approach column == value.
+_OV1_EQUITY_SUBAPPROACH_REFS: dict[str, tuple[str, str]] = {
+    "11": ("equity_transitional_approach", "irb_transitional"),
+    "12": ("ciu_approach", "look_through"),
+    "13": ("ciu_approach", "mandate_based"),
+    "14": ("ciu_approach", "fallback"),
+}
 # Refs whose value is _approach_rwa(approach_col, rwa_col, <approach>).
 _OV1_APPROACH_REFS: dict[str, str] = {
     "3": "foundation_irb",
@@ -1027,6 +1213,7 @@ def _ov1_row_values(
     total_rwa: float | None,
     own_funds: float | None,
     capital_ratios: Pillar3CapitalRatioOverrides | None,
+    output_floor_summary: OutputFloorSummary | None,
     column_refs: list[str],
 ) -> dict[str, object]:
     """Compute OV1 cell values for a single template row."""
@@ -1041,13 +1228,16 @@ def _ov1_row_values(
         total_rwa=total_rwa,
         own_funds=own_funds,
         capital_ratios=capital_ratios,
+        output_floor_summary=output_floor_summary,
     )
 
     # Column b (T-1) always None — requires prior period data
     values.setdefault("b", None)
     # Auto-shim: own funds = a * 0.08, except for ratio rows where column c
-    # is intentionally None (a is itself a percentage).
-    if ref not in _OV1_RATIO_REFS and values.get("a") is not None and values.get("c") is None:
+    # is intentionally None (a is itself a percentage) and the floor rows
+    # 26/27 where column a is a multiplier/adjustment, not an RWA amount.
+    no_shim = ref in _OV1_RATIO_REFS or ref in _OV1_FLOOR_NO_SHIM_REFS
+    if not no_shim and values.get("a") is not None and values.get("c") is None:
         values["c"] = float(values["a"] or 0.0) * 0.08
 
     return _make_row(row_def, values, column_refs)
@@ -1064,6 +1254,7 @@ def _ov1_cell_values(
     total_rwa: float | None,
     own_funds: float | None,
     capital_ratios: Pillar3CapitalRatioOverrides | None,
+    output_floor_summary: OutputFloorSummary | None,
 ) -> dict[str, object]:
     """Resolve the populated cell values for one OV1 row (pre auto-shim)."""
     if ref in ("29", "1"):
@@ -1074,10 +1265,14 @@ def _ov1_cell_values(
         return {"a": _ov1_ratio_value(capital_ratios, ref)}
     if ref == "24":
         return {"a": _ov1_memo_250_row(data, cols, rwa_col)}
-    if ref in _OV1_EXPLICIT_NULL_REFS:
-        # Output floor multiplier/adjustment (26/27) come from config not
-        # pipeline data; equity sub-rows (11-14) lack pipeline granularity.
-        return {"a": None}
+    if ref in _OV1_EQUITY_SUBAPPROACH_REFS:
+        return {"a": _ov1_equity_subapproach_rwa(ref, data, cols, approach_col, rwa_col)}
+    if ref == "26":
+        # Output floor multiplier — first non-null per-row output_floor_pct.
+        return {"a": _ov1_floor_multiplier(data, cols)}
+    if ref == "27":
+        # Output floor adjustment (OF-ADJ) — lives only on the summary bundle.
+        return {"a": output_floor_summary.of_adj if output_floor_summary else None}
     if approach_col:
         return _ov1_approach_cell(ref, data, approach_col, rwa_col)
     return {}
@@ -1135,6 +1330,43 @@ def _ov1_memo_250_row(
         return None
     memo = data.filter((pl.col(rw_col) >= 2.495) & (pl.col(rw_col) <= 2.505))
     return _col_sum(memo, rwa_col)
+
+
+@cites("PS1/26, paragraph 132")
+def _ov1_equity_subapproach_rwa(
+    ref: str,
+    data: pl.DataFrame,
+    cols: set[str],
+    approach_col: str | None,
+    rwa_col: str,
+) -> float | None:
+    """OV1 memo rows 11-14: equity RWEA broken down by sub-approach.
+
+    Sums ``rwa_final`` for ``approach_applied == "equity"`` AND the
+    discriminator column/value for the row (IRB transitional, look-through,
+    mandate-based, fall-back). These are "of which" sub-rows of equity already
+    counted in row 2 — they are not added to the row-29 total.
+
+    References:
+        PRA PS1/26 Annex XX (UKB OV1 rows 11-14), Art. 132-132C (CIU sub-approaches).
+    """
+    disc = _OV1_EQUITY_SUBAPPROACH_REFS.get(ref)
+    if disc is None:
+        return None
+    disc_col, disc_val = disc
+    if not approach_col or disc_col not in cols:
+        return None
+    subset = data.filter((pl.col(approach_col) == "equity") & (pl.col(disc_col) == disc_val))
+    return _col_sum(subset, rwa_col)
+
+
+def _ov1_floor_multiplier(data: pl.DataFrame, cols: set[str]) -> float | None:
+    """OV1 row 26: output floor multiplier (first non-null ``output_floor_pct``)."""
+    floor_col = _pick(cols, "output_floor_pct")
+    if not floor_col or data.height == 0:
+        return None
+    result = data.select(pl.col(floor_col).drop_nulls().first()).item()
+    return float(result) if result is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -1331,11 +1563,28 @@ def _compute_cr5_values(
     allocated = 0.0
     values: dict[str, object] = {}
 
+    # PRA PS1/26 Art. 123B: rows that fired the 1.5x currency-mismatch multiplier
+    # are bucketed on their pre-multiplier risk weight so EAD lands in the
+    # underlying credit-risk band rather than an inflated one. Frames without the
+    # snapshot/flag columns (CRR, or older callers) bucket on rw_col exactly as
+    # before.
+    if (
+        "risk_weight_pre_currency_mismatch" in data.columns
+        and "currency_mismatch_multiplier_applied" in data.columns
+    ):
+        rw_bucket_expr = (
+            pl.when(pl.col("currency_mismatch_multiplier_applied").fill_null(False))
+            .then(pl.col("risk_weight_pre_currency_mismatch"))
+            .otherwise(pl.col(rw_col))
+        )
+    else:
+        rw_bucket_expr = pl.col(rw_col)
+
     for i, (rw_value, _label) in enumerate(rw_bands):
         ref = _letter_ref(i)
         # Filter to ±0.5pp tolerance for risk weight match
         tol = 0.005
-        bucket = data.filter((pl.col(rw_col) >= rw_value - tol) & (pl.col(rw_col) < rw_value + tol))
+        bucket = data.filter((rw_bucket_expr >= rw_value - tol) & (rw_bucket_expr < rw_value + tol))
         bucket_ead = _col_sum(bucket, ead_col) or 0.0
         values[ref] = bucket_ead
         allocated += bucket_ead
@@ -1413,6 +1662,44 @@ def _compute_cr6_values(
     return values
 
 
+def _cr9_class_predicate(spec: CR9ClassSpec, ec_col: str, cols: set[str]) -> pl.Expr:
+    """Resolve a CR9 leaf-class descriptor into a row-filter ``pl.Expr``.
+
+    Builds the predicate over ``exposure_class`` plus the optional discriminator
+    columns (``is_sme``, ``property_type``, ``cp_is_financial_sector_entity``).
+    Degrades gracefully when a discriminator column is absent on the frame: the
+    corresponding clause is dropped, so a generic corporate leaf with absent
+    flags still matches (the residual ``corporate`` rows collapse onto
+    ``corporate_other_non_sme`` for the financial/large split).
+
+    References:
+        PRA PS1/26 Annex XXII, Art. 147(2)(b)-(d), 147A.
+    """
+    predicate = pl.col(ec_col).is_in(list(spec.exposure_classes))
+
+    if spec.is_sme is not None:
+        sme_col = _pick(cols, "is_sme")
+        if sme_col:
+            predicate = predicate & (pl.col(sme_col) == spec.is_sme)
+
+    if spec.property_type is not None:
+        prop_col = _pick(cols, "property_type")
+        if prop_col:
+            predicate = predicate & (pl.col(prop_col) == spec.property_type)
+
+    if spec.financial_large is not None:
+        fin_col = _pick(cols, "cp_is_financial_sector_entity", "apply_fi_scalar")
+        if fin_col:
+            flag = pl.col(fin_col).fill_null(False)
+            predicate = predicate & (flag == spec.financial_large)
+        elif spec.financial_large:
+            # Discriminator absent: no row can be financial/large, so the
+            # residual corporate rows fall through to the non-SME leaf.
+            predicate = pl.lit(value=False)
+
+    return predicate
+
+
 def _cr9_schema(column_refs: list[str]) -> dict[str, pl.DataType]:
     """Schema for CR9 frames: a/b are String, remaining cols Float64."""
     schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
@@ -1424,6 +1711,13 @@ def _cr9_schema(column_refs: list[str]) -> dict[str, pl.DataType]:
 def _cr9_empty_schema(column_refs: list[str]) -> pl.DataFrame:
     """Empty CR9 frame with the correct schema."""
     return pl.DataFrame([], schema=_cr9_schema(column_refs))
+
+
+def _cr9_1_schema(column_refs: list[str], grade_col: str) -> dict[str, pl.DataType]:
+    """Schema for CR9.1 frames: a/b/grade are String, remaining cols Float64."""
+    schema = _cr9_schema(column_refs)
+    schema[grade_col] = pl.String
+    return schema
 
 
 def _cr9_bucket_row(

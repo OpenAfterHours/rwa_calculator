@@ -11,7 +11,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from _deploy_changelog import (  # noqa: E402
+from _deploy_changelog import (  # noqa: E402  # ty: ignore[unresolved-import]
     EMPTY_UNRELEASED_BLOCK,
     promote_unreleased,
     update_version_table,

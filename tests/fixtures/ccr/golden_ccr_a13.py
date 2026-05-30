@@ -483,9 +483,13 @@ def main() -> None:
     print("  CCR collateral: 0 rows (c_net=0)")
     print()
     print("Post-fix golden (CRR Art. 275(2)):")
-    print(f"  rc_margined = max(-4m, TH+MTA-NICA={CCR_A13_MARGIN_THRESHOLD + CCR_A13_MINIMUM_TRANSFER_AMOUNT - CCR_A13_NICA:,.0f}, 0) = {CCR_A13_RC_MARGINED:,.1f}")
+    print(
+        f"  rc_margined = max(-4m, TH+MTA-NICA={CCR_A13_MARGIN_THRESHOLD + CCR_A13_MINIMUM_TRANSFER_AMOUNT - CCR_A13_NICA:,.0f}, 0) = {CCR_A13_RC_MARGINED:,.1f}"
+    )
     print(f"  pfe_addon   = {CCR_A13_PFE_ADDON:.8f}")
-    print(f"  EAD         = 1.4 * ({CCR_A13_RC_MARGINED:,.1f} + {CCR_A13_PFE_ADDON:.3f}) = {CCR_A13_EAD:.6f}")
+    print(
+        f"  EAD         = 1.4 * ({CCR_A13_RC_MARGINED:,.1f} + {CCR_A13_PFE_ADDON:.3f}) = {CCR_A13_EAD:.6f}"
+    )
     print(f"  RWA         = {CCR_A13_EAD:.6f} * {CCR_A13_RISK_WEIGHT} = {CCR_A13_RWA:.6f}")
     print()
     bundle = build_raw_data_bundle_with_ccr_a13()

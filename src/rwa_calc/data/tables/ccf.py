@@ -12,7 +12,8 @@ Tables (canonical dicts, keyed by the uppercase values in
 ``data.schemas.VALID_RISK_TYPES_INPUT``):
 
 - ``SA_CCF_CRR``: CRR Art. 111 SA mapping (FR/FRC=100%, MR=50%,
-  OC=50%, MLR=20%, LR=0%). The OC=50% value is the conservative
+  MR_ISSUED=50% (Annex I Row 3 issued OBS items), OC=50%, MLR=20%,
+  LR=0%). The OC=50% value is the conservative
   default; ``engine.ccf._compute_ccf`` overrides it to 20% when
   remaining maturity ≤ ``OC_SHORT_MATURITY_THRESHOLD_DAYS`` per
   Art. 111 (OC mapped to MLR for short maturities).
@@ -48,7 +49,33 @@ from decimal import Decimal
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS
+from rwa_calc.data.schemas import OBS_PRODUCT_SYNONYMS, RISK_TYPE_SYNONYMS
+
+# =============================================================================
+# ANNEX I PRODUCT -> RISK_TYPE MAPPING (CRR Annex I paras 1-4 / Art. 111(1))
+# =============================================================================
+
+# Maps a normalised concrete OBS *product* key to its abstract Annex I
+# ``risk_type`` bucket. Framework-INVARIANT: every product in scope resolves to
+# the same risk_type under both CRR and PRA PS1/26 Table A1; the framework split
+# lives only downstream in SA_CCF_CRR / SA_CCF_B31. Keyed by the uppercase values
+# produced by ``data.schemas.OBS_PRODUCT_SYNONYMS``.
+#
+# - ACCEPTANCE -> FR (CRR Annex I para 1 / Table A1 Row 1): bankers' acceptances
+#   are direct credit substitutes -> 100% CCF.
+# - PERFORMANCE_BOND / WARRANTY / TENDER_BOND / BID_BOND -> MLR (CRR Annex I
+#   Row 6(b) / Table A1 Row 6(b)): non-direct-credit-substitute guarantees -> 20%.
+# - DOCUMENTARY_CREDIT / TRADE_LC -> MLR (CRR Annex I Row 6(a) / Table A1
+#   Row 6(a)): self-liquidating trade-related letters of credit -> 20%.
+ANNEX1_PRODUCT_RISK_TYPE: dict[str, str] = {
+    "ACCEPTANCE": "FR",
+    "PERFORMANCE_BOND": "MLR",
+    "WARRANTY": "MLR",
+    "TENDER_BOND": "MLR",
+    "BID_BOND": "MLR",
+    "DOCUMENTARY_CREDIT": "MLR",
+    "TRADE_LC": "MLR",
+}
 
 # =============================================================================
 # SA CCF TABLES (CRR Art. 111 / PRA PS1/26 Art. 111 Table A1)
@@ -61,6 +88,10 @@ SA_CCF_CRR: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 — "other" issued medium-risk OBS items. Same 50% SA
+    # CCF as Row 4 (MR) but routed via a distinct risk_type so issued
+    # contingents are separable from NIF/RUF commitments (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.50"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.00"),
@@ -72,6 +103,9 @@ SA_CCF_B31: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 issued medium-risk OBS items mirror MR (50%) under
+    # Basel 3.1 Table A1 as well (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.40"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.10"),
@@ -84,6 +118,9 @@ FIRB_OBS_FALLBACK: dict[str, Decimal] = {
     "FR": Decimal("1.00"),
     "FRC": Decimal("1.00"),
     "MR": Decimal("0.50"),
+    # CRR Annex I Row 3 issued OBS items resolve to the same Art. 166(10)(b)
+    # 50% medium-risk fallback as MR (P2.30).
+    "MR_ISSUED": Decimal("0.50"),
     "OC": Decimal("0.50"),
     "MLR": Decimal("0.20"),
     "LR": Decimal("0.00"),
@@ -123,6 +160,37 @@ def _normalize_risk_type(risk_type_col: str) -> pl.Expr:
     return lowered.replace_strict(RISK_TYPE_SYNONYMS, default=casted.str.to_uppercase())
 
 
+# CRR Annex I product bands are given regulatory effect by Art. 111(1); the
+# watchfire parser only accepts an article-based citation, so the Annex I mapping
+# is attributed to Art. 111.
+@cites("CRR Art. 111")
+def build_product_to_risk_type_expr(
+    product_col: str = "obs_product",
+) -> pl.Expr:
+    """Build a Polars expression mapping a concrete OBS product to its risk_type.
+
+    Resolves the abstract Annex I ``risk_type`` bucket (FR / MLR / ...) from a
+    normalised concrete product key via ``ANNEX1_PRODUCT_RISK_TYPE``. The mapping
+    is framework-invariant (CRR Annex I == PRA PS1/26 Table A1 for every product
+    in scope). Unknown / unmapped products and nulls produce a null result, so
+    the caller can leave the existing ``risk_type`` resolution untouched.
+
+    Args:
+        product_col: Name of the obs_product column on the frame.
+
+    Returns:
+        String Polars expression evaluating to the resolved risk_type (or null
+        when the product is null / unmapped).
+    """
+    casted = pl.col(product_col).cast(pl.Utf8, strict=False).fill_null("")
+    lowered = casted.str.to_lowercase()
+    canonical = lowered.replace_strict(OBS_PRODUCT_SYNONYMS, default=casted.str.to_uppercase())
+    return canonical.replace_strict(
+        ANNEX1_PRODUCT_RISK_TYPE,
+        default=pl.lit(None, dtype=pl.Utf8),
+    )
+
+
 @cites("CRR Art. 111")
 def build_sa_ccf_expr(
     risk_type_col: str = "risk_type",
@@ -147,6 +215,10 @@ def build_sa_ccf_expr(
         .then(pl.lit(float(table["FRC"])))
         .when(canonical == "MR")
         .then(pl.lit(float(table["MR"])))
+        # CRR Annex I Row 3 issued medium-risk OBS items — explicit 50%
+        # (mirrors MR / Row 4) so EAD is provably equal, not a default fallback.
+        .when(canonical == "MR_ISSUED")
+        .then(pl.lit(float(table["MR_ISSUED"])))
         .when(canonical == "OC")
         .then(pl.lit(float(table["OC"])))
         .when(canonical == "MLR")
@@ -188,7 +260,10 @@ def build_firb_ccf_expr(risk_type_col: str = "risk_type") -> pl.Expr:
     is_commitment = pl.col("is_obs_commitment").fill_null(True)
     is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
     is_mlr = canonical == "MLR"
-    is_mr_or_oc = canonical.is_in(["MR", "OC"])
+    # MR_ISSUED (CRR Annex I Row 3 issued OBS items) mirrors MR exactly: it
+    # rides the same Art. 166(8)(d) commitment / Art. 166(10)(b) issued split,
+    # so it never diverges to the otherwise default (P2.30).
+    is_mr_or_oc = canonical.is_in(["MR", "MR_ISSUED", "OC"])
     return (
         # FR/FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
         pl.when(canonical.is_in(["FR", "FRC"]))

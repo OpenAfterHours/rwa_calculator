@@ -54,6 +54,29 @@ class P3Row:
     is_total: bool = False
 
 
+@dataclass(frozen=True)
+class CR9ClassSpec:
+    """Predicate descriptor for one CR9 column-`a` leaf class.
+
+    Plain-data discriminator carrier — no Polars expressions live here (this
+    module must stay import-clean). The generator resolves the descriptor into
+    a ``pl.Expr`` over the results frame.
+
+    Fields:
+        exposure_classes: pipeline ``exposure_class`` values that match this leaf.
+        is_sme: when set, require ``is_sme`` to equal this value (retail splits).
+        property_type: when set, require ``property_type`` to equal this value
+            (retail mortgage RRE/CRE split: "residential" / "commercial").
+        financial_large: when set, require the financial/large-corporate flag
+            (``cp_is_financial_sector_entity``) to equal this value (F-IRB only).
+    """
+
+    exposure_classes: tuple[str, ...]
+    is_sme: bool | None = None
+    property_type: str | None = None
+    financial_large: bool | None = None
+
+
 # ---------------------------------------------------------------------------
 # Shared label / group constants (DRY — referenced by multiple templates)
 # ---------------------------------------------------------------------------
@@ -597,22 +620,71 @@ CR9_COLUMNS: list[P3Column] = [
 
 CR9_COLUMN_REFS: list[str] = [c.ref for c in CR9_COLUMNS]
 
-# CR9 AIRB exposure class breakdown (Art. 147(2)(c)-(d))
-CR9_AIRB_CLASSES: list[tuple[str, str]] = [
-    ("corporate", "Corporates"),
-    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING),
-    ("corporate_sme", "Corporates — Other general corporates (SME)"),
-    ("retail_mortgage", _LBL_RETAIL_RE_MORTGAGE),
-    ("retail_qrre", _LBL_RETAIL_QRRE),
-    ("retail_other", _LBL_RETAIL_OTHER),
+# CR9 column-`a` leaf display labels (Art. 147(2)(b)-(d), 147A)
+_LBL_CR9_CORP_SME = "Corporates — Other general corporates (SME)"
+_LBL_CR9_CORP_OTHER_NON_SME = "Corporates — Other general corporates (non-SME)"
+_LBL_CR9_CORP_FINANCIAL_LARGE = "Corporates — Financial and large corporates"
+_LBL_CR9_RETAIL_RRE_SME = "Retail — Secured by residential immovable property (SME)"
+_LBL_CR9_RETAIL_RRE_NON_SME = "Retail — Secured by residential immovable property (non-SME)"
+_LBL_CR9_RETAIL_CRE_SME = "Retail — Secured by commercial immovable property (SME)"
+_LBL_CR9_RETAIL_CRE_NON_SME = "Retail — Secured by commercial immovable property (non-SME)"
+_LBL_CR9_RETAIL_OTHER_SME = "Retail — Other (SME)"
+_LBL_CR9_RETAIL_OTHER_NON_SME = "Retail — Other (non-SME)"
+
+# CR9 AIRB exposure class breakdown — 10 leaves (Art. 147(2)(c)-(d))
+# Collapsed parents (corporate / retail_mortgage / retail_other) are dropped:
+# the generator emits one template per leaf, resolving each predicate descriptor
+# into a pl.Expr over exposure_class / is_sme / property_type.
+CR9_AIRB_CLASSES: list[tuple[str, str, CR9ClassSpec]] = [
+    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING, CR9ClassSpec(("specialised_lending",))),
+    ("corporate_sme", _LBL_CR9_CORP_SME, CR9ClassSpec(("corporate_sme",))),
+    ("corporate_other_non_sme", _LBL_CR9_CORP_OTHER_NON_SME, CR9ClassSpec(("corporate",))),
+    (
+        "retail_rre_sme",
+        _LBL_CR9_RETAIL_RRE_SME,
+        CR9ClassSpec(("retail_mortgage",), is_sme=True, property_type="residential"),
+    ),
+    (
+        "retail_rre_non_sme",
+        _LBL_CR9_RETAIL_RRE_NON_SME,
+        CR9ClassSpec(("retail_mortgage",), is_sme=False, property_type="residential"),
+    ),
+    (
+        "retail_cre_sme",
+        _LBL_CR9_RETAIL_CRE_SME,
+        CR9ClassSpec(("retail_mortgage",), is_sme=True, property_type="commercial"),
+    ),
+    (
+        "retail_cre_non_sme",
+        _LBL_CR9_RETAIL_CRE_NON_SME,
+        CR9ClassSpec(("retail_mortgage",), is_sme=False, property_type="commercial"),
+    ),
+    ("retail_qrre", _LBL_RETAIL_QRRE, CR9ClassSpec(("retail_qrre",))),
+    ("retail_other_sme", _LBL_CR9_RETAIL_OTHER_SME, CR9ClassSpec(("retail_other",), is_sme=True)),
+    (
+        "retail_other_non_sme",
+        _LBL_CR9_RETAIL_OTHER_NON_SME,
+        CR9ClassSpec(("retail_other",), is_sme=False),
+    ),
 ]
 
-# CR9 FIRB exposure class breakdown (Art. 147(2)(b)-(c))
-CR9_FIRB_CLASSES: list[tuple[str, str]] = [
-    ("institution", "Institutions"),
-    ("corporate", "Corporates"),
-    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING),
-    ("corporate_sme", "Corporates — Other general corporates (SME)"),
+# CR9 FIRB exposure class breakdown — 5 leaves (Art. 147(2)(b)-(c), 147A)
+# Collapsed "corporate" parent dropped; F-IRB corporate splits into
+# financial/large (cp_is_financial_sector_entity True) vs other non-SME.
+CR9_FIRB_CLASSES: list[tuple[str, str, CR9ClassSpec]] = [
+    ("institution", "Institutions", CR9ClassSpec(("institution",))),
+    ("specialised_lending", _LBL_CORP_SPECIALISED_LENDING, CR9ClassSpec(("specialised_lending",))),
+    (
+        "corporate_financial_large",
+        _LBL_CR9_CORP_FINANCIAL_LARGE,
+        CR9ClassSpec(("corporate",), financial_large=True),
+    ),
+    ("corporate_sme", _LBL_CR9_CORP_SME, CR9ClassSpec(("corporate_sme",))),
+    (
+        "corporate_other_non_sme",
+        _LBL_CR9_CORP_OTHER_NON_SME,
+        CR9ClassSpec(("corporate",), financial_large=False),
+    ),
 ]
 
 # Combined display names for Excel sheet naming

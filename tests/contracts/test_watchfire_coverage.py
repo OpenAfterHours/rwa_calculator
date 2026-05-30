@@ -68,7 +68,7 @@ WHITELIST: list[tuple[str, str, tuple[str, ...]]] = [
     ("rwa_calc.engine.sa.namespace", "SALazyFrame.apply_guarantee_substitution",
      ("CRR Art. 213",)),
     ("rwa_calc.engine.sa.namespace", "SALazyFrame.apply_currency_mismatch_multiplier",
-     ("PS1/26, paragraph 123B",)),
+     ("PS1/26, paragraph 123B", "PS1/26, paragraph 123B.3")),
     ("rwa_calc.engine.sa.namespace", "SALazyFrame.apply_due_diligence_override",
      ("PS1/26, paragraph 110A",)),
     ("rwa_calc.engine.sa.namespace", "SALazyFrame.calculate_rwa",
@@ -173,7 +173,7 @@ WHITELIST: list[tuple[str, str, tuple[str, ...]]] = [
     ("rwa_calc.engine.sa.namespace", "_apply_crr_risk_weight_overrides",
      ("CRR Art. 134", "CRR Art. 137")),
     ("rwa_calc.engine.sa.namespace", "_apply_b31_risk_weight_overrides",
-     ("CRR Art. 134",)),
+     ("CRR Art. 134", "CRR Art. 137")),
     # --- ECAI use methodology (Art. 135-139) + short-term override (Art. 131, 140) ---
     ("rwa_calc.engine.hierarchy", "HierarchyResolver._attach_counterparty_rating",
      ("CRR Art. 135", "CRR Art. 136", "CRR Art. 138", "CRR Art. 139")),

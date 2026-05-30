@@ -110,7 +110,7 @@ EXPOSURE_REF: str = "CIU-P1139-LT"
 FUND_REFERENCE: str = "FUND-P1139"
 
 # Holding references
-HOLDING_REF_EQ: str = "H1-EQ"    # EQUITY holding, null CQS
+HOLDING_REF_EQ: str = "H1-EQ"  # EQUITY holding, null CQS
 HOLDING_REF_CORP: str = "H2-CORP"  # CORPORATE holding, CQS 3
 
 # Monetary values
@@ -145,8 +145,7 @@ EXPECTED_HOLDING_RW_CORP: float = CORPORATE_CQS3_RW  # 0.75
 
 #: Weighted sum: 600,000 × 3.70 + 400,000 × 0.75
 EXPECTED_WEIGHTED_SUM: float = (
-    HOLDING_VALUE_EQ * EXPECTED_HOLDING_RW_EQ
-    + HOLDING_VALUE_CORP * EXPECTED_HOLDING_RW_CORP
+    HOLDING_VALUE_EQ * EXPECTED_HOLDING_RW_EQ + HOLDING_VALUE_CORP * EXPECTED_HOLDING_RW_CORP
 )  # 2_220_000 + 300_000 = 2_520_000
 
 #: ciu_look_through_rw = weighted_sum / fund_nav
@@ -414,8 +413,12 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("-" * 80)
     print("Scenario: CIU look-through equity transitional floor (Rules 4.7-4.8 higher-of)")
     print(f"  Fund: {FUND_REFERENCE}, NAV = {FUND_NAV:,.0f}")
-    print(f"  H1-EQ  (EQUITY,    CQS=null, value={HOLDING_VALUE_EQ:,.0f}): holding_rw={EXPECTED_HOLDING_RW_EQ:.2f}")
-    print(f"  H2-CORP(CORPORATE, CQS=3,    value={HOLDING_VALUE_CORP:,.0f}): holding_rw={EXPECTED_HOLDING_RW_CORP:.2f}")
+    print(
+        f"  H1-EQ  (EQUITY,    CQS=null, value={HOLDING_VALUE_EQ:,.0f}): holding_rw={EXPECTED_HOLDING_RW_EQ:.2f}"
+    )
+    print(
+        f"  H2-CORP(CORPORATE, CQS=3,    value={HOLDING_VALUE_CORP:,.0f}): holding_rw={EXPECTED_HOLDING_RW_CORP:.2f}"
+    )
     print(f"  weighted_sum = {EXPECTED_WEIGHTED_SUM:,.0f}")
     print(f"  ciu_look_through_rw = {EXPECTED_CIU_LT_RW:.4f}")
     print(f"  EXPECTED_RWA = {EXPECTED_RWA:,.0f}")
@@ -424,8 +427,12 @@ def print_summary(saved: dict[str, Path]) -> None:
     print("  The proposal's golden of 2,620,000 assumed RW_corp=1.00 — corrected to 2,520,000.")
     print()
     print("  Key constants:")
-    print(f"    IRB_SIMPLE_RW_EQUITY_OTHER    = {IRB_SIMPLE_RW_EQUITY_OTHER:.2f} (Art. 155(2) other)")
-    print(f"    TRANSITIONAL_STANDARD_BAND_2027 = {TRANSITIONAL_STANDARD_BAND_2027:.2f} (Rule 4.2 2027)")
+    print(
+        f"    IRB_SIMPLE_RW_EQUITY_OTHER    = {IRB_SIMPLE_RW_EQUITY_OTHER:.2f} (Art. 155(2) other)"
+    )
+    print(
+        f"    TRANSITIONAL_STANDARD_BAND_2027 = {TRANSITIONAL_STANDARD_BAND_2027:.2f} (Rule 4.2 2027)"
+    )
     print(f"    CORPORATE_CQS3_RW             = {CORPORATE_CQS3_RW:.2f} (B31 Art. 122(2) Table 6)")
 
 

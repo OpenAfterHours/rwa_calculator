@@ -230,6 +230,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p219,
         ),
         (
+            "P1.153 (CRR Art. 155(3) PD/LGD equity approach — exchange-traded, no 1.5x)",
+            "p1_153",
+            _generate_p1153,
+        ),
+        (
             "P1.123 (CRR Art. 223(5) FCCM exposure volatility haircut HE for SFT exposures)",
             "p1_123",
             _generate_p1123,
@@ -265,6 +270,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1127,
         ),
         (
+            "P1.130 (B31 Art. 92(2A) output floor binding — unrated F-IRB + SA portfolio)",
+            "p1_130",
+            _generate_p1130,
+        ),
+        (
             "P2.18 (B31 Art. 226(1) 20-day secured-lending / FX-mismatch / weekly reval)",
             "p2_18",
             _generate_p218,
@@ -283,6 +293,16 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P1.94b (B31 hedge_coverage_ratio < 0.90 gate — Art. 123B(2) multiplier fires)",
             "p1_94b",
             _generate_p194b,
+        ),
+        (
+            "P1.94d (B31 Art. 123B(2A) revolving-instalment rule — full-draw hedge rescale)",
+            "p1_94d",
+            _generate_p194d,
+        ),
+        (
+            "P1.94e (B31 Art. 123B transitional gate — reporting_date < 2027-01-01 suppresses multiplier)",
+            "p1_94e",
+            _generate_p194e,
         ),
         (
             "P2.17 (CRR Art. 123 second subparagraph payroll/pension loan 35% RW)",
@@ -318,6 +338,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P2.33 / B31-D.CCF9 (UK residential-mortgage commitment 50% CCF override)",
             "p2_33",
             _generate_p233,
+        ),
+        (
+            "P2.32 / B31-D.CCF10 (purchased-receivables undrawn-commitment CCF Art. 166E(5))",
+            "p2_32",
+            _generate_p232,
         ),
         (
             "CCR-A1 golden (single 10y GBP IR swap, unmargined)",
@@ -373,6 +398,71 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P8.38 CCR-A11/A12 (SA-CCR SFT FCCM EAD - uncollateralised + cash-collateralised)",
             "ccr",
             _generate_ccr_a11_a12,
+        ),
+        (
+            "P1.30(e) (CRR Art. 234 mezzanine partial-protection tranching attachment/detachment)",
+            "p1_30e",
+            _generate_p130e,
+        ),
+        (
+            "P5.15 (B31 Art. 123A(1)(b)(ii) 0.2% retail portfolio granularity sub-condition)",
+            "p5_15",
+            _generate_p515,
+        ),
+        (
+            "P2.29 (OV1 equity sub-approach rows 11-14 + output-floor rows 26/27 — Python-only)",
+            "p2_29",
+            _generate_p229,
+        ),
+        (
+            "P1.141 (B31 Art. 124(4) all-or-nothing qualifying gate — mixed RE 124J fallback)",
+            "p1_141",
+            _generate_p1141,
+        ),
+        (
+            "P2.30 (Annex I Row 3 vs Row 4 CCF discrimination — MR_ISSUED vs MR risk_type)",
+            "p2_30",
+            _generate_p230,
+        ),
+        (
+            "P2.31 (Annex I obs_product -> risk_type fill — ACCEPTANCE/FR, PERF_BOND/MLR, explicit-wins)",
+            "p2_31",
+            _generate_p231,
+        ),
+        (
+            "P2.49 (CR9 column-a taxonomy extension — 5 F-IRB + 10 A-IRB leaf classes)",
+            "p2_49",
+            _generate_p249,
+        ),
+        (
+            "P2.15 (equity transitional irrevocable opt-out — Rules 4.9-4.10 higher-of suppression)",
+            "p2_15",
+            _generate_p215,
+        ),
+        (
+            "P2.47 (Basel 3.1 Art. 137 ECA MEIP score 2 → 20% sovereign RW — B31 arm)",
+            "p2_47",
+            _generate_p247,
+        ),
+        (
+            "P2.41 (COREP C 02.00 corporate sub-row split — FSE + large-corp-by-revenue → row 0295)",
+            "p2_41",
+            _generate_p241,
+        ),
+        (
+            "P2.38 (CRR Art. 155(2) non-trading-book short-position netting — long+short ISSUER-A)",
+            "p2_38",
+            _generate_p238,
+        ),
+        (
+            "P2.46 (Art. 150(1) PPU provenance ppu_reason — C 07.00 rows 0050/0060 discrimination)",
+            "p2_46",
+            _generate_p246,
+        ),
+        (
+            "P2.48 (CR8 RWEA-flow statement — two-period IRB snapshot, opening + residual + closing)",
+            "p2_48",
+            _generate_p248,
         ),
     ]
 
@@ -1318,6 +1408,32 @@ def _generate_p219(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p2_19", None)
 
 
+def _generate_p215(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.15 fixtures (equity transitional irrevocable opt-out, Rules 4.9-4.10)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_15 import save_p215_fixtures
+
+        saved = save_p215_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_15", None)
+
+
+def _generate_p1153(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.153 fixtures (CRR Art. 155(3) PD/LGD equity approach — exchange-traded)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_153 import save_p1153_fixtures
+
+        saved = save_p1153_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_153", None)
+
+
 def _generate_p1123(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P1.123 fixtures (CRR Art. 223(5) FCCM exposure volatility haircut HE)."""
     sys.path.insert(0, str(output_dir))
@@ -1412,6 +1528,19 @@ def _generate_p1127(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p1_127", None)
 
 
+def _generate_p1130(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.130 fixtures (B31 Art. 92(2A) output floor binding — unrated F-IRB + SA portfolio)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_130 import save_p1130_fixtures
+
+        saved = save_p1130_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_130", None)
+
+
 def _generate_p218(output_dir: Path) -> list[tuple[str, int]]:
     """Generate P2.18 fixtures (B31 Art. 226(1) 20-day secured-lending / FX-mismatch / weekly reval)."""
     sys.path.insert(0, str(output_dir))
@@ -1465,6 +1594,54 @@ def _generate_p194b(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_94b", None)
+
+
+def _generate_p194d(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.94d fixtures (B31 Art. 123B(2A) revolving-instalment full-draw rescale)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_94d import save_p194d_fixtures
+
+        saved = save_p194d_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_94d", None)
+
+
+def _generate_p194e(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P1.94e fixture module (Python-only; no parquet artefacts).
+
+    This fixture provides named constants for the two reporting-date config
+    runs that test the Art. 123B transitional gate.  The test drives
+    calculate_single_sa_exposure() directly with an in-memory LazyFrame;
+    no parquet is written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_94e import (
+            EAD,
+            REPORTING_DATE_B31,
+            REPORTING_DATE_PRE_2027,
+            RW_B31,
+            RW_PRE_2027,
+            RWA_B31,
+            RWA_PRE_2027,
+        )
+
+        # Sanity-check the hand-calculated scalars
+        assert RW_PRE_2027 == 0.75, f"RW_PRE_2027={RW_PRE_2027} != 0.75"
+        assert RWA_PRE_2027 == 75_000.0, f"RWA_PRE_2027={RWA_PRE_2027} != 75000"
+        assert abs(RW_B31 - 1.125) < 1e-9, f"RW_B31={RW_B31} != 1.125"
+        assert abs(RWA_B31 - 112_500.0) < 0.01, f"RWA_B31={RWA_B31} != 112500"
+        assert REPORTING_DATE_PRE_2027.year == 2026
+        assert REPORTING_DATE_B31.year == 2027
+
+        # Two virtual "rows": Run A and Run B constants
+        return [("p1_94e.py (Python-only, 2 config runs)", int(EAD // 50_000))]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_94e", None)
 
 
 def _generate_p217(output_dir: Path) -> list[tuple[str, int]]:
@@ -1562,6 +1739,19 @@ def _generate_p233(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_33", None)
+
+
+def _generate_p232(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.32 / B31-D.CCF10 fixtures (purchased-receivables undrawn-commitment CCF)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_32 import save_p232_fixtures
+
+        saved = save_p232_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_32", None)
 
 
 def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
@@ -2188,6 +2378,226 @@ def _generate_ccr_a11_a12(output_dir: Path) -> list[tuple[str, int]]:
             "ccr.margin_builder",
         ):
             sys.modules.pop(mod, None)
+
+
+def _generate_p130e(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.30(e) fixtures (CRR Art. 234 mezzanine partial-protection tranching)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_30e import save_p130e_fixtures
+
+        saved = save_p130e_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_30e", None)
+
+
+def _generate_p515(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P5.15 fixtures (B31 Art. 123A(1)(b)(ii) 0.2% retail granularity sub-condition)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p5_15 import save_p515_fixtures
+
+        saved = save_p515_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p5_15", None)
+
+
+def _generate_p229(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P2.29 fixture module (Python-only; no parquet artefacts).
+
+    This fixture provides factory functions and constants for the OV1
+    equity sub-approach rows (11-14) and output-floor rows (26/27).
+    The test drives ``Pillar3Generator.generate_from_lazyframe`` directly
+    with a seeded LazyFrame + ``OutputFloorSummary``; no parquet is written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_29 import build_equity_results_lf, build_output_floor_summary
+
+        lf = build_equity_results_lf()
+        df = lf.collect()
+        _ = build_output_floor_summary()  # verifies construction
+        return [("p2_29.py (Python-only)", df.height)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_29", None)
+
+
+def _generate_p1141(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.141 fixtures (B31 Art. 124(4) all-or-nothing qualifying gate — mixed RE)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_141 import save_p1141_fixtures
+
+        saved = save_p1141_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_141", None)
+
+
+def _generate_p230(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.30 fixtures (Annex I Row 3 vs Row 4 CCF discrimination — MR_ISSUED vs MR)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_30 import save_p230_fixtures
+
+        saved = save_p230_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_30", None)
+
+
+def _generate_p231(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.31 fixtures (Annex I obs_product -> risk_type fill, explicit-wins control)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_31 import save_p231_fixtures
+
+        saved = save_p231_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_31", None)
+
+
+def _generate_p249(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P2.49 builder imports (no parquet output — Python-only builder).
+
+    P2.49 extends the CR9 column-a exposure-class taxonomy from 4+6 leaves to
+    5+10 leaves.  The seed frame is a LazyFrame built in-memory and passed
+    directly to Pillar3Generator._generate_all_cr9; it is never written to
+    parquet.  This function smoke-checks the import, verifies frame shape, and
+    confirms the three new discriminator columns are present with correct types.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_49 import (  # noqa: F401
+            EXPECTED_AIRB_CLASS_COUNT,
+            EXPECTED_FIRB_CLASS_COUNT,
+            EXPECTED_KEYS,
+            build_cr9_irb_results_lf,
+        )
+
+        lf = build_cr9_irb_results_lf()
+        df = lf.collect()
+
+        # Invariant 1: 15 rows — one per leaf class (5 F-IRB + 10 A-IRB)
+        if df.height != 15:
+            raise AssertionError(f"Expected 15 rows, got {df.height}")
+
+        # Invariant 2: three new discriminator columns must be present
+        for col_name in ("is_sme", "property_type", "cp_is_financial_sector_entity"):
+            if col_name not in df.columns:
+                raise AssertionError(f"Column {col_name!r} must be present")
+
+        # Invariant 3: is_sme and cp_is_financial_sector_entity are Boolean
+        schema = df.schema
+        if schema["is_sme"] != pl.Boolean:
+            raise AssertionError(f"is_sme must be Boolean, got {schema['is_sme']}")
+        if schema["cp_is_financial_sector_entity"] != pl.Boolean:
+            raise AssertionError(
+                f"cp_is_financial_sector_entity must be Boolean, "
+                f"got {schema['cp_is_financial_sector_entity']}"
+            )
+
+        # Invariant 4: expected leaf counts match scenario constants
+        if EXPECTED_FIRB_CLASS_COUNT != 5:
+            raise AssertionError(
+                f"EXPECTED_FIRB_CLASS_COUNT must be 5, got {EXPECTED_FIRB_CLASS_COUNT}"
+            )
+        if EXPECTED_AIRB_CLASS_COUNT != 10:
+            raise AssertionError(
+                f"EXPECTED_AIRB_CLASS_COUNT must be 10, got {EXPECTED_AIRB_CLASS_COUNT}"
+            )
+        if len(EXPECTED_KEYS) != 15:
+            raise AssertionError(f"EXPECTED_KEYS must have 15 entries, got {len(EXPECTED_KEYS)}")
+
+        # No parquet files written — report zero files, zero records.
+        return [("(python-only builder — no parquet)", 0)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_49", None)
+
+
+def _generate_p247(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.47 fixtures (Basel 3.1 Art. 137 ECA MEIP score 2 → 20% sovereign RW)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_47 import save_p247_fixtures
+
+        saved = save_p247_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_47", None)
+
+
+def _generate_p241(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.41 fixtures (COREP C 02.00 corporate sub-row 0295/0296/0297 split)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_41 import save_p241_fixtures
+
+        saved = save_p241_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_41", None)
+
+
+def _generate_p238(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.38 fixtures (CRR Art. 155(2) non-trading-book short-position netting)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_38 import save_p238_fixtures
+
+        saved = save_p238_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_38", None)
+
+
+def _generate_p246(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P2.46 fixtures (Art. 150(1) PPU provenance ppu_reason — C 07.00 rows 0050/0060)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_46 import save_p246_fixtures
+
+        saved = save_p246_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_46", None)
+
+
+def _generate_p248(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P2.48 fixture module (Python-only; no parquet artefacts).
+
+    This fixture provides factory functions and constants for the CR8 RWEA-flow
+    statement two-period snapshot scenario.  The test drives
+    ``Pillar3Generator.generate_from_lazyframe`` with a seeded current-period
+    LazyFrame plus an optional ``previous_period_results`` LazyFrame; no parquet
+    is written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_48 import build_current_period_lf, build_prior_period_lf
+
+        prior_df = build_prior_period_lf().collect()
+        current_df = build_current_period_lf().collect()
+        # Report combined row count (3 prior + 3 current)
+        return [("p2_48.py (Python-only)", prior_df.height + current_df.height)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_48", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

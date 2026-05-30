@@ -276,7 +276,21 @@ class TestNegativeInterestAmount:
     def test_provision_weight_negative_interest_floored(
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """Negative interest floored to 0 in pro-rata weight calculation."""
+        """Negative interest floored to 0; nominal weighted by CCF in pro-rata weight.
+
+        Post-fix weight formula: max(0, drawn) + max(0, interest) + nominal * ccf.
+        Both rows have risk_type="MR" → SA CCF = 0.50 under CRR.
+
+        EXP001: drawn=100k, interest=-50k, nominal=100k
+            weight = max(0, 100k) + max(0, -50k) + 100k * 0.50
+                   = 100_000 + 0 + 50_000 = 150_000
+        EXP002: drawn=100k, interest=50k, nominal=100k
+            weight = max(0, 100k) + max(0, 50k) + 100k * 0.50
+                   = 100_000 + 50_000 + 50_000 = 200_000
+        total = 350_000
+        EXP001 share = 150/350 ≈ 0.4286
+        EXP002 share = 200/350 ≈ 0.5714
+        """
         exposures = _make_exposures(
             exposure_reference=["EXP001", "EXP002"],
             counterparty_reference=["CP001", "CP001"],
@@ -304,19 +318,14 @@ class TestNegativeInterestAmount:
 
         result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
 
-        # EXP001 weight: max(0, 100k) + max(0, -50k) + 100k = 200k
-        # EXP002 weight: max(0, 100k) + max(0, 50k)  + 100k = 250k
-        # total = 450k
-        # EXP001 share = 200/450 ≈ 0.4444
-        # EXP002 share = 250/450 ≈ 0.5556
         row1 = result.filter(pl.col("exposure_reference") == "EXP001")
         row2 = result.filter(pl.col("exposure_reference") == "EXP002")
 
         total_prov = row1["provision_allocated"][0] + row2["provision_allocated"][0]
         assert total_prov == pytest.approx(10_000.0)
-        # EXP001 gets less than half (200/450)
+        # Post-fix: EXP001 gets 150/350 share
         assert row1["provision_allocated"][0] == pytest.approx(
-            10_000.0 * 200_000 / 450_000, rel=1e-4
+            10_000.0 * 150_000 / 350_000, rel=1e-4
         )
 
 
@@ -487,6 +496,87 @@ class TestFacilityLevelProvision:
         # Pro-rata: 60% of 100k = 60k; 40% of 100k = 40k
         assert exp_a["provision_allocated"][0] == pytest.approx(60_000.0)
         assert exp_b["provision_allocated"][0] == pytest.approx(40_000.0)
+
+    def test_facility_provision_ccf_weighted_nominal_p6_9(
+        self, processor: CRMProcessor, crr_config: CalculationConfig
+    ) -> None:
+        """P6.9: facility-level pro-rata weight must use nominal*ccf, not bare nominal.
+
+        Scenario:
+          EXP_A: drawn=1_000_000, interest=0, nominal=0,       risk_type="MR"
+          EXP_B: drawn=0,         interest=0, nominal=1_000_000, risk_type="MR"
+          Provision: facility FAC001, amount=100_000
+
+        SA CCF for "MR" is 0.50 under CRR (and Basel 3.1).
+
+        Post-fix weight formula: max(0, drawn) + max(0, interest) + nominal * ccf
+          EXP_A weight = 1_000_000 + 0 + 0 * 0.50       = 1_000_000
+          EXP_B weight = 0         + 0 + 1_000_000 * 0.50 = 500_000
+          total        = 1_500_000
+
+        Expected post-fix allocation:
+          EXP_A: 100_000 * 1_000_000 / 1_500_000 = 66_666.667  (2/3)
+          EXP_B: 100_000 *   500_000 / 1_500_000 = 33_333.333  (1/3)
+
+        Anti-confound: pre-fix engine uses bare nominal (no CCF), giving equal
+        weights (1_000_000 / 1_000_000) → 50_000 / 50_000 split.  The assertion
+        ``provision_allocated[EXP_B] != approx(50_000)`` is load-bearing: it
+        confirms the fix changed the answer.
+        """
+        # Arrange
+        exposures = _make_exposures(
+            exposure_reference=["EXP_A", "EXP_B"],
+            counterparty_reference=["CP001", "CP001"],
+            parent_facility_reference=["FAC001", "FAC001"],
+            drawn_amount=[1_000_000.0, 0.0],
+            interest=[0.0, 0.0],
+            nominal_amount=[0.0, 1_000_000.0],
+            approach=[ApproachType.SA.value, ApproachType.SA.value],
+            risk_type=["MR", "MR"],
+            exposure_class=["corporate", "corporate"],
+            lgd=[0.45, 0.45],
+            seniority=["senior", "senior"],
+        )
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "FAC001",
+                    "beneficiary_type": "facility",
+                    "amount": 100_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
+
+        # Act
+        result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
+
+        exp_a = result.filter(pl.col("exposure_reference") == "EXP_A")
+        exp_b = result.filter(pl.col("exposure_reference") == "EXP_B")
+
+        # Assert — post-fix values (CCF-weighted nominal)
+        # Conservation: total provision allocated == 100_000
+        total_allocated = exp_a["provision_allocated"][0] + exp_b["provision_allocated"][0]
+        assert total_allocated == pytest.approx(100_000.0)
+
+        # EXP_B: nominal-only exposure gets 1/3 of provision (CCF=0.50 shrinks weight)
+        assert exp_b["provision_allocated"][0] == pytest.approx(100_000.0 / 3, rel=1e-4)
+        # Anti-confound: pre-fix would give 50_000 (equal weights); post-fix must differ
+        assert exp_b["provision_allocated"][0] != pytest.approx(50_000.0)
+
+        # EXP_A: drawn-only exposure gets 2/3 of provision
+        assert exp_a["provision_allocated"][0] == pytest.approx(200_000.0 / 3, rel=1e-4)
+
+        # Drawn-first deduction for EXP_A (provision absorbed entirely by drawn)
+        assert exp_a["provision_on_drawn"][0] == pytest.approx(200_000.0 / 3, rel=1e-4)
+        assert exp_a["provision_on_nominal"][0] == pytest.approx(0.0)
+
+        # Nominal deduction for EXP_B
+        assert exp_b["provision_on_nominal"][0] == pytest.approx(100_000.0 / 3, rel=1e-4)
+        assert exp_b["nominal_after_provision"][0] == pytest.approx(
+            1_000_000.0 - 100_000.0 / 3, rel=1e-4
+        )
 
 
 # =============================================================================

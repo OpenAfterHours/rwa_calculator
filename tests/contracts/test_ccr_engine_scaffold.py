@@ -317,13 +317,17 @@ def test_compute_pfe_ir_singleton_removed() -> None:
     # Assert 1 — symbol not re-exported from the package __init__
     # -----------------------------------------------------------------------
     with pytest.raises(ImportError):
-        from rwa_calc.engine.ccr import compute_pfe_ir_singleton  # noqa: F401
+        from rwa_calc.engine.ccr import (
+            compute_pfe_ir_singleton,  # noqa: F401  # ty: ignore[unresolved-import]
+        )
 
     # -----------------------------------------------------------------------
     # Assert 2 — symbol not defined in pfe.py
     # -----------------------------------------------------------------------
     with pytest.raises(ImportError):
-        from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton  # noqa: F401
+        from rwa_calc.engine.ccr.pfe import (
+            compute_pfe_ir_singleton,  # noqa: F401  # ty: ignore[unresolved-import]
+        )
 
     # -----------------------------------------------------------------------
     # Assert 3 — symbol absent from __all__

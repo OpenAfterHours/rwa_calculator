@@ -268,11 +268,13 @@ def print_summary(saved: dict[str, Path]) -> None:
         df = pl.read_parquet(path)
         print(f"  {name:<25} {len(df):>3} row(s)  ->  {path}")
     print("-" * 70)
-    print(f"Scenario B31-L24: unlisted equity, business_age_years=2.0 < {BUSINESS_AGE_THRESHOLD_YEARS}y")
+    print(
+        f"Scenario B31-L24: unlisted equity, business_age_years=2.0 < {BUSINESS_AGE_THRESHOLD_YEARS}y"
+    )
     print(f"  Counterparty:    {COUNTERPARTY_REF}")
     print(f"  Exposure:        {EXPOSURE_REF}")
-    print(f"  equity_type:     unlisted (base RW 250%, Art. 133(3))")
-    print(f"  is_speculative:  False — 400% must come from Art. 133(4), NOT speculative path")
+    print("  equity_type:     unlisted (base RW 250%, Art. 133(3))")
+    print("  is_speculative:  False — 400% must come from Art. 133(4), NOT speculative path")
     print(f"  business_age_years: 2.0 < {BUSINESS_AGE_THRESHOLD_YEARS}y → Art. 133(4) higher-risk")
     print(f"  fair_value:      GBP {FAIR_VALUE:,.0f}")
     print()

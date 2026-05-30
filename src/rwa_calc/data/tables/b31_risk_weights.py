@@ -35,6 +35,7 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
@@ -260,6 +261,11 @@ B31_RETAIL_TRANSACTOR_RW = Decimal("0.45")  # 45% for QRRE transactors
 B31_RETAIL_PAYROLL_LOAN_RW = Decimal("0.35")  # 35% for payroll/pension loans (Art. 123(3)(a-b))
 B31_RETAIL_NON_REGULATORY_RW = Decimal("1.00")  # 100% for non-regulatory retail (Art. 123(3)(c))
 
+# PRA PS1/26 Art. 123A(1)(b)(ii) second limb / BCBS CRE20.66 granularity criterion:
+# no single obligor's aggregate exposure may exceed 0.2% of the total regulatory
+# retail portfolio. Basel-3.1-only — the CRR Art. 123 retail branch is threshold-only.
+B31_RETAIL_GRANULARITY_LIMIT = Decimal("0.002")  # 0.2% single-obligor granularity cap
+
 # =============================================================================
 # CURRENCY MISMATCH MULTIPLIER — BASEL 3.1 (PRA PS1/26 Art. 123B / CRE20.93)
 # Retail / RE exposures denominated in a different currency to the borrower's
@@ -270,6 +276,12 @@ B31_CURRENCY_MISMATCH_MULTIPLIER: Decimal = Decimal("1.5")
 B31_CURRENCY_MISMATCH_RW_CAP: Decimal = Decimal("1.50")
 B31_CURRENCY_MISMATCH_HEDGE_COVERAGE_FLOOR: Decimal = Decimal("0.90")
 """PRA PS1/26 Art. 123B(2) — currency-mismatch multiplier waived when hedge coverage >= 90%."""
+
+# PRA PS1/26 commencement date — the entire Basel 3.1 SA framework (including the
+# Art. 123B currency-mismatch multiplier) takes effect on 1 January 2027. Reporting
+# dates strictly before this fall under the pre-Basel-3.1 portfolio treatment, where
+# the multiplier is a Basel-3.1-only measure with no CRR analogue and does not apply.
+B31_EFFECTIVE_DATE: date = date(2027, 1, 1)
 
 # =============================================================================
 # SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)

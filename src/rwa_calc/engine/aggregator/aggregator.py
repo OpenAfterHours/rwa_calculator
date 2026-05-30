@@ -126,12 +126,12 @@ class OutputAggregator:
         # column is a uniform 1.0 and this is a no-op.
         combined = apply_residual_multiplier(combined_unmultiplied)
 
-        # Generate CRM reporting views
+        # Pre-CRM summary uses the original (pre-substitution) class and is
+        # unaffected by the output floor, so it is built from the current
+        # ``combined``.  The post-CRM reporting views and the by-class /
+        # by-approach summaries are deferred until AFTER the output floor is
+        # applied below, so they reflect the floored per-row RWA (P1.130).
         pre_crm_summary = generate_pre_crm_summary(combined)
-        post_crm_detailed = generate_post_crm_detailed(combined)
-        post_crm_summary = generate_post_crm_summary(post_crm_detailed)
-        summary_by_class = generate_summary_by_class(post_crm_detailed)
-        summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
         # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
         # Computed BEFORE the output floor because OF-ADJ depends on EL summary
@@ -205,6 +205,18 @@ class OutputAggregator:
                 gcra_amount=gcra_capped,
                 sa_t2_credit=sa_t2,
             )
+
+        # Generate post-CRM reporting views from the (possibly floored)
+        # ``combined`` frame.  When the floor binds, ``combined`` now carries
+        # the per-row ``floor_impact_rwa`` add-on, which the by-class /
+        # by-approach summaries fold into ``total_rwa`` so the reported totals
+        # reconcile with ``output_floor_summary.total_rwa_post_floor`` (P1.130).
+        # When the floor does not run (or does not bind), ``combined`` is the
+        # pre-floor frame and these views are identical to the pre-fix output.
+        post_crm_detailed = generate_post_crm_detailed(combined)
+        post_crm_summary = generate_post_crm_summary(post_crm_detailed)
+        summary_by_class = generate_summary_by_class(post_crm_detailed)
+        summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
         # Supporting factor impact
         supporting_factor_impact = None

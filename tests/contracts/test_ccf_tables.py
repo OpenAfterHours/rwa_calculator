@@ -50,6 +50,9 @@ def test_sa_ccf_crr_matches_art_111() -> None:
         "FR": Decimal("1.00"),
         "FRC": Decimal("1.00"),
         "MR": Decimal("0.50"),
+        "MR_ISSUED": Decimal(
+            "0.50"
+        ),  # P2.30: Annex I Row 3 issued-OBS, identical 50% CCF to MR (Row 4)
         "OC": Decimal("0.50"),
         "MLR": Decimal("0.20"),
         "LR": Decimal("0.00"),
@@ -62,6 +65,9 @@ def test_sa_ccf_b31_matches_pra_table_a1() -> None:
         "FR": Decimal("1.00"),
         "FRC": Decimal("1.00"),
         "MR": Decimal("0.50"),
+        "MR_ISSUED": Decimal(
+            "0.50"
+        ),  # P2.30: Annex I Row 3 issued-OBS, identical 50% CCF to MR (Row 4)
         "OC": Decimal("0.40"),
         "MLR": Decimal("0.20"),
         "LR": Decimal("0.10"),
@@ -74,6 +80,9 @@ def test_firb_obs_fallback_matches_art_166_10() -> None:
         "FR": Decimal("1.00"),
         "FRC": Decimal("1.00"),
         "MR": Decimal("0.50"),
+        "MR_ISSUED": Decimal(
+            "0.50"
+        ),  # P2.30: Annex I Row 3 issued-OBS, identical 50% CCF to MR (Row 4)
         "OC": Decimal("0.50"),
         "MLR": Decimal("0.20"),
         "LR": Decimal("0.00"),

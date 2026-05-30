@@ -59,7 +59,13 @@ def crr_config() -> CalculationConfig:
 
 @pytest.fixture
 def b31_config() -> CalculationConfig:
-    return CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
+    # enforce_retail_granularity=False isolates the Art. 123A(1)(a)/(b)(iii) limbs
+    # exercised in this file (SME auto-qualify, GBP 880k threshold, pool management)
+    # from the (b)(ii) 0.2% granularity limb, which needs a full granular portfolio
+    # and is covered separately by tests/acceptance/basel31/test_p5_15_*.
+    return CalculationConfig.basel_3_1(
+        reporting_date=date(2027, 6, 30), enforce_retail_granularity=False
+    )
 
 
 def _counterparties(

@@ -82,8 +82,12 @@ def compute_of_adj(
         Tuple of (of_adj, gcra_capped) where gcra_capped is the GCRA after
         applying the 1.25% of S-TREA cap.
     """
+    # Cap GCRA at 1.25% of S-TREA per Art. 92 para 2A. When S-TREA == 0 the
+    # cap is 0.0, so gcra_capped collapses to 0.0 (GCRA is always >= 0, hence
+    # min(x, 0.0) == 0.0). The cap is applied unconditionally — guarding on
+    # `gcra_cap > 0` would leak the full uncapped GCRA at zero S-TREA.
     gcra_cap = s_trea * GCRA_CAP_RATE
-    gcra_capped = min(gcra_amount, gcra_cap) if gcra_cap > 0 else gcra_amount
+    gcra_capped = min(gcra_amount, gcra_cap)
     of_adj = 12.5 * (irb_t2_credit - irb_cet1_deduction - gcra_capped + sa_t2_credit)
     return of_adj, gcra_capped
 

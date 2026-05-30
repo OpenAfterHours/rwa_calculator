@@ -109,6 +109,31 @@ class ExposureClass(StrEnum):
     """Other items (CRR Art. 112(q))"""
 
 
+class ExposureSubclass(StrEnum):
+    """
+    Corporate exposure sub-classes for the Basel 3.1 COREP split (PRA PS1/26 Art. 147A(1)).
+
+    Derived by the Classifier (Basel 3.1 only — CRR leaves it null) for rows whose
+    ``exposure_class`` is corporate / corporate_sme. Routes the C 02.00 / OF 02.00
+    F-IRB corporate sub-rows (0295/0296/0297) and the A-IRB sub-rows (0355/0356).
+    """
+
+    CORPORATE_FINANCIAL_LARGE = "corporate_financial_large"
+    """Financial sector entity OR large corporate (annual revenue > GBP 440m).
+
+    Art. 147A(1)(e): FSE and large corporates are F-IRB only — COREP row 0295."""
+
+    CORPORATE_OTHER = "corporate_other"
+    """Other general corporate (non-FSE, non-large, non-SME).
+
+    Art. 147A(1)(f): COREP row 0297 (F-IRB) / 0356 (A-IRB)."""
+
+    CORPORATE_SME = "corporate_sme"
+    """Corporate SME (turnover <= GBP 44m).
+
+    Art. 147A(1)(f): COREP row 0296 (F-IRB) / 0355 (A-IRB)."""
+
+
 class ApproachType(StrEnum):
     """
     Calculation approach for credit risk.
@@ -412,7 +437,21 @@ class RiskType(StrEnum):
     """
     Medium Risk - 50% CCF under SA, 75% CCF under F-IRB (CRR Art. 166(8))
 
-    -- NIFs, RUFs, standby LCs, committed undrawn facilities
+    CRR Annex I Row 4: medium-risk *commitments* — NIFs, RUFs, standby LCs,
+    committed undrawn facilities (``is_obs_commitment=True``). Distinct from
+    Row 3 issued OBS items, which carry ``RiskType.MR_ISSUED``.
+    """
+
+    MR_ISSUED = "medium_risk_issued"
+    """
+    Medium Risk Issued - 50% CCF under SA (CRR Annex I Row 3)
+
+    CRR Annex I Row 3: "other" issued medium-risk off-balance-sheet items —
+    performance bonds, bid bonds, warranties, shipping guarantees, and standby
+    LCs that are not direct credit substitutes (``is_obs_commitment=False``).
+    Same 50% SA CCF as Row 4 (RiskType.MR) but conceptually distinct: the bank
+    has *issued* a contingent rather than *committed* to extend credit. Mirrors
+    MR's F-IRB issued-OBS behaviour (Art. 166(10)(b) -> 50%).
     """
 
     MLR = "medium_low_risk"
@@ -554,6 +593,15 @@ class EquityApproach(StrEnum):
     - 370% for other equity
     """
 
+    PD_LGD = "pd_lgd"
+    """
+    Article 155(3) PD/LGD approach (CRR only):
+    Risk-weighted exposure amounts use the corporate IRB K formula (Art. 153(1))
+    with supervisory parameters from Art. 165 — PD floors (165(1)), LGD 65%/90%
+    (165(2)), and fixed M = 5 years (165(3)). A 1.5x scaling applies where the
+    institution lacks Art. 178 default-definition data (155(3)).
+    """
+
 
 class InstitutionType(StrEnum):
     """
@@ -678,3 +726,57 @@ class RatingScope(StrEnum):
 
     CONTINGENT = "contingent"
     """Rating attaches to a specific contingent (off-balance sheet) exposure."""
+
+
+class PpuReason(StrEnum):
+    """
+    Legal basis for routing an IRB-eligible exposure to the Standardised Approach.
+
+    Carried on ``model_permissions`` rows whose ``approach="standardised"`` and
+    threaded onto the classifier output. Provenance-only — it does not alter the
+    SA risk weight or RWA. Drives the COREP C 07.00 / OF 07.00 Section 1
+    "of which" split:
+
+    - any ``ART_150_1_*`` permanent partial use condition  -> row 0050
+      ("of which: Exposures under permanent partial use of SA")
+    - ``ART_148_ROLLOUT`` sequential roll-out               -> row 0060
+      ("of which: Exposures under sequential IRB implementation")
+    - null / no-match (SA fallback, no permission)          -> neither (row 0010 only)
+
+    References:
+    - CRR Art. 150(1)(a)-(j): permanent partial use (PPU) conditions
+    - CRR Art. 148: sequential IRB roll-out
+    """
+
+    ART_150_1_A = "art_150_1_a"
+    """Art. 150(1)(a): sovereign class — limited material counterparties, unduly burdensome."""
+
+    ART_150_1_B = "art_150_1_b"
+    """Art. 150(1)(b): institution class — limited material counterparties, unduly burdensome."""
+
+    ART_150_1_C = "art_150_1_c"
+    """Art. 150(1)(c): non-significant business units / immaterial exposure classes or types."""
+
+    ART_150_1_D = "art_150_1_d"
+    """Art. 150(1)(d): UK central government / Bank / RGLA / PSE with 0% RW public arrangements."""
+
+    ART_150_1_E = "art_150_1_e"
+    """Art. 150(1)(e): intra-group exposures to parent / subsidiary / sister entities."""
+
+    ART_150_1_F = "art_150_1_f"
+    """Art. 150(1)(f): inter-institution exposures meeting Art. 113(7) (IPS)."""
+
+    ART_150_1_G = "art_150_1_g"
+    """Art. 150(1)(g): equity exposures to 0% RW entities under Chapter 2."""
+
+    ART_150_1_H = "art_150_1_h"
+    """Art. 150(1)(h): equity under government subsidy programmes (<= 10% own funds)."""
+
+    ART_150_1_I = "art_150_1_i"
+    """Art. 150(1)(i): minimum-reserve exposures identified in Art. 119(4)."""
+
+    ART_150_1_J = "art_150_1_j"
+    """Art. 150(1)(j): State / State-reinsured guarantees within Art. 215(2)."""
+
+    ART_148_ROLLOUT = "art_148_rollout"
+    """Art. 148: sequential IRB roll-out — temporary SA during a PRA-approved IRB plan."""

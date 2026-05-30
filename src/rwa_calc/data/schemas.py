@@ -139,6 +139,12 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
+    # CRR Annex I paras 1-4 / Art. 111(1): a normalised concrete OBS product key
+    # (e.g. "ACCEPTANCE", "PERFORMANCE_BOND", "DOCUMENTARY_CREDIT"), distinct from
+    # the free-text ``product_type``. When ``risk_type`` is null/empty the CCF
+    # engine resolves the abstract Annex I risk_type bucket from this product via
+    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -153,9 +159,15 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # Row 4(b) rate (50%), unless that CCF is already 10% or 100% (the Row 4(b)
     # "not subject to a 10% or 100% conversion factor" carve-out). No effect
     # under CRR (Table A1 is Basel 3.1 only).
-    "is_uk_residential_mortgage_commitment": ColumnSpec(
-        pl.Boolean, default=False, required=False
-    ),
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 166E(5): undrawn purchase commitments for *revolving*
+    # purchased-receivables facilities attract a 40% CCF by default (Table A1
+    # Row 5 "Other Commitments"), dropping to 10% where the commitment also
+    # meets the Table A1 Row 7 UCC criteria (LR risk_type). When True under
+    # Basel 3.1 the CCF engine routes the row to the OC (40%) / LR (10%) rate
+    # regardless of the otherwise-resolved risk_type. No effect under CRR
+    # (Art. 166E(5) is Basel 3.1 only).
+    "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_buy_to_let": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. When True, the exposure is routed
@@ -267,6 +279,11 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     "seniority": ColumnSpec(pl.String, default="senior", required=False),
     "risk_type": ColumnSpec(pl.String, required=False),
     "underlying_risk_type": ColumnSpec(pl.String, required=False),
+    # CRR Annex I paras 1-4 / Art. 111(1): normalised concrete OBS product key.
+    # Mirrored from FACILITY_SCHEMA; when ``risk_type`` is null/empty the CCF
+    # engine resolves the Annex I risk_type bucket from this product via
+    # ANNEX1_PRODUCT_RISK_TYPE. Explicit ``risk_type`` always wins.
+    "obs_product": ColumnSpec(pl.String, required=False),
     "ccf_modelled": ColumnSpec(pl.Float64, required=False),
     "ead_modelled": ColumnSpec(pl.Float64, required=False),
     "is_short_term_trade_lc": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -278,9 +295,11 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # PRA PS1/26 Art. 111(1) Table A1 Row 4(b): commitments to extend credit
     # secured by residential property attract a 50% CCF. Mirrored from
     # FACILITY_SCHEMA for parity; see the FACILITY_SCHEMA notes for full detail.
-    "is_uk_residential_mortgage_commitment": ColumnSpec(
-        pl.Boolean, default=False, required=False
-    ),
+    "is_uk_residential_mortgage_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 166E(5): revolving purchased-receivables undrawn purchase
+    # commitment flag. Mirrored from FACILITY_SCHEMA for parity; see the
+    # FACILITY_SCHEMA notes for full detail.
+    "is_purchased_receivable_commitment": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 178 row-level default flag. See FACILITY_SCHEMA for full notes.
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
     # PRA PS1/26 Art. 124(3) / Art. 124K: True when the financed property is
@@ -480,6 +499,15 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     #   "both"        — out of scope for the current implementation; treated
     #                   as "none" with a CRM warning.
     "look_through_election": ColumnSpec(pl.String, default="none", required=False),
+    # CRR Art. 234: tranching of credit protection. When a guarantee protects a
+    # mezzanine loss band rather than first loss, ``attachment_amount`` (a) marks
+    # where protection begins and ``detachment_amount`` (d) where it ends. The
+    # obligor retains a first-loss tranche [0, a) and a senior tranche [d, EAD]
+    # at its own risk weight, while [a, d) is substituted to the guarantor. Null
+    # on both => first-loss attach (a = 0), preserving legacy single-remainder
+    # behaviour.
+    "attachment_amount": ColumnSpec(pl.Float64, required=False),
+    "detachment_amount": ColumnSpec(pl.Float64, required=False),
 }
 
 PROVISION_SCHEMA: dict[str, ColumnSpec] = {
@@ -559,6 +587,24 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     # Art. 133(4)): unlisted PE with business_age_years < 5.0 (or null,
     # treated conservatively) routes to 400%; >= 5.0 routes to standard 250%.
     "business_age_years": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 155(3): True -> institution has sufficient Art. 178 default-
+    # definition data, so the 1.5x PD/LGD scaling does NOT apply. False/null ->
+    # the 1.5x scaling applies. Default True is the non-conservative branch, so
+    # the 1.5x edge case must set this explicitly False.
+    "has_default_definition_info": ColumnSpec(pl.Boolean, default=True, required=False),
+    # CRR Art. 155(2) non-trading-book short-position netting inputs.
+    # position_value: signed market value (+long / -short). When absent the
+    #   equity calculator falls back to the fair_value/carrying_value/ead chain
+    #   (every position stands alone on its absolute value).
+    # issuer_reference: netting key — same string means the same individual
+    #   stock (Art. 155(2) permits netting only within one issuer). Null -> no
+    #   netting for that row.
+    # is_explicitly_hedged: True -> the offsetting short is an explicit hedge
+    #   covering at least one year, so it may net the matching long. Default
+    #   False -> the short is treated as a standalone long on its absolute value.
+    "position_value": ColumnSpec(pl.Float64, required=False),
+    "issuer_reference": ColumnSpec(pl.String, required=False),
+    "is_explicitly_hedged": ColumnSpec(pl.Boolean, default=False, required=False),
     # Risk weight: 100% (listed), 250% (unlisted), 400% (speculative)
 }
 
@@ -696,6 +742,11 @@ MODEL_PERMISSIONS_SCHEMA: dict[str, ColumnSpec] = {
     # country_codes / excluded_book_codes absent → null (all geographies / no exclusions)
     "country_codes": ColumnSpec(pl.String, required=False),
     "excluded_book_codes": ColumnSpec(pl.String, required=False),
+    # ppu_reason absent → null. Identifies the legal basis for an SA-routed
+    # (approach="standardised") permission: any CRR Art. 150(1)(a)-(j) permanent
+    # partial use condition, or Art. 148 sequential IRB roll-out. Provenance-only
+    # — drives COREP C 07.00 / OF 07.00 Section 1 rows 0050/0060 (PpuReason enum).
+    "ppu_reason": ColumnSpec(pl.String, required=False),
 }
 
 
@@ -1244,7 +1295,22 @@ VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 # the SA-CCR pipeline (CRR Art. 271). They flow through the same exposure
 # row model as on-balance-sheet items but are routed into the dedicated CCR
 # stages downstream.
-VALID_RISK_TYPES_INPUT = {"FR", "FRC", "MR", "OC", "MLR", "LR", "CCR_DERIVATIVE", "CCR_SFT"}
+# MR_ISSUED (P2.30): CRR Annex I Row 3 — "other" issued medium-risk OBS items
+# (performance bonds, bid bonds, warranties, standby LCs not direct credit
+# substitutes). Same 50% SA CCF as MR (Row 4 NIF/RUF commitments) but routed
+# separately so Row 3 issued contingents are distinguishable from Row 4
+# commitments.
+VALID_RISK_TYPES_INPUT = {
+    "FR",
+    "FRC",
+    "MR",
+    "MR_ISSUED",
+    "OC",
+    "MLR",
+    "LR",
+    "CCR_DERIVATIVE",
+    "CCR_SFT",
+}
 
 # Lowercase synonyms accepted on input for the risk_type column. Maps every
 # permitted spelling (short code or full name) to its canonical uppercase
@@ -1258,12 +1324,45 @@ RISK_TYPE_SYNONYMS: dict[str, str] = {
     "full_risk_commitment": "FRC",
     "mr": "MR",
     "medium_risk": "MR",
+    "mr_issued": "MR_ISSUED",
+    "medium_risk_issued": "MR_ISSUED",
     "oc": "OC",
     "other_commit": "OC",
     "mlr": "MLR",
     "medium_low_risk": "MLR",
     "lr": "LR",
     "low_risk": "LR",
+}
+
+# CRR Annex I paras 1-4 / Art. 111(1): canonical normalised OBS *product* keys
+# accepted on the ``obs_product`` column. Each maps (via ANNEX1_PRODUCT_RISK_TYPE
+# in data/tables/ccf.py) to an abstract Annex I risk_type bucket. Distinct from
+# the free-text ``product_type``.
+VALID_OBS_PRODUCTS = {
+    "ACCEPTANCE",
+    "PERFORMANCE_BOND",
+    "WARRANTY",
+    "TENDER_BOND",
+    "BID_BOND",
+    "DOCUMENTARY_CREDIT",
+    "TRADE_LC",
+}
+
+# Lowercase synonyms accepted on input for the obs_product column. Maps every
+# permitted spelling to its canonical uppercase form in VALID_OBS_PRODUCTS.
+# Consumed by build_product_to_risk_type_expr in data/tables/ccf.py so product
+# matching is case-insensitive. Mirrors RISK_TYPE_SYNONYMS in shape.
+OBS_PRODUCT_SYNONYMS: dict[str, str] = {
+    "acceptance": "ACCEPTANCE",
+    "bankers_acceptance": "ACCEPTANCE",
+    "performance_bond": "PERFORMANCE_BOND",
+    "perf_bond": "PERFORMANCE_BOND",
+    "warranty": "WARRANTY",
+    "tender_bond": "TENDER_BOND",
+    "bid_bond": "BID_BOND",
+    "documentary_credit": "DOCUMENTARY_CREDIT",
+    "doc_credit": "DOCUMENTARY_CREDIT",
+    "trade_lc": "TRADE_LC",
 }
 
 VALID_BS_TYPES = {"ONB", "OFB"}
@@ -1276,7 +1375,33 @@ VALID_CHILD_TYPES = {"facility", "loan", "contingent"}
 # scope) are independent contracts. Null is also valid (counterparty-wide).
 VALID_RATING_SCOPE_TYPES = {"facility", "loan", "contingent"}
 
-VALID_MODEL_PERMISSION_APPROACHES = {"foundation_irb", "advanced_irb", "slotting"}
+VALID_MODEL_PERMISSION_APPROACHES = {
+    "foundation_irb",
+    "advanced_irb",
+    "slotting",
+    # "standardised" permits an IRB-permissioned firm to route an exposure class
+    # to SA under a permanent partial use (CRR Art. 150(1)) or sequential roll-out
+    # (CRR Art. 148) permission; the legal basis is carried in ``ppu_reason``.
+    "standardised",
+}
+
+# Allowed values for ``model_permissions.ppu_reason`` — the legal basis for an
+# SA-routed (approach="standardised") permission. CRR Art. 150(1)(a)-(j) permanent
+# partial use conditions plus Art. 148 sequential IRB roll-out. Mirrors the
+# PpuReason enum (domain/enums.py); null is also valid (plain SA fallback).
+VALID_PPU_REASONS = {
+    "art_150_1_a",
+    "art_150_1_b",
+    "art_150_1_c",
+    "art_150_1_d",
+    "art_150_1_e",
+    "art_150_1_f",
+    "art_150_1_g",
+    "art_150_1_h",
+    "art_150_1_i",
+    "art_150_1_j",
+    "art_148_rollout",
+}
 
 VALID_CIU_APPROACHES = {"look_through", "mandate_based", "fallback"}
 
@@ -1295,6 +1420,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "seniority": VALID_SENIORITY,
         "risk_type": VALID_RISK_TYPES_INPUT,
         "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
     },
     "loans": {
@@ -1307,6 +1433,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "bs_type": VALID_BS_TYPES,
         "risk_type": VALID_RISK_TYPES_INPUT,
         "underlying_risk_type": VALID_RISK_TYPES_INPUT,
+        "obs_product": VALID_OBS_PRODUCTS,
         "purchased_receivables_subtype": VALID_PURCHASED_RECEIVABLES_SUBTYPES,
         "exposure_collateral_type": VALID_COLLATERAL_TYPES,
     },
@@ -1348,6 +1475,7 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     },
     "model_permissions": {
         "approach": VALID_MODEL_PERMISSION_APPROACHES,
+        "ppu_reason": VALID_PPU_REASONS,
     },
     "securitisation_allocations": {
         "exposure_type": VALID_SECURITISATION_EXPOSURE_TYPES,
@@ -1441,6 +1569,21 @@ CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "re_split_residential_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     "re_split_commercial_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     "re_split_cre_rental_coverage_met": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 124(4) all-or-nothing gate: True for mixed-RE rows where
+    # at least one component fails Art. 124A — splitter routes BOTH secured rows
+    # through Art. 124J (Other RE) and allocates full pro-rata EAD (no 0.55xV cap).
+    "re_split_force_other_re": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 147A(1)(e)/(f) corporate sub-class — Basel 3.1 only (null
+    # under CRR). Drives the COREP C 02.00 / OF 02.00 corporate sub-row split:
+    # corporate_financial_large (FSE or revenue > GBP 440m) -> 0295,
+    # corporate_sme -> 0296/0355, corporate_other -> 0297/0356. Populated by
+    # Classifier._derive_exposure_subclass for corporate / corporate_sme rows.
+    "exposure_subclass": ColumnSpec(pl.String, required=False),
+    # CRR Art. 150(1)(a)-(j) PPU / Art. 148 roll-out provenance for SA-routed
+    # exposures, carried from the surviving model_permissions row by
+    # Classifier._resolve_model_permissions. Null under CRR/B31 when no SA-routing
+    # permission applied. Drives COREP C 07.00 / OF 07.00 Section 1 rows 0050/0060.
+    "ppu_reason": ColumnSpec(pl.String, required=False),
 }
 
 
@@ -1944,6 +2087,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     # -------------------------------------------------------------------------
     "borrower_income_currency": pl.String,  # ISO currency of borrower's primary income
     "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
+    "risk_weight_pre_currency_mismatch": pl.Float64,  # RW snapshot before 1.5x mismatch multiply
     # -------------------------------------------------------------------------
     # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS9/24 Art. 153(5A), 154(4A), 158(6A))
     # -------------------------------------------------------------------------

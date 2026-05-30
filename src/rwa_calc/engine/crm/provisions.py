@@ -22,7 +22,7 @@ from watchfire import cites
 
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
-from rwa_calc.engine.ccf import interest_for_ead
+from rwa_calc.engine.ccf import interest_for_ead, sa_ccf_expression
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -68,9 +68,12 @@ def resolve_provisions(
     exp_schema = exposures.collect_schema()
     has_beneficiary_type = "beneficiary_type" in prov_schema.names()
     has_parent_facility = "parent_facility_reference" in exp_schema.names()
+    has_risk_type = "risk_type" in exp_schema.names()
 
     if has_beneficiary_type:
-        exposures = _resolve_provisions_multi_level(exposures, provisions, has_parent_facility)
+        exposures = _resolve_provisions_multi_level(
+            exposures, provisions, has_parent_facility, has_risk_type, config.is_basel_3_1
+        )
     else:
         # Fallback: direct-only join (backward compat)
         provisions_agg = provisions.group_by("beneficiary_reference").agg(
@@ -132,17 +135,27 @@ def _resolve_provisions_multi_level(
     exposures: pl.LazyFrame,
     provisions: pl.LazyFrame,
     has_parent_facility: bool,
+    has_risk_type: bool,
+    is_basel_3_1: bool,
 ) -> pl.LazyFrame:
     """
     Resolve provisions from direct, facility, and counterparty levels.
 
     For facility and counterparty levels, provisions are allocated pro-rata
-    based on ``max(0, drawn) + interest + nominal`` as the weight proxy.
+    by the post-CCF EAD-equivalent weight
+    ``max(0, drawn) + max(0, interest) + nominal * ccf``. The CCF is derived
+    inline from ``risk_type`` (via ``sa_ccf_expression``) because this stage
+    runs *before* the CCF stage, so no ``ead_gross`` column exists yet. When
+    the frame has no ``risk_type`` column the CCF is treated as 1.0, so the
+    weight degrades to the bare-nominal proxy ``max(0, drawn) + interest +
+    nominal``.
 
     Args:
         exposures: Exposures LazyFrame
         provisions: Provisions with beneficiary_type column
         has_parent_facility: Whether exposures have parent_facility_reference
+        has_risk_type: Whether exposures have a risk_type column to CCF-weight
+        is_basel_3_1: Whether to use Basel 3.1 SA CCFs (else CRR)
 
     Returns:
         Exposures with provision_allocated column added
@@ -164,8 +177,18 @@ def _resolve_provisions_multi_level(
     ).with_columns(pl.col("_prov_direct").fill_null(0.0))
 
     # --- Compute exposure weight for pro-rata allocation ---
+    # Post-CCF EAD-equivalent: nominal is weighted by its SA CCF (derived inline
+    # from risk_type, since the CCF stage has not yet run). On-balance rows have
+    # nominal=0 so the CCF term vanishes; unknown/null risk_type falls through to
+    # sa_ccf_expression's conservative full-risk default rather than crashing.
+    # Frames without a risk_type column fall back to a CCF of 1.0 (bare nominal).
+    ccf_expr = (
+        sa_ccf_expression("risk_type", is_basel_3_1=is_basel_3_1) if has_risk_type else pl.lit(1.0)
+    )
     weight_expr = (
-        pl.col("drawn_amount").clip(lower_bound=0.0) + interest_for_ead() + pl.col("nominal_amount")
+        pl.col("drawn_amount").clip(lower_bound=0.0)
+        + interest_for_ead()
+        + pl.col("nominal_amount") * ccf_expr
     )
     exposures = exposures.with_columns(weight_expr.alias("_exp_weight"))
 

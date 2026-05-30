@@ -145,9 +145,27 @@ class TestConfigAndEnum:
         config = _b31_config(AIRBCollateralMethod.FOUNDATION)
         assert config.airb_collateral_method == AIRBCollateralMethod.FOUNDATION
 
-    def test_crr_config_no_airb_method(self):
-        config = _crr_config()
-        assert config.airb_collateral_method is None
+    def test_crr_config_defaults_airb_lgd_modelling(self):
+        # Arrange
+        # Act
+        config = CalculationConfig.crr(reporting_date=date(2026, 1, 1))
+        # Assert — CRR factory must default to LGD_MODELLING (not None)
+        assert config.airb_collateral_method == AIRBCollateralMethod.LGD_MODELLING
+
+    def test_crr_config_airb_method_override_passthrough(self):
+        # Arrange / Act
+        config = CalculationConfig.crr(
+            reporting_date=date(2026, 1, 1),
+            airb_collateral_method=AIRBCollateralMethod.FOUNDATION,
+        )
+        # Assert — caller-supplied override must be preserved
+        assert config.airb_collateral_method == AIRBCollateralMethod.FOUNDATION
+
+    def test_b31_config_airb_lgd_modelling_symmetry(self):
+        # Arrange / Act
+        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
+        # Assert — B31 factory default is unchanged (regression lock)
+        assert config.airb_collateral_method == AIRBCollateralMethod.LGD_MODELLING
 
     def test_b31_factory_accepts_airb_method(self):
         config = CalculationConfig.basel_3_1(

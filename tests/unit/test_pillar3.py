@@ -1196,6 +1196,21 @@ def _make_cr9_irb_data(**overrides: object) -> pl.LazyFrame:
     Includes 6 exposures across F-IRB (corporate, institution) and A-IRB
     (retail_mortgage, retail_other) with varied PDs, default status, and
     counterparty references for obligor counting.
+
+    Discriminator columns for P2.49 taxonomy routing:
+    - ``is_sme``: retail SME/non-SME split
+    - ``property_type``: "residential"/"commercial" for retail_mortgage sub-classes
+    - ``cp_is_financial_sector_entity``: True routes F-IRB corporate to
+      "corporate_financial_large"; False routes to "corporate_other_non_sme"
+
+    After P2.49:
+    - CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+      ``foundation_irb - corporate_other_non_sme``
+    - CP2 (F-IRB institution) → ``foundation_irb - institution``
+    - CP3/CP4 (A-IRB retail_mortgage, property_type=residential, is_sme=False) →
+      ``advanced_irb - retail_rre_non_sme``
+    - CP5/CP6 (A-IRB retail_other, is_sme=False) →
+      ``advanced_irb - retail_other_non_sme``
     """
     defaults = {
         "exposure_reference": ["CR9_1", "CR9_2", "CR9_3", "CR9_4", "CR9_5", "CR9_6"],
@@ -1215,6 +1230,10 @@ def _make_cr9_irb_data(**overrides: object) -> pl.LazyFrame:
             "retail_other",
             "retail_other",
         ],
+        # P2.49 discriminator columns — required for new taxonomy routing
+        "is_sme": [False, False, False, False, False, False],
+        "property_type": [None, None, "residential", "residential", None, None],
+        "cp_is_financial_sector_entity": [False, False, False, False, False, False],
         "ead_final": [5000.0, 3000.0, 2000.0, 1500.0, 1000.0, 800.0],
         "rwa_final": [4000.0, 1800.0, 1200.0, 900.0, 600.0, 480.0],
         "irb_pd_floored": [0.02, 0.005, 0.01, 0.008, 0.03, 1.0],
@@ -1259,24 +1278,34 @@ class TestCR9TemplateDefinitions:
         assert "historical" in col_h.name.lower()
 
     def test_cr9_airb_classes_count(self):
-        assert len(CR9_AIRB_CLASSES) == 6
+        assert len(CR9_AIRB_CLASSES) == 10
 
     def test_cr9_firb_classes_count(self):
-        assert len(CR9_FIRB_CLASSES) == 4
+        assert len(CR9_FIRB_CLASSES) == 5
 
     def test_cr9_approach_display_has_both(self):
         assert "foundation_irb" in CR9_APPROACH_DISPLAY
         assert "advanced_irb" in CR9_APPROACH_DISPLAY
 
     def test_cr9_firb_includes_institution(self):
-        keys = [k for k, _ in CR9_FIRB_CLASSES]
+        keys = [k for k, *_ in CR9_FIRB_CLASSES]
         assert "institution" in keys
 
     def test_cr9_airb_includes_retail(self):
-        keys = [k for k, _ in CR9_AIRB_CLASSES]
-        assert "retail_mortgage" in keys
+        # P2.49: collapsed parent keys "retail_mortgage" and "retail_other"
+        # are replaced by SME/non-SME and property-type sub-class leaves.
+        # Only the scalar class "retail_qrre" is unchanged.
+        keys = [k for k, *_ in CR9_AIRB_CLASSES]
         assert "retail_qrre" in keys
-        assert "retail_other" in keys
+        assert "retail_rre_sme" in keys
+        assert "retail_rre_non_sme" in keys
+        assert "retail_cre_sme" in keys
+        assert "retail_cre_non_sme" in keys
+        assert "retail_other_sme" in keys
+        assert "retail_other_non_sme" in keys
+        # Collapsed parents must not survive
+        assert "retail_mortgage" not in keys
+        assert "retail_other" not in keys
 
     def test_cr9_1_has_base_columns(self):
         """CR9.1 has at least the 8 base columns (ECAI columns added dynamically)."""
@@ -1311,13 +1340,23 @@ class TestCR9Generation:
     def test_cr9_keys_include_approach_and_class(self, generator: Pillar3Generator):
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        # Should have F-IRB corporate, F-IRB institution, A-IRB retail_mortgage,
-        # A-IRB retail_other from the test data
+        # P2.49: collapsed parent keys are replaced by leaf sub-class keys.
+        # CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        #   foundation_irb - corporate_other_non_sme
+        # CP2 (F-IRB institution) → foundation_irb - institution (unchanged)
+        # CP3/CP4 (A-IRB retail_mortgage, residential, is_sme=False) →
+        #   advanced_irb - retail_rre_non_sme
+        # CP5/CP6 (A-IRB retail_other, is_sme=False) →
+        #   advanced_irb - retail_other_non_sme
         keys = set(bundle.cr9.keys())
-        assert "foundation_irb - corporate" in keys
+        assert "foundation_irb - corporate_other_non_sme" in keys
         assert "foundation_irb - institution" in keys
-        assert "advanced_irb - retail_mortgage" in keys
-        assert "advanced_irb - retail_other" in keys
+        assert "advanced_irb - retail_rre_non_sme" in keys
+        assert "advanced_irb - retail_other_non_sme" in keys
+        # Old collapsed parents must be absent
+        assert "foundation_irb - corporate" not in keys
+        assert "advanced_irb - retail_mortgage" not in keys
+        assert "advanced_irb - retail_other" not in keys
 
     def test_cr9_has_correct_column_count(self, generator: Pillar3Generator):
         data = _make_cr9_irb_data()
@@ -1350,7 +1389,9 @@ class TestCR9ColumnValues:
         """Col c counts unique counterparty references."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         # 1 corporate F-IRB counterparty (CP1)
         assert total["c"][0] == pytest.approx(1.0)
@@ -1359,8 +1400,9 @@ class TestCR9ColumnValues:
         """Col d counts defaulted obligors."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        # retail_other has one defaulted (CP6, PD=1.0, is_defaulted=True)
-        ro = bundle.cr9["advanced_irb - retail_other"]
+        # P2.49: retail_other (is_sme=False) → advanced_irb - retail_other_non_sme
+        # CP6 is defaulted; CP5 is not → total d=1
+        ro = bundle.cr9["advanced_irb - retail_other_non_sme"]
         total = ro.filter(pl.col("row_ref") == "18")
         assert total["d"][0] == pytest.approx(1.0)
 
@@ -1368,7 +1410,9 @@ class TestCR9ColumnValues:
         """Classes with no defaults should have d=0."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         assert total["d"][0] == pytest.approx(0.0)
 
@@ -1376,8 +1420,9 @@ class TestCR9ColumnValues:
         """Col e = d/c * 100 (observed default rate as percentage)."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        # retail_other: 2 obligors (CP5, CP6), 1 defaulted → 50%
-        ro = bundle.cr9["advanced_irb - retail_other"]
+        # P2.49: retail_other (is_sme=False) → advanced_irb - retail_other_non_sme
+        # 2 obligors (CP5, CP6), 1 defaulted → 50%
+        ro = bundle.cr9["advanced_irb - retail_other_non_sme"]
         total = ro.filter(pl.col("row_ref") == "18")
         assert total["e"][0] == pytest.approx(50.0)
 
@@ -1385,7 +1430,9 @@ class TestCR9ColumnValues:
         """Col f = EAD-weighted average PD * 100 (post input floor)."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         # F-IRB corporate: PD=0.02, EAD=5000 → EWA PD = 0.02 * 100 = 2.0%
         assert total["f"][0] == pytest.approx(2.0)
@@ -1394,8 +1441,10 @@ class TestCR9ColumnValues:
         """Col g = arithmetic average PD * 100 (obligor-weighted)."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        # retail_mortgage: PDs=[0.01, 0.008] → avg 0.009 * 100 = 0.9%
-        rm = bundle.cr9["advanced_irb - retail_mortgage"]
+        # P2.49: retail_mortgage (property_type=residential, is_sme=False) →
+        # advanced_irb - retail_rre_non_sme
+        # CP3/CP4: PDs=[0.01, 0.008] → avg 0.009 * 100 = 0.9%
+        rm = bundle.cr9["advanced_irb - retail_rre_non_sme"]
         total = rm.filter(pl.col("row_ref") == "18")
         assert total["g"][0] == pytest.approx(0.9)
 
@@ -1403,7 +1452,8 @@ class TestCR9ColumnValues:
         """Col h falls back to col e when historical_annual_default_rate is absent."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        ro = bundle.cr9["advanced_irb - retail_other"]
+        # P2.49: retail_other (is_sme=False) → advanced_irb - retail_other_non_sme
+        ro = bundle.cr9["advanced_irb - retail_other_non_sme"]
         total = ro.filter(pl.col("row_ref") == "18")
         # Should equal observed rate (50%) as fallback
         assert total["h"][0] == pytest.approx(total["e"][0])
@@ -1414,7 +1464,9 @@ class TestCR9ColumnValues:
             historical_annual_default_rate=[0.01, 0.02, 0.015, 0.015, 0.025, 0.05],
         )
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         # Corporate: historical_annual_default_rate=0.01 → 1.0%
         assert total["h"][0] == pytest.approx(1.0)
@@ -1422,14 +1474,19 @@ class TestCR9ColumnValues:
     def test_col_a_shows_class_display_name(self, generator: Pillar3Generator):
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
-        # All rows in col a should show "Corporates"
-        assert all(v == "Corporates" for v in corp["a"].to_list())
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme, display label is
+        # "Corporates — Other general corporates (non-SME)"
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
+        expected_label = "Corporates — Other general corporates (non-SME)"
+        assert all(v == expected_label for v in corp["a"].to_list())
 
     def test_col_b_shows_pd_range_label(self, generator: Pillar3Generator):
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         # Total row col b should be "Total"
         total = corp.filter(pl.col("row_ref") == "18")
         assert total["b"][0] == "Total"
@@ -1442,7 +1499,9 @@ class TestCR9PDAllocation:
         """B31 allocates by irb_pd_original (pre-input-floor), not irb_pd_floored."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        # P2.49: CP1 (F-IRB corporate, cp_is_financial_sector_entity=False) →
+        # foundation_irb - corporate_other_non_sme
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         # Corporate: irb_pd_original=0.018 → bucket "10" (1.00-2.50%)
         non_total = corp.filter(pl.col("row_ref") != "18")
         refs = non_total["row_ref"].to_list()
@@ -1452,7 +1511,8 @@ class TestCR9PDAllocation:
         """Defaulted exposures (PD=1.0) should be in the 100% (Default) bucket."""
         data = _make_cr9_irb_data()
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        ro = bundle.cr9["advanced_irb - retail_other"]
+        # P2.49: retail_other (is_sme=False) → advanced_irb - retail_other_non_sme
+        ro = bundle.cr9["advanced_irb - retail_other_non_sme"]
         bucket_17 = ro.filter(pl.col("row_ref") == "17")
         assert bucket_17.height == 1
         assert bucket_17["d"][0] == pytest.approx(1.0)  # 1 defaulted
@@ -1528,7 +1588,7 @@ class TestCR9EdgeCases:
         collected = data.collect().drop("is_defaulted")
         no_default_col = collected.lazy()
         bundle = generator.generate_from_lazyframe(no_default_col, framework="BASEL_3_1")
-        ro = bundle.cr9.get("advanced_irb - retail_other")
+        ro = bundle.cr9.get("advanced_irb - retail_other_non_sme")
         assert ro is not None
         total = ro.filter(pl.col("row_ref") == "18")
         # CP6 has PD=1.0, should be detected as defaulted
@@ -1550,7 +1610,7 @@ class TestCR9EdgeCases:
         )
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
         assert len(bundle.cr9) == 1
-        assert "foundation_irb - corporate" in bundle.cr9
+        assert "foundation_irb - corporate_other_non_sme" in bundle.cr9
 
     def test_prior_year_obligor_count_used_when_present(
         self,
@@ -1561,7 +1621,7 @@ class TestCR9EdgeCases:
             prior_year_obligor_count=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
         )
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["foundation_irb - corporate"]
+        corp = bundle.cr9["foundation_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         # prior_year_obligor_count for corporate is 1.0 (one row)
         assert total["c"][0] == pytest.approx(1.0)
@@ -1582,7 +1642,7 @@ class TestCR9EdgeCases:
             }
         )
         bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
-        corp = bundle.cr9["advanced_irb - corporate"]
+        corp = bundle.cr9["advanced_irb - corporate_other_non_sme"]
         total = corp.filter(pl.col("row_ref") == "18")
         assert total["c"][0] == pytest.approx(2.0)  # 2 unique counterparties
 
@@ -1659,6 +1719,127 @@ class TestCR9ExcelExport:
         # CR9 rows should be included in total row count
         cr9_rows = sum(df.height for df in bundle.cr9.values())
         assert result.row_count >= cr9_rows
+
+
+# =============================================================================
+# P1.94g — DELIV1: CR5 buckets mismatch rows on pre-mismatch risk weight
+# =============================================================================
+
+
+def _make_sa_data_with_mismatch(**overrides: object) -> pl.LazyFrame:
+    """Extend _make_sa_data with the two currency-mismatch columns.
+
+    Adds a fourth row (retail_other, EAD=100_000) that has:
+        risk_weight                     = 1.125  (post-1.5x-multiplier)
+        risk_weight_pre_currency_mismatch = 0.75  (pre-multiplier base RW)
+        currency_mismatch_multiplier_applied = True
+
+    Pre-fix: the CR5 generator buckets on risk_weight=1.125 → no B31 band
+    matches (nearest are 1.1=110% and 1.3=130%) → falls to Other/Deducted (ref
+    "ac").  Post-fix: generator buckets on risk_weight_pre_currency_mismatch
+    =0.75 for mismatch rows → lands in the 75% bucket (ref "p").
+    """
+    base: dict[str, object] = {
+        "exposure_reference": ["SA1", "SA2", "SA3", "SA4_MISMATCH"],
+        "approach_applied": [
+            "standardised",
+            "standardised",
+            "standardised",
+            "standardised",
+        ],
+        "exposure_class": ["corporate", "retail_mortgage", "defaulted", "retail_other"],
+        "ead_final": [1000.0, 2000.0, 500.0, 100_000.0],
+        "rwa_final": [1000.0, 700.0, 750.0, 112_500.0],
+        "risk_weight": [1.0, 0.35, 1.5, 1.125],
+        "risk_weight_pre_currency_mismatch": [1.0, 0.35, 1.5, 0.75],
+        "currency_mismatch_multiplier_applied": [False, False, False, True],
+        "drawn_amount": [800.0, 1800.0, 400.0, 100_000.0],
+        "interest": [50.0, 100.0, 30.0, 0.0],
+        "nominal_amount": [200.0, 300.0, 100.0, 0.0],
+        "undrawn_amount": [150.0, 200.0, 70.0, 0.0],
+        "exposure_type": ["loan", "loan", "loan", "loan"],
+    }
+    base.update(overrides)
+    return pl.LazyFrame(base)
+
+
+class TestCR5CurrencyMismatchBucketing:
+    """P1.94g DELIV1: CR5 must bucket mismatch rows on pre-mismatch risk weight.
+
+    Why: A retail_other row with currency mismatch has risk_weight=1.125 (after
+    the 1.5× Art. 123B multiplier) but its pre-multiplier weight is 0.75.  The
+    CR5 disclosure table must show EAD in the 75% bucket (column "p" in B31) to
+    reflect the underlying credit risk weight, not the FX-adjusted weight.
+
+    Pre-fix failure mode: _compute_cr5_values buckets on risk_weight=1.125 →
+    no B31 band matches → EAD lands in Other/Deducted (ref "ac"), and the 75%
+    bucket (ref "p") shows 0.
+    """
+
+    def test_p1_94g_cr5_b31_mismatch_ead_in_75pct_bucket(self, generator: Pillar3Generator) -> None:
+        """Mismatch row (RW=1.125, pre-mismatch=0.75) must land in the 75% B31 bucket.
+
+        Arrange: retail_other row with currency_mismatch_multiplier_applied=True,
+                 risk_weight=1.125, risk_weight_pre_currency_mismatch=0.75,
+                 ead_final=100_000.
+        Act:     generate CR5 for BASEL_3_1.
+        Assert:  Retail row (row_ref "8") has column "p" (75% band) == 100_000.
+
+        Pre-fix failure: column "p" == 0.0, because the engine buckets on the
+        post-multiplier risk_weight=1.125 which matches no B31 band and falls
+        to Other/Deducted.
+        """
+        # Arrange
+        data = _make_sa_data_with_mismatch()
+
+        # Act
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cr5 is not None
+
+        # Retail row — SA_DISCLOSURE_CLASSES maps ("retail_other",) → row_ref "8"
+        retail_row = bundle.cr5.filter(pl.col("row_ref") == "8")
+        assert len(retail_row) == 1, "Expected one retail row in CR5"
+
+        # Assert: EAD must land in the 75% bucket (column ref "p", index 15 in B31)
+        ead_in_75pct = retail_row["p"][0]
+        assert ead_in_75pct == pytest.approx(100_000.0), (
+            f"Mismatch row EAD (100_000) should be in the 75% bucket (ref 'p'), "
+            f"but got {ead_in_75pct}. "
+            f"Pre-fix: engine buckets on risk_weight=1.125 → no B31 band → falls to "
+            f"Other/Deducted ('ac')."
+        )
+
+    def test_p1_94g_cr5_b31_mismatch_ead_not_in_other_deducted(
+        self, generator: Pillar3Generator
+    ) -> None:
+        """Anti-confound: mismatch EAD must NOT land in Other/Deducted after fix.
+
+        This is the load-bearing anti-confound: pre-fix, the 1.125 RW row falls
+        into Other/Deducted (ref 'ac') because no 112.5% band exists in B31.
+        After the fix, Other/Deducted should NOT carry 100_000 from this row.
+
+        Arrange/Act: same as above.
+        Assert:  Retail row has column 'ac' (Other/Deducted) != 100_000.
+
+        Pre-fix: 'ac' == 100_000 (the full mismatch EAD is residual-bucketed).
+        """
+        # Arrange
+        data = _make_sa_data_with_mismatch()
+
+        # Act
+        bundle = generator.generate_from_lazyframe(data, framework="BASEL_3_1")
+        assert bundle.cr5 is not None
+
+        retail_row = bundle.cr5.filter(pl.col("row_ref") == "8")
+        assert len(retail_row) == 1
+
+        # "ac" is Other/Deducted in B31 (n=28 bands → index 28 → chr('a'+28-26)='ac')
+        ead_in_other = retail_row["ac"][0]
+        assert ead_in_other != pytest.approx(100_000.0), (
+            f"Mismatch row EAD (100_000) must NOT be in Other/Deducted ('ac'), "
+            f"but got {ead_in_other}. "
+            f"Pre-fix: risk_weight=1.125 matches no B31 band → falls to residual."
+        )
 
 
 class TestExcelExport:

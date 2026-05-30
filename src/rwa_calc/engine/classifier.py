@@ -59,7 +59,10 @@ from rwa_calc.data.schemas import (
     B31_SOVEREIGN_LIKE_ENTITY_TYPES,
     RGLA_PSE_ENTITY_TYPES,
 )
-from rwa_calc.data.tables.b31_risk_weights import B31_RRE_THREE_PROPERTY_LIMIT
+from rwa_calc.data.tables.b31_risk_weights import (
+    B31_RETAIL_GRANULARITY_LIMIT,
+    B31_RRE_THREE_PROPERTY_LIMIT,
+)
 from rwa_calc.data.tables.entity_class_mapping import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
@@ -75,6 +78,7 @@ from rwa_calc.domain.enums import (
     SpecialisedLendingType,
 )
 from rwa_calc.engine.materialise import materialise_barrier
+from rwa_calc.engine.utils import partition_by_nullable
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -2042,6 +2046,8 @@ class ExposureClassifier:
         return base.alias("is_mortgage")
 
     @staticmethod
+    @cites("CRR Art. 123")
+    @cites("PS1/26, paragraph 123A")
     def _build_qualifies_as_retail_expr(
         config: CalculationConfig,
         schema_names: set[str],
@@ -2054,6 +2060,10 @@ class ExposureClassifier:
         Basel 3.1 Art. 123A adds two-path qualifying criteria:
         - Art. 123A(1)(a): SME entities (revenue > 0 and < GBP 44m) auto-qualify
           without needing pool management attestation.
+        - Art. 123A(1)(b)(ii): an obligor's aggregate exposure must not exceed
+          GBP 880k (threshold limb) AND no single obligor's aggregate exposure may
+          exceed 0.2% of the total regulatory-retail portfolio (granularity limb,
+          BCBS CRE20.66). Both limbs are Basel-3.1-only.
         - Art. 123A(1)(b)(iii): Non-SME entities must be managed as part of a
           retail pool (cp_is_managed_as_retail=True) to qualify.  Null values
           default to True for backward compatibility.
@@ -2081,12 +2091,44 @@ class ExposureClassifier:
         # total < EUR 43m when turnover null).
         is_sme_for_art_123a = ExposureClassifier._is_sme_by_size_expr(config)
 
+        # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
+        # aggregate exposure may exceed 0.2% of the total regulatory-retail
+        # portfolio. Candidate-retail rows are the entity-type RETAIL_OTHER
+        # population (``_sa_class``); the denominator counts each obligor once by
+        # dividing the per-obligor aggregate (``lending_group_adjusted_exposure``)
+        # by the obligor's line-count, masking non-retail rows to 0, then summing.
+        granularity_limit = float(B31_RETAIL_GRANULARITY_LIMIT)
+        is_retail_candidate = pl.col("_sa_class") == ExposureClass.RETAIL_OTHER.value
+        obligor_agg = pl.col("lending_group_adjusted_exposure")
+        # Guard the nullable ``counterparty_reference`` partition: a null key would
+        # otherwise pool all unmapped rows into a single bucket (see
+        # ``partition_by_nullable`` / ``NULLABLE_PARTITION_KEYS``). Null-keyed rows
+        # count as their own single-line obligor.
+        obligor_line_count = partition_by_nullable(
+            pl.len().over("counterparty_reference"),
+            "counterparty_reference",
+            pl.lit(1),
+        )
+        portfolio_total = (
+            pl.when(is_retail_candidate)
+            .then(obligor_agg / obligor_line_count)
+            .otherwise(pl.lit(0.0))
+        ).sum()
+        granularity_fail = (
+            is_retail_candidate
+            & (portfolio_total > 0)
+            & (obligor_agg / portfolio_total > granularity_limit)
+        )
+
         expr = (
             pl.when(threshold_fail)
             .then(pl.lit(False))
             # Art. 123A(1)(a): SMEs auto-qualify — no condition 3 needed
             .when(is_sme_for_art_123a)
             .then(pl.lit(True))
+            # Art. 123A(1)(b)(ii) granularity limb: > 0.2% of the retail portfolio
+            .when(granularity_fail)
+            .then(pl.lit(False))
         )
 
         # Art. 123A(1)(b)(iii): Non-SME must be managed as retail pool

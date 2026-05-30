@@ -394,6 +394,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_30e",
             _generate_p130e,
         ),
+        (
+            "P5.15 (B31 Art. 123A(1)(b)(ii) 0.2% retail portfolio granularity sub-condition)",
+            "p5_15",
+            _generate_p515,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2260,6 +2265,19 @@ def _generate_p130e(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_30e", None)
+
+
+def _generate_p515(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P5.15 fixtures (B31 Art. 123A(1)(b)(ii) 0.2% retail granularity sub-condition)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p5_15 import save_p515_fixtures
+
+        saved = save_p515_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p5_15", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

@@ -1911,7 +1911,7 @@ class ExposureClassifier:
             & (pl.col("lgd").is_null())
         )
 
-        # Art. 114(3)/(4): EU domestic sovereign → SA. Use original
+        # Art. 114(4)/(7): EU domestic sovereign → SA. Use original
         # (pre-FX) denomination — `currency` is overwritten by the FX
         # converter with the reporting currency, which would otherwise
         # reject legitimate Art. 114(4) treatment for any non-base-currency

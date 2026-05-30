@@ -367,3 +367,59 @@ def test_ccr_b1b_rwa_client_cleared() -> None:
         f"CCR-B1b RWA: expected {QCCP_RWA_CLIENT_CLEARED!r} (EAD × 0.04, Art. 307), "
         f"got {actual_rwa!r}."
     )
+
+
+# ===========================================================================
+# 7. Citation metadata — P6.35: apply_ccp_risk_weight must cite Art. 306 only
+# ===========================================================================
+
+
+def test_apply_ccp_risk_weight_cites_art_306_not_307() -> None:
+    """apply_ccp_risk_weight's @cites metadata must be exactly {CRR Art. 306}.
+
+    The function handles both proprietary (Art. 306) and client-cleared
+    (Art. 307) branches internally, but Art. 307 governs the *client*-facing
+    treatment that the clearing member passes through — it is not an
+    independent obligation of apply_ccp_risk_weight itself. The corrected
+    citation set is therefore exactly ("CRR Art. 306",); Art. 307 must be
+    removed.
+
+    Arrange:
+        apply_ccp_risk_weight imported from rwa_calc.engine.ccr.ccp.
+        __watchfire__ attribute carries the @cites metadata.
+
+    Act:
+        Collect canonical() strings from all Citation objects in __watchfire__.
+
+    Assert:
+        actual == ("CRR Art. 306",)  — exactly one citation, Art. 306.
+        "CRR Art. 307" not in actual — Art. 307 must not be present.
+        "Art. 307" not in (apply_ccp_risk_weight.__doc__ or "") — docstring
+        must not reference Art. 307 as a standalone decorator-citation marker.
+
+    References:
+        - CRR Art. 306(1) — the article that governs the function's own RW logic.
+        - P6.35 — XS citation-metadata correction.
+    """
+    # Arrange
+    if apply_ccp_risk_weight is None:
+        pytest.fail(
+            "Cannot import apply_ccp_risk_weight from rwa_calc.engine.ccr.ccp. "
+            "Module does not exist yet — engine-implementer must create engine/ccr/ccp.py."
+        )
+
+    # Act
+    citations = getattr(apply_ccp_risk_weight, "__watchfire__", ())
+    actual = tuple(c.canonical() for c in citations)
+
+    # Assert
+    assert actual == ("CRR Art. 306",), (
+        f"apply_ccp_risk_weight.__watchfire__ canonical citations: "
+        f"expected ('CRR Art. 306',), got {actual!r}. "
+        "P6.35: remove the @cites('CRR Art. 307') decorator — Art. 307 governs "
+        "the client-side clearing relationship, not this function's own obligation."
+    )
+    assert "CRR Art. 307" not in actual, (
+        "apply_ccp_risk_weight must not cite CRR Art. 307 — "
+        "the @cites('CRR Art. 307') decorator must be removed (P6.35)."
+    )

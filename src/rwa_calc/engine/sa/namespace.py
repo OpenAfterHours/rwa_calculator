@@ -534,7 +534,7 @@ def _b31_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
 
     Covers the regulatory retail class only (uc contains "RETAIL"):
     - QRRE transactor: 45% (Art. 123(2)).
-    - Payroll/pension loans: 35% (Art. 123(3)(a-b)).
+    - Payroll/pension loans: 35% (Art. 123(4)).
     - Non-regulatory retail (fails Art. 123A criteria): 100% (Art. 123(3)(c)).
     - Regulatory retail (non-mortgage): 75% flat.
 
@@ -547,7 +547,7 @@ def _b31_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
             uc.str.contains("RETAIL", literal=True) & pl.col("is_qrre_transactor").fill_null(False)
         )
         .then(pl.lit(_SA_B31_RW["qrre_transactor"]))
-        # Payroll/pension loans: 35% (Art. 123(3)(a-b)).
+        # Payroll/pension loans: 35% (Art. 123(4)).
         .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
         .then(pl.lit(_SA_B31_RW["payroll"]))
         # Non-regulatory retail (fails Art. 123A criteria): 100%.
@@ -695,7 +695,7 @@ def _crr_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
     - Non-regulatory retail (fails qualifying criteria): 100% (Art. 123(c)).
     - Payroll/pension loans: 35% (CRR Art. 123 second subparagraph, inserted
       by CRR2 Reg. (EU) 2019/876 F68 — scalar identical to PRA PS1/26
-      Art. 123(3)(a-b), reused from ``_SA_B31_RW``).
+      Art. 123(4), reused from ``_SA_B31_RW``).
     - Regulatory retail (non-mortgage): 75% flat (Art. 123).
 
     The SME-managed-as-retail branch stays in the parent override (it gates
@@ -711,7 +711,7 @@ def _crr_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
         .then(pl.lit(_SA_CRR_RW["non_reg_retail"]))
         # Payroll/pension loans: 35% (CRR Art. 123 second subparagraph,
         # inserted by CRR2 Reg. (EU) 2019/876 F68). Scalar identical to the
-        # Basel 3.1 payroll RW (PRA PS1/26 Art. 123(3)(a-b)), so the same
+        # Basel 3.1 payroll RW (PRA PS1/26 Art. 123(4)), so the same
         # B31_RETAIL_PAYROLL_LOAN_RW constant is reused via _SA_B31_RW.
         .when(uc.str.contains("RETAIL", literal=True) & pl.col("is_payroll_loan").fill_null(False))
         .then(pl.lit(_SA_B31_RW["payroll"]))
@@ -847,7 +847,7 @@ def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFr
 
 
 def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
-    """Build the Art. 114(3)/(4) domestic CGCB-guarantor currency check.
+    """Build the Art. 114(4)/(7) domestic CGCB-guarantor currency check.
 
     Evaluates the domestic-currency test against the guarantee currency (the
     currency of the substituted exposure to the sovereign); the Art. 233(3)
@@ -886,7 +886,7 @@ def _build_guarantor_rw_expr(
 
     Branch order (first match wins):
         no guarantee -> null
-        domestic CGCB sovereign (Art. 114(3)/(4)) -> 0%
+        domestic CGCB sovereign (Art. 114(4)/(7)) -> 0%
         CGCB CQS table
         CCP (CRR Art. 306, CRE54.14-15)
         Named MDB (Art. 117(2)) / International Organisation (Art. 118)
@@ -916,7 +916,7 @@ def _build_guarantor_rw_expr(
     return (
         pl.when(pl.col("guaranteed_portion") <= 0)
         .then(pl.lit(None).cast(pl.Float64))
-        # Art. 114(3)/(4): Domestic sovereign -> 0% regardless of CQS.
+        # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS.
         .when((gec == "central_govt_central_bank") & is_domestic_guarantor)
         .then(pl.lit(0.0))
         # CGCB guarantors via CQS (Table 1 — sovereign weights).
@@ -1048,7 +1048,7 @@ def _prepare_risk_weight_lookup(
     )
     schema = exposures.collect_schema()
 
-    # CRR Art. 114(3)/(4): Domestic CGCB exposures -> 0% RW. Must compare
+    # CRR Art. 114(4)/(7): Domestic CGCB exposures -> 0% RW. Must compare
     # against the exposure's ORIGINAL denomination — the FX converter
     # overwrites `currency` with the reporting currency, so using it
     # directly would reject legitimate Art. 114(4) 0% treatment for any
@@ -1166,7 +1166,7 @@ def _apply_b31_risk_weight_overrides(
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114
-        # unrated 100% fallback but not over the Art. 114(3)/(4) domestic 0%.
+        # unrated 100% fallback but not over the Art. 114(4)/(7) domestic 0%.
         # Identical to the CRR arm — MEIP risk weights are unchanged under PS1/26.
         .when(
             uc.str.contains("CENTRAL_GOVT", literal=True)
@@ -1342,12 +1342,12 @@ def _apply_crr_risk_weight_overrides(
 ) -> pl.LazyFrame:
     """Apply CRR class-specific risk-weight overrides (Art. 112-134)."""
     chain = (
-        # Art. 114(3)/(4): Domestic CGCB -> 0% RW (overrides all CQS).
+        # Art. 114(4)/(7): Domestic CGCB -> 0% RW (overrides all CQS).
         pl.when(uc.str.contains("CENTRAL_GOVT", literal=True) & is_domestic_currency)
         .then(pl.lit(0.0))
         # Art. 137(1)-(2) Table 9: nominated ECA / MEIP score → direct sovereign
         # RW when no ECAI rating is present. Takes precedence over the Art. 114
-        # unrated 100% fallback but not over the Art. 114(3)/(4) domestic 0%.
+        # unrated 100% fallback but not over the Art. 114(4)/(7) domestic 0%.
         .when(
             uc.str.contains("CENTRAL_GOVT", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
@@ -1870,7 +1870,7 @@ class SALazyFrame:
             pl.col("risk_weight").alias("pre_crm_risk_weight"),
         )
 
-        # Art. 114(3)/(4) domestic CGCB-guarantor currency check.
+        # Art. 114(4)/(7) domestic CGCB-guarantor currency check.
         is_domestic_guarantor = _build_domestic_guarantor_expr(exposures.collect_schema().names())
 
         # CRR/PS1/26 Art. 120(2) Table 4 short-term institution guarantor flag.

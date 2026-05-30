@@ -50,6 +50,7 @@ from rwa_calc.data.tables.sa_ccr_factors import (
     SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX,
     SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN,
 )
+from rwa_calc.engine.ccr.rc import compute_rc_unmargined
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,11 @@ def compute_pfe(
     denom = denom_coeff * one_minus_f * pl.col("addon_aggregate")
     uncapped = floor_f + one_minus_f * (v_minus_c / denom).exp()
 
+    # Delegate the unmargined RC derivation to the canonical
+    # ``compute_rc_unmargined`` (Art. 275(1)) so the ``rc_unmargined`` column is
+    # guaranteed present before the EAD coalesce reads it.
+    netting_sets = compute_rc_unmargined(netting_sets)
+
     # EAD consumes a unified replacement cost. When the caller has already
     # supplied an ``rc`` column (e.g. the SA-CCR adapter coalescing margined
     # RC per Art. 275(2) over unmargined RC per Art. 275(1)) the EAD step
@@ -112,10 +118,7 @@ def compute_pfe(
             pl.min_horizontal(pl.lit(1.0), uncapped).alias("pfe_multiplier"),
         )
         .with_columns(
-            [
-                (pl.col("pfe_multiplier") * pl.col("addon_aggregate")).alias("pfe_addon"),
-                pl.max_horizontal(v_minus_c, pl.lit(0.0)).alias("rc_unmargined"),
-            ]
+            (pl.col("pfe_multiplier") * pl.col("addon_aggregate")).alias("pfe_addon"),
         )
         .with_columns((pl.lit(alpha_value) * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr"))
     )

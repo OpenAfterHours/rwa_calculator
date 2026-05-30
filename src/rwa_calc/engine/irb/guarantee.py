@@ -216,7 +216,7 @@ def _compute_guarantor_rw_sa(
 
     _gec = pl.col("guarantor_exposure_class").fill_null("")
 
-    # Art. 114(3)/(4): Domestic CGCB guarantors -> 0% RW regardless of CQS.
+    # Art. 114(4)/(7): Domestic CGCB guarantors -> 0% RW regardless of CQS.
     # Evaluate the domestic-currency test against the guarantee currency (the
     # currency of the substituted exposure to the sovereign); the Art. 233(3) 8%
     # FX haircut separately handles any mismatch between the guarantee and the
@@ -249,7 +249,7 @@ def _compute_guarantor_rw_sa(
         [
             pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
             .then(pl.lit(None).cast(pl.Float64))
-            # Art. 114(3)/(4): Domestic sovereign -> 0% regardless of CQS
+            # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS
             .when((_gec == "central_govt_central_bank") & _is_domestic_guarantor)
             .then(pl.lit(0.0))
             # CGCB guarantors (sovereign, central_bank)

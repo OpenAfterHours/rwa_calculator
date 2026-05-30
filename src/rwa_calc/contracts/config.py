@@ -516,7 +516,7 @@ class PostModelAdjustmentConfig:
     """
     Post-model adjustment configuration for Basel 3.1 IRB.
 
-    PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
+    PRA PS1/26 Art. 153(5A), 154(4A), 158(6A) require firms to apply
     post-model adjustments (PMAs) to IRB model outputs for known deficiencies.
     These adjustments increase RWEA and EL to compensate for model limitations.
 

@@ -258,7 +258,7 @@ B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS: dict[int, Decimal] = {
 # =============================================================================
 
 B31_RETAIL_TRANSACTOR_RW = Decimal("0.45")  # 45% for QRRE transactors
-B31_RETAIL_PAYROLL_LOAN_RW = Decimal("0.35")  # 35% for payroll/pension loans (Art. 123(3)(a-b))
+B31_RETAIL_PAYROLL_LOAN_RW = Decimal("0.35")  # 35% for payroll/pension loans (Art. 123(4))
 B31_RETAIL_NON_REGULATORY_RW = Decimal("1.00")  # 100% for non-regulatory retail (Art. 123(3)(c))
 
 # PRA PS1/26 Art. 123A(1)(b)(ii) second limb / BCBS CRE20.66 granularity criterion:

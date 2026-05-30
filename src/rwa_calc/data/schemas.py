@@ -549,6 +549,9 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     # directly applicable (issue-specific) and not inferred.
     "rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
     "rating_is_inferred": ColumnSpec(pl.Boolean, default=False, required=False),
+    # Firm-supplied internal rating grade (COREP Annex II, C 08.02 obligor grade
+    # scale). Free-text firm master-scale label; no COLUMN_VALUE_CONSTRAINTS entry.
+    "internal_rating_grade": ColumnSpec(pl.String, required=False),
 }
 
 # Specialised Lending exposures - slotting approach (CRE33.1-8, PS1/26 Ch.5)
@@ -1535,6 +1538,9 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     # rating, which is disapplied for the SA specialised-lending routing under
     # Art. 122B(1). Default True preserves legacy behaviour (directly applicable).
     "external_rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
+    # Firm-supplied internal rating grade carried through as a cp_-prefixed
+    # results column for COREP C 08.02 grade-keyed rows (Annex II, C 08.02).
+    "cp_internal_rating_grade": ColumnSpec(pl.String, required=False),
 }
 
 # Columns produced by the CRM stage: collateral value buckets and provision
@@ -1629,7 +1635,7 @@ RAW_EXPOSURE_SCHEMA = {
     "ccf_modelled": pl.Float64,  # A-IRB modelled CCF (0.0-1.5, can exceed 100% for retail)
     "ead_modelled": pl.Float64,  # A-IRB modelled facility-level EAD (Art. 166D(3)/(4))
     "is_short_term_trade_lc": pl.Boolean,  # Short-term LC for goods movement - 20% CCF under F-IRB (Art. 166(9))
-    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(3)(a-b))
+    "is_payroll_loan": pl.Boolean,  # Payroll/pension loan — 35% RW under Basel 3.1 (Art. 123(4))
     "is_buy_to_let": pl.Boolean,  # BTL property lending - excluded from SME supporting factor (CRR Art. 501)
     "has_one_day_maturity_floor": pl.Boolean,  # Art. 162(3): repos/SFTs with daily margining — 1-day M floor
     "is_sft": pl.Boolean,  # CRR Art. 162(1): repurchase / securities / commodities lending/borrowing — F-IRB M = 0.5y
@@ -2089,7 +2095,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "currency_mismatch_multiplier_applied": pl.Boolean,  # True if 1.5x RW multiplier applied
     "risk_weight_pre_currency_mismatch": pl.Float64,  # RW snapshot before 1.5x mismatch multiply
     # -------------------------------------------------------------------------
-    # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS9/24 Art. 153(5A), 154(4A), 158(6A))
+    # POST-MODEL ADJUSTMENTS (Basel 3.1 PRA PS1/26 Art. 153(5A), 154(4A), 158(6A))
     # -------------------------------------------------------------------------
     "rwa_pre_adjustments": pl.Float64,  # RWEA before post-model adjustments
     "post_model_adjustment_rwa": pl.Float64,  # General PMA add-on to RWEA

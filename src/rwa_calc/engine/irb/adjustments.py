@@ -6,12 +6,12 @@ Pipeline position:
 
 Key responsibilities:
 - Defaulted exposure treatment (CRR Art. 153(1)(ii) / 154(1)(i), Basel CRE31.3)
-- Post-model adjustments for known model deficiencies (Basel 3.1 PRA PS9/24)
+- Post-model adjustments for known model deficiencies (Basel 3.1 PRA PS1/26)
 - EL shortfall/excess comparison against provisions (CRR Art. 158-159)
 
 References:
 - CRR Art. 153(1)(ii), 154(1)(i): Defaulted exposure treatment
-- PRA PS9/24 Art. 153(5A), 154(4A), 158(6A): Post-model adjustments
+- PRA PS1/26 Art. 153(5A), 154(4A), 158(6A): Post-model adjustments
 - CRR Art. 158-159: EL shortfall treatment
 - CRR Art. 62(d): Excess provisions as T2 capital (capped)
 """
@@ -130,7 +130,7 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     """
     Apply post-model adjustments to IRB RWEA and EL (Basel 3.1 only).
 
-    PRA PS9/24 Art. 153(5A), 154(4A), 158(6A) require firms to apply
+    PRA PS1/26 Art. 153(5A), 154(4A), 158(6A) require firms to apply
     adjustments for known model deficiencies. Three RWEA components:
 
     1. Mortgage RW floor: min risk weight for residential mortgage exposures

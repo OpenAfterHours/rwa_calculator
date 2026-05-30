@@ -65,6 +65,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.tables.airb_floors import (
+    AIRB_OBS_FLOOR_B_MULTIPLIER,
+    AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER,
+)
 from rwa_calc.data.tables.ccf import (
     OC_SHORT_MATURITY_CCF,
     OC_SHORT_MATURITY_THRESHOLD_DAYS,
@@ -415,10 +419,9 @@ class CCFCalculator:
             # facilities whose SA CCF is not 100% (Table A1 Row 2 carve-out).
             # Non-revolving A-IRB must use SA CCFs from Table A1.
             # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
-            # TODO: move CRE32.27 0.5 floor multiplier to data/tables/airb_floors.py
             airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
-                pl.col("_sa_ccf_from_risk_type") * 0.5,
+                pl.col("_sa_ccf_from_risk_type") * float(AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER),
             )
             is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
                 pl.col("_sa_ccf_from_risk_type") < 1.0
@@ -530,11 +533,9 @@ class CCFCalculator:
             # Floor (b): facility-level EAD floor for Art. 166D(3) single-EAD approach
             # EAD >= on-BS EAD + 50% x (nominal x SA_CCF)
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
-            # TODO: move Art. 166D(5)(b) 0.5 floor multiplier to data/tables/airb_floors.py
-            floor_b = (
-                pl.col("on_bs_for_ead")
-                + pl.col("nominal_after_provision") * pl.col("_sa_ccf_from_risk_type") * 0.5
-            )
+            floor_b = pl.col("on_bs_for_ead") + pl.col("nominal_after_provision") * pl.col(
+                "_sa_ccf_from_risk_type"
+            ) * float(AIRB_OBS_FLOOR_B_MULTIPLIER)
 
             # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
             # EAD >= on-balance-sheet EAD (ignoring Art. 166D)

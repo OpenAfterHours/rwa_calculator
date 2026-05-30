@@ -46,12 +46,19 @@ class P3Column:
 
 @dataclass(frozen=True)
 class P3Row:
-    """A Pillar III template row definition."""
+    """A Pillar III template row definition.
+
+    ``re_split_roles`` (Basel 3.1 CR5 only) tags a row whose membership also
+    includes RE 55%-LTV split legs carrying a matching ``re_split_role`` value
+    ("secured" / "residual"). The parent RE row uses both roles to reconcile to
+    the un-split exposure; the 9f/9g "of which" sub-rows each select one role.
+    """
 
     ref: str
     name: str
     exposure_classes: tuple[str, ...] = ()
     is_total: bool = False
+    re_split_roles: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -326,9 +333,48 @@ def _build_cr5_columns(
 CRR_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(CRR_CR5_RISK_WEIGHTS, is_b31=False)
 B31_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(B31_CR5_RISK_WEIGHTS, is_b31=True)
 
-# CR5 rows are the same as CR4 rows
+# CR5 rows are the same as CR4 rows under CRR (byte-identical).
 CRR_CR5_ROWS: list[P3Row] = CRR_CR4_ROWS
-B31_CR5_ROWS: list[P3Row] = B31_CR4_ROWS
+
+# Basel 3.1 CR5 rows extend the shared CR4 row set with two RE-loan-split
+# "of which" sub-rows (9f/9g) for not-materially-dependent RE that straddles
+# the 55%-LTV split (Art. 124F secured leg / Art. 124L residual leg). These are
+# CR5-only — building a dedicated list (rather than aliasing B31_CR4_ROWS) keeps
+# CR4 unchanged. The parent RE row (9) gains ``re_split_roles`` so it also sums
+# both tagged split legs and reconciles to the un-split exposure; the sub-rows
+# are memo rows not added to the grand Total (row 17).
+_B31_CR5_RE_SPLIT_SUBROWS: list[P3Row] = [
+    P3Row("9f", "  Of which: RE — secured up to 55% LTV", re_split_roles=("secured",)),
+    P3Row("9g", "  Of which: RE — above 55% LTV (residual)", re_split_roles=("residual",)),
+]
+
+
+def _build_b31_cr5_rows() -> list[P3Row]:
+    """Build the Basel 3.1 CR5 row set from the shared CR4 rows.
+
+    Widens the RE parent row (9) to also match the tagged split legs and inserts
+    the 9f/9g "of which" sub-rows after the existing RE sub-row block (9e).
+    """
+    rows: list[P3Row] = []
+    for row in B31_CR4_ROWS:
+        if row.ref == "9":
+            rows.append(
+                P3Row(
+                    row.ref,
+                    row.name,
+                    exposure_classes=row.exposure_classes,
+                    is_total=row.is_total,
+                    re_split_roles=("secured", "residual"),
+                )
+            )
+        else:
+            rows.append(row)
+        if row.ref == "9e":
+            rows.extend(_B31_CR5_RE_SPLIT_SUBROWS)
+    return rows
+
+
+B31_CR5_ROWS: list[P3Row] = _build_b31_cr5_rows()
 
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,9 @@ Pipeline position:
 Key responsibilities:
 - Identify QCCP trade exposures via the counterparty ``is_qccp`` flag and
   the trade-level ``is_client_cleared`` flag.
-- Assign the regulatory trade-exposure risk weight per CRR Art. 306 / 307:
-    * Proprietary QCCP trade exposure  -> 2% (Art. 306(1), CRE54.14)
-    * Client-cleared via clearing member -> 4% (Art. 307, CRE54.15)
+- Assign the regulatory trade-exposure risk weight per CRR Art. 306(1):
+    * Proprietary QCCP trade exposure  -> 2% (Art. 306(1)(a), CRE54.14)
+    * Client-cleared via clearing member -> 4% (Art. 306(1)(c), CRE54.15)
     * Non-QCCP                          -> NULL pass-through (SA path,
       Art. 107(2)(a), 20% institution weight applied by the downstream
       classifier).
@@ -18,9 +18,9 @@ Key responsibilities:
   invariant of P8.25 is that all three CCR-B1 variants share identical EAD.
 
 References:
-- CRR Art. 306(1) — 2% RW for clearing member's own trade exposures to QCCP
-- CRR Art. 306(4) — RWA = EAD x 2%
-- CRR Art. 307    — 4% RW for client-cleared trades through clearing member
+- CRR Art. 306(1)(a) — 2% RW for clearing member's own trade exposures to QCCP
+- CRR Art. 306(1)(c) — 4% RW for client-cleared trades through clearing member
+- CRR Art. 306(4)    — RWA = EAD x 2%
 - CRR Art. 272 Def (88) — qualified central counterparty
 - CRR Art. 107(2)(a) — non-QCCP exposures routed via SA institution path
 - BCBS CRE54.14, CRE54.15 — supervisory risk weights for trade exposures
@@ -44,20 +44,19 @@ logger = logging.getLogger(__name__)
 
 
 @cites("CRR Art. 306")
-@cites("CRR Art. 307")
 def apply_ccp_risk_weight(
     exposures: pl.LazyFrame,
     counterparties: pl.LazyFrame,
     trades: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """Annotate ``risk_weight`` for QCCP trade exposures per CRR Art. 306/307.
+    """Annotate ``risk_weight`` for QCCP trade exposures per CRR Art. 306(1).
 
     The function joins the QCCP flag from ``counterparties`` and the
     client-cleared flag from ``trades`` onto ``exposures`` and writes a
     new ``risk_weight`` column with the regulatory trade-exposure weight:
 
-        is_qccp=True,  is_client_cleared=False -> 0.02 (Art. 306(1))
-        is_qccp=True,  is_client_cleared=True  -> 0.04 (Art. 307)
+        is_qccp=True,  is_client_cleared=False -> 0.02 (Art. 306(1)(a))
+        is_qccp=True,  is_client_cleared=True  -> 0.04 (Art. 306(1)(c))
         is_qccp=False                          -> NULL (pass-through to SA)
 
     The non-QCCP NULL pass-through is intentional: the 20% SA-institution
@@ -76,14 +75,14 @@ def apply_ccp_risk_weight(
         counterparties: LazyFrame carrying the ``is_qccp`` Boolean flag
             (CRR Art. 272 Def (88)).
         trades: LazyFrame carrying the ``is_client_cleared`` Boolean
-            flag (CRR Art. 307 trade-clearing relationship).
+            flag (CRR Art. 306(1)(c) client-cleared trade relationship).
 
     Returns:
         LazyFrame with the input ``exposures`` columns plus a new
         ``risk_weight: Float64`` column. ``ead_ccr`` is unchanged.
 
     References:
-        - CRR Art. 306(1), 306(4), 307; CRR Art. 107(2)(a).
+        - CRR Art. 306(1)(a), 306(1)(c), 306(4); CRR Art. 107(2)(a).
         - BCBS CRE54.14 (2% proprietary), CRE54.15 (4% client-cleared).
     """
     # Reduce counterparties / trades to the single flag column each carries

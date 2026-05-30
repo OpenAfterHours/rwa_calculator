@@ -142,7 +142,7 @@ def build_domestic_cgcb_guarantor_expr(
 ) -> pl.Expr:
     """
     Build a Polars expression that identifies a domestic-currency CGCB guarantor
-    under CRR Art. 114(3)/(4) and Art. 114(7) (Basel 3.1 preservation).
+    under CRR Art. 114(4) and Art. 114(7) (Basel 3.1 preservation).
 
     Combines the UK (GB/GBP) and EU (member state / member-state-domestic-currency)
     branches into a single boolean expression.
@@ -174,8 +174,8 @@ def denomination_currency_expr(schema_names: list[str] | set[str]) -> pl.Expr:
     The pipeline's FX converter (``engine/fx_converter.py``) overwrites
     ``currency`` with the reporting currency and stores the original
     denomination in ``original_currency``. Every check that compares the
-    exposure's currency against a regulatory domestic currency (CRR Art. 114(3)
-    /(4), Art. 115(5)) must use the pre-conversion denomination — the
+    exposure's currency against a regulatory domestic currency (CRR Art. 114(4)
+    /(7), Art. 115(5)) must use the pre-conversion denomination — the
     reporting currency is irrelevant to Art. 114(4).
 
     This helper returns ``pl.col("original_currency")`` if it exists in the

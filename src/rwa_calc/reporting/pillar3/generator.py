@@ -358,16 +358,18 @@ class Pillar3Generator:
         all_columns = get_cr5_columns(framework)
         column_refs = [c.ref for c in all_columns]
         is_b31 = framework == "BASEL_3_1"
+        role_col = _pick(cols, "re_split_role")
         rows_out: list[dict[str, object]] = []
 
         for row_def in cr5_rows:
             if row_def.is_total:
                 subset = data
-            elif row_def.exposure_classes and ec_col:
-                subset = data.filter(pl.col(ec_col).is_in(list(row_def.exposure_classes)))
             else:
-                rows_out.append(_null_row(row_def, column_refs))
-                continue
+                predicate = _cr5_row_predicate(row_def, ec_col, role_col)
+                if predicate is None:
+                    rows_out.append(_null_row(row_def, column_refs))
+                    continue
+                subset = data.filter(predicate)
 
             values = _compute_cr5_values(subset, cols, ead_col, rw_col, rw_bands, is_b31)
             rows_out.append(_make_row(row_def, values, column_refs))
@@ -1548,6 +1550,32 @@ def _compute_cr4_values(
         "e": rwa,
         "f": rwa / denominator if denominator > 0 else None,
     }
+
+
+def _cr5_row_predicate(
+    row_def: P3Row,
+    ec_col: str | None,
+    role_col: str | None,
+) -> pl.Expr | None:
+    """Build the CR5 row membership predicate (or None if the row is inert).
+
+    A row matches an exposure when its ``exposure_class`` is in the row's
+    ``exposure_classes`` OR (Basel 3.1) its ``re_split_role`` is in the row's
+    ``re_split_roles``. The role limb selects the 55%-LTV split legs (Art. 124F
+    secured / Art. 124L residual) so the parent RE row reconciles to the
+    un-split exposure and the 9f/9g "of which" sub-rows each pick one leg.
+    """
+    predicates: list[pl.Expr] = []
+    if row_def.exposure_classes and ec_col:
+        predicates.append(pl.col(ec_col).is_in(list(row_def.exposure_classes)))
+    if row_def.re_split_roles and role_col:
+        predicates.append(pl.col(role_col).is_in(list(row_def.re_split_roles)))
+    if not predicates:
+        return None
+    combined = predicates[0]
+    for extra in predicates[1:]:
+        combined = combined | extra
+    return combined
 
 
 def _compute_cr5_values(

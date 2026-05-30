@@ -464,6 +464,16 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p2_48",
             _generate_p248,
         ),
+        (
+            "P2.25b (CR5 RE loan-split sub-row bucketing — not-materially-dependent 55%-LTV split, B3.1 only)",
+            "p2_25",
+            _generate_p225,
+        ),
+        (
+            "P4.20 (C 08.02 IRB rows keyed by firm-supplied internal rating grade — grade-path fixture)",
+            "p4_20",
+            _generate_p420,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2406,6 +2416,26 @@ def _generate_p515(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p5_15", None)
 
 
+def _generate_p225(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P2.25(b) fixture module (Python-only; no parquet artefacts).
+
+    This fixture provides factory functions and constants for the CR5 RE
+    loan-split sub-row bucketing (rows 9f/9g, not-materially-dependent, B3.1).
+    The test drives ``Pillar3Generator._generate_cr5`` directly with a seeded
+    two-row LazyFrame; no parquet is written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p2_25 import build_re_split_results_lf
+
+        lf = build_re_split_results_lf()
+        df = lf.collect()
+        return [("p2_25.py (Python-only)", df.height)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p2_25", None)
+
+
 def _generate_p229(output_dir: Path) -> list[tuple[str, int]]:
     """Validate P2.29 fixture module (Python-only; no parquet artefacts).
 
@@ -2598,6 +2628,36 @@ def _generate_p248(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_48", None)
+
+
+def _generate_p420(output_dir: Path) -> list[tuple[str, int]]:
+    """Validate P4.20 fixture module (Python-only; no parquet artefacts).
+
+    P4.20 provides the grade-path IRB results LazyFrame for C 08.02 testing.
+    The frame carries ``cp_internal_rating_grade`` so the generator groups by
+    grade label rather than fixed PD-band labels.  Three corporate exposures
+    cover grades AAA / BB / D.  The load-bearing property (E1 PD 0.01 and
+    E2 PD 0.02 both fall in the same fixed PD bucket "0.75% - 2.50%") is
+    verified by the module self-check; this function confirms the import and
+    row count only.  No parquet files are written.
+    """
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p4_20 import build_grade_path_irb_results_lf  # noqa: F401
+
+        df = build_grade_path_irb_results_lf().collect()
+        if df.height != 3:
+            raise AssertionError(f"Expected 3 rows, got {df.height}")
+        if "cp_internal_rating_grade" not in df.columns:
+            raise AssertionError("Column 'cp_internal_rating_grade' must be present")
+        grades = set(df["cp_internal_rating_grade"].to_list())
+        expected = {"AAA", "BB", "D"}
+        if grades != expected:
+            raise AssertionError(f"Expected grades {expected}, got {grades}")
+        return [("p4_20.py (Python-only)", df.height)]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p4_20", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

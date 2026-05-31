@@ -306,7 +306,7 @@ def _compute_exposure_haircut(
     """
     base = _lookup_haircut_unscaled(collateral_type, cqs, residual_maturity_years)
     if base is None or base == 0.0:
-        return 0.0 if base is not None else 0.0
+        return 0.0
     return scale_haircut_for_liquidation_period(base, LIQUIDATION_PERIOD_REPO)
 
 

@@ -74,7 +74,7 @@ def _create_bundle(
     collateral_data: dict,
 ) -> ClassifiedExposuresBundle:
     """Build a ClassifiedExposuresBundle with F-IRB exposures and collateral."""
-    n = len(list(exposures_data.values())[0])
+    n = len(next(iter(exposures_data.values())))
     defaults = {
         "exposure_type": ["loan"] * n,
         "nominal_amount": [0.0] * n,
@@ -100,7 +100,7 @@ def _create_bundle(
     if "parent_facility_reference" in exposures.collect_schema().names():
         exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
 
-    coll_n = len(list(collateral_data.values())[0])
+    coll_n = len(next(iter(collateral_data.values())))
     coll_defaults = {
         "issuer_type": [""] * coll_n,
         "issuer_cqs": [1] * coll_n,

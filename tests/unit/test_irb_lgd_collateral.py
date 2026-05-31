@@ -57,7 +57,7 @@ def create_classified_bundle(
     Adds required columns with defaults if not provided.
     """
     # Add default columns required by CRM processor
-    n = len(list(exposures_data.values())[0])
+    n = len(next(iter(exposures_data.values())))
     defaults = {
         "exposure_type": ["loan"] * n,
         "nominal_amount": [0.0] * n,
@@ -88,7 +88,7 @@ def create_classified_bundle(
     collateral = None
     if collateral_data:
         # Add default collateral columns required by haircut calculator
-        coll_n = len(list(collateral_data.values())[0])
+        coll_n = len(next(iter(collateral_data.values())))
         coll_defaults = {
             "issuer_type": [""] * coll_n,  # Empty string instead of None for type consistency
             "issuer_cqs": [1] * coll_n,  # Default CQS

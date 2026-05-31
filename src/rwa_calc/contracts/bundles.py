@@ -47,6 +47,11 @@ class RawDataBundle:
         contingents: Off-balance sheet contingent items
         counterparties: Counterparty/borrower information
         collateral: Security/collateral items
+        collateral_links: Optional M:N mapping of one collateral item to
+            multiple beneficiaries (many rows per collateral_reference). When
+            present, the CRM stage splits each finite collateral value across
+            the linked beneficiaries for the most beneficial RWA impact. None
+            for the single-beneficiary path. See CRR Art. 193/194/230-231.
         guarantees: Guarantee/credit protection items
         provisions: IFRS 9 provisions (SCRA/GCRA)
         ratings: Internal and external credit ratings
@@ -75,6 +80,7 @@ class RawDataBundle:
     org_mappings: pl.LazyFrame | None = None
     contingents: pl.LazyFrame | None = None
     collateral: pl.LazyFrame | None = None
+    collateral_links: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     ratings: pl.LazyFrame | None = None
@@ -125,6 +131,8 @@ class ResolvedHierarchyBundle:
         counterparty_lookup: Resolved counterparty information
         lending_group_totals: Aggregated exposures by lending group
         collateral: Collateral with beneficiary hierarchy resolved (optional)
+        collateral_links: M:N collateral-to-beneficiary linkage, passed through
+            unchanged for the CRM stage to consume (optional)
         guarantees: Guarantees with beneficiary hierarchy resolved (optional)
         provisions: Provisions with beneficiary hierarchy resolved (optional)
         model_permissions: Per-model IRB permissions (optional, passed from RawDataBundle)
@@ -136,6 +144,7 @@ class ResolvedHierarchyBundle:
     counterparty_lookup: CounterpartyLookup
     lending_group_totals: pl.LazyFrame
     collateral: pl.LazyFrame | None = None
+    collateral_links: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
@@ -166,6 +175,7 @@ class ClassifiedExposuresBundle:
         slotting_exposures: Specialised lending for slotting approach
         equity_exposures: Equity exposures (SA only under Basel 3.1)
         collateral: Collateral data for CRM processing (passed through)
+        collateral_links: M:N collateral-to-beneficiary linkage (passed through)
         guarantees: Guarantee data for CRM processing (passed through)
         provisions: Provision data for CRM processing (passed through)
         counterparty_lookup: Counterparty data for guarantor risk weights
@@ -180,6 +190,7 @@ class ClassifiedExposuresBundle:
     equity_exposures: pl.LazyFrame | None = None
     ciu_holdings: pl.LazyFrame | None = None
     collateral: pl.LazyFrame | None = None
+    collateral_links: pl.LazyFrame | None = None
     guarantees: pl.LazyFrame | None = None
     provisions: pl.LazyFrame | None = None
     counterparty_lookup: CounterpartyLookup | None = None
@@ -210,6 +221,10 @@ class CRMAdjustedBundle:
         equity_exposures: Equity exposures (passed through, no CRM)
         crm_audit: Detailed audit trail of CRM application
         collateral_allocation: How collateral was allocated to exposures
+        collateral_link_allocation: How each finite collateral item was split
+            across its linked beneficiaries (one row per resolved
+            collateral_reference / beneficiary slice). None when no
+            collateral_links table was supplied. See CRR Art. 230-231.
         crm_errors: Any errors during CRM processing
     """
 
@@ -221,6 +236,7 @@ class CRMAdjustedBundle:
     ciu_holdings: pl.LazyFrame | None = None
     crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
+    collateral_link_allocation: pl.LazyFrame | None = None
     # Audit trail emitted by the RealEstateSplitter stage. One row per
     # original exposure that was split, with parent EAD, secured/residual
     # split, effective threshold, target class, and triggering regime.
@@ -818,6 +834,7 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
         org_mappings=None,
         contingents=None,
         collateral=None,
+        collateral_links=None,
         guarantees=None,
         provisions=None,
         ratings=None,

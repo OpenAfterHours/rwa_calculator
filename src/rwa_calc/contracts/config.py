@@ -964,6 +964,13 @@ class CalculationConfig:
     #   Art. 169B fallback uses Foundation formula with own unsecured LGD.
     # FOUNDATION: uses supervisory LGDS/LGDU, same as F-IRB.
     # None: not applicable under CRR (A-IRB is free-form).
+    # Enable splitting one finite collateral item across multiple beneficiaries
+    # via the optional collateral_links table (CRR Art. 230-231). When True
+    # (default) and a collateral_links table is supplied, the CRM stage splits
+    # each finite value across the linked beneficiaries for the most beneficial
+    # RWA impact. No-op when no collateral_links table is present; acts as an
+    # A/B kill-switch against the single-beneficiary path.
+    enable_collateral_link_splitting: bool = True
     collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
     log_level: str = "INFO"  # stdlib logging level for the rwa_calc namespace
@@ -1035,6 +1042,7 @@ class CalculationConfig:
         enable_double_default: bool = False,
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
+        enable_collateral_link_splitting: bool = True,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -1093,6 +1101,7 @@ class CalculationConfig:
             enable_double_default=enable_double_default,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
+            enable_collateral_link_splitting=enable_collateral_link_splitting,
             collect_engine=collect_engine,
             spill_dir=spill_dir,
             log_level=log_level,
@@ -1118,6 +1127,7 @@ class CalculationConfig:
         crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE,
         airb_collateral_method: AIRBCollateralMethod = AIRBCollateralMethod.LGD_MODELLING,
         enforce_retail_granularity: bool = True,
+        enable_collateral_link_splitting: bool = True,
         collect_engine: PolarsEngine = "cpu",
         spill_dir: Path | None = None,
         log_level: str = "INFO",
@@ -1206,6 +1216,7 @@ class CalculationConfig:
             use_investment_grade_assessment=use_investment_grade_assessment,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
+            enable_collateral_link_splitting=enable_collateral_link_splitting,
             enforce_retail_granularity=enforce_retail_granularity,
             collect_engine=collect_engine,
             spill_dir=spill_dir,

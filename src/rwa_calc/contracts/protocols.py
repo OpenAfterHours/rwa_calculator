@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     )
     from rwa_calc.contracts.config import CalculationConfig, CCRConfig, OutputFloorConfig
     from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
+    from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocation
 
 
 @runtime_checkable
@@ -259,6 +260,40 @@ class CCRCalculator(Protocol):
         errors are accumulated on the leaf bundles' ``errors`` lists
         by upstream stages (loader, P8.5). Bundle-wide wiring errors
         live on ``RawCCRBundle.errors``.
+        """
+        ...
+
+
+@runtime_checkable
+class CollateralLinkAllocatorProtocol(Protocol):
+    """
+    Protocol for splitting one finite collateral item across many beneficiaries.
+
+    Expands the optional M:N ``collateral_links`` table into per-beneficiary
+    collateral slices, allocating each finite value greedily for the most
+    beneficial RWA impact (highest pre-CRM RWA density first, honouring any
+    ``priority`` override and ``max_pledge_amount`` cap) without over-claiming.
+
+    The expanded frame has the same shape as the single-beneficiary collateral
+    table, so the Art. 231 waterfall consumes it unchanged.
+
+    Input: exposures + collateral + collateral_links
+    Output: CollateralLinkAllocation (expanded collateral, audit, errors)
+    """
+
+    def allocate_links(
+        self,
+        exposures: pl.LazyFrame,
+        collateral: pl.LazyFrame | None,
+        collateral_links: pl.LazyFrame | None,
+        config: CalculationConfig,
+    ) -> CollateralLinkAllocation:
+        """
+        Expand ``collateral_links`` into per-beneficiary collateral slices.
+
+        Returns the original collateral unchanged when no usable links table is
+        supplied. Never raises — data-quality issues are accumulated on the
+        result's ``errors`` list.
         """
         ...
 

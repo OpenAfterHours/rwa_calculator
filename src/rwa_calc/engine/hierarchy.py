@@ -217,6 +217,7 @@ class HierarchyResolver:
             exposures=exposures,
             counterparty_lookup=counterparty_lookup,
             collateral=collateral,
+            collateral_links=data.collateral_links,
             guarantees=guarantees,
             provisions=provisions,
             equity_exposures=equity_exposures,

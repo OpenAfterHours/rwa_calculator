@@ -18,6 +18,9 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.errors import (
+    ERROR_COLLATERAL_LINK_DUPLICATE,
+    ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY,
+    ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL,
     ERROR_EAD_NULL,
     ERROR_INVALID_COLUMN_VALUE,
     ERROR_INVALID_VALUE,
@@ -673,6 +676,7 @@ def validate_bundle_values(
         "contingents": bundle.contingents,
         "counterparties": bundle.counterparties,
         "collateral": bundle.collateral,
+        "collateral_links": bundle.collateral_links,
         "guarantees": bundle.guarantees,
         "provisions": bundle.provisions,
         "ratings": bundle.ratings,
@@ -704,7 +708,189 @@ def validate_bundle_values(
         if table_name == "ratings":
             all_errors.extend(_validate_short_term_rating_scope(lf))
 
+    # Cross-table referential integrity for the M:N collateral-links table.
+    all_errors.extend(validate_collateral_links(bundle))
+
     return all_errors
+
+
+def validate_collateral_links(bundle: RawDataBundle) -> list[CalculationError]:
+    """Referential-integrity checks for the M:N collateral-links table.
+
+    The collateral_links table lets one finite collateral item be pledged
+    against multiple beneficiaries. Before the CRM stage splits the value, this
+    validates that:
+
+    - Every ``collateral_reference`` resolves to a real collateral item
+      (``CRM009``).
+    - Every ``(beneficiary_type, beneficiary_reference)`` resolves to a real
+      exposure / facility / counterparty / guarantee (``CRM010``). Types are
+      resolved exactly as the CRM cascade resolves them: direct types
+      (exposure/loan/contingent) against loan/contingent references, ``facility``
+      against facility references, ``counterparty`` against counterparty
+      references.
+    - No ``(collateral_reference, beneficiary_type, beneficiary_reference)``
+      triple is duplicated (``CRM011``).
+
+    Returns an empty list when no collateral_links table is supplied (the
+    single-beneficiary path is unaffected). Never raises — all issues are
+    accumulated as CalculationError.
+
+    References:
+    - CRR Art. 193/194/207: CRM eligibility and recognition conditions
+    """
+    links = bundle.collateral_links
+    if links is None:
+        return []
+
+    link_cols = set(links.collect_schema().names())
+    required = {"collateral_reference", "beneficiary_type", "beneficiary_reference"}
+    if not required.issubset(link_cols):
+        # Missing required columns are reported by schema validation.
+        return []
+
+    errors: list[CalculationError] = []
+
+    norm = links.select(
+        pl.col("collateral_reference").cast(pl.String),
+        pl.col("beneficiary_type").cast(pl.String).str.to_lowercase().alias("_bt"),
+        pl.col("beneficiary_reference").cast(pl.String),
+    )
+
+    # --- CRM009: unknown collateral reference ---------------------------------
+    # An absent collateral table yields an empty valid set, so the anti-join
+    # flags every linked collateral_reference (a single linear code path).
+    if bundle.collateral is not None and (
+        "collateral_reference" in bundle.collateral.collect_schema().names()
+    ):
+        valid_coll = (
+            bundle.collateral.select(pl.col("collateral_reference").cast(pl.String))
+            .unique()
+            .drop_nulls()
+        )
+    else:
+        valid_coll = pl.LazyFrame(schema={"collateral_reference": pl.String})
+    unknown_coll = (
+        norm.select("collateral_reference")
+        .unique()
+        .join(valid_coll, on="collateral_reference", how="anti")
+        .collect()["collateral_reference"]
+        .to_list()
+    )
+    if unknown_coll:
+        errors.append(
+            CalculationError(
+                code=ERROR_COLLATERAL_LINK_UNKNOWN_COLLATERAL,
+                message=(
+                    f"[collateral_links] {len(unknown_coll)} collateral_reference value(s) "
+                    f"do not resolve to a collateral item: {sorted(unknown_coll)[:5]}. "
+                    "Each link must reference a row in the collateral table."
+                ),
+                severity=ErrorSeverity.ERROR,
+                category=ErrorCategory.CRM,
+                field_name="collateral_reference",
+                regulatory_reference="CRR Art. 193/194",
+            )
+        )
+
+    # --- CRM010: unknown beneficiary (type, reference) ------------------------
+    valid_refs = _collateral_link_valid_beneficiaries(bundle)
+    unknown_benef = (
+        norm.select("_bt", "beneficiary_reference")
+        .unique()
+        .join(valid_refs, on=["_bt", "beneficiary_reference"], how="anti")
+        .collect()
+    )
+    if unknown_benef.height > 0:
+        sample = (
+            unknown_benef.head(5)
+            .select(pl.concat_str(["_bt", "beneficiary_reference"], separator=":").alias("s"))["s"]
+            .to_list()
+        )
+        errors.append(
+            CalculationError(
+                code=ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY,
+                message=(
+                    f"[collateral_links] {unknown_benef.height} beneficiary link(s) do not "
+                    f"resolve to a real exposure/facility/counterparty: {sample}. The "
+                    "beneficiary_type must match the reference's source table."
+                ),
+                severity=ErrorSeverity.ERROR,
+                category=ErrorCategory.CRM,
+                field_name="beneficiary_reference",
+                regulatory_reference="CRR Art. 193/194",
+            )
+        )
+
+    # --- CRM011: duplicate links ---------------------------------------------
+    dups = (
+        norm.group_by(["collateral_reference", "_bt", "beneficiary_reference"])
+        .len()
+        .filter(pl.col("len") > 1)
+        .collect()
+    )
+    if dups.height > 0:
+        sample = (
+            dups.head(5)
+            .select(
+                pl.concat_str(
+                    ["collateral_reference", "_bt", "beneficiary_reference"], separator=":"
+                ).alias("s")
+            )["s"]
+            .to_list()
+        )
+        errors.append(
+            CalculationError(
+                code=ERROR_COLLATERAL_LINK_DUPLICATE,
+                message=(
+                    f"[collateral_links] {dups.height} duplicated "
+                    f"(collateral_reference, beneficiary_type, beneficiary_reference) "
+                    f"triple(s): {sample}. Each link must be unique."
+                ),
+                severity=ErrorSeverity.ERROR,
+                category=ErrorCategory.CRM,
+                field_name="beneficiary_reference",
+                regulatory_reference="CRR Art. 193/194",
+            )
+        )
+
+    return errors
+
+
+def _collateral_link_valid_beneficiaries(bundle: RawDataBundle) -> pl.LazyFrame:
+    """Build the valid (lower-cased beneficiary_type, reference) universe.
+
+    Mirrors the CRM cascade's resolution: exposure/loan/contingent resolve
+    against loan and contingent references; facility against facility
+    references; counterparty against counterparty references; guarantee against
+    guarantee references.
+    """
+    frames: list[pl.LazyFrame] = []
+
+    def _add(lf: pl.LazyFrame | None, ref_col: str, bt_values: list[str]) -> None:
+        if lf is None:
+            return
+        if ref_col not in lf.collect_schema().names():
+            return
+        refs = lf.select(
+            pl.col(ref_col).cast(pl.String).alias("beneficiary_reference")
+        ).drop_nulls()
+        for bt in bt_values:
+            frames.append(refs.with_columns(pl.lit(bt).alias("_bt")))
+
+    # Direct types share the unified exposure_reference (= loan / contingent ref).
+    _add(bundle.loans, "loan_reference", ["loan", "exposure"])
+    _add(bundle.contingents, "contingent_reference", ["contingent", "exposure"])
+    _add(bundle.facilities, "facility_reference", ["facility"])
+    _add(bundle.counterparties, "counterparty_reference", ["counterparty"])
+    _add(bundle.guarantees, "guarantee_reference", ["guarantee"])
+
+    if not frames:
+        return pl.LazyFrame(
+            {"beneficiary_reference": [], "_bt": []},
+            schema={"beneficiary_reference": pl.String, "_bt": pl.String},
+        )
+    return pl.concat(frames, how="vertical_relaxed").unique()
 
 
 def _validate_effective_maturity_range(

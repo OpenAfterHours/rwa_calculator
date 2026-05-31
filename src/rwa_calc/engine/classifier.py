@@ -333,6 +333,7 @@ class ExposureClassifier:
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
             collateral=data.collateral,
+            collateral_links=data.collateral_links,
             guarantees=data.guarantees,
             provisions=data.provisions,
             counterparty_lookup=data.counterparty_lookup,

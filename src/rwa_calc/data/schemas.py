@@ -463,6 +463,38 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "credit_event_reduction": ColumnSpec(pl.Float64, default=0.0, required=False),
 }
 
+# Optional M:N linkage of one collateral item to multiple beneficiaries.
+#
+# COLLATERAL_SCHEMA carries a single ``beneficiary_reference`` per row. When a
+# physical pledge backs several facilities/loans, the firm supplies this side
+# table instead: the collateral row defines the finite value once, and each
+# link row names one beneficiary it may protect. The CRM stage then splits the
+# finite value across the linked beneficiaries for the most beneficial RWA
+# impact (engine/crm/link_allocation.py). Entirely additive — a corpus with no
+# collateral_links table behaves exactly as the single-beneficiary path.
+#
+# Many-to-one with collateral: multiple rows share a ``collateral_reference``.
+# Logical key = (collateral_reference, beneficiary_type, beneficiary_reference).
+#
+# References:
+# - CRR Art. 193/194/207: CRM eligibility and recognition conditions
+# - CRR Art. 230-231: substitution / sequential allocation of collateral
+COLLATERAL_LINK_SCHEMA: dict[str, ColumnSpec] = {
+    # FK to COLLATERAL_SCHEMA primary key. The finite value lives on that row.
+    "collateral_reference": ColumnSpec(pl.String),
+    # One of VALID_BENEFICIARY_TYPES. Direct types (exposure/loan/contingent)
+    # resolve on exposure_reference; "facility"/"counterparty" resolve on the
+    # pooled parent reference, mirroring the collateral cascade.
+    "beneficiary_type": ColumnSpec(pl.String),
+    "beneficiary_reference": ColumnSpec(pl.String),
+    # Optional per-link sub-limit (e.g. a legal cap on how much of this item may
+    # protect this beneficiary). Null = bounded only by the item's finite value.
+    "max_pledge_amount": ColumnSpec(pl.Float64, required=False),
+    # Optional manual fill order (lower = filled first). Null = engine ranks by
+    # pre-CRM RWA density (greedy most-beneficial allocation).
+    "priority": ColumnSpec(pl.Int32, required=False),
+}
+
 GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     "guarantee_reference": ColumnSpec(pl.String),
     "guarantee_type": ColumnSpec(pl.String, required=False),
@@ -1449,6 +1481,9 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
         "property_type": VALID_PROPERTY_TYPES,
         "issuer_type": VALID_ISSUER_TYPES,
         "valuation_type": VALID_VALUATION_TYPES,
+        "beneficiary_type": VALID_BENEFICIARY_TYPES,
+    },
+    "collateral_links": {
         "beneficiary_type": VALID_BENEFICIARY_TYPES,
     },
     "provisions": {

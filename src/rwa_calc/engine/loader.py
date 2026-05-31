@@ -50,6 +50,7 @@ from rwa_calc.data.column_spec import (
 from rwa_calc.data.schemas import (
     CCR_COLLATERAL_SCHEMA,
     CIU_HOLDINGS_SCHEMA,
+    COLLATERAL_LINK_SCHEMA,
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
     COUNTERPARTY_SCHEMA,
@@ -183,6 +184,7 @@ class DataSourceConfig:
     loans_file: Path | None = None
     contingents_file: Path | None = None
     collateral_file: Path | None = None
+    collateral_links_file: Path | None = None
     guarantees_file: Path | None = None
     provisions_file: Path | None = None
     ratings_file: Path | None = None
@@ -231,6 +233,7 @@ class DataSourceConfig:
             loans_file=get_p("loans"),
             contingents_file=get_p("contingents"),
             collateral_file=get_p("collateral"),
+            collateral_links_file=get_p("collateral_links"),
             guarantees_file=get_p("guarantee"),
             provisions_file=get_p("provision"),
             ratings_file=get_p("ratings"),
@@ -516,6 +519,9 @@ def _build_bundle(
         lending_mappings=load(config.lending_mappings_file, LENDING_MAPPING_SCHEMA),
         contingents=_opt("contingents", config.contingents_file, CONTINGENTS_SCHEMA),
         collateral=_opt("collateral", config.collateral_file, COLLATERAL_SCHEMA),
+        collateral_links=_opt(
+            "collateral_links", config.collateral_links_file, COLLATERAL_LINK_SCHEMA
+        ),
         guarantees=_opt("guarantees", config.guarantees_file, GUARANTEE_SCHEMA),
         provisions=_opt("provisions", config.provisions_file, PROVISION_SCHEMA),
         ratings=_opt("ratings", config.ratings_file, RATINGS_SCHEMA),

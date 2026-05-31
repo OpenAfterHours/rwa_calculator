@@ -328,9 +328,7 @@ def make_raw_data_bundle(
     if facility_mappings is None:
         fm_rows: list[dict[str, Any]] = [
             *_map_children_to_facilities(loan_rows, fac_rows, "loan_reference", "loan"),
-            *_map_children_to_facilities(
-                cont_rows, fac_rows, "contingent_reference", "contingent"
-            ),
+            *_map_children_to_facilities(cont_rows, fac_rows, "contingent_reference", "contingent"),
         ]
         # Note: Do NOT add facility self-reference entries (child_type=facility).
         # Those are only for multi-level facility hierarchies where sub-facilities

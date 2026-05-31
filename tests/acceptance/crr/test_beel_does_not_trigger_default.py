@@ -26,6 +26,7 @@ Regulatory References:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 
 import polars as pl
@@ -286,6 +287,9 @@ class TestBEELDoesNotTriggerDefault:
 
     def test_bundle_typing(self) -> None:
         """Smoke check that the test setup produces a ClassifiedExposuresBundle."""
-        # Sanity guard: if ClassifiedExposuresBundle is renamed, this test
-        # surfaces the contract drift instead of the more involved scenarios.
-        assert ClassifiedExposuresBundle is not None
+        # Sanity guard: if ClassifiedExposuresBundle is renamed, the module
+        # import fails to collect; if it stops being a frozen dataclass bundle,
+        # this assertion surfaces the contract drift instead of the more
+        # involved scenarios.
+        assert isinstance(ClassifiedExposuresBundle, type)
+        assert dataclasses.is_dataclass(ClassifiedExposuresBundle)

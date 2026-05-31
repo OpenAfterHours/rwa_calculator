@@ -23,6 +23,9 @@ import marimo
 __generated_with = "0.19.4"
 app = marimo.App(width="medium")
 
+# Regulatory references
+CRR_ART_224 = "CRR Art. 224"
+
 
 @app.cell
 def _():
@@ -323,7 +326,7 @@ def _(
             "formula": "C_adj = C × (1 - Hc)",
             "calculation": f"C_adj = £{coll_value_d2:,.0f} × (1 - 4%) = £{coll_adjusted_d2:,.0f}",
         },
-        regulatory_reference="CRR Art. 224",
+        regulatory_reference=CRR_ART_224,
     )
 
     print(f"CRR-D2: Collateral=£{coll_value_d2:,.0f}, Haircut={coll_haircut_d2 * 100:.1f}%")
@@ -408,7 +411,7 @@ def _(
             "other_equity_haircut": "25%",
             "calculation": f"C_adj = £{coll_value_d3:,.0f} × (1 - 15%) = £{coll_adjusted_d3:,.0f}",
         },
-        regulatory_reference="CRR Art. 224",
+        regulatory_reference=CRR_ART_224,
     )
 
     print(f"CRR-D3: Equity=£{coll_value_d3:,.0f}, Haircut=15%")
@@ -691,7 +694,7 @@ def _(
             "formula": "C_adj = C × (1 - Hc - Hfx)",
             "calculation": f"C_adj = £{coll_value_gbp_d6:,.0f} × (1 - 0% - 8%) = £{coll_adjusted_d6:,.0f}",
         },
-        regulatory_reference="CRR Art. 224",
+        regulatory_reference=CRR_ART_224,
     )
 
     print(

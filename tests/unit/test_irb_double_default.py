@@ -69,7 +69,7 @@ def _make_guaranteed_frame(
     guarantor_entity_type: str = "bank",
     guarantor_exposure_class: str = "institution",
     guarantor_cqs: int = 2,
-    guarantor_pd: float = 0.003,
+    guarantor_pd: float | None = 0.003,
     guarantor_approach: str = "irb",
     is_airb: bool = True,
     expected_loss: float = 9_000.0,

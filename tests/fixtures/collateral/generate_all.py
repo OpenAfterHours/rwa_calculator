@@ -104,76 +104,99 @@ def print_crm_scenario_analysis(output_dir: Path) -> None:
     print("CRM SCENARIO ANALYSIS")
     print("=" * 70)
 
-    # Financial collateral by type
-    print("\nFinancial Collateral (SA eligible):")
-    fin_coll = collateral.filter(pl.col("is_eligible_financial_collateral"))
-    if fin_coll.height > 0:
-        by_type = (
-            fin_coll.group_by("collateral_type")
-            .agg(
-                pl.col("market_value").sum().alias("total_value"),
-                pl.len().alias("count"),
-            )
-            .sort("collateral_type")
-        )
-        for row in by_type.iter_rows(named=True):
-            print(f"  {row['collateral_type']}: {row['count']} items, £{row['total_value']:,.0f}")
-
-    # Real estate analysis
-    print("\nReal Estate Collateral:")
-    re_coll = collateral.filter(pl.col("collateral_type") == "real_estate")
-    if re_coll.height > 0:
-        for row in re_coll.iter_rows(named=True):
-            prop_type = row["property_type"]
-            ltv = row["property_ltv"]
-            ref = row["collateral_reference"]
-            adc_status = ""
-            if row["is_adc"]:
-                adc_status = " (ADC-presold)" if row["is_presold"] else " (ADC)"
-            income = " (income-producing)" if row["is_income_producing"] else ""
-            print(f"  {ref}: {prop_type}, LTV={ltv:.0%}{adc_status}{income}")
-
-    # CRM test scenarios
-    print("\nCRM Test Scenarios:")
-
-    # D1: Cash collateral
-    cash_coll = collateral.filter(pl.col("collateral_type") == "cash")
-    if cash_coll.height > 0:
-        total_cash = cash_coll.select(pl.col("market_value").sum()).item()
-        print(f"  D1 - Cash collateral: {cash_coll.height} items, £{total_cash:,.0f}")
-
-    # D2: Government bonds
-    govt_bonds = collateral.filter(
-        (pl.col("collateral_type") == "bond") & (pl.col("issuer_type") == "sovereign")
-    )
-    if govt_bonds.height > 0:
-        total_bonds = govt_bonds.select(pl.col("market_value").sum()).item()
-        print(f"  D2 - Government bonds: {govt_bonds.height} items, £{total_bonds:,.0f}")
-
-    # D3: Equity
-    equity = collateral.filter(pl.col("collateral_type") == "equity")
-    if equity.height > 0:
-        total_equity = equity.select(pl.col("market_value").sum()).item()
-        print(f"  D3 - Equity collateral: {equity.height} items, £{total_equity:,.0f}")
-
-    # D5: Maturity mismatch
-    mat_mismatch = collateral.filter(pl.col("collateral_reference").str.contains("MAT_MISMATCH"))
-    if mat_mismatch.height > 0:
-        print(f"  D5 - Maturity mismatch: {mat_mismatch.height} items")
-
-    # D6: Currency mismatch
-    ccy_mismatch = collateral.filter(pl.col("collateral_reference").str.contains("CCY_MISMATCH"))
-    if ccy_mismatch.height > 0:
-        print(f"  D6 - Currency mismatch: {ccy_mismatch.height} items")
-
-    # Ineligible collateral
-    inelig = collateral.filter(
-        ~pl.col("is_eligible_financial_collateral") & ~pl.col("is_eligible_irb_collateral")
-    )
-    if inelig.height > 0:
-        print(f"  Ineligible collateral (test exclusion): {inelig.height} items")
+    _print_financial_collateral(collateral)
+    _print_real_estate_collateral(collateral)
+    _print_crm_test_scenarios(collateral)
 
     print("=" * 70)
+
+
+def _print_financial_collateral(collateral: pl.DataFrame) -> None:
+    """Print the SA-eligible financial collateral breakdown by type."""
+    print("\nFinancial Collateral (SA eligible):")
+    fin_coll = collateral.filter(pl.col("is_eligible_financial_collateral"))
+    if fin_coll.height == 0:
+        return
+
+    by_type = (
+        fin_coll.group_by("collateral_type")
+        .agg(
+            pl.col("market_value").sum().alias("total_value"),
+            pl.len().alias("count"),
+        )
+        .sort("collateral_type")
+    )
+    for row in by_type.iter_rows(named=True):
+        print(f"  {row['collateral_type']}: {row['count']} items, £{row['total_value']:,.0f}")
+
+
+def _print_real_estate_collateral(collateral: pl.DataFrame) -> None:
+    """Print the per-item real-estate collateral analysis."""
+    print("\nReal Estate Collateral:")
+    re_coll = collateral.filter(pl.col("collateral_type") == "real_estate")
+    for row in re_coll.iter_rows(named=True):
+        adc_status = _adc_status_label(row)
+        income = " (income-producing)" if row["is_income_producing"] else ""
+        print(
+            f"  {row['collateral_reference']}: {row['property_type']}, "
+            f"LTV={row['property_ltv']:.0%}{adc_status}{income}"
+        )
+
+
+def _adc_status_label(row: dict[str, object]) -> str:
+    """Return the ADC status suffix for a real-estate collateral row."""
+    if not row["is_adc"]:
+        return ""
+    return " (ADC-presold)" if row["is_presold"] else " (ADC)"
+
+
+def _print_crm_test_scenarios(collateral: pl.DataFrame) -> None:
+    """Print the labelled CRM test scenarios (cash, bonds, equity, mismatches)."""
+    print("\nCRM Test Scenarios:")
+
+    _print_valued_scenario(
+        collateral.filter(pl.col("collateral_type") == "cash"),
+        "D1 - Cash collateral",
+    )
+    _print_valued_scenario(
+        collateral.filter(
+            (pl.col("collateral_type") == "bond") & (pl.col("issuer_type") == "sovereign")
+        ),
+        "D2 - Government bonds",
+    )
+    _print_valued_scenario(
+        collateral.filter(pl.col("collateral_type") == "equity"),
+        "D3 - Equity collateral",
+    )
+    _print_count_scenario(
+        collateral.filter(pl.col("collateral_reference").str.contains("MAT_MISMATCH")),
+        "D5 - Maturity mismatch",
+    )
+    _print_count_scenario(
+        collateral.filter(pl.col("collateral_reference").str.contains("CCY_MISMATCH")),
+        "D6 - Currency mismatch",
+    )
+    _print_count_scenario(
+        collateral.filter(
+            ~pl.col("is_eligible_financial_collateral") & ~pl.col("is_eligible_irb_collateral")
+        ),
+        "Ineligible collateral (test exclusion)",
+    )
+
+
+def _print_valued_scenario(subset: pl.DataFrame, label: str) -> None:
+    """Print a scenario line with item count and summed market value."""
+    if subset.height == 0:
+        return
+    total = subset.select(pl.col("market_value").sum()).item()
+    print(f"  {label}: {subset.height} items, £{total:,.0f}")
+
+
+def _print_count_scenario(subset: pl.DataFrame, label: str) -> None:
+    """Print a scenario line with item count only."""
+    if subset.height == 0:
+        return
+    print(f"  {label}: {subset.height} items")
 
 
 if __name__ == "__main__":

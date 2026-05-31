@@ -137,6 +137,7 @@ _GRP_RWEA_SA_BREAKDOWN = "RWEA: SA Breakdown"
 
 # --- Section names ---
 _SEC_BREAKDOWN_EXPOSURE_TYPES = "Breakdown by Exposure Types"
+_SEC_MEMORANDUM_ITEMS = "Memorandum Items"
 
 # --- Slotting category labels ---
 _LBL_SLOT_CAT1 = "Category 1 (Strong)"
@@ -340,7 +341,7 @@ CRR_SA_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
     RowSection(
-        "Memorandum Items",
+        _SEC_MEMORANDUM_ITEMS,
         [
             COREPRow("0290", "Exposures secured by mortgages on commercial immovable property"),
             COREPRow("0300", "Exposures in default subject to RW of 100%"),
@@ -440,7 +441,7 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
     RowSection(
-        "Memorandum Items",
+        _SEC_MEMORANDUM_ITEMS,
         [
             # 0290, 0310 removed: replaced by detailed RE breakdown in Section 1
             COREPRow("0300", "Exposures in default subject to RW of 100%"),
@@ -1459,7 +1460,7 @@ B31_C02_00_ROW_SECTIONS: list[RowSection] = [
         ],
     ),
     RowSection(
-        "Memorandum Items",
+        _SEC_MEMORANDUM_ITEMS,
         [
             # PRA PS1/26 Art. 123B: portfolio-total RWEA of retail/RE exposures
             # that received the 1.5x currency-mismatch multiplier. Memo-only

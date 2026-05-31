@@ -176,9 +176,7 @@ def _(has_results, mo, pl, results_lf):
 
 @app.cell
 def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw_min):
-    if has_results and class_filter is not None:
-        schema_names = results_lf.collect_schema().names()
-
+    def _build_filter_predicates(schema_names):
         # Build combined filter predicate on LazyFrame
         predicates = []
 
@@ -193,13 +191,20 @@ def _(approach_filter, class_filter, has_results, mo, pl, results_lf, rw_max, rw
                 (pl.col("risk_weight") >= rw_min.value) & (pl.col("risk_weight") <= rw_max.value)
             )
 
-        if predicates:
-            combined = predicates[0]
-            for p in predicates[1:]:
-                combined = combined & p
-            filtered_lf = results_lf.filter(combined)
-        else:
-            filtered_lf = results_lf
+        return predicates
+
+    def _apply_predicates(predicates):
+        if not predicates:
+            return results_lf
+        combined = predicates[0]
+        for p in predicates[1:]:
+            combined = combined & p
+        return results_lf.filter(combined)
+
+    if has_results and class_filter is not None:
+        schema_names = results_lf.collect_schema().names()
+
+        filtered_lf = _apply_predicates(_build_filter_predicates(schema_names))
 
         # Compute filtered statistics via a single lazy aggregation
         stats_df = filtered_lf.select(

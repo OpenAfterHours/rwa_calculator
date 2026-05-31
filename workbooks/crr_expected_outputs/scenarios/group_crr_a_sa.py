@@ -23,6 +23,10 @@ import marimo
 __generated_with = "0.19.4"
 app = marimo.App(width="medium")
 
+# Module-level constants for repeated regulatory references and formulas
+RWA_FORMULA = "RWA = EAD × RW"
+CRR_ART_122_REF = "CRR Art. 122"
+
 
 @app.cell
 def _():
@@ -199,7 +203,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_cgcb_rw):
             "counterparty_name": cpty_a1["counterparty_name"],
             "country_code": cpty_a1["country_code"],
             "cqs": cqs_a1,
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1 * 100:.0f}% = £{rwa_a1:,.0f}",
         },
         regulatory_reference="CRR Art. 114",
@@ -254,10 +258,10 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_corporate_rw):
             "counterparty_name": cpty_a2["counterparty_name"],
             "cqs": cqs_a2,
             "rating_status": "unrated",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2 * 100:.0f}% = £{rwa_a2:,.0f}",
         },
-        regulatory_reference="CRR Art. 122",
+        regulatory_reference=CRR_ART_122_REF,
     )
 
     print(f"CRR-A2: EAD=£{ead_a2:,.0f}, RW={rw_a2 * 100:.0f}%, RWA=£{rwa_a2:,.0f}")
@@ -308,10 +312,10 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_corporate_rw):
             "counterparty_name": cpty_a3["counterparty_name"],
             "cqs": cqs_a3,
             "rating_value": rating_a3["rating_value"] if rating_a3 else "A",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3 * 100:.0f}% = £{rwa_a3:,.0f}",
         },
-        regulatory_reference="CRR Art. 122",
+        regulatory_reference=CRR_ART_122_REF,
     )
 
     print(f"CRR-A3: EAD=£{ead_a3:,.0f}, RW={rw_a3 * 100:.0f}%, RWA=£{rwa_a3:,.0f}")
@@ -361,7 +365,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, fixtures, get_institution_rw
         calculation_details={
             "counterparty_name": cpty_a4["counterparty_name"],
             "cqs": cqs_a4,
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
         regulatory_reference="CRR Art. 120 Table 3",
@@ -439,7 +443,7 @@ def _(
             "property_value": float(ead_a5 / ltv_a5),
             "ltv_treatment": rw_desc_a5,
             "crr_vs_basel31": "CRR 35% vs Basel 3.1 20% at 60% LTV",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5 * 100:.0f}% = £{rwa_a5:,.0f}",
         },
         regulatory_reference="CRR Art. 125",
@@ -571,7 +575,7 @@ def _(CRRScenarioResult, Decimal, calculate_sa_rwa, get_commercial_re_rw):
             "income_cover_met": has_income_cover_a7,
             "treatment": rw_desc_a7,
             "property_type": "commercial",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7 * 100:.0f}% = £{rwa_a7:,.0f}",
         },
         regulatory_reference="CRR Art. 126",
@@ -934,7 +938,7 @@ def _(
             "formula": "RWA = EAD × RW (no SME factor)",
             "calculation": f"RWA = £{ead_a12:,.0f} × {rw_a12 * 100:.0f}% = £{rwa_after_sf_a12:,.0f}",
         },
-        regulatory_reference="CRR Art. 122",
+        regulatory_reference=CRR_ART_122_REF,
     )
 
     print(

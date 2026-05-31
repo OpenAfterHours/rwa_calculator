@@ -628,28 +628,53 @@ class TestBenchmarkSummary:
         print("=" * 60)
 
         for name, info in dataset_100k_stats.items():
-            if isinstance(info, dict) and "count" in info:
-                print(f"\n{name}:")
-                print(f"  Count: {info['count']:,}")
-            elif name == "entity_distribution":
-                print(f"\n{name}:")
-                for entity, count in info.items():
-                    print(f"  {entity}: {count:,}")
-            elif name == "org_hierarchy":
-                print(f"\n{name}:")
-                for key, value in info.items():
-                    if isinstance(value, float):
-                        print(f"  {key}: {value:.2f}")
-                    else:
-                        print(f"  {key}: {value:,}")
-            elif name == "facility_hierarchy":
-                print(f"\n{name}:")
-                for key, value in info.items():
-                    if isinstance(value, dict):
-                        print(f"  {key}:")
-                        for k, v in value.items():
-                            print(f"    {k}: {v:,}")
-                    else:
-                        print(f"  {key}: {value:,}")
+            _print_stats_section(name, info)
 
         print("\n" + "=" * 60)
+
+
+# =============================================================================
+# PRIVATE HELPERS
+# =============================================================================
+
+
+def _print_stats_section(name: str, info: object) -> None:
+    """Dispatch one dataset-stats section to its printer based on its name/shape."""
+    if isinstance(info, dict) and "count" in info:
+        print(f"\n{name}:")
+        print(f"  Count: {info['count']:,}")
+    elif name == "entity_distribution" and isinstance(info, dict):
+        _print_entity_distribution(name, info)
+    elif name == "org_hierarchy" and isinstance(info, dict):
+        _print_scalar_mapping(name, info)
+    elif name == "facility_hierarchy" and isinstance(info, dict):
+        _print_nested_mapping(name, info)
+
+
+def _print_entity_distribution(name: str, info: dict) -> None:
+    """Print a flat entity -> count mapping."""
+    print(f"\n{name}:")
+    for entity, count in info.items():
+        print(f"  {entity}: {count:,}")
+
+
+def _print_scalar_mapping(name: str, info: dict) -> None:
+    """Print a flat key -> value mapping, formatting floats to 2dp."""
+    print(f"\n{name}:")
+    for key, value in info.items():
+        if isinstance(value, float):
+            print(f"  {key}: {value:.2f}")
+        else:
+            print(f"  {key}: {value:,}")
+
+
+def _print_nested_mapping(name: str, info: dict) -> None:
+    """Print a key -> value mapping where values may themselves be sub-mappings."""
+    print(f"\n{name}:")
+    for key, value in info.items():
+        if isinstance(value, dict):
+            print(f"  {key}:")
+            for k, v in value.items():
+                print(f"    {k}: {v:,}")
+        else:
+            print(f"  {key}: {value:,}")

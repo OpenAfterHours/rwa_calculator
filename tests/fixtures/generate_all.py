@@ -14,6 +14,20 @@ from pathlib import Path
 
 import polars as pl
 
+# Fixture parquet filenames (referenced from multiple generators / integrity checks).
+COUNTERPARTIES_PARQUET = "counterparties.parquet"
+MODEL_PERMISSIONS_PARQUET = "model_permissions.parquet"
+
+# Report label for builders that construct in-memory frames only (no parquet on disk).
+PYTHON_ONLY_NO_PARQUET = "(python-only builder — no parquet)"
+
+# Shared CCR builder module names cleared from sys.modules after each generator runs:
+# the ccr/*.py modules use relative imports and must be reloaded per package-root insert.
+CCR_GOLDEN_A1_MODULE = "ccr.golden_ccr_a1"
+CCR_TRADE_BUILDER_MODULE = "ccr.trade_builder"
+CCR_NETTING_SET_BUILDER_MODULE = "ccr.netting_set_builder"
+CCR_MARGIN_BUILDER_MODULE = "ccr.margin_builder"
+
 
 def main() -> None:
     """Entry point for master fixture generation."""
@@ -516,8 +530,8 @@ def _generate_counterparties(output_dir: Path) -> list[tuple[str, int]]:
         ]
 
         combined = pl.concat(frames)
-        combined.write_parquet(output_dir / "counterparties.parquet")
-        return [("counterparties.parquet", len(combined))]
+        combined.write_parquet(output_dir / COUNTERPARTIES_PARQUET)
+        return [(COUNTERPARTIES_PARQUET, len(combined))]
     finally:
         sys.path.remove(str(output_dir))
         # Clear cached module to avoid collision with ratings/specialised_lending.py
@@ -655,7 +669,7 @@ def _generate_model_permissions(output_dir: Path) -> list[tuple[str, int]]:
 
         df = create_model_permissions()
         save_model_permissions(output_dir)
-        return [("model_permissions.parquet", len(df))]
+        return [(MODEL_PERMISSIONS_PARQUET, len(df))]
     finally:
         sys.path.remove(str(output_dir))
 
@@ -797,7 +811,7 @@ def _generate_p1126(output_dir: Path) -> list[tuple[str, int]]:
                 )
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_126", None)
@@ -840,7 +854,7 @@ def _generate_p1125(output_dir: Path) -> list[tuple[str, int]]:
             raise AssertionError("Scenario C: is_financial_sector_entity must be absent")
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_125", None)
@@ -1277,7 +1291,7 @@ def _generate_p1147(output_dir: Path) -> list[tuple[str, int]]:
                 raise AssertionError(
                     f"Expected 5 mandatory parquet files, got {len(parquets)}: {parquets}"
                 )
-            mp = result / "config" / "model_permissions.parquet"
+            mp = result / "config" / MODEL_PERMISSIONS_PARQUET
             if mp.exists():
                 raise AssertionError("config/model_permissions.parquet must NOT be written")
 
@@ -1399,7 +1413,7 @@ def _generate_p239(output_dir: Path) -> list[tuple[str, int]]:
                 )
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_39", None)
@@ -1820,14 +1834,14 @@ def _generate_ccr_golden(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(fixtures_root)
         for mod in (
-            "ccr.golden_ccr_a1",
+            CCR_GOLDEN_A1_MODULE,
             "ccr.golden_ccr_a3",
             "ccr.golden_ccr_a7",
             "ccr.golden_ccr_a8",
             "ccr.golden_ccr_a9",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -1849,9 +1863,9 @@ def _generate_p814_margined(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.margined_mf_builder",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -1878,9 +1892,9 @@ def _generate_p815(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.hedging_sets_ir_builder",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -1970,14 +1984,14 @@ def _generate_p818(output_dir: Path) -> list[tuple[str, int]]:
             raise AssertionError("P8.18: ccr_collateral must be empty (no collateral)")
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.p8_18_non_enforceable",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2005,7 +2019,7 @@ def _generate_p816(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.pfe_multiplier_builder",
-            "ccr.netting_set_builder",
+            CCR_NETTING_SET_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2187,7 +2201,7 @@ def _generate_p824(output_dir: Path) -> list[tuple[str, int]]:
                 )
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(fixtures_root)
         for mod in ("ccr.failed_trade_builder",):
@@ -2276,14 +2290,14 @@ def _generate_p825(output_dir: Path) -> list[tuple[str, int]]:
 
         _ = (QCCP_RW_PROPRIETARY, QCCP_RW_CLIENT_CLEARED, QCCP_RW_SA_FALLBACK)
 
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.qccp_builder",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2311,9 +2325,9 @@ def _generate_p827(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.wwr_builder",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2333,10 +2347,10 @@ def _generate_ccr_a5(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_a5",
-            "ccr.golden_ccr_a1",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2356,11 +2370,11 @@ def _generate_ccr_a10(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_a10",
-            "ccr.golden_ccr_a1",
+            CCR_GOLDEN_A1_MODULE,
             "ccr.golden_ccr_a2",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2383,9 +2397,9 @@ def _generate_ccr_a11_a12(output_dir: Path) -> list[tuple[str, int]]:
         sys.path.remove(fixtures_root)
         for mod in (
             "ccr.golden_ccr_a11_a12",
-            "ccr.trade_builder",
-            "ccr.netting_set_builder",
-            "ccr.margin_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
         ):
             sys.modules.pop(mod, None)
 
@@ -2550,7 +2564,7 @@ def _generate_p249(output_dir: Path) -> list[tuple[str, int]]:
             raise AssertionError(f"EXPECTED_KEYS must have 15 entries, got {len(EXPECTED_KEYS)}")
 
         # No parquet files written — report zero files, zero records.
-        return [("(python-only builder — no parquet)", 0)]
+        return [(PYTHON_ONLY_NO_PARQUET, 0)]
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p2_49", None)
@@ -2702,7 +2716,7 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
 
     # Load all parquet files
     try:
-        counterparties = pl.read_parquet(fixtures_dir / "counterparty" / "counterparties.parquet")
+        counterparties = pl.read_parquet(fixtures_dir / "counterparty" / COUNTERPARTIES_PARQUET)
         loans = pl.read_parquet(fixtures_dir / "exposures" / "loans.parquet")
         facilities = pl.read_parquet(fixtures_dir / "exposures" / "facilities.parquet")
         contingents = pl.read_parquet(fixtures_dir / "exposures" / "contingents.parquet")
@@ -2847,7 +2861,7 @@ def print_data_integrity_check(fixtures_dir: Path) -> None:
             print("[OK] All provision loan references valid")
 
         # Check 12: Model ID references (ratings → model_permissions)
-        model_perms_path = fixtures_dir / "model_permissions" / "model_permissions.parquet"
+        model_perms_path = fixtures_dir / "model_permissions" / MODEL_PERMISSIONS_PARQUET
         if model_perms_path.exists():
             model_perms = pl.read_parquet(model_perms_path)
             valid_model_ids = set(model_perms["model_id"].to_list())

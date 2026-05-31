@@ -38,6 +38,9 @@ from workbooks.crr_expected_outputs.data.crr_params import (
     CRR_SME_SUPPORTING_FACTOR_TIER2,
 )
 
+# Regulatory references
+CRR2_ART_501 = "CRR2 Art. 501"
+
 
 @dataclass
 class CRRSupportingFactorResult:
@@ -104,7 +107,7 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
             rwa_before_sf=float(rwa_before_f1),
             supporting_factor=float(factor_f1),
             rwa_after_sf=float(rwa_after_f1),
-            regulatory_reference="CRR2 Art. 501",
+            regulatory_reference=CRR2_ART_501,
             calculation_notes=f"Tier 1 only: exposure £2m ≤ £{CRR_SME_EXPOSURE_THRESHOLD_GBP / 1000000:.2f}m threshold. Factor = {float(factor_f1):.4f}",
         )
     )
@@ -143,7 +146,7 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
             rwa_before_sf=float(rwa_before_f2),
             supporting_factor=float(factor_f2),
             rwa_after_sf=float(rwa_after_f2),
-            regulatory_reference="CRR2 Art. 501",
+            regulatory_reference=CRR2_ART_501,
             calculation_notes=(
                 f"Blended: £{threshold_gbp / 1000000:.2f}m @ 0.7619 + £{(ead_f2 - threshold_gbp) / 1000000:.2f}m @ 0.85. "
                 f"Effective factor = {float(factor_f2):.4f}"
@@ -185,7 +188,7 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
             rwa_before_sf=float(rwa_before_f3),
             supporting_factor=float(factor_f3),
             rwa_after_sf=float(rwa_after_f3),
-            regulatory_reference="CRR2 Art. 501",
+            regulatory_reference=CRR2_ART_501,
             calculation_notes=(
                 f"Tier 2 dominant: £{threshold_gbp / 1000000:.2f}m @ 0.7619 + £{tier2_amount_f3 / 1000000:.2f}m @ 0.85. "
                 f"Effective factor = {float(factor_f3):.4f}"
@@ -330,7 +333,7 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
             rwa_before_sf=float(rwa_before_f8),
             supporting_factor=float(factor_f8),
             rwa_after_sf=float(rwa_after_f8),
-            regulatory_reference="CRR2 Art. 501",
+            regulatory_reference=CRR2_ART_501,
             calculation_notes=(
                 f"Group total E* = £{e_star_f8 / 1000000:.2f}m across lending "
                 f"group LG_001. Blended factor = {float(factor_f8):.4f}. "
@@ -367,7 +370,7 @@ def generate_crr_f_scenarios() -> list[CRRSupportingFactorResult]:
             rwa_before_sf=float(rwa_before_f7),
             supporting_factor=float(factor_f7),
             rwa_after_sf=float(rwa_after_f7),
-            regulatory_reference="CRR2 Art. 501",
+            regulatory_reference=CRR2_ART_501,
             calculation_notes=(
                 f"At threshold: £{ead_f7 / 1000000:.2f}m exactly = Tier 1 only. "
                 f"Factor = {float(factor_f7):.4f}"

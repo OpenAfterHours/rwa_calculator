@@ -89,33 +89,36 @@ class _OverVisitor(ast.NodeVisitor):
         try:
             # Match ``<expr>.over(...)`` calls only.
             if isinstance(node.func, ast.Attribute) and node.func.attr == "over":
-                # All positional args are partition keys; check each.
-                for idx, arg in enumerate(node.args):
-                    if isinstance(arg, ast.Constant):
-                        self._flag_arg(node.lineno, arg.value, f"arg[{idx}]")
-                    else:
-                        # Variables, pl.col(...), splats — ambiguous from a
-                        # static AST view. Flag so the author has to opt in
-                        # via the helper.
-                        self._flag(
-                            node.lineno,
-                            f".over(<non-constant arg[{idx}]>) — "
-                            "use partition_by_nullable or move to allowlist",
-                        )
-                # Keyword form: ``.over(partition_by="...")``.
-                for kw in node.keywords:
-                    if kw.arg == "partition_by" and isinstance(kw.value, ast.Constant):
-                        self._flag_arg(node.lineno, kw.value.value, "partition_by")
-                    elif kw.arg == "partition_by":
-                        self._flag(
-                            node.lineno,
-                            ".over(partition_by=<non-constant>) — "
-                            "use partition_by_nullable or move to allowlist",
-                        )
+                self._check_over_call(node)
             self.generic_visit(node)
         finally:
             if is_helper:
                 self._helper_call_depth -= 1
+
+    def _check_over_call(self, node: ast.Call) -> None:
+        """Flag risky partition keys in a matched ``<expr>.over(...)`` call."""
+        # All positional args are partition keys; check each.
+        for idx, arg in enumerate(node.args):
+            if isinstance(arg, ast.Constant):
+                self._flag_arg(node.lineno, arg.value, f"arg[{idx}]")
+            else:
+                # Variables, pl.col(...), splats — ambiguous from a static AST
+                # view. Flag so the author has to opt in via the helper.
+                self._flag(
+                    node.lineno,
+                    f".over(<non-constant arg[{idx}]>) — "
+                    "use partition_by_nullable or move to allowlist",
+                )
+        # Keyword form: ``.over(partition_by="...")``.
+        for kw in node.keywords:
+            if kw.arg == "partition_by" and isinstance(kw.value, ast.Constant):
+                self._flag_arg(node.lineno, kw.value.value, "partition_by")
+            elif kw.arg == "partition_by":
+                self._flag(
+                    node.lineno,
+                    ".over(partition_by=<non-constant>) — "
+                    "use partition_by_nullable or move to allowlist",
+                )
 
 
 def _scan_file(path: Path) -> list[tuple[int, str]]:

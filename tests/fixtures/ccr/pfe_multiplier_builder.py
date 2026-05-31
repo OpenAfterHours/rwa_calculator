@@ -440,13 +440,27 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
     ns_b = make_ccr_a2b_netting_sets().collect()
     ns_p633 = make_ccr_p6_33_netting_sets().collect()
 
+    required_cols = set(dtypes_of(NETTING_SET_SCHEMA).keys())
+
+    _check_ccr_a2_invariants(ns_a, ns_b, required_cols)
+    _check_p6_33_invariants(ns_p633, required_cols)
+
+    return [("(python-only builder — no parquet)", 0)]
+
+
+def _check_ccr_a2_invariants(
+    ns_a: pl.DataFrame, ns_b: pl.DataFrame, required_cols: set[str]
+) -> None:
+    """Validate the CCR-A2 Scenario A / B frames and expected constants.
+
+    Raises:
+        AssertionError: If any Scenario A or Scenario B invariant is violated.
+    """
     # Invariant 1: each frame has exactly 1 row.
     if ns_a.height != 1:
         raise AssertionError(f"Scenario A: expected 1 netting-set row, got {ns_a.height}")
     if ns_b.height != 1:
         raise AssertionError(f"Scenario B: expected 1 netting-set row, got {ns_b.height}")
-    if ns_p633.height != 1:
-        raise AssertionError(f"P6.33: expected 1 netting-set row, got {ns_p633.height}")
 
     # Invariant 2: netting_set_id is correct on each scenario.
     if ns_a["netting_set_id"][0] != CCR_A2_NETTING_SET_ID:
@@ -513,13 +527,23 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
             raise AssertionError(f"Scenario {label}: is_legally_enforceable must be True")
 
     # Invariant 10: NETTING_SET_SCHEMA columns are all present (schema integrity).
-    required_cols = set(dtypes_of(NETTING_SET_SCHEMA).keys())
     for label, df in (("A", ns_a), ("B", ns_b)):
         missing = required_cols - set(df.columns)
         if missing:
             raise AssertionError(
                 f"Scenario {label}: missing NETTING_SET_SCHEMA columns: {sorted(missing)}"
             )
+
+
+def _check_p6_33_invariants(ns_p633: pl.DataFrame, required_cols: set[str]) -> None:
+    """Validate the P6.33 RC-active anchor frame.
+
+    Raises:
+        AssertionError: If any P6.33 invariant is violated.
+    """
+    # Invariant 1: the frame has exactly 1 row.
+    if ns_p633.height != 1:
+        raise AssertionError(f"P6.33: expected 1 netting-set row, got {ns_p633.height}")
 
     # Invariant 11: P6.33 frame has correct netting_set_id and counterparty.
     if ns_p633["netting_set_id"][0] != CCR_P6_33_NETTING_SET_ID:
@@ -555,5 +579,3 @@ def save_pfe_multiplier_fixtures() -> list[tuple[str, int]]:
     missing_p633 = required_cols - set(ns_p633.columns)
     if missing_p633:
         raise AssertionError(f"P6.33: missing NETTING_SET_SCHEMA columns: {sorted(missing_p633)}")
-
-    return [("(python-only builder — no parquet)", 0)]

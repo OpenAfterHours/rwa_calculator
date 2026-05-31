@@ -601,7 +601,9 @@ class TestPipelineErrorHandling:
 class TestPipelineBundleErrorPropagation:
     """Tests that RawDataBundle.errors are propagated to the final result."""
 
-    def test_bundle_errors_propagated_to_result(self, mock_raw_data, crr_config):
+    def test_bundle_errors_propagated_to_result(
+        self, mock_raw_data: RawDataBundle, crr_config: CalculationConfig
+    ):
         """Validation errors on RawDataBundle should appear in the final result."""
         validation_error = CalculationError(
             code="DQ002",
@@ -627,7 +629,9 @@ class TestPipelineBundleErrorPropagation:
         assert isinstance(result, AggregatedResultBundle)
         assert not any("entity_type" in e.message for e in result.errors)
 
-    def test_output_floor_summary_preserved_with_errors(self, mock_raw_data, basel31_config):
+    def test_output_floor_summary_preserved_with_errors(
+        self, mock_raw_data: RawDataBundle, basel31_config: CalculationConfig
+    ):
         """output_floor_summary must survive bundle reconstruction when errors exist.
 
         Regression test for P1.131: pipeline.py bundle reconstruction omitted

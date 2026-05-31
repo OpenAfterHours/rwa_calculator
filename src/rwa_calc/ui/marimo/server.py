@@ -246,7 +246,7 @@ async def duplicate_template(
 
 @gateway.delete(
     "/api/workbooks/{name:path}",
-    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT},
+    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT, 400: {"description": "Invalid path"}},
 )
 async def delete_workbook(name: str) -> dict[str, str]:
     """Delete a user workbook or an empty folder."""
@@ -290,7 +290,7 @@ async def create_folder(name: str, workspace: str = "local") -> dict[str, str]:
 
 @gateway.post(
     "/api/workbooks/move",
-    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT},
+    responses={**_RESP_404_NOT_FOUND, **_RESP_409_CONFLICT, 400: {"description": "Invalid path"}},
 )
 async def move_workbook(source: str, dest_folder: str = "") -> dict[str, str]:
     """Move a workbook to a different folder (or to root if *dest_folder* is empty)."""

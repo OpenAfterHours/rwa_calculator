@@ -484,6 +484,7 @@ def _(ScenarioResult):
     ]
 
     # Group E: Slotting Scenarios
+    SLOTTING_REFERENCE = "CRE33.5"
     group_e = [
         ScenarioResult(
             "E1",
@@ -497,7 +498,7 @@ def _(ScenarioResult):
             0.70,
             7000000,
             {"category": "strong"},
-            "CRE33.5",
+            SLOTTING_REFERENCE,
         ),
         ScenarioResult(
             "E2",
@@ -511,7 +512,7 @@ def _(ScenarioResult):
             0.90,
             9000000,
             {"category": "good"},
-            "CRE33.5",
+            SLOTTING_REFERENCE,
         ),
         ScenarioResult(
             "E3",
@@ -525,7 +526,7 @@ def _(ScenarioResult):
             1.15,
             5750000,
             {"category": "satisfactory"},
-            "CRE33.5",
+            SLOTTING_REFERENCE,
         ),
         ScenarioResult(
             "E4",

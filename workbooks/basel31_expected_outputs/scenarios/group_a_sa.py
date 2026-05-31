@@ -10,6 +10,10 @@ Usage:
 
 import marimo
 
+# Constants for RWA calculation formulas
+RWA_SIMPLE_FORMULA = "RWA = EAD × RW"
+RWA_LTV_BAND_FORMULA = "RWA = EAD × RW (based on LTV band)"
+
 __generated_with = "0.19.4"
 app = marimo.App(width="medium")
 
@@ -166,7 +170,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_cgcb_risk_weight):
             "counterparty_name": cpty_a1["counterparty_name"],
             "country_code": cpty_a1["country_code"],
             "cqs": cqs_a1,
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_SIMPLE_FORMULA,
             "calculation": f"RWA = £{ead_a1:,.0f} × {rw_a1 * 100:.0f}% = £{rwa_a1:,.0f}",
         },
         regulatory_reference="CRE20.7",
@@ -219,7 +223,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_corporate_risk_weight):
             "counterparty_name": cpty_a2["counterparty_name"],
             "cqs": cqs_a2,
             "rating_status": "unrated",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_SIMPLE_FORMULA,
             "calculation": f"RWA = £{ead_a2:,.0f} × {rw_a2 * 100:.0f}% = £{rwa_a2:,.0f}",
         },
         regulatory_reference="CRE20.26",
@@ -271,7 +275,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_corporate_risk_weight):
             "counterparty_name": cpty_a3["counterparty_name"],
             "cqs": cqs_a3,
             "rating_value": rating_a3["rating_value"] if rating_a3 else "A",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_SIMPLE_FORMULA,
             "calculation": f"RWA = £{ead_a3:,.0f} × {rw_a3 * 100:.0f}% = £{rwa_a3:,.0f}",
         },
         regulatory_reference="CRE20.25",
@@ -323,7 +327,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_institution_risk_weight):
             "counterparty_name": cpty_a4["counterparty_name"],
             "cqs": cqs_a4,
             "b31_ecra_rw": 0.30,
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_SIMPLE_FORMULA,
             "calculation": f"RWA = £{ead_a4:,.0f} × {rw_a4 * 100:.0f}% = £{rwa_a4:,.0f}",
         },
         regulatory_reference="CRE20.16, PRA PS1/26",
@@ -391,7 +395,7 @@ def _(
             "ltv": ltv_a5,
             "property_value": ead_a5 / ltv_a5,
             "ltv_band": "≤60%",
-            "formula": "RWA = EAD × RW (based on LTV band)",
+            "formula": RWA_LTV_BAND_FORMULA,
             "calculation": f"RWA = £{ead_a5:,.0f} × {rw_a5 * 100:.0f}% = £{rwa_a5:,.0f}",
         },
         regulatory_reference="CRE20.71",
@@ -445,7 +449,7 @@ def _(ScenarioResult, calculate_sa_rwa, fixtures, get_mortgage_risk_weight):
             "ltv": ltv_a6,
             "property_value": ead_a6 / ltv_a6,
             "ltv_band": "80% < LTV ≤ 90%",
-            "formula": "RWA = EAD × RW (based on LTV band)",
+            "formula": RWA_LTV_BAND_FORMULA,
             "calculation": f"RWA = £{ead_a6:,.0f} × {rw_a6 * 100:.0f}% = £{rwa_a6:,.0f}",
         },
         regulatory_reference="CRE20.71",
@@ -497,7 +501,7 @@ def _(ScenarioResult, calculate_sa_rwa, get_mortgage_risk_weight):
             "property_value": ead_a7 / ltv_a7,
             "ltv_band": "LTV ≤ 60%",
             "property_type": "commercial",
-            "formula": "RWA = EAD × RW (based on LTV band)",
+            "formula": RWA_LTV_BAND_FORMULA,
             "calculation": f"RWA = £{ead_a7:,.0f} × {rw_a7 * 100:.0f}% = £{rwa_a7:,.0f}",
         },
         regulatory_reference="CRE20.83",

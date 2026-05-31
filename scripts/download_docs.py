@@ -304,26 +304,31 @@ def print_summary(results: list[dict[str, str | int]]) -> None:
             print(f"  - {r['filename']}: {r['detail']}")
 
     if manual:
-        print()
-        print("Manual downloads required:")
-        print("-" * 50)
-
-        # Group by source
-        by_source: dict[str, list[dict[str, str | int]]] = {}
-        for r in manual:
-            source = str(r["detail"])
-            by_source.setdefault(source, []).append(r)
-
-        for source, entries in by_source.items():
-            print(f"\n  Source: {source}")
-            for r in entries:
-                print(f"    - {r['filename']}")
-
-        print()
-        print(f"  Save manual downloads to: {ASSETS_DIR}")
+        _print_manual_instructions(manual)
 
 
 # ── Private helpers ──────────────────────────────────────────────────────────
+
+
+def _print_manual_instructions(manual: list[dict[str, str | int]]) -> None:
+    """Print manual-download instructions grouped by source."""
+    print()
+    print("Manual downloads required:")
+    print("-" * 50)
+
+    # Group by source
+    by_source: dict[str, list[dict[str, str | int]]] = {}
+    for r in manual:
+        source = str(r["detail"])
+        by_source.setdefault(source, []).append(r)
+
+    for source, entries in by_source.items():
+        print(f"\n  Source: {source}")
+        for r in entries:
+            print(f"    - {r['filename']}")
+
+    print()
+    print(f"  Save manual downloads to: {ASSETS_DIR}")
 
 
 def _download_file(url: str, dest: Path) -> int:

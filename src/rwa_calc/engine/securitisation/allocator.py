@@ -69,6 +69,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Regulatory reference for securitisation significant risk transfer criteria
+CRR_ART_244 = "CRR Art. 244"
 
 # Schema of the resolved lookup frame returned by ``allocate``. Centralised
 # here so the hierarchy resolver and aggregator can build empty placeholder
@@ -110,7 +112,7 @@ class SecuritisationAllocator:
     """
 
     @cites("CRR Art. 109")
-    @cites("CRR Art. 244")
+    @cites(CRR_ART_244)
     @cites("PS1/26, paragraph 147A")
     def allocate(
         self,
@@ -160,7 +162,7 @@ class SecuritisationAllocator:
                         "allocation_pct outside (0, 1] or null; rows dropped."
                     ),
                     severity=ErrorSeverity.ERROR,
-                    regulatory_reference="CRR Art. 244",
+                    regulatory_reference=CRR_ART_244,
                 )
             )
         raw = raw.filter(
@@ -198,7 +200,7 @@ class SecuritisationAllocator:
                         "facilities; rows dropped."
                     ),
                     severity=ErrorSeverity.WARNING,
-                    regulatory_reference="CRR Art. 244",
+                    regulatory_reference=CRR_ART_244,
                 )
             )
         raw = raw.filter(pl.col("_is_known")).drop("_is_known")
@@ -225,7 +227,7 @@ class SecuritisationAllocator:
                         "securitisation allocation row(s) dropped; first row kept."
                     ),
                     severity=ErrorSeverity.WARNING,
-                    regulatory_reference="CRR Art. 244",
+                    regulatory_reference=CRR_ART_244,
                 )
             )
 
@@ -269,7 +271,7 @@ class SecuritisationAllocator:
                         "kept fully on-balance-sheet."
                     ),
                     severity=ErrorSeverity.ERROR,
-                    regulatory_reference="CRR Art. 244",
+                    regulatory_reference=CRR_ART_244,
                 )
             )
 
@@ -291,7 +293,7 @@ class SecuritisationAllocator:
                         "(residual = 0); zero on-balance-sheet contribution."
                     ),
                     severity=ErrorSeverity.WARNING,
-                    regulatory_reference="CRR Art. 244",
+                    regulatory_reference=CRR_ART_244,
                 )
             )
 

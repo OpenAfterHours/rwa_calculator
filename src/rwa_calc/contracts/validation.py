@@ -45,6 +45,9 @@ if TYPE_CHECKING:
         ResolvedHierarchyBundle,
     )
 
+# Regulatory reference for collateral link validation (CRM)
+COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
+
 
 def _as_dtype(entry: pl.DataType | ColumnSpec) -> pl.DataType:
     """Unwrap a schema entry to its dtype — accepts either a raw Polars dtype or a ColumnSpec."""
@@ -789,7 +792,7 @@ def validate_collateral_links(bundle: RawDataBundle) -> list[CalculationError]:
                 severity=ErrorSeverity.ERROR,
                 category=ErrorCategory.CRM,
                 field_name="collateral_reference",
-                regulatory_reference="CRR Art. 193/194",
+                regulatory_reference=COLLATERAL_LINK_CRM_REFERENCE,
             )
         )
 
@@ -818,7 +821,7 @@ def validate_collateral_links(bundle: RawDataBundle) -> list[CalculationError]:
                 severity=ErrorSeverity.ERROR,
                 category=ErrorCategory.CRM,
                 field_name="beneficiary_reference",
-                regulatory_reference="CRR Art. 193/194",
+                regulatory_reference=COLLATERAL_LINK_CRM_REFERENCE,
             )
         )
 
@@ -850,7 +853,7 @@ def validate_collateral_links(bundle: RawDataBundle) -> list[CalculationError]:
                 severity=ErrorSeverity.ERROR,
                 category=ErrorCategory.CRM,
                 field_name="beneficiary_reference",
-                regulatory_reference="CRR Art. 193/194",
+                regulatory_reference=COLLATERAL_LINK_CRM_REFERENCE,
             )
         )
 

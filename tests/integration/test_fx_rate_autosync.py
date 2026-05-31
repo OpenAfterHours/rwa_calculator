@@ -17,6 +17,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.observability import RunIdFilter
@@ -46,7 +47,7 @@ def _reset_logging_state() -> Iterator[None]:
     _reset()
 
 
-def _bundle_with_fx_rate(rate: float):
+def _bundle_with_fx_rate(rate: float) -> RawDataBundle:
     """Minimal bundle with a single (EUR, GBP, rate) row in fx_rates."""
     bundle = make_raw_data_bundle(
         counterparties=[make_counterparty()],
@@ -63,7 +64,7 @@ def _bundle_with_fx_rate(rate: float):
 
 
 def _run(
-    data, config: CalculationConfig, caplog: pytest.LogCaptureFixture
+    data: RawDataBundle, config: CalculationConfig, caplog: pytest.LogCaptureFixture
 ) -> list[logging.LogRecord]:
     caplog.set_level(logging.DEBUG, logger="rwa_calc")
     caplog.handler.addFilter(RunIdFilter())

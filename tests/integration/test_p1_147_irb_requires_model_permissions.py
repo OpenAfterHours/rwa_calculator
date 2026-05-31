@@ -144,10 +144,9 @@ class TestP1147IrbRequiresModelPermissions:
         val003_errs = _val003_errors(response.errors)
 
         # Tolerate no VAL003 at all (pre-fix) so only one assertion fails cleanly
-        if not val003_errs:
+        err = next(iter(val003_errs), None)
+        if err is None:
             pytest.fail("No VAL003 error found; cannot check attributes")
-
-        err = val003_errs[0]
 
         # Assert — structural contract of the error
         assert err.severity == "error", f"Expected severity='error'; got {err.severity!r}"

@@ -110,6 +110,10 @@ def _():
     """Helper functions for slotting calculations."""
     from decimal import Decimal
 
+    # Constants for slotting calculations
+    RWA_FORMULA = "RWA = EAD × RW"
+    REGULATORY_REFERENCE_ART_153_5 = "CRR Art. 153(5)"
+
     def get_slotting_rw(category: str, is_hvcre: bool = False) -> Decimal:
         """
         Get CRR slotting risk weight for specialised lending (>=2.5yr maturity).
@@ -164,6 +168,8 @@ def _():
         return rw, rwa
 
     return (
+        RWA_FORMULA,
+        REGULATORY_REFERENCE_ART_153_5,
         calculate_slotting_rwa,
         get_slotting_rw,
     )
@@ -227,7 +233,13 @@ def _(mo):
 
 
 @app.cell
-def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
+def _(
+    CRRSlottingResult,
+    Decimal,
+    RWA_FORMULA,
+    REGULATORY_REFERENCE_ART_153_5,
+    calculate_slotting_rwa,
+):
     """Calculate Scenario CRR-E1: Project Finance - Strong."""
     # Input
     ead_e1 = Decimal("10000000")
@@ -254,11 +266,11 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         calculation_details={
             "crr_rw": "70% (>=2.5yr), 50% (<2.5yr)",
             "basel31_rw": "70% (PRA PS1/26 — no separate pre-op table)",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_e1:,.0f} × 70% = £{rwa_e1:,.0f}",
             "note": "CRR Strong=70% for non-HVCRE with >=2.5yr maturity",
         },
-        regulatory_reference="CRR Art. 153(5)",
+        regulatory_reference=REGULATORY_REFERENCE_ART_153_5,
     )
 
     print("CRR-E1: Project Finance (Strong)")
@@ -288,7 +300,13 @@ def _(mo):
 
 
 @app.cell
-def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
+def _(
+    CRRSlottingResult,
+    Decimal,
+    RWA_FORMULA,
+    REGULATORY_REFERENCE_ART_153_5,
+    calculate_slotting_rwa,
+):
     """Calculate Scenario CRR-E2: Project Finance - Good."""
     ead_e2 = Decimal("10000000")
     category_e2 = "good"
@@ -313,10 +331,10 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         calculation_details={
             "crr_rw": "90% (>=2.5yr), 70% (<2.5yr)",
             "basel31_rw": "90% operational",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_e2:,.0f} × {rw_e2 * 100:.0f}% = £{rwa_e2:,.0f}",
         },
-        regulatory_reference="CRR Art. 153(5)",
+        regulatory_reference=REGULATORY_REFERENCE_ART_153_5,
     )
 
     print("CRR-E2: Project Finance (Good)")
@@ -351,7 +369,13 @@ def _(mo):
 
 
 @app.cell
-def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
+def _(
+    CRRSlottingResult,
+    Decimal,
+    RWA_FORMULA,
+    REGULATORY_REFERENCE_ART_153_5,
+    calculate_slotting_rwa,
+):
     """Calculate Scenario CRR-E3: IPRE - Weak."""
     ead_e3 = Decimal("5000000")
     category_e3 = "weak"
@@ -376,11 +400,11 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         calculation_details={
             "crr_rw": "250%",
             "basel31_rw": "150% (lower than CRR)",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_e3:,.0f} × 250% = £{rwa_e3:,.0f}",
             "note": "Weak category has punitive RW - close monitoring required",
         },
-        regulatory_reference="CRR Art. 153(5)",
+        regulatory_reference=REGULATORY_REFERENCE_ART_153_5,
     )
 
     print("CRR-E3: IPRE (Weak)")
@@ -414,7 +438,13 @@ def _(mo):
 
 
 @app.cell
-def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
+def _(
+    CRRSlottingResult,
+    Decimal,
+    RWA_FORMULA,
+    REGULATORY_REFERENCE_ART_153_5,
+    calculate_slotting_rwa,
+):
     """Calculate Scenario CRR-E4: HVCRE - Strong."""
     ead_e4 = Decimal("5000000")
     category_e4 = "strong"
@@ -439,11 +469,11 @@ def _(CRRSlottingResult, Decimal, calculate_slotting_rwa):
         calculation_details={
             "crr_rw": "95% (>=2.5yr), 70% (<2.5yr)",
             "basel31_rw": "95% (HVCRE Strong)",
-            "formula": "RWA = EAD × RW",
+            "formula": RWA_FORMULA,
             "calculation": f"RWA = £{ead_e4:,.0f} × {rw_e4 * 100:.0f}% = £{rwa_e4:,.0f}",
             "note": "CRR HVCRE has higher weights than non-HVCRE",
         },
-        regulatory_reference="CRR Art. 153(5)",
+        regulatory_reference=REGULATORY_REFERENCE_ART_153_5,
     )
 
     print("CRR-E4: HVCRE (Strong)")

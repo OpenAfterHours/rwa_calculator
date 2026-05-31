@@ -12,6 +12,8 @@ import marimo
 __generated_with = "0.10.0"
 app = marimo.App(width="medium")
 
+CRE33_5_REFERENCE = "CRE33.5"
+
 
 @app.cell
 def _():
@@ -124,7 +126,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
             "remaining_maturity": maturity_e1,
             "is_hvcre": False,
         },
-        regulatory_reference="CRE33.5",
+        regulatory_reference=CRE33_5_REFERENCE,
     )
 
     print(f"E1: PF Strong, EAD=£{ead_e1:,.0f}, RW={rw_e1 * 100:.0f}%, RWA=£{rwa_e1:,.0f}")
@@ -170,7 +172,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
             "remaining_maturity": maturity_e2,
             "is_hvcre": False,
         },
-        regulatory_reference="CRE33.5",
+        regulatory_reference=CRE33_5_REFERENCE,
     )
 
     print(f"E2: PF Good, EAD=£{ead_e2:,.0f}, RW={rw_e2 * 100:.0f}%, RWA=£{rwa_e2:,.0f}")
@@ -216,7 +218,7 @@ def _(get_slotting_risk_weight, calculate_sa_rwa, ScenarioResult):
             "remaining_maturity": maturity_e3,
             "is_hvcre": False,
         },
-        regulatory_reference="CRE33.5",
+        regulatory_reference=CRE33_5_REFERENCE,
     )
 
     print(f"E3: IPRE Satisfactory, EAD=£{ead_e3:,.0f}, RW={rw_e3 * 100:.0f}%, RWA=£{rwa_e3:,.0f}")

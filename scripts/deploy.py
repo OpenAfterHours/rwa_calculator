@@ -188,7 +188,8 @@ def run_command(cmd: list[str], description: str) -> bool:
         return False
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser for the deploy script."""
     parser = argparse.ArgumentParser(
         description="Deploy rwa-calc to PyPI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -231,50 +232,96 @@ Examples:
         action="store_true",
         help="Skip git commit and tag creation (leave changes uncommitted)",
     )
+    return parser
 
-    args = parser.parse_args()
 
-    # Determine new version
-    current_version = get_current_version()
-    print(f"Current version: {current_version}")
-
+def resolve_new_version(args: argparse.Namespace, current_version: str) -> str | None:
+    """Resolve the target version from args, or None if the args are invalid."""
     if args.version and args.bump:
         print("ERROR: Cannot specify both version and --bump")
-        return 1
+        return None
 
     if args.bump:
-        new_version = bump_version(current_version, args.bump)
-    elif args.version:
-        new_version = args.version
-    else:
-        # Default to patch bump
-        new_version = bump_version(current_version, "patch")
+        return bump_version(current_version, args.bump)
+    if args.version:
+        return args.version
+    # Default to patch bump
+    return bump_version(current_version, "patch")
 
-    print(f"New version: {new_version}")
 
-    if args.dry_run:
-        print("\n[DRY RUN] Would perform the following:")
-        print(f"  - Update version to {new_version} in:")
-        for file_path in VERSION_FILES:
-            print(f"    - {file_path}")
-        print("  - Update changelog")
-        print("  - Run: uv run python scripts/generate_citation_matrix.py")
-        print("  - Run: uv sync")
-        print("  - Run: uv build")
-        if not args.no_git:
-            print(f"  - git commit + git tag v{new_version}")
-        if args.publish:
-            print("  - Run: uv publish")
-        return 0
-
-    # Confirm
+def print_dry_run(args: argparse.Namespace, new_version: str) -> None:
+    """Print the actions a real run would perform, without making changes."""
+    print("\n[DRY RUN] Would perform the following:")
+    print(f"  - Update version to {new_version} in:")
+    for file_path in VERSION_FILES:
+        print(f"    - {file_path}")
+    print("  - Update changelog")
+    print("  - Run: uv run python scripts/generate_citation_matrix.py")
+    print("  - Run: uv sync")
+    print("  - Run: uv build")
+    if not args.no_git:
+        print(f"  - git commit + git tag v{new_version}")
     if args.publish:
-        print(f"\nThis will publish version {new_version} to PyPI.")
-        response = input("Continue? [y/N]: ").strip().lower()
-        if response != "y":
-            print("Aborted.")
-            return 1
+        print("  - Run: uv publish")
 
+
+def confirm_publish() -> bool:
+    """Prompt for interactive confirmation before publishing. Return True to proceed."""
+    response = input("Continue? [y/N]: ").strip().lower()
+    if response != "y":
+        print("Aborted.")
+        return False
+    return True
+
+
+def update_versioned_files(new_version: str, current_version: str) -> None:
+    """Apply the version bump and changelog promotion across all tracked files."""
+    print("\nUpdating version numbers...")
+    for file_path, pattern in VERSION_FILES.items():
+        full_path = PROJECT_ROOT / file_path
+        update_version_in_file(full_path, pattern, new_version)
+
+    print("\nUpdating changelog...")
+    update_changelog(new_version, current_version)
+
+
+def build_release(new_version: str) -> bool:
+    """Regenerate the citation matrix, sync the lockfile, and build the package."""
+    if not run_command(
+        ["uv", "run", "python", "scripts/generate_citation_matrix.py"],
+        "Regenerating citation matrix",
+    ):
+        return False
+
+    if not run_command(["uv", "sync"], "Syncing uv.lock"):
+        return False
+
+    if not run_command(["uv", "build"], "Building package"):
+        return False
+
+    dist_dir = PROJECT_ROOT / "dist"
+    if dist_dir.exists():
+        print("\nBuilt packages:")
+        for f in sorted(dist_dir.glob(f"*{new_version}*")):
+            print(f"  {f.name}")
+    return True
+
+
+def print_next_steps(args: argparse.Namespace, new_version: str) -> None:
+    """Print the manual follow-up steps a maintainer must run after the script."""
+    if args.no_git:
+        print("\nGit step skipped (--no-git). To commit and tag manually:")
+        print(f"  git add {' '.join(GIT_STAGE_FILES)}")
+        print(f'  git commit -m "chore(release): bump version to {new_version}"')
+        print(f'  git tag -a v{new_version} -m "Release v{new_version}"')
+        print("  git push origin master --tags")
+    else:
+        print("\nRelease committed and tagged. To finish, push:")
+        print("  git push origin master --tags")
+
+
+def run_release(args: argparse.Namespace, new_version: str, current_version: str) -> int:
+    """Execute the full release flow (tests, build, commit/tag, publish)."""
     # Run tests first (unless skipped)
     if not args.skip_tests and not run_command(
         ["uv", "run", "pytest", "-x", "-q"], "Running tests"
@@ -283,37 +330,10 @@ Examples:
         print("Use --skip-tests to bypass (not recommended).")
         return 1
 
-    # Update version in all files
-    print("\nUpdating version numbers...")
-    for file_path, pattern in VERSION_FILES.items():
-        full_path = PROJECT_ROOT / file_path
-        update_version_in_file(full_path, pattern, new_version)
+    update_versioned_files(new_version, current_version)
 
-    # Update changelog
-    print("\nUpdating changelog...")
-    update_changelog(new_version, current_version)
-
-    # Regenerate citation matrix from live @cites decorators
-    if not run_command(
-        ["uv", "run", "python", "scripts/generate_citation_matrix.py"],
-        "Regenerating citation matrix",
-    ):
+    if not build_release(new_version):
         return 1
-
-    # Sync uv.lock
-    if not run_command(["uv", "sync"], "Syncing uv.lock"):
-        return 1
-
-    # Build package
-    if not run_command(["uv", "build"], "Building package"):
-        return 1
-
-    # Show built files
-    dist_dir = PROJECT_ROOT / "dist"
-    if dist_dir.exists():
-        print("\nBuilt packages:")
-        for f in sorted(dist_dir.glob(f"*{new_version}*")):
-            print(f"  {f.name}")
 
     # Commit + tag before publishing so a successful PyPI release always has a
     # matching git tag.
@@ -334,17 +354,32 @@ Examples:
         print("Run with --publish to upload to PyPI:")
         print(f"  python scripts/deploy.py {new_version} --publish")
 
-    if args.no_git:
-        print("\nGit step skipped (--no-git). To commit and tag manually:")
-        print(f"  git add {' '.join(GIT_STAGE_FILES)}")
-        print(f'  git commit -m "chore(release): bump version to {new_version}"')
-        print(f'  git tag -a v{new_version} -m "Release v{new_version}"')
-        print("  git push origin master --tags")
-    else:
-        print("\nRelease committed and tagged. To finish, push:")
-        print("  git push origin master --tags")
-
+    print_next_steps(args, new_version)
     return 0
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    current_version = get_current_version()
+    print(f"Current version: {current_version}")
+
+    new_version = resolve_new_version(args, current_version)
+    if new_version is None:
+        return 1
+
+    print(f"New version: {new_version}")
+
+    if args.dry_run:
+        print_dry_run(args, new_version)
+        return 0
+
+    if args.publish:
+        print(f"\nThis will publish version {new_version} to PyPI.")
+        if not confirm_publish():
+            return 1
+
+    return run_release(args, new_version, current_version)
 
 
 if __name__ == "__main__":

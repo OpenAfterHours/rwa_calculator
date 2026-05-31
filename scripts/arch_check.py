@@ -50,6 +50,7 @@ COLLECT_ALLOWLIST = {"materialise.py"}
 
 _PATH_AGGREGATOR_SCHEMAS = "engine/aggregator/_schemas.py"
 _PATH_COMPARISON = "engine/comparison.py"
+_PATH_UTILS = "engine/utils.py"
 
 # Existing module-level regulatory-like scalars in engine/** that were
 # deliberately kept in place (see PR notes next to each). New entries require
@@ -91,7 +92,7 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # These are engine-internal column names tightly coupled to the helper's
     # AST-level contract test; keeping them in `data/schemas.py` would split
     # the rule from the code that enforces it.
-    "engine/utils.py": {"NULLABLE_PARTITION_KEYS"},
+    _PATH_UTILS: {"NULLABLE_PARTITION_KEYS"},
     # Two-site coupling marker for QRRE-related facility columns. Same
     # rationale as NULLABLE_PARTITION_KEYS: these are engine-internal column
     # names that document a within-module coupling between
@@ -115,7 +116,7 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
 LOGGER_REQUIRED_EXEMPT: set[str] = {
     # Supporting / helper modules that do not correspond to a pipeline stage.
     "engine/ccf.py",
-    "engine/utils.py",
+    _PATH_UTILS,
     "engine/crm/collateral.py",
     "engine/crm/expressions.py",
     "engine/crm/guarantees.py",
@@ -152,7 +153,7 @@ REFERENCES_REQUIRED_EXEMPT: set[str] = {
     "engine/aggregator/_utils.py",
     "engine/aggregator/_equity_prep.py",
     _PATH_AGGREGATOR_SCHEMAS,
-    "engine/utils.py",
+    _PATH_UTILS,
     "engine/fx_converter.py",
     "engine/fx_rate_sync.py",
     "engine/materialise.py",

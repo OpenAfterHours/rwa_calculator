@@ -305,6 +305,15 @@ def save_p827_fixtures() -> list[tuple[str, int]]:
     _ = make_p827_margin_agreements().collect()
     _ = make_p827_collateral().collect()
 
+    _check_trade_invariants(trades_df)  # Invariants 1-4
+    _check_netting_set_invariants(ns_df)  # Invariants 5-8
+    _check_scalar_invariants()  # Invariants 9-11
+
+    return [("(python-only builder — no parquet)", 0)]
+
+
+def _check_trade_invariants(trades_df: pl.DataFrame) -> None:
+    """Validate trade-frame invariants 1-4 (row count, T_WWR_01, T_NORMAL_01, NS membership)."""
     # Invariant 1: exactly 2 trade rows.
     if trades_df.height != 2:
         raise AssertionError(f"P8.27: expected 2 trade rows, got {trades_df.height}")
@@ -350,6 +359,9 @@ def save_p827_fixtures() -> list[tuple[str, int]]:
     if ns_ids != {NS_WWR_01_ID}:
         raise AssertionError(f"P8.27: all trades must belong to {NS_WWR_01_ID!r} (got {ns_ids})")
 
+
+def _check_netting_set_invariants(ns_df: pl.DataFrame) -> None:
+    """Validate netting-set-frame invariants 5-8 (row count, flags, null lgd override)."""
     # Invariant 5: exactly 1 netting-set row.
     if ns_df.height != 1:
         raise AssertionError(f"P8.27: expected 1 netting-set row, got {ns_df.height}")
@@ -383,6 +395,9 @@ def save_p827_fixtures() -> list[tuple[str, int]]:
             f"(got {ns_df['wwr_lgd_override'][0]!r})"
         )
 
+
+def _check_scalar_invariants() -> None:
+    """Validate scalar invariants 9-11 (synthetic NS id, lgd override, expected error counts)."""
     # Invariant 9: SYNTHETIC_NS_ID forms correctly.
     expected_synthetic = f"{NS_WWR_01_ID}__wwr__{T_WWR_01_ID}"
     if expected_synthetic != SYNTHETIC_NS_ID:
@@ -405,5 +420,3 @@ def save_p827_fixtures() -> list[tuple[str, int]]:
         raise AssertionError(
             f"P8.27: EXPECTED_CCR011_COUNT must be 0 (got {EXPECTED_CCR011_COUNT!r})"
         )
-
-    return [("(python-only builder — no parquet)", 0)]

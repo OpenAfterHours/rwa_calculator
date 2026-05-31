@@ -227,15 +227,30 @@ def save_p815_fixtures() -> list[tuple[str, int]]:
     _ = make_p815_margin_agreements().collect()
     _ = make_p815_collateral().collect()
 
-    # Invariant 1: two trade rows.
+    _check_row_counts(trades_df, ns_df)  # Invariants 1 & 2
+    _check_trade_asset_class_and_currency(trades_df)  # Invariants 3 & 4
+
+    t1_row = trades_df.filter(pl.col("trade_id") == P815_TRADE_ID_T1)
+    t2_row = trades_df.filter(pl.col("trade_id") == P815_TRADE_ID_T2)
+
+    _check_trade_directions(t1_row, t2_row)  # Invariants 3 & 4 (is_long)
+    _check_maturity_buckets()  # Invariants 5 & 6
+    _check_trade_netting_set_membership(t1_row, t2_row)  # Invariant 7
+    _check_netting_set_flags(ns_df)  # Invariant 8
+
+    return [("(python-only builder — no parquet)", 0)]
+
+
+def _check_row_counts(trades_df: pl.DataFrame, ns_df: pl.DataFrame) -> None:
+    """Invariants 1 & 2: two trade rows and one netting-set row."""
     if trades_df.height != 2:
         raise AssertionError(f"Expected 2 trade rows, got {trades_df.height}")
-
-    # Invariant 2: one netting-set row.
     if ns_df.height != 1:
         raise AssertionError(f"Expected 1 netting-set row, got {ns_df.height}")
 
-    # Invariants 3 & 4: asset class and currency for each trade.
+
+def _check_trade_asset_class_and_currency(trades_df: pl.DataFrame) -> None:
+    """Invariants 3 & 4: asset class and currency for each trade."""
     for tid in (P815_TRADE_ID_T1, P815_TRADE_ID_T2):
         row = trades_df.filter(pl.col("trade_id") == tid)
         if row.height != 1:
@@ -249,29 +264,31 @@ def save_p815_fixtures() -> list[tuple[str, int]]:
         if ccy != P815_CURRENCY:
             raise AssertionError(f"Trade {tid!r}: currency must be {P815_CURRENCY!r} (got {ccy!r})")
 
-    t1_row = trades_df.filter(pl.col("trade_id") == P815_TRADE_ID_T1)
-    t2_row = trades_df.filter(pl.col("trade_id") == P815_TRADE_ID_T2)
 
+def _check_trade_directions(t1_row: pl.DataFrame, t2_row: pl.DataFrame) -> None:
+    """Invariants 3 & 4 (is_long): T1 long, T2 short."""
     if t1_row["is_long"][0] is not True:
         raise AssertionError(f"T1 is_long must be True (got {t1_row['is_long'][0]!r})")
     if t2_row["is_long"][0] is not False:
         raise AssertionError(f"T2 is_long must be False (got {t2_row['is_long'][0]!r})")
 
-    # Invariant 5: T1 tenor > 5 years (GT_5Y bucket).
+
+def _check_maturity_buckets() -> None:
+    """Invariants 5 & 6: T1 tenor > 5y (GT_5Y) and T2 tenor in [1, 5]y (1Y_5Y)."""
     t1_tenor_years = (P815_MATURITY_T1 - P815_START_DATE).days / 365.25
     if t1_tenor_years <= 5.0:
         raise AssertionError(
             f"T1 tenor must be > 5 years for GT_5Y bucket (got {t1_tenor_years:.2f}y)"
         )
-
-    # Invariant 6: T2 tenor in [1, 5] years (1Y_5Y bucket).
     t2_tenor_years = (P815_MATURITY_T2 - P815_START_DATE).days / 365.25
     if not (1.0 <= t2_tenor_years <= 5.0):
         raise AssertionError(
             f"T2 tenor must be in [1, 5] years for 1Y_5Y bucket (got {t2_tenor_years:.2f}y)"
         )
 
-    # Invariant 7: both trades belong to NS-IR-01.
+
+def _check_trade_netting_set_membership(t1_row: pl.DataFrame, t2_row: pl.DataFrame) -> None:
+    """Invariant 7: both trades belong to NS-IR-01."""
     for tid, row in ((P815_TRADE_ID_T1, t1_row), (P815_TRADE_ID_T2, t2_row)):
         ns_id = row["netting_set_id"][0]
         if ns_id != P815_NETTING_SET_ID:
@@ -279,7 +296,9 @@ def save_p815_fixtures() -> list[tuple[str, int]]:
                 f"Trade {tid!r}: netting_set_id must be {P815_NETTING_SET_ID!r} (got {ns_id!r})"
             )
 
-    # Invariant 8: NS-IR-01 is unmargined and legally enforceable.
+
+def _check_netting_set_flags(ns_df: pl.DataFrame) -> None:
+    """Invariant 8: NS-IR-01 is unmargined and legally enforceable."""
     if ns_df["is_margined"][0] is not False:
         raise AssertionError(
             f"NS-IR-01 is_margined must be False (got {ns_df['is_margined'][0]!r})"
@@ -289,5 +308,3 @@ def save_p815_fixtures() -> list[tuple[str, int]]:
             f"NS-IR-01 is_legally_enforceable must be True "
             f"(got {ns_df['is_legally_enforceable'][0]!r})"
         )
-
-    return [("(python-only builder — no parquet)", 0)]

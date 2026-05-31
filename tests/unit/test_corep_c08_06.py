@@ -536,9 +536,7 @@ class TestC0806B31Features:
 
     def test_b31_hvcre_ead_correct(self):
         gen = COREPGenerator()
-        bundle = gen.generate_from_lazyframe(
-            _b31_slotting_with_hvcre(), framework="BABEL_3_1" if False else "BASEL_3_1"
-        )
+        bundle = gen.generate_from_lazyframe(_b31_slotting_with_hvcre(), framework="BASEL_3_1")
         hvcre = bundle.c08_06["hvcre"]
         total_long = hvcre.filter(pl.col("row_ref") == "0120")
         assert total_long["0040"][0] == pytest.approx(1_000_000, rel=1e-4)

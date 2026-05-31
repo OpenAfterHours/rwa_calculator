@@ -270,6 +270,38 @@ def _is_column_spec_schema(schema: dict[str, Any]) -> bool:
     return any(isinstance(v, ColumnSpec) for v in schema.values())
 
 
+def _map_children_to_facilities(
+    child_rows: list[dict[str, Any]],
+    fac_rows: list[dict[str, Any]],
+    child_ref_key: str,
+    child_type: str,
+) -> list[dict[str, Any]]:
+    """Map each child row (loan/contingent) to its counterparty's facility.
+
+    Falls back to the first facility when no counterparty match is found.
+    Children with no facility to attach to are skipped.
+    """
+    mappings: list[dict[str, Any]] = []
+    for child in child_rows:
+        matching_fac = next(
+            (
+                f
+                for f in fac_rows
+                if f.get("counterparty_reference") == child.get("counterparty_reference")
+            ),
+            fac_rows[0] if fac_rows else None,
+        )
+        if matching_fac:
+            mappings.append(
+                {
+                    "parent_facility_reference": matching_fac["facility_reference"],
+                    "child_reference": child[child_ref_key],
+                    "child_type": child_type,
+                }
+            )
+    return mappings
+
+
 def make_raw_data_bundle(
     counterparties: list[dict[str, Any]] | None = None,
     loans: list[dict[str, Any]] | None = None,
@@ -294,44 +326,10 @@ def make_raw_data_bundle(
 
     # Auto-generate facility mappings: each loan/contingent → its counterparty's facility
     if facility_mappings is None:
-        fm_rows: list[dict[str, Any]] = []
-        # Map loans to facilities
-        for loan in loan_rows:
-            # Find matching facility for same counterparty
-            matching_fac = next(
-                (
-                    f
-                    for f in fac_rows
-                    if f.get("counterparty_reference") == loan.get("counterparty_reference")
-                ),
-                fac_rows[0] if fac_rows else None,
-            )
-            if matching_fac:
-                fm_rows.append(
-                    {
-                        "parent_facility_reference": matching_fac["facility_reference"],
-                        "child_reference": loan["loan_reference"],
-                        "child_type": "loan",
-                    }
-                )
-        # Map contingents to facilities
-        for cont in cont_rows:
-            matching_fac = next(
-                (
-                    f
-                    for f in fac_rows
-                    if f.get("counterparty_reference") == cont.get("counterparty_reference")
-                ),
-                fac_rows[0] if fac_rows else None,
-            )
-            if matching_fac:
-                fm_rows.append(
-                    {
-                        "parent_facility_reference": matching_fac["facility_reference"],
-                        "child_reference": cont["contingent_reference"],
-                        "child_type": "contingent",
-                    }
-                )
+        fm_rows: list[dict[str, Any]] = [
+            *_map_children_to_facilities(loan_rows, fac_rows, "loan_reference", "loan"),
+            *_map_children_to_facilities(cont_rows, fac_rows, "contingent_reference", "contingent"),
+        ]
         # Note: Do NOT add facility self-reference entries (child_type=facility).
         # Those are only for multi-level facility hierarchies where sub-facilities
         # reference parent facilities. Adding them for standalone facilities causes

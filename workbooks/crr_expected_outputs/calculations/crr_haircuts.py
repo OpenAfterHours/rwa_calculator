@@ -49,43 +49,13 @@ def get_collateral_haircut(
 
     # Government bonds
     if collateral_lower in ("govt_bond", "sovereign_bond", "government_bond", "gilt"):
-        maturity = residual_maturity_years or 5.0
-        if cqs == 1:
-            if maturity <= 1:
-                return CRR_HAIRCUTS["govt_bond_cqs1_0_1y"]
-            elif maturity <= 5:
-                return CRR_HAIRCUTS["govt_bond_cqs1_1_5y"]
-            else:
-                return CRR_HAIRCUTS["govt_bond_cqs1_5y_plus"]
-        elif cqs in (2, 3):
-            if maturity <= 1:
-                return CRR_HAIRCUTS["govt_bond_cqs2_3_0_1y"]
-            elif maturity <= 5:
-                return CRR_HAIRCUTS["govt_bond_cqs2_3_1_5y"]
-            else:
-                return CRR_HAIRCUTS["govt_bond_cqs2_3_5y_plus"]
         # CQS 4+ or unrated - use higher haircut
-        return Decimal("0.15")
+        return _bond_haircut("govt_bond", cqs, residual_maturity_years, Decimal("0.15"))
 
     # Corporate bonds
     if collateral_lower in ("corp_bond", "corporate_bond"):
-        maturity = residual_maturity_years or 5.0
-        if cqs == 1:
-            if maturity <= 1:
-                return CRR_HAIRCUTS["corp_bond_cqs1_0_1y"]
-            elif maturity <= 5:
-                return CRR_HAIRCUTS["corp_bond_cqs1_1_5y"]
-            else:
-                return CRR_HAIRCUTS["corp_bond_cqs1_5y_plus"]
-        elif cqs in (2, 3):
-            if maturity <= 1:
-                return CRR_HAIRCUTS["corp_bond_cqs2_3_0_1y"]
-            elif maturity <= 5:
-                return CRR_HAIRCUTS["corp_bond_cqs2_3_1_5y"]
-            else:
-                return CRR_HAIRCUTS["corp_bond_cqs2_3_5y_plus"]
         # Lower rated - not eligible or high haircut
-        return Decimal("0.20")
+        return _bond_haircut("corp_bond", cqs, residual_maturity_years, Decimal("0.20"))
 
     # Equity
     if collateral_lower in ("equity", "shares", "stock"):
@@ -103,6 +73,43 @@ def get_collateral_haircut(
 
     # Other physical collateral
     return CRR_HAIRCUTS["other_physical"]
+
+
+def _bond_haircut(
+    prefix: str,
+    cqs: int | None,
+    residual_maturity_years: float | None,
+    low_rating_fallback: Decimal,
+) -> Decimal:
+    """
+    Look up the maturity-banded debt-security haircut for a bond (CRR Art. 224).
+
+    Args:
+        prefix: CRR_HAIRCUTS key prefix ("govt_bond" or "corp_bond")
+        cqs: Credit quality step of issuer
+        residual_maturity_years: Remaining maturity (defaults to 5.0 if missing)
+        low_rating_fallback: Haircut for CQS 4+ / unrated issuers
+
+    Returns:
+        Haircut as Decimal
+    """
+    maturity = residual_maturity_years or 5.0
+    if cqs == 1:
+        band = _maturity_band(maturity)
+        return CRR_HAIRCUTS[f"{prefix}_cqs1_{band}"]
+    if cqs in (2, 3):
+        band = _maturity_band(maturity)
+        return CRR_HAIRCUTS[f"{prefix}_cqs2_3_{band}"]
+    return low_rating_fallback
+
+
+def _maturity_band(maturity: float) -> str:
+    """Map a residual maturity (years) to its CRR haircut band suffix."""
+    if maturity <= 1:
+        return "0_1y"
+    if maturity <= 5:
+        return "1_5y"
+    return "5y_plus"
 
 
 def get_fx_haircut(exposure_currency: str, collateral_currency: str) -> Decimal:

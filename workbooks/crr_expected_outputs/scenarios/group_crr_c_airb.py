@@ -22,6 +22,9 @@ import marimo
 __generated_with = "0.19.4"
 app = marimo.App(width="medium")
 
+# Regulatory reference constants
+LGD_FLOOR_LABEL_CRR_AIRB = "None (CRR A-IRB)"
+
 
 @app.cell
 def _():
@@ -221,7 +224,7 @@ def _(
         expected_loss=el_c1,
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
-            "lgd_floor": "None (CRR A-IRB)",
+            "lgd_floor": LGD_FLOOR_LABEL_CRR_AIRB,
             "lgd_internal": lgd_internal_c1,
             "lgd_vs_firb": f"Internal {lgd_internal_c1 * 100:.0f}% vs F-IRB 45%",
             "scaling_factor": 1.06,
@@ -320,7 +323,7 @@ def _(
         expected_loss=el_c2,
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
-            "lgd_floor": "None (CRR A-IRB)",
+            "lgd_floor": LGD_FLOOR_LABEL_CRR_AIRB,
             "correlation_type": "Retail PD-dependent (3%-16%)",
             "maturity_adjustment": "Not applicable for retail",
             "scaling_factor": 1.06,
@@ -421,7 +424,7 @@ def _(
         expected_loss=el_c3,
         calculation_details={
             "pd_floor": float(CRR_PD_FLOOR),
-            "lgd_floor": "None (CRR A-IRB)",
+            "lgd_floor": LGD_FLOOR_LABEL_CRR_AIRB,
             "lgd_internal": lgd_internal_c3,
             "lending_type": "Project Finance",
             "alternative_approach": "Slotting (CRR Art. 153(5))",

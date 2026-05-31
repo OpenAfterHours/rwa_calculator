@@ -57,6 +57,7 @@ from rwa_calc.engine.crm import guarantees as guarantees_mod
 from rwa_calc.engine.crm import provisions as provisions_mod
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
+from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
 from rwa_calc.engine.materialise import materialise_barrier, sink_audit
@@ -541,6 +542,14 @@ class CRMProcessor:
         # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
 
+        # Step 3.55: Split finite collateral values across linked beneficiaries
+        # (CRR Art. 230-231) when a collateral_links table is supplied. Runs
+        # before FCSM precompute so the Simple Method sees the per-beneficiary
+        # slices. No-op when no links table is present.
+        collateral, link_allocation = self._apply_collateral_links(
+            exposures, collateral, data, config, errors
+        )
+
         # Step 3.6: Pre-compute FCSM columns if Simple Method is elected
         # Must run BEFORE Comprehensive Method (which is still needed for IRB LGD)
         use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
@@ -610,6 +619,7 @@ class CRMProcessor:
             ciu_holdings=data.ciu_holdings,
             crm_audit=crm_audit,
             collateral_allocation=collateral_allocation,
+            collateral_link_allocation=link_allocation,
             securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )
@@ -648,6 +658,13 @@ class CRMProcessor:
 
         # Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
+
+        # Step 3.7: Split each finite collateral value across its linked
+        # beneficiaries (CRR Art. 230-231) when a collateral_links table is
+        # supplied. No-op otherwise; the single-beneficiary path is unchanged.
+        collateral, link_allocation = self._apply_collateral_links(
+            exposures, collateral, data, config, errors
+        )
 
         # Step 4: Apply collateral (unified path — no misdirected-AIRB diagnostic)
         exposures, collateral_applied = self._apply_collateral_unified_step(
@@ -697,6 +714,7 @@ class CRMProcessor:
             ciu_holdings=data.ciu_holdings,
             crm_audit=None,  # Audit computed at collect time if needed
             collateral_allocation=collateral_allocation,
+            collateral_link_allocation=link_allocation,
             securitisation_audit=data.securitisation_audit,
             crm_errors=errors,
         )
@@ -778,6 +796,55 @@ class CRMProcessor:
 
             exposures = _add_default_fcsm_columns(exposures)
         return exposures, False
+
+    def _apply_collateral_links(
+        self,
+        exposures: pl.LazyFrame,
+        collateral: pl.LazyFrame | None,
+        data: ClassifiedExposuresBundle,
+        config: CalculationConfig,
+        errors: list[CalculationError],
+    ) -> tuple[pl.LazyFrame | None, pl.LazyFrame | None]:
+        """Expand the M:N collateral_links table into per-beneficiary slices.
+
+        Returns the (possibly expanded) collateral frame and the per-link
+        allocation audit. No-op (returns collateral unchanged, audit None) when
+        no collateral_links table is supplied or splitting is disabled.
+        """
+        if (
+            collateral is None
+            or data.collateral_links is None
+            or not config.enable_collateral_link_splitting
+        ):
+            return collateral, None
+        ranked = self._annotate_link_rank_metric(exposures, config)
+        result = CollateralLinkAllocator().allocate_links(
+            ranked, collateral, data.collateral_links, config
+        )
+        errors.extend(result.errors)
+        return result.collateral, result.audit
+
+    def _annotate_link_rank_metric(
+        self, exposures: pl.LazyFrame, config: CalculationConfig
+    ) -> pl.LazyFrame:
+        """Attach the SA-equivalent risk weight as the link-ranking density.
+
+        Used only to order beneficiaries for the greedy most-beneficial split
+        (CRR Art. 230-231) — it never feeds the actual RWA. Falls back to no
+        annotation (degenerating to priority + deterministic tie-break) when the
+        frame is not classified enough to run the SA risk-weight lookup.
+        """
+        schema_names = set(exposures.collect_schema().names())
+        if "exposure_class" not in schema_names or "exposure_reference" not in schema_names:
+            return exposures
+        # Register the `.sa` namespace (lazy import avoids a module-level cycle).
+        import rwa_calc.engine.sa.namespace  # noqa: F401
+
+        ranked = exposures.sa.apply_risk_weights(config).select(
+            pl.col("exposure_reference"),
+            pl.col("risk_weight").alias(RANK_METRIC_COLUMN),
+        )
+        return exposures.join(ranked, on="exposure_reference", how="left")
 
     def _apply_collateral_unified_step(
         self,

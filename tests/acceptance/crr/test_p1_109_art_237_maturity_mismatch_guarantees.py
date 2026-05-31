@@ -43,7 +43,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-
 from tests.acceptance.crr.conftest import (
     aggregate_sa_rows_by_parent,
     run_single_guarantee_sa_pipeline,

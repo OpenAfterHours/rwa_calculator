@@ -33,6 +33,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.unit.crm._crm_bundles import empty_counterparty_lookup
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -40,8 +41,6 @@ from rwa_calc.contracts.errors import ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED
 from rwa_calc.data.schemas import COLLATERAL_SCHEMA
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
-
-from tests.unit.crm._crm_bundles import empty_counterparty_lookup
 
 # ---------------------------------------------------------------------------
 # Fixtures

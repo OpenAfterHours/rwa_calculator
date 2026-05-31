@@ -29,7 +29,6 @@ from tests.acceptance.acceptance_helpers import (  # noqa: E402
     make_irb_bundle,
 )
 
-
 # =============================================================================
 # Configuration Fixtures
 # =============================================================================

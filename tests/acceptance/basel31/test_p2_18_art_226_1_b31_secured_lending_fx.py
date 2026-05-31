@@ -74,11 +74,11 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from tests.acceptance.conftest import find_exposure_rows, total_field
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.acceptance.conftest import find_exposure_rows, total_field
 
 # ---------------------------------------------------------------------------
 # Fixture paths

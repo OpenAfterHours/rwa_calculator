@@ -63,9 +63,7 @@ _SCENARIO = "b31_re_threshold_30pct"
 
 def _run_pipeline() -> object:
     """Run Basel 3.1 F-IRB pipeline for the b31_re_threshold_30pct scenario."""
-    bundle = build_p1_190_bundle(
-        _SCENARIO, B31_RE_THRESHOLD_FAC_REF, B31_RE_THRESHOLD_LOAN_REF
-    )
+    bundle = build_p1_190_bundle(_SCENARIO, B31_RE_THRESHOLD_FAC_REF, B31_RE_THRESHOLD_LOAN_REF)
     config = CalculationConfig.basel_3_1(
         reporting_date=REPORTING_DATE,
         permission_mode=PermissionMode.IRB,

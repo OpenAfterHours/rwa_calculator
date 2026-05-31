@@ -46,11 +46,11 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.acceptance.sa_bundle import build_sa_loan_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
-from tests.acceptance.sa_bundle import build_sa_loan_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 
 import polars as pl
 import pytest
@@ -74,7 +75,7 @@ def _calculate_sa_exposures(
         irb_exposures=pl.LazyFrame(),
     )
 
-    return calculator.calculate(bundle, config).frame.collect()
+    return cast("pl.DataFrame", calculator.calculate(bundle, config).frame.collect())
 
 
 # =============================================================================

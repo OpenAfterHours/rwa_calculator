@@ -104,6 +104,7 @@ ignore = [
 "tests/**" = ["T20", "G"]                  # test debugging prints / f-string logs are OK
 "src/rwa_calc/ui/marimo/apps/**" = ["T20"] # marimo workbooks use print for cell output
 "scripts/**" = ["T20", "G"]                # CLI scripts print user-facing output
+"scratch_barrier/**" = ["T20"]             # scratch diagnostic scripts print tab-separated traces
 
 [tool.ruff.lint.isort]
 known-first-party = ["rwa_calc"]

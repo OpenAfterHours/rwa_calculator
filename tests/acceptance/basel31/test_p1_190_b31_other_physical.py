@@ -91,9 +91,7 @@ _SCENARIO = "b31_other_physical"
 
 def _run_pipeline() -> object:
     """Run Basel 3.1 F-IRB pipeline for the b31_other_physical scenario."""
-    bundle = build_p1_190_bundle(
-        _SCENARIO, B31_OTHER_PHYSICAL_FAC_REF, B31_OTHER_PHYSICAL_LOAN_REF
-    )
+    bundle = build_p1_190_bundle(_SCENARIO, B31_OTHER_PHYSICAL_FAC_REF, B31_OTHER_PHYSICAL_LOAN_REF)
     config = CalculationConfig.basel_3_1(
         reporting_date=REPORTING_DATE,
         permission_mode=PermissionMode.IRB,

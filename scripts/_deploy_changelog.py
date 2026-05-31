@@ -47,23 +47,26 @@ def promote_unreleased(content: str, new_version: str, *, today: str | None = No
     if f"## [{new_version}]" in content:
         return content
 
-    pattern = re.compile(
-        r"## \[Unreleased\]\s*\n(?P<body>.*?)\n---\n",
-        re.DOTALL,
-    )
-    match = pattern.search(content)
+    header = "## [Unreleased]"
+    terminator = "\n---\n"
+    start = content.find(header)
+    body_start = content.find("\n", start) if start != -1 else -1
+    term_idx = content.find(terminator, body_start) if body_start != -1 else -1
 
-    if match is None:
+    if start == -1 or term_idx == -1:
         return _insert_fallback_version(content, new_version, today)
 
-    sections = _parse_subsections(match.group("body"))
+    body = content[body_start + 1 : term_idx]
+    end = term_idx + len(terminator)
+
+    sections = _parse_subsections(body)
     real_sections = _drop_placeholders(sections)
     new_version_body = _format_subsections(real_sections) or FALLBACK_SUBSECTIONS
 
     new_block = f"## [{new_version}] - {today}\n\n{new_version_body}---\n"
     replacement = f"{EMPTY_UNRELEASED_BLOCK}\n{new_block}"
 
-    return content[: match.start()] + replacement + content[match.end() :]
+    return content[:start] + replacement + content[end:]
 
 
 def update_version_table(
@@ -90,9 +93,8 @@ def _parse_subsections(body: str) -> dict[str, list[str]]:
     current: str | None = None
 
     for line in body.split("\n"):
-        header = re.match(r"^###\s+(.+?)\s*$", line)
-        if header:
-            current = header.group(1)
+        if line.startswith("###") and line[3:4].isspace():
+            current = line[3:].strip()
             sections.setdefault(current, [])
             continue
         if current is None:

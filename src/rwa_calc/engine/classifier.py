@@ -1937,11 +1937,18 @@ class ExposureClassifier:
         # (pre-FX) denomination — `currency` is overwritten by the FX
         # converter with the reporting currency, which would otherwise
         # reject legitimate Art. 114(4) treatment for any non-base-currency
-        # exposure.
+        # exposure. Gated to Basel 3.1: under CRR, Art. 114(4) sets only the
+        # SA *risk weight*, not the *approach* — Art. 150(1) PPU is an
+        # election ("may apply"), so a firm holding CGCB IRB permission must
+        # be allowed to route to IRB. Under B31 (PS1/26 Art. 147A(1)(a)),
+        # sovereign-like exposures are SA-only as a mandatory restriction,
+        # also backstopped by the `b31_sa_only` IRB-blocker.
         is_eu_domestic_sovereign = (
-            pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
-        ) & build_eu_domestic_currency_expr(
-            "cp_country_code", denomination_currency_expr(schema_names)
+            pl.lit(config.is_basel_3_1)
+            & (pl.col("exposure_class") == ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value)
+            & build_eu_domestic_currency_expr(
+                "cp_country_code", denomination_currency_expr(schema_names)
+            )
         )
 
         # Art. 147A(1)(c): IPRE/HVCRE → slotting only (overrides model perms)

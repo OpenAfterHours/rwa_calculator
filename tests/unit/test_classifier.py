@@ -1610,12 +1610,30 @@ class TestApproachAssignment:
         # No internal rating → SA even with IRB permissions
         assert df["approach"][0] == ApproachType.SA.value
 
-    def test_eu_domestic_sovereign_forced_to_sa(
+    def test_crr_eu_domestic_sovereign_with_irb_permission_routes_to_airb(
         self,
         classifier: ExposureClassifier,
         crr_config_with_irb: CalculationConfig,
     ) -> None:
-        """EU sovereign in domestic currency must be forced to SA for 0% RW treatment."""
+        """P1.192 / Scenario A — CRR Art. 150(1) PPU is an election, not a mandate.
+
+        Under CRR, Art. 114(4) grants a 0% *SA risk weight* for EU-member-state
+        central-govt/central-bank exposures denominated in the domestic currency —
+        it does NOT force the *approach* to SA.  CRR Art. 150(1) PPU says an IRB
+        firm "*may* apply the SA" (permissive), so a firm holding CGCB IRB permission
+        that supplies an internal rating and LGD must be routed to AIRB, not locked
+        to SA.
+
+        The existing engine has a hard SA override in _build_approach_expr that is
+        not gated on config.is_basel_3_1; this test pins the correct post-fix
+        behaviour and MUST FAIL on the unmodified engine (approach will be
+        ApproachType.SA.value instead of ApproachType.AIRB.value).
+
+        References:
+            CRR Art. 114(1)/(4) — SA risk-weight ladder; 0% for EU domestic sovereign.
+            CRR Art. 150(1)(a)/(d) — PPU: "may apply" SA, not "shall apply".
+        """
+        # Arrange
         counterparties = pl.DataFrame(
             {
                 "counterparty_reference": ["SOV_DE"],
@@ -1656,15 +1674,99 @@ class TestApproachAssignment:
                 "lending_group_reference": [None],
                 "lending_group_total_exposure": [0.0],
                 "internal_pd": [0.001],
+                "model_id": [_TEST_MODEL_ID],
             }
         ).lazy()
 
-        bundle = create_resolved_bundle(exposures, counterparties)
+        bundle = create_resolved_bundle(
+            exposures, counterparties, model_permissions=_full_model_permissions()
+        )
+
+        # Act
         result = classifier.classify(bundle, crr_config_with_irb)
 
         df = result.all_exposures.collect()
 
-        # EU domestic sovereign must be forced to SA even with IRB permissions
+        # Assert — CRR firm with CGCB IRB permission, internal rating, and LGD must route to AIRB.
+        # Defect: unmodified engine returns ApproachType.SA.value (hard SA override ignores framework).
+        assert df["approach"][0] == ApproachType.AIRB.value
+
+    def test_b31_eu_domestic_sovereign_with_irb_permission_still_routes_to_sa(
+        self,
+        classifier: ExposureClassifier,
+    ) -> None:
+        """P1.192 / Scenario B — B31 regression guard (Art. 147A(1)(a)).
+
+        Under PRA PS1/26 Art. 147A(1)(a) read with Art. 147(3), sovereign / 0%-RW
+        quasi-sovereign exposures are SA-*only* — a mandatory approach restriction
+        that must survive the Scenario A fix.  This test asserts that gating the
+        is_eu_domestic_sovereign branch on config.is_basel_3_1 preserves the forced-SA
+        outcome under Basel 3.1 even when the firm holds full CGCB IRB permission.
+
+        References:
+            PRA PS1/26 Art. 147A(1)(a) + Art. 147(3) — sovereign SA-only mandatory.
+        """
+        # Arrange — identical rows to Scenario A; only the config changes.
+        b31_irb_config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 1, 1),
+            permission_mode=PermissionMode.IRB,
+        )
+
+        counterparties = pl.DataFrame(
+            {
+                "counterparty_reference": ["SOV_DE"],
+                "counterparty_name": ["Federal Republic of Germany"],
+                "entity_type": ["sovereign"],
+                "country_code": ["DE"],
+                "annual_revenue": [None],
+                "total_assets": [None],
+                "default_status": [False],
+                "sector_code": ["GOVT"],
+                "apply_fi_scalar": [False],
+                "is_managed_as_retail": [False],
+            }
+        ).lazy()
+
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_type": ["loan"],
+                "product_type": ["TERM_LOAN"],
+                "book_code": ["GOVT"],
+                "counterparty_reference": ["SOV_DE"],
+                "value_date": [date(2023, 1, 1)],
+                "maturity_date": [date(2028, 1, 1)],
+                "currency": ["EUR"],
+                "drawn_amount": [5000000.0],
+                "undrawn_amount": [0.0],
+                "nominal_amount": [0.0],
+                "lgd": [0.45],
+                "seniority": ["senior"],
+                "exposure_has_parent": [False],
+                "root_facility_reference": [None],
+                "facility_hierarchy_depth": [1],
+                "counterparty_has_parent": [False],
+                "parent_counterparty_reference": [None],
+                "ultimate_parent_reference": [None],
+                "counterparty_hierarchy_depth": [1],
+                "lending_group_reference": [None],
+                "lending_group_total_exposure": [0.0],
+                "internal_pd": [0.001],
+                "model_id": [_TEST_MODEL_ID],
+            }
+        ).lazy()
+
+        bundle = create_resolved_bundle(
+            exposures, counterparties, model_permissions=_full_model_permissions()
+        )
+
+        # Act
+        classifier_instance = ExposureClassifier()
+        result = classifier_instance.classify(bundle, b31_irb_config)
+
+        df = result.all_exposures.collect()
+
+        # Assert — B31 mandatory SA-only restriction must be preserved.
         assert df["approach"][0] == ApproachType.SA.value
 
     def test_eu_sovereign_foreign_currency_not_forced_to_sa(

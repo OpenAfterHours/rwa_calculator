@@ -564,8 +564,20 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     # Natural person or SME → loan-splitting (Art. 124H(1-2))
     # Other counterparties → max/min formula (Art. 124H(3))
     # Default: False (other counterparty) — conservative, gives higher RW
-    is_person_or_sme = pl.col("cp_is_natural_person").fill_null(False) | pl.col("is_sme").fill_null(
-        False
+    is_natural = pl.col("cp_is_natural_person").fill_null(False)
+    is_sme = pl.col("is_sme").fill_null(False)
+    is_person_or_sme = is_natural | is_sme
+
+    # Art. 124L — counterparty-type residual RW for the Art. 124H(1) loan-split
+    # leg. CQS-independent: only the three limbs reachable from the
+    # is_person_or_sme gate (natural person / retail SME 75%, other SME 85%).
+    # The social-housing and "other" limbs of Art. 124L are unreachable here
+    # (those counterparties route to Art. 124H(3) instead).
+    is_retail_sme = is_sme & pl.col("qualifies_as_retail").fill_null(False)
+    cp_rw_for_cre = (
+        pl.when(is_natural | is_retail_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_NATURAL_PERSON)))  # Art. 124L(a)
+        .otherwise(pl.lit(float(B31_RRE_RESIDUAL_RW_OTHER_SME)))  # Art. 124L(b): other SME
     )
 
     # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
@@ -584,7 +596,7 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     # Art. 124F(2): Junior charges reduce the 55% threshold
     effective_threshold = pl.max_horizontal(pl.lit(0.0), pl.lit(0.55) - prior_charge)
     secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
-    loan_split_rw = pl.lit(0.60) * secured_share + cp_rw * (pl.lit(1.0) - secured_share)
+    loan_split_rw = pl.lit(0.60) * secured_share + cp_rw_for_cre * (pl.lit(1.0) - secured_share)
 
     # General CRE — other counterparties (Art. 124H(3)):
     # max(60%, min(counterparty_RW, Art. 124I income-producing RW))

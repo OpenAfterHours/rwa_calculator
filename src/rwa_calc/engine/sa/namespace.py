@@ -1379,8 +1379,14 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         )
         .then(pl.lit(_SA_SHARED_RW["retail"]))
-        # Corporate SME: 100%.
-        .when(uc.str.contains("CORPORATE", literal=True) & uc.str.contains("SME", literal=True))
+        # Corporate SME: 100% — unrated only (Art. 122). A rated SME (CQS 1-6)
+        # keeps its Art. 122 CQS-table weight from the rw_table join; SME relief
+        # is delivered separately via the Art. 501 supporting factor.
+        .when(
+            uc.str.contains("CORPORATE", literal=True)
+            & uc.str.contains("SME", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+        )
         .then(pl.lit(_SA_CRR_RW["corporate_sme"]))
     )
 

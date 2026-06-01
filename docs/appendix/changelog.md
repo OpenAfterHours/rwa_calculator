@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **`collateral_links` is now auto-discovered from the standard data layout via the data-source registry.** The optional `collateral_links` input (the M:N collateral-to-beneficiary mapping shipped in v0.2.20, `COLLATERAL_LINK_SCHEMA`) was fully wired through `DataSourceConfig.from_registry()` and `_build_bundle` in `engine/loader.py`, but had no entry in the `DATA_SOURCES` registry (`config/data_sources.py`) — so `get_p("collateral_links")` always resolved to `None` and the table was never picked up from the conventional layout; a caller had to set `collateral_links_file` by hand. A new `DataSourceFile(id="collateral_links", relative_path=Path("collateral/collateral_links"), OPTIONAL)` entry (mirroring the sibling `collateral` source) now lets `DataSourceConfig.from_registry()` resolve `collateral_links_file` to `collateral/collateral_links.parquet` (or `.csv`) automatically, exactly like every other optional input. Purely additive and behaviour-preserving — firms with no `collateral_links` table still take the single-beneficiary path (loader returns `None` gracefully when the file is absent). Pinned by `tests/unit/config/test_data_sources_collateral_links.py` (7 tests: registry entry presence, relative path, OPTIONAL requirement, parquet appears in `get_optional`, `from_registry` parquet/csv population, description). Ref: CRR Art. 230-231.
 
 ### Changed
 - (Next release changes will go here)

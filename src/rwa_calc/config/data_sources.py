@@ -82,6 +82,15 @@ DATA_SOURCES = [
         description="Collateral and security details",
     ),
     DataSourceFile(
+        id="collateral_links",
+        relative_path=Path("collateral/collateral_links"),
+        requirement=RequirementLevel.OPTIONAL,
+        description=(
+            "M:N mapping of collateral items to beneficiary exposures for "
+            "substitution / sequential allocation (CRR Art. 230-231)."
+        ),
+    ),
+    DataSourceFile(
         id="guarantee",
         relative_path=Path("guarantee/guarantee"),
         requirement=RequirementLevel.OPTIONAL,

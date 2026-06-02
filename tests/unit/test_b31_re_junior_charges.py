@@ -456,8 +456,9 @@ class TestArt124F2JuniorChargeCRE:
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
         # effective_threshold = 0.35, secured_share = 0.35/0.80
+        # Residual uses Art. 124L(1)(a) natural-person counterparty RW = 0.75 (not raw 1.00)
         secured_share = 0.35 / 0.80
-        expected = 0.60 * secured_share + 1.0 * (1.0 - secured_share)
+        expected = 0.60 * secured_share + 0.75 * (1.0 - secured_share)
         assert float(result["risk_weight"]) == pytest.approx(expected, abs=1e-4)
 
     def test_cre_no_prior_charge_unchanged(
@@ -481,8 +482,9 @@ class TestArt124F2JuniorChargeCRE:
             }
         ).lazy()
         result = sa_calculator.calculate_branch(df, b31_config).collect().to_dicts()[0]
+        # Residual uses Art. 124L(1)(a) natural-person counterparty RW = 0.75 (not raw 1.00)
         secured_share = 0.55 / 0.80
-        expected = 0.60 * secured_share + 1.0 * (1.0 - secured_share)
+        expected = 0.60 * secured_share + 0.75 * (1.0 - secured_share)
         assert float(result["risk_weight"]) == pytest.approx(expected, abs=1e-4)
 
 

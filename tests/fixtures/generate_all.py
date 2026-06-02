@@ -508,6 +508,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p1_196",
             _generate_p1196,
         ),
+        (
+            "P1.200 (B31 Art. 239(3) guarantee/CDS maturity-mismatch scaling wrongly gated on is_crr)",
+            "p1_200",
+            _generate_p1200,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2744,6 +2749,21 @@ def _generate_p1196(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_196", None)
+
+
+def _generate_p1200(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.200 fixtures (B31 Art. 239(3) guarantee/CDS maturity-mismatch scaling)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_200 import save_p1200_fixtures
+
+        saved = save_p1200_fixtures(output_dir / "data")
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_200", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

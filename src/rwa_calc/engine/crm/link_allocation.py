@@ -16,11 +16,19 @@ Key responsibilities:
   beneficiary collateral table, so the existing Art. 231 waterfall in
   ``apply_collateral`` consumes it unchanged.
 
-The split reuses the cumulative-cap trick already used by the waterfall
-(``slice_i = min(cum_i, V) - min(prev_i, V)``): within each collateral item the
-linked beneficiaries are ranked, their EAD demand is accumulated, and the slice
-each absorbs is the increment of the cumulative demand capped at the finite
-value ``V``.
+The split is a JOINT, residual-demand-aware fill across all collateral items
+at once: link edges are walked in a single global order (explicit ``priority``
+first, then descending beneficiary RWA density, then a most-constrained-item
+tie-break) and each edge absorbs ``min(item supply remaining, beneficiary
+demand remaining, per-link cap)``, decrementing both residuals. Once a
+beneficiary's demand is filled by one item, later items see zero residual
+demand there and spill to the next-best beneficiary — so two items linked to
+the same facilities no longer both pile onto the highest-RW one. It is a
+deterministic greedy heuristic (not a global LP optimum): optimal when
+collateral is fungible across the linked beneficiaries and on the
+restricted-eligibility case, and it reduces to the legacy single-item
+cumulative-cap split when an item links exactly one beneficiary. The per-edge
+supply cap preserves the ``Σ slices ≤ V`` guarantee for every item.
 
 References:
 - CRR Art. 193/194/207: CRM eligibility and recognition conditions
@@ -262,7 +270,21 @@ class CollateralLinkAllocator:
 
     @staticmethod
     def _allocate_slices(links: pl.LazyFrame) -> pl.LazyFrame:
-        """Greedy cumulative-cap split within each collateral_reference."""
+        """Joint, residual-demand-aware split of finite collateral across links.
+
+        Adds a ``_slice`` column to each link edge: the amount that edge
+        absorbs after walking all edges in a single global priority order and
+        decrementing BOTH the item's remaining finite value (supply) and the
+        beneficiary's remaining demand. See the module docstring for the
+        rationale and the heuristic-not-LP caveat.
+
+        A bounded Python walk is used because the two-sided residual (supply
+        AND demand) cannot be expressed as a single vectorised cumulative sum.
+        The ``.collect()`` here is a one-time pre-pass over the small
+        collateral_links edge set — gated upstream by
+        ``enable_collateral_link_splitting`` so it never runs on the
+        per-exposure hot path — not a pipeline-branch barrier.
+        """
         links = links.with_columns(
             pl.when(pl.col("max_pledge_amount").is_not_null())
             .then(pl.min_horizontal(pl.col("_demand"), pl.col("max_pledge_amount")))
@@ -274,30 +296,32 @@ class CollateralLinkAllocator:
             pl.col("priority").is_null().cast(pl.Int8).alias("_ord_pri_null"),
             pl.col("priority").fill_null(0).alias("_ord_priority"),
             (-pl.col("_metric")).alias("_ord_negmetric"),
+            # Most-constrained-item tie-break: an item linked to fewer
+            # beneficiaries draws first, so supply that can only go to the
+            # current beneficiary is not stranded by a more flexible item.
+            pl.len().over("collateral_reference").alias("_item_fanout"),
         )
-        links = links.with_columns(
-            pl.col("_demand_eff")
-            .cum_sum()
-            .over(
+        ordered = links.sort(
+            by=[
+                "_ord_pri_null",
+                "_ord_priority",
+                "_ord_negmetric",
+                "beneficiary_type",
+                "beneficiary_reference",
+                "_item_fanout",
                 "collateral_reference",
-                order_by=[
-                    "_ord_pri_null",
-                    "_ord_priority",
-                    "_ord_negmetric",
-                    "beneficiary_type",
-                    "beneficiary_reference",
-                ],
-            )
-            .alias("_cum")
+            ]
+        ).collect()  # small link-set pre-pass; not a pipeline barrier
+
+        slices = _residual_fill(
+            ordered.get_column("collateral_reference").to_list(),
+            ordered.get_column("beneficiary_type").to_list(),
+            ordered.get_column("beneficiary_reference").to_list(),
+            ordered.get_column("_value").to_list(),
+            ordered.get_column("_demand").to_list(),
+            ordered.get_column("_demand_eff").to_list(),
         )
-        return links.with_columns(
-            (
-                pl.min_horizontal(pl.col("_cum"), pl.col("_value"))
-                - pl.min_horizontal(pl.col("_cum") - pl.col("_demand_eff"), pl.col("_value"))
-            )
-            .clip(lower_bound=0.0)
-            .alias("_slice")
-        )
+        return ordered.with_columns(pl.Series("_slice", slices, dtype=pl.Float64)).lazy()
 
     @staticmethod
     def _build_expanded_collateral(
@@ -335,3 +359,49 @@ class CollateralLinkAllocator:
             else:
                 final_exprs.append(pl.col(col))
         return sliced.select(final_exprs)
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _residual_fill(
+    coll_refs: list[str],
+    ben_types: list[str],
+    ben_refs: list[str],
+    values: list[float],
+    demands: list[float],
+    demand_effs: list[float],
+) -> list[float]:
+    """Greedy two-sided residual fill over pre-ordered link edges.
+
+    Each edge absorbs ``min(item supply remaining, beneficiary demand
+    remaining, per-link cap)`` and decrements both residuals, so demand filled
+    by one item is invisible to later items (they spill to the next-best
+    beneficiary). Returns the allocated slice per edge in the input order;
+    ``Σ slices`` for any single item never exceeds its finite value.
+
+    ``values`` / ``demands`` are per-edge but constant within a
+    ``collateral_reference`` / ``(beneficiary_type, beneficiary_reference)``
+    respectively, so they seed each residual on first sight and the running
+    residual is used thereafter. ``demand_effs`` is the per-edge ceiling
+    (the ``max_pledge_amount`` sub-limit when present).
+    """
+    eps = 1e-9
+    supply_rem: dict[str, float] = {}
+    demand_rem: dict[tuple[str, str], float] = {}
+    slices: list[float] = []
+    for cref, btype, bref, value, demand, demand_eff in zip(
+        coll_refs, ben_types, ben_refs, values, demands, demand_effs, strict=True
+    ):
+        s_rem = supply_rem.get(cref, value)
+        ben_key = (btype, bref)
+        d_rem = demand_rem.get(ben_key, demand)
+        take = min(s_rem, d_rem, demand_eff)
+        if take < eps:
+            take = 0.0
+        supply_rem[cref] = s_rem - take
+        demand_rem[ben_key] = d_rem - take
+        slices.append(take)
+    return slices

@@ -173,6 +173,151 @@ class TestOtherREExpression:
         result = df.select(b31_other_re_rw_expr().alias("rw"))
         assert result["rw"][0] == pytest.approx(0.60)
 
+    # -------------------------------------------------------------------------
+    # P1.195 — Art. 124L counterparty-type routing for the non-income residual
+    # Cases A-G from the scenario proposal.
+    # -------------------------------------------------------------------------
+
+    def _make_other_re_row(
+        self,
+        *,
+        has_income_cover: bool = False,
+        property_type: str = "residential",
+        cqs_risk_weight: float | None = None,
+        cp_is_natural_person: bool = False,
+        is_sme: bool = False,
+        qualifies_as_retail: bool = True,
+        cp_is_social_housing: bool = False,
+    ) -> pl.DataFrame:
+        """Build a single-row DataFrame with all Art. 124J / 124L columns."""
+        return pl.DataFrame(
+            {
+                "has_income_cover": [has_income_cover],
+                "property_type": [property_type],
+                "_cqs_risk_weight": [cqs_risk_weight if cqs_risk_weight is not None else 1.0],
+                "cp_is_natural_person": [cp_is_natural_person],
+                "is_sme": [is_sme],
+                "qualifies_as_retail": [qualifies_as_retail],
+                "cp_is_social_housing": [cp_is_social_housing],
+            },
+            schema_overrides={"_cqs_risk_weight": pl.Float64},
+        )
+
+    def test_p1195_case_a_resi_non_income_natural_person_75pct(self) -> None:
+        """Case A (P1.195): RESI non-income, natural person, unrated → 75% (Art. 124L(a)).
+
+        Engine bug: uses raw cp_rw=1.00 instead of 124L routing → returns 1.00.
+        Expected after fix: 0.75.
+        """
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="residential",
+            cqs_risk_weight=1.00,  # unrated fallback
+            cp_is_natural_person=True,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(0.75)  # Art. 124L(a)
+
+    def test_p1195_case_b_resi_non_income_other_sme_85pct(self) -> None:
+        """Case B (P1.195): RESI non-income, other SME (not retail), unrated → 85% (Art. 124L(b))."""
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="residential",
+            cqs_risk_weight=1.00,
+            is_sme=True,
+            qualifies_as_retail=False,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(0.85)  # Art. 124L(b)
+
+    def test_p1195_case_c_resi_non_income_social_housing_unrated_100pct(self) -> None:
+        """Case C (P1.195): RESI non-income, social housing, unrated → max(75%, 100%) = 100% (Art. 124L(c)).
+
+        Floor doesn't bind for unrated obligors; this is a regression guard (expected to pass pre-fix).
+        """
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="residential",
+            cqs_risk_weight=1.00,  # unrated → full cp_rw
+            cp_is_social_housing=True,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(1.00)  # max(0.75, 1.00) = 1.00
+
+    def test_p1195_case_d_cre_non_income_natural_person_75pct(self) -> None:
+        """Case D (P1.195): CRE non-income, natural person, unrated → max(60%, 75%) = 75% (Art. 124L(a) + 124J(3)(b)).
+
+        Engine bug: uses raw cp_rw=1.00 → max(0.60, 1.00) = 1.00. Expected: 0.75.
+        """
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="commercial",
+            cqs_risk_weight=1.00,  # unrated fallback — ignored after 124L routing
+            cp_is_natural_person=True,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(0.75)  # max(0.60, 0.75) = 0.75
+
+    def test_p1195_case_e_cre_non_income_other_sme_85pct(self) -> None:
+        """Case E (P1.195): CRE non-income, other SME, unrated → max(60%, 85%) = 85% (Art. 124L(b) + 124J(3)(b))."""
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="commercial",
+            cqs_risk_weight=1.00,
+            is_sme=True,
+            qualifies_as_retail=False,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(0.85)  # max(0.60, 0.85) = 0.85
+
+    def test_p1195_case_f_cre_non_income_other_cqs1_60pct_floor(self) -> None:
+        """Case F (P1.195): CRE non-income, 'other' counterparty, CQS 1 (20%) → max(60%, 20%) = 60%.
+
+        Regression guard — floor binds; this should already pass and stay 0.60 post-fix.
+        """
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=False,
+            property_type="commercial",
+            cqs_risk_weight=0.20,  # CQS 1 → 20%
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(0.60)  # max(0.60, 0.20) = 0.60
+
+    def test_p1195_case_g_income_dependent_150pct_regression(self) -> None:
+        """Case G (P1.195): income-dependent flag → 150% regardless of counterparty type.
+
+        Regression guard — must remain 1.50 after fix.
+        """
+        # Arrange
+        df = self._make_other_re_row(
+            has_income_cover=True,
+            property_type="residential",
+            cqs_risk_weight=0.20,
+            cp_is_natural_person=True,
+        )
+        # Act
+        result = df.select(b31_other_re_rw_expr().alias("rw"))
+        # Assert
+        assert result["rw"][0] == pytest.approx(1.50)
+
 
 # =============================================================================
 # SCALAR LOOKUP TESTS
@@ -520,3 +665,72 @@ class TestOtherRESACalculator:
         assert df["risk_weight"][1] == pytest.approx(1.00)
         # Q001: qualifying RESI non-income → 20% (fully secured at LTV 50%)
         assert df["risk_weight"][2] == pytest.approx(0.20)
+
+    # -------------------------------------------------------------------------
+    # P1.195 — Art. 124L counterparty-type routing via full SA pipeline
+    # -------------------------------------------------------------------------
+
+    def test_p1195_case_a_sa_resi_non_income_natural_person_75pct(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Case A (P1.195): Non-qualifying RESI non-income, natural person → RW 75%, RWA 750,000.
+
+        Art. 124J(2) + Art. 124L(a). Engine bug returns 1.00/1,000,000 pre-fix.
+        """
+        # Arrange
+        bundle = _make_bundle(
+            {
+                "exposure_reference": ["P1195_A"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["retail_mortgage"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "is_qualifying_re": [False],
+                "property_type": ["residential"],
+                "cp_is_natural_person": [True],
+                "cp_is_social_housing": [False],
+                "qualifies_as_retail": [True],
+            }
+        )
+        # Act
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+        # Assert
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+        assert df["rwa_post_factor"][0] == pytest.approx(750_000.0)
+
+    def test_p1195_case_d_sa_cre_non_income_natural_person_75pct(
+        self, sa_calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """Case D (P1.195): Non-qualifying CRE non-income, natural person → RW 75%, RWA 750,000.
+
+        Art. 124J(3)(b) + Art. 124L(a): max(60%, 75%) = 75%.
+        Engine bug: max(60%, 1.00) = 1.00/1,000,000 pre-fix.
+        """
+        # Arrange
+        bundle = _make_bundle(
+            {
+                "exposure_reference": ["P1195_D"],
+                "ead_final": [1_000_000.0],
+                "exposure_class": ["corporate"],
+                "cqs": [None],
+                "ltv": [0.50],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+                "has_income_cover": [False],
+                "is_qualifying_re": [False],
+                "property_type": ["commercial"],
+                "cp_is_natural_person": [True],
+                "cp_is_social_housing": [False],
+                "qualifies_as_retail": [True],
+            }
+        )
+        # Act
+        result = sa_calculator.calculate(bundle, b31_config)
+        df = result.frame.collect()
+        # Assert
+        assert df["risk_weight"][0] == pytest.approx(0.75)
+        assert df["rwa_post_factor"][0] == pytest.approx(750_000.0)

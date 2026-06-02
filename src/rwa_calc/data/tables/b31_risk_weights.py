@@ -39,6 +39,7 @@ from datetime import date
 from decimal import Decimal
 
 import polars as pl
+import polars.selectors as cs
 from watchfire import cites
 
 from rwa_calc.domain.enums import PropertyType
@@ -643,11 +644,23 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
 
     Three sub-treatments:
     - Income-dependent: 150% flat
-    - RESI non-dependent: counterparty RW (no floor)
-    - CRE non-dependent: max(60%, counterparty RW)
+    - RESI non-dependent: Art. 124L counterparty-type RW (no floor)
+    - CRE non-dependent: max(60%, Art. 124L counterparty-type RW)
+
+    The non-income residual resolves the counterparty RW through the full
+    Art. 124L(1)(a)-(e) type table (mirroring ``cp_rw_for_rre`` in
+    ``b31_residential_rw_expr``) — Art. 124J has no counterparty gate, so all
+    five limbs are reachable, including social housing and the "other" full
+    unsecured fallback:
+      - Natural person / retail-qualifying SME: 75% (Art. 124L(a))
+      - Other SME (non-retail): 85% (Art. 124L(b))
+      - Social housing: max(75%, unsecured counterparty RW) (Art. 124L(c))
+      - Other (corporate, institution, etc.): full unsecured RW (Art. 124L(d/e))
 
     Requires columns: has_income_cover (Boolean), property_type (String),
-                      counterparty_rw_col (Float64)
+                      cp_is_natural_person (Boolean), is_sme (Boolean),
+                      qualifies_as_retail (Boolean), cp_is_social_housing
+                      (Boolean), counterparty_rw_col (Float64)
 
     Returns:
         Expression resolving to Art. 124J risk weight
@@ -656,15 +669,43 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
     cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
     is_resi = pl.col("property_type").fill_null("").str.to_lowercase() == "residential"
 
-    # Income-dependent: 150% regardless of property type
-    # Non-dependent RESI: counterparty RW (no floor)
-    # Non-dependent CRE: max(60%, counterparty RW)
+    # Art. 124L — Counterparty type routing for the Art. 124J non-income residual.
+    # The four type flags are optional pipeline columns (HIERARCHY_OUTPUT_SCHEMA /
+    # CLASSIFIER_OUTPUT_SCHEMA). When this expression is evaluated against a frame
+    # that omits them, coalesce against the schema default keeps the routing on the
+    # "other" limb (raw cp_rw) rather than raising ColumnNotFound.
+    is_natural = pl.coalesce(
+        cs.by_name("cp_is_natural_person", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_sme = pl.coalesce(cs.by_name("is_sme", require_all=False), pl.lit(False)).fill_null(False)
+    qualifies_as_retail = pl.coalesce(
+        cs.by_name("qualifies_as_retail", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_retail_sme = is_sme & qualifies_as_retail
+    is_social = pl.coalesce(
+        cs.by_name("cp_is_social_housing", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    cp_rw_for_re = (
+        pl.when(is_natural | is_retail_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_NATURAL_PERSON)))  # Art. 124L(a): natural / retail SME
+        .when(is_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_OTHER_SME)))  # Art. 124L(b): other SME (non-retail)
+        .when(is_social)
+        .then(  # Art. 124L(c): social housing floor
+            pl.max_horizontal(pl.lit(float(B31_RRE_RESIDUAL_RW_SOCIAL_HOUSING_FLOOR)), cp_rw)
+        )
+        .otherwise(cp_rw)  # Art. 124L(d/e): full unsecured counterparty RW
+    )
+
+    # Income-dependent: 150% regardless of property type (Art. 124J(1))
+    # Non-dependent RESI: Art. 124L counterparty-type RW, no floor (Art. 124J(2))
+    # Non-dependent CRE: max(60%, Art. 124L counterparty-type RW) (Art. 124J(3)(b))
     return (
         pl.when(is_income)
         .then(pl.lit(float(B31_OTHER_RE_INCOME_DEPENDENT_RW)))
         .when(is_resi)
-        .then(cp_rw)
-        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw))
+        .then(cp_rw_for_re)
+        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw_for_re))
     )
 
 

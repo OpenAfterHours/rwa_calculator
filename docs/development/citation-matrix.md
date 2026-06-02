@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-06-01.
+Last generated: 2026-06-02.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -755,17 +755,17 @@ Last generated: 2026-06-01.
     --8<-- "src/rwa_calc/engine/crm/collateral.py:291:412"
     ```
 
-??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:80"
+??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:88"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/link_allocation.py:80:124"
+    --8<-- "src/rwa_calc/engine/crm/link_allocation.py:88:132"
     ```
 
 
 ### CRR Art. 231 — Calculating risk-weighted exposure amounts and expected loss amounts in the case of mixed pools of collateral
 
-??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:81"
+??? quote "`allocate_links` — src/rwa_calc/engine/crm/link_allocation.py:89"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/link_allocation.py:80:124"
+    --8<-- "src/rwa_calc/engine/crm/link_allocation.py:88:132"
     ```
 
 

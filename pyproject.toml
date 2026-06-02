@@ -1,6 +1,6 @@
 [project]
 name = "rwa-calc"
-version = "0.2.21"
+version = "0.2.22"
 description = "Basel 3.1 Credit Risk RWA Calculator compliant with PRA PS1/26"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -168,6 +168,7 @@ dev = [
     "zensical>=0.0.29",
     "mkdocstrings[python]>=1.0.0",
     "pytest-benchmark>=5.2.3",
+    "pytest-xdist>=3.5.0",  # addopts pass -n auto --dist=loadfile; must be in the default-synced group
     "numpy>=1.26.0",  # For benchmark data generation only
     "pymupdf>=1.27.2.2",
     "ruff>=0.14.14",

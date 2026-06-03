@@ -109,15 +109,6 @@ def _make_collateral(
     )
 
 
-def _empty_ead_totals() -> pl.LazyFrame:
-    return pl.LazyFrame(
-        {
-            "parent_facility_reference": pl.Series([], dtype=pl.String),
-            "_fac_ead_total": pl.Series([], dtype=pl.Float64),
-        }
-    )
-
-
 def _empty_cp_totals() -> pl.LazyFrame:
     return pl.LazyFrame(
         {
@@ -301,7 +292,6 @@ class TestArt169BFallback:
             exposures,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         )
@@ -340,7 +330,6 @@ class TestArt169BFallback:
             airb_exp,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
@@ -349,7 +338,6 @@ class TestArt169BFallback:
             firb_exp,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
@@ -422,7 +410,6 @@ class TestFoundationElection:
             exposures,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         )
@@ -498,7 +485,6 @@ class TestCRRBackwardCompat:
             exposures,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=False,
         )
@@ -635,7 +621,6 @@ class TestMixedBatch:
             exposures,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
@@ -684,7 +669,6 @@ class TestCapitalImpact:
             exposures_169b,
             collateral,
             config_169b,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
@@ -693,7 +677,6 @@ class TestCapitalImpact:
             exposures_fcm,
             collateral,
             config_fcm,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()
@@ -759,7 +742,6 @@ class TestArt169BFinancialCollateral:
             exposures,
             collateral,
             config,
-            _empty_ead_totals(),
             _empty_cp_totals(),
             is_basel_3_1=True,
         ).collect()

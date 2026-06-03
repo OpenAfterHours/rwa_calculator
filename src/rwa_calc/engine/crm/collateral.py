@@ -365,16 +365,13 @@ def apply_collateral(
     facility_lookup = facility_df.lazy()
     cp_lookup = cp_df.lazy()
 
-    # Derive pool-aware EAD totals from the lookups for allocation methods.
-    # Unflagged collateral pro-rates over the non-AIRB pool only; flagged
-    # collateral (is_airb_model_collateral=True) pro-rates over the AIRB pool
-    # only.
-    facility_ead_totals = facility_lookup.select(
-        pl.col("_ben_ref_facility").alias("parent_facility_reference"),
-        pl.col("_ead_facility").alias("_fac_ead_total"),
-        pl.col("_ead_facility_airb").alias("_fac_ead_total_airb"),
-        pl.col("_ead_facility_non_airb").alias("_fac_ead_total_non_airb"),
-    )
+    # Derive pool-aware counterparty EAD totals from the lookups. Unflagged
+    # collateral pro-rates over the non-AIRB pool only; flagged collateral
+    # (is_airb_model_collateral=True) pro-rates over the AIRB pool only.
+    # Facility-level subtree totals are derived per-ancestor inside
+    # ``_apply_collateral_unified`` (``_cascade_facility_collateral``) so that
+    # collateral pledged at any ancestor facility cascades over its whole
+    # descendant subtree for nested facility hierarchies.
     cp_ead_totals = cp_lookup.select(
         pl.col("_ben_ref_cp").alias("counterparty_reference"),
         pl.col("_ead_cp").alias("_cp_ead_total"),
@@ -406,7 +403,6 @@ def apply_collateral(
         exposures,
         adjusted_collateral,
         config,
-        facility_ead_totals,
         cp_ead_totals,
         is_basel_3_1,
     )
@@ -536,7 +532,6 @@ def _apply_collateral_unified(
     exposures: pl.LazyFrame,
     adjusted_collateral: pl.LazyFrame,
     config: CalculationConfig,
-    facility_ead_totals: pl.LazyFrame,
     cp_ead_totals: pl.LazyFrame,
     is_basel_3_1: bool,
 ) -> pl.LazyFrame:
@@ -582,14 +577,21 @@ def _apply_collateral_unified(
     if "effective_ccf" not in exposure_schema.names():
         exposures = exposures.with_columns(pl.lit(1.0).alias("effective_ccf"))
 
-    fac_totals_schema = facility_ead_totals.collect_schema().names()
-    fac_total_fills: list[pl.Expr] = []
-    if "_fac_ead_total_non_airb" not in fac_totals_schema:
-        fac_total_fills.append(pl.col("_fac_ead_total").alias("_fac_ead_total_non_airb"))
-    if "_fac_ead_total_airb" not in fac_totals_schema:
-        fac_total_fills.append(pl.lit(0.0).alias("_fac_ead_total_airb"))
-    if fac_total_fills:
-        facility_ead_totals = facility_ead_totals.with_columns(fac_total_fills)
+    # Facility-ancestor closure for the multi-level facility collateral cascade.
+    # Production supplies ``ancestor_facilities`` (parent + all ancestors up to
+    # root, incl. self) from the HierarchyResolver. Direct unit-test callers and
+    # single-level inputs fall back to the 1-element [parent] list, which makes
+    # the cascade in ``_cascade_facility_collateral`` reduce exactly to the
+    # legacy single-level allocation.
+    if "ancestor_facilities" not in exposure_schema.names():
+        if "parent_facility_reference" in exposure_schema.names():
+            exposures = exposures.with_columns(
+                pl.concat_list("parent_facility_reference").alias("ancestor_facilities")
+            )
+        else:
+            exposures = exposures.with_columns(
+                pl.lit(None, dtype=pl.List(pl.String)).alias("ancestor_facilities")
+            )
 
     cp_totals_schema = cp_ead_totals.collect_schema().names()
     cp_total_fills: list[pl.Expr] = []
@@ -720,9 +722,7 @@ def _apply_collateral_unified(
         .rename({c: f"{c}_c" for c in _agg})
     )
 
-    # --- Join all 3 levels to exposures (5 joins total) ---
-    exp_schema = exposures.collect_schema()
-
+    # --- Join direct + counterparty levels to exposures ---
     exposures = exposures.join(
         coll_direct,
         left_on="exposure_reference",
@@ -730,26 +730,13 @@ def _apply_collateral_unified(
         how="left",
     )
 
-    if "parent_facility_reference" in exp_schema.names():
-        exposures = exposures.join(
-            coll_facility,
-            left_on="parent_facility_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        ).join(
-            facility_ead_totals,
-            on="parent_facility_reference",
-            how="left",
-        )
-    else:
-        exposures = exposures.with_columns(
-            [pl.lit(0.0).alias(f"{c}_f") for c in _agg]
-            + [
-                pl.lit(0.0).alias("_fac_ead_total"),
-                pl.lit(0.0).alias("_fac_ead_total_airb"),
-                pl.lit(0.0).alias("_fac_ead_total_non_airb"),
-            ]
-        )
+    # Facility level: cascade collateral over each exposure's full ancestor set
+    # so a pledge at any ancestor facility (parent, grandparent, ... root) flows
+    # pro-rata to every descendant exposure (CRR Art. 230-231 pooling over the
+    # facility subtree). Produces pre-weighted, ancestor-summed ``{m}_{p}_f``
+    # columns that ``_sum6`` adds in directly (the pro-rata weight is already
+    # baked in, so no further ``_fw`` multiply is needed).
+    exposures = _cascade_facility_collateral(exposures, coll_facility, _metrics)
 
     exposures = exposures.join(
         coll_counterparty,
@@ -762,16 +749,16 @@ def _apply_collateral_unified(
         how="left",
     )
 
-    # --- Fill nulls + pro-rata weights ---
+    # --- Fill nulls + counterparty pro-rata weights ---
+    # Facility ``{c}_f`` columns are already filled + pre-weighted by
+    # ``_cascade_facility_collateral``; only the direct (``_d``) and
+    # counterparty (``_c``) families plus the CP EAD totals need filling here.
     fill_exprs = []
-    for sfx in ["d", "f", "c"]:
+    for sfx in ["d", "c"]:
         for c in _agg:
             fill_exprs.append(pl.col(f"{c}_{sfx}").fill_null(0.0))
     fill_exprs.extend(
         [
-            pl.col("_fac_ead_total").fill_null(0.0),
-            pl.col("_fac_ead_total_airb").fill_null(0.0),
-            pl.col("_fac_ead_total_non_airb").fill_null(0.0),
             pl.col("_cp_ead_total").fill_null(0.0),
             pl.col("_cp_ead_total_airb").fill_null(0.0),
             pl.col("_cp_ead_total_non_airb").fill_null(0.0),
@@ -779,25 +766,17 @@ def _apply_collateral_unified(
     )
     exposures = exposures.with_columns(fill_exprs)
 
-    # Pool-aware pro-rata weights. ``_is_airb_pool`` was tagged on exposures in
-    # ``apply_collateral`` via ``airb_lgd_preserved_expr``; weights bake in the
-    # pool-match gate so non-matching pools always contribute zero.
+    # Pool-aware counterparty pro-rata weights. ``_is_airb_pool`` was tagged on
+    # exposures in ``apply_collateral`` via ``airb_lgd_preserved_expr``; weights
+    # bake in the pool-match gate so non-matching pools always contribute zero.
     in_airb = pl.col("_is_airb_pool").fill_null(False)
     in_non_airb = ~in_airb
     # Pro-rata weights use ead_for_crm (CRR Art. 223(4) / PS1/26 Art. 223(4):
     # off-BS items at CCF=100% for CRM allocation purposes), so the share
-    # an exposure receives of a facility/CP collateral pool is proportional
-    # to its full pre-CCF basis rather than its post-CCF EAD.
+    # an exposure receives of a CP collateral pool is proportional to its full
+    # pre-CCF basis rather than its post-CCF EAD.
     exposures = exposures.with_columns(
         [
-            pl.when(in_non_airb & (pl.col("_fac_ead_total_non_airb") > 0))
-            .then(pl.col("ead_for_crm") / pl.col("_fac_ead_total_non_airb"))
-            .otherwise(pl.lit(0.0))
-            .alias("_fw_n"),
-            pl.when(in_airb & (pl.col("_fac_ead_total_airb") > 0))
-            .then(pl.col("ead_for_crm") / pl.col("_fac_ead_total_airb"))
-            .otherwise(pl.lit(0.0))
-            .alias("_fw_a"),
             pl.when(in_non_airb & (pl.col("_cp_ead_total_non_airb") > 0))
             .then(pl.col("ead_for_crm") / pl.col("_cp_ead_total_non_airb"))
             .otherwise(pl.lit(0.0))
@@ -812,18 +791,22 @@ def _apply_collateral_unified(
 
     # --- Combine all levels for EAD + LGD ---
     # Non-AIRB-flagged collateral (``_n`` family) flows to non-AIRB-pool
-    # exposures via the ``_fw_n`` / ``_cw_n`` weights (already gated to that
-    # pool); direct unflagged is unconditional (1:1, no pro-rata).
-    # AIRB-flagged collateral (``_a`` family) flows only to AIRB-pool exposures
-    # — facility/counterparty via ``_fw_a`` / ``_cw_a``, and direct gated by
+    # exposures: facility via the ancestor cascade (``_n_f`` pre-weighted) and
+    # counterparty via the ``_cw_n`` weight (both gated to that pool); direct
+    # unflagged is unconditional (1:1, no pro-rata). AIRB-flagged collateral
+    # (``_a`` family) flows only to AIRB-pool exposures — facility via the
+    # cascade (``_a_f``), counterparty via ``_cw_a``, and direct gated by
     # ``_airb_match``. Direct flagged collateral on a non-AIRB exposure is a
     # data-quality issue surfaced as CRM006 by the validation pass.
     def _sum6(metric: str) -> pl.Expr:
+        # Facility terms (``_f``) are already pro-rata-weighted and summed over
+        # the exposure's ancestor facilities by ``_cascade_facility_collateral``,
+        # so they enter the blend without a further weight multiply.
         return (
             pl.col(f"{metric}_n_d")
             + pl.col(f"{metric}_a_d") * pl.col("_airb_match")
-            + pl.col(f"{metric}_n_f") * pl.col("_fw_n")
-            + pl.col(f"{metric}_a_f") * pl.col("_fw_a")
+            + pl.col(f"{metric}_n_f")
+            + pl.col(f"{metric}_a_f")
             + pl.col(f"{metric}_n_c") * pl.col("_cw_n")
             + pl.col(f"{metric}_a_c") * pl.col("_cw_a")
         )
@@ -939,14 +922,9 @@ def _apply_collateral_unified(
     drop_cols = (
         [f"{c}_{sfx}" for sfx in ["d", "f", "c"] for c in _agg]
         + [
-            "_fac_ead_total",
-            "_fac_ead_total_airb",
-            "_fac_ead_total_non_airb",
             "_cp_ead_total",
             "_cp_ead_total_airb",
             "_cp_ead_total_non_airb",
-            "_fw_n",
-            "_fw_a",
             "_cw_n",
             "_cw_a",
             "_airb_match",
@@ -1086,3 +1064,82 @@ def _apply_collateral_unified(
     )
 
     return exposures
+
+
+def _cascade_facility_collateral(
+    exposures: pl.LazyFrame,
+    coll_facility: pl.LazyFrame,
+    metrics: list[str],
+) -> pl.LazyFrame:
+    """Distribute facility-level collateral over each exposure's ancestor set.
+
+    Supports nested facility hierarchies: collateral pledged at *any* ancestor
+    facility ``F`` (immediate parent, grandparent, ... root) flows pro-rata to
+    every descendant exposure, shared by ``ead_for_crm`` across ``F``'s whole
+    subtree (CRR Art. 230-231 pooling). Membership comes from the
+    ``ancestor_facilities`` list column (parent + all ancestors incl. self).
+
+    For every (exposure, ancestor facility) pair the exposure receives
+    ``ead_for_crm / subtree_ead[F, pool]`` of ``F``'s pooled facility
+    collateral; contributions are summed across ancestor levels, so a pledge at
+    the grandparent and one at the direct parent stack. Pool-aware: the
+    non-AIRB subtree denominator applies to non-AIRB-pool exposures and the AIRB
+    denominator to AIRB-pool exposures, so unflagged collateral never leaks into
+    the AIRB pool (CRR Art. 181 / Basel 3.1 Art. 169A).
+
+    Returns ``exposures`` with one ``{metric}_n_f`` and ``{metric}_a_f`` column
+    per metric, each already pro-rata-weighted and ancestor-summed (so ``_sum6``
+    adds them in without a further weight multiply). Reduces exactly to the
+    legacy single-level allocation when every ``ancestor_facilities`` is its
+    ``[parent]``.
+    """
+    agg_cols = [f"{m}_{p}_f" for m in metrics for p in ("n", "a")]
+
+    # (exposure, ancestor facility) edge list with pool flag + EAD basis.
+    edges = (
+        exposures.select(
+            "exposure_reference",
+            "ead_for_crm",
+            pl.col("_is_airb_pool").fill_null(False).alias("_pool"),
+            "ancestor_facilities",
+        )
+        .explode("ancestor_facilities")
+        .rename({"ancestor_facilities": "_anc_fac"})
+        .filter(pl.col("_anc_fac").is_not_null())
+    )
+
+    # Pool-aware subtree EAD per ancestor facility (over ALL descendant exposures).
+    subtree = edges.group_by("_anc_fac").agg(
+        pl.col("ead_for_crm").filter(pl.col("_pool")).sum().alias("_sub_airb"),
+        pl.col("ead_for_crm").filter(~pl.col("_pool")).sum().alias("_sub_non_airb"),
+    )
+
+    contrib = (
+        edges.join(
+            coll_facility,
+            left_on="_anc_fac",
+            right_on="beneficiary_reference",
+            how="inner",
+        )
+        .join(subtree, on="_anc_fac", how="left")
+        .with_columns(
+            pl.when(~pl.col("_pool") & (pl.col("_sub_non_airb") > 0))
+            .then(pl.col("ead_for_crm") / pl.col("_sub_non_airb"))
+            .otherwise(pl.lit(0.0))
+            .alias("_w_n"),
+            pl.when(pl.col("_pool") & (pl.col("_sub_airb") > 0))
+            .then(pl.col("ead_for_crm") / pl.col("_sub_airb"))
+            .otherwise(pl.lit(0.0))
+            .alias("_w_a"),
+        )
+        .with_columns(
+            [(pl.col(f"{m}_n_f") * pl.col("_w_n")).alias(f"{m}_n_f") for m in metrics]
+            + [(pl.col(f"{m}_a_f") * pl.col("_w_a")).alias(f"{m}_a_f") for m in metrics]
+        )
+        .group_by("exposure_reference")
+        .agg([pl.col(c).sum() for c in agg_cols])
+    )
+
+    return exposures.join(contrib, on="exposure_reference", how="left").with_columns(
+        [pl.col(c).fill_null(0.0) for c in agg_cols]
+    )

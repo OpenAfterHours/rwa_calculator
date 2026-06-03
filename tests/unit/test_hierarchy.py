@@ -4364,6 +4364,85 @@ class TestBuildFacilityRootLookup:
         assert len(df) == 0
 
 
+class TestBuildFacilityAncestorClosure:
+    """Tests for _build_facility_ancestor_closure (multi-level collateral cascade)."""
+
+    def test_single_level_closure_includes_self_and_parent(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Sub-facility → parent: ancestors = [self, parent]."""
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_PARENT"],
+                "child_reference": ["FAC_CHILD"],
+                "child_type": ["facility"],
+            }
+        ).lazy()
+
+        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+
+        row = df.filter(pl.col("child_facility_reference") == "FAC_CHILD")
+        assert sorted(row["ancestor_facilities"][0].to_list()) == ["FAC_CHILD", "FAC_PARENT"]
+
+    def test_two_level_closure_includes_all_ancestors(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """sub2 → sub1 → root: sub2 ancestors = [sub2, sub1, root]."""
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT", "FAC_SUB1"],
+                "child_reference": ["FAC_SUB1", "FAC_SUB2"],
+                "child_type": ["facility", "facility"],
+            }
+        ).lazy()
+
+        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+
+        sub2 = df.filter(pl.col("child_facility_reference") == "FAC_SUB2")
+        assert sorted(sub2["ancestor_facilities"][0].to_list()) == [
+            "FAC_ROOT",
+            "FAC_SUB1",
+            "FAC_SUB2",
+        ]
+        sub1 = df.filter(pl.col("child_facility_reference") == "FAC_SUB1")
+        assert sorted(sub1["ancestor_facilities"][0].to_list()) == ["FAC_ROOT", "FAC_SUB1"]
+
+    def test_no_facility_type_returns_empty(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """No facility-typed children → empty closure (single-level fallback used)."""
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": ["FAC_ROOT"],
+                "child_reference": ["SUB_A"],
+            }
+        ).lazy()
+
+        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+
+        assert len(df) == 0
+
+    def test_empty_mappings_returns_empty(
+        self,
+        resolver: HierarchyResolver,
+    ) -> None:
+        """Empty facility mappings → empty closure."""
+        facility_mappings = pl.DataFrame(
+            {
+                "parent_facility_reference": pl.Series([], dtype=pl.String),
+                "child_reference": pl.Series([], dtype=pl.String),
+                "child_type": pl.Series([], dtype=pl.String),
+            }
+        ).lazy()
+
+        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+
+        assert len(df) == 0
+
+
 class TestMultiLevelFacilityUndrawn:
     """Tests for multi-level facility undrawn aggregation."""
 

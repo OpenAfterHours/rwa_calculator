@@ -1722,6 +1722,9 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "parent_facility_reference": pl.String,
     "root_facility_reference": pl.String,
     "facility_hierarchy_depth": pl.Int8,
+    # Parent + every ancestor facility (incl. self) — drives the CRM cascade of
+    # facility-level collateral down nested facility hierarchies.
+    "ancestor_facilities": pl.List(pl.String),
     # Lending group aggregation
     "lending_group_reference": pl.String,
     "lending_group_total_exposure": pl.Float64,
@@ -1963,6 +1966,7 @@ CALCULATION_OUTPUT_SCHEMA = {
     "root_facility_reference": pl.String,  # Top-level facility in hierarchy
     "facility_hierarchy_depth": pl.Int8,  # Levels from root facility (0=top)
     "facility_hierarchy_path": pl.List(pl.String),  # Full path from root to this exposure
+    "ancestor_facilities": pl.List(pl.String),  # Parent + all ancestors (incl. self) for CRM cascade
     # -------------------------------------------------------------------------
     # CRM INHERITANCE (From Hierarchy)
     # -------------------------------------------------------------------------

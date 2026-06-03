@@ -578,6 +578,43 @@ class TestFacilityLevelProvision:
             1_000_000.0 - 100_000.0 / 3, rel=1e-4
         )
 
+    def test_grandparent_facility_provision_cascades(
+        self, processor: CRMProcessor, crr_config: CalculationConfig
+    ) -> None:
+        """A provision at a grandparent facility (FAC_1 → FAC_2 → exposures)
+        cascades pro-rata to the descendant exposures under the child FAC_2."""
+        exposures = _make_exposures(
+            exposure_reference=["EXP_A", "EXP_B"],
+            counterparty_reference=["CP001", "CP001"],
+            parent_facility_reference=["FAC_2", "FAC_2"],
+            ancestor_facilities=[["FAC_2", "FAC_1"], ["FAC_2", "FAC_1"]],
+            drawn_amount=[600_000.0, 400_000.0],  # 60:40
+            interest=[0.0, 0.0],
+            nominal_amount=[0.0, 0.0],
+            approach=[ApproachType.SA.value, ApproachType.SA.value],
+            risk_type=["MR", "MR"],
+            exposure_class=["corporate", "corporate"],
+            lgd=[0.45, 0.45],
+            seniority=["senior", "senior"],
+        )
+        provisions = _make_provisions(
+            [
+                {
+                    "provision_reference": "P1",
+                    "beneficiary_reference": "FAC_1",  # grandparent
+                    "beneficiary_type": "facility",
+                    "amount": 100_000.0,
+                    "provision_type": "SCRA",
+                }
+            ]
+        )
+
+        result = processor.resolve_provisions(exposures, provisions, crr_config).collect()
+        exp_a = result.filter(pl.col("exposure_reference") == "EXP_A")
+        exp_b = result.filter(pl.col("exposure_reference") == "EXP_B")
+        assert exp_a["provision_allocated"][0] == pytest.approx(60_000.0)
+        assert exp_b["provision_allocated"][0] == pytest.approx(40_000.0)
+
 
 # =============================================================================
 # Counterparty-level provision tests

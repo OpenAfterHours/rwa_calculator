@@ -192,7 +192,13 @@ def _resolve_provisions_multi_level(
     )
     exposures = exposures.with_columns(weight_expr.alias("_exp_weight"))
 
-    # --- 2. Facility-level provisions ---
+    # --- 2. Facility-level provisions (cascade over the ancestor facility set) ---
+    # A provision pledged at any ancestor facility (parent, grandparent, ...
+    # root) is allocated pro-rata across that facility's whole descendant
+    # subtree — mirroring the collateral cascade. ``ancestor_facilities`` (parent
+    # + ancestors incl. self, from the HierarchyResolver) drives the membership;
+    # when absent it falls back to the 1-element [parent] list, identical to the
+    # legacy single-level behaviour. Contributions sum across ancestor levels.
     if has_parent_facility:
         fac_provs = (
             provisions.filter(bt_lower == "facility")
@@ -200,34 +206,42 @@ def _resolve_provisions_multi_level(
             .agg(pl.col("amount").sum().alias("_prov_facility"))
         )
 
-        fac_totals = (
-            exposures.filter(pl.col("parent_facility_reference").is_not_null())
-            .group_by("parent_facility_reference")
-            .agg(pl.col("_exp_weight").sum().alias("_fac_total_weight"))
-        )
+        if "ancestor_facilities" in exposures.collect_schema().names():
+            anc_col = pl.col("ancestor_facilities")
+        else:
+            anc_col = pl.concat_list("parent_facility_reference")
 
-        exposures = (
-            exposures.join(
-                fac_provs,
-                left_on="parent_facility_reference",
-                right_on="beneficiary_reference",
-                how="left",
+        edges = (
+            exposures.select(
+                "exposure_reference",
+                "_exp_weight",
+                anc_col.alias("_anc_fac"),
             )
-            .join(fac_totals, on="parent_facility_reference", how="left")
-            .with_columns(
-                [
-                    pl.col("_prov_facility").fill_null(0.0),
-                    pl.col("_fac_total_weight").fill_null(0.0),
-                ]
+            .explode("_anc_fac")
+            .filter(pl.col("_anc_fac").is_not_null())
+        )
+        subtree_totals = edges.group_by("_anc_fac").agg(
+            pl.col("_exp_weight").sum().alias("_fac_total_weight")
+        )
+        fac_alloc = (
+            edges.join(
+                fac_provs, left_on="_anc_fac", right_on="beneficiary_reference", how="inner"
             )
+            .join(subtree_totals, on="_anc_fac", how="left")
             .with_columns(
                 pl.when(pl.col("_fac_total_weight") > 0)
                 .then(
                     pl.col("_prov_facility") * pl.col("_exp_weight") / pl.col("_fac_total_weight")
                 )
                 .otherwise(pl.lit(0.0))
-                .alias("_prov_facility_alloc"),
+                .alias("_prov_facility_part")
             )
+            .group_by("exposure_reference")
+            .agg(pl.col("_prov_facility_part").sum().alias("_prov_facility_alloc"))
+        )
+
+        exposures = exposures.join(fac_alloc, on="exposure_reference", how="left").with_columns(
+            pl.col("_prov_facility_alloc").fill_null(0.0)
         )
     else:
         exposures = exposures.with_columns(pl.lit(0.0).alias("_prov_facility_alloc"))
@@ -273,6 +287,8 @@ def _resolve_provisions_multi_level(
     )
 
     # --- Drop temporary columns ---
+    # (Facility intermediates ``_prov_facility`` / ``_fac_total_weight`` live in
+    # the per-ancestor edge frames above and never land on ``exposures``.)
     drop_cols = [
         "_prov_direct",
         "_exp_weight",
@@ -281,8 +297,6 @@ def _resolve_provisions_multi_level(
         "_prov_cp",
         "_cp_total_weight",
     ]
-    if has_parent_facility:
-        drop_cols.extend(["_prov_facility", "_fac_total_weight"])
     exposures = exposures.drop(drop_cols)
 
     return exposures

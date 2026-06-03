@@ -479,6 +479,39 @@ Collateral is allocated at three levels, distributed pro-rata:
 
 Financial and non-financial collateral are tracked separately to apply the correct overcollateralisation ratios and minimum thresholds.
 
+### Nested facilities — ancestor cascade
+
+The facility level is **hierarchy-aware**: facilities may nest (a facility whose
+parent is another facility, expressed via `FACILITY_MAPPING_SCHEMA` with
+`child_type = "facility"`). Collateral pledged at **any ancestor facility**
+(immediate parent, grandparent, … root) cascades pro-rata (by `ead_for_crm`) to
+**every descendant exposure** of that facility, not just the exposures whose
+immediate `parent_facility_reference` matches the pledged facility.
+
+The `HierarchyResolver` emits an `ancestor_facilities` list column on each
+exposure (its parent plus every ancestor up to the root, including the facility
+itself). The CRM stage (`_build_facility_lookup` for `pledge_percentage`
+resolution, and `_cascade_facility_collateral` for the allocation) consumes it:
+
+- A `pledge_percentage` at an ancestor facility `F` resolves against the **whole
+  subtree EAD** of `F` (Σ `ead_for_crm` over all descendants), not `F`'s direct
+  exposures only.
+- Each descendant's share of `F`'s collateral is `ead_for_crm / subtree_ead(F, pool)`.
+- Pledges made at several ancestor levels **stack** on a descendant.
+- A pledge at a specific facility reaches only that facility's subtree — sibling
+  subtrees sharing a common root are unaffected.
+
+The cascade is pool-aware (see below) and **reduces exactly to single-level
+allocation** when no facility hierarchy is present (`ancestor_facilities` =
+`[parent]`).
+
+The **same ancestor cascade applies to facility-level provisions and
+guarantees** (`engine/crm/provisions.py`, `engine/crm/guarantees.py`): a
+provision (CRR Art. 111(2)) or guarantee (CRR Art. 213-217) pledged at any
+ancestor facility is allocated pro-rata across the whole descendant subtree
+(by EAD-equivalent weight / `ead_after_collateral` respectively), so all three
+credit-protection types behave consistently across nested facilities.
+
 ### Pool-Aware Pro-Rata for AIRB Mixes (CRR Art. 181)
 
 Under A-IRB, the firm's own modelled LGD already reflects the credit-risk-mitigating effect of any collateral incorporated in the model. To prevent double-counting when a counterparty has both A-IRB and non-A-IRB exposures, the pipeline splits the pro-rata base by pool:

@@ -96,6 +96,72 @@ class TestFacilityLevelGuarantee:
         # LOAN_B: 400k / 1000k * 500k = 200k guaranteed
         assert loan_b["guaranteed_portion"].sum() == pytest.approx(200_000.0, rel=1e-6)
 
+    def test_grandparent_facility_guarantee_cascades(
+        self,
+        crm_processor: CRMProcessor,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """A guarantee at a grandparent facility (FAC_1 → FAC_2 → loans) is
+        allocated pro-rata to the descendant exposures under the child FAC_2."""
+        # Arrange: loans under FAC_2, guarantee pledged at the grandparent FAC_1
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["LOAN_A", "LOAN_B"],
+                "counterparty_reference": ["CP001", "CP001"],
+                "parent_facility_reference": ["FAC_2", "FAC_2"],
+                "ancestor_facilities": [["FAC_2", "FAC_1"], ["FAC_2", "FAC_1"]],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "approach": ["SA", "SA"],
+                "ead_pre_crm": [600_000.0, 400_000.0],
+                "lgd": [0.45, 0.45],
+                "cqs": [3, 3],
+                "product_type": ["LOAN", "LOAN"],
+                "drawn_amount": [600_000.0, 400_000.0],
+                "undrawn_amount": [0.0, 0.0],
+                "nominal_amount": [0.0, 0.0],
+                "risk_type": [None, None],
+            }
+        )
+        counterparties = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "GUAR001"],
+                "entity_type": ["corporate", "sovereign"],
+            }
+        )
+        guarantees = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["FAC_1"],  # grandparent
+                "beneficiary_type": ["facility"],
+                "amount_covered": [500_000.0],
+                "percentage_covered": [None],
+                "guarantor": ["GUAR001"],
+            }
+        )
+        rating_inheritance = pl.LazyFrame(
+            {
+                "counterparty_reference": ["CP001", "GUAR001"],
+                "cqs": [3, 1],
+                "pd": [0.01, 0.0001],
+            }
+        )
+        classified_bundle = ClassifiedExposuresBundle(
+            all_exposures=exposures,
+            sa_exposures=exposures,
+            irb_exposures=pl.LazyFrame(),
+            guarantees=guarantees,
+            counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
+        )
+
+        # Act
+        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        df = result.exposures.collect().sort("exposure_reference")
+
+        # Assert: grandparent guarantee allocated pro-rata (60/40 split on 500k)
+        loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
+        loan_b = df.filter(pl.col("parent_exposure_reference") == "LOAN_B")
+        assert loan_a["guaranteed_portion"].sum() == pytest.approx(300_000.0, rel=1e-6)
+        assert loan_b["guaranteed_portion"].sum() == pytest.approx(200_000.0, rel=1e-6)
+
     def test_facility_guarantee_with_percentage_covered(
         self,
         crm_processor: CRMProcessor,

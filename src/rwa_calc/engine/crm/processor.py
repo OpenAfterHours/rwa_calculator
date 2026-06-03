@@ -123,7 +123,18 @@ def _build_facility_lookup(
     has_floor_col: bool,
     has_sft_col: bool,
 ) -> pl.LazyFrame:
-    """Build the facility (parent_facility_reference) aggregated lookup frame."""
+    """Build the facility-aggregated lookup frame, keyed by each ancestor facility.
+
+    For nested facility hierarchies (collateral pledged at a grandparent
+    facility) the EAD / currency / maturity aggregates for a facility ``F`` cover
+    ALL descendant exposures of ``F`` — not only exposures whose immediate
+    ``parent_facility_reference`` is ``F``. Subtree membership comes from the
+    ``ancestor_facilities`` list column (parent + all ancestors up to root, incl.
+    self) built by the HierarchyResolver; when absent it falls back to the
+    1-element ``[parent_facility_reference]`` list, identical to the legacy
+    single-level behaviour. This makes a ``pledge_percentage`` pledged at any
+    ancestor facility resolve against the full subtree EAD.
+    """
     if not has_parent_col:
         return pl.LazyFrame(
             schema={
@@ -137,26 +148,29 @@ def _build_facility_lookup(
                 "_sft_facility": pl.Boolean,
             }
         )
+    if "ancestor_facilities" in exposures.collect_schema().names():
+        anc_col = pl.col("ancestor_facilities")
+    else:
+        anc_col = pl.concat_list("parent_facility_reference")
     facility_agg = [
         pl.col("ead_for_crm").sum().alias("_ead_facility"),
         pl.col("ead_for_crm").filter(pool_expr).sum().alias("_ead_facility_airb"),
         pl.col("ead_for_crm").filter(~pool_expr).sum().alias("_ead_facility_non_airb"),
         pl.col(exposure_ccy_col).first().alias("_currency_facility"),
         pl.col("maturity_date").first().alias("_maturity_facility"),
-        # Conservative: if ANY exposure in facility has flag, flag whole facility
+        # Conservative: if ANY descendant exposure has the flag, flag the facility
         _optional_bool_col(
             "has_one_day_maturity_floor", "_floor_facility", has_floor_col, aggregate="max"
         ),
         _optional_bool_col("is_sft", "_sft_facility", has_sft_col, aggregate="max"),
     ]
     return (
-        exposures.filter(pl.col("parent_facility_reference").is_not_null())
-        .group_by("parent_facility_reference")
+        exposures.with_columns(anc_col.alias("_ben_ref_facility"))
+        .explode("_ben_ref_facility")
+        .filter(pl.col("_ben_ref_facility").is_not_null())
+        .group_by("_ben_ref_facility")
         .agg(facility_agg)
-        .with_columns(
-            pl.col("parent_facility_reference").cast(pl.String),
-        )
-        .rename({"parent_facility_reference": "_ben_ref_facility"})
+        .with_columns(pl.col("_ben_ref_facility").cast(pl.String))
     )
 
 

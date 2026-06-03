@@ -207,10 +207,6 @@ def profile_pipeline_stages(
         # 3f-iii: Join + haircuts + allocation
         haircut_calc = HaircutCalculator(is_basel_3_1=config.is_basel_3_1)
 
-        facility_ead_totals = facility_lookup.select(
-            pl.col("_ben_ref_facility").alias("parent_facility_reference"),
-            pl.col("_ead_facility").alias("_fac_ead_total"),
-        )
         cp_ead_totals = cp_lookup.select(
             pl.col("_ben_ref_cp").alias("counterparty_reference"),
             pl.col("_ead_cp").alias("_cp_ead_total"),
@@ -245,7 +241,6 @@ def profile_pipeline_stages(
                 exposures,
                 adjusted_collateral,
                 config,
-                facility_ead_totals,
                 cp_ead_totals,
                 config.is_basel_3_1,
             ),

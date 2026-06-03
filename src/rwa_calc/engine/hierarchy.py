@@ -633,6 +633,75 @@ class HierarchyResolver:
             }
         ).lazy()
 
+    def _build_facility_ancestor_closure(
+        self,
+        facility_mappings: pl.LazyFrame,
+        max_depth: int = 10,
+    ) -> pl.LazyFrame:
+        """Build the facility ancestor closure for multi-level collateral cascade.
+
+        Walks the facility→facility graph and, for every sub-facility, collects
+        the facility itself plus every ancestor facility up to the root. The CRM
+        stage uses this so collateral pledged at any ancestor facility (parent,
+        grandparent, ... root) cascades pro-rata to the whole descendant subtree
+        (CRR Art. 230-231). Only facilities that appear as a child in a
+        facility→facility mapping are included; roots / single-level facilities
+        are absent and handled by the ``[parent]`` fallback at the call site.
+
+        Args:
+            facility_mappings: Facility mappings with ``parent_facility_reference``,
+                ``child_reference`` and ``child_type``. Caller may pass an
+                already-normalised frame (idempotent re-normalisation).
+            max_depth: Maximum hierarchy depth to traverse.
+
+        Returns:
+            LazyFrame with columns:
+            - child_facility_reference: the sub-facility
+            - ancestor_facilities: list[str] of the facility + all ancestors
+              (incl. self).
+        """
+        empty_result = pl.LazyFrame(
+            schema={
+                "child_facility_reference": pl.String,
+                "ancestor_facilities": pl.List(pl.String),
+            }
+        )
+        if not has_required_columns(
+            facility_mappings, {"parent_facility_reference", "child_reference"}
+        ):
+            return empty_result
+        facility_mappings = _normalise_facility_mappings(facility_mappings)
+
+        facility_edges = (
+            facility_mappings.filter(
+                pl.col("child_type").fill_null("").str.to_lowercase() == "facility"
+            )
+            .select(
+                [
+                    pl.col("child_reference").alias("child_facility_reference"),
+                    pl.col("parent_facility_reference"),
+                ]
+            )
+            .unique()
+            .collect()
+        )
+
+        if facility_edges.height == 0:
+            return empty_result
+
+        closure = _resolve_ancestors_eager(
+            facility_edges,
+            child_col="child_facility_reference",
+            parent_col="parent_facility_reference",
+            max_depth=max_depth,
+        )
+        return (
+            closure.lazy()
+            .group_by("descendant")
+            .agg(pl.col("ancestor").alias("ancestor_facilities"))
+            .rename({"descendant": "child_facility_reference"})
+        )
+
     def _enrich_counterparties_with_hierarchy(
         self,
         counterparties: pl.LazyFrame,
@@ -2110,6 +2179,35 @@ class HierarchyResolver:
             ]
         )
 
+        # Attach the facility ancestor closure (parent + every ancestor up to the
+        # root, incl. self) so the CRM stage can cascade facility-level collateral
+        # down nested facility hierarchies. Facilities absent from the closure
+        # (roots / single-level) fall back to the 1-element [parent] list, which
+        # makes the CRM cascade reduce to the legacy single-level allocation.
+        ancestor_lists = self._build_facility_ancestor_closure(facility_mappings)
+        exposures = (
+            exposures.join(
+                ancestor_lists.select(
+                    [
+                        pl.col("child_facility_reference").alias("_anc_child"),
+                        pl.col("ancestor_facilities").alias("_anc_list"),
+                    ]
+                ),
+                left_on="parent_facility_reference",
+                right_on="_anc_child",
+                how="left",
+            )
+            .with_columns(
+                pl.when(pl.col("_anc_list").is_not_null())
+                .then(pl.col("_anc_list"))
+                .when(pl.col("parent_facility_reference").is_not_null())
+                .then(pl.concat_list("parent_facility_reference"))
+                .otherwise(pl.lit(None, dtype=pl.List(pl.String)))
+                .alias("ancestor_facilities")
+            )
+            .drop("_anc_list")
+        )
+
         # Resolve root_facility_reference and facility_hierarchy_depth using root lookup.
         # Left join is safe even when lookup is empty — NULLs fall through to the
         # when/then/otherwise chain, producing identical results to the no-lookup case.
@@ -3523,6 +3621,65 @@ def _resolve_graph_eager(
             "depth": pl.Int32,
             "truncated": pl.Boolean,
         },
+    )
+
+
+def _resolve_ancestors_eager(
+    edges: pl.DataFrame,
+    child_col: str,
+    parent_col: str,
+    max_depth: int = 10,
+) -> pl.DataFrame:
+    """Resolve a parent-child graph to its full ancestor closure.
+
+    Builds a child→parent dict from collected edge data, then for each child
+    walks the chain towards the root, emitting one ``(descendant, ancestor)``
+    row for every node on the path INCLUDING the child itself (self-edge). Used
+    to cascade facility-level collateral over the whole facility subtree: a
+    pledge at any ancestor facility reaches every descendant exposure.
+
+    Args:
+        edges: Collected DataFrame with child and parent columns.
+        child_col: Name of the child column in ``edges``.
+        parent_col: Name of the parent column in ``edges``.
+        max_depth: Safety limit to prevent infinite loops on bad data; the walk
+            also breaks on a revisited node (cycle guard).
+
+    Returns:
+        DataFrame with columns:
+        - descendant (Utf8): the child facility.
+        - ancestor (Utf8): the child itself or one of its ancestor facilities.
+    """
+    child_series = edges[child_col].to_list()
+    parent_series = edges[parent_col].to_list()
+
+    parent_of: dict[str, str] = {}
+    for child, parent in zip(child_series, parent_series, strict=True):
+        if child is not None and parent is not None:
+            parent_of[child] = parent
+
+    descendants: list[str] = []
+    ancestors: list[str] = []
+    for entity in parent_of:
+        # Self-edge: a pledge at the facility itself must still reach it.
+        descendants.append(entity)
+        ancestors.append(entity)
+        current = entity
+        depth = 0
+        visited: set[str] = {current}
+        while current in parent_of and depth < max_depth:
+            next_parent = parent_of[current]
+            if next_parent in visited:
+                break  # Cycle detected
+            visited.add(next_parent)
+            descendants.append(entity)
+            ancestors.append(next_parent)
+            current = next_parent
+            depth += 1
+
+    return pl.DataFrame(
+        {"descendant": descendants, "ancestor": ancestors},
+        schema={"descendant": pl.String, "ancestor": pl.String},
     )
 
 

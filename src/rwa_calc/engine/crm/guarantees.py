@@ -413,17 +413,29 @@ def _resolve_guarantees_multi_level(
 
     expanded_parts: list[pl.LazyFrame] = [direct_guarantees]
 
-    # --- 2. Facility-level guarantees — allocate pro-rata to child exposures ---
+    # --- 2. Facility-level guarantees — cascade pro-rata over the ancestor set ---
+    # A guarantee pledged at any ancestor facility (parent, grandparent, ...
+    # root) is allocated pro-rata across that facility's whole descendant subtree
+    # — mirroring the collateral / provision cascade. ``ancestor_facilities``
+    # (parent + ancestors incl. self, from the HierarchyResolver) drives the
+    # membership; when absent it falls back to the 1-element [parent] list,
+    # identical to the legacy single-level behaviour.
     exp_schema = exposures.collect_schema()
     has_parent_fac = "parent_facility_reference" in exp_schema.names()
 
     if has_parent_fac:
         facility_guarantees = guarantees.filter(bt_lower == "facility")
-        fac_exposures = exposures.filter(pl.col("parent_facility_reference").is_not_null())
+        if "ancestor_facilities" in exp_schema.names():
+            anc_col = pl.col("ancestor_facilities")
+        else:
+            anc_col = pl.concat_list("parent_facility_reference")
+        fac_exposures = (
+            exposures.with_columns(anc_col.alias("_anc_fac"))
+            .explode("_anc_fac")
+            .filter(pl.col("_anc_fac").is_not_null())
+        )
         expanded_parts.append(
-            _allocate_guarantees_pro_rata(
-                facility_guarantees, fac_exposures, "parent_facility_reference"
-            )
+            _allocate_guarantees_pro_rata(facility_guarantees, fac_exposures, "_anc_fac")
         )
 
     # --- 3. Counterparty-level guarantees — allocate pro-rata ---

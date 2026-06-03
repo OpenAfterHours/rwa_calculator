@@ -192,13 +192,15 @@ def _prepare_guarantees(
     guarantees = _apply_fx_haircut_to_guarantees(guarantees, exposures)
     guarantees = _apply_restructuring_haircut_to_guarantees(guarantees)
 
-    # CRR Art. 239(3): maturity mismatch adjustment for unfunded credit
-    # protection. When the protection's residual maturity t is shorter than
-    # the exposure's effective maturity T, the covered amount G is scaled by
-    # (t - 0.25) / (T - 0.25), with T capped at 5y. Applied before splitting
-    # so the reduced amount_covered propagates through cap-at-EAD.
-    if config.is_crr:
-        guarantees = _apply_maturity_mismatch_to_guarantees(guarantees, exposures, config)
+    # CRR Art. 239(3) / PS1/26 Art. 239(3): maturity mismatch adjustment for
+    # unfunded credit protection. When the protection's residual maturity t is
+    # shorter than the exposure's effective maturity T, the covered amount G is
+    # scaled by (t - 0.25) / (T - 0.25), with T capped at 5y. Applied before
+    # splitting so the reduced amount_covered propagates through cap-at-EAD.
+    # Framework-agnostic (reads only reporting_date + maturity columns; the
+    # multiplier is identical under CRR and Basel 3.1), so it runs
+    # unconditionally — mirroring the collateral sibling in collateral.py.
+    guarantees = _apply_maturity_mismatch_to_guarantees(guarantees, exposures, config)
     return guarantees
 
 

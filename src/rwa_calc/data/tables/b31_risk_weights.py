@@ -39,6 +39,7 @@ from datetime import date
 from decimal import Decimal
 
 import polars as pl
+import polars.selectors as cs
 from watchfire import cites
 
 from rwa_calc.domain.enums import PropertyType
@@ -484,19 +485,7 @@ def b31_residential_rw_expr(
     is_junior = prior_charge > 0.0
 
     # Art. 124L — Counterparty type routing for RRE residual risk weight
-    is_natural = pl.col("cp_is_natural_person").fill_null(False)
-    is_sme = pl.col("is_sme").fill_null(False)
-    is_retail_sme = is_sme & pl.col("qualifies_as_retail").fill_null(False)
-    is_social = pl.col("cp_is_social_housing").fill_null(False)
-    cp_rw_for_rre = (
-        pl.when(is_natural | is_retail_sme)
-        .then(pl.lit(0.75))  # Art. 124L(a): natural person / retail SME
-        .when(is_sme)
-        .then(pl.lit(0.85))  # Art. 124L(b): other SME (non-retail)
-        .when(is_social)
-        .then(pl.max_horizontal(pl.lit(0.75), cp_rw))  # Art. 124L(c): social housing
-        .otherwise(cp_rw)  # Art. 124L(d): full unsecured counterparty RW
-    )
+    cp_rw_for_rre = _b31_art_124l_cp_rw_expr(cp_rw)
 
     # General residential (PRA PS1/26 Art. 124F) — loan-splitting
     # Art. 124F(2): Junior charges reduce the 55% threshold
@@ -564,9 +553,16 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     # Natural person or SME → loan-splitting (Art. 124H(1-2))
     # Other counterparties → max/min formula (Art. 124H(3))
     # Default: False (other counterparty) — conservative, gives higher RW
-    is_person_or_sme = pl.col("cp_is_natural_person").fill_null(False) | pl.col("is_sme").fill_null(
-        False
-    )
+    is_natural = pl.col("cp_is_natural_person").fill_null(False)
+    is_sme = pl.col("is_sme").fill_null(False)
+    is_person_or_sme = is_natural | is_sme
+
+    # Art. 124L — counterparty-type residual RW for the Art. 124H(1) loan-split
+    # leg. Only used on the ``is_person_or_sme`` branch (line below), so only the
+    # natural-person/retail-SME (75%) and other-SME (85%) limbs of the shared
+    # Art. 124L helper are reachable; the social-housing and "other" limbs are
+    # inert here (those counterparties route to Art. 124H(3) instead).
+    cp_rw_for_cre = _b31_art_124l_cp_rw_expr(cp_rw)
 
     # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
     base_income_rw = pl.when(ltv <= 0.80).then(pl.lit(1.00)).otherwise(pl.lit(1.10))
@@ -584,7 +580,7 @@ def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.
     # Art. 124F(2): Junior charges reduce the 55% threshold
     effective_threshold = pl.max_horizontal(pl.lit(0.0), pl.lit(0.55) - prior_charge)
     secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
-    loan_split_rw = pl.lit(0.60) * secured_share + cp_rw * (pl.lit(1.0) - secured_share)
+    loan_split_rw = pl.lit(0.60) * secured_share + cp_rw_for_cre * (pl.lit(1.0) - secured_share)
 
     # General CRE — other counterparties (Art. 124H(3)):
     # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
@@ -631,11 +627,22 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
 
     Three sub-treatments:
     - Income-dependent: 150% flat
-    - RESI non-dependent: counterparty RW (no floor)
-    - CRE non-dependent: max(60%, counterparty RW)
+    - RESI non-dependent: Art. 124L counterparty-type RW (no floor)
+    - CRE non-dependent: max(60%, Art. 124L counterparty-type RW)
+
+    The non-income residual resolves the counterparty RW through the full
+    Art. 124L type table via the shared ``_b31_art_124l_cp_rw_expr`` helper —
+    Art. 124J has no counterparty gate, so all four limbs are reachable,
+    including social housing and the "other" full unsecured fallback:
+      - Natural person / retail-qualifying SME: 75% (Art. 124L(a))
+      - Other SME (non-retail): 85% (Art. 124L(b))
+      - Social housing: max(75%, unsecured counterparty RW) (Art. 124L(c))
+      - Other (corporate, institution, etc.): full unsecured RW (Art. 124L(d/e))
 
     Requires columns: has_income_cover (Boolean), property_type (String),
-                      counterparty_rw_col (Float64)
+                      cp_is_natural_person (Boolean), is_sme (Boolean),
+                      qualifies_as_retail (Boolean), cp_is_social_housing
+                      (Boolean), counterparty_rw_col (Float64)
 
     Returns:
         Expression resolving to Art. 124J risk weight
@@ -644,15 +651,21 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
     cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
     is_resi = pl.col("property_type").fill_null("").str.to_lowercase() == "residential"
 
-    # Income-dependent: 150% regardless of property type
-    # Non-dependent RESI: counterparty RW (no floor)
-    # Non-dependent CRE: max(60%, counterparty RW)
+    # Art. 124L — Counterparty type routing for the Art. 124J non-income residual.
+    # Art. 124J has no counterparty gate, so all four limbs of the shared
+    # Art. 124L helper are reachable (incl. social housing and the "other"
+    # full-unsecured fallback).
+    cp_rw_for_re = _b31_art_124l_cp_rw_expr(cp_rw)
+
+    # Income-dependent: 150% regardless of property type (Art. 124J(1))
+    # Non-dependent RESI: Art. 124L counterparty-type RW, no floor (Art. 124J(2))
+    # Non-dependent CRE: max(60%, Art. 124L counterparty-type RW) (Art. 124J(3)(b))
     return (
         pl.when(is_income)
         .then(pl.lit(float(B31_OTHER_RE_INCOME_DEPENDENT_RW)))
         .when(is_resi)
-        .then(cp_rw)
-        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw))
+        .then(cp_rw_for_re)
+        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw_for_re))
     )
 
 
@@ -685,6 +698,56 @@ def b31_sa_sl_rw_expr() -> pl.Expr:
             .otherwise(pl.lit(1.00))  # operational default
         )
         .otherwise(pl.lit(1.00))  # fallback for unknown SL types
+    )
+
+
+def _b31_art_124l_cp_rw_expr(cp_rw: pl.Expr) -> pl.Expr:
+    """
+    Art. 124L counterparty-type residual risk weight.
+
+    Shared by the Art. 124F RRE, Art. 124H CRE and Art. 124J Other-RE routers —
+    resolves the unsecured/residual leg RW from the counterparty type:
+      - Natural person / retail-qualifying SME: 75% (Art. 124L(a))
+      - Other SME (non-retail): 85% (Art. 124L(b))
+      - Social housing: max(75%, unsecured counterparty RW) (Art. 124L(c))
+      - Other (corporate, institution, etc.): full unsecured RW (Art. 124L(d/e))
+
+    The four type flags are optional pipeline columns (HIERARCHY_OUTPUT_SCHEMA /
+    CLASSIFIER_OUTPUT_SCHEMA). They are resolved via coalesce against the schema
+    default (False) so the expression is safe to evaluate against a frame that
+    omits them — routing then falls back to the "other"/``cp_rw`` limb rather
+    than raising ColumnNotFound. Callers that gate on counterparty type before
+    using the result (e.g. the Art. 124H(1) loan-split leg, reachable only for
+    natural-person/SME rows) get identical values from the unreachable limbs.
+
+    Args:
+        cp_rw: Expression for the unsecured counterparty risk weight (already
+            ``fill_null``-ed by the caller to its framework default).
+
+    Returns:
+        Expression resolving to the Art. 124L counterparty-type risk weight.
+    """
+    is_natural = pl.coalesce(
+        cs.by_name("cp_is_natural_person", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_sme = pl.coalesce(cs.by_name("is_sme", require_all=False), pl.lit(False)).fill_null(False)
+    qualifies_as_retail = pl.coalesce(
+        cs.by_name("qualifies_as_retail", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_retail_sme = is_sme & qualifies_as_retail
+    is_social = pl.coalesce(
+        cs.by_name("cp_is_social_housing", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    return (
+        pl.when(is_natural | is_retail_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_NATURAL_PERSON)))  # Art. 124L(a)
+        .when(is_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_OTHER_SME)))  # Art. 124L(b): other SME
+        .when(is_social)
+        .then(  # Art. 124L(c): social housing floor
+            pl.max_horizontal(pl.lit(float(B31_RRE_RESIDUAL_RW_SOCIAL_HOUSING_FLOOR)), cp_rw)
+        )
+        .otherwise(cp_rw)  # Art. 124L(d/e): full unsecured counterparty RW
     )
 
 

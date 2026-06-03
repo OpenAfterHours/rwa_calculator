@@ -488,6 +488,31 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "p4_20",
             _generate_p420,
         ),
+        (
+            "P1.191 (QRRE per-individual aggregate nominal qualification — CRR Art. 154(4)(c) / B31 Art. 147(5A)(c))",
+            "p1_191",
+            _generate_p1191,
+        ),
+        (
+            "P1.193 (B31 Art. 122(2) Table 6 rated corporate-SME — CQS gate on 85% override)",
+            "p1_193",
+            _generate_p1193,
+        ),
+        (
+            "P1.197 (CRR-E.CCF1 slotting OBS EAD — Art. 166(8)(d) F-IRB CCF 75% vs SA CCF 50%)",
+            "p1_197",
+            _generate_p1197,
+        ),
+        (
+            "P1.196 (CRR-SA-SME-CQS1 rated corporate-SME CQS 1 — Art. 122 20% vs 100% override)",
+            "p1_196",
+            _generate_p1196,
+        ),
+        (
+            "P1.200 (B31 Art. 239(3) guarantee/CDS maturity-mismatch scaling wrongly gated on is_crr)",
+            "p1_200",
+            _generate_p1200,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2644,6 +2669,19 @@ def _generate_p248(output_dir: Path) -> list[tuple[str, int]]:
         sys.modules.pop("p2_48", None)
 
 
+def _generate_p1191(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.191 fixtures (QRRE per-individual aggregate nominal test)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_191 import save_p1191_fixtures
+
+        saved = save_p1191_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_191", None)
+
+
 def _generate_p420(output_dir: Path) -> list[tuple[str, int]]:
     """Validate P4.20 fixture module (Python-only; no parquet artefacts).
 
@@ -2672,6 +2710,60 @@ def _generate_p420(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p4_20", None)
+
+
+def _generate_p1193(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.193 fixtures (B31 Art. 122(2) Table 6 rated corporate-SME CQS gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_193 import save_p1193_fixtures
+
+        saved = save_p1193_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_193", None)
+
+
+def _generate_p1197(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.197 fixtures (CRR-E.CCF1 slotting OBS EAD Art. 166(8)(d) F-IRB CCF 75%)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_197 import save_p1197_fixtures
+
+        saved = save_p1197_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_197", None)
+
+
+def _generate_p1196(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.196 fixtures (CRR-SA-SME-CQS1: rated corporate-SME Art. 122 CQS-gate)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_196 import save_p1196_fixtures
+
+        saved = save_p1196_fixtures(output_dir)
+        return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_196", None)
+
+
+def _generate_p1200(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate P1.200 fixtures (B31 Art. 239(3) guarantee/CDS maturity-mismatch scaling)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from p1_200 import save_p1200_fixtures
+
+        saved = save_p1200_fixtures(output_dir / "data")
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("p1_200", None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

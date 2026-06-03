@@ -1290,8 +1290,13 @@ def _apply_b31_risk_weight_overrides(
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
         .then(b31_sa_sl_rw_expr())
-        # Corporate SME: 85% (CRE20.47-49).
-        .when(uc.str.contains("CORPORATE", literal=True) & uc.str.contains("SME", literal=True))
+        # Corporate SME: 85% — unrated only (Art. 122(11)). A rated SME
+        # (CQS 1-6) keeps its Art. 122(2) Table-6 weight from the rw_table join.
+        .when(
+            uc.str.contains("CORPORATE", literal=True)
+            & uc.str.contains("SME", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+        )
         .then(pl.lit(_SA_B31_RW["corporate_sme"]))
     )
 
@@ -1374,8 +1379,14 @@ def _apply_crr_risk_weight_overrides(
             & (pl.col("qualifies_as_retail") == True)  # noqa: E712
         )
         .then(pl.lit(_SA_SHARED_RW["retail"]))
-        # Corporate SME: 100%.
-        .when(uc.str.contains("CORPORATE", literal=True) & uc.str.contains("SME", literal=True))
+        # Corporate SME: 100% — unrated only (Art. 122). A rated SME (CQS 1-6)
+        # keeps its Art. 122 CQS-table weight from the rw_table join; SME relief
+        # is delivered separately via the Art. 501 supporting factor.
+        .when(
+            uc.str.contains("CORPORATE", literal=True)
+            & uc.str.contains("SME", literal=True)
+            & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
+        )
         .then(pl.lit(_SA_CRR_RW["corporate_sme"]))
     )
 

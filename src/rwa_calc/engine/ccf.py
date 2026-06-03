@@ -442,6 +442,12 @@ class CCFCalculator:
             .then(airb_ccf)
             .when(pl.col("approach") == ApproachType.FIRB.value)
             .then(pl.col("_firb_ccf_from_risk_type"))
+            # CRR Art. 147(8): specialised-lending slotting is a corporate IRB
+            # exposure, so its OBS EAD is governed by Art. 166(8) — the F-IRB CCF
+            # (e.g. MR -> 75%), not the SA 50%. Under Basel 3.1, Art. 166C makes
+            # F-IRB CCFs equal SA CCFs, so slotting stays on the SA path below.
+            .when((pl.col("approach") == ApproachType.SLOTTING.value) & (not is_b31))
+            .then(pl.col("_firb_ccf_from_risk_type"))
             .otherwise(pl.col("_sa_ccf_from_risk_type"))
             .alias("ccf"),
         )

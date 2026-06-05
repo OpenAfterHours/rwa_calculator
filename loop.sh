@@ -22,6 +22,11 @@ elif [[ "$1" = "docs_build" ]]; then
     MODE="build"
     PROMPT_FILE="PROMPT_docs_build.md"
     MAX_ITERATIONS=${2:-2}
+elif [[ "$1" = "build_next" ]]; then
+    # build mode
+    MODE="build"
+    PROMPT_FILE="PROMPT_build_next"
+    MAX_ITERATIONS=${2:-2}
 elif [[ "$1" =~ ^[0-9]+$ ]]; then
     # Build mode with max iterations
     MODE="build"

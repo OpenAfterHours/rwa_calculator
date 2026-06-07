@@ -8,6 +8,7 @@ The project includes several scripts for setup, deployment, test data generation
 |--------|---------|-------------|
 | `scripts/download_docs.py` | Download regulatory PDFs | After cloning the repo |
 | `scripts/deploy.py` | Version bump + PyPI publish | Cutting a release |
+| `scripts/generate_dependency_graph.py` | Regenerate the module dependency graph docs page | After structural refactors |
 | `tests/fixtures/generate_all.py` | Regenerate test fixture parquet files | After modifying fixture definitions |
 | `workbooks/crr_expected_outputs/generate_outputs.py` | Generate CRR acceptance test golden files | After adding/changing CRR scenarios |
 | `loop.sh` | Iterative Claude agent development loop | Hands-off agent-driven development |
@@ -54,6 +55,19 @@ uv run python scripts/deploy.py --bump patch --dry-run
 
 !!! info "See also"
     Full details (Windows batch wrapper, PyPI token setup, post-deployment git workflow) in [`scripts/README.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/scripts/README.md).
+
+### `scripts/generate_dependency_graph.py` — Regenerate the module dependency graph
+
+Builds the live import graph of `src/rwa_calc` with the [`curfew`](https://github.com/OpenAfterHours) dev tool and writes the [Module Dependencies](module-dependencies.md) page — a package-level overview plus the full module-level graph. Re-run by `scripts/deploy.py` on every release, so it normally only needs running by hand after a structural refactor.
+
+```bash
+# Regenerate the docs page
+uv run python scripts/generate_dependency_graph.py
+
+# Inspect the graph directly without writing docs
+uv run curfew show --mermaid                       # full module graph to stdout
+uv run curfew report rwa_calc.engine.classifier    # one module's deps + dependents
+```
 
 ---
 

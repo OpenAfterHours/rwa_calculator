@@ -172,4 +172,5 @@ dev = [
     "numpy>=1.26.0",  # For benchmark data generation only
     "pymupdf>=1.27.2.2",
     "ruff>=0.14.14",
+    "curfew>=0.1.0",
 ]

@@ -5,7 +5,7 @@ Deployment script for rwa-calc package.
 Automates version updates and PyPI publishing:
 1. Updates version in pyproject.toml, __init__.py, docs
 2. Updates changelog with new version section
-3. Regenerates docs/development/citation-matrix.md from @cites decorators
+3. Regenerates generated docs pages (citation matrix from @cites; module dependency graph via curfew)
 4. Syncs uv.lock
 5. Builds the package
 6. Commits the version bump and creates a git tag
@@ -54,6 +54,7 @@ GIT_STAGE_FILES = [
     *VERSION_FILES.keys(),
     "docs/appendix/changelog.md",
     "docs/development/citation-matrix.md",
+    "docs/development/module-dependencies.md",
     "uv.lock",
 ]
 
@@ -286,10 +287,16 @@ def update_versioned_files(new_version: str, current_version: str) -> None:
 
 
 def build_release(new_version: str) -> bool:
-    """Regenerate the citation matrix, sync the lockfile, and build the package."""
+    """Regenerate generated docs, sync the lockfile, and build the package."""
     if not run_command(
         ["uv", "run", "python", "scripts/generate_citation_matrix.py"],
         "Regenerating citation matrix",
+    ):
+        return False
+
+    if not run_command(
+        ["uv", "run", "python", "scripts/generate_dependency_graph.py"],
+        "Regenerating dependency graph",
     ):
         return False
 

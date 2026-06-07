@@ -138,6 +138,7 @@ nav = [
     { "Documentation Conventions" = "development/documentation-conventions.md" },
     { "Citation Tracking" = "development/citation-tracking.md" },
     { "Citation Coverage Matrix" = "development/citation-matrix.md" },
+    { "Module Dependencies" = "development/module-dependencies.md" },
   ]},
   { "Plans" = [
     "plans/index.md",

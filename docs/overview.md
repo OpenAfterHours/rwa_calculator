@@ -165,7 +165,7 @@ See the [Regulatory References](appendix/regulatory-references.md) appendix for 
 
 | Component | Version |
 |-----------|---------|
-| Calculator | 0.2.24 |
+| Calculator | 0.2.25 |
 | CRR Support | Full |
 | Basel 3.1 Support | Complete |
 | Python Required | >= 3.13 |

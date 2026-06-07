@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.2.25] - 2026-06-07
+
+### Added
 - **Parallel-run reconciliation is now a first-class page in the app (`/reconciliation`) and a REST endpoint, replacing the Marimo workbook.** The reconciliation feature (run this calculator alongside a firm's legacy engine and compare component-by-component, triaging each break to a data vs. engine fix) is now part of the server-rendered FastAPI/Jinja app: a form takes the data path and an editable TOML mapping, and the result renders across the four drill-down tiers — headline tie-out + per-component summary (with two inline-SVG charts: legacy-vs-ours per component and Σ|Δ| by component), the by-bucket / by-class / by-approach segmentation, the break worklist ranked by materiality, and a per-key forensic table whose bucket filter (`?bucket=…`) re-reads a cached result without recomputing. The wide forensic frame is projected to a readable column set on screen; the full per-key detail (explain + input drivers) is available via CSV/Excel download. A matching library-first HTTP contract is exposed: `POST /api/reconcile` (returns a `recon_id` + each tier as `{columns, rows}`) and `GET /api/reconcile/export/{csv|excel}`. New module `src/rwa_calc/ui/views/reconciliation.py` (framework-agnostic view helpers) sits over the unchanged `CreditRiskCalc.reconcile()` API — **no calculation impact**. Pinned by `tests/unit/ui/test_views_reconciliation.py`, `tests/integration/test_ui_reconciliation.py`, and new reconcile cases in `tests/integration/test_rest_api.py`.
 
 ### Changed

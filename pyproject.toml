@@ -176,4 +176,5 @@ dev = [
     "ruff>=0.14.14",
     "curfew>=0.1.0",
     "watchfire==0.3.1",  # arch_check pre-commit gate runs `watchfire check`; must be in the default-synced group
+    "httpx>=0.27.0",  # FastAPI TestClient; the REST/UI test gate needs it in the default-synced group
 ]

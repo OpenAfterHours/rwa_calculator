@@ -45,10 +45,11 @@ your browser at the landing page.
 | **Calculator** | `/calculator` | Configure and run an RWA calculation |
 | **Results** | `/results/{run_id}` | Headline metrics, charts and an exposure sample for a run |
 | **Comparison** | `/comparison` | CRR vs Basel 3.1 with the capital-impact waterfall |
+| **Reconciliation** | `/reconciliation` | Reconcile against a legacy calculator, component by component |
 | **Workbench** | `/workbench` | Launch the editable Marimo notebook editor (port 8002) |
 
-Charts on the results and comparison pages are rendered as inline SVG themed
-with the documentation palette.
+Charts on the results, comparison and reconciliation pages are rendered as inline
+SVG themed with the documentation palette.
 
 ---
 
@@ -81,6 +82,21 @@ breakdown. It takes roughly twice a single-framework run.
 
 ---
 
+## Reconciliation
+
+The reconciliation page (`/reconciliation`) reconciles this calculator's output
+against a **legacy** calculator's output, component by component, for migration
+confidence. Enter your data path, edit the TOML mapping (which names the legacy
+file, the join keys and how each legacy column maps to a canonical component)
+directly in the form, and run. The result is shown across four drill-down tiers —
+the headline tie-out and per-component summary, the by-bucket / by-class /
+by-approach segmentation, the break worklist ranked by materiality, and a per-key
+forensic table with a bucket filter — plus CSV / Excel downloads of the full
+per-key detail. See the [Reconciliation guide](../reconciliation/index.md) for the
+mapping grammar and the output reference.
+
+---
+
 ## Workbench
 
 The polished pages above are read-only. For ad-hoc analysis, the Workbench page
@@ -104,6 +120,8 @@ other tools). Interactive docs are at `/docs` (OpenAPI).
 | `GET`  | `/api/results?run_id=…` | Page exposure-level results |
 | `GET`  | `/api/results/summary/{class\|approach}?run_id=…` | Portfolio summary |
 | `POST` | `/api/comparison` | Run CRR and Basel 3.1 with deltas |
+| `POST` | `/api/reconcile` | Reconcile against a legacy output; returns a `recon_id` + tiers |
+| `GET`  | `/api/reconcile/export/{csv\|excel}?recon_id=…` | Download the reconciliation |
 | `GET`  | `/api/export/{parquet\|csv\|excel\|corep}?run_id=…` | Download an export |
 
 ```bash

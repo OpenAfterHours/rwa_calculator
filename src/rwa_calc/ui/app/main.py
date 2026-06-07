@@ -32,15 +32,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from rwa_calc.api.rest import get_run, register_run
+from rwa_calc.api.reconciliation import loads_reconciliation_config
+from rwa_calc.api.rest import get_reconciliation, get_run, register_reconciliation, register_run
 from rwa_calc.api.rest import router as api_router
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import validate_data_path
 from rwa_calc.ui.views import charts
 from rwa_calc.ui.views import comparison as comparison_view
+from rwa_calc.ui.views import reconciliation as reconciliation_view
 
 if TYPE_CHECKING:
-    from rwa_calc.api.models import CalculationResponse
+    from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +234,58 @@ def _register_pages(app: FastAPI) -> None:
             ),
         )
 
+    @app.get("/reconciliation", response_class=HTMLResponse)
+    def reconciliation_form(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request=request,
+            name="reconciliation.html",
+            context=_nav(_reconciliation_form_context()),
+        )
+
+    @app.post("/reconciliation", response_class=HTMLResponse)
+    def run_reconciliation(
+        request: Request,
+        data_path: Annotated[str, Form()],
+        reporting_date: Annotated[str, Form()],
+        mapping_toml: Annotated[str, Form()],
+        framework: Annotated[FrameworkArg, Form()] = "CRR",
+        permission_mode: Annotated[PermissionArg, Form()] = "standardised",
+        data_format: Annotated[FormatArg, Form()] = "parquet",
+    ) -> Response:
+        try:
+            settings = loads_reconciliation_config(mapping_toml, base_dir=data_path or ".")
+            response = CreditRiskCalc(
+                data_path=data_path,
+                framework=framework,
+                reporting_date=date.fromisoformat(reporting_date),
+                permission_mode=permission_mode,
+                data_format=data_format,
+            ).reconcile(settings)
+        except Exception as exc:  # noqa: BLE001 - surface any parse/run failure to the page
+            logger.warning("reconciliation failed: %s", exc)
+            context = _reconciliation_form_context(
+                default_path=data_path, default_date=reporting_date, mapping_toml=mapping_toml
+            )
+            context["error"] = str(exc)
+            return templates.TemplateResponse(
+                request=request, name="reconciliation.html", context=_nav(context), status_code=400
+            )
+        recon_id = register_reconciliation(response)
+        return RedirectResponse(url=f"/reconciliation/{recon_id}", status_code=303)
+
+    @app.get("/reconciliation/{recon_id}", response_class=HTMLResponse)
+    def reconciliation_result(
+        request: Request, recon_id: str, bucket: str = "break"
+    ) -> HTMLResponse:
+        response = get_reconciliation(recon_id)
+        if response is None:
+            return _not_found(request, "That reconciliation has expired or does not exist.")
+        context = _reconciliation_form_context()
+        context["result"] = _reconciliation_result(recon_id, response, bucket)
+        return templates.TemplateResponse(
+            request=request, name="reconciliation.html", context=_nav(context)
+        )
+
     @app.get("/workbench", response_class=HTMLResponse)
     def workbench(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
@@ -307,9 +361,80 @@ def _compute_comparison(
     }
 
 
+def _reconciliation_form_context(
+    *,
+    default_path: str | None = None,
+    default_date: str = "2025-01-01",
+    mapping_toml: str | None = None,
+) -> dict:
+    """Base template context for the reconciliation page (form fields + no result)."""
+    return {
+        "frameworks": get_supported_frameworks(),
+        "default_path": default_path if default_path is not None else _default_data_path(),
+        "default_date": default_date,
+        "mapping_toml": mapping_toml
+        if mapping_toml is not None
+        else reconciliation_view.DEFAULT_MAPPING_TOML,
+        "error": None,
+        "result": None,
+    }
+
+
+def _reconciliation_result(recon_id: str, response: ReconciliationResponse, bucket: str) -> dict:
+    """Build the four-tier result context for a registered reconciliation."""
+    warnings = [f"[{e.code}] {e.message}" for e in response.errors]
+    if not response.success:
+        return {"recon_id": recon_id, "success": False, "warnings": warnings}
+
+    if bucket not in reconciliation_view.BUCKET_CHOICES:
+        bucket = "break"
+    segments = reconciliation_view.segment_tables(response)
+    breaks = reconciliation_view.breaks_table(response)
+    f_cols, f_rows, f_total = reconciliation_view.forensic_table(response, bucket)
+    return {
+        "recon_id": recon_id,
+        "success": True,
+        "warnings": warnings,
+        "has_breaks": response.has_breaks,
+        # Tier 1 — headline
+        "headline": reconciliation_view.headline_stats(response),
+        "chart_abs_delta": charts.horizontal_bar_svg(
+            reconciliation_view.abs_delta_chart_items(response)
+        ),
+        "chart_tie_out": charts.grouped_bar_svg(
+            reconciliation_view.tie_out_chart_items(response), series=("Legacy", "Ours")
+        ),
+        "component_table": _table(reconciliation_view.summary_by_component_table(response)),
+        # Tier 2 — segment
+        "bucket_table": _table(segments["by_bucket"]),
+        "class_table": _table(segments["by_class"]),
+        "approach_table": _table(segments["by_approach"]),
+        # Tier 3 — worklist
+        "break_count": breaks.height,
+        "breaks_table": _table(breaks),
+        # Tier 4 — forensic
+        "bucket_choices": reconciliation_view.BUCKET_CHOICES,
+        "active_bucket": bucket,
+        "forensic": {
+            "columns": f_cols,
+            "rows": f_rows,
+            "total": f_total,
+            "shown": len(f_rows),
+        },
+        "export_csv_url": f"/api/reconcile/export/csv?recon_id={recon_id}",
+        "export_excel_url": f"/api/reconcile/export/excel?recon_id={recon_id}",
+    }
+
+
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _table(df: pl.DataFrame) -> dict:
+    """Convert a DataFrame to a template-friendly ``{columns, rows}`` table."""
+    clean = df.fill_nan(None)
+    return {"columns": clean.columns, "rows": clean.to_dicts()}
 
 
 def _class_chart_items(

@@ -202,25 +202,25 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n125["rwa_calc.ui.app"]
         n126["rwa_calc.ui.app.main"]
         n127["rwa_calc.ui.marimo"]
-        n128["rwa_calc.ui.marimo.reconciliation_app"]
-        n129["rwa_calc.ui.marimo.shared"]
-        n130["rwa_calc.ui.marimo.shared.sidebar"]
-        n131["rwa_calc.ui.marimo.workspaces"]
-        n132["rwa_calc.ui.marimo.workspaces.local"]
-        n133["rwa_calc.ui.marimo.workspaces.local.book_1"]
-        n134["rwa_calc.ui.marimo.workspaces.local.df"]
-        n135["rwa_calc.ui.marimo.workspaces.local.my_workbook"]
-        n136["rwa_calc.ui.marimo.workspaces.local.my_workbook_1"]
-        n137["rwa_calc.ui.marimo.workspaces.local.my_workbook_2"]
-        n138["rwa_calc.ui.marimo.workspaces.local.new_folder"]
-        n139["rwa_calc.ui.marimo.workspaces.local.new_folder.my_workbook"]
-        n140["rwa_calc.ui.marimo.workspaces.local.test_book"]
-        n141["rwa_calc.ui.marimo.workspaces.local.tests"]
-        n142["rwa_calc.ui.marimo.workspaces.templates"]
-        n143["rwa_calc.ui.marimo.workspaces.templates.starter"]
-        n144["rwa_calc.ui.views"]
-        n145["rwa_calc.ui.views.charts"]
-        n146["rwa_calc.ui.views.comparison"]
+        n128["rwa_calc.ui.marimo.shared"]
+        n129["rwa_calc.ui.marimo.shared.sidebar"]
+        n130["rwa_calc.ui.marimo.workspaces"]
+        n131["rwa_calc.ui.marimo.workspaces.local"]
+        n132["rwa_calc.ui.marimo.workspaces.local.book_1"]
+        n133["rwa_calc.ui.marimo.workspaces.local.df"]
+        n134["rwa_calc.ui.marimo.workspaces.local.my_workbook"]
+        n135["rwa_calc.ui.marimo.workspaces.local.my_workbook_1"]
+        n136["rwa_calc.ui.marimo.workspaces.local.my_workbook_2"]
+        n137["rwa_calc.ui.marimo.workspaces.local.new_folder"]
+        n138["rwa_calc.ui.marimo.workspaces.local.new_folder.my_workbook"]
+        n139["rwa_calc.ui.marimo.workspaces.local.test_book"]
+        n140["rwa_calc.ui.marimo.workspaces.local.tests"]
+        n141["rwa_calc.ui.marimo.workspaces.templates"]
+        n142["rwa_calc.ui.marimo.workspaces.templates.starter"]
+        n143["rwa_calc.ui.views"]
+        n144["rwa_calc.ui.views.charts"]
+        n145["rwa_calc.ui.views.comparison"]
+        n146["rwa_calc.ui.views.reconciliation"]
         n1 --> n3
         n1 --> n5
         n1 --> n6
@@ -245,6 +245,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n6 --> n16
         n6 --> n22
         n7 --> n5
+        n7 --> n6
         n7 --> n9
         n7 --> n10
         n9 --> n2
@@ -623,6 +624,7 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n122 --> n16
         n122 --> n123
         n126 --> n5
+        n126 --> n6
         n126 --> n7
         n126 --> n9
         n126 --> n10
@@ -631,17 +633,19 @@ The complete graph, one node per module, exactly as `curfew show --mermaid` emit
         n126 --> n74
         n126 --> n98
         n126 --> n113
+        n126 --> n144
         n126 --> n145
         n126 --> n146
-        n128 --> n1
-        n130 --> n0
-        n134 --> n130
-        n135 --> n130
-        n136 --> n130
-        n137 --> n130
-        n141 --> n130
-        n143 --> n130
-        n146 --> n15
+        n129 --> n0
+        n133 --> n129
+        n134 --> n129
+        n135 --> n129
+        n136 --> n129
+        n140 --> n129
+        n142 --> n129
+        n145 --> n15
+        n146 --> n5
+        n146 --> n102
         classDef first_party fill:#e8f0fe,stroke:#1a73e8,color:#202124
         class n0,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18,n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,n30,n31,n32,n33,n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48,n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63,n64,n65,n66,n67,n68,n69,n70,n71,n72,n73,n74,n75,n76,n77,n78,n79,n80,n81,n82,n83,n84,n85,n86,n87,n88,n89,n90,n91,n92,n93,n94,n95,n96,n97,n98,n99,n100,n101,n102,n103,n104,n105,n106,n107,n108,n109,n110,n111,n112,n113,n114,n115,n116,n117,n118,n119,n120,n121,n122,n123,n124,n125,n126,n127,n128,n129,n130,n131,n132,n133,n134,n135,n136,n137,n138,n139,n140,n141,n142,n143,n144,n145,n146 first_party
     ```

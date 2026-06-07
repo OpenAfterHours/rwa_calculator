@@ -1104,6 +1104,7 @@ ui = [
 [package.dev-dependencies]
 dev = [
     { name = "curfew" },
+    { name = "httpx" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "numpy" },
     { name = "pymupdf" },
@@ -1148,6 +1149,7 @@ provides-extras = ["ui", "dev", "all"]
 [package.metadata.requires-dev]
 dev = [
     { name = "curfew", specifier = ">=0.1.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pymupdf", specifier = ">=1.27.2.2" },

@@ -21,10 +21,13 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
 from rwa_calc.api import create_api_app
+from rwa_calc.api.service import CreditRiskCalc
+from rwa_calc.ui.views.reconciliation import DEFAULT_MAPPING_TOML
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
 # =============================================================================
@@ -43,6 +46,49 @@ def data_dir(tmp_path: Path) -> str:
     """Mandatory-minimum SA dataset written to disk; returns the path string."""
     write_mandatory_minimum(tmp_path)
     return str(tmp_path)
+
+
+@pytest.fixture
+def recon_data_dir(tmp_path: Path) -> str:
+    """Mandatory-minimum dataset plus a legacy_output.csv derived from our results."""
+    write_mandatory_minimum(tmp_path)
+    ours = (
+        CreditRiskCalc(
+            data_path=str(tmp_path),
+            framework="CRR",
+            reporting_date=date(2025, 1, 1),
+            permission_mode="standardised",
+            data_format="parquet",
+        )
+        .calculate()
+        .scan_results()
+        .select("exposure_reference", "ead_final", "rwa_final")
+        .collect()
+    )
+    legacy = (
+        ours.rename({"ead_final": "EAD", "rwa_final": "RWA"})
+        .with_row_index("_i")
+        .with_columns(
+            pl.when(pl.col("_i") == 0)
+            .then(pl.col("RWA") * 1.5)
+            .otherwise(pl.col("RWA"))
+            .alias("RWA")
+        )
+        .drop("_i")
+    )
+    legacy.write_csv(tmp_path / "legacy_output.csv")
+    return str(tmp_path)
+
+
+def _reconcile_body(data_dir: str) -> dict:
+    return {
+        "data_path": data_dir,
+        "reporting_date": "2025-01-01",
+        "framework": "CRR",
+        "permission_mode": "standardised",
+        "data_format": "parquet",
+        "mapping_toml": DEFAULT_MAPPING_TOML,
+    }
 
 
 # =============================================================================
@@ -162,3 +208,65 @@ def test_export_downloads_with_fixed_filename(
     disposition = resp.headers.get("content-disposition", "")
     assert run_id not in disposition
     assert media in disposition
+
+
+# =============================================================================
+# Reconciliation
+# =============================================================================
+
+
+def test_reconcile_returns_id_and_tiers(client: TestClient, recon_data_dir: str) -> None:
+    # Act
+    resp = client.post("/api/reconcile", json=_reconcile_body(recon_data_dir))
+
+    # Assert
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["recon_id"]
+    assert body["success"] is True
+    assert body["has_breaks"] is True  # the nudged RWA breaks
+    assert body["totals_tie_out"]["columns"]
+    assert body["summary_by_component"]["rows"]
+    assert "breaks_detail" in body
+
+
+def test_reconcile_invalid_config_is_422(client: TestClient, recon_data_dir: str) -> None:
+    # Arrange — invalid TOML in the mapping
+    body = _reconcile_body(recon_data_dir)
+    body["mapping_toml"] = "not valid ["
+
+    # Act
+    resp = client.post("/api/reconcile", json=body)
+
+    # Assert
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize(("fmt", "media"), [("csv", "zip"), ("excel", "xlsx")])
+def test_reconcile_export_downloads(
+    client: TestClient, recon_data_dir: str, fmt: str, media: str
+) -> None:
+    # Arrange
+    recon_id = client.post("/api/reconcile", json=_reconcile_body(recon_data_dir)).json()[
+        "recon_id"
+    ]
+
+    # Act
+    resp = client.get(f"/api/reconcile/export/{fmt}", params={"recon_id": recon_id})
+
+    # Assert — download succeeds; the served filename is a fixed literal (no recon_id)
+    assert resp.status_code == 200
+    assert resp.content
+    disposition = resp.headers.get("content-disposition", "")
+    assert recon_id not in disposition
+    assert media in disposition
+
+
+def test_reconcile_export_unknown_id_is_404(client: TestClient) -> None:
+    assert client.get("/api/reconcile/export/csv", params={"recon_id": "nope"}).status_code == 404
+
+
+def test_openapi_documents_reconcile(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    assert "/api/reconcile" in schema["paths"]
+    assert "post" in schema["paths"]["/api/reconcile"]

@@ -205,25 +205,22 @@ response.to_csv(Path("reconciliation_out/"))
 
 ### 3. Or use the interactive UI
 
-A Marimo workbook is served at **`/reconciliation`** with a live-editable TOML mapping, the
-four drill-down tiers, and CSV / Excel downloads — ideal for analysts iterating on the
-mapping without writing Python.
+The **Reconciliation** page in the app (served at **`/reconciliation`**) gives you the same
+result without writing Python: enter your data path, edit the TOML mapping in the form, and
+run. It renders the four drill-down tiers (headline tie-out, per-component summary, the break
+worklist, and the per-key forensic table with a bucket filter) and offers CSV / Excel
+downloads of the full per-key detail.
 
-=== "From the app server"
+```bash
+uv add rwa-calc
+rwa-ui                 # then open http://localhost:8000/reconciliation
+```
 
-    ```bash
-    uv run python src/rwa_calc/ui/marimo/server.py
-    # then open http://localhost:8000/reconciliation
-    ```
-
-=== "Single app"
-
-    ```bash
-    uv run marimo run src/rwa_calc/ui/marimo/reconciliation_app.py
-    ```
+The same flow is available over HTTP for programmatic callers via `POST /api/reconcile`
+(with `GET /api/reconcile/export/{csv|excel}` for the downloads).
 
 > **Details:** See [Interactive UI](../user-guide/interactive-ui.md) for the full list of
-> workbooks and how to start the server.
+> pages and how to start the server.
 
 ## Output reference
 
@@ -278,5 +275,5 @@ Reconciliation never aborts on a data problem — issues are recorded as non-fat
 
 - [Output Schemas](../data-model/output-schemas.md) — the per-exposure columns reconciliation reads from.
 - [Comparison & Impact Analysis](../framework-comparison/impact-analysis.md) — CRR vs Basel 3.1 (a different kind of comparison).
-- [Interactive UI](../user-guide/interactive-ui.md) — running the Marimo workbooks.
+- [Interactive UI](../user-guide/interactive-ui.md) — the Reconciliation page and the other app surfaces.
 - [Service API](../api/service.md) — `CreditRiskCalc` reference.

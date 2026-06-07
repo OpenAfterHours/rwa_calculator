@@ -41,6 +41,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from rwa_calc.api.models import ValidationRequest
+from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
 from rwa_calc.api.validation import DataPathValidator
 
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from rwa_calc.api.models import (
         CalculationResponse,
         PerformanceMetrics,
+        ReconciliationResponse,
         SummaryStatistics,
         ValidationResponse,
     )
@@ -57,6 +59,11 @@ logger = logging.getLogger(__name__)
 # In-process registry of completed runs (local single-process tool). Keyed by a
 # generated run_id so results/export endpoints can find the cached parquet.
 _RUNS: dict[str, CalculationResponse] = {}
+
+# Parallel registry for reconciliation runs, keyed by a generated recon_id so the
+# forensic-tier filter and export endpoints can re-read a cached result without
+# recomputing. Same in-process / non-persistent trade-off as ``_RUNS``.
+_RECON_RUNS: dict[str, ReconciliationResponse] = {}
 
 _MAX_PAGE = 10_000
 
@@ -99,6 +106,22 @@ class ComparisonRequest(BaseModel):
     reporting_date: date
     permission_mode: Literal["standardised", "irb"] = "standardised"
     data_format: Literal["parquet", "csv"] = "parquet"
+
+
+class ReconcileRequest(BaseModel):
+    """Body for POST /api/reconcile — our run vs a mapped legacy output.
+
+    ``mapping_toml`` is the reconciliation config (legacy file path, join keys,
+    per-component column mapping) as TOML text; relative ``legacy_file`` paths in
+    it resolve against ``data_path``.
+    """
+
+    data_path: str
+    reporting_date: date
+    framework: Literal["CRR", "BASEL_3_1"] = "CRR"
+    permission_mode: Literal["standardised", "irb"] = "standardised"
+    data_format: Literal["parquet", "csv"] = "parquet"
+    mapping_toml: str
 
 
 # =============================================================================
@@ -203,6 +226,70 @@ def comparison(req: ComparisonRequest) -> dict:
     }
 
 
+@router.post("/reconcile")
+def reconcile(req: ReconcileRequest) -> dict:
+    """Reconcile our results against a mapped legacy output; register the result.
+
+    Returns the recon_id plus each headline / segment / worklist tier as a
+    ``{columns, rows}`` table. The wide per-key forensic frame is not inlined —
+    download it via ``GET /api/reconcile/export/{fmt}``.
+    """
+    logger.info("api reconcile framework=%s mode=%s", req.framework, req.permission_mode)
+    try:
+        settings = loads_reconciliation_config(req.mapping_toml, base_dir=req.data_path or ".")
+        response = CreditRiskCalc(
+            data_path=req.data_path,
+            framework=req.framework,
+            reporting_date=req.reporting_date,
+            permission_mode=req.permission_mode,
+            data_format=req.data_format,
+        ).reconcile(settings)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=422, detail=f"invalid reconciliation config: {exc}"
+        ) from exc
+
+    recon_id = register_reconciliation(response)
+    return {
+        "recon_id": recon_id,
+        "success": response.success,
+        "has_breaks": response.has_breaks,
+        "totals_tie_out": _df(response.collect_totals_tie_out()),
+        "summary_by_component": _df(response.collect_summary_by_component()),
+        "summary_by_bucket": _df(response.collect_summary_by_bucket()),
+        "summary_by_exposure_class": _df(response.bundle.summary_by_exposure_class.collect()),
+        "summary_by_approach": _df(response.bundle.summary_by_approach.collect()),
+        "breaks_detail": _df(response.collect_breaks_detail()),
+        "errors": [dataclasses.asdict(e) for e in response.errors],
+    }
+
+
+@router.get("/reconcile/export/{fmt}", responses=_RESP_404)
+def reconcile_export(fmt: Literal["csv", "excel"], recon_id: str) -> FileResponse:
+    """Export a registered reconciliation and stream it back for download.
+
+    As with ``/export``, on-disk paths use a fresh temp dir plus fixed literal
+    filenames — the user-supplied recon_id never reaches the filesystem path.
+    """
+    response = _require_reconciliation(recon_id)
+    tmp = Path(tempfile.mkdtemp(prefix="rwa_recon_export_"))
+
+    if fmt == "excel":
+        out = tmp / "reconciliation.xlsx"
+        response.to_excel(out)
+        return _file(out)
+
+    out_dir = tmp / "csv"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    response.to_csv(out_dir)
+    zip_path = tmp / "reconciliation_csv.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(out_dir.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(out_dir))
+    return _file(zip_path)
+
+
 @router.get("/export/{fmt}", responses=_RESP_404)
 def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> FileResponse:
     """Export a completed run and stream it back for download.
@@ -267,6 +354,18 @@ def get_run(run_id: str) -> CalculationResponse | None:
     return _RUNS.get(run_id)
 
 
+def register_reconciliation(response: ReconciliationResponse) -> str:
+    """Register a reconciliation result in the in-process registry; return its id."""
+    recon_id = uuid.uuid4().hex
+    _RECON_RUNS[recon_id] = response
+    return recon_id
+
+
+def get_reconciliation(recon_id: str) -> ReconciliationResponse | None:
+    """Look up a registered reconciliation, or None if it is unknown/expired."""
+    return _RECON_RUNS.get(recon_id)
+
+
 # =============================================================================
 # Private helpers
 # =============================================================================
@@ -300,6 +399,20 @@ def _require_run(run_id: str) -> CalculationResponse:
     if response is None:
         raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
     return response
+
+
+def _require_reconciliation(recon_id: str) -> ReconciliationResponse:
+    """Look up a registered reconciliation or raise 404."""
+    response = _RECON_RUNS.get(recon_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail=f"unknown recon_id: {recon_id}")
+    return response
+
+
+def _df(df: pl.DataFrame) -> dict:
+    """Serialize a DataFrame as a JSON-friendly ``{columns, rows}`` table."""
+    clean = df.fill_nan(None)
+    return {"columns": clean.columns, "rows": clean.to_dicts()}
 
 
 def _file(path: Path) -> FileResponse:

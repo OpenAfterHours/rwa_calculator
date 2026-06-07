@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Reconciliation — RWA Calculator{% endblock %}
+
+{# One table renderer reused by every tier. Integers print without decimals,
+   other numbers to 2dp, everything else verbatim (blank for nulls). #}
+{% macro render_table(table) %}
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>{% for c in table.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>{% for c in table.columns %}
+        {% set v = row[c] %}
+        <td>{% if v is integer %}{{ "{:,}".format(v) }}{% elif v is number %}{{ "{:,.2f}".format(v) }}{% else %}{{ v if v is not none else "" }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h1>Parallel-run reconciliation</h1>
+<p class="muted">Run this calculator and reconcile its output against your legacy
+calculator, component by component (EAD, RWA, risk weight, PD, LGD, CCF, exposure
+class, …). Each row is bucketed as match / within-tolerance / break / missing, with
+our reason and input drivers attached so a break can be triaged to a data fix or an
+engine fix.</p>
+
+{% if error %}<div class="callout error">Reconciliation failed: {{ error }}</div>{% endif %}
+
+<form class="form" method="post" action="/reconciliation">
+  <div class="field">
+    <label for="data_path">Our data path</label>
+    <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="framework">Framework</label>
+      <select id="framework" name="framework">
+        {% for fw in frameworks %}<option value="{{ fw.id }}">{{ fw.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="permission_mode">Permission mode</label>
+      <select id="permission_mode" name="permission_mode">
+        <option value="standardised">Standardised (all SA)</option>
+        <option value="irb">IRB (model permissions)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="data_format">Data format</label>
+      <select id="data_format" name="data_format">
+        <option value="parquet">parquet</option>
+        <option value="csv">csv</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="reporting_date">Reporting date</label>
+      <input id="reporting_date" name="reporting_date" type="date" value="{{ default_date }}" required>
+    </div>
+  </div>
+  <div class="field">
+    <label for="mapping_toml">Legacy mapping (TOML)</label>
+    <textarea id="mapping_toml" name="mapping_toml" class="mono" rows="16" spellcheck="false">{{ mapping_toml }}</textarea>
+    <p class="muted">Declare the join key(s) and which legacy column maps to each canonical
+    component. <code>legacy_file</code> resolves relative to the data path above; numeric
+    components accept <code>scale</code> and <code>unit = "percent"</code>, categoricals a
+    <code>value_map</code> of synonyms.</p>
+  </div>
+  <button class="btn btn-primary" type="submit">Run reconciliation</button>
+</form>
+
+{% if result %}
+{% if result.warnings %}
+<div class="callout warn">{% for w in result.warnings %}<div>{{ w }}</div>{% endfor %}</div>
+{% endif %}
+
+{% if not result.success %}
+<div class="callout info">No comparable components — check the mapping (legacy file path,
+join keys and column names).</div>
+{% else %}
+
+<h2>1 · Headline — does it tie out?</h2>
+<div class="stat-row">
+  {% for s in result.headline %}
+  <div class="stat">
+    <div class="stat-num">{{ "{:,.0f}".format(s.our_total) }}</div>
+    <div class="stat-lbl">{{ s.component }} — ours</div>
+    <div class="muted">legacy {{ "{:,.0f}".format(s.legacy_total) }}{% if s.delta_pct is not none %} · Δ {{ "%+.2f"|format(s.delta_pct) }}%{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+<div class="panel">
+  <h3>Tie-out — legacy vs ours per component</h3>
+  {{ result.chart_tie_out | safe }}
+</div>
+<div class="panel">
+  <h3>Where the money differs — Σ|Δ| by component</h3>
+  {{ result.chart_abs_delta | safe }}
+</div>
+<h3>By component</h3>
+{{ render_table(result.component_table) }}
+
+<h2>2 · Segment — where do breaks concentrate?</h2>
+<h3>By bucket</h3>
+{{ render_table(result.bucket_table) }}
+<h3>By exposure class</h3>
+{{ render_table(result.class_table) }}
+<h3>By approach</h3>
+{{ render_table(result.approach_table) }}
+
+<h2>3 · Worklist — {{ result.break_count }} break(s), largest first</h2>
+{{ render_table(result.breaks_table) }}
+
+<h2>4 · Forensic — per-key detail</h2>
+<div class="bucket-filter">
+  {% for b in result.bucket_choices %}
+  <a class="btn btn-ghost{% if b == result.active_bucket %} is-active{% endif %}"
+     href="/reconciliation/{{ result.recon_id }}?bucket={{ b }}">{{ b }}</a>
+  {% endfor %}
+</div>
+<p class="muted">Showing {{ result.forensic.shown }} of {{ result.forensic.total }} row(s).
+Download the full per-key detail (with explain &amp; input columns):
+<a href="{{ result.export_csv_url }}">CSV</a> · <a href="{{ result.export_excel_url }}">Excel</a>.</p>
+{{ render_table(result.forensic) }}
+
+{% endif %}
+{% endif %}
+{% endblock %}

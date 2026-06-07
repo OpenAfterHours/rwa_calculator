@@ -78,8 +78,19 @@ h3 { font-size: 16px; margin: 0 0 8px; }
   border: 1px solid var(--oah-slate-600); font-family: var(--font-sans); font-size: 14px;
 }
 .field input:focus, .field select:focus { outline: none; border-color: var(--oah-orange); }
+.field textarea {
+  width: 100%; padding: 10px 12px; border-radius: 8px; resize: vertical;
+  background: var(--oah-slate-900); color: var(--oah-slate-100);
+  border: 1px solid var(--oah-slate-600); font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+}
+.field textarea:focus { outline: none; border-color: var(--oah-orange); }
 .field-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .field-row .field { flex: 1; min-width: 180px; }
+
+/* Forensic-tier bucket filter — links styled as ghost buttons. */
+.bucket-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.bucket-filter .btn { padding: 7px 14px; font-size: 13px; }
+.bucket-filter .btn.is-active { border-color: var(--oah-orange); color: var(--oah-orange); background: rgba(255, 145, 0, 0.10); }
 
 /* ---------- Stats ------------------------------------------ */
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 18px 0; }

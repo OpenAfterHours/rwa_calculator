@@ -17,7 +17,7 @@ The calculator includes a multi-app web server providing three interactive appli
 
 ```bash
 # If installed from PyPI
-rwa-calc-ui
+rwa-ui
 
 # From source with uv
 uv run python src/rwa_calc/ui/marimo/server.py

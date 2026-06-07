@@ -26,7 +26,7 @@ Launch the multi-application server:
 
     ```bash
     # Using the console command (recommended)
-    rwa-calc-ui
+    rwa-ui
 
     # Or using the module directly
     python -m rwa_calc.ui.marimo.server

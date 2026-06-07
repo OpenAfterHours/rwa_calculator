@@ -61,7 +61,7 @@ for the model permissions schema.
 
 ```bash
 pip install rwa-calc[ui]
-rwa-calc-ui
+rwa-ui
 # Open http://localhost:8000 in your browser
 ```
 

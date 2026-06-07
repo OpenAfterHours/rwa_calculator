@@ -11,7 +11,7 @@ Key responsibilities:
 - Launch marimo edit subprocess for interactive workbench on separate port
 
 Usage (installed from PyPI):
-    rwa-calc-ui
+    rwa-ui
 
 Usage (from source):
     uv run python src/rwa_calc/ui/marimo/server.py

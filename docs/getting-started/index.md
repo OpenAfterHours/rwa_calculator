@@ -63,3 +63,4 @@ Need more control? See the [Quick Start](quickstart.md) for framework selection,
 - New to RWA calculations? Start with [Concepts](concepts.md)
 - Ready to install? Go to [Installation](installation.md)
 - Want to jump right in? Try the [Quick Start](quickstart.md)
+- Migrating from another calculator? See [Reconciliation](../reconciliation/index.md) to validate the numbers against your existing engine before you switch

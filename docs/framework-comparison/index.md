@@ -4,6 +4,12 @@ UK firms transition from CRR to Basel 3.1 (PRA PS1/26) on 1 January 2027, with t
 floor phasing in through 2030. This section brings together all framework comparison content
 in one place.
 
+!!! info "Looking to validate against your *existing* calculator?"
+    This section compares **two internal frameworks** (CRR and Basel 3.1) run through the
+    **same engine** on the **same inputs**. To compare this calculator's output against your
+    **legacy / incumbent** engine during a migration, see
+    [Parallel-Run Reconciliation](../reconciliation/index.md) instead.
+
 ## Why Basel 3.1?
 
 Basel 3.1 addresses three core problems the BCBS and PRA identified with the post-crisis

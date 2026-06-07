@@ -12,6 +12,10 @@ timeline levels is essential for capital planning, board reporting, and ICAAP st
 The comparison module runs both frameworks against the same portfolio from a single codebase,
 ensuring consistent methodology and eliminating reconciliation issues.
 
+> **Note:** This is a CRR-vs-Basel-3.1 comparison within one engine. To reconcile this
+> calculator against a **separate legacy calculator** during a migration, see
+> [Parallel-Run Reconciliation](../reconciliation/index.md).
+
 ## Dual-Framework Comparison (M3.1)
 
 `DualFrameworkRunner` runs the same portfolio through both CRR and Basel 3.1 pipelines and

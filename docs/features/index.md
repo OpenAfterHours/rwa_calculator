@@ -44,6 +44,7 @@ This section provides an overview of all implemented features in the RWA calcula
 | **Dual-Framework Comparison** | Side-by-side CRR vs Basel 3.1 analysis with per-exposure delta joins | [Feature Guide](../framework-comparison/impact-analysis.md), [API](../api/engine.md#comparison-module) |
 | **Capital Impact Analysis** | 4-driver waterfall attribution (scaling, supporting, methodology, floor) | [Feature Guide](../framework-comparison/impact-analysis.md#capital-impact-analysis-m32), [API](../api/engine.md#comparison-module) |
 | **Transitional Floor Schedule** | Year-by-year output floor modelling from 60% (2027) to 72.5% (2030) | [Feature Guide](../framework-comparison/impact-analysis.md#transitional-floor-schedule-m33), [API](../api/engine.md#comparison-module) |
+| **Parallel-Run Reconciliation** | Component-by-component comparison against a legacy/incumbent calculator to validate the numbers before migrating | [Guide](../reconciliation/index.md), [API](../api/service.md) |
 
 ## Dual-Framework Support
 

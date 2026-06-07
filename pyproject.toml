@@ -37,7 +37,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rwa-calc-ui = "rwa_calc.ui.marimo.server:main"
+rwa-ui = "rwa_calc.ui.marimo.server:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"
@@ -172,4 +172,5 @@ dev = [
     "pymupdf>=1.27.2.2",
     "ruff>=0.14.14",
     "curfew>=0.1.0",
+    "watchfire==0.3.1",  # arch_check pre-commit gate runs `watchfire check`; must be in the default-synced group
 ]

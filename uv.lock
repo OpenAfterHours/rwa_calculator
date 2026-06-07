@@ -1060,6 +1060,7 @@ dev = [
     { name = "pytest-benchmark" },
     { name = "pytest-xdist" },
     { name = "ruff" },
+    { name = "watchfire" },
     { name = "zensical" },
 ]
 
@@ -1100,6 +1101,7 @@ dev = [
     { name = "pytest-benchmark", specifier = ">=5.2.3" },
     { name = "pytest-xdist", specifier = ">=3.5.0" },
     { name = "ruff", specifier = ">=0.14.14" },
+    { name = "watchfire", specifier = "==0.3.1" },
     { name = "zensical", specifier = ">=0.0.29" },
 ]
 

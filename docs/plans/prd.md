@@ -162,7 +162,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 |----|-------------|----------|--------|
 | FR-6.1 | Python API: `create_pipeline()` and `RWAService` for programmatic access | P0 | Done |
 | FR-6.2 | Interactive web UI via Marimo for scenario analysis and exploration | P1 | Done |
-| FR-6.3 | CLI entry point (`rwa-calc-ui`) for launching the web interface | P2 | Done |
+| FR-6.3 | CLI entry point (`rwa-ui`) for launching the web interface | P2 | Done |
 | FR-6.4 | API input validation with clear error messages | P1 | Done |
 
 ---

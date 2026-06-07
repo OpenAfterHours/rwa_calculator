@@ -29,7 +29,7 @@ uv add rwa-calc --extra ui
 
 ```bash
 # If installed from PyPI
-rwa-calc-ui
+rwa-ui
 
 # Or from source
 uv run python src/rwa_calc/ui/marimo/server.py

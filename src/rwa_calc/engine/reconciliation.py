@@ -406,7 +406,6 @@ def _component_columns(a: _ActiveComponent, mapping: LegacyColumnMapping) -> lis
     name = a.spec.name
     ov = pl.col(f"our_{name}")
     lv = pl.col(a.legacy_col)
-    present = pl.col("_our_present") & pl.col("_legacy_present")
 
     if a.spec.kind == "numeric":
         abs_delta = (ov - lv).alias(f"abs_delta_{name}")

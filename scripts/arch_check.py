@@ -51,6 +51,7 @@ COLLECT_ALLOWLIST = {"materialise.py"}
 _PATH_AGGREGATOR_SCHEMAS = "engine/aggregator/_schemas.py"
 _PATH_COMPARISON = "engine/comparison.py"
 _PATH_UTILS = "engine/utils.py"
+_PATH_COLLAPSE = "engine/aggregator/_collapse.py"
 
 # Existing module-level regulatory-like scalars in engine/** that were
 # deliberately kept in place (see PR notes next to each). New entries require
@@ -73,7 +74,7 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     "engine/slotting/namespace.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
-    "engine/aggregator/_collapse.py": {"_EAD_ZERO_GUARD"},
+    _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
     "engine/reconciliation.py": {"_EXACT_EPSILON", "_ZERO_GUARD"},
 }
 
@@ -146,7 +147,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/aggregator/_utils.py",
     # Pure reshape helper: collapses guarantee/RE sub-rows to a key grain for
     # parallel-run reconciliation. No pipeline-stage telemetry.
-    "engine/aggregator/_collapse.py",
+    _PATH_COLLAPSE,
 }
 
 # Modules exempt from the check-10 "must declare a References: block" rule.
@@ -158,7 +159,7 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
 REFERENCES_REQUIRED_EXEMPT: set[str] = {
     "engine/aggregator/_summaries.py",
     "engine/aggregator/_utils.py",
-    "engine/aggregator/_collapse.py",  # pure sub-row collapse helper, no citations
+    _PATH_COLLAPSE,  # pure sub-row collapse helper, no citations
     "engine/aggregator/_equity_prep.py",
     _PATH_AGGREGATOR_SCHEMAS,
     _PATH_UTILS,

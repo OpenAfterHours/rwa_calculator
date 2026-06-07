@@ -20,6 +20,7 @@ runner (single authority), so reconciliation degrades gracefully.
 from __future__ import annotations
 
 import logging
+import math
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -104,7 +105,7 @@ def dump_reconciliation_config(settings: ReconciliationSettings) -> str:
         lines.append("")
         lines.append(f"[components.{name}]")
         lines.append(f"legacy_column = {_toml_str(cm.legacy_column)}")
-        if cm.scale != 1.0:
+        if not math.isclose(cm.scale, 1.0):
             lines.append(f"scale = {cm.scale!r}")
         if cm.unit != "raw":
             lines.append(f"unit = {_toml_str(cm.unit)}")

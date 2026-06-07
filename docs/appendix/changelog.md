@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- **New generated "Module Dependencies" docs page (`docs/development/module-dependencies.md`).** Driven by the new `curfew` dev dependency, `scripts/generate_dependency_graph.py` builds the live import graph of `src/rwa_calc` and renders two Mermaid charts: a readable package-level overview (top-level subpackage edges collapsed from the module graph) and the full 144-module graph in a collapsible block. The generator is wired into `scripts/deploy.py` so the page refreshes on each release, mirroring the Citation Coverage Matrix. Docs/tooling only — no calculation impact.
 
 ### Changed
 - (Next release changes will go here)

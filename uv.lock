@@ -115,6 +115,15 @@ wheels = [
 ]
 
 [[package]]
+name = "curfew"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/01/bae23dc184f2f5cbaba1031279fdcfeb73505b9e3d00a3cb3a7527c9d134/curfew-0.1.0.tar.gz", hash = "sha256:acb669a8b235225a620bd24e582f1268dc1a24d0a6a272eec3827600208643b7", size = 100168, upload-time = "2026-06-06T21:14:55.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/25/c949c6952651b91efb1ac973d74921b4be1c4772736d7dda19244379dec2/curfew-0.1.0-py3-none-any.whl", hash = "sha256:d2190f0919886c6b2f2edb0d51a640dba7863fa64d81256c2dcdb5d1fdef4ca7", size = 44687, upload-time = "2026-06-06T21:14:56.689Z" },
+]
+
+[[package]]
 name = "deepmerge"
 version = "2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1044,6 +1053,7 @@ ui = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "curfew" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "numpy" },
     { name = "pymupdf" },
@@ -1084,6 +1094,7 @@ provides-extras = ["ui", "dev", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "curfew", specifier = ">=0.1.0" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.0" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pymupdf", specifier = ">=1.27.2.2" },

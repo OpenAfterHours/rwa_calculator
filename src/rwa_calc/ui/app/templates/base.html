@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}RWA Calculator{% endblock %}</title>
   <link rel="icon" href="/static/favicon.png">
+  {% block styles %}
   <link rel="stylesheet" href="/static/tokens.css">
   <link rel="stylesheet" href="/static/app.css">
+  {% endblock %}
 </head>
 <body>
+  {% block topnav %}
   <nav class="nav">
     <a class="brand" href="/">
       <img src="/static/favicon.png" alt="">
@@ -21,10 +24,12 @@
       <a href="{{ docs_url }}" target="_blank" rel="noopener">Docs</a>
     </div>
   </nav>
+  {% endblock %}
   {% block body %}
   <main class="container">
     {% block content %}{% endblock %}
   </main>
   {% endblock %}
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -4,6 +4,7 @@ site_description = "Documentation for the UK Credit Risk RWA Calculator - suppor
 site_author = "OpenAfterHours"
 repo_url = "https://github.com/OpenAfterHours/rwa_calculator"
 extra_css = ["assets/stylesheets/tokens.css", "assets/stylesheets/homepage.css"]
+extra_javascript = ["assets/javascripts/bear-constellation.js"]
 
 # -- Navigation -------------------------------------------------------------
 

@@ -5,6 +5,10 @@
   On "/" (page.url empty) we render a full-viewport constellation hero
   and hide Material's header, sidebar, main container, and footer so the
   hero owns the screen. Every other page gets the stock Material layout.
+
+  The animated polar-bear constellation is injected into .constellation-bg
+  by assets/javascripts/bear-constellation.js (loaded via zensical.toml
+  extra_javascript; it no-ops on every page that lacks .constellation-bg).
 #}
 
 {% block extrahead %}
@@ -23,170 +27,7 @@
 {% block hero %}
   {% if not page.url %}
     <section class="landing-hero" data-screen-label="01 Hero">
-      <div class="constellation-bg" aria-hidden="true">
-        <svg class="constellation-svg" viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice">
-          <g class="constellation-spin">
-            {# Cluster A — left bleed (visible on wider screens) #}
-            <line class="constellation-line" x1="22" y1="36" x2="30" y2="28" />
-            <line class="constellation-line" x1="30" y1="28" x2="40" y2="30" />
-            <line class="constellation-line" x1="40" y1="30" x2="44" y2="42" />
-            <line class="constellation-line" x1="44" y1="42" x2="28" y2="46" />
-            <line class="constellation-line" x1="28" y1="46" x2="22" y2="36" />
-            <line class="constellation-line" x1="30" y1="28" x2="28" y2="46" />
-
-            {# Cluster B — Standardised Approach (safe zone) #}
-            <line class="constellation-line" x1="80" y1="28" x2="86" y2="22" />
-            <line class="constellation-line" x1="86" y1="22" x2="94" y2="26" />
-            <line class="constellation-line" x1="94" y1="26" x2="96" y2="36" />
-            <line class="constellation-line" x1="96" y1="36" x2="84" y2="38" />
-            <line class="constellation-line" x1="84" y1="38" x2="80" y2="28" />
-            <line class="constellation-line" x1="86" y1="22" x2="84" y2="38" />
-
-            {# Cluster C — Foundation IRB (safe zone) #}
-            <line class="constellation-line" x1="108" y1="58" x2="116" y2="54" />
-            <line class="constellation-line" x1="116" y1="54" x2="124" y2="58" />
-            <line class="constellation-line" x1="124" y1="58" x2="122" y2="68" />
-            <line class="constellation-line" x1="122" y1="68" x2="110" y2="70" />
-            <line class="constellation-line" x1="110" y1="70" x2="108" y2="58" />
-            <line class="constellation-line" x1="116" y1="54" x2="110" y2="70" />
-
-            {# Cluster D — right bleed (visible on wider screens) #}
-            <line class="constellation-line" x1="158" y1="34" x2="166" y2="28" />
-            <line class="constellation-line" x1="166" y1="28" x2="176" y2="32" />
-            <line class="constellation-line" x1="176" y1="32" x2="178" y2="44" />
-            <line class="constellation-line" x1="178" y1="44" x2="164" y2="46" />
-            <line class="constellation-line" x1="164" y1="46" x2="158" y2="34" />
-            <line class="constellation-line" x1="158" y1="34" x2="176" y2="32" />
-
-            {# Cluster E — CRR · Basel 3.1 anchor (safe zone) #}
-            <line class="constellation-line" x1="90" y1="82" x2="98" y2="78" />
-            <line class="constellation-line" x1="98" y1="78" x2="106" y2="82" />
-            <line class="constellation-line" x1="106" y1="82" x2="100" y2="88" />
-            <line class="constellation-line" x1="100" y1="88" x2="90" y2="82" />
-            <line class="constellation-line" x1="98" y1="78" x2="100" y2="88" />
-
-            {# Warm cluster stars #}
-            <circle class="constellation-star-warm" cx="22"  cy="36" r="0.432"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="30"  cy="28" r="0.360"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="40"  cy="30" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="44"  cy="42" r="0.324"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="28"  cy="46" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="7s" repeatCount="indefinite" /></circle>
-
-            <circle class="constellation-star-warm" cx="80"  cy="28" r="0.468"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="86"  cy="22" r="0.360"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="94"  cy="26" r="0.324"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="96"  cy="36" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="84"  cy="38" r="0.288"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="7s" repeatCount="indefinite" /></circle>
-
-            <circle class="constellation-star-warm" cx="108" cy="58" r="0.432"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="116" cy="54" r="0.324"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="124" cy="58" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="122" cy="68" r="0.360"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="110" cy="70" r="0.288"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="7s" repeatCount="indefinite" /></circle>
-
-            <circle class="constellation-star-warm" cx="158" cy="34" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="166" cy="28" r="0.468"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="176" cy="32" r="0.324"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="178" cy="44" r="0.360"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="164" cy="46" r="0.288"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="7s" repeatCount="indefinite" /></circle>
-
-            <circle class="constellation-star-warm" cx="90"  cy="82" r="0.396"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="98"  cy="78" r="0.324"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="106" cy="82" r="0.432"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-warm" cx="100" cy="88" r="0.360"><animate attributeName="opacity" values="0.4;0.95;0.4" dur="6s" repeatCount="indefinite" /></circle>
-
-            {# Cool filler stars — left bleed #}
-            <circle class="constellation-star-cool" cx="5"   cy="18" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="12"  cy="60" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="18"  cy="72" r="0.252"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="50"  cy="12" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="8"   cy="88" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="55"  cy="88" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="15"  cy="8"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="65"  cy="50" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="48"  cy="60" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="40"  cy="80" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="35"  cy="14" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="60"  cy="70" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-
-            {# Cool filler stars — safe zone (mobile-visible) #}
-            <circle class="constellation-star-cool" cx="75"  cy="12" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="92"  cy="10" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="108" cy="8"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="125" cy="14" r="0.252"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="78"  cy="50" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="85"  cy="66" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="120" cy="32" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="104" cy="48" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="118" cy="78" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="82"  cy="76" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-
-            {# Cool filler stars — right bleed #}
-            <circle class="constellation-star-cool" cx="140" cy="12" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="150" cy="74" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="190" cy="22" r="0.252"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="195" cy="62" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="145" cy="88" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="182" cy="82" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="140" cy="50" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="190" cy="92" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="155" cy="18" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="170" cy="16" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="168" cy="90" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="175" cy="55" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="135" cy="60" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-
-            {# Envelope stars — placed outside the 200×100 viewBox so rotation never leaves the sides bare #}
-            <circle class="constellation-star-cool" cx="-8"  cy="30"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="0"   cy="70"  r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="15"  cy="-10" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="40"  cy="-25" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="75"  cy="-15" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="100" cy="-40" r="0.252"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="125" cy="-20" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="160" cy="-25" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="195" cy="-15" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="208" cy="20"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="210" cy="55"  r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="205" cy="80"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="198" cy="108" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="170" cy="120" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="135" cy="135" r="0.252"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="100" cy="130" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="65"  cy="138" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="30"  cy="125" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="2"   cy="110" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="-5"  cy="85"  r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="-10" cy="20"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="215" cy="30"  r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="218" cy="75"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="88"  cy="-45" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="105" cy="148" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-
-            {# Densifying feeder strips (x=50..150, y<0 or y>100) — these swing into the L/R bands at 90°/270° rotation #}
-            <circle class="constellation-star-cool" cx="55"  cy="-8"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="70"  cy="-30" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="85"  cy="-12" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="112" cy="-30" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="130" cy="-8"  r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="145" cy="-32" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="58"  cy="-32" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-
-            <circle class="constellation-star-cool" cx="55"  cy="112" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="72"  cy="128" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="88"  cy="115" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="4s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="115" cy="118" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="5s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="125" cy="132" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="6s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="148" cy="115" r="0.180"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="7s" repeatCount="indefinite" /></circle>
-            <circle class="constellation-star-cool" cx="80"  cy="110" r="0.216"><animate attributeName="opacity" values="0.4;0.7;0.4" dur="3s" repeatCount="indefinite" /></circle>
-
-            {# Labels — kept within safe zone so they remain visible on mobile #}
-            <text class="constellation-svg-label" x="88"  y="44" text-anchor="middle">Standardised Approach</text>
-            <text class="constellation-svg-label" x="116" y="76" text-anchor="middle">Foundation IRB</text>
-            <text class="constellation-svg-label" x="100" y="94" text-anchor="middle">CRR &middot; Basel 3.1</text>
-          </g>
-        </svg>
-      </div>
+      <div class="constellation-bg" aria-hidden="true"></div>
 
       <div class="landing-scrim" aria-hidden="true"></div>
 

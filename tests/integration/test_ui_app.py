@@ -99,3 +99,16 @@ def test_rest_api_and_tokens_served_from_same_app(client: TestClient) -> None:
     css = client.get("/static/tokens.css")
     assert css.status_code == 200
     assert "--oah-orange" in css.text
+
+
+def test_landing_hosts_bear_constellation(client: TestClient) -> None:
+    # Arrange / Act
+    page = client.get("/").text
+    js = client.get("/static/bear-constellation.js")
+
+    # Assert — the landing page wires up the animated background and the
+    # vendored script is served from the same app.
+    assert 'class="constellation-bg"' in page
+    assert "/static/bear-constellation.js" in page
+    assert js.status_code == 200
+    assert "URSA POLARIS" in js.text

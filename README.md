@@ -3,7 +3,7 @@
 
 # UK Credit Risk (CR) & Counterparty Credit Risk (CCR) RWA Calculator
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://OpenAfterHours.github.io/rwa_calculator/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://OpenAfterHours.club/rwa_calculator/)
 
 A high-performance Risk-Weighted Assets (RWA) calculator for UK CR & CCR, supporting both current regulations and future Basel 3.1 implementation. Built with Python using Polars for vectorized performance.
 
@@ -51,11 +51,12 @@ if response.success:
 **IRB Mode** — set `permission_mode="irb"` and provide a `model_permissions` input table
 to route exposures to FIRB, AIRB, or slotting based on per-model approvals. Exposures
 without a matching model permission fall back to SA. See the
-[Data Model docs](https://OpenAfterHours.github.io/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
+[Data Model docs](https://OpenAfterHours.club/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
 for the model permissions schema.
 
 **Interactive UI** — server-rendered web interface (calculator, results, CRR vs
-Basel 3.1 comparison) plus a REST API and an editable Marimo workbench:
+Basel 3.1 comparison, and legacy-engine reconciliation) plus a REST API and an
+editable Marimo workbench:
 
 ```bash
 uv add rwa-calc
@@ -77,6 +78,45 @@ A configuration toggle allows switching between calculation modes for:
 - Impact analysis and parallel running ahead of Basel 3.1 go-live
 - Seamless transition when Basel 3.1 becomes effective
 
+## Migrating from an Existing Calculator
+
+The hardest part of adopting a new credit-risk engine is not installing it — it is
+**signing off that the new numbers are correct** on your own book. Parallel-run
+reconciliation operationalises that discipline: run **this** calculator and your
+**existing/legacy** calculator on the same portfolio, then reconcile the two outputs
+**component by component** (exposure class, approach, CCF, EAD, PD, LGD, risk weight, RWA, …).
+
+Every exposure is bucketed as an exact match, a within-tolerance difference, a break, or
+missing on one side — with our engine's *reason* and *input drivers* attached so each break
+can be traced to either a **data / mapping** issue or an **engine** difference.
+
+```python
+from datetime import date
+from rwa_calc.api import CreditRiskCalc
+
+calc = CreditRiskCalc(
+    data_path="/path/to/data",
+    framework="CRR",
+    reporting_date=date(2026, 12, 31),
+    permission_mode="standardised",
+)
+
+# Map your legacy output columns onto our components in a small TOML file
+response = calc.reconcile("reconciliation.toml")
+
+print(response.collect_totals_tie_out())        # does it tie out?
+print(response.collect_summary_by_component())  # which components agree
+breaks = response.collect_breaks_detail()       # the break worklist, largest first
+response.to_excel("reconciliation.xlsx")        # full report, one sheet per view
+```
+
+You can also run it without writing Python from the **Reconciliation** page in the web UI
+(`rwa-ui`, then open `http://localhost:8000/reconciliation`) or over HTTP via
+`POST /api/reconcile`. This is distinct from Framework Comparison (CRR vs Basel 3.1 on the
+*same* engine) — here the other side is your external, legacy output.
+
+> **Details:** See the [Parallel-Run Reconciliation guide](https://OpenAfterHours.club/rwa_calculator/reconciliation/).
+
 ## Key Features
 
 - **Dual-Framework Support**: Single codebase for CRR and Basel 3.1 with UK-specific deviations
@@ -86,6 +126,7 @@ A configuration toggle allows switching between calculation modes for:
 - **Complex Hierarchies**: Multi-level counterparty and facility hierarchy support
 - **Audit Trail**: Full calculation transparency for regulatory review
 - **Framework Comparison**: Side-by-side CRR vs Basel 3.1 impact analysis
+- **Parallel-Run Reconciliation**: Tie this calculator out against your existing/legacy engine component-by-component (EAD, RWA, risk weight, PD, LGD, …) to sign off a migration with confidence
 - **COREP Output**: Export results to COREP regulatory templates
 - **Multiple Export Formats**: Parquet, CSV, Excel, and COREP
 
@@ -108,13 +149,14 @@ Comprehensive documentation is available at **[OpenAfterHours.club/rwa_calculato
 
 | Section | Description |
 |---------|-------------|
-| [Getting Started](https://OpenAfterHours.github.io/rwa_calculator/getting-started/) | Installation and first calculation |
-| [User Guide](https://OpenAfterHours.github.io/rwa_calculator/user-guide/) | Regulatory frameworks, methodology, exposure classes |
-| [Architecture](https://OpenAfterHours.github.io/rwa_calculator/architecture/) | System design and pipeline |
-| [Data Model](https://OpenAfterHours.github.io/rwa_calculator/data-model/) | Input schemas and validation |
-| [API Reference](https://OpenAfterHours.github.io/rwa_calculator/api/) | Complete technical documentation |
-| [Development](https://OpenAfterHours.github.io/rwa_calculator/development/) | Testing, benchmarks, contributing |
-| [Plans](https://OpenAfterHours.github.io/rwa_calculator/plans/) | Development roadmap and status |
+| [Getting Started](https://OpenAfterHours.club/rwa_calculator/getting-started/) | Installation and first calculation |
+| [User Guide](https://OpenAfterHours.club/rwa_calculator/user-guide/) | Regulatory frameworks, methodology, exposure classes |
+| [Reconciliation](https://OpenAfterHours.club/rwa_calculator/reconciliation/) | Parallel-run tie-out against a legacy calculator for migration |
+| [Architecture](https://OpenAfterHours.club/rwa_calculator/architecture/) | System design and pipeline |
+| [Data Model](https://OpenAfterHours.club/rwa_calculator/data-model/) | Input schemas and validation |
+| [API Reference](https://OpenAfterHours.club/rwa_calculator/api/) | Complete technical documentation |
+| [Development](https://OpenAfterHours.club/rwa_calculator/development/) | Testing, benchmarks, contributing |
+| [Plans](https://OpenAfterHours.club/rwa_calculator/plans/) | Development roadmap and status |
 
 ## Running Tests
 

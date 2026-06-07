@@ -1,94 +1,88 @@
 /* ---------------------------------------------------------------
-   RWA Calculator Theme — matches Zensical docs site
-   (Material Design, orange primary/accent, slate dark mode)
+   RWA Calculator workbench theme — maps marimo's semantic CSS
+   variables onto the shared brand tokens (--oah-*). The tokens
+   themselves live once in tokens.css (the single source of truth,
+   loaded by the docs and vendored into the app); sidebar.py inlines
+   that tokens.css ahead of this file so the var() refs resolve.
 
-   Injected into <head> via marimo's css_file config.
-   Uses light-dark() to match marimo's color-scheme toggle.
-
-   Zensical reference colours:
-     Primary fg:      #ffa724 (bright orange)
-     Accent fg:       #ff9100 (standard orange)
-     Accent 10%:      #ff91001a (subtle bg)
-     Hover dark:      #e68200 (darker orange)
-     Slate bg:        hsla(225, 15%, 5%, 1) ≈ #0d0e11
-     Slate fg:        hsla(225, 15%, 90%, 0.82)
-     Slate fg-light:  hsla(225, 15%, 90%, 0.12)  (borders, hover bg)
-     Headings:        #fff (pure white in dark)
+   Only marimo's own variable *names* and the derived alpha/light-mode
+   shades (which have no brand token) are defined here — never the
+   canonical palette hexes, so the palette can no longer drift.
    --------------------------------------------------------------- */
 
 .marimo, :root {
   /* Page background */
-  --background: light-dark(#fff, #0d0e11);
-  --foreground: light-dark(#1a1a2e, #e2e4e8);
+  --background: light-dark(#fff, var(--oah-slate-900));
+  --foreground: light-dark(#1a1a2e, var(--oah-slate-100));
 
   /* Primary — orange (same both modes) */
-  --primary: #ff9100;
+  --primary: var(--oah-orange);
   --primary-foreground: #fff;
 
   /* Accent — active/selected nav items: subtle orange bg + orange text */
-  --accent: #ff91001a;
-  --accent-foreground: #ff9100;
+  --accent: color-mix(in srgb, var(--oah-orange) 10%, transparent);
+  --accent-foreground: var(--oah-orange);
 
-  /* Action buttons (run/execute) */
+  /* Action buttons (run/execute) — derived shades, no brand token */
   --action: light-dark(#fff3e0, #3e2700);
   --action-hover: light-dark(#ffe0b2, #5c3a00);
-  --action-foreground: light-dark(#e68200, #ffb74d);
+  --action-foreground: light-dark(var(--oah-orange-hover), var(--oah-orange-soft));
 
   /* Links */
-  --link: light-dark(#e68200, #ffb74d);
-  --link-visited: light-dark(#bf6900, #ff9100);
+  --link: light-dark(var(--oah-orange-hover), var(--oah-orange-soft));
+  --link-visited: light-dark(#bf6900, var(--oah-orange));
 
   /* Focus ring */
-  --ring: light-dark(#ffb74d, #ff9100);
+  --ring: light-dark(var(--oah-orange-soft), var(--oah-orange));
 
   /* Borders */
   --border: light-dark(#e2e8f0, rgba(216, 222, 233, 0.12));
 
   /* Card */
-  --card: light-dark(#fff, #0d0e11);
-  --card-foreground: light-dark(#1a1a2e, #e2e4e8);
+  --card: light-dark(#fff, var(--oah-slate-900));
+  --card-foreground: light-dark(#1a1a2e, var(--oah-slate-100));
 
   /* Muted — hover bg for nav items */
-  --muted: light-dark(#f1f5f9, rgba(216, 222, 233, 0.12));
-  --muted-foreground: light-dark(#64748b, #a0a4ab);
+  --muted: light-dark(var(--oah-slate-050), rgba(216, 222, 233, 0.12));
+  --muted-foreground: light-dark(var(--oah-slate-400), var(--oah-slate-300));
 
   /* Secondary */
-  --secondary: light-dark(#f1f5f9, rgba(216, 222, 233, 0.08));
-  --secondary-foreground: light-dark(#1a1a2e, #e2e4e8);
+  --secondary: light-dark(var(--oah-slate-050), rgba(216, 222, 233, 0.08));
+  --secondary-foreground: light-dark(#1a1a2e, var(--oah-slate-100));
 
   /* Input */
   --input: light-dark(#e2e8f0, rgba(216, 222, 233, 0.18));
 
   /* Popover */
-  --popover: light-dark(#fff, #161719);
-  --popover-foreground: light-dark(#1a1a2e, #e2e4e8);
+  --popover: light-dark(#fff, var(--oah-slate-800));
+  --popover-foreground: light-dark(#1a1a2e, var(--oah-slate-100));
 }
 
-/* Fallback for browsers without light-dark() support */
+/* Fallback for browsers without light-dark() support (var() is universal) */
 .dark .marimo,
 .dark-theme .marimo,
 .marimo:is(.dark *),
 :root:is(.dark, .dark-theme) {
-  --primary: #ff9100;
+  --primary: var(--oah-orange);
   --primary-foreground: #fff;
-  --accent: #ff91001a;
-  --accent-foreground: #ff9100;
+  --accent: color-mix(in srgb, var(--oah-orange) 10%, transparent);
+  --accent-foreground: var(--oah-orange);
   --action: #3e2700;
   --action-hover: #5c3a00;
-  --action-foreground: #ffb74d;
-  --link: #ffb74d;
-  --link-visited: #ff9100;
-  --ring: #ff9100;
-  --background: #0d0e11;
-  --foreground: #e2e4e8;
+  --action-foreground: var(--oah-orange-soft);
+  --link: var(--oah-orange-soft);
+  --link-visited: var(--oah-orange);
+  --ring: var(--oah-orange);
+  --background: var(--oah-slate-900);
+  --foreground: var(--oah-slate-100);
   --border: rgba(216, 222, 233, 0.12);
-  --card: #0d0e11;
-  --card-foreground: #e2e4e8;
+  --card: var(--oah-slate-900);
+  --card-foreground: var(--oah-slate-100);
   --muted: rgba(216, 222, 233, 0.12);
-  --muted-foreground: #a0a4ab;
+  --muted-foreground: var(--oah-slate-300);
   --secondary: rgba(216, 222, 233, 0.08);
-  --secondary-foreground: #e2e4e8;
+  --secondary-foreground: var(--oah-slate-100);
   --input: rgba(216, 222, 233, 0.18);
-  --popover: #161719;
-  --popover-foreground: #e2e4e8;
+  --popover: var(--oah-slate-800);
+  --popover-foreground: var(--oah-slate-100);
 }

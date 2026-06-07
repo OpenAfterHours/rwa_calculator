@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Calculator — RWA Calculator{% endblock %}
+
+{% block content %}
+<h1>Run a calculation</h1>
+<p class="muted">Point at a local data directory of parquet/CSV inputs and run the RWA pipeline.</p>
+
+{% if error %}<div class="callout error">{{ error }}</div>{% endif %}
+
+<form class="form" method="post" action="/calculate">
+  <div class="field">
+    <label for="data_path">Data path</label>
+    <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="framework">Framework</label>
+      <select id="framework" name="framework">
+        {% for fw in frameworks %}
+        <option value="{{ fw.id }}">{{ fw.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="permission_mode">Permission mode</label>
+      <select id="permission_mode" name="permission_mode">
+        <option value="standardised">Standardised (all SA)</option>
+        <option value="irb">IRB (model permissions)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="data_format">Data format</label>
+      <select id="data_format" name="data_format">
+        <option value="parquet">parquet</option>
+        <option value="csv">csv</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="reporting_date">Reporting date</label>
+      <input id="reporting_date" name="reporting_date" type="date" value="{{ default_date }}" required>
+    </div>
+  </div>
+  <button class="btn btn-primary" type="submit">Run calculation</button>
+</form>
+{% endblock %}

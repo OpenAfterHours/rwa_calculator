@@ -33,11 +33,13 @@ dependencies = [
     "fastapi>=0.135.3",
     "itsdangerous>=2.2.0",
     "uvicorn>=0.40.0",
+    "jinja2>=3.1.0",  # server-rendered read-only UI (rwa-ui)
+    "python-multipart>=0.0.9",  # FastAPI form parsing for the calculator
     "marimo>=0.19.6",
 ]
 
 [project.scripts]
-rwa-ui = "rwa_calc.ui.marimo.server:main"
+rwa-ui = "rwa_calc.ui.app.main:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"
@@ -59,6 +61,7 @@ dev = [
     "pytest-xdist>=3.5.0",
     "ruff>=0.3.0",
     "ty",
+    "httpx>=0.27.0",  # FastAPI TestClient (REST API tests)
     "zensical>=0.0.29",
     "mkdocstrings[python]>=0.24.0",
     "numpy>=1.26.0",  # For benchmark data generation only

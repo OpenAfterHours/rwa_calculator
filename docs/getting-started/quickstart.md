@@ -17,13 +17,15 @@ There are two ways to run RWA calculations:
 
 The fastest way to get started is the web-based interface.
 
-### Step 1: Install with UI Support
+### Step 1: Install
 
 ```bash
-pip install rwa-calc[ui]
+pip install rwa-calc
 # Or with uv
-uv add rwa-calc --extra ui
+uv add rwa-calc
 ```
+
+The UI dependencies ship with the base package — no extra is required.
 
 ### Step 2: Start the Server
 
@@ -32,16 +34,18 @@ uv add rwa-calc --extra ui
 rwa-ui
 
 # Or from source
-uv run python src/rwa_calc/ui/marimo/server.py
+uv run rwa-ui
 ```
 
 ### Step 3: Open Your Browser
 
 Navigate to [http://localhost:8000](http://localhost:8000) to access:
 
-- **RWA Calculator** (`/`) - Run calculations on your data
-- **Results Explorer** (`/results`) - Filter and analyze results
-- **Framework Reference** (`/reference`) - View regulatory parameters
+- **Calculator** (`/calculator`) - Run calculations on your data
+- **Comparison** (`/comparison`) - CRR vs Basel 3.1 impact analysis
+- **Workbench** (`/workbench`) - Editable Marimo notebooks against the engine
+
+A JSON REST API is served from the same process (see `/docs`).
 
 For detailed UI documentation, see the [Interactive UI Guide](../user-guide/interactive-ui.md).
 

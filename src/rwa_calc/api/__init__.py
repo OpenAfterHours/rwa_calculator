@@ -36,6 +36,12 @@ from rwa_calc.api.models import (
     ValidationRequest,
     ValidationResponse,
 )
+from rwa_calc.api.rest import (
+    create_api_app,
+)
+from rwa_calc.api.rest import (
+    router as api_router,
+)
 from rwa_calc.api.results_cache import (
     CachedResults,
     ResultsCache,
@@ -65,6 +71,9 @@ __all__ = [
     "SummaryStatistics",
     "APIError",
     "PerformanceMetrics",
+    # REST API
+    "create_api_app",
+    "api_router",
     # Export
     "ResultExporter",
     "ExportResult",

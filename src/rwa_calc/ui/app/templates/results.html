@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Results — RWA Calculator{% endblock %}
+
+{% block content %}
+<h1>Results <span class="muted mono">· {{ framework }}</span></h1>
+
+{% if not success %}
+<div class="callout error">Calculation did not complete successfully — see issues below.</div>
+{% endif %}
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.total_rwa) }}</div><div class="stat-lbl">Total RWA</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.total_ead) }}</div><div class="stat-lbl">Total EAD</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:,}".format(summary.exposure_count) }}</div><div class="stat-lbl">Exposures</div></div>
+  <div class="stat"><div class="stat-num">{{ "%.1f"|format(summary.average_risk_weight * 100) }}%</div><div class="stat-lbl">Avg risk weight</div></div>
+</div>
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.total_rwa_sa) }}</div><div class="stat-lbl">RWA · SA</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.total_rwa_irb) }}</div><div class="stat-lbl">RWA · IRB</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.total_rwa_slotting) }}</div><div class="stat-lbl">RWA · Slotting</div></div>
+  {% if summary.floor_applied %}
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(summary.floor_impact) }}</div><div class="stat-lbl">Output floor impact</div></div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3>RWA by exposure class</h3>
+  {{ chart_rwa_by_class | safe }}
+</div>
+<div class="panel">
+  <h3>EAD by exposure class</h3>
+  {{ chart_ead_by_class | safe }}
+</div>
+<div class="panel">
+  <h3>RWA by approach</h3>
+  {{ chart_approach | safe }}
+</div>
+
+<h2>Exposure sample</h2>
+<p class="muted">First {{ table_rows | length }} exposures. Export the full result set via the REST API
+(<span class="mono">/api/export/&lt;fmt&gt;?run_id={{ run_id }}</span>).</p>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>{% for c in table_columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in table_rows %}
+      <tr>{% for c in table_columns %}
+        {% set v = row[c] %}
+        <td>{% if v is number %}{{ "{:,.2f}".format(v) }}{% else %}{{ v if v is not none else "" }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if errors %}
+<h2>Issues ({{ errors | length }})</h2>
+{% for e in errors[:20] %}
+<div class="callout {{ 'error' if e.severity in ('error', 'critical') else 'warn' }}">
+  <strong class="mono">[{{ e.code }}]</strong> {{ e.message }}
+</div>
+{% endfor %}
+{% endif %}
+
+<p style="margin-top:24px"><a class="btn btn-ghost" href="/calculator">Run another</a></p>
+{% endblock %}

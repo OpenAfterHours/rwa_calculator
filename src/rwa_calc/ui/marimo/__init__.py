@@ -1,33 +1,15 @@
-"""Marimo UI applications for RWA Calculator.
+"""Marimo workbench for the RWA Calculator.
 
-Available applications:
-    - rwa_app.py: Main calculator for running RWA calculations
-    - results_explorer.py: Interactive results analysis and filtering
-    - comparison_app.py: CRR vs Basel 3.1 impact analysis
-    - workbench_app.py: Workbench hub for custom analysis notebooks
+The polished read-only surface (landing, calculator, results, comparison) now
+lives in the server-rendered app at ``rwa_calc.ui.app`` (the ``rwa-ui`` console
+script). Marimo is retained only for the **editable workbench** — reactive,
+reproducible, git-friendly notebooks against the engine.
 
-Usage (Multi-App Server - Recommended):
-    # Start the server with all apps
-    uv run python src/rwa_calc/ui/marimo/server.py
+The ``rwa-ui`` server launches the Marimo edit server on demand (port 8002),
+pointed at ``workspaces/`` (``local/`` and ``team/``). New notebooks start from
+``workspaces/templates/starter.py``; ``shared/sidebar.py`` provides the in-app
+navigation back to the read-only surface.
 
-    # Apps available at:
-    #   http://localhost:8000/           (Landing Page)
-    #   http://localhost:8000/calculator (Calculator)
-    #   http://localhost:8000/results    (Results Explorer)
-    #   http://localhost:8000/comparison (Impact Analysis)
-    #   http://localhost:8000/workbench  (Workbench Hub)
-
-Usage (Single App):
-    # Run individual app in edit mode (development)
-    uv run marimo edit src/rwa_calc/ui/marimo/rwa_app.py
-
-    # Run individual app in read-only mode
-    uv run marimo run src/rwa_calc/ui/marimo/rwa_app.py
-
-    Note: Navigation between apps only works with the multi-app server.
-
-Navigation:
-    All apps include a sidebar with navigation links to switch between apps.
-    Results from the calculator are cached and shared with the results explorer.
-    Regulatory reference documentation is available on the docs site.
+Run the editor directly during development:
+    uv run marimo edit src/rwa_calc/ui/marimo/workspaces
 """

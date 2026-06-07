@@ -5,38 +5,10 @@
    dark colour scheme toggle.
    ============================================================= */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;600;700&display=swap");
-
-/* ---------- Design tokens (brand) --------------------------- */
-:root {
-  --oah-orange:           #ff9100;
-  --oah-orange-bright:    #ffa724;
-  --oah-orange-hover:     #e68200;
-  --oah-orange-soft:      #ffb74d;
-  --oah-owl-body:         #c9442a;
-  --oah-owl-eye:          #ffc857;
-  --oah-terminal-green:   #3dd68c;
-
-  --oah-slate-900:        #0d0e11;
-  --oah-slate-850:        #11141a;
-  --oah-slate-800:        #161719;
-  --oah-slate-700:        #1f2430;
-  --oah-slate-600:        #2a3142;
-  --oah-slate-500:        #3b4356;
-  --oah-slate-400:        #64748b;
-  --oah-slate-300:        #a0a4ab;
-  --oah-slate-200:        #cbd0d8;
-  --oah-slate-100:        #e2e4e8;
-  --oah-slate-050:        #f1f5f9;
-
-  --font-sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-                  Roboto, Helvetica, Arial, sans-serif;
-  --font-display: "Space Grotesk", "Inter", -apple-system, sans-serif;
-  --font-mono:    "JetBrains Mono", "Roboto Mono", "Fira Code",
-                  ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
-}
+/* Brand tokens (--oah-* palette, font stack, --ease-std) and the
+   Google Fonts import now live in tokens.css — the single source
+   of truth, loaded before this file via zensical.toml extra_css.
+   This file only consumes them via var(--oah-*). */
 
 /* ---------- Landing hero tokens (always dark) --------------- */
 /* Landing is fixed dark by design; it does not participate in

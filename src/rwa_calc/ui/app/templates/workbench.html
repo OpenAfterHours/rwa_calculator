@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Workbench — RWA Calculator{% endblock %}
+
+{% block content %}
+<h1>Workbench</h1>
+<p class="lede muted">Open an editable Marimo notebook against the engine — reactive, reproducible,
+and git-friendly. Use it for ad-hoc analysis that the read-only pages don't cover.</p>
+
+<div class="callout info">
+  The workbench runs as a separate Marimo edit server on port {{ edit_port }}. Launching it
+  starts that server and opens the editor.
+</div>
+
+<form method="post" action="/workbench/launch">
+  <button class="btn btn-primary" type="submit">Open workbench</button>
+</form>
+{% endblock %}

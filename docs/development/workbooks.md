@@ -11,85 +11,28 @@ The project includes two types of Marimo-based components:
 
 ## Interactive UI
 
-The calculator includes a multi-app web server providing three interactive applications.
-
-### Starting the Server
+The polished read-only interface (landing, calculator, results, comparison) is a
+server-rendered FastAPI + Jinja app at `rwa_calc.ui.app` (the `rwa-ui` console
+script), backed by a REST API in the same process. See the
+[Interactive UI Guide](../user-guide/interactive-ui.md) for full coverage. Marimo
+is retained only for the **editable workbench** described below.
 
 ```bash
-# If installed from PyPI
-rwa-ui
-
-# From source with uv
-uv run python src/rwa_calc/ui/marimo/server.py
-
-# Or using uvicorn directly
-uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
+rwa-ui            # installed from PyPI
+uv run rwa-ui     # from source
 ```
 
-### Available Applications
+### Workbench (Marimo)
 
-| Application | URL | Description |
-|-------------|-----|-------------|
-| **RWA Calculator** | `http://localhost:8000/` or `/calculator` | Run RWA calculations |
-| **Results Explorer** | `http://localhost:8000/results` | Analyze calculation results |
-| **Impact Analysis** | `http://localhost:8000/comparison` | CRR vs Basel 3.1 comparison |
-| **Workbench** | `http://localhost:8000/workbench` | Custom analysis notebooks |
+The Workbench page launches the Marimo edit server (port 8002) pointed at
+`src/rwa_calc/ui/marimo/workspaces/` (`local/` and `team/`). New notebooks start
+from `workspaces/templates/starter.py`; `shared/sidebar.py` provides the
+navigation back to the read-only app and `shared/theme.css` maps Marimo's
+variables onto the shared `--oah-*` brand tokens (vendored from
+`ui/app/static/tokens.css`, the single source of truth). Edit directly with:
 
-### RWA Calculator (`rwa_app.py`)
-
-The main calculator application provides:
-
-- **Data Input**
-    - Data path selection with validation
-    - Format selection (Parquet / CSV)
-    - Reporting date picker
-
-- **Configuration**
-    - Framework selection (CRR / Basel 3.1)
-    - IRB approach toggle
-
-- **Results**
-    - Summary statistics (total EAD, total RWA, average risk weight)
-    - Breakdown by calculation approach
-    - Performance metrics (duration, throughput)
-    - Results preview (first 100 rows)
-    - CSV export
-
-### Results Explorer (`results_explorer.py`)
-
-Analyze and filter calculation results:
-
-- **Filters**
-    - By exposure class (dropdown)
-    - By approach (dropdown)
-    - By risk weight range (min/max)
-
-- **Aggregation Options**
-    - By Exposure Class
-    - By Approach
-    - By Risk Weight Band
-
-- **Features**
-    - Column selector for detailed view
-    - Export filtered results (CSV + Parquet)
-    - Summary statistics
-
-### Server Architecture
-
-The multi-app server uses Marimo's ASGI integration:
-
-```python
-from marimo import create_asgi_app
-
-app = (
-    create_asgi_app()
-    .with_app(path="", root=str(apps_dir / "rwa_app.py"))
-    .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
-    .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
-    .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
-    .with_app(path="/workbench", root=str(apps_dir / "workbench_app.py"))
-    .build()
-)
+```bash
+uv run marimo edit src/rwa_calc/ui/marimo/workspaces
 ```
 
 ---

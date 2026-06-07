@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}RWA Calculator{% endblock %}
+
+{% block body %}
+<section class="hero">
+  <div class="eyebrow">UK Credit Risk &middot; CRR &amp; Basel 3.1</div>
+  <h1>Risk-Weighted Assets,<br><span class="title-accent">computed at the speed of Polars.</span></h1>
+  <p class="lede">
+    Run the standardised, F-IRB and A-IRB approaches over your portfolio, explore the
+    results, and quantify the CRR &rarr; Basel 3.1 capital impact — all locally.
+  </p>
+  <div>
+    <a class="btn btn-primary" href="/calculator">Open Calculator</a>
+    <a class="btn btn-ghost" href="/comparison">CRR vs Basel 3.1</a>
+  </div>
+</section>
+
+<div class="container">
+  <div class="card-grid">
+    <a class="card" href="/calculator">
+      <h3>Calculator</h3>
+      <p>Point at a data directory and run a full RWA calculation under CRR or Basel 3.1.</p>
+    </a>
+    <a class="card" href="/comparison">
+      <h3>Impact Analysis</h3>
+      <p>Run both frameworks side by side with a capital-impact waterfall.</p>
+    </a>
+    <a class="card" href="/workbench">
+      <h3>Workbench</h3>
+      <p>Open an editable Marimo notebook against the engine for ad-hoc analysis.</p>
+    </a>
+    <a class="card" href="{{ docs_url }}" target="_blank" rel="noopener">
+      <h3>Documentation</h3>
+      <p>Methodology, regulatory references and the API contract.</p>
+    </a>
+  </div>
+</div>
+{% endblock %}

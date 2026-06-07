@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Starting workbench…{% endblock %}
+{% block head %}{% endblock %}
+
+{% block content %}
+<meta http-equiv="refresh" content="3;url=http://localhost:{{ edit_port }}/">
+<h1>Starting the workbench…</h1>
+<p class="lede muted">The Marimo editor is starting on port {{ edit_port }}. You'll be redirected in a
+moment — if not, open it directly:</p>
+<p><a class="btn btn-primary" href="http://localhost:{{ edit_port }}/">Open the workbench editor</a></p>
+{% endblock %}

@@ -1,0 +1,359 @@
+"""
+REST API for the RWA Calculator — the library-first HTTP contract.
+
+Pipeline position:
+    HTTP client -> rest.router -> CreditRiskCalc -> CalculationResponse
+
+Key responsibilities:
+- Expose the engine's public Python API (``CreditRiskCalc``) over HTTP/JSON so
+  the reference UI and external embedders consume one shared contract.
+- Run calculations and validations, page cached results, run CRR vs Basel 3.1
+  comparisons, and stream exports (parquet/csv/excel/corep).
+
+Design notes:
+- Results are never held in memory: a calculation registers its
+  ``CalculationResponse`` in an in-process registry keyed by ``run_id`` and the
+  result rows are scanned lazily from the cached parquet on demand. This suits
+  the local, single-process tool the UI ships as.
+- Decimal summary metrics are emitted as floats for chart-friendliness; the
+  underlying engine retains full Decimal precision.
+
+References:
+- src/rwa_calc/api/service.py (CreditRiskCalc)
+- docs/specifications/interfaces.md (FR-6.x)
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import logging
+import tempfile
+import uuid
+import zipfile
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+import polars as pl
+from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from rwa_calc.api.models import ValidationRequest
+from rwa_calc.api.service import CreditRiskCalc, get_supported_frameworks
+from rwa_calc.api.validation import DataPathValidator
+
+if TYPE_CHECKING:
+    from rwa_calc.api.models import (
+        CalculationResponse,
+        PerformanceMetrics,
+        SummaryStatistics,
+        ValidationResponse,
+    )
+
+logger = logging.getLogger(__name__)
+
+# In-process registry of completed runs (local single-process tool). Keyed by a
+# generated run_id so results/export endpoints can find the cached parquet.
+_RUNS: dict[str, CalculationResponse] = {}
+
+_MAX_PAGE = 10_000
+
+router = APIRouter(prefix="/api", tags=["rwa"])
+
+
+# =============================================================================
+# Request models
+# =============================================================================
+
+
+class CalculateRequest(BaseModel):
+    """Body for POST /api/calculate."""
+
+    data_path: str
+    framework: Literal["CRR", "BASEL_3_1"] = "CRR"
+    reporting_date: date
+    permission_mode: Literal["standardised", "irb"] = "standardised"
+    data_format: Literal["parquet", "csv"] = "parquet"
+    base_currency: str = "GBP"
+    eur_gbp_rate: Decimal = Decimal("0.8732")
+
+
+class ValidateRequest(BaseModel):
+    """Body for POST /api/validate."""
+
+    data_path: str
+    data_format: Literal["parquet", "csv"] = "parquet"
+    permission_mode: Literal["standardised", "irb"] = "standardised"
+
+
+class ComparisonRequest(BaseModel):
+    """Body for POST /api/comparison — runs both frameworks over one dataset."""
+
+    data_path: str
+    reporting_date: date
+    permission_mode: Literal["standardised", "irb"] = "standardised"
+    data_format: Literal["parquet", "csv"] = "parquet"
+
+
+# =============================================================================
+# Endpoints
+# =============================================================================
+
+
+@router.get("/frameworks")
+def frameworks() -> list[dict[str, str]]:
+    """List supported regulatory frameworks (for UI form population)."""
+    return get_supported_frameworks()
+
+
+@router.post("/validate")
+def validate(req: ValidateRequest) -> dict:
+    """Validate a data directory for calculation readiness."""
+    response = DataPathValidator().validate(
+        ValidationRequest(
+            data_path=req.data_path,
+            data_format=req.data_format,
+            permission_mode=req.permission_mode,
+        )
+    )
+    return _serialize_validation(response)
+
+
+@router.post("/calculate")
+def calculate(req: CalculateRequest) -> dict:
+    """Run an RWA calculation and register the result under a fresh run_id."""
+    logger.info("api calculate framework=%s mode=%s", req.framework, req.permission_mode)
+    response = _run_calc(
+        data_path=req.data_path,
+        framework=req.framework,
+        reporting_date=req.reporting_date,
+        permission_mode=req.permission_mode,
+        data_format=req.data_format,
+        base_currency=req.base_currency,
+        eur_gbp_rate=req.eur_gbp_rate,
+    )
+    run_id = register_run(response)
+    return {"run_id": run_id, **_serialize_response(response)}
+
+
+@router.get("/results")
+def results(run_id: str, offset: int = 0, limit: int = 100) -> dict:
+    """Page through the exposure-level results for a completed run."""
+    response = _require_run(run_id)
+    limit = max(1, min(limit, _MAX_PAGE))
+    offset = max(0, offset)
+    lf = response.scan_results()
+    total = int(lf.select(pl.len()).collect().item())
+    page = lf.slice(offset, limit).collect().fill_nan(None)
+    return {
+        "run_id": run_id,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "columns": page.columns,
+        "rows": page.to_dicts(),
+    }
+
+
+@router.get("/results/summary/{dimension}")
+def results_summary(dimension: Literal["class", "approach"], run_id: str) -> dict:
+    """Return a portfolio summary (by exposure class or by approach) for charts."""
+    response = _require_run(run_id)
+    lf = (
+        response.scan_summary_by_class()
+        if dimension == "class"
+        else response.scan_summary_by_approach()
+    )
+    if lf is None:
+        raise HTTPException(status_code=404, detail=f"no summary by {dimension} for this run")
+    df = lf.collect().fill_nan(None)
+    return {"run_id": run_id, "dimension": dimension, "columns": df.columns, "rows": df.to_dicts()}
+
+
+@router.post("/comparison")
+def comparison(req: ComparisonRequest) -> dict:
+    """Run CRR and Basel 3.1 over one dataset and return both with deltas."""
+    logger.info("api comparison mode=%s", req.permission_mode)
+    crr = _run_calc(
+        data_path=req.data_path,
+        framework="CRR",
+        reporting_date=req.reporting_date,
+        permission_mode=req.permission_mode,
+        data_format=req.data_format,
+    )
+    b31 = _run_calc(
+        data_path=req.data_path,
+        framework="BASEL_3_1",
+        reporting_date=req.reporting_date,
+        permission_mode=req.permission_mode,
+        data_format=req.data_format,
+    )
+    crr_id = register_run(crr)
+    b31_id = register_run(b31)
+    return {
+        "crr": {"run_id": crr_id, **_serialize_response(crr)},
+        "basel_3_1": {"run_id": b31_id, **_serialize_response(b31)},
+        "deltas": _summary_deltas(crr.summary, b31.summary),
+    }
+
+
+@router.get("/export/{fmt}")
+def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> FileResponse:
+    """Export a completed run and stream it back for download."""
+    response = _require_run(run_id)
+    tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
+
+    if fmt == "excel":
+        out = tmp / f"rwa_results_{run_id}.xlsx"
+        response.to_excel(out)
+        return _file(out)
+    if fmt == "corep":
+        out = tmp / f"rwa_corep_{run_id}.xlsx"
+        response.to_corep(out)
+        return _file(out)
+
+    # parquet / csv export to a directory, then zip for a single download.
+    out_dir = tmp / fmt
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if fmt == "csv":
+        response.to_csv(out_dir)
+    else:
+        response.to_parquet(out_dir)
+    zip_path = tmp / f"rwa_{fmt}_{run_id}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(out_dir.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(out_dir))
+    return _file(zip_path)
+
+
+# =============================================================================
+# App factory
+# =============================================================================
+
+
+def create_api_app() -> FastAPI:
+    """Build a standalone FastAPI app exposing the RWA router (for tests / dev)."""
+    app = FastAPI(title="RWA Calculator API")
+    app.include_router(router)
+    return app
+
+
+# =============================================================================
+# Run registry (shared by the REST API and the server-rendered UI)
+# =============================================================================
+
+
+def register_run(response: CalculationResponse) -> str:
+    """Register a completed run in the in-process registry; return its run_id."""
+    run_id = uuid.uuid4().hex
+    _RUNS[run_id] = response
+    return run_id
+
+
+def get_run(run_id: str) -> CalculationResponse | None:
+    """Look up a registered run, or None if it is unknown/expired."""
+    return _RUNS.get(run_id)
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+
+def _run_calc(
+    *,
+    data_path: str,
+    framework: Literal["CRR", "BASEL_3_1"],
+    reporting_date: date,
+    permission_mode: Literal["standardised", "irb"],
+    data_format: Literal["parquet", "csv"],
+    base_currency: str = "GBP",
+    eur_gbp_rate: Decimal = Decimal("0.8732"),
+) -> CalculationResponse:
+    """Construct CreditRiskCalc and run a single calculation."""
+    return CreditRiskCalc(
+        data_path=data_path,
+        framework=framework,
+        reporting_date=reporting_date,
+        permission_mode=permission_mode,
+        data_format=data_format,
+        base_currency=base_currency,
+        eur_gbp_rate=eur_gbp_rate,
+    ).calculate()
+
+
+def _require_run(run_id: str) -> CalculationResponse:
+    """Look up a registered run or raise 404."""
+    response = _RUNS.get(run_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail=f"unknown run_id: {run_id}")
+    return response
+
+
+def _file(path: Path) -> FileResponse:
+    """Stream a file back as an attachment."""
+    return FileResponse(path, filename=path.name)
+
+
+def _serialize_response(r: CalculationResponse) -> dict:
+    """Convert a CalculationResponse into a JSON-friendly dict."""
+    by_class = r.summary_by_class_path
+    by_approach = r.summary_by_approach_path
+    return {
+        "success": r.success,
+        "framework": r.framework,
+        "reporting_date": r.reporting_date.isoformat(),
+        "summary": _serialize_summary(r.summary),
+        "errors": [dataclasses.asdict(e) for e in r.errors],
+        "performance": _serialize_perf(r.performance),
+        "has_results": r.results_path is not None,
+        "has_summary_by_class": by_class is not None and Path(by_class).exists(),
+        "has_summary_by_approach": by_approach is not None and Path(by_approach).exists(),
+    }
+
+
+def _serialize_summary(s: SummaryStatistics) -> dict:
+    """Flatten SummaryStatistics, casting Decimals to float for charts."""
+    return {
+        k: (float(v) if isinstance(v, Decimal) else v) for k, v in dataclasses.asdict(s).items()
+    }
+
+
+def _serialize_perf(p: PerformanceMetrics | None) -> dict | None:
+    """Serialize performance metrics, or None when absent."""
+    if p is None:
+        return None
+    return {
+        "started_at": p.started_at.isoformat(),
+        "completed_at": p.completed_at.isoformat(),
+        "duration_seconds": p.duration_seconds,
+        "exposure_count": p.exposure_count,
+        "exposures_per_second": p.exposures_per_second,
+    }
+
+
+def _serialize_validation(v: ValidationResponse) -> dict:
+    """Convert a ValidationResponse into a JSON-friendly dict."""
+    return {
+        "valid": v.valid,
+        "data_path": str(v.data_path),
+        "files_found": [str(p) for p in v.files_found],
+        "files_missing": [str(p) for p in v.files_missing],
+        "errors": [dataclasses.asdict(e) for e in v.errors],
+        "cached_path": str(v.cached_path) if v.cached_path is not None else None,
+    }
+
+
+def _summary_deltas(crr: SummaryStatistics, b31: SummaryStatistics) -> dict:
+    """Per-metric Basel 3.1 minus CRR deltas for the headline figures."""
+    metrics = (
+        "total_ead",
+        "total_rwa",
+        "total_rwa_sa",
+        "total_rwa_irb",
+        "total_rwa_slotting",
+    )
+    return {m: float(getattr(b31, m) - getattr(crr, m)) for m in metrics}

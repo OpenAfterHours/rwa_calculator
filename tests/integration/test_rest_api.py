@@ -130,3 +130,35 @@ def test_openapi_documents_calculate(client: TestClient) -> None:
     # Assert
     assert "/api/calculate" in schema["paths"]
     assert "post" in schema["paths"]["/api/calculate"]
+
+
+def test_openapi_documents_results_404(client: TestClient) -> None:
+    # Assert — the 404 is documented in the OpenAPI schema (SonarQube fix)
+    schema = client.get("/openapi.json").json()
+    assert "404" in schema["paths"]["/api/results"]["get"]["responses"]
+
+
+@pytest.mark.parametrize(("fmt", "media"), [("parquet", "zip"), ("excel", "xlsx")])
+def test_export_downloads_with_fixed_filename(
+    client: TestClient, data_dir: str, fmt: str, media: str
+) -> None:
+    # Arrange
+    run_id = client.post(
+        "/api/calculate",
+        json={
+            "data_path": data_dir,
+            "framework": "CRR",
+            "reporting_date": "2025-01-01",
+            "permission_mode": "standardised",
+        },
+    ).json()["run_id"]
+
+    # Act
+    resp = client.get(f"/api/export/{fmt}", params={"run_id": run_id})
+
+    # Assert — download succeeds; the served filename is a fixed literal (no run_id)
+    assert resp.status_code == 200
+    assert resp.content
+    disposition = resp.headers.get("content-disposition", "")
+    assert run_id not in disposition
+    assert media in disposition

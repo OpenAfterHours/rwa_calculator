@@ -60,6 +60,10 @@ _RUNS: dict[str, CalculationResponse] = {}
 
 _MAX_PAGE = 10_000
 
+# Documents the 404 raised when a run_id (or its summary) is unknown, so it
+# appears in the generated OpenAPI schema for the affected endpoints.
+_RESP_404: dict[int | str, dict[str, str]] = {404: {"description": "Run or summary not found"}}
+
 router = APIRouter(prefix="/api", tags=["rwa"])
 
 
@@ -138,7 +142,7 @@ def calculate(req: CalculateRequest) -> dict:
     return {"run_id": run_id, **_serialize_response(response)}
 
 
-@router.get("/results")
+@router.get("/results", responses=_RESP_404)
 def results(run_id: str, offset: int = 0, limit: int = 100) -> dict:
     """Page through the exposure-level results for a completed run."""
     response = _require_run(run_id)
@@ -157,7 +161,7 @@ def results(run_id: str, offset: int = 0, limit: int = 100) -> dict:
     }
 
 
-@router.get("/results/summary/{dimension}")
+@router.get("/results/summary/{dimension}", responses=_RESP_404)
 def results_summary(dimension: Literal["class", "approach"], run_id: str) -> dict:
     """Return a portfolio summary (by exposure class or by approach) for charts."""
     response = _require_run(run_id)
@@ -199,29 +203,34 @@ def comparison(req: ComparisonRequest) -> dict:
     }
 
 
-@router.get("/export/{fmt}")
+@router.get("/export/{fmt}", responses=_RESP_404)
 def export(fmt: Literal["parquet", "csv", "excel", "corep"], run_id: str) -> FileResponse:
-    """Export a completed run and stream it back for download."""
+    """Export a completed run and stream it back for download.
+
+    All on-disk paths are built from a fresh temp dir plus fixed, literal
+    filenames — the user-supplied run_id never reaches the filesystem path.
+    """
     response = _require_run(run_id)
     tmp = Path(tempfile.mkdtemp(prefix="rwa_export_"))
 
     if fmt == "excel":
-        out = tmp / f"rwa_results_{run_id}.xlsx"
+        out = tmp / "rwa_results.xlsx"
         response.to_excel(out)
         return _file(out)
     if fmt == "corep":
-        out = tmp / f"rwa_corep_{run_id}.xlsx"
+        out = tmp / "rwa_corep.xlsx"
         response.to_corep(out)
         return _file(out)
 
     # parquet / csv export to a directory, then zip for a single download.
-    out_dir = tmp / fmt
+    out_dir = tmp / ("csv" if fmt == "csv" else "parquet")
     out_dir.mkdir(parents=True, exist_ok=True)
     if fmt == "csv":
         response.to_csv(out_dir)
+        zip_path = tmp / "rwa_csv.zip"
     else:
         response.to_parquet(out_dir)
-    zip_path = tmp / f"rwa_{fmt}_{run_id}.zip"
+        zip_path = tmp / "rwa_parquet.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(out_dir.rglob("*")):
             if f.is_file():

@@ -56,6 +56,11 @@ _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8000
 _EDIT_PORT = 8002
 
+# User-facing loopback URL. The literal "localhost" host keeps this a recognised
+# loopback address (no TLS applies to a local dev server); binding still uses the
+# 127.0.0.1 literal above.
+_LOCAL_URL = f"http://localhost:{_DEFAULT_PORT}"
+
 # Form-field Literal types as module-level aliases. Referenced by name in the
 # route signatures so the values FastAPI validates against survive ruff's
 # annotation rewriting under `from __future__ import annotations`.
@@ -99,9 +104,9 @@ def main() -> None:
 
     configure_logging("INFO", "text")
     app = create_app()
-    logger.info("RWA Calculator UI: http://%s:%d", _DEFAULT_HOST, _DEFAULT_PORT)
+    logger.info("RWA Calculator UI: %s", _LOCAL_URL)
     try:
-        webbrowser.open(f"http://{_DEFAULT_HOST}:{_DEFAULT_PORT}")
+        webbrowser.open(_LOCAL_URL)
     except Exception:  # pragma: no cover - browser launch is best-effort
         logger.debug("could not open browser automatically", exc_info=True)
     try:

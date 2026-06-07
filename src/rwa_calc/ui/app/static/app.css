@@ -52,37 +52,9 @@ h3 { font-size: 16px; margin: 0 0 8px; }
 .nav-links a { color: var(--oah-slate-200); }
 .nav-links a:hover { color: var(--oah-orange); }
 
-/* ---------- Hero (landing) --------------------------------- */
-.hero {
-  padding: 72px 24px 40px;
-  max-width: 1100px;
-  margin: 0 auto;
-  text-align: center;
-}
-.hero .eyebrow {
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em;
-  color: var(--oah-orange); text-transform: uppercase;
-}
-.hero .lede { color: var(--oah-slate-200); max-width: 640px; margin: 14px auto 28px; font-size: 17px; }
-.title-accent {
-  background: linear-gradient(90deg, var(--oah-orange) 0%, var(--oah-orange-bright) 60%, var(--oah-owl-eye) 100%);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  font-style: italic;
-}
-
-/* ---------- Cards ------------------------------------------ */
-.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin: 28px 0; }
-.card {
-  display: block;
-  padding: 20px;
-  background: var(--oah-slate-800);
-  border: 1px solid rgba(216, 222, 233, 0.10);
-  border-radius: 12px;
-  transition: border-color 160ms var(--ease-std), transform 160ms var(--ease-std);
-}
-.card:hover { border-color: var(--oah-orange); transform: translateY(-2px); }
-.card h3 { color: #fff; }
-.card p { color: var(--oah-slate-300); margin: 6px 0 0; font-size: 14px; }
+/* The landing page is a full-screen constellation hero served from its own
+   stylesheet (homepage.css); the old centred-hero / card-grid rules that used
+   to live here have been removed as dead code. */
 
 /* ---------- Buttons ---------------------------------------- */
 .btn {

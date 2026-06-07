@@ -81,8 +81,7 @@ class TestReconcileEndToEnd:
         # the phantom legacy row is missing_left.
         assert response.success
         buckets = {
-            r["row_bucket"]: r["count"]
-            for r in response.collect_summary_by_bucket().to_dicts()
+            r["row_bucket"]: r["count"] for r in response.collect_summary_by_bucket().to_dicts()
         }
         assert buckets.get("exact_match") == 1
         assert buckets.get("missing_left") == 1
@@ -110,7 +109,9 @@ class TestReconcileEndToEnd:
 
         our = our_calc.calculate()
         results = our.collect_results()
-        legacy = _write_legacy(tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0]))
+        legacy = _write_legacy(
+            tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0])
+        )
         cfg = tmp_path / "reconciliation.toml"
         cfg.write_text(dump_reconciliation_config(_settings(legacy)))
 
@@ -124,7 +125,9 @@ class TestReconcileEndToEnd:
         pytest.importorskip("xlsxwriter")
         our = our_calc.calculate()
         results = our.collect_results()
-        legacy = _write_legacy(tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0]))
+        legacy = _write_legacy(
+            tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0])
+        )
         response = our_calc.reconcile(_settings(legacy))
 
         out = tmp_path / "recon.xlsx"
@@ -138,7 +141,9 @@ class TestReconcileEndToEnd:
     ) -> None:
         our = our_calc.calculate()
         results = our.collect_results()
-        legacy = _write_legacy(tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0]))
+        legacy = _write_legacy(
+            tmp_path, results["exposure_reference"][0], float(results["rwa_final"][0])
+        )
         response = our_calc.reconcile(_settings(legacy))
 
         export = response.to_csv(tmp_path / "csvout")

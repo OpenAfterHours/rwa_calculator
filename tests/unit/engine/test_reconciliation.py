@@ -156,8 +156,7 @@ class TestUnmatched:
     def test_summary_by_bucket_counts(self) -> None:
         bundle = _recon(_ours(), _legacy(), _mapping())
         counts = {
-            r["row_bucket"]: r["count"]
-            for r in bundle.summary_by_bucket.collect().to_dicts()
+            r["row_bucket"]: r["count"] for r in bundle.summary_by_bucket.collect().to_dicts()
         }
         # L1 exact, L2 within, L3 break.
         assert counts.get(BUCKET_EXACT) == 1
@@ -266,7 +265,11 @@ class TestDataQualityWarnings:
     def test_missing_our_column_skips_component(self) -> None:
         # Arrange: map pd, but our frame has no irb_pd_floored/irb_pd column.
         legacy = pl.LazyFrame(
-            {"loan_id": ["L1", "L2", "L3"], "legacy_rwa": [50.0, 150.0, 250.0], "legacy_pd": [0.01, 0.02, 0.03]}
+            {
+                "loan_id": ["L1", "L2", "L3"],
+                "legacy_rwa": [50.0, 150.0, 250.0],
+                "legacy_pd": [0.01, 0.02, 0.03],
+            }
         )
         mapping = _mapping(pd=ComponentMapping("legacy_pd"))
 

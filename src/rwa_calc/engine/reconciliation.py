@@ -225,16 +225,12 @@ class ReconciliationRunner:
             active.append(_ActiveComponent(spec=spec, our_col=our_col, legacy_col=legacy_col))
         return active
 
-    def _check_heterogeneity(
-        self, collapsed: pl.LazyFrame, errors: list[CalculationError]
-    ) -> None:
+    def _check_heterogeneity(self, collapsed: pl.LazyFrame, errors: list[CalculationError]) -> None:
         """Emit REC004 if a coarse key aggregated rows of mixed class/approach."""
         if HETEROGENEITY_FLAG not in collapsed.collect_schema().names():
             return
         # Small diagnostic collect (offline analysis tool, not the hot pipeline).
-        count = (
-            collapsed.filter(pl.col(HETEROGENEITY_FLAG)).select(pl.len()).collect().item()
-        )
+        count = collapsed.filter(pl.col(HETEROGENEITY_FLAG)).select(pl.len()).collect().item()
         if count:
             errors.append(
                 reconciliation_warning(
@@ -315,8 +311,7 @@ class ReconciliationRunner:
             errors.append(
                 reconciliation_warning(
                     ERROR_RECON_DUPLICATE_LEGACY_KEY,
-                    f"{dup_count} duplicate legacy key(s); keeping the first row of "
-                    "each on join",
+                    f"{dup_count} duplicate legacy key(s); keeping the first row of each on join",
                     actual_value=str(dup_count),
                 )
             )
@@ -353,10 +348,16 @@ class ReconciliationRunner:
         joined = joined.with_columns(row_bucket)
 
         worst_break = pl.coalesce(
-            [pl.when(pl.col(f"{a.spec.name}_bucket") == BUCKET_BREAK).then(pl.lit(a.spec.name)) for a in active]
+            [
+                pl.when(pl.col(f"{a.spec.name}_bucket") == BUCKET_BREAK).then(pl.lit(a.spec.name))
+                for a in active
+            ]
         )
         worst_within = pl.coalesce(
-            [pl.when(pl.col(f"{a.spec.name}_bucket") == BUCKET_WITHIN).then(pl.lit(a.spec.name)) for a in active]
+            [
+                pl.when(pl.col(f"{a.spec.name}_bucket") == BUCKET_WITHIN).then(pl.lit(a.spec.name))
+                for a in active
+            ]
         )
         worst_component = (
             pl.when(pl.col("row_bucket") == BUCKET_BREAK)
@@ -470,7 +471,11 @@ def _within_expr(
     if tol_kind == "rel":
         # Relative tolerance, zero-guarded: when legacy ~ 0, only an exact match
         # passes (handled separately by the exact-epsilon branch).
-        return pl.when(lv.abs() > _ZERO_GUARD).then(diff <= tol * lv.abs()).otherwise(diff <= _EXACT_EPSILON)
+        return (
+            pl.when(lv.abs() > _ZERO_GUARD)
+            .then(diff <= tol * lv.abs())
+            .otherwise(diff <= _EXACT_EPSILON)
+        )
     return diff <= tol
 
 
@@ -516,11 +521,7 @@ def _summary_by_component(recon: pl.LazyFrame, active: list[_ActiveComponent]) -
 
 def _summary_by_bucket(recon: pl.LazyFrame) -> pl.LazyFrame:
     """Row-level bucket counts."""
-    return (
-        recon.group_by("row_bucket")
-        .agg(pl.len().alias("count"))
-        .sort("row_bucket")
-    )
+    return recon.group_by("row_bucket").agg(pl.len().alias("count")).sort("row_bucket")
 
 
 def _summary_by_group(
@@ -528,9 +529,7 @@ def _summary_by_group(
 ) -> pl.LazyFrame:
     """Break counts/sums grouped by our exposure class or approach."""
     has_rwa = any(a.spec.name == "rwa" for a in active)
-    sum_abs_rwa = (
-        pl.col("abs_delta_rwa").abs().sum() if has_rwa else pl.lit(None, dtype=pl.Float64)
-    )
+    sum_abs_rwa = pl.col("abs_delta_rwa").abs().sum() if has_rwa else pl.lit(None, dtype=pl.Float64)
     return (
         recon.group_by(group_col)
         .agg(
@@ -564,12 +563,12 @@ def _breaks_detail(
                 pl.lit(name).alias("component"),
                 pl.col(f"our_{name}").cast(pl.String).alias("our_value"),
                 pl.col(a.legacy_col).cast(pl.String).alias("legacy_value"),
-                (
-                    pl.col(f"abs_delta_{name}") if is_num else pl.lit(None, dtype=pl.Float64)
-                ).alias("abs_delta"),
-                (
-                    pl.col(f"rel_delta_{name}") if is_num else pl.lit(None, dtype=pl.Float64)
-                ).alias("rel_delta"),
+                (pl.col(f"abs_delta_{name}") if is_num else pl.lit(None, dtype=pl.Float64)).alias(
+                    "abs_delta"
+                ),
+                (pl.col(f"rel_delta_{name}") if is_num else pl.lit(None, dtype=pl.Float64)).alias(
+                    "rel_delta"
+                ),
                 explain_expr.alias("our_explain"),
             )
         )
@@ -603,9 +602,11 @@ def _totals_tie_out(recon: pl.LazyFrame, active: list[_ActiveComponent]) -> pl.L
                 pl.lit(a.spec.name).alias("component"),
                 legacy_total.alias("legacy_total"),
                 our_total.alias("our_total"),
-            ).with_columns(
+            )
+            .with_columns(
                 (pl.col("our_total") - pl.col("legacy_total")).alias("delta"),
-            ).with_columns(
+            )
+            .with_columns(
                 pl.when(pl.col("legacy_total").abs() > _ZERO_GUARD)
                 .then(pl.col("delta") / pl.col("legacy_total") * 100.0)
                 .otherwise(pl.lit(None, dtype=pl.Float64))

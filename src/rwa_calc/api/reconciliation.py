@@ -74,9 +74,7 @@ def load_reconciliation_config(path: str | Path) -> ReconciliationSettings:
     return _settings_from_raw(raw, base_dir=path.parent)
 
 
-def loads_reconciliation_config(
-    text: str, base_dir: str | Path = "."
-) -> ReconciliationSettings:
+def loads_reconciliation_config(text: str, base_dir: str | Path = ".") -> ReconciliationSettings:
     """Parse reconciliation settings from a TOML string (e.g. a UI editor).
 
     Relative ``legacy_file`` paths are resolved against ``base_dir``.

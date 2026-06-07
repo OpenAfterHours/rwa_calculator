@@ -169,7 +169,7 @@ legacy_column = "EAD"
                 mo.md(
                     "Declare the join key(s) and which legacy column maps to each "
                     "canonical component. Numeric components accept `scale` (e.g. "
-                    "millions) and `unit = \"percent\"`; categoricals accept a "
+                    'millions) and `unit = "percent"`; categoricals accept a '
                     "`value_map` of label synonyms. `legacy_file` is resolved "
                     "relative to the data path above."
                 ),
@@ -240,11 +240,11 @@ def _(
             if response.errors
             else mo.md("")
         )
-        mo.output.replace(mo.vstack([mo.callout("Reconciliation complete.", kind="success"), _warn]))
-    elif run_button.value:
         mo.output.replace(
-            mo.callout("No comparable components — check the mapping.", kind="warn")
+            mo.vstack([mo.callout("Reconciliation complete.", kind="success"), _warn])
         )
+    elif run_button.value:
+        mo.output.replace(mo.callout("No comparable components — check the mapping.", kind="warn"))
     return (response,)
 
 
@@ -306,9 +306,18 @@ def _(mo, response):
                     mo.md("## 2 · Segment — where do breaks concentrate?"),
                     mo.hstack(
                         [
-                            mo.vstack([mo.md("**By bucket**"), mo.ui.table(by_bucket, selection=None)]),
-                            mo.vstack([mo.md("**By exposure class**"), mo.ui.table(by_class, selection=None)]),
-                            mo.vstack([mo.md("**By approach**"), mo.ui.table(by_approach, selection=None)]),
+                            mo.vstack(
+                                [mo.md("**By bucket**"), mo.ui.table(by_bucket, selection=None)]
+                            ),
+                            mo.vstack(
+                                [
+                                    mo.md("**By exposure class**"),
+                                    mo.ui.table(by_class, selection=None),
+                                ]
+                            ),
+                            mo.vstack(
+                                [mo.md("**By approach**"), mo.ui.table(by_approach, selection=None)]
+                            ),
                         ],
                         wrap=True,
                     ),
@@ -351,7 +360,14 @@ def _(mo, response):
 def _(mo, response):
     if response is not None and response.success:
         bucket_filter = mo.ui.dropdown(
-            options=["(all)", "break", "within_tolerance", "exact_match", "missing_left", "missing_right"],
+            options=[
+                "(all)",
+                "break",
+                "within_tolerance",
+                "exact_match",
+                "missing_left",
+                "missing_right",
+            ],
             value="break",
             label="Row bucket",
         )

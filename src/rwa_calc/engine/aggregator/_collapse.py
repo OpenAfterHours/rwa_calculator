@@ -136,9 +136,7 @@ def _finalise_heterogeneity(
 ) -> pl.LazyFrame:
     """Fold the temporary distinct-count columns into a single boolean flag."""
     nuniq_cols = [
-        f"__nuniq_{c}"
-        for c in RECON_HETEROGENEITY_COLUMNS
-        if c in present and c not in group_cols
+        f"__nuniq_{c}" for c in RECON_HETEROGENEITY_COLUMNS if c in present and c not in group_cols
     ]
     if not nuniq_cols:
         return collapsed.with_columns(pl.lit(False).alias(HETEROGENEITY_FLAG))

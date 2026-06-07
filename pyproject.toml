@@ -34,8 +34,6 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "uvicorn>=0.40.0",
     "marimo>=0.19.6",
-    "ty>=0.0.26",
-    "watchfire==0.3.1",
 ]
 
 [project.scripts]
@@ -64,6 +62,7 @@ dev = [
     "zensical>=0.0.29",
     "mkdocstrings[python]>=0.24.0",
     "numpy>=1.26.0",  # For benchmark data generation only
+    "watchfire==0.3.1",
 ]
 all = [
     "rwa-calc[ui,dev]",

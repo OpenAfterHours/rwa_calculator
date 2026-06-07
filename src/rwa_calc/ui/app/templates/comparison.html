@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}CRR vs Basel 3.1 — RWA Calculator{% endblock %}
+
+{% block content %}
+<h1>CRR vs Basel 3.1 impact</h1>
+<p class="muted">Runs the portfolio through both frameworks and decomposes the RWA delta into
+regulatory drivers. Takes roughly twice a single run.</p>
+
+{% if error %}<div class="callout error">Comparison failed: {{ error }}</div>{% endif %}
+
+<form class="form" method="post" action="/comparison">
+  <div class="field">
+    <label for="data_path">Data path</label>
+    <input id="data_path" name="data_path" value="{{ default_path }}" placeholder="/path/to/data" required>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label for="permission_mode">Permission mode</label>
+      <select id="permission_mode" name="permission_mode">
+        <option value="standardised">Standardised (all SA)</option>
+        <option value="irb">IRB (model permissions)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="data_format">Data format</label>
+      <select id="data_format" name="data_format">
+        <option value="parquet">parquet</option>
+        <option value="csv">csv</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="reporting_date">Reporting date</label>
+      <input id="reporting_date" name="reporting_date" type="date" value="{{ default_date }}" required>
+    </div>
+  </div>
+  <button class="btn btn-primary" type="submit">Run comparison</button>
+</form>
+
+{% if result %}
+<h2>Executive summary</h2>
+<div class="stat-row">
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(result.summary.crr_rwa) }}</div><div class="stat-lbl">CRR total RWA</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:,.0f}".format(result.summary.b31_rwa) }}</div><div class="stat-lbl">Basel 3.1 total RWA</div></div>
+  <div class="stat"><div class="stat-num">{{ "{:+,.0f}".format(result.summary.delta_rwa) }} ({{ "%+.1f"|format(result.summary.delta_pct) }}%)</div><div class="stat-lbl">Delta RWA</div></div>
+  <div class="stat"><div class="stat-num">{{ "%.1f"|format(result.summary.b31_avg_rw * 100) }}%</div><div class="stat-lbl">Basel 3.1 avg RW</div></div>
+</div>
+
+<div class="panel">
+  <h3>Capital impact waterfall</h3>
+  <p class="muted">Each driver is additive; together they sum to the total RWA delta.</p>
+  {{ result.chart_waterfall | safe }}
+</div>
+
+<div class="panel">
+  <h3>RWA by exposure class — CRR vs Basel 3.1</h3>
+  {{ result.chart_by_class | safe }}
+</div>
+
+<h2>By exposure class</h2>
+<div class="table-wrap">
+  <table class="data">
+    <thead><tr>{% for c in result.class_columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in result.class_rows %}
+      <tr>{% for c in result.class_columns %}
+        {% set v = row[c] %}
+        <td>{% if v is number %}{{ "{:,.2f}".format(v) }}{% else %}{{ v if v is not none else "" }}{% endif %}</td>
+      {% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

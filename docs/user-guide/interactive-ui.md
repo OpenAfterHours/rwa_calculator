@@ -1,267 +1,177 @@
 # Interactive UI
 
-The RWA Calculator includes a web-based interactive interface for running calculations, exploring results, and referencing regulatory parameters—all without writing code.
+The RWA Calculator ships a polished, locally-run web interface for configuring a
+run, exploring results, and comparing CRR with Basel 3.1 — backed by a REST API
+that the UI itself consumes. It is a server-rendered FastAPI + Jinja app styled
+with the same design tokens as this documentation site, so no JavaScript build
+step is required and it bundles cleanly for local distribution.
 
 ## Prerequisites
 
-Before using the UI, ensure you have installed the calculator with UI dependencies:
-
 ```bash
-# Install with UI support
-pip install rwa-calc[ui]
-
-# Or with uv
-uv add rwa-calc --extra ui
+pip install rwa-calc      # or: uv add rwa-calc
 ```
 
-This installs Marimo and Uvicorn, which power the web interface.
+The UI dependencies (FastAPI, Uvicorn, Jinja, Marimo) ship with the base
+package — no extra is required.
 
 ---
 
-## Starting the UI Server
-
-Launch the multi-application server:
+## Starting the UI server
 
 === "Installed from PyPI"
 
     ```bash
-    # Using the console command (recommended)
     rwa-ui
-
-    # Or using the module directly
-    python -m rwa_calc.ui.marimo.server
-
-    # Or using uvicorn
-    uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
     ```
 
-=== "From Source"
+=== "From source"
 
     ```bash
-    # Using uv
-    uv run python src/rwa_calc/ui/marimo/server.py
-
-    # Or using uvicorn
-    uv run uvicorn rwa_calc.ui.marimo.server:app --host 127.0.0.1 --port 8000
+    uv run rwa-ui
+    # or: uv run python -m rwa_calc.ui.app.main
     ```
 
-Once started, open your browser to [http://localhost:8000](http://localhost:8000).
+The server starts on [http://localhost:8000](http://localhost:8000) and opens
+your browser at the landing page.
 
 ---
 
-## Available Applications
+## Pages
 
-The UI provides four integrated applications plus an editable workbench:
+| Page | URL | Purpose |
+|------|-----|---------|
+| **Landing** | `/` | Overview and navigation |
+| **Calculator** | `/calculator` | Configure and run an RWA calculation |
+| **Results** | `/results/{run_id}` | Headline metrics, charts and an exposure sample for a run |
+| **Comparison** | `/comparison` | CRR vs Basel 3.1 with the capital-impact waterfall |
+| **Workbench** | `/workbench` | Launch the editable Marimo notebook editor (port 8002) |
 
-| Application | URL | Purpose |
-|-------------|-----|---------|
-| **RWA Calculator** | `/` or `/calculator` | Run RWA calculations on your data |
-| **Results Explorer** | `/results` | Filter, aggregate, and export results |
-| **Impact Analysis** | `/comparison` | Compare CRR vs Basel 3.1 side-by-side |
-| **Framework Reference** | `/reference` | View regulatory parameters and risk weights |
-| **Workbench** | `http://localhost:8002/` | Editable workbooks — duplicate templates, write Python & SQL |
-
----
-
-## RWA Calculator
-
-The main calculator application at [http://localhost:8000/](http://localhost:8000/) allows you to run RWA calculations through a visual interface.
-
-### Configuration Options
-
-| Option | Description |
-|--------|-------------|
-| **Data Path** | Path to your data directory containing Parquet or CSV files |
-| **Data Format** | Select Parquet (recommended) or CSV |
-| **Reporting Date** | The calculation reference date |
-| **Framework** | Choose between CRR (Basel 3.0) or Basel 3.1 |
-| **Enable IRB** | Toggle IRB calculations on/off |
-
-### Running a Calculation
-
-1. **Set your data path** - Enter the path to your data directory
-2. **Select format** - Choose Parquet or CSV
-3. **Choose framework** - CRR for current rules, Basel 3.1 for future rules
-4. **Configure options** - Set reporting date and IRB toggle
-5. **Run calculation** - Click the calculate button
-
-### Understanding Results
-
-The calculator displays:
-
-- **Summary Statistics**
-    - Total EAD (Exposure at Default)
-    - Total RWA (Risk-Weighted Assets)
-    - Average Risk Weight (RWA / EAD)
-
-- **Breakdown by Approach**
-    - Standardised Approach RWA
-    - IRB RWA (if enabled)
-    - Slotting RWA (for specialised lending)
-
-- **Performance Metrics**
-    - Calculation duration
-    - Throughput (exposures per second)
-
-- **Results Preview**
-    - First 100 rows of detailed results
-    - Export to CSV option
+Charts on the results and comparison pages are rendered as inline SVG themed
+with the documentation palette.
 
 ---
 
-## Results Explorer
+## Calculator
 
-The Results Explorer at [http://localhost:8000/results](http://localhost:8000/results) provides interactive analysis of calculation outputs.
+The calculator (`/calculator`) runs the full pipeline through a form.
 
-### Filtering Options
+| Field | Description |
+|-------|-------------|
+| **Data path** | Directory of Parquet/CSV inputs (see [Input Schemas](../data-model/input-schemas.md)) |
+| **Framework** | CRR (Basel 3.0) or Basel 3.1 |
+| **Permission mode** | Standardised (all SA) or IRB (driven by `model_permissions`) |
+| **Data format** | Parquet (recommended) or CSV |
+| **Reporting date** | Calculation reference date |
 
-| Filter | Description |
-|--------|-------------|
-| **Exposure Class** | Filter by class (Corporate, Retail, Central Govt / Central Bank, etc.) |
-| **Approach** | Filter by calculation approach (SA, F-IRB, A-IRB, Slotting) |
-| **Risk Weight Range** | Set minimum and maximum risk weight bounds |
-
-### Aggregation Views
-
-Aggregate results by different dimensions:
-
-- **By Exposure Class** - See totals for each exposure category
-- **By Approach** - Compare SA vs IRB vs Slotting
-- **By Risk Weight Band** - Distribution across risk weight ranges
-
-### Exporting Data
-
-Export your filtered and aggregated results:
-
-- **CSV** - For spreadsheet analysis
-- **Parquet** - For further processing with Polars/Pandas
+Submitting validates the data path, runs the calculation, and redirects to the
+results page for that run. Results show total RWA/EAD, exposure count and average
+risk weight; the RWA/IRB/SA/Slotting split and output-floor impact; charts of RWA
+and EAD by exposure class and RWA by approach; and a sample of the exposure-level
+output. Any data-quality issues are listed beneath the results.
 
 ---
 
-## Framework Reference
+## Comparison
 
-The Framework Reference at [http://localhost:8000/reference](http://localhost:8000/reference) provides an interactive regulatory reference.
-
-### Available Sections
-
-| Tab | Content |
-|-----|---------|
-| **Overview** | Summary of CRR vs Basel 3.1 differences |
-| **CRR Parameters** | Current framework regulatory values |
-| **Basel 3.1 Parameters** | Future framework regulatory values |
-| **Risk Weight Tables** | SA risk weights by exposure class and rating |
-| **IRB Parameters** | PD floors, LGD values, correlation factors |
-
-This reference is useful for:
-
-- Validating calculation inputs
-- Understanding regulatory differences
-- Quick lookup of risk weights and parameters
+The comparison page (`/comparison`) runs the portfolio through **both**
+frameworks and shows an executive summary, the additive capital-impact waterfall
+(scaling factor, supporting factor, methodology, output floor), and a per-class
+breakdown. It takes roughly twice a single-framework run.
 
 ---
 
 ## Workbench
 
-The Workbench at [http://localhost:8002/](http://localhost:8002/) provides an editable environment for interactive analysis using Python and SQL.
-
-### How It Works
-
-The template applications (Calculator, Results Explorer, etc.) are **read-only** — you can view and interact with their outputs but cannot modify code. The Workbench lets you **duplicate** any template into your own editable workspace.
-
-### Duplicating a Template
-
-Use the REST API to duplicate a template:
-
-```bash
-# Duplicate the calculator template
-curl -X POST "http://localhost:8000/api/workbooks/duplicate?template=calculator"
-
-# Duplicate with a custom name
-curl -X POST "http://localhost:8000/api/workbooks/duplicate?template=results_explorer&name=my_analysis"
-```
-
-The response includes the URL to open the workbook in the Workbench.
-
-### Managing Workbooks
-
-```bash
-# List available templates
-curl http://localhost:8000/api/templates
-
-# List your workbooks
-curl http://localhost:8000/api/workbooks
-
-# Delete a workbook
-curl -X DELETE http://localhost:8000/api/workbooks/my_analysis
-```
-
-### Using the Workbench
-
-Once a workbook is duplicated, open it in the Workbench to:
-
-- **Edit Python cells** — modify calculations, add visualisations, explore data
-- **Add SQL cells** — query Polars DataFrames with SQL using `mo.sql()`
-- **Save changes** — workbooks persist in `workspaces/local/` across server restarts
+The polished pages above are read-only. For ad-hoc analysis, the Workbench page
+launches the **Marimo editor** (a separate edit server on port 8002) pointed at
+`workspaces/`. Marimo notebooks are reactive, reproducible, and git-friendly
+plain-Python files; new notebooks start from `workspaces/templates/starter.py`,
+which wires in the engine API and the shared sidebar.
 
 ---
 
-## Data Requirements
+## REST API
 
-The UI expects data in the same format as the Python API. Place your files in a directory structure:
+The same server exposes a JSON API (the library-first contract — embeddable by
+other tools). Interactive docs are at `/docs` (OpenAPI).
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET`  | `/api/frameworks` | List supported frameworks |
+| `POST` | `/api/validate` | Validate a data directory |
+| `POST` | `/api/calculate` | Run a calculation; returns a `run_id` + summary |
+| `GET`  | `/api/results?run_id=…` | Page exposure-level results |
+| `GET`  | `/api/results/summary/{class\|approach}?run_id=…` | Portfolio summary |
+| `POST` | `/api/comparison` | Run CRR and Basel 3.1 with deltas |
+| `GET`  | `/api/export/{parquet\|csv\|excel\|corep}?run_id=…` | Download an export |
+
+```bash
+curl -X POST http://localhost:8000/api/calculate \
+  -H 'content-type: application/json' \
+  -d '{"data_path": "/path/to/data", "framework": "CRR", "reporting_date": "2025-01-01"}'
+```
+
+The API is also importable without the web server:
+
+```python
+from rwa_calc.api import create_api_app  # a FastAPI app exposing the router
+```
+
+---
+
+## Data requirements
+
+The UI expects the same directory layout as the Python API:
 
 ```
 your_data_directory/
-├── counterparty/
-│   └── counterparties.parquet
+├── counterparty/counterparties.parquet
 ├── exposures/
 │   ├── facilities.parquet
 │   └── loans.parquet
-├── collateral/           # Optional
-│   └── collateral.parquet
-├── guarantee/            # Optional
-│   └── guarantee.parquet
-└── ratings/              # Optional
-    └── ratings.parquet
+├── collateral/collateral.parquet     # optional
+├── guarantee/guarantee.parquet       # optional
+└── ratings/ratings.parquet           # optional
 ```
 
-See [Input Schemas](../data-model/input-schemas.md) for detailed field requirements.
+See [Input Schemas](../data-model/input-schemas.md) for field requirements.
+
+---
+
+## Packaging for local distribution (moonlit)
+
+Because the UI is pure-Python and server-rendered (templates, CSS and SVG charts
+ship as package data — no JS build artifact), it bundles into a single
+self-contained zipapp with [moonlit](https://github.com/OpenAfterHours/moonlit):
+
+```bash
+moonlit build -e rwa_calc.ui.app.main:main -o rwa-ui.pyz
+```
+
+Recipients run `rwa-ui.pyz` with a matching Python; moonlit extracts to a local
+cache on first run, so the FastAPI static files (including the brand tokens)
+serve normally. No Node toolchain or internet access is required.
 
 ---
 
 ## Troubleshooting
 
-### Server won't start
-
-**Error: `ModuleNotFoundError: No module named 'marimo'`**
-
-Install with UI dependencies:
+**Port 8000 already in use** — run the app on another port:
 ```bash
-pip install rwa-calc[ui]
+uv run uvicorn "rwa_calc.ui.app.main:create_app" --factory --port 8080
 ```
 
-**Error: Port 8000 already in use**
+**Data path not found** — use an absolute path and confirm the mandatory files
+(counterparties, facilities, loans) exist in the expected layout.
 
-Use a different port:
-```bash
-uv run uvicorn rwa_calc.ui.marimo.server:app --port 8080
-```
-
-### Data path not found
-
-- Ensure the path is absolute or relative to your current working directory
-- Check that the required files (counterparties, facilities, loans) exist
-- Verify file format matches your selection (Parquet vs CSV)
-
-### Calculation errors
-
-- Check the error panel for specific validation failures
-- Ensure required fields are present in your data
-- See [Data Validation](../data-model/data-validation.md) for field requirements
+**Calculation errors** — check the issues panel on the results page; see
+[Data Validation](../data-model/data-validation.md) for field requirements.
 
 ---
 
-## Next Steps
+## Next steps
 
-- [Configuration Guide](configuration.md) - Advanced configuration options
-- [Calculation Methodology](methodology/index.md) - Understanding how RWA is calculated
-- [Data Model](../data-model/index.md) - Detailed schema documentation
+- [Configuration Guide](configuration.md)
+- [Calculation Methodology](methodology/index.md)
+- [Data Model](../data-model/index.md)

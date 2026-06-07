@@ -20,16 +20,13 @@ pip install rwa-calc
 uv add rwa-calc
 ```
 
-*With UI support (web-based calculator interface)*
-```bash
-uv add rwa-calc[ui]
-```
+The web UI and REST API ship with the base package — no extra required.
 
 ### Optional Dependencies
 
 | Extra | Description |
 |-------|-------------|
-| `ui` | Interactive web UI via Marimo |
+| `ui` | Legacy alias — UI deps are now included in the base install |
 | `dev` | Development tools (pytest, ruff, ty, zensical) |
 | `all` | All optional dependencies |
 
@@ -57,12 +54,13 @@ without a matching model permission fall back to SA. See the
 [Data Model docs](https://OpenAfterHours.github.io/rwa_calculator/data-model/input-schemas/#model-permissions-schema)
 for the model permissions schema.
 
-**Interactive UI** — web-based calculator interface:
+**Interactive UI** — server-rendered web interface (calculator, results, CRR vs
+Basel 3.1 comparison) plus a REST API and an editable Marimo workbench:
 
 ```bash
-pip install rwa-calc[ui]
+pip install rwa-calc
 rwa-ui
-# Open http://localhost:8000 in your browser
+# Open http://localhost:8000 in your browser (REST API + OpenAPI at /docs)
 ```
 
 ## Regulatory Scope

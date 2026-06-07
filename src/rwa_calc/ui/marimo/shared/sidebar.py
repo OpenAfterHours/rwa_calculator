@@ -32,10 +32,18 @@ def _load_logo_base64() -> str:
 
 
 def _load_theme_css() -> str:
-    css_path = Path(__file__).parent / "theme.css"
-    if css_path.exists():
-        return css_path.read_text(encoding="utf-8")
-    return ""
+    """Brand tokens (single source of truth) + the marimo var() mapping.
+
+    tokens.css defines the --oah-* palette; theme.css maps marimo's semantic
+    variables onto it. The tokens are vendored under the app's static dir so the
+    workbench shares one palette with the docs and the read-only app.
+    """
+    shared = Path(__file__).parent
+    tokens_path = shared.parent.parent / "app" / "static" / "tokens.css"
+    tokens = tokens_path.read_text(encoding="utf-8") if tokens_path.exists() else ""
+    theme_path = shared / "theme.css"
+    theme = theme_path.read_text(encoding="utf-8") if theme_path.exists() else ""
+    return f"{tokens}\n{theme}"
 
 
 _LOGO_URI = _load_logo_base64()
@@ -144,10 +152,9 @@ def create_sidebar(mo: object, *, version: str = "", base_url: str = "") -> obje
             {
                 f"{base_url}/": f"{mo.icon('home')} Home",
                 f"{base_url}/calculator": f"{mo.icon('calculator')} Calculator",
-                f"{base_url}/results": f"{mo.icon('table')} Results Explorer",
                 f"{base_url}/comparison": f"{mo.icon('git-compare')} Impact Analysis",
-                "https://openafterhours.github.io/rwa_calculator/": f"{mo.icon('book')} Documentation",
                 f"{base_url}/workbench": f"{mo.icon('code')} Workbench",
+                "https://openafterhours.github.io/rwa_calculator/": f"{mo.icon('book')} Documentation",
             },
             orientation="vertical",
         ),

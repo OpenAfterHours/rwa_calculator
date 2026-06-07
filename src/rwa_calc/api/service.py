@@ -196,8 +196,10 @@ class CreditRiskCalc:
         from rwa_calc.api.models import ReconciliationResponse
         from rwa_calc.api.reconciliation import (
             LegacyOutputLoader,
-            ReconciliationSettings as _Settings,
             load_reconciliation_config,
+        )
+        from rwa_calc.api.reconciliation import (
+            ReconciliationSettings as _Settings,
         )
         from rwa_calc.engine.reconciliation import ReconciliationRunner
 

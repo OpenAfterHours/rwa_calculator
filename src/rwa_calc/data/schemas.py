@@ -116,6 +116,9 @@ References:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 import polars as pl
 
 from rwa_calc.data.column_spec import ColumnSpec
@@ -2261,3 +2264,208 @@ EXPECTED_OUTPUT_SCHEMA = {
     # Calculation details (JSON string for flexibility)
     "calculation_details_json": pl.String,  # JSON-encoded calculation breakdown
 }
+
+
+# =============================================================================
+# PARALLEL-RUN RECONCILIATION — canonical component registry
+# =============================================================================
+# Output-domain metadata describing which components of a calculation result can
+# be reconciled against an external (legacy) calculator's output, what our value
+# column is, and which columns explain / drive that value. Lives here (not in
+# engine/**) per arch_check check 6 (no input/output-domain string collections at
+# engine module scope). The reconciliation engine resolves ``our_columns`` against
+# the actual results frame (first present wins) and filters explain/input columns
+# to those present, so the registry is resilient to the historical
+# ``ead_final`` vs ``final_ead`` naming drift between the runtime frame and the
+# documented Calculation_output schema above.
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcilableComponent:
+    """A single result component that can be reconciled legacy-vs-ours.
+
+    Attributes:
+        name: Canonical component name used in config and output columns (e.g. "pd").
+        kind: "numeric" (delta + tolerance) or "categorical" (normalised equality).
+        our_columns: Candidate column names on our results frame, in preference
+            order; the first present is used as our value.
+        explain_columns: Columns carrying OUR rationale (reason / source / which
+            floor bound) — surfaced on the reconciliation row to answer "why did we
+            get this value". Absent columns are silently dropped.
+        input_columns: Raw upstream drivers that FED our value — surfaced so an
+            analyst can attribute a break to bad input data vs engine logic.
+            Absent columns are silently dropped.
+        additive: True when the value sums across guarantee/RE sub-rows on collapse
+            (EAD, RWA, expected loss); False for rates/categoricals.
+        derived_ratio: When set, ``(numerator_component, denominator_component)`` —
+            the value is recomputed after a collapse as sum(num)/sum(den) rather
+            than summed or taken first (e.g. risk_weight = rwa/ead).
+        default_tol_kind: "rel" (relative) or "abs" (absolute) tolerance default.
+        default_tol: Default tolerance magnitude (overridable per-component in the
+            mapping config).
+    """
+
+    name: str
+    kind: Literal["numeric", "categorical"]
+    our_columns: tuple[str, ...]
+    explain_columns: tuple[str, ...] = ()
+    input_columns: tuple[str, ...] = ()
+    additive: bool = False
+    derived_ratio: tuple[str, str] | None = None
+    default_tol_kind: Literal["rel", "abs"] = "rel"
+    default_tol: float = 0.01
+
+
+RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
+    ReconcilableComponent(
+        "exposure_class",
+        "categorical",
+        our_columns=("exposure_class",),
+        explain_columns=("exposure_class_reason", "pre_crm_exposure_class"),
+    ),
+    ReconcilableComponent(
+        "approach",
+        "categorical",
+        our_columns=("approach_applied", "approach"),
+        explain_columns=("approach_selection_reason", "approach_permitted"),
+        input_columns=("model_id",),
+    ),
+    ReconcilableComponent(
+        "pd",
+        "numeric",
+        our_columns=("irb_pd_floored", "irb_pd"),
+        explain_columns=("irb_pd_original", "irb_pd_floor"),
+        input_columns=("internal_pd",),
+        default_tol_kind="abs",
+        default_tol=5e-5,
+    ),
+    ReconcilableComponent(
+        "lgd",
+        "numeric",
+        our_columns=("irb_lgd_floored", "irb_lgd"),
+        explain_columns=("irb_lgd_original", "irb_lgd_floor", "irb_lgd_type"),
+        default_tol_kind="abs",
+        default_tol=1e-3,
+    ),
+    ReconcilableComponent(
+        "maturity",
+        "numeric",
+        our_columns=("irb_maturity_m", "irb_m", "maturity"),
+        input_columns=("residual_maturity_years", "original_maturity_date"),
+        default_tol_kind="abs",
+        default_tol=1e-2,
+    ),
+    ReconcilableComponent(
+        "ccf",
+        "numeric",
+        our_columns=("ccf_applied", "ccf"),
+        explain_columns=("ccf_source",),
+        input_columns=("exposure_type", "undrawn_amount", "converted_undrawn"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "ead",
+        "numeric",
+        our_columns=("ead_final", "final_ead", "ead"),
+        explain_columns=("gross_ead", "converted_undrawn"),
+        input_columns=(
+            "drawn_amount",
+            "undrawn_amount",
+            "ccf_applied",
+            "collateral_adjusted_value",
+            "guarantee_benefit",
+        ),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
+        "risk_weight",
+        "numeric",
+        our_columns=("risk_weight", "risk_weight_effective"),
+        explain_columns=("sa_rw_regulatory_ref", "sa_rw_adjustment_reason"),
+        input_columns=("external_cqs", "sa_cqs", "property_ltv", "ltv_band"),
+        derived_ratio=("rwa", "ead"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "supporting_factor",
+        "numeric",
+        our_columns=("sme_supporting_factor", "supporting_factor"),
+        explain_columns=("infra_supporting_factor", "supporting_factor_benefit"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "expected_loss",
+        "numeric",
+        our_columns=("expected_loss", "irb_expected_loss"),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
+        "rwa",
+        "numeric",
+        our_columns=("rwa_final", "final_rwa", "rwa"),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+)
+
+# Index by canonical name for O(1) lookup by config validators / the engine.
+RECONCILABLE_COMPONENTS_BY_NAME: dict[str, ReconcilableComponent] = {
+    c.name: c for c in RECONCILABLE_COMPONENTS
+}
+
+# Numeric result fields that must be SUMMED when collapsing guarantee/RE sub-rows
+# (and any coarser key grain) back to a parent/key. Mirrors the runtime results
+# frame names (ead_final / rwa_final / expected_loss). Single source of truth for
+# the engine collapse helper and the acceptance-test result lookup.
+ADDITIVE_OUTPUT_FIELDS: frozenset[str] = frozenset(
+    {
+        "ead_final",
+        "ead_pre_crm",
+        "ead_after_collateral",
+        "rwa_final",
+        "rwa_pre_crm",
+        "rwa_post_factor",
+        "rwa_pre_factor",
+        "guaranteed_portion",
+        "unguaranteed_portion",
+        "drawn_amount",
+        "undrawn_amount",
+        "nominal_amount",
+        "provision_deducted",
+        "provision_on_drawn",
+        "provision_on_nominal",
+        "expected_loss",
+    }
+)
+
+# Columns that carry a sub-row's link to its parent exposure. The collapse helper
+# coalesces whichever are present (then falls back to exposure_reference) to derive
+# the parent grain. guarantees.py sets ``parent_exposure_reference``; re_splitter.py
+# sets ``split_parent_id`` (may be dropped from the final frame — hence "if present").
+RECON_PARENT_KEY_COLUMNS: tuple[str, ...] = (
+    "parent_exposure_reference",
+    "split_parent_id",
+)
+
+# Candidate columns (preference order) for the RWA numerator and EAD denominator
+# used to recompute ratio columns after a sub-row collapse. The runtime results
+# frame uses ead_final / rwa_final; the documented schema uses final_ead /
+# final_rwa — accept both.
+RECON_RWA_CANDIDATES: tuple[str, ...] = ("rwa_final", "final_rwa", "rwa")
+RECON_EAD_CANDIDATES: tuple[str, ...] = ("ead_final", "final_ead", "ead")
+
+# Ratio columns that are meaningless when summed/first-ed across sub-rows and must
+# be recomputed as sum(rwa) / sum(ead) after the collapse group-by.
+RECON_RATIO_COLUMNS: tuple[str, ...] = ("risk_weight", "risk_weight_effective")
+
+# Categorical columns whose within-group disagreement is surfaced when a coarse
+# reconciliation key aggregates rows of mixed class/approach.
+RECON_HETEROGENEITY_COLUMNS: tuple[str, ...] = ("exposure_class", "approach_applied")

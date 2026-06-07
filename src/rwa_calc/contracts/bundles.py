@@ -811,6 +811,53 @@ class CapitalImpactBundle:
     errors: list[CalculationError] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ReconciliationBundle:
+    """
+    Output from parallel-run reconciliation (legacy calculator vs this one).
+
+    Reconciles our per-exposure results against an external legacy calculator's
+    output, component by component (EAD, RWA, risk weight, PD, LGD, CCF, exposure
+    class, ...). Unlike ``ComparisonBundle`` (CRR vs Basel 3.1, same engine), the
+    other side here is an opaque external file mapped onto our canonical
+    components via a ``LegacyColumnMapping`` and joined on a composite/custom key.
+
+    Why: firms migrating to this calculator run it in parallel with their existing
+    engine and must demonstrate where the two agree and, where they diverge, by how
+    much and why — so a break can be triaged to a data fix or an engine fix.
+
+    The frames are layered high-level → forensic:
+    - ``totals_tie_out`` / ``summary_by_component``: headline agreement.
+    - ``summary_by_bucket`` / ``summary_by_exposure_class`` / ``summary_by_approach``:
+      where breaks concentrate.
+    - ``breaks_detail``: long-format worklist of every break, ranked by materiality.
+    - ``component_reconciliation``: per-key forensic row carrying legacy vs our value
+      per component, the bucket, our explain columns (why) and input columns (drivers).
+
+    Attributes:
+        component_reconciliation: Per-key wide frame — legacy_<c>/our_<c>/<c>_bucket
+            for each mapped component, plus our explain/input columns and row_bucket.
+        summary_by_component: Per component — counts per bucket, summed absolute
+            delta, and break rate (the headline "which components agree").
+        summary_by_bucket: Row-level bucket counts.
+        summary_by_exposure_class: Break counts/sums grouped by our exposure class.
+        summary_by_approach: Break counts/sums grouped by our approach.
+        breaks_detail: Long-format worklist (one row per key×component break),
+            sorted by materiality.
+        totals_tie_out: Per additive component — sum(legacy) vs sum(ours), delta, pct.
+        errors: Accumulated reconciliation data-quality errors/warnings.
+    """
+
+    component_reconciliation: pl.LazyFrame
+    summary_by_component: pl.LazyFrame
+    summary_by_bucket: pl.LazyFrame
+    summary_by_exposure_class: pl.LazyFrame
+    summary_by_approach: pl.LazyFrame
+    breaks_detail: pl.LazyFrame
+    totals_tie_out: pl.LazyFrame
+    errors: list[CalculationError] = field(default_factory=list)
+
+
 # =============================================================================
 # HELPER FUNCTIONS FOR BUNDLE CREATION
 # =============================================================================
@@ -908,4 +955,19 @@ def create_empty_crm_adjusted_bundle() -> CRMAdjustedBundle:
         exposures=pl.LazyFrame(),
         sa_exposures=pl.LazyFrame(),
         irb_exposures=pl.LazyFrame(),
+    )
+
+
+def create_empty_reconciliation_bundle() -> ReconciliationBundle:
+    """Create an empty ReconciliationBundle for testing."""
+    import polars as pl
+
+    return ReconciliationBundle(
+        component_reconciliation=pl.LazyFrame(),
+        summary_by_component=pl.LazyFrame(),
+        summary_by_bucket=pl.LazyFrame(),
+        summary_by_exposure_class=pl.LazyFrame(),
+        summary_by_approach=pl.LazyFrame(),
+        breaks_detail=pl.LazyFrame(),
+        totals_tie_out=pl.LazyFrame(),
     )

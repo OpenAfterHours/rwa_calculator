@@ -21,6 +21,7 @@ import polars as pl
 
 if TYPE_CHECKING:
     from rwa_calc.api.export import ExportResult
+    from rwa_calc.contracts.bundles import ReconciliationBundle
 
 
 # =============================================================================
@@ -346,3 +347,112 @@ class ValidationResponse:
     def found_count(self) -> int:
         """Count of found files."""
         return len(self.files_found)
+
+
+# =============================================================================
+# Response Models - Reconciliation
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ReconciliationResponse:
+    """
+    Response model for a parallel-run reconciliation (legacy vs this calculator).
+
+    Wraps the engine ``ReconciliationBundle`` (lazy frames) with scan/collect
+    accessors and export helpers, mirroring ``CalculationResponse`` ergonomics.
+    Reconciliation output is small relative to a full run, so frames are kept lazy
+    in memory rather than parquet-cached.
+
+    Attributes:
+        success: True when at least one component was reconciled.
+        bundle: The underlying reconciliation bundle (lazy frames).
+        legacy_file: Path to the legacy output that was reconciled.
+        framework: Framework our side was run under (for the report header).
+        reporting_date: As-of date of our run.
+        errors: Non-fatal reconciliation warnings (REC001-REC004), API-friendly.
+    """
+
+    success: bool
+    bundle: ReconciliationBundle
+    legacy_file: Path
+    framework: str | None = None
+    reporting_date: date | None = None
+    errors: list[APIError] = field(default_factory=list)
+
+    @classmethod
+    def from_bundle(
+        cls,
+        bundle: ReconciliationBundle,
+        *,
+        legacy_file: Path,
+        framework: str | None = None,
+        reporting_date: date | None = None,
+    ) -> ReconciliationResponse:
+        """Build a response from an engine bundle, converting errors to APIError."""
+        from rwa_calc.api.errors import convert_errors
+
+        # A real bundle's per-key frame carries columns; the empty bundle does not.
+        produced = len(bundle.component_reconciliation.collect_schema().names()) > 0
+        critical = any(e.severity.value == "critical" for e in bundle.errors)
+        return cls(
+            success=produced and not critical,
+            bundle=bundle,
+            legacy_file=legacy_file,
+            framework=framework,
+            reporting_date=reporting_date,
+            errors=convert_errors(bundle.errors),
+        )
+
+    def scan_component_reconciliation(self) -> pl.LazyFrame:
+        """Lazy per-key reconciliation (legacy vs ours per component)."""
+        return self.bundle.component_reconciliation
+
+    def collect_component_reconciliation(self) -> pl.DataFrame:
+        """Collect the per-key reconciliation frame."""
+        df: pl.DataFrame = self.bundle.component_reconciliation.collect()
+        return df
+
+    def collect_summary_by_component(self) -> pl.DataFrame:
+        """Collect the headline per-component summary (bucket counts, break rate)."""
+        df: pl.DataFrame = self.bundle.summary_by_component.collect()
+        return df
+
+    def collect_summary_by_bucket(self) -> pl.DataFrame:
+        """Collect the row-level bucket counts."""
+        df: pl.DataFrame = self.bundle.summary_by_bucket.collect()
+        return df
+
+    def collect_breaks_detail(self) -> pl.DataFrame:
+        """Collect the long-format break worklist (ranked by materiality)."""
+        df: pl.DataFrame = self.bundle.breaks_detail.collect()
+        return df
+
+    def collect_totals_tie_out(self) -> pl.DataFrame:
+        """Collect the per-component portfolio tie-out (sum legacy vs sum ours)."""
+        df: pl.DataFrame = self.bundle.totals_tie_out.collect()
+        return df
+
+    def to_csv(self, output_dir: Path) -> ExportResult:
+        """Export the reconciliation frames to CSV files."""
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_reconciliation_to_csv(self, output_dir)
+
+    def to_excel(self, output_path: Path) -> ExportResult:
+        """Export the reconciliation to a multi-sheet Excel workbook."""
+        from rwa_calc.api.export import ResultExporter
+
+        return ResultExporter().export_reconciliation_to_excel(self, output_path)
+
+    @property
+    def has_breaks(self) -> bool:
+        """True when any row reconciled to a break."""
+        if not self.success:
+            return False
+        breaks: pl.DataFrame = (
+            self.bundle.summary_by_bucket.filter(pl.col("row_bucket") == "break")
+            .select(pl.col("count").sum())
+            .collect()
+        )
+        return bool(breaks.height and (breaks.item() or 0) > 0)

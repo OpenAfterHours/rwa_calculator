@@ -24,6 +24,7 @@ nav = [
     { "Quick Start" = "getting-started/quickstart.md" },
     { "Concepts" = "getting-started/concepts.md" },
   ]},
+  { "Reconciliation" = "reconciliation/index.md" },
   { "User Guide" = [
     "user-guide/index.md",
     { "Interactive UI" = "user-guide/interactive-ui.md" },

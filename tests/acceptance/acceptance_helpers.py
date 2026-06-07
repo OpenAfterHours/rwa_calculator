@@ -24,29 +24,16 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import pytest
 
+from rwa_calc.data.schemas import ADDITIVE_OUTPUT_FIELDS
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import RawDataBundle
 
 # Numeric result fields that must be summed across guarantee sub-rows
-# (guaranteed + remainder) when aggregating a parent exposure's result.
-_ADDITIVE_FIELDS = {
-    "ead_final",
-    "ead_pre_crm",
-    "ead_after_collateral",
-    "rwa_final",
-    "rwa_pre_crm",
-    "rwa_post_factor",
-    "rwa_pre_factor",
-    "guaranteed_portion",
-    "unguaranteed_portion",
-    "drawn_amount",
-    "undrawn_amount",
-    "nominal_amount",
-    "provision_deducted",
-    "provision_on_drawn",
-    "provision_on_nominal",
-    "expected_loss",
-}
+# (guaranteed + remainder) when aggregating a parent exposure's result. Sourced
+# from data/schemas so the engine collapse helper and these test helpers share a
+# single source of truth (see engine/aggregator/_collapse.py).
+_ADDITIVE_FIELDS = ADDITIVE_OUTPUT_FIELDS
 
 
 # =============================================================================

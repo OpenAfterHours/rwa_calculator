@@ -240,6 +240,14 @@ ERROR_RW_NEGATIVE = "OUT002"
 ERROR_RWA_NEGATIVE = "OUT003"
 ERROR_EAD_NULL = "OUT004"
 
+# Parallel-run reconciliation error codes (legacy-vs-ours comparison).
+# Non-fatal: reconciliation degrades gracefully (skips the affected
+# component/column) and records the issue rather than aborting.
+ERROR_RECON_LEGACY_COLUMN_MISSING = "REC001"
+ERROR_RECON_DUPLICATE_LEGACY_KEY = "REC002"
+ERROR_RECON_KEY_COLUMN_MISSING = "REC003"
+ERROR_RECON_GRAIN_HETEROGENEOUS = "REC004"
+
 
 # =============================================================================
 # ERROR FACTORY FUNCTIONS
@@ -454,4 +462,29 @@ def optional_file_load_error(
         ),
         field_name=field_name,
         actual_value=str(relative_path),
+    )
+
+
+def reconciliation_warning(
+    code: str,
+    message: str,
+    *,
+    field_name: str | None = None,
+    actual_value: str | None = None,
+) -> CalculationError:
+    """Create a non-fatal parallel-run reconciliation warning.
+
+    Reconciliation never aborts on a data issue — a missing mapped column, a
+    duplicate legacy key, or a heterogeneous aggregation grain degrades the
+    affected component/row and is recorded here so the problem is visible in the
+    reconciliation report rather than silently swallowed. Use one of the
+    ``ERROR_RECON_*`` codes.
+    """
+    return CalculationError(
+        code=code,
+        message=message,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        field_name=field_name,
+        actual_value=actual_value,
     )

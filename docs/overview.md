@@ -28,6 +28,7 @@ The system provides accurate, auditable RWA calculations across all major exposu
 - **Counterparty Credit Risk (SA-CCR)**: Derivative EAD via CRR Art. 271-311 using `EAD = α · (RC + PFE)` with `α = 1.4` per Art. 274(2); RC (Art. 275), PFE add-on (Art. 278) including the FX asset class, hedging-set aggregation, supervisory deltas, and the Art. 272(4) legal-enforceability netting gate are all in scope. See the [SA-CCR specifications](specifications/crr/ccr/index.md).
 - **Credit Risk Mitigation**: Complete CRM support including collateral, guarantees, and provisions
 - **Audit Trail**: Error accumulation and full traceability for regulatory compliance
+- **Parallel-Run Reconciliation**: Compare outputs against your existing/legacy calculator, component by component, to gain comfort the numbers are right before you migrate. See the [Reconciliation guide](reconciliation/index.md).
 - **Extensible Architecture**: Protocol-based design enabling easy customization
 
 ## Who Is This Documentation For?
@@ -64,6 +65,14 @@ This documentation serves multiple audiences:
     Install the calculator and run your first RWA calculation
 
     [:octicons-arrow-right-24: Quick Start](getting-started/quickstart.md)
+
+-   :material-compare-horizontal:{ .lg .middle } **Migrate with Confidence**
+
+    ---
+
+    Reconcile this calculator against your existing one before you switch
+
+    [:octicons-arrow-right-24: Reconciliation](reconciliation/index.md)
 
 -   :material-scale-balance:{ .lg .middle } **Regulatory Frameworks**
 

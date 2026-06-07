@@ -175,6 +175,47 @@ class CreditRiskCalc:
             )
         )
 
+    def reconcile(
+        self,
+        settings: ReconciliationSettings | str | Path,
+    ) -> ReconciliationResponse:
+        """
+        Reconcile this calculator's results against a legacy calculator's output.
+
+        Runs ``self.calculate()`` for our side, loads and maps the legacy output
+        per ``settings``, and reconciles them component by component.
+
+        Args:
+            settings: A ``ReconciliationSettings`` object, or a path to a TOML
+                reconciliation config file.
+
+        Returns:
+            ReconciliationResponse with per-component buckets, summaries, a break
+            worklist, and a totals tie-out.
+        """
+        from rwa_calc.api.models import ReconciliationResponse
+        from rwa_calc.api.reconciliation import (
+            LegacyOutputLoader,
+            ReconciliationSettings as _Settings,
+            load_reconciliation_config,
+        )
+        from rwa_calc.engine.reconciliation import ReconciliationRunner
+
+        if not isinstance(settings, _Settings):
+            settings = load_reconciliation_config(settings)
+
+        calc_response = self.calculate()
+        our_results = calc_response.scan_results()
+        legacy_results = LegacyOutputLoader(settings).load()
+
+        bundle = ReconciliationRunner().reconcile(our_results, legacy_results, settings.mapping)
+        return ReconciliationResponse.from_bundle(
+            bundle,
+            legacy_file=settings.legacy_file,
+            framework=self.framework,
+            reporting_date=self.reporting_date,
+        )
+
     def _create_config(self) -> CalculationConfig:
         """Create CalculationConfig from instance parameters."""
         from rwa_calc.contracts.config import CalculationConfig
@@ -226,6 +267,8 @@ class CreditRiskCalc:
 
 
 if TYPE_CHECKING:
+    from rwa_calc.api.models import ReconciliationResponse
+    from rwa_calc.api.reconciliation import ReconciliationSettings
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.protocols import LoaderProtocol
     from rwa_calc.engine.pipeline import PipelineOrchestrator

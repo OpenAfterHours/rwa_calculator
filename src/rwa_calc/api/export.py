@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
-    from rwa_calc.api.models import CalculationResponse
+    from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
     from rwa_calc.contracts.config import OutputFloorConfig
 
 logger = logging.getLogger(__name__)
@@ -297,3 +297,109 @@ class ResultExporter:
         generator = Pillar3Generator()
         bundle = generator.generate(response)
         return generator.export_to_excel(bundle, output_path)
+
+    # -- reconciliation -----------------------------------------------------
+
+    def export_reconciliation_to_csv(
+        self,
+        response: ReconciliationResponse,
+        output_dir: Path,
+    ) -> ExportResult:
+        """Export each reconciliation frame to its own CSV file."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        files: list[Path] = []
+        total_rows = 0
+        for name, df in _reconciliation_frames(response):
+            path = output_dir / f"reconciliation_{name}.csv"
+            df.write_csv(path)
+            files.append(path)
+            total_rows += len(df)
+        return ExportResult(format="csv", files=files, row_count=total_rows)
+
+    def export_reconciliation_to_excel(
+        self,
+        response: ReconciliationResponse,
+        output_path: Path,
+    ) -> ExportResult:
+        """Export the reconciliation to a multi-sheet Excel workbook.
+
+        Sheets: By Component, Reconciliation, Breaks, By Class, By Approach,
+        Totals Tie-Out, Errors. Requires xlsxwriter.
+
+        Raises:
+            ModuleNotFoundError: If xlsxwriter is not installed.
+        """
+        try:
+            import xlsxwriter  # noqa: F401
+        except ModuleNotFoundError:
+            msg = "Excel export requires 'xlsxwriter'. Install it with: uv add xlsxwriter"
+            raise ModuleNotFoundError(msg) from None
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        import xlsxwriter as xw
+
+        # Friendly sheet titles in report order (headline -> forensic).
+        sheet_titles = {
+            "summary_by_component": "By Component",
+            "totals_tie_out": "Totals Tie-Out",
+            "summary_by_bucket": "By Bucket",
+            "summary_by_exposure_class": "By Class",
+            "summary_by_approach": "By Approach",
+            "breaks_detail": "Breaks",
+            "component_reconciliation": "Reconciliation",
+        }
+        total_rows = 0
+        workbook = xw.Workbook(str(output_path))
+        try:
+            for name, df in _reconciliation_frames(response):
+                if len(df) == 0:
+                    continue
+                df.write_excel(
+                    workbook=workbook,
+                    worksheet=sheet_titles.get(name, name)[:31],
+                    autofit=True,
+                )
+                total_rows += len(df)
+            errors_df = _reconciliation_errors_frame(response)
+            if len(errors_df) > 0:
+                errors_df.write_excel(workbook=workbook, worksheet="Errors", autofit=True)
+        finally:
+            workbook.close()
+        return ExportResult(format="excel", files=[output_path], row_count=total_rows)
+
+
+# =============================================================================
+# Reconciliation export helpers
+# =============================================================================
+
+
+def _reconciliation_frames(
+    response: ReconciliationResponse,
+) -> list[tuple[str, pl.DataFrame]]:
+    """Collect the reconciliation bundle frames in report order (headline first)."""
+    bundle = response.bundle
+    ordered = [
+        ("summary_by_component", bundle.summary_by_component),
+        ("totals_tie_out", bundle.totals_tie_out),
+        ("summary_by_bucket", bundle.summary_by_bucket),
+        ("summary_by_exposure_class", bundle.summary_by_exposure_class),
+        ("summary_by_approach", bundle.summary_by_approach),
+        ("breaks_detail", bundle.breaks_detail),
+        ("component_reconciliation", bundle.component_reconciliation),
+    ]
+    frames: list[tuple[str, pl.DataFrame]] = []
+    for name, lf in ordered:
+        df: pl.DataFrame = lf.collect()
+        frames.append((name, df))
+    return frames
+
+
+def _reconciliation_errors_frame(response: ReconciliationResponse) -> pl.DataFrame:
+    """Build a small DataFrame of the reconciliation warnings for the report."""
+    return pl.DataFrame(
+        {
+            "code": [e.code for e in response.errors],
+            "severity": [e.severity for e in response.errors],
+            "message": [e.message for e in response.errors],
+        }
+    )

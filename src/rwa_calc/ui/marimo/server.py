@@ -77,6 +77,7 @@ TEMPLATE_REGISTRY: dict[str, str] = {
     "calculator": "rwa_app.py",
     "results_explorer": "results_explorer.py",
     "comparison": "comparison_app.py",
+    "reconciliation": "reconciliation_app.py",
     "workbench_starter": "workspaces/templates/starter.py",
 }
 
@@ -92,6 +93,7 @@ templates_asgi = (
     .with_app(path="/calculator", root=str(apps_dir / "rwa_app.py"))
     .with_app(path="/results", root=str(apps_dir / "results_explorer.py"))
     .with_app(path="/comparison", root=str(apps_dir / "comparison_app.py"))
+    .with_app(path="/reconciliation", root=str(apps_dir / "reconciliation_app.py"))
     .with_app(path="/workbench", root=str(apps_dir / "workbench_app.py"))
     .with_dynamic_directory(path="/run/local", directory=str(workspaces_dir))
     .with_dynamic_directory(path="/run/team", directory=str(team_dir))

@@ -28,13 +28,25 @@ from rwa_calc.api.export import (
     ExportResult,
     ResultExporter,
 )
+from rwa_calc.contracts.config import (
+    ComponentMapping,
+    LegacyColumnMapping,
+)
 from rwa_calc.api.models import (
     APIError,
     CalculationResponse,
     PerformanceMetrics,
+    ReconciliationResponse,
     SummaryStatistics,
     ValidationRequest,
     ValidationResponse,
+)
+from rwa_calc.api.reconciliation import (
+    LegacyOutputLoader,
+    ReconciliationSettings,
+    dump_reconciliation_config,
+    load_reconciliation_config,
+    loads_reconciliation_config,
 )
 from rwa_calc.api.results_cache import (
     CachedResults,
@@ -65,6 +77,15 @@ __all__ = [
     "SummaryStatistics",
     "APIError",
     "PerformanceMetrics",
+    # Reconciliation
+    "ReconciliationResponse",
+    "ReconciliationSettings",
+    "LegacyOutputLoader",
+    "LegacyColumnMapping",
+    "ComponentMapping",
+    "load_reconciliation_config",
+    "loads_reconciliation_config",
+    "dump_reconciliation_config",
     # Export
     "ResultExporter",
     "ExportResult",

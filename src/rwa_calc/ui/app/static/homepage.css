@@ -17,6 +17,7 @@
 body:has(.landing-hero) {
   margin: 0;
   overflow: hidden;
+  background: var(--oah-slate-900);   /* match the hero edge so the ground-shake reveals nothing */
 
   --hero-bg-gradient: radial-gradient(ellipse at 50% 30%, #1a1f2e 0%, var(--oah-slate-900) 70%);
   --hero-scrim:

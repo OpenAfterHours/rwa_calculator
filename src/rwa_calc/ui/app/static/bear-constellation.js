@@ -96,6 +96,7 @@
   var STAND_MID = 5;        // visual x-midpoint of the standing pose (tail -3 .. frontPaw 13)
   var QUAD_MID = 11.5;      // visual x-midpoint of the all-fours pose
   var MIN_SCALE = 0.7;      // never shrink the bear below this on tiny screens
+  var SHAKE_A = 6;          // px — peak ground-shake at each footfall (mobile intro only)
 
   function lerp(a, b, t) { return a + (b - a) * t; }
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
@@ -288,6 +289,16 @@
       refs.group.style.display = d; refs.label.style.display = d;
     };
 
+    // Ground shake: a footfall-synced camera shake on the whole hero (mobile intro).
+    var heroEl = host.closest(".landing-hero") || host;
+    var applyShake = function (s, foot) {
+      if (s <= 0.001) { heroEl.style.transform = ""; return; }
+      var dir = (Math.floor(foot) % 2 === 0) ? 1 : -1;        // alternate sway per footfall
+      var dx = (SHAKE_A * 0.35 * s * dir).toFixed(2);
+      var dy = (SHAKE_A * s).toFixed(2);
+      heroEl.style.transform = "translate3d(" + dx + "px," + dy + "px,0)";
+    };
+
     // Desktop: endless walk (today's behaviour, now via the anchors param).
     var loopTick = function (now) {
       if (t0 == null) { t0 = now; last = now; }
@@ -306,15 +317,25 @@
       if (rafId == null) { t0 = null; last = null; rafId = requestAnimationFrame(loopTick); }
     };
 
-    // Mobile: one-shot stand → bolt off right (hero text tows in via CSS).
+    // Mobile: one-shot stand → bolt off right (hero text tows in via CSS, and the
+    // hero shakes in time with the gallop footfalls).
     var introTick = function (now) {
       if (t0 == null) { t0 = now; last = now; }
       var dt = Math.min(0.05, (now - last) / 1000); last = now;
       var t = INTRO_T0 + (now - t0) / 1000;               // one-shot, not modulo
       var freq = (t >= 3 && t < 4) ? 0.7 : (t >= 4 ? 1.9 : 0);
       phase += freq * dt;
-      render(refs, computeBear(t, phase, mobileAnchors(host)));
-      if (t >= INTRO_END) { stop(); setBearHidden(true); return; }
+      var anchors = mobileAnchors(host);
+      var bear = computeBear(t, phase, anchors);
+      render(refs, bear);
+      // ground shake: footfall-synced jolt, ramped by the gallop, faded as it exits
+      var gallop = (t < 3) ? 0 : (t < 4 ? ease(t - 3) : 1);
+      var xR = anchors.offRX - 40;                         // visible right edge (vb units)
+      var presence = clamp((xR + 4 - bear.cx) / 24, 0, 1); // 1 on-screen → 0 once it leaves
+      var foot = phase * 2;                                // 2 footfalls per stride cycle
+      var u = foot - Math.floor(foot);
+      applyShake((1 - u) * (1 - u) * gallop * presence, foot);
+      if (t >= INTRO_END) { stop(); setBearHidden(true); heroEl.style.transform = ""; return; }
       rafId = requestAnimationFrame(introTick);
     };
     var startIntro = function () {
@@ -325,7 +346,6 @@
     // The mobile intro is driven by an IntersectionObserver so it plays the moment
     // the hero is actually on-screen (not lost in the initial paint) and replays
     // whenever the hero re-enters view.
-    var heroEl = host.closest(".landing-hero") || host;
     var io = null, inView = false, firstPlay = true;
     var retriggerTextTow = function () {        // restart the CSS .hero-body tow-in
       var hb = document.querySelector(".hero-body");
@@ -337,6 +357,7 @@
     var teardownObserver = function () {
       if (io) { io.disconnect(); io = null; }
       inView = false;
+      heroEl.style.transform = "";               // drop any leftover ground-shake
     };
     var setupObserver = function () {
       if (io) { return; }                       // already observing

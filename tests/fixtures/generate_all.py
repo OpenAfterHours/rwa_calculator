@@ -399,6 +399,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p827,
         ),
         (
+            "P8.53 / CCR-WWR-1 (orchestrator-ready WWR bundle — institution CQS 2 + full RawDataBundle)",
+            "ccr",
+            _generate_ccr_wwr1,
+        ),
+        (
             "CCR-A5 golden (single-name equity TRS, 1y, unmargined)",
             "ccr",
             _generate_ccr_a5,
@@ -2349,6 +2354,36 @@ def _generate_p827(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(fixtures_root)
         for mod in (
+            "ccr.wwr_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_wwr1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate CCR-WWR-1 orchestrator-ready bundle (Python-only — no persistent parquet output).
+
+    P8.53 / CCR-WWR-1 extends the P8.27 specific-WWR scenario with a full
+    RawDataBundle that PipelineOrchestrator.run_with_data can consume end-to-end:
+    counterparty CP_WWR_01 (institution, CQS 2) + external rating (S&P "A") +
+    empty traditional-lending frames + RawCCRBundle assembled from the P8.27
+    make_p827_* factories (2 trades, 1 NS, 0 margin agreements, 0 collateral).
+    The builder is Python-only; test-writer imports build_raw_data_bundle_ccr_wwr1()
+    directly rather than reading parquet.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.ccr_wwr1_builder import save_ccr_wwr1_fixtures
+
+        return save_ccr_wwr1_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.ccr_wwr1_builder",
             "ccr.wwr_builder",
             CCR_TRADE_BUILDER_MODULE,
             CCR_NETTING_SET_BUILDER_MODULE,

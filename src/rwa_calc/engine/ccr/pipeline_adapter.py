@@ -43,6 +43,8 @@ from rwa_calc.contracts.bundles import (
     TradeBundle,
 )
 from rwa_calc.contracts.config import CCRConfig
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import NETTING_SET_SCHEMA
 from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_commodity,
     compute_adjusted_notional_credit,
@@ -347,6 +349,16 @@ def _derivative_rows_to_exposures(
         )
     )
 
+    # Guarantee the Art. 291(5)(c) WWR LGD override column is present so the
+    # synthetic-row select below can surface it. ``apply_wwr_gate`` tags the
+    # synthetic NS with ``wwr_lgd_override = 1.0`` and the residual NS with
+    # null; when the gate did not run (no specific-WWR trades) ``ensure_columns``
+    # backfills the schema default (null) so the column rides the lazy plan
+    # unchanged. No-op when already present.
+    ns_frame = ensure_columns(
+        ns_frame, {"wwr_lgd_override": NETTING_SET_SCHEMA["wwr_lgd_override"]}
+    )
+
     # Replacement cost. Unmargined sets follow CRR Art. 275(1):
     #   RC = max(V - C, 0).
     # Margined sets follow CRR Art. 275(2):
@@ -383,6 +395,11 @@ def _derivative_rows_to_exposures(
             pl.lit("CCR_DERIVATIVE").alias("risk_type"),
             pl.col("netting_set_id").alias("source_netting_set_id"),
             pl.lit("sa_ccr").alias("ccr_method"),
+            # Surface the Art. 291(5)(c) WWR LGD override onto the exposure
+            # row: 1.0 for a specific-WWR synthetic NS, null otherwise. The
+            # downstream IRB consumer (deferred P8.31) reads this to apply
+            # LGD = 100%; SA-routed CCR rows carry it as an audit tag only.
+            pl.col("wwr_lgd_override"),
             # Preserve the SA-CCR component columns so downstream tests /
             # COREP exports can reconcile the EAD back to RC + PFE without
             # re-running the chain.

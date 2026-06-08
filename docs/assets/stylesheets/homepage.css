@@ -381,6 +381,22 @@ body:has(.landing-hero) {
   .meta-row { flex-wrap: wrap; gap: 16px 20px; }
   .meta-divider { display: none; }
   .hero-footer .footer-meta { display: none; }
+
+  /* Bear-tows-text intro. On phones the constellation bear (bear-constellation.js)
+     stands centred, then bolts off the right edge, and the hero copy is pulled in
+     from the left in the same beat — so the bear never sits behind the full-width
+     text. Pure-CSS auto-play; fill-mode `both` applies the hidden 0% state from the
+     first painted frame (no flash, no JS arming). Keep timing in sync with the JS
+     INTRO_T0/INTRO_END: duration = INTRO_END - INTRO_T0 (5s), hold % =
+     (4 - INTRO_T0) / (INTRO_END - INTRO_T0) (50%). */
+  @keyframes bear-tow-in {
+    0%, 50% { opacity: 0; transform: translateX(-110%); }  /* held while the bear stands */
+    100%    { opacity: 1; transform: translateX(0); }       /* towed in as the bear bolts */
+  }
+  .hero-body {
+    animation: bear-tow-in 5s var(--ease-std) both;
+    will-change: transform, opacity;
+  }
 }
 
 @media (min-width: 1600px) {
@@ -395,4 +411,5 @@ body:has(.landing-hero) {
 @media (prefers-reduced-motion: reduce) {
   .status-dot { animation: none; }
   .btn, .nav-links a, .copy-btn { transition: none; }
+  .hero-body { animation: none; }   /* show the hero copy immediately, no tow-in */
 }

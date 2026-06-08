@@ -89,8 +89,17 @@
   var INTRO_T0 = 1.5;       // intro start on the lifecycle clock (trims the stand)
   var INTRO_END = 6.5;      // intro end — bear has bolted off the right edge
 
+  // Mobile-intro pose geometry (viewBox units) — used by mobileAnchors to centre
+  // the bear's VISUAL extent (not its hip) and shrink it to fit a narrow band.
+  var QUAD_SPAN = 29;       // all-fours x-extent: tail (-3) .. snout (26)
+  var QUAD_FILL = 0.82;     // fraction of the visible band the all-fours pose fills
+  var STAND_MID = 5;        // visual x-midpoint of the standing pose (tail -3 .. frontPaw 13)
+  var QUAD_MID = 11.5;      // visual x-midpoint of the all-fours pose
+  var MIN_SCALE = 0.7;      // never shrink the bear below this on tiny screens
+
   function lerp(a, b, t) { return a + (b - a) * t; }
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   // Returns { pts, cx, cy, labelO } for time t and gallop phase. `a` is the
   // anchors object { standX, quadX, offRX, offLX, scale }: desktop passes the
@@ -241,9 +250,10 @@
     refs.label.setAttribute("opacity", bear.labelO);
   }
 
-  // Centre the stand at the viewBox midpoint (always inside the slice-visible
-  // band) and measure the visible right edge so the bear exits at the END of the
-  // gallop, not early. Used only by the small-screen one-shot intro.
+  // Frame the mobile intro: measure the slice-visible band, scale the bear to fit
+  // it, and centre each pose's VISUAL extent (not the hip — the bear reaches
+  // forward, so hip-centring pushes the head off the right edge as it drops to all
+  // fours). Used only by the small-screen one-shot intro.
   function mobileAnchors(host) {
     var rect = host.getBoundingClientRect();
     var W = rect.width, H = rect.height, xR = 101;        // sane phone default
@@ -251,8 +261,11 @@
       var cover = Math.max(W / VB_W, H / VB_H);            // slice = cover = max
       xR = VB_W / 2 + (W / cover) / 2;                     // visible right edge, vb units
     }
-    var standX = VB_W / 2;                                 // centred → fully visible
-    return { standX: standX, quadX: standX, offRX: xR + 40, offLX: standX, scale: SCALE };
+    var band = 2 * (xR - VB_W / 2);                        // visible width, centred on 80
+    var s = clamp(band * QUAD_FILL / QUAD_SPAN, MIN_SCALE, SCALE);
+    var standX = VB_W / 2 - STAND_MID * s;                 // centre the standing pose
+    var quadX = VB_W / 2 - QUAD_MID * s;                   // centre the all-fours pose
+    return { standX: standX, quadX: quadX, offRX: xR + 40, offLX: standX, scale: s };
   }
 
   function init() {
@@ -268,7 +281,7 @@
     var reduced = function () { return !!(mqReduced && mqReduced.matches); };
     var small = function () { return !!(mqSmall && mqSmall.matches); };
 
-    var rafId = null, t0 = null, last = null, phase = 0, introDone = false;
+    var rafId = null, t0 = null, last = null, phase = 0;
     var stop = function () { if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; } };
     var setBearHidden = function (hidden) {
       var d = hidden ? "none" : "";
@@ -301,22 +314,56 @@
       var freq = (t >= 3 && t < 4) ? 0.7 : (t >= 4 ? 1.9 : 0);
       phase += freq * dt;
       render(refs, computeBear(t, phase, mobileAnchors(host)));
-      if (t >= INTRO_END) { introDone = true; stop(); setBearHidden(true); return; }
+      if (t >= INTRO_END) { stop(); setBearHidden(true); return; }
       rafId = requestAnimationFrame(introTick);
     };
     var startIntro = function () {
-      introDone = false; setBearHidden(false); t0 = null; last = null; phase = 0;
+      stop(); setBearHidden(false); t0 = null; last = null; phase = 0;
       rafId = requestAnimationFrame(introTick);
+    };
+
+    // The mobile intro is driven by an IntersectionObserver so it plays the moment
+    // the hero is actually on-screen (not lost in the initial paint) and replays
+    // whenever the hero re-enters view.
+    var heroEl = host.closest(".landing-hero") || host;
+    var io = null, inView = false, firstPlay = true;
+    var retriggerTextTow = function () {        // restart the CSS .hero-body tow-in
+      var hb = document.querySelector(".hero-body");
+      if (!hb) { return; }
+      hb.style.animation = "none";
+      void hb.offsetWidth;                      // force reflow so it can restart
+      hb.style.animation = "";                   // resume the stylesheet animation
+    };
+    var teardownObserver = function () {
+      if (io) { io.disconnect(); io = null; }
+      inView = false;
+    };
+    var setupObserver = function () {
+      if (io) { return; }                       // already observing
+      if (!("IntersectionObserver" in window)) { startIntro(); return; } // old browser
+      io = new IntersectionObserver(function (entries) {
+        var vis = entries[entries.length - 1].isIntersecting;
+        if (vis && !inView) {
+          inView = true;
+          startIntro();                          // bear: stand → bolt off (the bounce)
+          if (!firstPlay) { retriggerTextTow(); } // first paint: CSS auto-plays the text;
+          firstPlay = false;                      //   re-entries: JS re-tows it in sync
+        } else if (!vis) {
+          inView = false;                         // left view → arm replay on return
+        }
+      }, { threshold: 0.5 });
+      io.observe(heroEl);
     };
 
     var update = function () {
       if (small()) {
-        stop();
-        if (reduced()) { setBearHidden(true); return; }   // no bear, starfield only
-        if (!introDone) { startIntro(); } else { setBearHidden(true); }
+        if (reduced()) { teardownObserver(); stop(); setBearHidden(true); return; }
+        setBearHidden(true);                      // hide until the observer fires (no flash)
+        setupObserver();                          // observer drives play + replay
         return;
       }
-      setBearHidden(false);                                // desktop
+      teardownObserver();                          // desktop
+      setBearHidden(false);
       if (reduced()) { stop(); render(refs, computeBear(0, 0, DESKTOP)); return; }
       startLoop();
     };

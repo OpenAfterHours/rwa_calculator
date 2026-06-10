@@ -7,7 +7,7 @@ CRR Art. 306 and Art. 307:
     CCR-B1a (is_qccp=True,  is_client_cleared=False) → risk_weight = 0.02
     CCR-B1b (is_qccp=True,  is_client_cleared=True)  → risk_weight = 0.04
     CCR-B1c (is_qccp=False, is_client_cleared=False)  → risk_weight = NULL
-             (pass-through to SA institution path — 0.20 applied downstream)
+             (pass-through to SA institution path — 0.50 applied downstream for CQS-2)
 
 Load-bearing invariant: EAD must not be mutated by apply_ccp_risk_weight.
 
@@ -168,7 +168,7 @@ def test_ccr_b1b_qccp_client_cleared_risk_weight() -> None:
 def test_ccr_b1c_non_qccp_risk_weight_is_null() -> None:
     """Non-QCCP counterparty: apply_ccp_risk_weight must return NULL risk_weight.
 
-    The 0.20 SA-Institution weight for CQS-1 is applied by the downstream
+    The 0.50 SA-Institution weight for CQS-2 is applied by the downstream
     SA classifier (P8.30), NOT by ccp.py.  The CCP module signals pass-through
     with NULL so the routing layer knows to invoke the SA path.
 
@@ -180,7 +180,7 @@ def test_ccr_b1c_non_qccp_risk_weight_is_null() -> None:
         apply_ccp_risk_weight(exposures, counterparties, trades) -> LazyFrame.
 
     Assert:
-        risk_weight is NULL (None) — not 0.20.
+        risk_weight is NULL (None) — not 0.50.
 
     References: CRR Art. 107(2)(a) — routing to SA institution handled elsewhere.
     """
@@ -207,7 +207,7 @@ def test_ccr_b1c_non_qccp_risk_weight_is_null() -> None:
     assert actual_rw is None, (
         f"CCR-B1c (is_qccp=False, is_client_cleared=False): "
         f"expected risk_weight=NULL (non-QCCP pass-through to SA path), got {actual_rw!r}. "
-        "apply_ccp_risk_weight must NOT apply 0.20 — that is the SA-Institution CQS-1 weight "
+        "apply_ccp_risk_weight must NOT apply 0.50 — that is the SA-Institution CQS-2 weight "
         "applied downstream by the classifier (P8.30). CRR Art. 107(2)(a)."
     )
 

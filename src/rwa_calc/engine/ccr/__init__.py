@@ -57,9 +57,11 @@ from rwa_calc.engine.ccr.supervisory_delta import (  # noqa: E402
     compute_supervisory_delta_linear,
     compute_supervisory_delta_option,
 )
+from rwa_calc.engine.ccr.wwr import apply_wwr_gate  # noqa: E402
 
 __all__ = [
     "apply_legal_enforceability_gate",
+    "apply_wwr_gate",
     "assign_hedging_set",
     "assign_ir_maturity_bucket",
     "ccr_rows_to_exposures",

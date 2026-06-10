@@ -393,7 +393,7 @@ def test_valid_risk_types_input_length_is_nine() -> None:
 #   CRR Art. 280a / 280b — is_index discriminator
 # ===========================================================================
 
-_P8_35_EXPECTED_COLUMN_COUNT = 29  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality)
+_P8_35_EXPECTED_COLUMN_COUNT = 30  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
 
@@ -581,12 +581,13 @@ def test_trade_schema_commodity_type_value_constraint_has_five_buckets() -> None
 
 
 def test_trade_schema_column_count_includes_credit_quality() -> None:
-    """TRADE_SCHEMA must have exactly 29 columns after P8.35 adds credit_quality.
+    """TRADE_SCHEMA must have exactly 30 columns (P8.35 credit_quality + P8.29 is_legacy_cva_exempt).
 
     Baseline (pre-P8.33): 23 columns.
     P8.33 adds: market_price, number_of_units, reference_entity, commodity_type, is_index.
     P8.35 adds: credit_quality.
-    Expected total: 29.
+    P8.29 adds: is_legacy_cva_exempt (PRA PS1/26 Art. 274(2A) transitional alpha add-on).
+    Expected total: 30.
     """
     # Arrange
     schema = _get_schema("TRADE_SCHEMA")

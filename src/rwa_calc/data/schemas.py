@@ -408,6 +408,13 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # trade-exposure RW (and the Art. 307 4% client-cleared route). Defaults
     # to False so pre-existing fixtures route to the non-QCCP / SA fallback.
     "is_qccp": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 274(2) second sub-paragraph: SA-CCR supervisory-alpha discriminator.
+    # "financial" (default) → alpha = 1.4; "non_financial" (EMIR Art. 2(9)),
+    # "pension_scheme" (EMIR Art. 2(10)) and "pension_default_comp" → alpha = 1.0
+    # carve-out. Read by engine/ccr/pipeline_adapter.py to compute the per-row
+    # ``alpha_applied`` scalar. Defaults to "financial" so pre-existing CCR
+    # fixtures (which never set this column) keep the standard alpha = 1.4.
+    "counterparty_type": ColumnSpec(pl.String, default="financial", required=False),
 }
 
 COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
@@ -930,6 +937,16 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # null for non-credit rows (IR / FX / equity / commodity). Keyed by
     # COLUMN_VALUE_CONSTRAINTS["trades"]["credit_quality"] for input validation.
     "credit_quality": ColumnSpec(pl.String, required=False),
+    # PRA PS1/26 Art. 274(2A): firm-supplied legacy CVA-exemption flag. True
+    # when the trade was entered into prior to 1 Jan 2027 AND the counterparty
+    # is one of those listed in the CVA Risk Part 7.1(1)(a)/(b) (the
+    # non-financial / pension-scheme / intragroup CVA-exempt cohort). When True
+    # the netting set qualifies for the transitional alpha add-on (phased
+    # 60%/40%/20% of the (α=1.4 − α=1.0) × (RC+PFE) uplift across 2027-2029).
+    # Conservative default False — pre-2027 fixtures and the Python-bundle path
+    # see no transitional add-on. See SA_CCR_TRANSITIONAL_ADDON_PHASE in
+    # data/tables/sa_ccr_factors.py.
+    "is_legacy_cva_exempt": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Netting-set-level input for SA-CCR. One row per netting set keyed by
@@ -1329,6 +1346,32 @@ VALID_PROTECTION_TYPES = {"guarantee", "credit_derivative"}
 
 VALID_SCRA_GRADES = {"A", "A_ENHANCED", "B", "C"}
 
+# CRR Art. 274(2) second sub-paragraph: the supervisory alpha carve-out
+# (alpha = 1.0 instead of the 1.4 default) applies to derivative netting sets
+# whose counterparty is a non-financial counterparty (EMIR Art. 2(9)), a
+# pension scheme arrangement (EMIR Art. 2(10)), or a pension-scheme
+# default-fund-contribution position. "financial" is the default — standard
+# alpha = 1.4. Consumed by engine/ccr/pipeline_adapter.py to select the per-row
+# ``alpha_applied`` scalar (see SA_CCR_ALPHA / SA_CCR_ALPHA_CARVE_OUT in
+# data/tables/sa_ccr_factors.py).
+VALID_CCR_COUNTERPARTY_TYPES = {
+    "financial",
+    "non_financial",
+    "pension_scheme",
+    "pension_default_comp",
+}
+
+# The subset of VALID_CCR_COUNTERPARTY_TYPES that qualifies for the CRR
+# Art. 274(2) alpha = 1.0 carve-out (non-financial / pension-scheme / pension
+# default-fund-contribution). "financial" is excluded — it keeps alpha = 1.4.
+# engine/ccr/pipeline_adapter.py membership-tests ``counterparty_type`` against
+# this set so the category strings are not inlined in engine scope.
+CCR_ALPHA_CARVE_OUT_COUNTERPARTY_TYPES = {
+    "non_financial",
+    "pension_scheme",
+    "pension_default_comp",
+}
+
 # P8.5 extension: "CCR_DERIVATIVE" / "CCR_SFT" tag exposures originated by
 # the SA-CCR pipeline (CRR Art. 271). They flow through the same exposure
 # row model as on-balance-sheet items but are routed into the dedicated CCR
@@ -1478,6 +1521,8 @@ COLUMN_VALUE_CONSTRAINTS: dict[str, dict[str, set[str]]] = {
     "counterparties": {
         "entity_type": VALID_ENTITY_TYPES,
         "scra_grade": VALID_SCRA_GRADES,
+        # CRR Art. 274(2) second sub-paragraph — SA-CCR alpha carve-out discriminator.
+        "counterparty_type": VALID_CCR_COUNTERPARTY_TYPES,
     },
     "collateral": {
         "collateral_type": VALID_COLLATERAL_TYPES,
@@ -1561,6 +1606,10 @@ HIERARCHY_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
     "cp_is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
     "cp_is_investment_grade": ColumnSpec(pl.Boolean, default=False, required=False),
     "cp_is_ccp_client_cleared": ColumnSpec(pl.Boolean, required=False),
+    # CRR Art. 272 Def (88) — qualifying-CCP flag. Gates the Art. 306(1) 2%/4%
+    # QCCP trade-exposure pin: only an explicit False demotes a ``ccp``
+    # entity_type to the standard institution ladder (Art. 107(2)(a)).
+    "cp_is_qccp": ColumnSpec(pl.Boolean, required=False),
     "cp_scra_grade": ColumnSpec(pl.String, required=False),
     "cp_sovereign_cqs": ColumnSpec(pl.Int32, required=False),
     "cp_local_currency": ColumnSpec(pl.String, required=False),

@@ -108,6 +108,57 @@ MF_MARGINED_DISPUTE_MULTIPLIER: int = 2
 
 
 # =============================================================================
+# SUPERVISORY ALPHA (CRR Art. 274(2))
+#
+# EAD = alpha * (RC + PFE). The default supervisory alpha is 1.4 (BCBS CRE52.1).
+# CRR Art. 274(2) second sub-paragraph applies an alpha = 1.0 carve-out where the
+# counterparty is a non-financial counterparty (EMIR Art. 2(9)), a pension scheme
+# arrangement (EMIR Art. 2(10)), or a pension-scheme default-fund-contribution
+# position. The per-row discriminator is the COUNTERPARTY_SCHEMA
+# ``counterparty_type`` column (see VALID_CCR_COUNTERPARTY_TYPES in schemas.py);
+# engine/ccr/pipeline_adapter.py joins it onto the netting-set frame to select
+# ``alpha_applied`` before compute_pfe.
+# =============================================================================
+
+#: CRR Art. 274(2) / BCBS CRE52.1 — default supervisory alpha.
+SA_CCR_ALPHA: Decimal = Decimal("1.4")
+
+#: CRR Art. 274(2) second sub-paragraph — alpha carve-out for non-financial /
+#: pension-scheme counterparties (EMIR Art. 2(9) / 2(10)).
+SA_CCR_ALPHA_CARVE_OUT: Decimal = Decimal("1.0")
+
+
+# =============================================================================
+# TRANSITIONAL ALPHA ADD-ON (PRA PS1/26 Art. 274(2A)-(2B)) — Basel 3.1 only
+#
+# Art. 274(2A): for netting sets whose trades were entered into prior to
+# 1 Jan 2027 with a counterparty listed in the CVA Risk Part 7.1(1)(a)/(b)
+# (the legacy CVA-exempt cohort, flagged via TRADE_SCHEMA.is_legacy_cva_exempt),
+# the firm must add a phased fraction of the alpha add-on to the exposure value.
+# The full alpha add-on is the difference between EAD computed with α=1.4 and
+# EAD computed with α=1.0:
+#     alpha_add_on = (SA_CCR_ALPHA − SA_CCR_ALPHA_CARVE_OUT) × (RC + PFE)
+#                  = 0.4 × (RC + PFE)
+# The transitional fraction phases out across the first three years and is zero
+# from 1 Jan 2030: 60% (2027) / 40% (2028) / 20% (2029) / 0% (2030+). Years not
+# present in the map resolve to 0 (no add-on). This provision is Basel 3.1 only;
+# CRR has no Art. 274(2A) equivalent so the add-on must never fire under CRR.
+#
+# Art. 274(2B): the transitional add-on is excluded from the leverage-ratio
+# exposure measure. Moot here — this engine exposes no leverage-ratio EAD path,
+# so there is nothing to bifurcate.
+# =============================================================================
+
+#: PRA PS1/26 Art. 274(2A) — transitional alpha add-on phase fractions keyed by
+#: reporting year. Years absent from the map (e.g. 2030+) resolve to 0.
+SA_CCR_TRANSITIONAL_ADDON_PHASE: dict[int, Decimal] = {
+    2027: Decimal("0.60"),
+    2028: Decimal("0.40"),
+    2029: Decimal("0.20"),
+}
+
+
+# =============================================================================
 # PFE MULTIPLIER FLOOR (CRR Art. 278(3))
 # =============================================================================
 

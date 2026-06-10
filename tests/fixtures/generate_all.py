@@ -389,7 +389,7 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p824,
         ),
         (
-            "P8.25 (QCCP trade exposure RW — CCR-B1a 2%, CCR-B1b 4%, CCR-B1c 20% SA fallback)",
+            "P8.25 (QCCP trade exposure RW — CCR-B1a 2%, CCR-B1b 4%, CCR-B1c 50% SA fallback CQS-2)",
             "ccr",
             _generate_p825,
         ),
@@ -397,6 +397,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P8.27 (CRR Art. 291 WWR identification — specific WWR break-out + LGD=100% override)",
             "ccr",
             _generate_p827,
+        ),
+        (
+            "P8.53 / CCR-WWR-1 (orchestrator-ready WWR bundle — institution CQS 2 + full RawDataBundle)",
+            "ccr",
+            _generate_ccr_wwr1,
         ),
         (
             "CCR-A5 golden (single-name equity TRS, 1y, unmargined)",
@@ -512,6 +517,26 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "P1.200 (B31 Art. 239(3) guarantee/CDS maturity-mismatch scaling wrongly gated on is_crr)",
             "p1_200",
             _generate_p1200,
+        ),
+        (
+            "P8.39 (CCR-CCP-1/CCP-2 orchestrator QCCP wiring — 2%/4% vs 50% anti-degenerate baseline)",
+            "ccr",
+            _generate_p839_ccp,
+        ),
+        (
+            "P8.28 (CCR-ALPHA-1/2/3 per-counterparty α=1.0 carve-out — non_financial/pension_scheme/financial)",
+            "ccr",
+            _generate_p828_alpha,
+        ),
+        (
+            "P8.29 (CCR-ALPHA-ADDON-1..4 transitional alpha add-on — PS1/26 Art. 274(2A) phasing)",
+            "ccr",
+            _generate_p829_addon,
+        ),
+        (
+            "P8.23 (CCR-LS-1/LS-1-CTRL long-settlement no-op regression pin — EAD invariant)",
+            "ccr",
+            _generate_p823_ls,
         ),
     ]
 
@@ -2357,6 +2382,36 @@ def _generate_p827(output_dir: Path) -> list[tuple[str, int]]:
             sys.modules.pop(mod, None)
 
 
+def _generate_ccr_wwr1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate CCR-WWR-1 orchestrator-ready bundle (Python-only — no persistent parquet output).
+
+    P8.53 / CCR-WWR-1 extends the P8.27 specific-WWR scenario with a full
+    RawDataBundle that PipelineOrchestrator.run_with_data can consume end-to-end:
+    counterparty CP_WWR_01 (institution, CQS 2) + external rating (S&P "A") +
+    empty traditional-lending frames + RawCCRBundle assembled from the P8.27
+    make_p827_* factories (2 trades, 1 NS, 0 margin agreements, 0 collateral).
+    The builder is Python-only; test-writer imports build_raw_data_bundle_ccr_wwr1()
+    directly rather than reading parquet.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.ccr_wwr1_builder import save_ccr_wwr1_fixtures
+
+        return save_ccr_wwr1_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.ccr_wwr1_builder",
+            "ccr.wwr_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
 def _generate_ccr_a5(output_dir: Path) -> list[tuple[str, int]]:
     """Generate CCR-A5 golden fixtures (single-name equity TRS, 1y, unmargined)."""
     # golden_ccr_a5 uses relative imports from the ccr package, so load it as
@@ -2764,6 +2819,123 @@ def _generate_p1200(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_200", None)
+
+
+def _generate_p828_alpha(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.28 α=1.0 carve-out bundles (Python-only — no persistent parquet output).
+
+    P8.28 / CCR-ALPHA-1, CCR-ALPHA-2, CCR-ALPHA-3 provide orchestrator-ready
+    RawDataBundles proving that applying per-counterparty α (1.0 for
+    non_financial/pension_scheme, 1.4 for financial) produces the correct EAD.
+    The supplementary 2-counterparty book regression-guards the keyed-join
+    in the counterparty→NS alpha lookup against cross-join fan-out.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p828_alpha_builder import save_p828_fixtures
+
+        return save_p828_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p828_alpha_builder",
+            CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p829_addon(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.29 transitional alpha add-on bundles (Python-only — no persistent parquet output).
+
+    P8.29 / CCR-ALPHA-ADDON-1..4 provide orchestrator-ready RawDataBundles proving
+    that the transitional alpha add-on (PRA PS1/26 Art. 274(2A)) fires correctly for
+    legacy CVA-exempt non-financial counterparties under Basel 3.1, phases over
+    2027/28/29, and is suppressed for non-legacy, financial, or CRR-framework scenarios.
+    The supplementary 2-NS book regression-guards the per-trade→per-NS
+    any(is_legacy_cva_exempt) collapse against cross-join fan-out.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p829_addon_builder import save_p829_fixtures
+
+        return save_p829_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p829_addon_builder",
+            CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p823_ls(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.23 long-settlement no-op regression-pin bundles (Python-only).
+
+    P8.23 / CCR-LS-1 and CCR-LS-1-CTRL provide two orchestrator-ready
+    RawDataBundles that are economically identical except for the
+    ``is_long_settlement`` flag.  The smoke-check verifies structural
+    invariants and the parity property (all trade fields identical except
+    trade_id, netting_set_id, is_long_settlement) so that the acceptance
+    test can rely on EAD(LS=True) == EAD(LS=False) by construction.
+
+    Regulatory basis: CRR Art. 271 / 272(2) / 279c(1) / 285 — the flag
+    is inert under SA-CCR (no bespoke MPOR floor for long-settlement).
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p823_ls_builder import save_p823_fixtures
+
+        return save_p823_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p823_ls_builder",
+            CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_p839_ccp(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Validate P8.39 CCP-wiring bundles (Python-only — no persistent parquet output).
+
+    P8.39 / CCR-CCP-1 and CCR-CCP-2 provide orchestrator-ready RawDataBundles
+    proving that apply_ccp_risk_weight, once wired into _run_ccr_stage, produces
+    2% / 4% RWs instead of the CQS-2 SA-Institution fallback of 50%.
+    The supplementary 2-counterparty book regression-guards the keyed-join in
+    apply_ccp_risk_weight against cross-join fan-out.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.p839_ccp_builder import save_p839_fixtures
+
+        return save_p839_fixtures()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.p839_ccp_builder",
+            "ccr.qccp_builder",
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
 
 
 def print_master_report(results: list[FixtureGroupResult], fixtures_dir: Path) -> None:

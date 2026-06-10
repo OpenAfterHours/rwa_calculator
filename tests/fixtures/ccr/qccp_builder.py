@@ -1,10 +1,11 @@
 """
-P8.25 fixture: QCCP trade exposure risk weight — three variants (CCR-B1a/b/c).
+P8.25 / P8.39 fixture: QCCP trade exposure risk weight — three variants (CCR-B1a/b/c)
+and orchestrator acceptance pair (CCR-CCP-1 / CCR-CCP-2).
 
 Pipeline position:
     fixture-builder output -> test-writer (tests/unit/ccr/test_qccp_risk_weight.py,
-        tests/acceptance/ccr/test_b1_qccp.py)
-    -> engine-implementer (engine/ccr/ccp.py)
+        tests/acceptance/ccr/test_b1_qccp.py, tests/acceptance/ccr/test_ccp_wiring.py)
+    -> engine-implementer (engine/ccr/ccp.py, pipeline.py CCR stage)
 
 Scenario design:
     One GBP interest-rate derivative (T-QCCP-01, notional GBP 100m, MtM 2m,
@@ -14,11 +15,17 @@ Scenario design:
     Three variants share an identical EAD (SA-CCR formula, Art. 274(2)) and
     differ only in the QCCP risk-weight branch:
 
-    | Variant   | is_qccp | is_client_cleared | rw   | Regulatory base          |
-    |-----------|---------|-------------------|------|--------------------------|
-    | CCR-B1a   | True    | False             | 2%   | CRR Art. 306(1)          |
-    | CCR-B1b   | True    | True              | 4%   | CRR Art. 307             |
-    | CCR-B1c   | False   | False             | 20%  | SA Institution CQS 1     |
+    | Variant      | is_qccp | is_client_cleared | rw   | Regulatory base                |
+    |--------------|---------|-------------------|------|--------------------------------|
+    | CCR-B1a      | True    | False             | 2%   | CRR Art. 306(1)(a)             |
+    | CCR-B1b      | True    | True              | 4%   | CRR Art. 306(1)(c) / Art. 307  |
+    | CCR-B1c      | False   | False             | 50%  | SA Institution CQS 2 (Table 3) |
+
+    P8.39 orchestrator pair (CCR-CCP-1 / CCR-CCP-2) reuses the same trade economics.
+    CCR-B1a == CCR-CCP-1; CCR-B1b == CCR-CCP-2.  The QCCP_INSTITUTION_CQS=2 value
+    is load-bearing for the anti-degenerate assertion: without wiring, both rows
+    fall to the SA-Institution ladder at 50% (CRR Art. 120(1) Table 3 CQS 2).
+    Ratios: 50%/2% = 25x (proprietary), 50%/4% = 12.5x (client-cleared).
 
     Hand-calculated EAD (Art. 274(2), alpha=1.4, unmargined, no collateral):
         V   = 2_000_000
@@ -49,11 +56,12 @@ persistent parquet files are written — test-writer imports the builder
 functions directly.
 
 References:
-    - CRR Art. 306(1) — 2% RW for clearing-member's own trade exposures to QCCP
-    - CRR Art. 306(4) — RWA = EAD × 2%
-    - CRR Art. 307  — 4% RW for client-cleared trades through clearing member
+    - CRR Art. 306(1)(a) — 2% RW for clearing-member's own trade exposures to QCCP
+    - CRR Art. 306(1)(c) — 4% RW for client-cleared trades through clearing member
+    - CRR Art. 306(4) — RWA = EAD × 2% / 4%
     - CRR Art. 272 Def (88) — qualified central counterparty (QCCP)
     - CRR Art. 107(2)(a) — other exposures to QCCP routed as institution (SA)
+    - CRR Art. 120(1) Table 3 — institution CQS 2 → 50% SA RW (anti-degenerate baseline)
     - BCBS CRE54.14 — 2% supervisory factor (proprietary trade exposures)
     - BCBS CRE54.15 — 4% supervisory factor (client-cleared trade exposures)
     - src/rwa_calc/data/schemas.py — COUNTERPARTY_SCHEMA, TRADE_SCHEMA,
@@ -108,7 +116,7 @@ QCCP_IS_MARGINED: bool = False  # unmargined, no CSA
 # --- Counterparty attributes ---
 QCCP_ENTITY_TYPE: str = "ccp"
 QCCP_COUNTRY_CODE: str = "GB"
-QCCP_INSTITUTION_CQS: int = 1  # CQS 1 → 20% SA institution RW for non-QCCP fallback
+QCCP_INSTITUTION_CQS: int = 2  # CQS 2 → 50% SA institution RW for non-QCCP fallback (anti-degenerate baseline, CRR Art. 120 Table 3)
 
 # --- Hand-calculated EAD (Art. 274(2), alpha=1.4) ---
 # RC  = max(2_000_000 - 0, 0) = 2_000_000
@@ -122,7 +130,7 @@ QCCP_EAD: float = 4_750_088.326134375  # authoritative expected value (rel=1e-9)
 # --- Risk weights per variant ---
 QCCP_RW_PROPRIETARY: float = 0.02  # CCR-B1a: Art. 306(1), CRE54.14
 QCCP_RW_CLIENT_CLEARED: float = 0.04  # CCR-B1b: Art. 307, CRE54.15
-QCCP_RW_SA_FALLBACK: float = 0.20  # CCR-B1c: SA institution CQS 1
+QCCP_RW_SA_FALLBACK: float = 0.50  # CCR-B1c: SA institution CQS 2 (CRR Art. 120 Table 3)
 
 # --- Expected RWA per variant ---
 QCCP_RWA_PROPRIETARY: float = QCCP_EAD * QCCP_RW_PROPRIETARY

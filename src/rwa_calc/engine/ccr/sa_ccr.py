@@ -71,12 +71,20 @@ def compute_ead(
     Returns:
         Input LazyFrame with a new ``ead_ccr: Float64`` column.
 
+    Per-row α (CRR Art. 274(2) second sub-paragraph): when an ``alpha_applied``
+    column is present (set to 1.0 for non-financial / pension-scheme
+    counterparties per the SA-CCR adapter) it is honoured per row; otherwise the
+    scalar ``config.alpha`` / 1.4 is used for every row (backward-compatible
+    default).
+
     References:
         CRR Art. 274(2); BCBS CRE52.
     """
     alpha_value = float(config.alpha) if config is not None else 1.4
+    has_alpha_col = "alpha_applied" in netting_sets.collect_schema().names()
+    alpha_expr = pl.col("alpha_applied") if has_alpha_col else pl.lit(alpha_value)
     return netting_sets.with_columns(
-        (pl.lit(alpha_value) * (pl.col("rc_unmargined") + pl.col("pfe_addon"))).alias("ead_ccr")
+        (alpha_expr * (pl.col("rc_unmargined") + pl.col("pfe_addon"))).alias("ead_ccr")
     )
 
 

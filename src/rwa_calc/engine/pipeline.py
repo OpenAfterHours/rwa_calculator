@@ -76,6 +76,7 @@ from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.errors import CalculationError
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,10 @@ class PipelineOrchestrator:
         # consumed when wiring the resolved lookup into ResolvedHierarchyBundle.
         self._securitisation_resolved: pl.LazyFrame | None = None
         self._errors: list[PipelineError] = []
+        # Per-run scratch — CCR-stage CalculationErrors (e.g. WWR gate CCR010/
+        # CCR011 diagnostics) that must reach the result bundle as raw
+        # CalculationErrors rather than being downgraded to PipelineError.
+        self._ccr_errors: list[CalculationError] = []
 
     # =========================================================================
     # Public API
@@ -245,6 +250,7 @@ class PipelineOrchestrator:
         """
         # Reset errors for new run
         self._errors = []
+        self._ccr_errors = []
 
         run_id, run_id_token = new_run_id()
         run_start = time.perf_counter()
@@ -343,10 +349,13 @@ class PipelineOrchestrator:
             # Stages 5-8: Calculation and aggregation
             result = self._run_calculators(crm_adjusted, config)
 
-            # Add loader validation errors and pipeline errors to result
+            # Add loader validation errors, CCR-stage diagnostics, and
+            # pipeline errors to result. CCR errors (e.g. WWR gate CCR010/
+            # CCR011) are raw CalculationErrors and join the same channel as
+            # loader CalculationErrors so they reach the result unchanged.
             loader_errors = list(data.errors) if data.errors else []
             pipeline_errors = [self._convert_pipeline_error(e) for e in self._errors]
-            extra_errors = loader_errors + pipeline_errors
+            extra_errors = loader_errors + self._ccr_errors + pipeline_errors
             if extra_errors:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
@@ -556,20 +565,37 @@ class PipelineOrchestrator:
             logger.debug("no CCR inputs - skipping SA-CCR stage")
             return resolved
 
-        from rwa_calc.engine.ccr import apply_legal_enforceability_gate, ccr_rows_to_exposures
+        from rwa_calc.engine.ccr import (
+            apply_legal_enforceability_gate,
+            apply_wwr_gate,
+            ccr_rows_to_exposures,
+        )
 
         try:
             with stage_timer(logger, "ccr_sa_ccr"):
                 # Apply the Art. 272(4) legal-enforceability gate first so
                 # non-enforceable netting sets are split into single-trade
-                # synthetic NSes before the EAD chain runs.
-                raw_ccr_gated = apply_legal_enforceability_gate(data.ccr)
+                # synthetic NSes before the EAD chain runs, then the
+                # Art. 291(4)-(5) WWR gate so specific-WWR trades break out
+                # into their own synthetic netting sets (LGD = 100%).
+                raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(data.ccr))
+                # Propagate the gates' CCR010/CCR011 diagnostics to the result
+                # bundle as raw CalculationErrors (not downgraded PipelineErrors).
+                self._ccr_errors = list(raw_ccr_gated.errors)
                 ccr_exposure_rows = ccr_rows_to_exposures(
                     raw_ccr_gated,
                     config.ccr,
                     config.reporting_date,
                     base_currency=config.base_currency,
                     fx_rates=data.fx_rates,
+                    # CRR Art. 274(2): the counterparty frame carries the
+                    # ``counterparty_type`` discriminator that selects the
+                    # per-NS supervisory alpha (1.0 carve-out vs 1.4 default).
+                    counterparties=data.counterparties,
+                    # PRA PS1/26 Art. 274(2A): the transitional alpha add-on is
+                    # Basel 3.1 only — gate it on the framework so it never
+                    # fires under CRR.
+                    is_basel_3_1=config.is_basel_3_1,
                 )
                 # Inherit the resolved counterparty rating columns onto each
                 # CCR synthetic row so the downstream SA Institution lookup

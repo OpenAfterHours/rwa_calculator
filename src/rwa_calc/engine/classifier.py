@@ -423,6 +423,12 @@ class ExposureClassifier:
         if "is_ccp_client_cleared" in cp_col_names:
             select_cols.append(pl.col("is_ccp_client_cleared").alias("cp_is_ccp_client_cleared"))
 
+        # QCCP flag (CRR Art. 272 Def (88)) — gates the Art. 306(1) 2%/4% trade
+        # exposure pin so a ``ccp`` entity_type with an explicit is_qccp=False
+        # falls through to the standard institution ladder (Art. 107(2)(a)).
+        if "is_qccp" in cp_col_names:
+            select_cols.append(pl.col("is_qccp").alias("cp_is_qccp"))
+
         # Currency mismatch (Basel 3.1 Art. 123B / CRE20.93)
         if "borrower_income_currency" in cp_col_names:
             select_cols.append(

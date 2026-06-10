@@ -1071,8 +1071,19 @@ def _prepare_risk_weight_lookup(
     # Named MDBs (mdb_named) bypass CQS entirely later — coalescing here is
     # harmless for them.
     is_mdb_class = upper == "MDB"
+    # CRR Art. 107(2)(a): a non-qualifying CCP counterparty (entity_type "ccp"
+    # demoted past the Art. 306(1) 2%/4% pin by cp_is_qccp=False) is treated as
+    # an ordinary institution. Its own ECAI rating is carried on the synthetic
+    # CCR row as ``cp_institution_cqs`` (the CCR adapter surfaces no top-level
+    # ``cqs``), so lift it into ``cqs`` here — mirroring the MDB treatment —
+    # so the Art. 120(1) Table 3 institution ladder resolves (e.g. CQS 2 -> 50%)
+    # instead of the unrated 100% fallback. Scoped to ``ccp`` entity_type with a
+    # null ``cqs`` so rated institutions and lending rows are untouched.
+    is_non_qccp_institution = (pl.col("cp_entity_type").fill_null("") == "ccp") & ~pl.col(
+        "cp_is_qccp"
+    ).fill_null(True)
     exposures = exposures.with_columns(
-        pl.when(is_mdb_class & pl.col("cqs").is_null())
+        pl.when((is_mdb_class | is_non_qccp_institution) & pl.col("cqs").is_null())
         .then(pl.col("cp_institution_cqs"))
         .otherwise(pl.col("cqs"))
         .alias("cqs")
@@ -1174,8 +1185,12 @@ def _apply_b31_risk_weight_overrides(
             & pl.col("cp_eca_score").is_not_null()
         )
         .then(_eca_meip_rw_expr())
-        # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
-        .when(pl.col("cp_entity_type") == "ccp")
+        # QCCP trade exposures (CRR Art. 306, CRE54.14-15). The 2%/4% pin is
+        # for QUALIFYING CCPs only (Art. 272 Def (88)): an explicit
+        # cp_is_qccp=False demotes a ``ccp`` entity_type to the standard
+        # institution ladder (Art. 107(2)(a)). An absent flag is treated as
+        # qualifying so legacy ``ccp`` rows keep the prescribed weight.
+        .when((pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True))
         .then(
             pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
             .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
@@ -1359,8 +1374,12 @@ def _apply_crr_risk_weight_overrides(
             & pl.col("cp_eca_score").is_not_null()
         )
         .then(_eca_meip_rw_expr())
-        # QCCP trade exposures (CRR Art. 306, CRE54.14-15).
-        .when(pl.col("cp_entity_type") == "ccp")
+        # QCCP trade exposures (CRR Art. 306, CRE54.14-15). The 2%/4% pin is
+        # for QUALIFYING CCPs only (Art. 272 Def (88)): an explicit
+        # cp_is_qccp=False demotes a ``ccp`` entity_type to the standard
+        # institution ladder (Art. 107(2)(a)). An absent flag is treated as
+        # qualifying so legacy ``ccp`` rows keep the prescribed weight.
+        .when((pl.col("cp_entity_type") == "ccp") & pl.col("cp_is_qccp").fill_null(True))
         .then(
             pl.when(pl.col("cp_is_ccp_client_cleared").fill_null(False))
             .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))

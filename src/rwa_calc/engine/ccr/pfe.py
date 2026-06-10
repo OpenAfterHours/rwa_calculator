@@ -88,11 +88,23 @@ def compute_pfe(
         - ``rc_unmargined: Float64``  — Art. 275(1) replacement cost.
         - ``ead_ccr: Float64``        — Art. 274(2) EAD at α = 1.4.
 
+    Per-row α (CRR Art. 274(2) second sub-paragraph): when the caller supplies
+    a per-netting-set ``alpha_applied`` column (the SA-CCR adapter sets it to
+    1.0 for non-financial / pension-scheme counterparties and 1.4 otherwise),
+    the EAD step honours it per row. When the column is absent the scalar
+    ``config.alpha`` / 1.4 is used for every row — this keeps the default path
+    backward-compatible with callers that do not supply ``alpha_applied``.
+
     References:
         CRR Art. 274(2); CRR Art. 275(1); CRR Art. 278(1)-(3);
         BCBS CRE52.20-23.
     """
     alpha_value = float(config.alpha) if config is not None else 1.4
+    # CRR Art. 274(2) second sub-paragraph: prefer the per-row carve-out scalar
+    # (``alpha_applied``) when the caller has joined it onto the frame; fall back
+    # to the scalar α for backward compatibility.
+    has_alpha_col = "alpha_applied" in netting_sets.collect_schema().names()
+    alpha_expr = pl.col("alpha_applied") if has_alpha_col else pl.lit(alpha_value)
     floor_f = float(PFE_MULTIPLIER_FLOOR_F)
     denom_coeff = float(PFE_AGGREGATE_DENOM_COEFF)
     one_minus_f = 1.0 - floor_f
@@ -120,7 +132,7 @@ def compute_pfe(
         .with_columns(
             (pl.col("pfe_multiplier") * pl.col("addon_aggregate")).alias("pfe_addon"),
         )
-        .with_columns((pl.lit(alpha_value) * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr"))
+        .with_columns((alpha_expr * (rc_for_ead + pl.col("pfe_addon"))).alias("ead_ccr"))
     )
 
 

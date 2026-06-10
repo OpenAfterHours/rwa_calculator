@@ -188,6 +188,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_investment_grade": pl.Series(np.zeros(n, dtype=bool)),
                 "is_ccp_client_cleared": pl.Series([None] * n, dtype=pl.Boolean),
                 "is_qccp": pl.Series(np.zeros(n, dtype=bool)),
+                "counterparty_type": pl.Series(["financial"] * n, dtype=pl.String),
                 "borrower_income_currency": pl.Series(income_currencies, dtype=pl.String),
                 "is_natural_person": pl.Series(ind_mask),
                 # Art. 124E(1)(b) qualifying-property count: null = unknown, so no

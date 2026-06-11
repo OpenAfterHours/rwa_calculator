@@ -117,6 +117,9 @@ from rwa_calc.data.schemas import (
 # can import everything from one module.  These are intentionally *not* shadowed
 # here — they remain the single source of truth in wwr_builder.py.
 from .wwr_builder import (
+    CCR010_ERROR_CODE,
+    CCR011_ERROR_CODE,
+    CP_WWR_01_REF,
     EXPECTED_CCR010_COUNT,
     EXPECTED_CCR011_COUNT,
     NS_WWR_01_ID,
@@ -124,17 +127,40 @@ from .wwr_builder import (
     T_NORMAL_01_ID,
     T_WWR_01_ID,
     WWR_LGD_OVERRIDE_VALUE,
-    CCR010_ERROR_CODE,
-    CCR010_REGULATORY_REF,
-    CCR011_ERROR_CODE,
-    CCR011_REGULATORY_REF,
-    CCR_WWR_SEVERITY,
-    CP_WWR_01_REF,
     make_p827_collateral,
     make_p827_margin_agreements,
     make_p827_netting_sets,
     make_p827_trades,
 )
+
+# Public surface re-exported for the orchestrator-gate test-writers. The WWR-gate
+# constants (SYNTHETIC_NS_ID, WWR_LGD_OVERRIDE_VALUE, EXPECTED_CCR0xx_COUNT,
+# CCR0xx_ERROR_CODE) keep their single source of truth in wwr_builder; listing
+# them here marks them as intentional re-exports (not unused imports).
+__all__ = [
+    "CCR010_ERROR_CODE",
+    "CCR011_ERROR_CODE",
+    "CCR_WWR1_COUNTERPARTY_REF",
+    "CCR_WWR1_COUNTRY_CODE",
+    "CCR_WWR1_ENTITY_TYPE",
+    "CCR_WWR1_EXPECTED_INSTITUTION_RW",
+    "CCR_WWR1_RATING_AGENCY",
+    "CCR_WWR1_RATING_CQS",
+    "CCR_WWR1_RATING_DATE",
+    "CCR_WWR1_RATING_REF",
+    "CCR_WWR1_RATING_TYPE",
+    "CCR_WWR1_RATING_VALUE",
+    "CP_WWR_01_REF",
+    "EXPECTED_CCR010_COUNT",
+    "EXPECTED_CCR011_COUNT",
+    "NS_WWR_01_ID",
+    "SYNTHETIC_NS_ID",
+    "T_NORMAL_01_ID",
+    "T_WWR_01_ID",
+    "WWR_LGD_OVERRIDE_VALUE",
+    "build_raw_data_bundle_ccr_wwr1",
+    "save_ccr_wwr1_fixtures",
+]
 
 # ---------------------------------------------------------------------------
 # CCR-WWR-1-specific counterparty / rating constants.
@@ -265,12 +291,8 @@ def _build_raw_ccr_bundle() -> RawCCRBundle:
     return RawCCRBundle(
         trades=TradeBundle(trades=make_p827_trades()),
         netting_sets=NettingSetBundle(netting_sets=make_p827_netting_sets()),
-        margin_agreements=MarginAgreementBundle(
-            margin_agreements=make_p827_margin_agreements()
-        ),
-        ccr_collateral=CCRCollateralBundle(
-            ccr_collateral=make_p827_collateral()
-        ),
+        margin_agreements=MarginAgreementBundle(margin_agreements=make_p827_margin_agreements()),
+        ccr_collateral=CCRCollateralBundle(ccr_collateral=make_p827_collateral()),
     )
 
 
@@ -388,18 +410,14 @@ def save_ccr_wwr1_fixtures() -> list[tuple[str, int]]:
             f"(got {wwr_row['asset_class'][0]!r})"
         )
     if wwr_row["is_specific_wwr"][0] is not True:
-        raise AssertionError(
-            f"CCR-WWR-1: {T_WWR_01_ID} is_specific_wwr must be True"
-        )
+        raise AssertionError(f"CCR-WWR-1: {T_WWR_01_ID} is_specific_wwr must be True")
     if wwr_row["underlying_reference"][0] != "CP_WWR_01_EQUITY":
         raise AssertionError(
             f"CCR-WWR-1: {T_WWR_01_ID} underlying_reference must be 'CP_WWR_01_EQUITY' "
             f"(got {wwr_row['underlying_reference'][0]!r})"
         )
     if wwr_row["netting_set_id"][0] != NS_WWR_01_ID:
-        raise AssertionError(
-            f"CCR-WWR-1: {T_WWR_01_ID} netting_set_id must be {NS_WWR_01_ID!r}"
-        )
+        raise AssertionError(f"CCR-WWR-1: {T_WWR_01_ID} netting_set_id must be {NS_WWR_01_ID!r}")
 
     # --- Invariant 4: T_NORMAL_01 checks ---
     normal_row = trades_df.filter(pl.col("trade_id") == T_NORMAL_01_ID)
@@ -411,9 +429,7 @@ def save_ccr_wwr1_fixtures() -> list[tuple[str, int]]:
             f"(got {normal_row['asset_class'][0]!r})"
         )
     if normal_row["is_specific_wwr"][0] is not False:
-        raise AssertionError(
-            f"CCR-WWR-1: {T_NORMAL_01_ID} is_specific_wwr must be False"
-        )
+        raise AssertionError(f"CCR-WWR-1: {T_NORMAL_01_ID} is_specific_wwr must be False")
 
     # --- Invariant 5: 1 netting-set row ---
     if ns_df.height != 1:
@@ -468,8 +484,7 @@ def save_ccr_wwr1_fixtures() -> list[tuple[str, int]]:
         raise AssertionError("CCR-WWR-1: rating counterparty_reference mismatch")
     if rating_df["cqs"][0] != CCR_WWR1_RATING_CQS:
         raise AssertionError(
-            f"CCR-WWR-1: rating cqs must be {CCR_WWR1_RATING_CQS} "
-            f"(got {rating_df['cqs'][0]!r})"
+            f"CCR-WWR-1: rating cqs must be {CCR_WWR1_RATING_CQS} (got {rating_df['cqs'][0]!r})"
         )
 
     # --- Invariant 12: zero margin-agreements rows ---

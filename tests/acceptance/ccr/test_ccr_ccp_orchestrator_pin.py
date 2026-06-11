@@ -79,8 +79,6 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.ccr.p839_ccp_builder import (
     P839_ANTI_DEGENERATE_RW,
-    P839_CP_NON_QCCP_REF,
-    P839_CP_QCCP_REF,
     P839_NS_NON_QCCP_ID,
     P839_RW_CLIENT_CLEARED,
     P839_RW_PROPRIETARY,
@@ -180,9 +178,7 @@ def ccp1_ccr_row(ccp1_result_bundle) -> dict:
     Fails clearly if the row is absent (pipeline returned no CCR rows).
     """
     df = ccp1_result_bundle.results.collect()
-    ccr_rows = df.filter(
-        pl.col("exposure_reference") == f"ccr__{QCCP_NS_ID}"
-    ).to_dicts()
+    ccr_rows = df.filter(pl.col("exposure_reference") == f"ccr__{QCCP_NS_ID}").to_dicts()
     assert len(ccr_rows) == 1, (
         f"CCR-CCP-1: expected exactly 1 CCR exposure row with "
         f"exposure_reference='ccr__{QCCP_NS_ID}', got {len(ccr_rows)}. "
@@ -201,9 +197,7 @@ def ccp2_ccr_row(ccp2_result_bundle) -> dict:
     Same netting set as CCR-CCP-1 — only the trade's is_client_cleared differs.
     """
     df = ccp2_result_bundle.results.collect()
-    ccr_rows = df.filter(
-        pl.col("exposure_reference") == f"ccr__{QCCP_NS_ID}"
-    ).to_dicts()
+    ccr_rows = df.filter(pl.col("exposure_reference") == f"ccr__{QCCP_NS_ID}").to_dicts()
     assert len(ccr_rows) == 1, (
         f"CCR-CCP-2: expected exactly 1 CCR exposure row with "
         f"exposure_reference='ccr__{QCCP_NS_ID}', got {len(ccr_rows)}. "
@@ -218,9 +212,7 @@ def ccp2_ccr_row(ccp2_result_bundle) -> dict:
 def two_cp_ccr_rows(two_cp_result_bundle) -> list[dict]:
     """Return all CCR exposure rows from the 2-counterparty result."""
     df = two_cp_result_bundle.results.collect()
-    return df.filter(
-        pl.col("exposure_reference").str.starts_with("ccr__")
-    ).to_dicts()
+    return df.filter(pl.col("exposure_reference").str.starts_with("ccr__")).to_dicts()
 
 
 # ---------------------------------------------------------------------------
@@ -449,9 +441,7 @@ class TestCCRCCP2ClientCleared:
             "apply_ccp_risk_weight must never mutate ead_ccr."
         )
 
-    def test_ccr_ccp2_ead_matches_ccp1_ead(
-        self, ccp1_ccr_row: dict, ccp2_ccr_row: dict
-    ) -> None:
+    def test_ccr_ccp2_ead_matches_ccp1_ead(self, ccp1_ccr_row: dict, ccp2_ccr_row: dict) -> None:
         """
         CCR-CCP-1 and CCR-CCP-2 must have identical ead_final.
 
@@ -539,9 +529,7 @@ class TestCCRCCPKeyedJoinGuard:
         - CRR Art. 120(1) Table 3 — 50% fallback for CQS-2 non-QCCP institution
     """
 
-    def test_two_cp_book_produces_exactly_two_ccr_rows(
-        self, two_cp_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_cp_book_produces_exactly_two_ccr_rows(self, two_cp_ccr_rows: list[dict]) -> None:
         """
         Exactly 2 CCR exposure rows must appear in the 2-counterparty book result.
 
@@ -578,9 +566,7 @@ class TestCCRCCPKeyedJoinGuard:
             "source_netting_set_id."
         )
 
-    def test_two_cp_book_qccp_row_risk_weight_is_002(
-        self, two_cp_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_cp_book_qccp_row_risk_weight_is_002(self, two_cp_ccr_rows: list[dict]) -> None:
         """
         QCCP netting set (NS-QCCP-01) must have risk_weight == 0.02.
 
@@ -645,8 +631,7 @@ class TestCCRCCPKeyedJoinGuard:
         """
         # Arrange: locate the non-QCCP NS row
         non_qccp_rows = [
-            r for r in two_cp_ccr_rows
-            if r["source_netting_set_id"] == P839_NS_NON_QCCP_ID
+            r for r in two_cp_ccr_rows if r["source_netting_set_id"] == P839_NS_NON_QCCP_ID
         ]
         assert len(non_qccp_rows) == 1, (
             f"CCR keyed-join guard: expected 1 row for NS {P839_NS_NON_QCCP_ID!r}, "
@@ -661,7 +646,7 @@ class TestCCRCCPKeyedJoinGuard:
             f"{P839_ANTI_DEGENERATE_RW} (SA-Institution CQS-2 fallback per "
             f"CRR Art. 120(1) Table 3, entity_type=ccp is_qccp=False), "
             f"got {actual_rw!r}. "
-            f"Without P8.39 wiring, the SA calculator's entity_type==\"ccp\" branch "
+            f'Without P8.39 wiring, the SA calculator\'s entity_type=="ccp" branch '
             f"applies {P839_RW_PROPRIETARY} (0.02) to ALL ccp-type CPs, ignoring "
             f"is_qccp=False. "
             "P8.39 fix: apply_ccp_risk_weight must use a keyed join on "

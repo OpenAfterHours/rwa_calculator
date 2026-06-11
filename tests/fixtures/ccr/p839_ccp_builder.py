@@ -80,8 +80,6 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
 import polars as pl
@@ -130,7 +128,7 @@ from .qccp_builder import (
     QCCP_TRADE_ID,
     QCCP_TRANSACTION_TYPE,
 )
-from .trade_builder import Trade, create_trades, make_trade
+from .trade_builder import create_trades, make_trade
 
 # ---------------------------------------------------------------------------
 # P8.39-specific constants.
@@ -252,15 +250,11 @@ def _build_raw_ccr_bundle(trades_df: pl.DataFrame, netting_sets_df: pl.DataFrame
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([]).lazy()
         ),
-        ccr_collateral=CCRCollateralBundle(
-            ccr_collateral=_build_empty_ccr_collateral().lazy()
-        ),
+        ccr_collateral=CCRCollateralBundle(ccr_collateral=_build_empty_ccr_collateral().lazy()),
     )
 
 
-def _build_empty_lending_frames() -> tuple[
-    pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame
-]:
+def _build_empty_lending_frames() -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Return zero-row facilities/loans/facility_mappings/lending_mappings LazyFrames."""
     return (
         pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
@@ -437,9 +431,7 @@ def _check_p839_single(bundle: RawDataBundle, scenario: str, expected_client_cle
     cp_df = bundle.counterparties.collect()
 
     if trades_df.height != 1:
-        raise AssertionError(
-            f"P8.39 {scenario}: expected 1 trade row, got {trades_df.height}"
-        )
+        raise AssertionError(f"P8.39 {scenario}: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != QCCP_TRADE_ID:
         raise AssertionError(
             f"P8.39 {scenario}: trade_id must be {QCCP_TRADE_ID!r} "
@@ -454,9 +446,7 @@ def _check_p839_single(bundle: RawDataBundle, scenario: str, expected_client_cle
         )
 
     if ns_df.height != 1:
-        raise AssertionError(
-            f"P8.39 {scenario}: expected 1 NS row, got {ns_df.height}"
-        )
+        raise AssertionError(f"P8.39 {scenario}: expected 1 NS row, got {ns_df.height}")
     if ns_df["netting_set_id"][0] != QCCP_NS_ID:
         raise AssertionError(
             f"P8.39 {scenario}: netting_set_id must be {QCCP_NS_ID!r} "
@@ -468,9 +458,7 @@ def _check_p839_single(bundle: RawDataBundle, scenario: str, expected_client_cle
         raise AssertionError(f"P8.39 {scenario}: NS is_margined must be False")
 
     if cp_df.height != 1:
-        raise AssertionError(
-            f"P8.39 {scenario}: expected 1 counterparty row, got {cp_df.height}"
-        )
+        raise AssertionError(f"P8.39 {scenario}: expected 1 counterparty row, got {cp_df.height}")
     if "is_qccp" not in cp_df.columns:
         raise AssertionError(f"P8.39 {scenario}: is_qccp column must be present on counterparty")
     if cp_df["is_qccp"][0] is not True:
@@ -503,15 +491,11 @@ def _check_p839_two_cp(bundle: RawDataBundle) -> None:
     coll_df = bundle.ccr.ccr_collateral.ccr_collateral.collect()
 
     if cp_df.height != 2:
-        raise AssertionError(
-            f"P8.39 2-CP book: expected 2 counterparty rows, got {cp_df.height}"
-        )
+        raise AssertionError(f"P8.39 2-CP book: expected 2 counterparty rows, got {cp_df.height}")
     cp_refs = cp_df["counterparty_reference"].to_list()
     for ref in [P839_CP_QCCP_REF, P839_CP_NON_QCCP_REF]:
         if ref not in cp_refs:
-            raise AssertionError(
-                f"P8.39 2-CP book: counterparty {ref!r} not found in {cp_refs}"
-            )
+            raise AssertionError(f"P8.39 2-CP book: counterparty {ref!r} not found in {cp_refs}")
 
     if "is_qccp" not in cp_df.columns:
         raise AssertionError("P8.39 2-CP book: is_qccp column must be present on counterparties")
@@ -523,13 +507,9 @@ def _check_p839_two_cp(bundle: RawDataBundle) -> None:
         raise AssertionError("P8.39 2-CP book: CP-NON-QCCP-01 is_qccp must be False")
 
     if trades_df.height != 2:
-        raise AssertionError(
-            f"P8.39 2-CP book: expected 2 trade rows, got {trades_df.height}"
-        )
+        raise AssertionError(f"P8.39 2-CP book: expected 2 trade rows, got {trades_df.height}")
     if ns_df.height != 2:
-        raise AssertionError(
-            f"P8.39 2-CP book: expected 2 netting-set rows, got {ns_df.height}"
-        )
+        raise AssertionError(f"P8.39 2-CP book: expected 2 netting-set rows, got {ns_df.height}")
     if margin_df.height != 0:
         raise AssertionError(
             f"P8.39 2-CP book: margin_agreements must be empty (got {margin_df.height})"

@@ -227,9 +227,7 @@ P828_RWA_FINANCIAL: float = 2_740_008.759
 # Private helpers — scenario-specific counterparty / entity-type mapping.
 # ---------------------------------------------------------------------------
 
-_CARVE_OUT_TYPES: frozenset[str] = frozenset(
-    {P828_CP_TYPE_NON_FINANCIAL, P828_CP_TYPE_PENSION}
-)
+_CARVE_OUT_TYPES: frozenset[str] = frozenset({P828_CP_TYPE_NON_FINANCIAL, P828_CP_TYPE_PENSION})
 
 _SCENARIO_MAP: dict[str, tuple[str, str, str, str, str]] = {
     # counterparty_type → (cp_ref, ns_id, trade_id, entity_type, name)
@@ -344,15 +342,11 @@ def _build_raw_ccr_bundle(trades_df: pl.DataFrame, netting_sets_df: pl.DataFrame
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([]).lazy()
         ),
-        ccr_collateral=CCRCollateralBundle(
-            ccr_collateral=_build_empty_ccr_collateral().lazy()
-        ),
+        ccr_collateral=CCRCollateralBundle(ccr_collateral=_build_empty_ccr_collateral().lazy()),
     )
 
 
-def _build_empty_lending_frames() -> tuple[
-    pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame
-]:
+def _build_empty_lending_frames() -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Return zero-row facilities/loans/facility_mappings/lending_mappings LazyFrames."""
     return (
         pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
@@ -511,11 +505,39 @@ def save_p828_fixtures() -> list[tuple[str, int]]:
         ``[("(python-only builder — no parquet)", 0)]``
     """
     scenarios = [
-        (P828_CP_TYPE_NON_FINANCIAL, "CCR-ALPHA-1", P828_CP_NFC_REF, P828_NS_NFC_ID, P828_TRADE_NFC_ID, "corporate"),
-        (P828_CP_TYPE_PENSION,       "CCR-ALPHA-2", P828_CP_PENSION_REF, P828_NS_PENSION_ID, P828_TRADE_PENSION_ID, "corporate"),
-        (P828_CP_TYPE_FINANCIAL,     "CCR-ALPHA-3", P828_CP_FIN_REF, P828_NS_FIN_ID, P828_TRADE_FIN_ID, "institution"),
+        (
+            P828_CP_TYPE_NON_FINANCIAL,
+            "CCR-ALPHA-1",
+            P828_CP_NFC_REF,
+            P828_NS_NFC_ID,
+            P828_TRADE_NFC_ID,
+            "corporate",
+        ),
+        (
+            P828_CP_TYPE_PENSION,
+            "CCR-ALPHA-2",
+            P828_CP_PENSION_REF,
+            P828_NS_PENSION_ID,
+            P828_TRADE_PENSION_ID,
+            "corporate",
+        ),
+        (
+            P828_CP_TYPE_FINANCIAL,
+            "CCR-ALPHA-3",
+            P828_CP_FIN_REF,
+            P828_NS_FIN_ID,
+            P828_TRADE_FIN_ID,
+            "institution",
+        ),
     ]
-    for cp_type, scenario, expected_cp_ref, expected_ns_id, expected_trade_id, expected_entity in scenarios:
+    for (
+        cp_type,
+        scenario,
+        expected_cp_ref,
+        expected_ns_id,
+        expected_trade_id,
+        expected_entity,
+    ) in scenarios:
         bundle = build_p828_bundle(cp_type)
         _check_p828_single(
             bundle,
@@ -554,9 +576,7 @@ def _check_p828_single(
 
     # Trade checks.
     if trades_df.height != 1:
-        raise AssertionError(
-            f"P8.28 {scenario}: expected 1 trade row, got {trades_df.height}"
-        )
+        raise AssertionError(f"P8.28 {scenario}: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != expected_trade_id:
         raise AssertionError(
             f"P8.28 {scenario}: trade_id must be {expected_trade_id!r} "
@@ -565,9 +585,7 @@ def _check_p828_single(
 
     # Netting-set checks.
     if ns_df.height != 1:
-        raise AssertionError(
-            f"P8.28 {scenario}: expected 1 NS row, got {ns_df.height}"
-        )
+        raise AssertionError(f"P8.28 {scenario}: expected 1 NS row, got {ns_df.height}")
     if ns_df["netting_set_id"][0] != expected_ns_id:
         raise AssertionError(
             f"P8.28 {scenario}: netting_set_id must be {expected_ns_id!r} "
@@ -581,9 +599,7 @@ def _check_p828_single(
 
     # Counterparty checks.
     if cp_df.height != 1:
-        raise AssertionError(
-            f"P8.28 {scenario}: expected 1 counterparty row, got {cp_df.height}"
-        )
+        raise AssertionError(f"P8.28 {scenario}: expected 1 counterparty row, got {cp_df.height}")
     if "counterparty_type" not in cp_df.columns:
         raise AssertionError(
             f"P8.28 {scenario}: counterparty_type column must be present on counterparty frame"
@@ -598,12 +614,14 @@ def _check_p828_single(
             f"P8.28 {scenario}: entity_type must be {expected_entity_type!r} "
             f"(got {cp_df['entity_type'][0]!r})"
         )
-    if expected_cp_type == P828_CP_TYPE_FINANCIAL:
-        if cp_df["institution_cqs"][0] != P828_INSTITUTION_CQS:
-            raise AssertionError(
-                f"P8.28 {scenario}: institution_cqs must be {P828_INSTITUTION_CQS} "
-                f"(got {cp_df['institution_cqs'][0]!r})"
-            )
+    if (
+        expected_cp_type == P828_CP_TYPE_FINANCIAL
+        and cp_df["institution_cqs"][0] != P828_INSTITUTION_CQS
+    ):
+        raise AssertionError(
+            f"P8.28 {scenario}: institution_cqs must be {P828_INSTITUTION_CQS} "
+            f"(got {cp_df['institution_cqs'][0]!r})"
+        )
 
     # Empty frame checks.
     if margin_df.height != 0:
@@ -628,9 +646,7 @@ def _check_p828_two_cp(bundle: RawDataBundle) -> None:
     coll_df = bundle.ccr.ccr_collateral.ccr_collateral.collect()
 
     if cp_df.height != 2:
-        raise AssertionError(
-            f"P8.28 2-CP book: expected 2 counterparty rows, got {cp_df.height}"
-        )
+        raise AssertionError(f"P8.28 2-CP book: expected 2 counterparty rows, got {cp_df.height}")
 
     if "counterparty_type" not in cp_df.columns:
         raise AssertionError("P8.28 2-CP book: counterparty_type column must be present")
@@ -643,20 +659,15 @@ def _check_p828_two_cp(bundle: RawDataBundle) -> None:
             )
 
     if trades_df.height != 2:
-        raise AssertionError(
-            f"P8.28 2-CP book: expected 2 trade rows, got {trades_df.height}"
-        )
+        raise AssertionError(f"P8.28 2-CP book: expected 2 trade rows, got {trades_df.height}")
     if ns_df.height != 2:
-        raise AssertionError(
-            f"P8.28 2-CP book: expected 2 netting-set rows, got {ns_df.height}"
-        )
+        raise AssertionError(f"P8.28 2-CP book: expected 2 netting-set rows, got {ns_df.height}")
 
     # Cross-join fan-out guard.
     ns_ids = ns_df["netting_set_id"].to_list()
     if len(ns_ids) != len(set(ns_ids)):
         raise AssertionError(
-            f"P8.28 2-CP book: duplicate netting_set_id detected "
-            f"(cross-join fan-out?): {ns_ids}"
+            f"P8.28 2-CP book: duplicate netting_set_id detected (cross-join fan-out?): {ns_ids}"
         )
 
     if margin_df.height != 0:

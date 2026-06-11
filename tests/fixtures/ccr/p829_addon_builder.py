@@ -198,12 +198,12 @@ P829_ADDON_FULL: float = 1_565_719.2912
 P829_EAD_2027: float = 4_853_729.80272  # phase=0.6, factor=1.24
 P829_EAD_2028: float = 4_540_585.94448  # phase=0.4, factor=1.16
 P829_EAD_2029: float = 4_227_442.08624  # phase=0.2, factor=1.08
-P829_EAD_2030: float = 3_914_298.228    # phase=0.0, factor=1.00
+P829_EAD_2030: float = 3_914_298.228  # phase=0.0, factor=1.00
 
 # Transitional add-on amounts = phase × P829_ADDON_FULL:
-P829_ADDON_2027: float = 939_431.57472   # 0.6 × 1_565_719.2912
-P829_ADDON_2028: float = 626_287.71648   # 0.4 × 1_565_719.2912
-P829_ADDON_2029: float = 313_143.85824   # 0.2 × 1_565_719.2912
+P829_ADDON_2027: float = 939_431.57472  # 0.6 × 1_565_719.2912
+P829_ADDON_2028: float = 626_287.71648  # 0.4 × 1_565_719.2912
+P829_ADDON_2029: float = 313_143.85824  # 0.2 × 1_565_719.2912
 
 #: Institution CQS for the financial control counterparty (CQS 2 → 50% RW).
 _P829_INSTITUTION_CQS: int = CCR_A1_RATING_CQS  # 2
@@ -309,9 +309,7 @@ def _build_trade(
         mtm_value=CCR_A1_MTM,
     )
     trades_df = create_trades([trade])
-    return trades_df.with_columns(
-        pl.lit(is_legacy_cva_exempt).alias("is_legacy_cva_exempt")
-    )
+    return trades_df.with_columns(pl.lit(is_legacy_cva_exempt).alias("is_legacy_cva_exempt"))
 
 
 def _build_netting_set(netting_set_id: str, cp_ref: str) -> pl.DataFrame:
@@ -341,15 +339,11 @@ def _build_raw_ccr_bundle(
         margin_agreements=MarginAgreementBundle(
             margin_agreements=create_margin_agreements([]).lazy()
         ),
-        ccr_collateral=CCRCollateralBundle(
-            ccr_collateral=_build_empty_ccr_collateral().lazy()
-        ),
+        ccr_collateral=CCRCollateralBundle(ccr_collateral=_build_empty_ccr_collateral().lazy()),
     )
 
 
-def _build_empty_lending_frames() -> tuple[
-    pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame
-]:
+def _build_empty_lending_frames() -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Return zero-row facilities/loans/facility_mappings/lending_mappings LazyFrames."""
     return (
         pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
@@ -508,12 +502,46 @@ def save_p829_fixtures() -> list[tuple[str, int]]:
     """
     scenarios: list[tuple[str, bool, str, str, str, str, int | None]] = [
         # (cp_type, legacy, scenario_label, cp_ref, ns_id, trade_id, entity_type, institution_cqs)
-        ("non_financial", True,  "ADDON-1", P829_CP_NFC_ADDON1_REF, P829_NS_NFC_LEGACY_ID, P829_TRADE_NFC_LEGACY_ID, "corporate",    None),
-        ("non_financial", False, "ADDON-2", P829_CP_NFC_ADDON2_REF, P829_NS_NFC_NONLEG_ID, P829_TRADE_NFC_NONLEG_ID, "corporate",    None),
-        ("financial",     True,  "ADDON-3", P829_CP_FIN_ADDON3_REF, P829_NS_FIN_LEGACY_ID, P829_TRADE_FIN_LEGACY_ID, "institution",  _P829_INSTITUTION_CQS),
+        (
+            "non_financial",
+            True,
+            "ADDON-1",
+            P829_CP_NFC_ADDON1_REF,
+            P829_NS_NFC_LEGACY_ID,
+            P829_TRADE_NFC_LEGACY_ID,
+            "corporate",
+            None,
+        ),
+        (
+            "non_financial",
+            False,
+            "ADDON-2",
+            P829_CP_NFC_ADDON2_REF,
+            P829_NS_NFC_NONLEG_ID,
+            P829_TRADE_NFC_NONLEG_ID,
+            "corporate",
+            None,
+        ),
+        (
+            "financial",
+            True,
+            "ADDON-3",
+            P829_CP_FIN_ADDON3_REF,
+            P829_NS_FIN_LEGACY_ID,
+            P829_TRADE_FIN_LEGACY_ID,
+            "institution",
+            _P829_INSTITUTION_CQS,
+        ),
     ]
     for (
-        cp_type, legacy, label, exp_cp_ref, exp_ns_id, exp_trade_id, exp_entity, exp_cqs
+        cp_type,
+        legacy,
+        label,
+        exp_cp_ref,
+        exp_ns_id,
+        exp_trade_id,
+        exp_entity,
+        exp_cqs,
     ) in scenarios:
         bundle = build_p829_bundle(cp_type, legacy)
         _check_p829_single(
@@ -562,8 +590,7 @@ def _check_p829_single(
         raise AssertionError(f"{prefix}: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != expected_trade_id:
         raise AssertionError(
-            f"{prefix}: trade_id must be {expected_trade_id!r} "
-            f"(got {trades_df['trade_id'][0]!r})"
+            f"{prefix}: trade_id must be {expected_trade_id!r} (got {trades_df['trade_id'][0]!r})"
         )
 
     # is_legacy_cva_exempt column check.
@@ -605,7 +632,9 @@ def _check_p829_single(
     if cp_df.height != 1:
         raise AssertionError(f"{prefix}: expected 1 counterparty row, got {cp_df.height}")
     if "counterparty_type" not in cp_df.columns:
-        raise AssertionError(f"{prefix}: counterparty_type column must be present on counterparty frame")
+        raise AssertionError(
+            f"{prefix}: counterparty_type column must be present on counterparty frame"
+        )
     if cp_df["counterparty_type"][0] != expected_cp_type:
         raise AssertionError(
             f"{prefix}: counterparty_type must be {expected_cp_type!r} "
@@ -631,13 +660,9 @@ def _check_p829_single(
 
     # Empty frame checks.
     if margin_df.height != 0:
-        raise AssertionError(
-            f"{prefix}: margin_agreements must be empty (got {margin_df.height})"
-        )
+        raise AssertionError(f"{prefix}: margin_agreements must be empty (got {margin_df.height})")
     if coll_df.height != 0:
-        raise AssertionError(
-            f"{prefix}: ccr_collateral must be empty (got {coll_df.height})"
-        )
+        raise AssertionError(f"{prefix}: ccr_collateral must be empty (got {coll_df.height})")
 
 
 def _check_p829_two_ns(bundle: RawDataBundle) -> None:

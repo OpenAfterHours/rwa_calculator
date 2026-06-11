@@ -120,11 +120,11 @@ from rwa_calc.data.schemas import (
 )
 
 from .golden_ccr_a1 import (
+    CCR_A1_RATING_AGENCY,
     CCR_A1_RATING_CQS,
     CCR_A1_RATING_DATE,
-    CCR_A1_RATING_VALUE,
-    CCR_A1_RATING_AGENCY,
     CCR_A1_RATING_TYPE,
+    CCR_A1_RATING_VALUE,
 )
 from .margin_builder import create_margin_agreements
 from .netting_set_builder import create_netting_sets, make_netting_set
@@ -262,9 +262,7 @@ def _build_raw_ccr_bundle(trades_df: pl.DataFrame, netting_sets_df: pl.DataFrame
     )
 
 
-def _build_empty_lending_frames() -> tuple[
-    pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame
-]:
+def _build_empty_lending_frames() -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Return zero-row facilities/loans/facility_mappings/lending_mappings LazyFrames."""
     return (
         pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
@@ -359,10 +357,20 @@ def save_p823_fixtures() -> list[tuple[str, int]]:
     bundle_ls = build_p823_bundle(is_long_settlement=True)
     bundle_ctrl = build_p823_bundle(is_long_settlement=False)
 
-    _check_p823_single(bundle_ls, scenario="CCR-LS-1", expected_trade_id=P823_TRADE_LS_ID,
-                       expected_ns_id=P823_NS_LS_ID, expected_is_ls=True)
-    _check_p823_single(bundle_ctrl, scenario="CCR-LS-1-CTRL", expected_trade_id=P823_TRADE_CTRL_ID,
-                       expected_ns_id=P823_NS_CTRL_ID, expected_is_ls=False)
+    _check_p823_single(
+        bundle_ls,
+        scenario="CCR-LS-1",
+        expected_trade_id=P823_TRADE_LS_ID,
+        expected_ns_id=P823_NS_LS_ID,
+        expected_is_ls=True,
+    )
+    _check_p823_single(
+        bundle_ctrl,
+        scenario="CCR-LS-1-CTRL",
+        expected_trade_id=P823_TRADE_CTRL_ID,
+        expected_ns_id=P823_NS_CTRL_ID,
+        expected_is_ls=False,
+    )
     _check_p823_parity(bundle_ls, bundle_ctrl)
 
     return [("(python-only builder — no parquet)", 0)]
@@ -387,9 +395,7 @@ def _check_p823_single(
 
     # Trade row count and identity.
     if trades_df.height != 1:
-        raise AssertionError(
-            f"P8.23 {scenario}: expected 1 trade row, got {trades_df.height}"
-        )
+        raise AssertionError(f"P8.23 {scenario}: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != expected_trade_id:
         raise AssertionError(
             f"P8.23 {scenario}: trade_id must be {expected_trade_id!r} "
@@ -400,15 +406,12 @@ def _check_p823_single(
     actual_ls = trades_df["is_long_settlement"][0]
     if actual_ls != expected_is_ls:
         raise AssertionError(
-            f"P8.23 {scenario}: is_long_settlement must be {expected_is_ls!r} "
-            f"(got {actual_ls!r})"
+            f"P8.23 {scenario}: is_long_settlement must be {expected_is_ls!r} (got {actual_ls!r})"
         )
 
     # Netting-set row count and identity.
     if ns_df.height != 1:
-        raise AssertionError(
-            f"P8.23 {scenario}: expected 1 netting-set row, got {ns_df.height}"
-        )
+        raise AssertionError(f"P8.23 {scenario}: expected 1 netting-set row, got {ns_df.height}")
     if ns_df["netting_set_id"][0] != expected_ns_id:
         raise AssertionError(
             f"P8.23 {scenario}: netting_set_id must be {expected_ns_id!r} "
@@ -422,9 +425,7 @@ def _check_p823_single(
 
     # Counterparty row count and identity.
     if cp_df.height != 1:
-        raise AssertionError(
-            f"P8.23 {scenario}: expected 1 counterparty row, got {cp_df.height}"
-        )
+        raise AssertionError(f"P8.23 {scenario}: expected 1 counterparty row, got {cp_df.height}")
     if cp_df["counterparty_reference"][0] != P823_CP_REF:
         raise AssertionError(
             f"P8.23 {scenario}: counterparty_reference must be {P823_CP_REF!r} "
@@ -432,8 +433,7 @@ def _check_p823_single(
         )
     if cp_df["entity_type"][0] != "institution":
         raise AssertionError(
-            f"P8.23 {scenario}: entity_type must be 'institution' "
-            f"(got {cp_df['entity_type'][0]!r})"
+            f"P8.23 {scenario}: entity_type must be 'institution' (got {cp_df['entity_type'][0]!r})"
         )
     if cp_df["institution_cqs"][0] != P823_INSTITUTION_CQS:
         raise AssertionError(

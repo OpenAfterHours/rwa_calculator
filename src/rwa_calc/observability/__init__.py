@@ -10,13 +10,16 @@ Key responsibilities:
 - Per-run correlation IDs exposed as a contextvar
 - Stage-timing context manager emitting structured entry/exit records
 - Text and JSON formatters for human-readable and audit-friendly output
+- Opt-in audit-cache writer (`sink_audit` / `prune_audit_cache`)
 
 References:
 - docs/specifications/observability.md
+- docs/specifications/audit-cache.md
 """
 
 from __future__ import annotations
 
+from rwa_calc.observability.audit_cache import prune_audit_cache, sink_audit
 from rwa_calc.observability.context import (
     RunIdFilter,
     bind_run_id,
@@ -38,5 +41,7 @@ __all__ = [
     "current_run_id",
     "get_logger",
     "new_run_id",
+    "prune_audit_cache",
+    "sink_audit",
     "stage_timer",
 ]

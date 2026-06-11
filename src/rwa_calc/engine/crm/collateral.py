@@ -42,7 +42,7 @@ from rwa_calc.engine.crm.expressions import (
     supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
-from rwa_calc.engine.materialise import sink_audit
+from rwa_calc.observability.audit_cache import sink_audit
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig

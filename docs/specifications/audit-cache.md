@@ -304,11 +304,12 @@ The cache is opt-in for two reasons:
    kind of surprise that lands in a regulated-firm incident review;
    enabling the cache is a deliberate operator decision.
 
-The cache writer is `engine/materialise.sink_audit` — the **only** place
-`sink_parquet` is invoked outside the streaming-mode spill path
-(`scripts/arch_check.py` enforces this rule). New artifact types should be
-added by calling `sink_audit` from the existing CRM / orchestrator hook
-points; no new sink call sites should appear outside `materialise.py`.
+The cache writer is `observability/audit_cache.sink_audit` — operability
+code, deliberately kept out of `engine/materialise.py`, which owns only the
+pipeline materialisation barriers and the streaming-mode spill path. New
+artifact types should be added by calling `sink_audit` from the existing
+CRM / orchestrator hook points; avoid introducing ad-hoc parquet writes
+elsewhere.
 
 ## Related
 

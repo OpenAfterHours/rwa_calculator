@@ -489,8 +489,8 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> ResolvedHierarchyBundle | None:
         """Run hierarchy resolution stage and attach the securitisation lookup."""
-        from rwa_calc.engine.materialise import sink_audit
         from rwa_calc.engine.securitisation.allocator import attach_securitisation_lookup
+        from rwa_calc.observability.audit_cache import sink_audit
 
         try:
             with stage_timer(logger, "hierarchy_resolver"):
@@ -657,7 +657,7 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> ClassifiedExposuresBundle | None:
         """Run classification stage."""
-        from rwa_calc.engine.materialise import sink_audit
+        from rwa_calc.observability.audit_cache import sink_audit
 
         try:
             with stage_timer(logger, "classifier"):
@@ -695,7 +695,7 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> EquityResultBundle | None:
         """Run Equity calculation stage."""
-        from rwa_calc.engine.materialise import sink_audit
+        from rwa_calc.observability.audit_cache import sink_audit
 
         try:
             with stage_timer(logger, "equity_calculator"):
@@ -765,7 +765,7 @@ class PipelineOrchestrator:
         config: CalculationConfig,
     ) -> CRMAdjustedBundle | None:
         """Run the real estate loan-splitter stage."""
-        from rwa_calc.engine.materialise import sink_audit
+        from rwa_calc.observability.audit_cache import sink_audit
 
         try:
             with stage_timer(logger, "re_splitter"):
@@ -1046,8 +1046,8 @@ def _persist_audit_artifacts(
     """
     import json as _json
 
-    from rwa_calc.engine.materialise import prune_audit_cache as _prune_audit_cache
-    from rwa_calc.engine.materialise import sink_audit as _sink_audit
+    from rwa_calc.observability.audit_cache import prune_audit_cache as _prune_audit_cache
+    from rwa_calc.observability.audit_cache import sink_audit as _sink_audit
 
     if config.audit_cache_dir is None:
         return

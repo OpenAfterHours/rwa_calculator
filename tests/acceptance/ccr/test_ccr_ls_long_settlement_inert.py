@@ -200,9 +200,7 @@ class TestCCRLongSettlementInert:
         - CRR Art. 285 — MPOR floors keyed on margining, NOT on is_long_settlement
     """
 
-    def test_p823_ls_ead_equals_ctrl_ead(
-        self, ls_ccr_row: dict, ctrl_ccr_row: dict
-    ) -> None:
+    def test_p823_ls_ead_equals_ctrl_ead(self, ls_ccr_row: dict, ctrl_ccr_row: dict) -> None:
         """
         EAD inertness (load-bearing): ead_final(LS=True) == ead_final(LS=False).
 
@@ -244,9 +242,7 @@ class TestCCRLongSettlementInert:
             "introduced in the SA-CCR maturity-factor or MPOR logic."
         )
 
-    def test_p823_ls_rwa_equals_ctrl_rwa(
-        self, ls_ccr_row: dict, ctrl_ccr_row: dict
-    ) -> None:
+    def test_p823_ls_rwa_equals_ctrl_rwa(self, ls_ccr_row: dict, ctrl_ccr_row: dict) -> None:
         """
         RWA inertness: rwa_final(LS=True) == rwa_final(LS=False).
 
@@ -324,9 +320,7 @@ class TestCCRLongSettlementInert:
             "CRR Art. 112(b): institution entity_type maps to institution exposure class."
         )
 
-    def test_p823_ls_rc_unmargined_is_zero(
-        self, ls_ccr_row: dict, ctrl_ccr_row: dict
-    ) -> None:
+    def test_p823_ls_rc_unmargined_is_zero(self, ls_ccr_row: dict, ctrl_ccr_row: dict) -> None:
         """
         rc_unmargined == 0.0 for both variants (at-par swap, no collateral).
 

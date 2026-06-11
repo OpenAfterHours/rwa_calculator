@@ -606,9 +606,7 @@ def _attach_transitional_add_on(
     # Phase factor is resolved at build time: 0 under CRR or for years not in
     # the Art. 274(2A) schedule (e.g. 2030+).
     phase_factor = (
-        float(SA_CCR_TRANSITIONAL_ADDON_PHASE.get(reporting_date.year, 0))
-        if is_basel_3_1
-        else 0.0
+        float(SA_CCR_TRANSITIONAL_ADDON_PHASE.get(reporting_date.year, 0)) if is_basel_3_1 else 0.0
     )
     alpha_uplift = float(SA_CCR_ALPHA) - float(SA_CCR_ALPHA_CARVE_OUT)
     carve_out = float(SA_CCR_ALPHA_CARVE_OUT)

@@ -207,9 +207,7 @@ def alpha3_ccr_row(alpha3_result_bundle) -> dict:
 def two_cp_ccr_rows(two_cp_result_bundle) -> list[dict]:
     """Return all CCR exposure rows from the 2-counterparty result."""
     df = two_cp_result_bundle.results.collect()
-    return df.filter(
-        pl.col("exposure_reference").str.starts_with("ccr__")
-    ).to_dicts()
+    return df.filter(pl.col("exposure_reference").str.starts_with("ccr__")).to_dicts()
 
 
 # ---------------------------------------------------------------------------
@@ -512,9 +510,7 @@ class TestCCRAlphaInvariants:
         Unfixed: ratio == 1.0 → AssertionError: 1.0 != approx(0.71428...)
     """
 
-    def test_alpha1_ead_equals_alpha2_ead(
-        self, alpha1_ccr_row: dict, alpha2_ccr_row: dict
-    ) -> None:
+    def test_alpha1_ead_equals_alpha2_ead(self, alpha1_ccr_row: dict, alpha2_ccr_row: dict) -> None:
         """
         CCR-ALPHA-1 and CCR-ALPHA-2 must have identical ead_ccr (rel=1e-9).
 
@@ -575,9 +571,7 @@ class TestCCRAlphaInvariants:
             "P8.28 fix: join counterparty_type → α scalar before the EAD multiplication."
         )
 
-    def test_alpha1_to_alpha3_ead_ratio(
-        self, alpha1_ccr_row: dict, alpha3_ccr_row: dict
-    ) -> None:
+    def test_alpha1_to_alpha3_ead_ratio(self, alpha1_ccr_row: dict, alpha3_ccr_row: dict) -> None:
         """
         ead(ALPHA-1) / ead(ALPHA-3) == approx(1.0/1.4, rel=1e-9).
 
@@ -644,9 +638,7 @@ class TestCCRAlphaKeyedJoinGuard:
         NS-FIN-01:  alpha_applied = 1.4  (financial standard)
     """
 
-    def test_two_cp_book_produces_exactly_two_ccr_rows(
-        self, two_cp_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_cp_book_produces_exactly_two_ccr_rows(self, two_cp_ccr_rows: list[dict]) -> None:
         """
         Exactly 2 CCR exposure rows must appear in the 2-counterparty book result.
 
@@ -680,9 +672,7 @@ class TestCCRAlphaKeyedJoinGuard:
             "receives exactly one alpha value."
         )
 
-    def test_two_cp_book_nfc_row_alpha_applied(
-        self, two_cp_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_cp_book_nfc_row_alpha_applied(self, two_cp_ccr_rows: list[dict]) -> None:
         """
         NS-NFC-01 row in the 2-CP book: alpha_applied == 1.0 (non-financial carve-out).
 
@@ -692,10 +682,7 @@ class TestCCRAlphaKeyedJoinGuard:
         References: CRR Art. 274(2) / EMIR Art. 2(9).
         """
         # Arrange: locate the non-financial NS row
-        nfc_rows = [
-            r for r in two_cp_ccr_rows
-            if r.get("source_netting_set_id") == P828_NS_NFC_ID
-        ]
+        nfc_rows = [r for r in two_cp_ccr_rows if r.get("source_netting_set_id") == P828_NS_NFC_ID]
         assert len(nfc_rows) == 1, (
             f"CCR alpha keyed-join guard: expected 1 row for NS {P828_NS_NFC_ID!r}, "
             f"got {len(nfc_rows)}. "
@@ -712,9 +699,7 @@ class TestCCRAlphaKeyedJoinGuard:
             "not leaked to NS-FIN-01 via cross-join."
         )
 
-    def test_two_cp_book_fin_row_alpha_applied(
-        self, two_cp_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_cp_book_fin_row_alpha_applied(self, two_cp_ccr_rows: list[dict]) -> None:
         """
         NS-FIN-01 row in the 2-CP book: alpha_applied == 1.4 (financial standard).
 
@@ -723,10 +708,7 @@ class TestCCRAlphaKeyedJoinGuard:
         References: CRR Art. 274(2) — α=1.4 default.
         """
         # Arrange: locate the financial NS row
-        fin_rows = [
-            r for r in two_cp_ccr_rows
-            if r.get("source_netting_set_id") == P828_NS_FIN_ID
-        ]
+        fin_rows = [r for r in two_cp_ccr_rows if r.get("source_netting_set_id") == P828_NS_FIN_ID]
         assert len(fin_rows) == 1, (
             f"CCR alpha keyed-join guard: expected 1 row for NS {P828_NS_FIN_ID!r}, "
             f"got {len(fin_rows)}. "

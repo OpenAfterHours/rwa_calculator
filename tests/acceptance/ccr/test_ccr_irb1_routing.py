@@ -247,8 +247,8 @@ class TestCCRIRB1FoundationIRBRouting:
         """
         # Arrange
         row = ccr_irb1_result
-        expected_pd = _EXPECTED["pd"]        # 0.015
-        expected_lgd = _EXPECTED["lgd"]      # 0.45
+        expected_pd = _EXPECTED["pd"]  # 0.015
+        expected_lgd = _EXPECTED["lgd"]  # 0.45
         expected_m = _EXPECTED["irb_maturity_m"]  # 5.0
 
         # Assert
@@ -311,8 +311,8 @@ class TestCCRIRB1FoundationIRBRouting:
         """
         # Arrange
         row = ccr_irb1_result
-        expected_rw = _EXPECTED["risk_weight"]    # 1.45929215
-        expected_rwa = _EXPECTED["rwa_final"]     # 4477756.045762
+        expected_rw = _EXPECTED["risk_weight"]  # 1.45929215
+        expected_rwa = _EXPECTED["rwa_final"]  # 4477756.045762
 
         # Assert
         assert row["risk_weight"] == pytest.approx(expected_rw, rel=1e-4), (

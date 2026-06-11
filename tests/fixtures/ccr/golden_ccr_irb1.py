@@ -522,25 +522,21 @@ def save_ccr_irb1_smoke_check() -> list[tuple[str, int]]:
         raise AssertionError(f"CCR-IRB-1: expected 1 trade row, got {trades_df.height}")
     if trades_df["trade_id"][0] != CCR_IRB1_TRADE_ID:
         raise AssertionError(
-            f"CCR-IRB-1: trade_id must be {CCR_IRB1_TRADE_ID!r} "
-            f"(got {trades_df['trade_id'][0]!r})"
+            f"CCR-IRB-1: trade_id must be {CCR_IRB1_TRADE_ID!r} (got {trades_df['trade_id'][0]!r})"
         )
     if trades_df["asset_class"][0] != "interest_rate":
         raise AssertionError(
-            f"CCR-IRB-1: asset_class must be 'interest_rate' "
-            f"(got {trades_df['asset_class'][0]!r})"
+            f"CCR-IRB-1: asset_class must be 'interest_rate' (got {trades_df['asset_class'][0]!r})"
         )
 
     # --- Invariant 3: notional / currency / delta ---
     if trades_df["notional"][0] != CCR_IRB1_NOTIONAL:
         raise AssertionError(
-            f"CCR-IRB-1: notional must be {CCR_IRB1_NOTIONAL} "
-            f"(got {trades_df['notional'][0]})"
+            f"CCR-IRB-1: notional must be {CCR_IRB1_NOTIONAL} (got {trades_df['notional'][0]})"
         )
     if trades_df["currency"][0] != CCR_IRB1_CURRENCY:
         raise AssertionError(
-            f"CCR-IRB-1: currency must be {CCR_IRB1_CURRENCY!r} "
-            f"(got {trades_df['currency'][0]!r})"
+            f"CCR-IRB-1: currency must be {CCR_IRB1_CURRENCY!r} (got {trades_df['currency'][0]!r})"
         )
     if trades_df["delta"][0] != CCR_IRB1_DELTA:
         raise AssertionError(
@@ -620,9 +616,7 @@ def save_ccr_irb1_smoke_check() -> list[tuple[str, int]]:
         raise AssertionError("CCR-IRB-1: rating counterparty_reference mismatch")
     pd_val = rating_df["pd"][0]
     if pd_val is None or abs(pd_val - CCR_IRB1_INTERNAL_PD) > 1e-10:
-        raise AssertionError(
-            f"CCR-IRB-1: rating pd must be {CCR_IRB1_INTERNAL_PD} (got {pd_val})"
-        )
+        raise AssertionError(f"CCR-IRB-1: rating pd must be {CCR_IRB1_INTERNAL_PD} (got {pd_val})")
     if rating_df["model_id"][0] != CCR_IRB1_MODEL_ID:
         raise AssertionError(
             f"CCR-IRB-1: rating model_id must be {CCR_IRB1_MODEL_ID!r} "
@@ -632,13 +626,9 @@ def save_ccr_irb1_smoke_check() -> list[tuple[str, int]]:
     # --- Invariant 11: model permission row structure ---
     perm_df = create_ccr_irb1_model_permission()
     if perm_df.height != 1:
-        raise AssertionError(
-            f"CCR-IRB-1: model permission must have 1 row (got {perm_df.height})"
-        )
+        raise AssertionError(f"CCR-IRB-1: model permission must have 1 row (got {perm_df.height})")
     if perm_df["model_id"][0] != CCR_IRB1_MODEL_ID:
-        raise AssertionError(
-            f"CCR-IRB-1: permission model_id must be {CCR_IRB1_MODEL_ID!r}"
-        )
+        raise AssertionError(f"CCR-IRB-1: permission model_id must be {CCR_IRB1_MODEL_ID!r}")
     if perm_df["approach"][0] != CCR_IRB1_MODEL_APPROACH:
         raise AssertionError(
             f"CCR-IRB-1: permission approach must be {CCR_IRB1_MODEL_APPROACH!r} "
@@ -651,10 +641,7 @@ def save_ccr_irb1_smoke_check() -> list[tuple[str, int]]:
 
     # Write parquet files and return report.
     saved = save_ccr_irb1_fixtures()
-    return [
-        (f"{name}.parquet", pl.read_parquet(path).height)
-        for name, path in saved.items()
-    ]
+    return [(f"{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()]
 
 
 def main() -> None:
@@ -671,9 +658,7 @@ def main() -> None:
     perm_df = create_ccr_irb1_model_permission()
     print(f"  {'model_permission (in-memory)':<35} {len(perm_df):>2} row(s)  (not written to disk)")
     print("-" * 70)
-    print(
-        f"Scenario: CCR-IRB-1 — 5y GBP IR swap, CP_IRB_001 (corporate, F-IRB), unmargined"
-    )
+    print("Scenario: CCR-IRB-1 — 5y GBP IR swap, CP_IRB_001 (corporate, F-IRB), unmargined")
     print(
         f"  Trade:        {CCR_IRB1_TRADE_ID} (notional={CCR_IRB1_NOTIONAL:,.0f} {CCR_IRB1_CURRENCY},"
         f" tenor={CCR_IRB1_START_DATE}..{CCR_IRB1_MATURITY_DATE})"
@@ -686,9 +671,7 @@ def main() -> None:
         f"  Counterparty: {CCR_IRB1_COUNTERPARTY_REF} (entity_type={CCR_IRB1_CP_ENTITY_TYPE!r},"
         f" country={CCR_IRB1_CP_COUNTRY_CODE})"
     )
-    print(
-        f"  Rating:       internal, pd={CCR_IRB1_INTERNAL_PD}, model_id={CCR_IRB1_MODEL_ID!r}"
-    )
+    print(f"  Rating:       internal, pd={CCR_IRB1_INTERNAL_PD}, model_id={CCR_IRB1_MODEL_ID!r}")
     print(
         f"  Permission:   {CCR_IRB1_MODEL_ID} -> {CCR_IRB1_MODEL_APPROACH} for"
         f" {CCR_IRB1_MODEL_EXPOSURE_CLASS} (country={CCR_IRB1_MODEL_COUNTRY_CODES})"

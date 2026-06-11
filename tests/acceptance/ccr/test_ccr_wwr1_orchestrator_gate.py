@@ -72,16 +72,14 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ErrorCategory, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.ccr.ccr_wwr1_builder import (
+    CCR010_ERROR_CODE,
+    CCR011_ERROR_CODE,
     CCR_WWR1_COUNTERPARTY_REF,
     EXPECTED_CCR010_COUNT,
     EXPECTED_CCR011_COUNT,
     NS_WWR_01_ID,
     SYNTHETIC_NS_ID,
-    T_NORMAL_01_ID,
-    T_WWR_01_ID,
     WWR_LGD_OVERRIDE_VALUE,
-    CCR010_ERROR_CODE,
-    CCR011_ERROR_CODE,
     build_raw_data_bundle_ccr_wwr1,
 )
 
@@ -136,10 +134,7 @@ def ccr_wwr1_result_bundle():
 def ccr_wwr1_all_rows(ccr_wwr1_result_bundle) -> list[dict]:
     """Return all CCR exposure rows from the aggregated result as a list of dicts."""
     df = ccr_wwr1_result_bundle.results.collect()
-    return (
-        df.filter(pl.col("exposure_reference").str.starts_with("ccr__"))
-        .to_dicts()
-    )
+    return df.filter(pl.col("exposure_reference").str.starts_with("ccr__")).to_dicts()
 
 
 @pytest.fixture(scope="module")
@@ -202,9 +197,7 @@ class TestCCRWWR1OrchestratorGate:
     All five tests are RED on the unfixed pipeline where the gate is not called.
     """
 
-    def test_ccr_wwr1_partition_produces_two_ccr_rows(
-        self, ccr_wwr1_all_rows: list[dict]
-    ) -> None:
+    def test_ccr_wwr1_partition_produces_two_ccr_rows(self, ccr_wwr1_all_rows: list[dict]) -> None:
         """
         Two CCR exposure rows must appear: one per post-gate netting set.
 
@@ -236,9 +229,7 @@ class TestCCRWWR1OrchestratorGate:
             "specific-WWR trade T_WWR_01 is broken out into a separate netting set."
         )
 
-    def test_ccr_wwr1_synthetic_row_has_wwr_separator(
-        self, ccr_wwr1_synthetic_row: dict
-    ) -> None:
+    def test_ccr_wwr1_synthetic_row_has_wwr_separator(self, ccr_wwr1_synthetic_row: dict) -> None:
         """
         Synthetic exposure_reference must contain the __wwr__ separator.
 
@@ -310,9 +301,7 @@ class TestCCRWWR1OrchestratorGate:
             "in the synthetic-row select expression."
         )
 
-    def test_ccr_wwr1_parent_row_override_is_null(
-        self, ccr_wwr1_parent_row: dict
-    ) -> None:
+    def test_ccr_wwr1_parent_row_override_is_null(self, ccr_wwr1_parent_row: dict) -> None:
         """
         Residual parent exposure row must have wwr_lgd_override = null.
 
@@ -340,9 +329,7 @@ class TestCCRWWR1OrchestratorGate:
             "trades) must NOT inherit the wwr_lgd_override=1.0 tag."
         )
 
-    def test_ccr_wwr1_exactly_one_ccr010_warning(
-        self, ccr_wwr1_result_bundle
-    ) -> None:
+    def test_ccr_wwr1_exactly_one_ccr010_warning(self, ccr_wwr1_result_bundle) -> None:
         """
         Result bundle must contain exactly one CCR010 warning for NS_WWR_01.
 
@@ -400,9 +387,7 @@ class TestCCRWWR1OrchestratorGate:
             f"got {actual_reg_ref!r}."
         )
 
-    def test_ccr_wwr1_zero_ccr011_warnings(
-        self, ccr_wwr1_result_bundle
-    ) -> None:
+    def test_ccr_wwr1_zero_ccr011_warnings(self, ccr_wwr1_result_bundle) -> None:
         """
         No CCR011 warnings should appear (has_general_wwr_flag=False).
 

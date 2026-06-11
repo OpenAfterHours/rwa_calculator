@@ -74,11 +74,9 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.ccr.p829_addon_builder import (
-    P829_EAD_ALPHA14,
     P829_NS_FIN_LEGACY_ID,
     P829_NS_NFC_LEGACY_ID,
     P829_NS_NFC_NONLEG_ID,
-    P829_PFE_ADDON,
     build_p829_bundle,
     build_p829_two_ns_book,
 )
@@ -352,9 +350,7 @@ def addon4_crr_row(addon4_crr_result_bundle) -> dict:
 def two_ns_ccr_rows(two_ns_2027_result_bundle) -> list[dict]:
     """All CCR exposure rows from the 2-NS result."""
     df = two_ns_2027_result_bundle.results.collect()
-    return df.filter(
-        pl.col("exposure_reference").str.starts_with("ccr__")
-    ).to_dicts()
+    return df.filter(pl.col("exposure_reference").str.starts_with("ccr__")).to_dicts()
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +378,7 @@ class TestCCRAlphaAddon1Phasing:
         transitional_add_on absent → row.get(...) == None != approx(non-zero).
     """
 
-    def test_addon1_ead_2027(
-        self, addon1_2027_row: dict, addon2_2027_row: dict
-    ) -> None:
+    def test_addon1_ead_2027(self, addon1_2027_row: dict, addon2_2027_row: dict) -> None:
         """
         ADDON-1 @ 2027-06-30: ead_ccr == base_ead × 1.24 (phase=0.6, factor=1.24).
 
@@ -425,9 +419,7 @@ class TestCCRAlphaAddon1Phasing:
             "PRA PS1/26 Art. 274(2A)."
         )
 
-    def test_addon1_ead_2028(
-        self, addon1_2028_row: dict, addon2_2028_row: dict
-    ) -> None:
+    def test_addon1_ead_2028(self, addon1_2028_row: dict, addon2_2028_row: dict) -> None:
         """
         ADDON-1 @ 2028-06-30: ead_ccr == base_ead × 1.16 (phase=0.4, factor=1.16).
 
@@ -455,9 +447,7 @@ class TestCCRAlphaAddon1Phasing:
             "PRA PS1/26 Art. 274(2A)."
         )
 
-    def test_addon1_ead_2029(
-        self, addon1_2029_row: dict, addon2_2029_row: dict
-    ) -> None:
+    def test_addon1_ead_2029(self, addon1_2029_row: dict, addon2_2029_row: dict) -> None:
         """
         ADDON-1 @ 2029-06-30: ead_ccr == base_ead × 1.08 (phase=0.2, factor=1.08).
 
@@ -485,9 +475,7 @@ class TestCCRAlphaAddon1Phasing:
             "PRA PS1/26 Art. 274(2A)."
         )
 
-    def test_addon1_ead_2030(
-        self, addon1_2030_row: dict, addon2_2030_row: dict
-    ) -> None:
+    def test_addon1_ead_2030(self, addon1_2030_row: dict, addon2_2030_row: dict) -> None:
         """
         ADDON-1 @ 2030-06-30: ead_ccr == base_ead (phase=0.0 — add-on expired).
 
@@ -896,9 +884,7 @@ class TestCCRAlphaAddon4FrameworkGate:
             "CRR does not have an Art. 274(2A) provision."
         )
 
-    def test_addon4_transitional_add_on_is_zero_under_crr(
-        self, addon4_crr_row: dict
-    ) -> None:
+    def test_addon4_transitional_add_on_is_zero_under_crr(self, addon4_crr_row: dict) -> None:
         """
         ADDON-4 @ CRR 2027: transitional_add_on == 0.0 (CRR framework gate closed).
 
@@ -942,9 +928,7 @@ class TestCCRAlphaAddonTwoNsKeyedJoinGuard:
         NS-NFC-ADDON-02 transitional_add_on == 0 — passes (None accepted as 0).
     """
 
-    def test_two_ns_book_produces_exactly_two_ccr_rows(
-        self, two_ns_ccr_rows: list[dict]
-    ) -> None:
+    def test_two_ns_book_produces_exactly_two_ccr_rows(self, two_ns_ccr_rows: list[dict]) -> None:
         """
         Exactly 2 CCR exposure rows in the 2-NS book.
 
@@ -993,7 +977,8 @@ class TestCCRAlphaAddonTwoNsKeyedJoinGuard:
         """
         # Arrange: locate the legacy NS row
         legacy_rows = [
-            r for r in two_ns_ccr_rows
+            r
+            for r in two_ns_ccr_rows
             if r.get("exposure_reference") == f"ccr__{P829_NS_NFC_LEGACY_ID}"
         ]
         assert len(legacy_rows) == 1, (
@@ -1031,7 +1016,8 @@ class TestCCRAlphaAddonTwoNsKeyedJoinGuard:
         """
         # Arrange: locate the non-legacy NS row
         nonleg_rows = [
-            r for r in two_ns_ccr_rows
+            r
+            for r in two_ns_ccr_rows
             if r.get("exposure_reference") == f"ccr__{P829_NS_NFC_NONLEG_ID}"
         ]
         assert len(nonleg_rows) == 1, (

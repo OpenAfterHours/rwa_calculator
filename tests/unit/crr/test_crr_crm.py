@@ -21,7 +21,7 @@ import pytest
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ApproachType, PermissionMode
+from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.crm import (
     CRMProcessor,
     HaircutCalculator,
@@ -126,12 +126,6 @@ def create_classified_bundle(
     """Helper to create a ClassifiedExposuresBundle for testing."""
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
-        irb_exposures=exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        ),
-        slotting_exposures=None,
         equity_exposures=None,
         classification_audit=None,
         classification_errors=[],
@@ -282,32 +276,18 @@ class TestHaircutCalculator:
 class TestCRMProcessor:
     """Tests for the full CRM processor."""
 
-    def test_apply_crm_returns_bundle(
+    def test_unified_bundle_returns_exposures_and_errors(
         self,
         crm_processor: CRMProcessor,
         basic_exposures: pl.LazyFrame,
         crr_config: CalculationConfig,
     ) -> None:
-        """apply_crm should return LazyFrameResult."""
+        """get_crm_unified_bundle should return a CRMAdjustedBundle with errors list."""
         bundle = create_classified_bundle(basic_exposures)
-        result = crm_processor.apply_crm(bundle, crr_config)
-
-        assert result.frame is not None
-        assert isinstance(result.errors, list)
-
-    def test_get_crm_adjusted_bundle_returns_bundle(
-        self,
-        crm_processor: CRMProcessor,
-        basic_exposures: pl.LazyFrame,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """get_crm_adjusted_bundle should return CRMAdjustedBundle."""
-        bundle = create_classified_bundle(basic_exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
         assert result.exposures is not None
-        assert result.sa_exposures is not None
-        assert result.irb_exposures is not None
+        assert isinstance(result.crm_errors, list)
 
     def test_loan_ead_equals_drawn_amount(
         self,
@@ -340,7 +320,7 @@ class TestCRMProcessor:
         ).lazy()
 
         bundle = create_classified_bundle(exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
         df = result.exposures.collect()
         assert df["ead_gross"][0] == pytest.approx(1000000.0)
@@ -377,7 +357,7 @@ class TestCRMProcessor:
         ).lazy()
 
         bundle = create_classified_bundle(exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
         df = result.exposures.collect()
         # EAD = nominal * CCF = 500k * 0.5 = 250k
@@ -389,16 +369,16 @@ class TestCRMProcessor:
         basic_exposures: pl.LazyFrame,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRM audit trail should be populated."""
+        """CRM audit columns are present on the unified frame."""
         bundle = create_classified_bundle(basic_exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
-        audit_df = result.crm_audit.collect()
+        df = result.exposures.collect()
 
-        assert "exposure_reference" in audit_df.columns
-        assert "ead_gross" in audit_df.columns
-        assert "ead_final" in audit_df.columns
-        assert "crm_calculation" in audit_df.columns
+        assert "exposure_reference" in df.columns
+        assert "ead_gross" in df.columns
+        assert "ead_final" in df.columns
+        assert "crm_calculation" in df.columns
 
     def test_sa_irb_split_correct(
         self,
@@ -431,10 +411,11 @@ class TestCRMProcessor:
         ).lazy()
 
         bundle = create_classified_bundle(exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
-        sa_df = result.sa_exposures.collect()
-        irb_df = result.irb_exposures.collect()
+        unified = result.exposures.collect()
+        sa_df = unified.filter(pl.col("approach") == "standardised")
+        irb_df = unified.filter(pl.col("approach").is_in(["foundation_irb", "advanced_irb"]))
 
         assert len(sa_df) == 2
         assert len(irb_df) == 0  # SA-only config
@@ -475,7 +456,7 @@ class TestCRMIntegration:
     ) -> None:
         """Mixed loans and contingents should be processed correctly."""
         bundle = create_classified_bundle(basic_exposures)
-        result = crm_processor.get_crm_adjusted_bundle(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
         df = result.exposures.collect()
 

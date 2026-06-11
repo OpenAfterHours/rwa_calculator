@@ -76,14 +76,12 @@ class TestFacilityLevelGuarantee:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         # Assert: guarantee allocated pro-rata (60/40 split on 500k)
@@ -146,14 +144,12 @@ class TestFacilityLevelGuarantee:
         )
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         # Assert: grandparent guarantee allocated pro-rata (60/40 split on 500k)
@@ -213,13 +209,11 @@ class TestFacilityLevelGuarantee:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
@@ -280,13 +274,11 @@ class TestFacilityLevelGuarantee:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Guarantor sub-row should have the substituted counterparty
@@ -348,13 +340,11 @@ class TestCounterpartyLevelGuarantee:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         # Pro-rata: 500/1000*400=200, 300/1000*400=120, 200/1000*400=80
@@ -422,13 +412,11 @@ class TestMixedLevelGuarantees:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")
@@ -493,13 +481,11 @@ class TestLoanLevelGuaranteeUnchanged:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Splits into guarantor sub-row + remainder
@@ -561,13 +547,11 @@ class TestLoanLevelGuaranteeUnchanged:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Splits into guarantor sub-row + remainder
@@ -631,13 +615,11 @@ class TestBasel31FacilityGuarantee:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, basel31_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, basel31_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         loan_a = df.filter(pl.col("parent_exposure_reference") == "LOAN_A")

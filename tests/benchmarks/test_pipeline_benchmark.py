@@ -332,7 +332,7 @@ class TestComponentBenchmarks100K:
         classified = classifier.classify(resolved, config)
 
         crm = CRMProcessor()
-        crm_adjusted = crm.get_crm_adjusted_bundle(classified, config)
+        crm_adjusted = crm.get_crm_unified_bundle(classified, config)
 
         sa_calc = SACalculator()
 

@@ -22,6 +22,7 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import FX_RATES_SCHEMA, GUARANTEE_SCHEMA, RATINGS_SCHEMA
+from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
@@ -214,7 +215,7 @@ def _run_to_crm(
 ) -> CRMAdjustedBundle:
     resolved = resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_adjusted_bundle(classified, config)
+    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 def _guarantor_row(df: pl.DataFrame, loan_reference: str = "LN_BORROWER") -> dict[str, Any]:
@@ -254,8 +255,13 @@ class TestDomesticSovereignGuarantorEndToEnd:
         crm_bundle = _run_to_crm(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        irb_lf = irb_calculator.calculate_branch(
+            crm_bundle.exposures.filter(
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+            ),
+            crr_firb_config,
+        )
+        df = irb_lf.collect()
 
         row = _guarantor_row(df)
         assert row["guarantor_approach"] == "sa", (
@@ -277,8 +283,13 @@ class TestDomesticSovereignGuarantorEndToEnd:
         crm_bundle = _run_to_crm(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        irb_lf = irb_calculator.calculate_branch(
+            crm_bundle.exposures.filter(
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+            ),
+            crr_firb_config,
+        )
+        df = irb_lf.collect()
 
         row = _guarantor_row(df)
         assert row["guarantor_approach"] == "sa"
@@ -302,8 +313,13 @@ class TestDomesticSovereignGuarantorEndToEnd:
         crm_bundle = _run_to_crm(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        irb_lf = irb_calculator.calculate_branch(
+            crm_bundle.exposures.filter(
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+            ),
+            crr_firb_config,
+        )
+        df = irb_lf.collect()
 
         row = _guarantor_row(df)
         assert row["guarantor_approach"] == "sa"
@@ -326,8 +342,13 @@ class TestDomesticSovereignGuarantorEndToEnd:
         crm_bundle = _run_to_crm(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        irb_lf = irb_calculator.calculate_branch(
+            crm_bundle.exposures.filter(
+                pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+            ),
+            crr_firb_config,
+        )
+        df = irb_lf.collect()
 
         row = _guarantor_row(df)
         assert row["guarantor_approach"] == "irb"

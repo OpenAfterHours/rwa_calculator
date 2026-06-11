@@ -313,21 +313,11 @@ class ExposureClassifier:
         data: ResolvedHierarchyBundle,
         classification_errors: list[CalculationError],
     ) -> ClassifiedExposuresBundle:
-        """Split classified exposures by approach and assemble the output bundle."""
-        sa_exposures = classified.filter(
-            pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
-        )
-        irb_exposures = classified.filter(
-            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
-        )
-        slotting_exposures = classified.filter(pl.col("approach") == ApproachType.SLOTTING.value)
+        """Assemble the classifier's output bundle around the unified frame."""
         classification_audit = self._build_audit_trail(classified)
 
         return ClassifiedExposuresBundle(
             all_exposures=classified,
-            sa_exposures=sa_exposures,
-            irb_exposures=irb_exposures,
-            slotting_exposures=slotting_exposures,
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
             collateral=data.collateral,

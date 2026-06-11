@@ -39,12 +39,6 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
-from rwa_calc.contracts.errors import (
-    CalculationError,
-    ErrorCategory,
-    ErrorSeverity,
-    LazyFrameResult,
-)
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.crr_equity_pd_lgd import (
@@ -211,38 +205,6 @@ class EquityCalculator:
 
     @cites("CRR Art. 133")
     @cites("CRR Art. 155")
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA for equity exposures.
-
-        Args:
-            data: CRM-adjusted exposures (uses equity_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with equity RWA calculations
-        """
-        bundle = self.get_equity_result_bundle(data, config)
-
-        calc_errors = [
-            CalculationError(
-                code="EQUITY001",
-                message=str(err),
-                severity=ErrorSeverity.ERROR,
-                category=ErrorCategory.CALCULATION,
-            )
-            for err in bundle.errors
-        ]
-
-        return LazyFrameResult(
-            frame=bundle.results,
-            errors=calc_errors,
-        )
-
     def get_equity_result_bundle(
         self,
         data: CRMAdjustedBundle,

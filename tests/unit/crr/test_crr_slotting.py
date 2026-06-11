@@ -23,7 +23,6 @@ import polars as pl
 import pytest
 from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle, SlottingResultBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.slotting import SlottingCalculator, create_slotting_calculator
 
@@ -50,17 +49,14 @@ def slotting_calculator() -> SlottingCalculator:
     return SlottingCalculator()
 
 
-def create_slotting_bundle(
+def _slotting_audit(
     exposures_data: list[dict],
-) -> CRMAdjustedBundle:
-    """Helper to create a CRMAdjustedBundle with slotting exposures."""
-    slotting_frame = pl.LazyFrame(exposures_data)
-    return CRMAdjustedBundle(
-        exposures=pl.LazyFrame(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=slotting_frame,
-    )
+    calculator: SlottingCalculator,
+    config: CalculationConfig,
+) -> pl.DataFrame:
+    """Run calculate_branch and project the slotting audit trail."""
+    result = calculator.calculate_branch(pl.LazyFrame(exposures_data), config)
+    return result.slotting.build_audit().collect()
 
 
 # =============================================================================
@@ -447,42 +443,23 @@ class TestSlottingBundleProcessing:
         assert row2["risk_weight"] == pytest.approx(2.50)
         assert row2["rwa"] == pytest.approx(12_500_000)
 
-    def test_empty_slotting_exposures_returns_empty_result(
+    def test_calculate_branch_standardises_aggregator_columns(
         self,
         slotting_calculator: SlottingCalculator,
         crr_config: CalculationConfig,
     ):
-        """None slotting exposures returns empty result via get_slotting_result_bundle."""
-        bundle = CRMAdjustedBundle(
-            exposures=pl.LazyFrame(),
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
-            slotting_exposures=None,
+        """calculate_branch emits approach_applied and rwa_final."""
+        exposures = pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001"],
+                "slotting_category": ["strong"],
+                "is_hvcre": [False],
+                "ead": [10_000_000.0],
+            }
         )
-        result = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
-        df = result.results.collect()
-        assert len(df) == 0
-
-    def test_get_slotting_result_bundle_returns_bundle(
-        self,
-        slotting_calculator: SlottingCalculator,
-        crr_config: CalculationConfig,
-    ):
-        """get_slotting_result_bundle returns SlottingResultBundle."""
-        bundle = create_slotting_bundle(
-            [
-                {
-                    "exposure_reference": "SL001",
-                    "slotting_category": "strong",
-                    "is_hvcre": False,
-                    "ead": 10_000_000.0,
-                },
-            ]
-        )
-        result = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
-        assert isinstance(result, SlottingResultBundle)
-        assert result.results is not None
-        assert result.calculation_audit is not None
+        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
+        assert "approach_applied" in df.columns
+        assert "rwa_final" in df.columns
 
 
 # =============================================================================
@@ -627,7 +604,7 @@ class TestSlottingAuditTrail:
         crr_config: CalculationConfig,
     ):
         """Audit trail contains calculation details."""
-        bundle = create_slotting_bundle(
+        audit_df = _slotting_audit(
             [
                 {
                     "exposure_reference": "SL001",
@@ -635,11 +612,10 @@ class TestSlottingAuditTrail:
                     "is_hvcre": False,
                     "ead": 10_000_000.0,
                 },
-            ]
+            ],
+            slotting_calculator,
+            crr_config,
         )
-        result_bundle = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
-        audit_df = result_bundle.calculation_audit.collect()
-
         assert "slotting_calculation" in audit_df.columns
         calc_str = audit_df["slotting_calculation"][0]
         assert "Category=strong" in calc_str
@@ -651,7 +627,7 @@ class TestSlottingAuditTrail:
         crr_config: CalculationConfig,
     ):
         """Audit trail shows HVCRE flag when applicable."""
-        bundle = create_slotting_bundle(
+        audit_df = _slotting_audit(
             [
                 {
                     "exposure_reference": "SL001",
@@ -659,11 +635,10 @@ class TestSlottingAuditTrail:
                     "is_hvcre": True,
                     "ead": 5_000_000.0,
                 },
-            ]
+            ],
+            slotting_calculator,
+            crr_config,
         )
-        result_bundle = slotting_calculator.get_slotting_result_bundle(bundle, crr_config)
-        audit_df = result_bundle.calculation_audit.collect()
-
         calc_str = audit_df["slotting_calculation"][0]
         assert "(HVCRE)" in calc_str
 

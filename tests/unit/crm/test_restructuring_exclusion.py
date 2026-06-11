@@ -129,13 +129,11 @@ def _run_crm(
 
     classified_bundle = ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=exposures,
-        irb_exposures=pl.LazyFrame(),
         guarantees=guarantees,
         counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
     )
 
-    result = crm_processor.get_crm_adjusted_bundle(classified_bundle, config)
+    result = crm_processor.get_crm_unified_bundle(classified_bundle, config)
     collected = result.exposures.collect()
     assert isinstance(collected, pl.DataFrame)
     return collected
@@ -347,15 +345,13 @@ class TestNoGuaranteeRestructuringColumn:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=None,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)

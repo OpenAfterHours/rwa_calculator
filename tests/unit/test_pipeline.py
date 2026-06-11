@@ -341,15 +341,13 @@ def mock_classified_bundle() -> ClassifiedExposuresBundle:
         }
     )
 
-    sa_exposures = all_exposures.filter(pl.col("approach") == "SA")
-    irb_exposures = all_exposures.filter(
+    all_exposures.filter(pl.col("approach") == "SA")
+    all_exposures.filter(
         (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
     )
 
     return ClassifiedExposuresBundle(
         all_exposures=all_exposures,
-        sa_exposures=sa_exposures,
-        irb_exposures=irb_exposures,
         classification_errors=[],
     )
 
@@ -388,15 +386,13 @@ def mock_crm_bundle() -> CRMAdjustedBundle:
         }
     )
 
-    sa_exposures = exposures.filter(pl.col("approach") == "SA")
-    irb_exposures = exposures.filter(
+    exposures.filter(pl.col("approach") == "SA")
+    exposures.filter(
         (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
     )
 
     return CRMAdjustedBundle(
         exposures=exposures,
-        sa_exposures=sa_exposures,
-        irb_exposures=irb_exposures,
         crm_errors=[],
     )
 

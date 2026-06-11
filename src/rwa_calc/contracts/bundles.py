@@ -165,14 +165,13 @@ class ClassifiedExposuresBundle:
     """
     Output from the classifier component.
 
-    Contains exposures classified by exposure class and approach.
-    Splits exposures into SA-applicable and IRB-applicable sets.
+    Contains all exposures classified by exposure class and approach on a
+    single unified frame. Downstream consumers (CRM, the calculators' branch
+    split) filter on the ``approach`` column — there are no approach-split
+    frame fields.
 
     Attributes:
         all_exposures: All exposures with classification metadata
-        sa_exposures: Exposures to be processed via Standardised Approach
-        irb_exposures: Exposures to be processed via IRB (F-IRB or A-IRB)
-        slotting_exposures: Specialised lending for slotting approach
         equity_exposures: Equity exposures (SA only under Basel 3.1)
         collateral: Collateral data for CRM processing (passed through)
         collateral_links: M:N collateral-to-beneficiary linkage (passed through)
@@ -184,9 +183,6 @@ class ClassifiedExposuresBundle:
     """
 
     all_exposures: pl.LazyFrame
-    sa_exposures: pl.LazyFrame
-    irb_exposures: pl.LazyFrame
-    slotting_exposures: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
     ciu_holdings: pl.LazyFrame | None = None
     collateral: pl.LazyFrame | None = None
@@ -211,15 +207,14 @@ class CRMAdjustedBundle:
     - Guarantee effects (substitution)
     - Provision effects (SCRA/GCRA)
 
-    EAD and LGD values are adjusted based on CRM.
+    EAD and LGD values are adjusted based on CRM. All exposures travel on
+    the single unified frame; the calculators' branch split filters on the
+    ``approach`` column. The per-exposure CRM audit projection is sunk to
+    the opt-in audit cache (``crm_audit.parquet``), not carried as a field.
 
     Attributes:
-        exposures: Exposures with CRM-adjusted EAD and LGD
-        sa_exposures: SA exposures after CRM
-        irb_exposures: IRB exposures after CRM
-        slotting_exposures: Specialised lending exposures for slotting approach
+        exposures: Exposures with CRM-adjusted EAD and LGD (unified frame)
         equity_exposures: Equity exposures (passed through, no CRM)
-        crm_audit: Detailed audit trail of CRM application
         collateral_allocation: How collateral was allocated to exposures
         collateral_link_allocation: How each finite collateral item was split
             across its linked beneficiaries (one row per resolved
@@ -229,12 +224,8 @@ class CRMAdjustedBundle:
     """
 
     exposures: pl.LazyFrame
-    sa_exposures: pl.LazyFrame
-    irb_exposures: pl.LazyFrame
-    slotting_exposures: pl.LazyFrame | None = None
     equity_exposures: pl.LazyFrame | None = None
     ciu_holdings: pl.LazyFrame | None = None
-    crm_audit: pl.LazyFrame | None = None
     collateral_allocation: pl.LazyFrame | None = None
     collateral_link_allocation: pl.LazyFrame | None = None
     # Audit trail emitted by the RealEstateSplitter stage. One row per
@@ -446,62 +437,6 @@ class RawCCRBundle:
     margin_agreements: MarginAgreementBundle
     ccr_collateral: CCRCollateralBundle
     failed_trades: FailedTradesBundle | None = None
-    errors: list[CalculationError] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class SAResultBundle:
-    """
-    Output from the SA calculator component.
-
-    Contains Standardised Approach RWA calculations.
-
-    Attributes:
-        results: SA calculation results with risk weights and RWA
-        calculation_audit: Detailed calculation breakdown
-        errors: Any errors during SA calculation
-    """
-
-    results: pl.LazyFrame
-    calculation_audit: pl.LazyFrame | None = None
-    errors: list[CalculationError] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class IRBResultBundle:
-    """
-    Output from the IRB calculator component.
-
-    Contains IRB RWA calculations (F-IRB and A-IRB).
-
-    Attributes:
-        results: IRB calculation results with K, RW, RWA
-        expected_loss: Expected loss calculations
-        calculation_audit: Detailed calculation breakdown (PD, LGD, M, R, K)
-        errors: Any errors during IRB calculation
-    """
-
-    results: pl.LazyFrame
-    expected_loss: pl.LazyFrame | None = None
-    calculation_audit: pl.LazyFrame | None = None
-    errors: list[CalculationError] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class SlottingResultBundle:
-    """
-    Output from the Slotting calculator component.
-
-    Contains slotting approach RWA calculations for specialised lending.
-
-    Attributes:
-        results: Slotting calculation results with risk weights and RWA
-        calculation_audit: Detailed calculation breakdown
-        errors: Any errors during slotting calculation
-    """
-
-    results: pl.LazyFrame
-    calculation_audit: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
 
@@ -946,22 +881,14 @@ def create_empty_classified_bundle() -> ClassifiedExposuresBundle:
     """Create an empty ClassifiedExposuresBundle for testing."""
     import polars as pl
 
-    return ClassifiedExposuresBundle(
-        all_exposures=pl.LazyFrame(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-    )
+    return ClassifiedExposuresBundle(all_exposures=pl.LazyFrame())
 
 
 def create_empty_crm_adjusted_bundle() -> CRMAdjustedBundle:
     """Create an empty CRMAdjustedBundle for testing."""
     import polars as pl
 
-    return CRMAdjustedBundle(
-        exposures=pl.LazyFrame(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-    )
+    return CRMAdjustedBundle(exposures=pl.LazyFrame())
 
 
 def create_empty_reconciliation_bundle() -> ReconciliationBundle:

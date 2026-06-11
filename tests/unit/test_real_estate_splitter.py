@@ -72,8 +72,6 @@ def _build_bundle(rows: list[dict[str, Any]]) -> CRMAdjustedBundle:
     lf = pl.DataFrame(expanded).lazy()
     return CRMAdjustedBundle(
         exposures=lf,
-        sa_exposures=lf,
-        irb_exposures=pl.LazyFrame(),
     )
 
 

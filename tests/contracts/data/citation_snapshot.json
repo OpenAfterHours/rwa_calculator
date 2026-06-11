@@ -210,7 +210,7 @@
     "CRR Art. 230",
     "CRR Art. 231"
   ],
-  "rwa_calc.engine.crm.processor::CRMProcessor.apply_crm": [
+  "rwa_calc.engine.crm.processor::CRMProcessor.get_crm_unified_bundle": [
     "CRR Art. 194"
   ],
   "rwa_calc.engine.crm.provisions::resolve_provisions": [
@@ -237,12 +237,12 @@
   "rwa_calc.engine.equity.calculator::EquityCalculator._net_short_positions": [
     "CRR Art. 155(2)"
   ],
-  "rwa_calc.engine.equity.calculator::EquityCalculator.calculate": [
-    "CRR Art. 133",
-    "CRR Art. 155"
-  ],
   "rwa_calc.engine.equity.calculator::EquityCalculator.calculate_branch": [
     "CRR Art. 133"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator.get_equity_result_bundle": [
+    "CRR Art. 133",
+    "CRR Art. 155"
   ],
   "rwa_calc.engine.equity.calculator::_append_ciu_branches": [
     "PS1/26, paragraph 132"

@@ -89,14 +89,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Assert: should have 3 sub-rows
@@ -161,14 +159,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Total guaranteed should not exceed EAD
@@ -224,14 +220,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Assert: 2 rows (1 guarantor + remainder)
@@ -286,14 +280,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Assert: single row unchanged
@@ -337,14 +329,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Assert: total ead_final across sub-rows should equal original EAD
@@ -387,14 +377,12 @@ class TestMultiGuarantorSplit:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
         # Act
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Assert: each guarantor sub-row has the correct post-CRM counterparty

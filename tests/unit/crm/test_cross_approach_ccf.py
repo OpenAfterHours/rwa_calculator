@@ -98,9 +98,6 @@ def _make_bundle(
         )
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=pl.LazyFrame(),
         equity_exposures=None,
         counterparty_lookup=CounterpartyLookup(
             counterparties=counterparties,
@@ -192,7 +189,7 @@ def _run_crm(
     rating_inheritance = pl.LazyFrame(rating_rows) if rating_rows else None
 
     bundle = _make_bundle(exposures, guarantees, counterparties, rating_inheritance)
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     df: pl.DataFrame = result.exposures.collect()
     return df
 

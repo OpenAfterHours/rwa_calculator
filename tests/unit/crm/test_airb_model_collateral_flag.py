@@ -136,9 +136,6 @@ _COLL_SCHEMA: dict[str, pl.DataType] = {
 def _make_bundle(exposures: pl.LazyFrame, collateral: pl.LazyFrame) -> ClassifiedExposuresBundle:
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=pl.LazyFrame(),
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),
         collateral=collateral,
@@ -156,7 +153,7 @@ def _run(
     exposures_lf = pl.LazyFrame(exposures)
     collateral_lf = pl.LazyFrame(collateral, schema=_COLL_SCHEMA)
     bundle = _make_bundle(exposures_lf, collateral_lf)
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     return result.exposures.collect(), result.crm_errors
 
 

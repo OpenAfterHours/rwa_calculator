@@ -5,7 +5,7 @@ Validates that classified exposures flow correctly into CRM processing:
 - Approach-specific CRM treatment (SA CCF, FIRB supervisory LGD, AIRB modelled LGD)
 - Provision column initialisation
 - CCF application for on- and off-balance sheet items
-- Approach split correctness (sa_exposures, irb_exposures, slotting_exposures)
+- Approach split correctness (filtering the unified frame on `approach`)
 
 Why Priority 2: The classifier→CRM boundary is where approach assignment
 meets EAD/LGD adjustment. Misrouted exposures here silently get wrong
@@ -120,7 +120,7 @@ def _run_pipeline(
     """Run hierarchy + classifier + CRM and return the CRMAdjustedBundle."""
     resolved = resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_adjusted_bundle(classified, config)
+    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 # =============================================================================
@@ -206,7 +206,7 @@ class TestApproachSpecificCRM:
     def test_slotting_classified_exposure_passes_through_crm(
         self, hierarchy_resolver, classifier, crm_processor, crr_config
     ):
-        """When no slotting exposures exist, slotting_exposures is empty."""
+        """When no slotting exposures exist, the slotting filter is empty."""
         # Standard corporate does not trigger slotting classification
         bundle = make_raw_data_bundle(
             counterparties=[make_counterparty(entity_type="corporate")],
@@ -218,10 +218,11 @@ class TestApproachSpecificCRM:
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
 
-        # No specialised lending -> slotting split should be empty
-        if crm_bundle.slotting_exposures is not None:
-            slotting_df = crm_bundle.slotting_exposures.collect()
-            assert slotting_df.height == 0
+        # No specialised lending -> slotting filter should be empty
+        slotting_df = crm_bundle.exposures.filter(
+            pl.col("approach") == ApproachType.SLOTTING.value
+        ).collect()
+        assert slotting_df.height == 0
 
     def test_mixed_approaches_in_single_portfolio(
         self, hierarchy_resolver, classifier, crm_processor, crr_firb_config
@@ -548,7 +549,7 @@ class TestApproachSplit:
     def test_sa_exposures_only_contain_sa_approach(
         self, hierarchy_resolver, classifier, crm_processor, crr_config
     ):
-        """CRM bundle's sa_exposures only have approach=standardised."""
+        """The unified frame's SA subset only has approach=standardised."""
         bundle = make_raw_data_bundle(
             counterparties=[make_counterparty(entity_type="corporate")],
             loans=[make_loan()],
@@ -558,7 +559,9 @@ class TestApproachSplit:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        sa_df = crm_bundle.sa_exposures.collect()
+        sa_df = crm_bundle.exposures.filter(
+            pl.col("approach") == ApproachType.SA.value
+        ).collect()
 
         assert sa_df.height > 0
         approaches = sa_df["approach"].unique().to_list()
@@ -567,7 +570,7 @@ class TestApproachSplit:
     def test_irb_exposures_contain_firb_and_airb(
         self, hierarchy_resolver, classifier, crm_processor, crr_full_irb_config
     ):
-        """CRM bundle's irb_exposures have FIRB and/or AIRB approaches."""
+        """The unified frame's IRB subset has FIRB and/or AIRB approaches."""
         bundle = _bundle_with_ratings(
             make_raw_data_bundle(
                 counterparties=[
@@ -623,7 +626,9 @@ class TestApproachSplit:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_full_irb_config, bundle
         )
-        irb_df = crm_bundle.irb_exposures.collect()
+        irb_df = crm_bundle.exposures.filter(
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        ).collect()
 
         assert irb_df.height > 0
         irb_approaches = set(irb_df["approach"].unique().to_list())
@@ -667,13 +672,14 @@ class TestApproachSplit:
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
 
-        total = crm_bundle.exposures.collect().height
-        sa_count = crm_bundle.sa_exposures.collect().height
-        irb_count = crm_bundle.irb_exposures.collect().height
-        slotting_count = (
-            crm_bundle.slotting_exposures.collect().height
-            if crm_bundle.slotting_exposures is not None
-            else 0
-        )
+        unified = crm_bundle.exposures.collect()
+        total = unified.height
+        sa_count = unified.filter(pl.col("approach") == ApproachType.SA.value).height
+        irb_count = unified.filter(
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        ).height
+        slotting_count = unified.filter(
+            pl.col("approach") == ApproachType.SLOTTING.value
+        ).height
 
         assert sa_count + irb_count + slotting_count == total

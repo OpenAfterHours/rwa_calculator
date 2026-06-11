@@ -100,15 +100,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # G* = 500,000 × (1 - 0.08) = 460,000
@@ -128,15 +126,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert df["guaranteed_portion"].sum() == pytest.approx(500_000.0, rel=1e-6)
@@ -154,15 +150,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=None,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert df["guaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
@@ -180,15 +174,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Full guarantee capped at EAD, then reduced by 8%
@@ -216,15 +208,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # G* = 200M × 0.92 = 184M → min(184M, 1M) = 1M (fully covered)
@@ -244,15 +234,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, basel31_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, basel31_config)
         df = result.exposures.collect()
 
         # Same 8% haircut under Basel 3.1
@@ -280,15 +268,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # No currency on guarantee → guarantee_currency is null → no haircut
@@ -317,15 +303,13 @@ class TestGuaranteeFXMismatchHaircut:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
                 _default_counterparties(), _default_rating_inheritance()
             ),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # 50% of 1M = 500k, then reduced by 8%: 500k × 0.92 = 460k
@@ -374,13 +358,11 @@ class TestMultiGuarantorFXMismatch:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         # Multi-guarantor split produces: LOAN_A__G_GUAR_EUR, LOAN_A__G_GUAR_GBP, LOAN_A__REM

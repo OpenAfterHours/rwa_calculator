@@ -81,12 +81,6 @@ def _bundle(rows: dict[str, list]) -> ClassifiedExposuresBundle:
     lf = pl.DataFrame(rows).lazy()
     return ClassifiedExposuresBundle(
         all_exposures=lf,
-        sa_exposures=lf.filter(pl.col("approach") == ApproachType.SA.value),
-        irb_exposures=lf.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        ),
-        slotting_exposures=lf.filter(pl.col("approach") == ApproachType.SLOTTING.value),
         equity_exposures=None,
         collateral=None,
         guarantees=None,
@@ -102,7 +96,7 @@ def _run(
     config: CalculationConfig,
     bundle: ClassifiedExposuresBundle,
 ) -> pl.DataFrame:
-    collected = processor.get_crm_adjusted_bundle(bundle, config).exposures.collect()
+    collected = processor.get_crm_unified_bundle(bundle, config).exposures.collect()
     assert isinstance(collected, pl.DataFrame)
     return collected
 
@@ -313,9 +307,6 @@ def _bundle_with_collateral(
 
     return ClassifiedExposuresBundle(
         all_exposures=bundle.all_exposures,
-        sa_exposures=bundle.sa_exposures,
-        irb_exposures=bundle.irb_exposures,
-        slotting_exposures=bundle.slotting_exposures,
         equity_exposures=None,
         collateral=coll_lf,
         guarantees=None,
@@ -363,7 +354,7 @@ def test_firb_off_bs_cash_collateral_phils_example(
         },
     )
 
-    df = crr_processor.get_crm_adjusted_bundle(bundle, crr_config).exposures.collect()
+    df = crr_processor.get_crm_unified_bundle(bundle, crr_config).exposures.collect()
 
     assert df["ead_for_crm"][0] == pytest.approx(100.0e6)
     assert df["ead_gross"][0] == pytest.approx(75.0e6)
@@ -407,7 +398,7 @@ def test_sa_off_bs_cash_collateral_post_ccf_recoupling(
         },
     )
 
-    df = crr_processor.get_crm_adjusted_bundle(bundle, crr_config).exposures.collect()
+    df = crr_processor.get_crm_unified_bundle(bundle, crr_config).exposures.collect()
 
     assert df["ead_for_crm"][0] == pytest.approx(100.0e6)
     assert df["ead_gross"][0] == pytest.approx(50.0e6)

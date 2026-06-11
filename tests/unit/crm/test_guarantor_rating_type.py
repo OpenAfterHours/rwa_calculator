@@ -67,8 +67,6 @@ def guaranteed_audit_bundle() -> ClassifiedExposuresBundle:
     """Fully-populated guaranteed bundle shared by the CRM audit-trail tests."""
     return ClassifiedExposuresBundle(
         all_exposures=_base_exposure(),
-        sa_exposures=_base_exposure(),
-        irb_exposures=pl.LazyFrame(),
         counterparty_lookup=CounterpartyLookup(
             counterparties=_counterparty_lookup(),
             parent_mappings=pl.LazyFrame({"child": [], "parent": []}),
@@ -285,7 +283,7 @@ class TestGuarantorRatingTypeB31:
 
 
 class TestGuarantorRatingTypeInAudit:
-    """Tests that guarantor_rating_type appears in the CRM audit trail."""
+    """Tests that guarantor_rating_type rides on the unified CRM output frame."""
 
     def test_audit_contains_rating_type_column(
         self,
@@ -296,9 +294,8 @@ class TestGuarantorRatingTypeInAudit:
         """CRM audit trail must include guarantor_rating_type."""
         data = guaranteed_audit_bundle
 
-        bundle = crm_processor.get_crm_adjusted_bundle(data, crr_config)
-        assert bundle.crm_audit is not None
-        audit = bundle.crm_audit.collect()
+        bundle = crm_processor.get_crm_unified_bundle(data, crr_config)
+        audit = bundle.exposures.collect()
         assert "guarantor_rating_type" in audit.columns
 
     def test_audit_rating_type_value_external(
@@ -310,8 +307,8 @@ class TestGuarantorRatingTypeInAudit:
         """Audit: external-only guarantor -> "external"."""
         data = guaranteed_audit_bundle
 
-        bundle = crm_processor.get_crm_adjusted_bundle(data, crr_config)
-        audit = bundle.crm_audit.collect()
+        bundle = crm_processor.get_crm_unified_bundle(data, crr_config)
+        audit = bundle.exposures.collect()
         assert audit["guarantor_rating_type"][0] == "external"
 
     def test_audit_rating_type_null_no_guarantees(
@@ -322,8 +319,6 @@ class TestGuarantorRatingTypeInAudit:
         """Audit: no guarantee -> guarantor_rating_type is null."""
         data = ClassifiedExposuresBundle(
             all_exposures=_base_exposure(),
-            sa_exposures=_base_exposure(),
-            irb_exposures=pl.LazyFrame(),
             counterparty_lookup=None,
             classification_errors=[],
             guarantees=None,
@@ -331,9 +326,8 @@ class TestGuarantorRatingTypeInAudit:
             provisions=None,
         )
 
-        bundle = crm_processor.get_crm_adjusted_bundle(data, crr_config)
-        assert bundle.crm_audit is not None
-        audit = bundle.crm_audit.collect()
+        bundle = crm_processor.get_crm_unified_bundle(data, crr_config)
+        audit = bundle.exposures.collect()
         assert "guarantor_rating_type" in audit.columns
         assert audit["guarantor_rating_type"][0] is None
 
@@ -361,8 +355,6 @@ class TestGuarantorRatingTypeEdgeCases:
         """Exposure without any guarantee should have null rating_type."""
         data = ClassifiedExposuresBundle(
             all_exposures=_base_exposure(),
-            sa_exposures=_base_exposure(),
-            irb_exposures=pl.LazyFrame(),
             counterparty_lookup=None,
             classification_errors=[],
             guarantees=None,
@@ -370,7 +362,7 @@ class TestGuarantorRatingTypeEdgeCases:
             provisions=None,
         )
 
-        bundle = crm_processor.get_crm_adjusted_bundle(data, crr_config)
+        bundle = crm_processor.get_crm_unified_bundle(data, crr_config)
         exposures = bundle.exposures.collect()
         assert "guarantor_rating_type" in exposures.columns
         assert exposures["guarantor_rating_type"][0] is None

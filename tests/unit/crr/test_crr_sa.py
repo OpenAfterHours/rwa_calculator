@@ -26,7 +26,6 @@ import polars as pl
 import pytest
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa import SACalculator, create_sa_calculator
 from rwa_calc.engine.supporting_factors import (
@@ -69,13 +68,7 @@ def _calculate_sa_exposures(
         }
     ).lazy()
 
-    bundle = CRMAdjustedBundle(
-        exposures=exposures,
-        sa_exposures=exposures,
-        irb_exposures=pl.LazyFrame(),
-    )
-
-    return cast("pl.DataFrame", calculator.calculate(bundle, config).frame.collect())
+    return cast("pl.DataFrame", calculator.calculate_branch(exposures, config).collect())
 
 
 # =============================================================================
@@ -623,14 +616,8 @@ class TestCCPRiskWeights:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.02)
 
@@ -653,14 +640,8 @@ class TestCCPRiskWeights:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.04)
 
@@ -683,14 +664,8 @@ class TestCCPRiskWeights:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.02)
 
@@ -713,14 +688,8 @@ class TestCCPRiskWeights:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         # RWA = 10,000,000 × 4% = 400,000
         assert df["rwa_pre_factor"][0] == pytest.approx(400_000.0)
@@ -744,14 +713,8 @@ class TestCCPRiskWeights:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         # Should be 2% (CCP), NOT 20% (institution CQS 1)
         assert df["risk_weight"][0] == pytest.approx(0.02)
@@ -780,14 +743,8 @@ class TestCCPRiskWeightsBasel31:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, basel31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, basel31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.02)
 
@@ -810,14 +767,8 @@ class TestCCPRiskWeightsBasel31:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, basel31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, basel31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.04)
 
@@ -1074,15 +1025,38 @@ class TestSMESupportingFactorCounterpartyAggregation:
 # =============================================================================
 
 
-class TestSACalculatorBundleProcessing:
-    """Tests for processing CRMAdjustedBundle."""
+class TestSACalculatorBranchProcessing:
+    """Tests for the branch entry point's output contract."""
 
-    def test_calculate_returns_lazyframe_result(
+    def test_calculate_branch_returns_lazyframe(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """calculate() should return LazyFrameResult."""
+        """calculate_branch() returns a LazyFrame and accepts an error channel."""
+        exposures = pl.DataFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "ead_final": [1000000.0],
+                "exposure_class": ["CORPORATE"],
+                "cqs": [None],
+                "is_sme": [False],
+                "is_infrastructure": [False],
+            }
+        ).lazy()
+        errors: list = []
+
+        result = sa_calculator.calculate_branch(exposures, crr_config, errors=errors)
+
+        assert isinstance(result, pl.LazyFrame)
+        assert isinstance(errors, list)
+
+    def test_calculate_branch_standardises_aggregator_columns(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+    ) -> None:
+        """calculate_branch() emits approach_applied and rwa_final."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -1094,45 +1068,10 @@ class TestSACalculatorBundleProcessing:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
+        df = sa_calculator.calculate_branch(exposures, crr_config).collect()
 
-        result = sa_calculator.calculate(bundle, crr_config)
-
-        assert hasattr(result, "frame")
-        assert hasattr(result, "errors")
-
-    def test_get_sa_result_bundle_returns_bundle(
-        self,
-        sa_calculator: SACalculator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """get_sa_result_bundle() should return SAResultBundle."""
-        exposures = pl.DataFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "ead_final": [1000000.0],
-                "exposure_class": ["CORPORATE"],
-                "cqs": [None],
-                "is_sme": [False],
-                "is_infrastructure": [False],
-            }
-        ).lazy()
-
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.get_sa_result_bundle(bundle, crr_config)
-
-        assert hasattr(result, "results")
-        assert hasattr(result, "calculation_audit")
-        assert hasattr(result, "errors")
+        assert "approach_applied" in df.columns
+        assert "rwa_final" in df.columns
 
     def test_multiple_exposures_processed(
         self,
@@ -1151,14 +1090,8 @@ class TestSACalculatorBundleProcessing:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         assert len(df) == 3
         # Sovereign CQS1: 0%
@@ -1220,23 +1153,15 @@ class TestSAAuditTrail:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        audit_df = result.sa.build_audit().collect()
 
-        result = sa_calculator.get_sa_result_bundle(bundle, crr_config)
-        audit = result.calculation_audit
-
-        if audit is not None:
-            audit_df = audit.collect()
-            assert "sa_calculation" in audit_df.columns
-            calc_str = audit_df["sa_calculation"][0]
-            assert "EAD=" in calc_str
-            assert "RW=" in calc_str
-            assert "SF=" in calc_str
-            assert "RWA=" in calc_str
+        assert "sa_calculation" in audit_df.columns
+        calc_str = audit_df["sa_calculation"][0]
+        assert "EAD=" in calc_str
+        assert "RW=" in calc_str
+        assert "SF=" in calc_str
+        assert "RWA=" in calc_str
 
 
 # =============================================================================

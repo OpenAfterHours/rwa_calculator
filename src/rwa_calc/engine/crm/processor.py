@@ -28,7 +28,7 @@ Usage:
     from rwa_calc.engine.crm.processor import CRMProcessor
 
     processor = CRMProcessor()
-    adjusted = processor.apply_crm(classified_data, config)
+    adjusted = processor.get_crm_unified_bundle(classified_data, config)
 """
 
 from __future__ import annotations
@@ -47,10 +47,9 @@ from rwa_calc.contracts.errors import (
     ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
     ERROR_INELIGIBLE_COLLATERAL,
     ERROR_INVALID_GUARANTEE,
-    LazyFrameResult,
     crm_warning,
 )
-from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod
+from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.ccf import CCFCalculator
 from rwa_calc.engine.crm import collateral as collateral_mod
 from rwa_calc.engine.crm import guarantees as guarantees_mod
@@ -501,168 +500,37 @@ class CRMProcessor:
         self._is_basel_3_1 = is_basel_3_1
 
     @cites("CRR Art. 194")
-    def apply_crm(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Apply credit risk mitigation to exposures.
-
-        Args:
-            data: Classified exposures from classifier
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with CRM-adjusted exposures and any errors
-        """
-        bundle = self.get_crm_adjusted_bundle(data, config)
-
-        return LazyFrameResult(
-            frame=bundle.exposures,
-            errors=bundle.crm_errors,
-        )
-
-    def get_crm_adjusted_bundle(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> CRMAdjustedBundle:
-        """
-        Apply CRM and return as a bundle.
-
-        Args:
-            data: Classified exposures from classifier
-            config: Calculation configuration
-
-        Returns:
-            CRMAdjustedBundle with adjusted exposures
-        """
-        errors: list[CalculationError] = []
-
-        # Step 0: PRA Art. 191A(2)(e)(i) two-layer protection look-through.
-        # Re-anchors collateral pledged against a guarantee onto the obligor
-        # exposure when the bank elects "funded_only" — and suppresses the
-        # guarantee row so RWSM substitution does not also apply.  Runs
-        # before any other CRM step so the rewritten collateral / guarantee
-        # frames feed the rest of the pipeline normally.
-        guarantees_lf, collateral_lf, look_through_errors = apply_funded_only_look_through(
-            data.guarantees, data.collateral
-        )
-        errors.extend(look_through_errors)
-
-        # Steps 1-3: provisions -> CCF -> init EAD -> materialise barrier
-        exposures = self._run_ead_pipeline(data, config)
-
-        # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
-        exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
-
-        # Step 3.55: Split finite collateral values across linked beneficiaries
-        # (CRR Art. 230-231) when a collateral_links table is supplied. Runs
-        # before FCSM precompute so the Simple Method sees the per-beneficiary
-        # slices. No-op when no links table is present.
-        collateral, link_allocation = self._apply_collateral_links(
-            exposures, collateral, data, config, errors
-        )
-
-        # Step 3.6: Pre-compute FCSM columns if Simple Method is elected
-        # Must run BEFORE Comprehensive Method (which is still needed for IRB LGD)
-        use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
-        if use_simple_method and has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-            exposures = compute_fcsm_columns(exposures, collateral, config)
-
-        # Step 4: Apply collateral (if available and valid)
-        # Under Simple Method, the Comprehensive pipeline still runs for IRB LGD
-        # adjustment. SA EAD reduction is undone in Step 4b.
-        exposures, collateral_applied = self._apply_collateral_step(
-            exposures, collateral, config, errors, use_simple_method=use_simple_method
-        )
-
-        # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
-        # The Comprehensive pipeline reduced SA EAD by collateral_adjusted_value,
-        # but Art. 222 does not reduce EAD — it substitutes risk weights instead.
-        if use_simple_method:
-            exposures = undo_sa_ead_reduction(exposures)
-
-        # Step 4c: Pre-compute life insurance method columns (Art. 232).
-        exposures = self._apply_life_insurance_step(exposures, collateral, config)
-
-        # Step 5: Apply guarantees (if available and valid)
-        exposures = self._apply_guarantees_step(exposures, guarantees_lf, data, config, errors)
-
-        # Step 6: Calculate final EAD after all CRM adjustments
-        # Provisions already baked into ead_pre_crm — no double deduction
-        exposures = self._finalize_ead(exposures)
-
-        # Step 7: Add CRM audit trail
-        exposures = self._add_crm_audit(exposures)
-
-        # Materialise CRM results before the approach split fan-out.
-        # The pipeline runs independent .collect() calls on each branch
-        # (SA, IRB, slotting) via has_rows() and individual calculators.
-        # Without this collect, the full pipeline plan is re-evaluated per
-        # branch and the plan depth causes Polars optimizer segfaults.
-        # In streaming mode, spills to disk instead of loading into memory.
-        exposures = materialise_edge(exposures, config, "crm_post_audit_fanout")
-
-        # Split by approach for output
-        sa_exposures = exposures.filter(pl.col("approach") == ApproachType.SA.value)
-        irb_exposures = exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        )
-        slotting_exposures = exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value)
-
-        crm_audit = self._build_crm_audit(exposures)
-        collateral_allocation = (
-            self._build_collateral_allocation(exposures) if collateral_applied else None
-        )
-
-        # Opt-in audit cache: persist the exposure-level audit and per-type
-        # allocation frames for offline inspection. No-op unless
-        # config.audit_cache_dir is set.
-        sink_audit(crm_audit, config, "crm_audit")
-        if collateral_allocation is not None:
-            sink_audit(collateral_allocation, config, "collateral_allocation")
-
-        return CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=sa_exposures,
-            irb_exposures=irb_exposures,
-            slotting_exposures=slotting_exposures,
-            equity_exposures=data.equity_exposures,  # Pass through equity (no CRM)
-            ciu_holdings=data.ciu_holdings,
-            crm_audit=crm_audit,
-            collateral_allocation=collateral_allocation,
-            collateral_link_allocation=link_allocation,
-            securitisation_audit=data.securitisation_audit,
-            crm_errors=errors,
-        )
-
     def get_crm_unified_bundle(
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
     ) -> CRMAdjustedBundle:
         """
-        Apply CRM without fan-out split. No mid-pipeline collect.
+        Apply CRM on the unified exposure frame (single-pass pipeline).
 
-        Same CRM processing as get_crm_adjusted_bundle() but skips the
-        collect().lazy() materialisation barrier and approach split. Returns
-        the unified LazyFrame for single-pass calculator processing.
+        Runs the full CRM chain — look-through, provisions, CCF, collateral
+        (Comprehensive, plus FCSM precompute under a Simple Method election),
+        life insurance, guarantees — and returns the unified LazyFrame for
+        the calculators' approach split. Laziness is strictly intra-stage:
+        the two sanctioned checkpoints (``crm_post_ead``,
+        ``crm_pre_guarantee_unified``) and the ``crm_exit`` stage edge keep
+        the plan shallow.
 
         Args:
             data: Classified exposures from classifier
             config: Calculation configuration
 
         Returns:
-            CRMAdjustedBundle with unified exposures (split fields empty)
+            CRMAdjustedBundle with all exposures in the unified frame
         """
         errors: list[CalculationError] = []
 
         # Step 0: PRA Art. 191A(2)(e)(i) two-layer protection look-through.
-        # Mirrors get_crm_adjusted_bundle so the unified path honours the
-        # funded-only election before any other CRM step runs.
+        # Re-anchors collateral pledged against a guarantee onto the obligor
+        # exposure when the bank elects "funded_only" — and suppresses the
+        # guarantee row so RWSM substitution does not also apply. Runs first
+        # so the rewritten collateral / guarantee frames feed the rest of
+        # the CRM chain normally.
         guarantees_lf, collateral_lf, look_through_errors = apply_funded_only_look_through(
             data.guarantees, data.collateral
         )
@@ -682,8 +550,8 @@ class CRMProcessor:
         )
 
         # Step 3.8: Pre-compute FCSM columns if Simple Method is elected
-        # (Art. 222). Mirrors Step 3.6 of get_crm_adjusted_bundle: must run
-        # BEFORE the Comprehensive Method (still needed for IRB LGD).
+        # (Art. 222). Must run BEFORE the Comprehensive Method (which is
+        # still needed for IRB LGD adjustment).
         use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
         if use_simple_method:
             if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
@@ -694,7 +562,7 @@ class CRMProcessor:
 
                 exposures = _add_default_fcsm_columns(exposures)
 
-        # Step 4: Apply collateral (unified path — no misdirected-AIRB diagnostic)
+        # Step 4: Apply collateral (if available and valid)
         exposures, collateral_applied = self._apply_collateral_unified_step(
             exposures, collateral, config, errors
         )
@@ -748,12 +616,8 @@ class CRMProcessor:
 
         return CRMAdjustedBundle(
             exposures=exposures,
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
-            slotting_exposures=None,
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
-            crm_audit=None,  # Audit computed at collect time if needed
             collateral_allocation=collateral_allocation,
             collateral_link_allocation=link_allocation,
             securitisation_audit=data.securitisation_audit,
@@ -814,35 +678,6 @@ class CRMProcessor:
             collateral = netting_collateral
         return exposures, collateral
 
-    def _apply_collateral_step(
-        self,
-        exposures: pl.LazyFrame,
-        collateral: pl.LazyFrame | None,
-        config: CalculationConfig,
-        errors: list[CalculationError],
-        *,
-        use_simple_method: bool,
-    ) -> tuple[pl.LazyFrame, bool]:
-        """Apply collateral with misdirected-AIRB diagnostics (fan-out path)."""
-        if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-            assert collateral is not None  # narrowed by has_required_columns
-            self._record_misdirected_airb_errors(exposures, collateral, config, errors)
-            exposures = self.apply_collateral(exposures, collateral, config)
-            return exposures, True
-        # No (valid) collateral path
-        self._record_missing_collateral_columns(collateral, errors)
-        # No collateral: still need to set F-IRB supervisory LGD based on seniority.
-        # Under B31, AIRB Foundation/169B exposures also get formula-based LGD.
-        exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-            exposures, self._is_basel_3_1, config=config
-        )
-        if use_simple_method:
-            # Add default (zero) FCSM columns when no collateral
-            from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns
-
-            exposures = _add_default_fcsm_columns(exposures)
-        return exposures, False
-
     def _apply_collateral_links(
         self,
         exposures: pl.LazyFrame,
@@ -899,12 +734,19 @@ class CRMProcessor:
         config: CalculationConfig,
         errors: list[CalculationError],
     ) -> tuple[pl.LazyFrame, bool]:
-        """Apply collateral (unified path — no misdirected diagnostics)."""
+        """Apply collateral with misdirected-AIRB diagnostics."""
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-            assert collateral is not None
+            assert collateral is not None  # narrowed by has_required_columns
+            # Cheap no-op unless the collateral table actually carries the
+            # is_airb_model_collateral flag (early-return inside the finder).
+            self._record_misdirected_airb_errors(exposures, collateral, config, errors)
             exposures = self.apply_collateral(exposures, collateral, config)
             return exposures, True
+        # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
+        # No collateral: still need to set F-IRB supervisory LGD based on
+        # seniority. Under B31, AIRB Foundation/169B exposures also get
+        # formula-based LGD.
         exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
             exposures, self._is_basel_3_1, config=config
         )

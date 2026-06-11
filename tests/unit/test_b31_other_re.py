@@ -20,7 +20,6 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_OTHER_RE_CRE_FLOOR_RW,
@@ -46,10 +45,9 @@ def crr_config() -> CalculationConfig:
     return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
 
-def _make_bundle(data: dict) -> CRMAdjustedBundle:
-    """Build a CRMAdjustedBundle from a column dict."""
-    df = pl.DataFrame(data).lazy()
-    return CRMAdjustedBundle(exposures=df, sa_exposures=df, irb_exposures=pl.LazyFrame())
+def _make_bundle(data: dict) -> pl.LazyFrame:
+    """Build an SA-branch exposures frame from a column dict."""
+    return pl.DataFrame(data).lazy()
 
 
 # =============================================================================
@@ -387,8 +385,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(1.50)
 
     def test_non_qualifying_resi_non_income_cp_rw(
@@ -409,8 +407,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         # Unrated counterparty RW = 1.0 (from CQS table fallback)
         assert df["risk_weight"][0] == pytest.approx(1.00)
 
@@ -432,8 +430,8 @@ class TestOtherRESACalculator:
                 "property_type": ["commercial"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(1.50)
 
     def test_non_qualifying_cre_non_income_max_60_cp(
@@ -454,8 +452,8 @@ class TestOtherRESACalculator:
                 "property_type": ["commercial"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(1.00)
 
     def test_non_qualifying_cre_rated_cqs1_floor_binds(
@@ -476,8 +474,8 @@ class TestOtherRESACalculator:
                 "property_type": ["commercial"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(0.60)
 
     def test_qualifying_re_unchanged(
@@ -498,8 +496,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         # Qualifying RESI: loan-splitting at 55% threshold
         # LTV=50%, secured_share = min(1.0, 0.55/0.50) = 1.0 → fully secured at 20%
         assert df["risk_weight"][0] == pytest.approx(0.20)
@@ -522,8 +520,8 @@ class TestOtherRESACalculator:
             }
         )
         # is_qualifying_re not set → null → treated as qualifying
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         # Should get qualifying RESI treatment (20% at LTV 50%)
         assert df["risk_weight"][0] == pytest.approx(0.20)
 
@@ -545,9 +543,8 @@ class TestOtherRESACalculator:
         df = pl.DataFrame(data).lazy()
         # Confirm column is NOT in the schema
         assert "is_qualifying_re" not in df.collect_schema().names()
-        bundle = CRMAdjustedBundle(exposures=df, sa_exposures=df, irb_exposures=pl.LazyFrame())
-        result = sa_calculator.calculate(bundle, b31_config)
-        df_out = result.frame.collect()
+        result = sa_calculator.calculate_branch(df, b31_config)
+        df_out = result.collect()
         # Should get qualifying RESI treatment (20%)
         assert df_out["risk_weight"][0] == pytest.approx(0.20)
 
@@ -570,8 +567,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         assert df["risk_weight"][0] == pytest.approx(1.50)
         assert df["rwa_post_factor"][0] == pytest.approx(ead * 1.50)
 
@@ -593,8 +590,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential"],
             }
         )
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, crr_config)
+        df = result.collect()
         # CRR: standard mortgage treatment regardless of is_qualifying_re
         # LTV 50% ≤ 80% threshold → 35% residential RW (Art. 125)
         assert df["risk_weight"][0] == pytest.approx(0.35)
@@ -621,8 +618,8 @@ class TestOtherRESACalculator:
                 "is_qualifying_re": [True],
             }
         )
-        q_result = sa_calculator.calculate(q_bundle, b31_config)
-        q_df = q_result.frame.collect()
+        q_result = sa_calculator.calculate_branch(q_bundle, b31_config)
+        q_df = q_result.collect()
 
         # Non-qualifying: income-dependent → 150%
         nq_bundle = _make_bundle(
@@ -632,8 +629,8 @@ class TestOtherRESACalculator:
                 "is_qualifying_re": [False],
             }
         )
-        nq_result = sa_calculator.calculate(nq_bundle, b31_config)
-        nq_df = nq_result.frame.collect()
+        nq_result = sa_calculator.calculate_branch(nq_bundle, b31_config)
+        nq_df = nq_result.collect()
 
         assert nq_df["risk_weight"][0] > q_df["risk_weight"][0]
         assert q_df["risk_weight"][0] == pytest.approx(0.30)  # Income-producing RESI
@@ -657,8 +654,8 @@ class TestOtherRESACalculator:
                 "property_type": ["residential", "residential", "commercial"],
             }
         )
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect().sort("exposure_reference")
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect().sort("exposure_reference")
         # NQ001: non-qualifying RESI income → 150%
         assert df["risk_weight"][0] == pytest.approx(1.50)
         # NQ002: non-qualifying CRE non-income → max(60%, 100%) = 100%
@@ -696,8 +693,8 @@ class TestOtherRESACalculator:
             }
         )
         # Act
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         # Assert
         assert df["risk_weight"][0] == pytest.approx(0.75)
         assert df["rwa_post_factor"][0] == pytest.approx(750_000.0)
@@ -729,8 +726,8 @@ class TestOtherRESACalculator:
             }
         )
         # Act
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(bundle, b31_config)
+        df = result.collect()
         # Assert
         assert df["risk_weight"][0] == pytest.approx(0.75)
         assert df["rwa_post_factor"][0] == pytest.approx(750_000.0)

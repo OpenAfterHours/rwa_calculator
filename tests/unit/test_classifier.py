@@ -1971,7 +1971,9 @@ class TestExposureSplitting:
         bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
         result = classifier.classify(bundle, crr_config)
 
-        sa_df = result.sa_exposures.collect()
+        sa_df = result.all_exposures.filter(
+            pl.col("approach").is_in([ApproachType.SA.value, ApproachType.EQUITY.value])
+        ).collect()
 
         # All exposures should be in SA (SA-only config)
         assert len(sa_df) == 4
@@ -1987,7 +1989,9 @@ class TestExposureSplitting:
         bundle = create_resolved_bundle(simple_exposures, corporate_counterparties)
         result = classifier.classify(bundle, crr_config)
 
-        irb_df = result.irb_exposures.collect()
+        irb_df = result.all_exposures.filter(
+            pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        ).collect()
 
         # No IRB exposures with SA-only config
         assert len(irb_df) == 0
@@ -2062,8 +2066,6 @@ class TestReturnTypes:
         result = classifier.classify(bundle, crr_config)
 
         assert result.all_exposures is not None
-        assert result.sa_exposures is not None
-        assert result.irb_exposures is not None
         assert result.classification_audit is not None
         assert isinstance(result.classification_errors, list)
 

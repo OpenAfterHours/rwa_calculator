@@ -54,7 +54,7 @@ def _run_through_hierarchy_classifier_crm(
     """Run a RawDataBundle through hierarchy → classifier → CRM."""
     resolved = hierarchy_resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_adjusted_bundle(classified, config)
+    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 def _build_crm_adjusted_with_equity(
@@ -70,8 +70,6 @@ def _build_crm_adjusted_with_equity(
     empty = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
     return CRMAdjustedBundle(
         exposures=empty,
-        sa_exposures=empty,
-        irb_exposures=empty,
         equity_exposures=equity_lf,
     )
 

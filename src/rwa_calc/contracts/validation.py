@@ -39,8 +39,6 @@ from rwa_calc.data.column_spec import ColumnSpec
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
-        ClassifiedExposuresBundle,
-        CRMAdjustedBundle,
         RawDataBundle,
         ResolvedHierarchyBundle,
     )
@@ -303,76 +301,6 @@ def validate_resolved_hierarchy_bundle(
                 category=ErrorCategory.SCHEMA_VALIDATION,
             )
         )
-
-    return errors
-
-
-def validate_classified_bundle(
-    bundle: ClassifiedExposuresBundle,
-    expected_columns: list[str],
-) -> list[CalculationError]:
-    """
-    Validate ClassifiedExposuresBundle has expected classification columns.
-
-    Args:
-        bundle: ClassifiedExposuresBundle to validate
-        expected_columns: List of column names expected in classified frames
-
-    Returns:
-        List of CalculationError objects for any issues
-    """
-    errors: list[CalculationError] = []
-
-    for frame_name, lf in [
-        ("all_exposures", bundle.all_exposures),
-        ("sa_exposures", bundle.sa_exposures),
-        ("irb_exposures", bundle.irb_exposures),
-    ]:
-        missing = validate_required_columns(lf, expected_columns, context=frame_name)
-        for msg in missing:
-            errors.append(
-                CalculationError(
-                    code=ERROR_MISSING_FIELD,
-                    message=msg,
-                    severity=ErrorSeverity.ERROR,
-                    category=ErrorCategory.SCHEMA_VALIDATION,
-                )
-            )
-
-    return errors
-
-
-def validate_crm_adjusted_bundle(
-    bundle: CRMAdjustedBundle,
-    expected_columns: list[str],
-) -> list[CalculationError]:
-    """
-    Validate CRMAdjustedBundle has expected CRM-related columns.
-
-    Args:
-        bundle: CRMAdjustedBundle to validate
-        expected_columns: List of column names expected
-
-    Returns:
-        List of CalculationError objects for any issues
-    """
-    errors: list[CalculationError] = []
-
-    for frame_name, lf in [
-        ("exposures", bundle.exposures),
-        ("sa_exposures", bundle.sa_exposures),
-        ("irb_exposures", bundle.irb_exposures),
-    ]:
-        missing = validate_required_columns(lf, expected_columns, context=frame_name)
-        for msg in missing:
-            errors.append(
-                CalculationError(
-                    code=ERROR_MISSING_FIELD,
-                    message=msg,
-                    severity=ErrorSeverity.ERROR,
-                    category=ErrorCategory.SCHEMA_VALIDATION,
-                )
-            )
 
     return errors
 

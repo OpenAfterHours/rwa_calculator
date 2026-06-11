@@ -851,17 +851,25 @@ class PipelineOrchestrator:
                 # materialise_branches.
                 exposures = crm_adjusted.exposures
 
+                # Branch-path error channel: calculator data-quality warnings
+                # (SA004/SA005/SF001, EL diagnostics) accumulate here and merge
+                # into the result bundle with their ORIGINAL codes — the
+                # PipelineError channel would rewrite them to PIPELINE_*.
+                branch_errors: list[CalculationError] = []
+
                 # Compute Art. 501 E* (SME tier threshold input) across the full
                 # unified frame so SA / IRB / slotting siblings in the same
                 # lending group all contribute. Without this, each branch's
                 # apply_factors would compute the window sum on its own subset
                 # and under-count E* whenever a group spans multiple approaches.
                 # No-op when supporting factors are disabled (Basel 3.1).
-                exposures = compute_e_star_group_drawn(exposures, config)
+                exposures = compute_e_star_group_drawn(exposures, config, errors=branch_errors)
 
                 # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
                 if config.output_floor.enabled:
-                    exposures = self._sa_calculator.calculate_unified(exposures, config)
+                    exposures = self._sa_calculator.calculate_unified(
+                        exposures, config, errors=branch_errors
+                    )
 
                 # Split once by approach
                 is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
@@ -882,11 +890,15 @@ class PipelineOrchestrator:
                         pl.col("rwa_post_factor").alias("rwa_final"),
                     )
                 else:
-                    sa_result = self._sa_calculator.calculate_branch(sa_branch, config)
+                    sa_result = self._sa_calculator.calculate_branch(
+                        sa_branch, config, errors=branch_errors
+                    )
 
-                irb_result = self._irb_calculator.calculate_branch(irb_branch, config)
+                irb_result = self._irb_calculator.calculate_branch(
+                    irb_branch, config, errors=branch_errors
+                )
                 slotting_result = self._slotting_calculator.calculate_branch(
-                    slotting_branch, config
+                    slotting_branch, config, errors=branch_errors
                 )
 
                 # Collect all branches. In cpu mode, uses collect_all with CSE so
@@ -916,7 +928,7 @@ class PipelineOrchestrator:
                 equity_bundle = self._run_equity_calculator(crm_adjusted, config)
 
                 # Aggregate from already-collected DataFrames
-                return self._aggregate_results(
+                result = self._aggregate_results(
                     sa_df,
                     irb_df,
                     slotting_df,
@@ -924,6 +936,10 @@ class PipelineOrchestrator:
                     config,
                     crm_adjusted.securitisation_audit,
                 )
+                # Merge branch-path calculator warnings, codes preserved.
+                if branch_errors:
+                    result = replace(result, errors=list(result.errors) + branch_errors)
+                return result
         except Exception as e:
             self._errors.append(
                 PipelineError(

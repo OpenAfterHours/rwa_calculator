@@ -31,18 +31,16 @@ if TYPE_CHECKING:
         ComparisonBundle,
         CRMAdjustedBundle,
         EquityResultBundle,
-        RawCCRBundle,
         RawDataBundle,
         ReconciliationBundle,
         ResolvedHierarchyBundle,
     )
     from rwa_calc.contracts.config import (
         CalculationConfig,
-        CCRConfig,
         LegacyColumnMapping,
         OutputFloorConfig,
     )
-    from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
+    from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.contracts.results import ExportResult
     from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocation
 
@@ -193,84 +191,6 @@ class ClassifierProtocol(Protocol):
 
 
 @runtime_checkable
-class CCRCalculator(Protocol):
-    """
-    Protocol for the Counterparty Credit Risk EAD calculator.
-
-    Responsible for:
-    - Computing the per-netting-set Replacement Cost (RC) per Art. 275.
-    - Computing the per-netting-set Potential Future Exposure (PFE)
-      per Art. 278 (aggregate add-on x multiplier).
-    - Producing the SA-CCR EAD = alpha * (RC + PFE) per Art. 274(2),
-      with alpha = 1.4 default or firm-specific alpha under PRA permission.
-
-    First-batch scope: SA-CCR only (unmargined, single-trade netting
-    sets for CCR-A1). Simplified SA-CCR and OEM are deferred to v2.0;
-    IMM (Art. 283-294) is deferred to v2.0.
-
-    Pipeline position:
-        Classifier -> CCRCalculator -> CRMProcessor (P8.20 wiring)
-
-    The CCR EAD output is joined onto the unified exposure frame on
-    ``netting_set_id`` so downstream SA / IRB stages see a single
-    ``ead_pre_crm`` column regardless of whether the EAD came from
-    on-balance-sheet drawn/contingent rows or from SA-CCR.
-
-    Input: RawCCRBundle (the four P8.1 leaf bundles, composed in P8.2).
-    Output: LazyFrame keyed by ``netting_set_id`` with columns
-        ``rc``, ``pfe``, ``alpha``, ``ead_ccr``, ``ccr_method``.
-
-    References:
-    - CRR Art. 271 (scope), Art. 272 (definitions)
-    - PRA Rulebook CCR (CRR) Part Art. 274(2) (alpha factor)
-    - PRA Rulebook CCR (CRR) Part Art. 275(1)-(2) (RC formula)
-    - PRA Rulebook CCR (CRR) Part Art. 278 (PFE multiplier)
-    - BCBS CRE52.1-52.43
-    """
-
-    def compute_ead(
-        self,
-        data: RawCCRBundle,
-        config: CCRConfig,
-    ) -> pl.LazyFrame:
-        """Compute per-netting-set SA-CCR EAD.
-
-        Args:
-            data: CCR input bundle. The four leaf LazyFrames
-                (``trades``, ``netting_sets``, ``margin_agreements``,
-                ``ccr_collateral``) may each be empty (zero rows,
-                schema present) -- e.g. CCR-A1 has empty
-                ``margin_agreements``.
-            config: CCR-specific configuration (alpha factor, method
-                selection, MPOR overrides). Owned by P8.6.
-
-        Returns:
-            LazyFrame with one row per netting set, schema:
-
-            - ``netting_set_id`` (pl.String): primary key, mirrors
-              ``RawCCRBundle.netting_sets`` ordering.
-            - ``rc`` (pl.Float64): Replacement Cost per Art. 275.
-              Non-negative.
-            - ``pfe`` (pl.Float64): Potential Future Exposure per
-              Art. 278. Non-negative.
-            - ``alpha`` (pl.Float64): alpha factor per Art. 274(2).
-              Sourced from ``config`` (default 1.4).
-            - ``ead_ccr`` (pl.Float64): alpha * (RC + PFE).
-              Non-negative.
-            - ``ccr_method`` (pl.String): method discriminator.
-              First batch returns ``"sa_ccr"`` for every row;
-              future values include ``"simplified_sa_ccr"``,
-              ``"oem"``, ``"imm"``.
-
-        The method does not raise on data-quality issues; row-level
-        errors are accumulated on the leaf bundles' ``errors`` lists
-        by upstream stages (loader, P8.5). Bundle-wide wiring errors
-        live on ``RawCCRBundle.errors``.
-        """
-        ...
-
-
-@runtime_checkable
 class CollateralLinkAllocatorProtocol(Protocol):
     """
     Protocol for splitting one finite collateral item across many beneficiaries.
@@ -316,45 +236,8 @@ class CRMProcessorProtocol(Protocol):
     - Calculating final EAD and LGD values
 
     Input: ClassifiedExposuresBundle
-    Output: LazyFrameResult containing CRMAdjustedBundle
+    Output: CRMAdjustedBundle (unified frame; laziness intra-stage only)
     """
-
-    def apply_crm(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Apply credit risk mitigation to exposures.
-
-        Args:
-            data: Classified exposures
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with CRM-adjusted exposures and any errors
-        """
-        ...
-
-    def get_crm_adjusted_bundle(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> CRMAdjustedBundle:
-        """
-        Apply CRM and return as a bundle with approach-split exposures.
-
-        Performs full CRM pipeline including collateral, guarantees, provisions,
-        and CCF, then splits exposures by approach (SA/IRB/Slotting).
-
-        Args:
-            data: Classified exposures
-            config: Calculation configuration
-
-        Returns:
-            CRMAdjustedBundle with adjusted exposures split by approach
-        """
-        ...
 
     def get_crm_unified_bundle(
         self,
@@ -364,9 +247,9 @@ class CRMProcessorProtocol(Protocol):
         """
         Apply CRM and return a unified bundle without approach splitting.
 
-        Performs the same CRM pipeline as get_crm_adjusted_bundle but returns
-        all exposures in a single unified LazyFrame without splitting by
-        approach. Used by the pipeline for single-pass calculator processing.
+        Performs the full CRM pipeline (look-through, provisions, CCF,
+        collateral, guarantees) and returns all exposures in a single
+        unified LazyFrame for single-pass calculator processing.
 
         Args:
             data: Classified exposures
@@ -434,14 +317,16 @@ class SACalculatorProtocol(Protocol):
     - Applying LTV-based weights for real estate
     - Calculating RWA = EAD x RW
 
-    Input: CRMAdjustedBundle (SA exposures)
-    Output: LazyFrameResult with SA calculations
+    Input: pre-filtered SA rows (branch) or the unified frame (floor path)
+    Output: LazyFrame with SA RWA columns populated
     """
 
     def calculate_unified(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA risk weights on unified frame (single-pass pipeline).
@@ -449,6 +334,7 @@ class SACalculatorProtocol(Protocol):
         Args:
             exposures: Unified frame with all approaches
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             Unified frame with SA columns populated for SA rows
@@ -459,6 +345,8 @@ class SACalculatorProtocol(Protocol):
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate SA RWA on pre-filtered SA-only rows.
@@ -466,27 +354,11 @@ class SACalculatorProtocol(Protocol):
         Args:
             exposures: Pre-filtered SA rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             LazyFrame with SA RWA columns populated.
             Must include ``approach_applied`` and ``rwa_final``.
-        """
-        ...
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using Standardised Approach.
-
-        Args:
-            data: CRM-adjusted exposures (uses sa_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with SA RWA calculations
         """
         ...
 
@@ -504,14 +376,16 @@ class IRBCalculatorProtocol(Protocol):
     - Applying scaling factor (1.06)
     - Calculating RWA = K x 12.5 x EAD
 
-    Input: CRMAdjustedBundle (IRB exposures)
-    Output: LazyFrameResult with IRB calculations
+    Input: pre-filtered IRB rows
+    Output: LazyFrame with IRB RWA columns populated
     """
 
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.
@@ -519,46 +393,11 @@ class IRBCalculatorProtocol(Protocol):
         Args:
             exposures: Pre-filtered IRB rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             LazyFrame with IRB RWA columns populated.
             Must include ``approach_applied`` and ``rwa_final``.
-        """
-        ...
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using IRB approach.
-
-        Args:
-            data: CRM-adjusted exposures (uses irb_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with IRB RWA calculations
-        """
-        ...
-
-    def calculate_expected_loss(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate expected loss for IRB exposures.
-
-        EL = PD x LGD x EAD
-
-        Args:
-            data: CRM-adjusted exposures
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with expected loss calculations
         """
         ...
 
@@ -573,14 +412,16 @@ class SlottingCalculatorProtocol(Protocol):
     - Applying maturity adjustments (<2.5 years)
     - Handling HVCRE higher weights
 
-    Input: CRMAdjustedBundle (slotting exposures)
-    Output: LazyFrameResult with slotting calculations
+    Input: pre-filtered slotting rows
+    Output: LazyFrame with slotting RWA columns populated
     """
 
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA on pre-filtered slotting-only rows.
@@ -588,6 +429,7 @@ class SlottingCalculatorProtocol(Protocol):
         Args:
             exposures: Pre-filtered slotting rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
 
         Returns:
             LazyFrame with slotting RWA columns populated.
@@ -607,25 +449,8 @@ class EquityCalculatorProtocol(Protocol):
     - Handling diversified portfolio treatment for private equity
 
     Input: CRMAdjustedBundle (equity exposures)
-    Output: LazyFrameResult with equity calculations
+    Output: EquityResultBundle with equity calculations
     """
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA for equity exposures.
-
-        Args:
-            data: CRM-adjusted exposures (uses equity_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with equity RWA calculations
-        """
-        ...
 
     def get_equity_result_bundle(
         self,
@@ -826,66 +651,6 @@ class ReconciliationRunnerProtocol(Protocol):
 
         Returns:
             ReconciliationBundle with per-component reconciliation and summaries.
-        """
-        ...
-
-
-# =============================================================================
-# VALIDATION HELPER PROTOCOLS
-# =============================================================================
-
-
-@runtime_checkable
-class SchemaValidatorProtocol(Protocol):
-    """
-    Protocol for schema validation components.
-
-    Validates LazyFrame schemas against expected definitions
-    without materializing the data.
-    """
-
-    def validate(
-        self,
-        lf: pl.LazyFrame,
-        expected_schema: dict[str, pl.DataType],
-        context: str,
-    ) -> list[str]:
-        """
-        Validate LazyFrame schema against expected schema.
-
-        Args:
-            lf: LazyFrame to validate
-            expected_schema: Expected column types
-            context: Context for error messages
-
-        Returns:
-            List of validation error messages (empty if valid)
-        """
-        ...
-
-
-@runtime_checkable
-class DataQualityCheckerProtocol(Protocol):
-    """
-    Protocol for data quality checking components.
-
-    Performs data quality checks on input data.
-    """
-
-    def check(
-        self,
-        data: RawDataBundle,
-        config: CalculationConfig,
-    ) -> list[CalculationError]:
-        """
-        Run data quality checks on raw data.
-
-        Args:
-            data: Raw data bundle to check
-            config: Calculation configuration
-
-        Returns:
-            List of CalculationError for any issues found
         """
         ...
 

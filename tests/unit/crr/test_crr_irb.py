@@ -25,7 +25,6 @@ import polars as pl
 import pytest
 from tests.fixtures.single_exposure import calculate_single_irb_exposure
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import (
     IRBCalculator,
@@ -532,15 +531,15 @@ class TestExpectedLoss:
 # =============================================================================
 
 
-class TestIRBCalculatorBundleProcessing:
-    """Tests for processing CRMAdjustedBundle."""
+class TestIRBCalculatorBranchProcessing:
+    """Tests for the branch entry point's output contract."""
 
-    def test_calculate_returns_lazyframe_result(
+    def test_calculate_branch_returns_lazyframe(
         self,
         irb_calculator: IRBCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """calculate() should return LazyFrameResult."""
+        """calculate_branch() returns a LazyFrame and accepts an error channel."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -552,17 +551,12 @@ class TestIRBCalculatorBundleProcessing:
                 "approach": ["foundation_irb"],
             }
         ).lazy()
+        errors: list = []
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=exposures,
-        )
+        result = irb_calculator.calculate_branch(exposures, crr_config, errors=errors)
 
-        result = irb_calculator.calculate(bundle, crr_config)
-
-        assert hasattr(result, "frame")
-        assert hasattr(result, "errors")
+        assert isinstance(result, pl.LazyFrame)
+        assert isinstance(errors, list)
 
     def test_multiple_exposures_processed(
         self,
@@ -582,14 +576,7 @@ class TestIRBCalculatorBundleProcessing:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=exposures,
-        )
-
-        result = irb_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        df = irb_calculator.calculate_branch(exposures, crr_config).collect()
 
         assert len(df) == 3
         assert "rwa" in df.columns
@@ -599,12 +586,12 @@ class TestIRBCalculatorBundleProcessing:
         # All RWAs should be positive
         assert all(df["rwa"] > 0)
 
-    def test_get_irb_result_bundle_returns_bundle(
+    def test_calculate_branch_standardises_aggregator_columns(
         self,
         irb_calculator: IRBCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """get_irb_result_bundle() should return IRBResultBundle."""
+        """calculate_branch() emits approach_applied / rwa_final / EL columns."""
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -617,18 +604,11 @@ class TestIRBCalculatorBundleProcessing:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=exposures,
-        )
+        df = irb_calculator.calculate_branch(exposures, crr_config).collect()
 
-        result = irb_calculator.get_irb_result_bundle(bundle, crr_config)
-
-        assert hasattr(result, "results")
-        assert hasattr(result, "expected_loss")
-        assert hasattr(result, "calculation_audit")
-        assert hasattr(result, "errors")
+        assert "approach_applied" in df.columns
+        assert "rwa_final" in df.columns
+        assert "expected_loss" in df.columns
 
 
 # =============================================================================
@@ -744,24 +724,16 @@ class TestIRBAuditTrail:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=exposures,
-        )
+        result = irb_calculator.calculate_branch(exposures, crr_config)
+        audit_df = result.irb.build_audit().collect()
 
-        result = irb_calculator.get_irb_result_bundle(bundle, crr_config)
-        audit = result.calculation_audit
-
-        if audit is not None:
-            audit_df = audit.collect()
-            assert "irb_calculation" in audit_df.columns
-            calc_str = audit_df["irb_calculation"][0]
-            assert "PD=" in calc_str
-            assert "LGD=" in calc_str
-            assert "R=" in calc_str
-            assert "K=" in calc_str
-            assert "RWA=" in calc_str
+        assert "irb_calculation" in audit_df.columns
+        calc_str = audit_df["irb_calculation"][0]
+        assert "PD=" in calc_str
+        assert "LGD=" in calc_str
+        assert "R=" in calc_str
+        assert "K=" in calc_str
+        assert "RWA=" in calc_str
 
 
 # =============================================================================

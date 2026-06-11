@@ -40,7 +40,6 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,
@@ -293,14 +292,8 @@ class TestB31CommercialREGeneral:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # LTV 50% ≤ 55%: secured_share = 1.0, RW = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
@@ -325,14 +318,8 @@ class TestB31CommercialREGeneral:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # LTV 50% ≤ 55%: secured_share = 1.0, RW = 60% (loan-split secured portion)
         assert df["risk_weight"][0] == pytest.approx(0.60)
@@ -357,14 +344,8 @@ class TestB31CommercialREGeneral:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # secured_share = 0.55/0.75, cp_rw = 0.75 (Art. 124L(1)(a) natural person)
         secured_share = 0.55 / 0.75
@@ -393,14 +374,8 @@ class TestB31CommercialREGeneral:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # LTV = 55% → secured_share = 0.55/0.55 = 1.0 → RW = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
@@ -457,14 +432,8 @@ class TestB31CommercialREIncomeProducing:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(float(expected_rw))
 
@@ -503,14 +472,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # max(60%, min(100%, 100%)) = 100%
         assert df["risk_weight"][0] == pytest.approx(1.00)
@@ -536,14 +499,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # max(60%, min(20%, 100%)) = max(60%, 20%) = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
@@ -573,14 +530,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # CQS 5 corporate cp_rw = 150%, LTV 90% > 80% → income_rw = 110%
         # max(60%, min(150%, 110%)) = max(60%, 110%) = 110%
@@ -610,14 +561,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # CQS 5 corporate cp_rw = 150%, LTV 60% ≤ 80% → income_rw = 100%
         # max(60%, min(150%, 100%)) = max(60%, 100%) = 100%
@@ -643,14 +588,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # SME → loan-splitting: LTV 50% ≤ 55% → secured_share = 1.0 → RW = 60%
         assert df["risk_weight"][0] == pytest.approx(0.60)
@@ -675,14 +614,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # max(60%, min(100%, 100%)) = 100%
         assert df["risk_weight"][0] == pytest.approx(1.00)
@@ -709,14 +642,8 @@ class TestB31CommercialREOtherCounterparties:
             schema_overrides={"cp_is_natural_person": pl.Boolean},
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # Null → False → other counterparty: max(60%, min(100%, 100%)) = 100%
         assert df["risk_weight"][0] == pytest.approx(1.00)
@@ -740,14 +667,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # No cp_is_natural_person column → defaults to False → max/min formula
         # max(60%, min(100%, 100%)) = 100%
@@ -773,14 +694,8 @@ class TestB31CommercialREOtherCounterparties:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # Income-producing: 100% (LTV ≤ 80%) — counterparty type irrelevant
         assert df["risk_weight"][0] == pytest.approx(1.00)
@@ -804,19 +719,13 @@ class TestB31CommercialREOtherCounterparties:
 
         # Natural person: loan-splitting
         np_exp = pl.DataFrame({**base, "cp_is_natural_person": [True]}).lazy()
-        np_bundle = CRMAdjustedBundle(
-            exposures=np_exp, sa_exposures=np_exp, irb_exposures=pl.LazyFrame()
-        )
-        np_result = sa_calculator.calculate(np_bundle, b31_config)
-        np_rw = np_result.frame.collect()["risk_weight"][0]
+        np_result = sa_calculator.calculate_branch(np_exp, b31_config)
+        np_rw = np_result.collect()["risk_weight"][0]
 
         # Other counterparty: max/min formula
         oc_exp = pl.DataFrame({**base, "cp_is_natural_person": [False]}).lazy()
-        oc_bundle = CRMAdjustedBundle(
-            exposures=oc_exp, sa_exposures=oc_exp, irb_exposures=pl.LazyFrame()
-        )
-        oc_result = sa_calculator.calculate(oc_bundle, b31_config)
-        oc_rw = oc_result.frame.collect()["risk_weight"][0]
+        oc_result = sa_calculator.calculate_branch(oc_exp, b31_config)
+        oc_rw = oc_result.collect()["risk_weight"][0]
 
         # Loan-splitting at LTV 75%: 0.60 × (0.55/0.75) + 0.75 × (1 - 0.55/0.75) ≈ 64.0%
         # Residual uses Art. 124L(1)(a) natural-person counterparty weight = 0.75 (not cp_rw=1.00)
@@ -1081,14 +990,8 @@ class TestB31QRRETransactor:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.45)
 
@@ -1110,14 +1013,8 @@ class TestB31QRRETransactor:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -1194,14 +1091,8 @@ class TestB31NonRegulatoryRetail:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(1.0)
 
@@ -1224,14 +1115,8 @@ class TestB31NonRegulatoryRetail:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.45)
 
@@ -1254,14 +1139,8 @@ class TestB31NonRegulatoryRetail:
             schema_overrides={"qualifies_as_retail": pl.Boolean},
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -1315,14 +1194,8 @@ class TestB31SASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(expected_rw)
 
@@ -1386,14 +1259,8 @@ class TestRatedSASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(expected_rw)
 
@@ -1416,14 +1283,8 @@ class TestRatedSASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.80)  # PF high-quality = 80%
 
@@ -1447,14 +1308,8 @@ class TestRatedSASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.20)
         assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.20)
@@ -1478,14 +1333,8 @@ class TestRatedSASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # Rated: 75% (corporate CQS 3), not 80% (SL PF high-quality)
         assert df["risk_weight"][0] == pytest.approx(0.75)
@@ -1509,14 +1358,8 @@ class TestRatedSASpecialisedLending:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # Rated: 50% (corporate CQS 2), not 130% (SL PF pre-operational)
         assert df["risk_weight"][0] == pytest.approx(0.50)
@@ -3700,14 +3543,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.35)
 
@@ -3730,14 +3567,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["rwa_pre_factor"][0] == pytest.approx(ead * 0.35)
 
@@ -3759,14 +3590,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -3789,14 +3614,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         # QRRE transactor (45%) takes priority over payroll (35%) in the when-chain
         assert df["risk_weight"][0] == pytest.approx(0.45)
@@ -3820,14 +3639,8 @@ class TestB31PayrollPensionLoan:
             schema_overrides={"is_payroll_loan": pl.Boolean},
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -3848,14 +3661,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, b31_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, b31_config)
+        df = result.collect()
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
@@ -3877,14 +3684,8 @@ class TestB31PayrollPensionLoan:
             }
         ).lazy()
 
-        bundle = CRMAdjustedBundle(
-            exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
-        )
-
-        result = sa_calculator.calculate(bundle, crr_config)
-        df = result.frame.collect()
+        result = sa_calculator.calculate_branch(exposures, crr_config)
+        df = result.collect()
 
         # P2.17: CRR Art. 123 second subparagraph (added by CRR2, Reg (EU)
         # 2019/876 Art. 1 §68) now grants payroll / pension loans the 35% RW

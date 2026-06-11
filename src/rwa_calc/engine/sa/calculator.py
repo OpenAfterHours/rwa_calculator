@@ -29,20 +29,17 @@ References:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 # Importing the namespace module registers the ``lf.sa`` fluent API with Polars.
 import rwa_calc.engine.sa.namespace  # noqa: F401
-from rwa_calc.contracts.bundles import CRMAdjustedBundle, SAResultBundle
 from rwa_calc.contracts.errors import (
     ERROR_EQUITY_IN_MAIN_TABLE,
     CalculationError,
     ErrorCategory,
     ErrorSeverity,
-    LazyFrameResult,
 )
 from rwa_calc.domain.enums import ApproachType
 
@@ -53,119 +50,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SACalculationError:
-    """Error during SA calculation."""
-
-    error_type: str
-    message: str
-    exposure_reference: str | None = None
-
-
 class SACalculator:
     """
     Calculate RWA using Standardised Approach.
 
     Implements SACalculatorProtocol. The class is a thin orchestrator — the
     per-stage logic lives on the ``lf.sa`` namespace (see
-    ``engine/sa/namespace.py``). Each of ``get_sa_result_bundle``,
-    ``calculate_unified``, and ``calculate_branch`` reads as a fluent chain
-    of ``lf.sa.*`` calls.
+    ``engine/sa/namespace.py``). Both ``calculate_unified`` and
+    ``calculate_branch`` read as a fluent chain of ``lf.sa.*`` calls.
 
     Usage:
         calculator = SACalculator()
-        result = calculator.calculate(crm_bundle, config)
+        result = calculator.calculate_branch(sa_exposures, config)
     """
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using Standardised Approach.
-
-        Args:
-            data: CRM-adjusted exposures (uses sa_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with SA RWA calculations
-        """
-        bundle = self.get_sa_result_bundle(data, config)
-
-        # Convert bundle errors to CalculationErrors, preserving any
-        # CalculationError objects already created by sub-components
-        calc_errors: list[CalculationError] = []
-        for err in bundle.errors:
-            if isinstance(err, CalculationError):
-                calc_errors.append(err)
-            else:
-                calc_errors.append(
-                    CalculationError(
-                        code="SA001",
-                        message=str(err),
-                        severity=ErrorSeverity.ERROR,
-                        category=ErrorCategory.CALCULATION,
-                    )
-                )
-
-        return LazyFrameResult(
-            frame=bundle.results,
-            errors=calc_errors,
-        )
-
-    def get_sa_result_bundle(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> SAResultBundle:
-        """
-        Calculate SA RWA and return as a bundle.
-
-        Args:
-            data: CRM-adjusted exposures
-            config: Calculation configuration
-
-        Returns:
-            SAResultBundle with results and audit trail
-        """
-        errors: list[CalculationError] = []
-        dd_errors: list[CalculationError] = []
-        sf_errors: list[CalculationError] = []
-
-        exposures = data.sa_exposures
-
-        # Warn if equity-class rows are present in the main exposure table.
-        # These get correct SA equity RW (250% B31, 100% CRR) but miss
-        # full equity treatment (CIU approaches, transitional floor, IRB Simple).
-        self._warn_equity_in_main_table(exposures, errors)
-
-        exposures = (
-            exposures.sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config, errors=dd_errors)
-            .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config, errors=sf_errors)
-        )
-        errors.extend(dd_errors)
-        errors.extend(sf_errors)
-
-        audit = exposures.sa.build_audit()
-
-        return SAResultBundle(
-            results=exposures,
-            calculation_audit=audit,
-            errors=errors,
-        )
 
     def calculate_unified(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA risk weights to SA rows on a unified frame.
@@ -178,11 +82,16 @@ class SACalculator:
         Args:
             exposures: Unified frame with all approaches
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
+                (SA004 due diligence, SF001 SME aggregation, SA005 equity)
 
         Returns:
             Unified frame with SA columns populated for SA rows
         """
         is_sa = pl.col("approach") == ApproachType.SA.value
+
+        if errors is not None:
+            self._warn_equity_in_main_table(exposures, errors)
 
         # Risk weights + CRM substitution + guarantee + mismatch + due diligence.
         # Runs unconditionally — also provides SA-equivalent RW for the
@@ -193,7 +102,7 @@ class SACalculator:
             .sa.apply_life_insurance_rw_mapping()
             .sa.apply_guarantee_substitution(config)
             .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config)
+            .sa.apply_due_diligence_override(config, errors=errors)
         )
 
         # Store SA-equivalent RWA for ALL rows before the IRB calculator
@@ -221,7 +130,7 @@ class SACalculator:
         )
 
         # Supporting factors (SA rows only).
-        exposures = exposures.sa.apply_supporting_factors(config)
+        exposures = exposures.sa.apply_supporting_factors(config, errors=errors)
 
         return exposures
 
@@ -229,6 +138,8 @@ class SACalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate SA RWA on pre-filtered SA-only rows.
@@ -240,19 +151,24 @@ class SACalculator:
         Args:
             exposures: Pre-filtered SA rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
+                (SA004 due diligence, SF001 SME aggregation, SA005 equity)
 
         Returns:
             LazyFrame with SA RWA columns populated
         """
+        if errors is not None:
+            self._warn_equity_in_main_table(exposures, errors)
+
         exposures = (
             exposures.sa.apply_risk_weights(config)
             .sa.apply_fcsm_rw_substitution(config)
             .sa.apply_life_insurance_rw_mapping()
             .sa.apply_guarantee_substitution(config)
             .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config)
+            .sa.apply_due_diligence_override(config, errors=errors)
             .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config)
+            .sa.apply_supporting_factors(config, errors=errors)
         )
 
         # Standardise output for aggregator.

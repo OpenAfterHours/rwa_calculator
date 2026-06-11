@@ -128,12 +128,6 @@ def _create_bundle(
 
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
-        irb_exposures=exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        ),
-        slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
         equity_exposures=None,
         collateral=collateral,
         guarantees=None,
@@ -150,7 +144,7 @@ def _run_crm(
     bundle: ClassifiedExposuresBundle,
 ) -> pl.DataFrame:
     """Run CRM processing and return collected exposures."""
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     collected = result.exposures.collect()
     assert isinstance(collected, pl.DataFrame)
     return collected
@@ -528,12 +522,6 @@ class TestSequentialFillEdgeCases:
         empty_cp = create_empty_counterparty_lookup()
         bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
-            irb_exposures=exposures.filter(
-                (pl.col("approach") == ApproachType.FIRB.value)
-                | (pl.col("approach") == ApproachType.AIRB.value)
-            ),
-            slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
             equity_exposures=None,
             collateral=None,
             guarantees=None,

@@ -106,9 +106,6 @@ def _make_bundle(
     """Build a ClassifiedExposuresBundle with optional collateral."""
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=pl.LazyFrame(),
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),
         collateral=collateral,
@@ -126,7 +123,7 @@ def _run_crm(
     """Run CRM pipeline and return collected result."""
     exposures = pl.LazyFrame(exposure_rows)
     bundle = _make_bundle(exposures, collateral)
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     df: pl.DataFrame = result.exposures.collect()
     return df
 

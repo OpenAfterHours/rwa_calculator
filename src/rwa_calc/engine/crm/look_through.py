@@ -2,7 +2,7 @@
 Two-layer protection look-through for credit risk mitigation.
 
 Pipeline position:
-    CRMProcessor.get_crm_adjusted_bundle (pre-collateral / pre-guarantee fan-out)
+    CRMProcessor.get_crm_unified_bundle (Step 0, before any other CRM step)
 
 Key responsibilities:
 - Honour the PRA Art. 191A(2)(e)(i) "funded-only" election: when an unfunded

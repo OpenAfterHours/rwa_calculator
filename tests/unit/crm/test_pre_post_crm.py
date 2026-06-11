@@ -54,12 +54,10 @@ class TestPreCRMAttributePreservation:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert "pre_crm_counterparty_reference" in df.columns
@@ -98,12 +96,10 @@ class TestPreCRMAttributePreservation:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert "pre_crm_exposure_class" in df.columns
@@ -163,13 +159,11 @@ class TestGuarantorExposureClassDerivation:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         assert "post_crm_exposure_class_guaranteed" in df.columns
@@ -226,13 +220,11 @@ class TestGuarantorExposureClassDerivation:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # Entity type mapping produces lowercase class names
@@ -292,13 +284,11 @@ class TestPostCRMCompositeAttributes:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect().sort("exposure_reference")
 
         assert "is_guaranteed" in df.columns
@@ -338,12 +328,10 @@ class TestPostCRMCompositeAttributes:
 
         classified_bundle = ClassifiedExposuresBundle(
             all_exposures=exposures,
-            sa_exposures=exposures,
-            irb_exposures=pl.LazyFrame(),
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
 
-        result = crm_processor.get_crm_adjusted_bundle(classified_bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(classified_bundle, crr_config)
         df = result.exposures.collect()
 
         # For non-guaranteed exposures, post-CRM = pre-CRM

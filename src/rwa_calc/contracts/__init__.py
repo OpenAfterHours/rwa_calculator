@@ -11,7 +11,7 @@ for the RWA calculation pipeline. This module enables:
 Submodules:
 - bundles: Data transfer dataclasses for pipeline stages
 - config: CalculationConfig and related configuration classes
-- errors: CalculationError and LazyFrameResult for error handling
+- errors: CalculationError and error-code constants for error handling
 - protocols: Protocol definitions for component interfaces
 - validation: Schema validation utilities
 """
@@ -27,12 +27,9 @@ from rwa_calc.contracts.bundles import (
     CRMAdjustedBundle,
     ELPortfolioSummary,
     EquityResultBundle,
-    IRBResultBundle,
     OutputFloorSummary,
     RawDataBundle,
     ResolvedHierarchyBundle,
-    SAResultBundle,
-    SlottingResultBundle,
     TransitionalScheduleBundle,
     create_empty_classified_bundle,
     create_empty_counterparty_lookup,
@@ -82,7 +79,6 @@ from rwa_calc.contracts.errors import (
     ERROR_TYPE_MISMATCH,
     ERROR_UNKNOWN_EXPOSURE_CLASS,
     CalculationError,
-    LazyFrameResult,
     business_rule_error,
     crm_warning,
     hierarchy_error,
@@ -96,7 +92,6 @@ from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     ComparisonRunnerProtocol,
     CRMProcessorProtocol,
-    DataQualityCheckerProtocol,
     EquityCalculatorProtocol,
     HierarchyResolverProtocol,
     IRBCalculatorProtocol,
@@ -105,15 +100,12 @@ from rwa_calc.contracts.protocols import (
     PipelineProtocol,
     ResultExporterProtocol,
     SACalculatorProtocol,
-    SchemaValidatorProtocol,
     SlottingCalculatorProtocol,
 )
 
 # Validation utilities
 from rwa_calc.contracts.validation import (
     validate_ccf_modelled,
-    validate_classified_bundle,
-    validate_crm_adjusted_bundle,
     validate_lgd_range,
     validate_non_negative_amounts,
     validate_pd_range,
@@ -140,7 +132,6 @@ __all__ = [
     "SupportingFactors",
     # Errors
     "CalculationError",
-    "LazyFrameResult",
     "business_rule_error",
     "crm_warning",
     "hierarchy_error",
@@ -184,11 +175,8 @@ __all__ = [
     "ClassifiedExposuresBundle",
     "CounterpartyLookup",
     "CRMAdjustedBundle",
-    "IRBResultBundle",
     "RawDataBundle",
     "ResolvedHierarchyBundle",
-    "SAResultBundle",
-    "SlottingResultBundle",
     "create_empty_classified_bundle",
     "create_empty_counterparty_lookup",
     "create_empty_crm_adjusted_bundle",
@@ -199,7 +187,6 @@ __all__ = [
     "ClassifierProtocol",
     "ComparisonRunnerProtocol",
     "CRMProcessorProtocol",
-    "DataQualityCheckerProtocol",
     "EquityCalculatorProtocol",
     "HierarchyResolverProtocol",
     "IRBCalculatorProtocol",
@@ -208,12 +195,9 @@ __all__ = [
     "PipelineProtocol",
     "ResultExporterProtocol",
     "SACalculatorProtocol",
-    "SchemaValidatorProtocol",
     "SlottingCalculatorProtocol",
     # Validation
     "validate_ccf_modelled",
-    "validate_classified_bundle",
-    "validate_crm_adjusted_bundle",
     "validate_lgd_range",
     "validate_non_negative_amounts",
     "validate_pd_range",

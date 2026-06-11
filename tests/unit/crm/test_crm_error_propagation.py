@@ -2,15 +2,13 @@
 Unit tests for CRM error propagation (P6.19).
 
 Verifies that CRM processing errors are properly accumulated as
-CalculationError objects and propagated through:
-- get_crm_adjusted_bundle() → CRMAdjustedBundle.crm_errors
-- get_crm_unified_bundle() → CRMAdjustedBundle.crm_errors
-- apply_crm() → LazyFrameResult.errors
+CalculationError objects and propagated through
+get_crm_unified_bundle() → CRMAdjustedBundle.crm_errors.
 
-Why: CRM errors were previously silently discarded — apply_crm() returned
-an empty errors list and CRMError objects (now removed) were never converted
-to CalculationError. This meant CRM data quality issues were invisible to
-callers and the audit trail. See IMPLEMENTATION_PLAN.md P6.19.
+Why: CRM errors were previously silently discarded — CRM data quality
+issues were invisible to callers and the audit trail. See
+IMPLEMENTATION_PLAN.md P6.19; migration Phase 2 collapsed the legacy
+apply_crm()/get_crm_adjusted_bundle() interfaces into the unified path.
 """
 
 from __future__ import annotations
@@ -66,9 +64,6 @@ def _bundle_with_bad_collateral() -> ClassifiedExposuresBundle:
     """Bundle with collateral that is missing required columns."""
     return ClassifiedExposuresBundle(
         all_exposures=_minimal_exposures(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=None,
         equity_exposures=None,
         ciu_holdings=None,
         collateral=pl.LazyFrame({"some_column": [1.0]}),  # missing required cols
@@ -82,9 +77,6 @@ def _bundle_with_bad_guarantees() -> ClassifiedExposuresBundle:
     """Bundle with guarantee data that is missing required columns."""
     return ClassifiedExposuresBundle(
         all_exposures=_minimal_exposures(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=None,
         equity_exposures=None,
         ciu_holdings=None,
         collateral=None,
@@ -98,9 +90,6 @@ def _bundle_with_no_counterparty_lookup() -> ClassifiedExposuresBundle:
     """Bundle with valid guarantees but missing counterparty lookup."""
     return ClassifiedExposuresBundle(
         all_exposures=_minimal_exposures(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=None,
         equity_exposures=None,
         ciu_holdings=None,
         collateral=None,
@@ -120,9 +109,6 @@ def _bundle_no_crm_data() -> ClassifiedExposuresBundle:
     """Bundle with no CRM data — no errors expected."""
     return ClassifiedExposuresBundle(
         all_exposures=_minimal_exposures(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=None,
         equity_exposures=None,
         ciu_holdings=None,
         collateral=None,
@@ -131,55 +117,6 @@ def _bundle_no_crm_data() -> ClassifiedExposuresBundle:
         counterparty_lookup=None,
     )
 
-
-class TestCRMErrorPropagationAdjustedBundle:
-    """Test errors propagate through get_crm_adjusted_bundle."""
-
-    def test_bad_collateral_emits_warning(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """Collateral with missing columns should emit CRM001 warning."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_with_bad_collateral(), crr_config)
-
-        assert len(bundle.crm_errors) == 1
-        error = bundle.crm_errors[0]
-        assert error.code == ERROR_INELIGIBLE_COLLATERAL
-        assert error.severity == ErrorSeverity.WARNING
-        assert error.category == ErrorCategory.CRM
-        assert "missing required columns" in error.message
-
-    def test_bad_guarantees_emits_warning(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """Guarantees with missing columns should emit CRM005 warning."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_with_bad_guarantees(), crr_config)
-
-        assert len(bundle.crm_errors) == 1
-        error = bundle.crm_errors[0]
-        assert error.code == ERROR_INVALID_GUARANTEE
-        assert error.severity == ErrorSeverity.WARNING
-        assert "missing required columns" in error.message
-
-    def test_missing_counterparty_lookup_emits_warning(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """Valid guarantees but missing counterparty lookup should emit CRM005."""
-        bundle = crm_processor.get_crm_adjusted_bundle(
-            _bundle_with_no_counterparty_lookup(), crr_config
-        )
-
-        assert len(bundle.crm_errors) == 1
-        error = bundle.crm_errors[0]
-        assert error.code == ERROR_INVALID_GUARANTEE
-        assert "counterparty lookup is missing" in error.message
-
-    def test_no_crm_data_no_errors(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """No CRM data means no errors."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_no_crm_data(), crr_config)
-
-        assert len(bundle.crm_errors) == 0
 
 
 class TestCRMErrorPropagationUnifiedBundle:
@@ -230,37 +167,15 @@ class TestCRMErrorPropagationUnifiedBundle:
         assert len(bundle.crm_errors) == 0
 
 
-class TestApplyCRMErrorPropagation:
-    """Test errors propagate through the apply_crm() interface."""
+class TestMultipleErrorAccumulation:
+    """Multiple CRM data issues accumulate on the same bundle."""
 
-    def test_apply_crm_propagates_errors(
+    def test_multiple_errors_accumulate(
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """apply_crm() should return errors from the CRM bundle."""
-        result = crm_processor.apply_crm(_bundle_with_bad_collateral(), crr_config)
-
-        assert len(result.errors) == 1
-        assert result.errors[0].code == ERROR_INELIGIBLE_COLLATERAL
-        assert result.errors[0].category == ErrorCategory.CRM
-
-    def test_apply_crm_no_errors_when_clean(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """apply_crm() should return empty errors when no issues."""
-        result = crm_processor.apply_crm(_bundle_no_crm_data(), crr_config)
-
-        assert len(result.errors) == 0
-
-    def test_apply_crm_multiple_errors(
-        self, crm_processor: CRMProcessor, crr_config: CalculationConfig
-    ) -> None:
-        """apply_crm() should propagate multiple errors."""
-        # Bundle with both bad collateral and bad guarantees
+        """Both collateral and guarantee issues surface together."""
         bundle = ClassifiedExposuresBundle(
             all_exposures=_minimal_exposures(),
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
-            slotting_exposures=None,
             equity_exposures=None,
             ciu_holdings=None,
             collateral=pl.LazyFrame({"some_column": [1.0]}),
@@ -269,10 +184,10 @@ class TestApplyCRMErrorPropagation:
             counterparty_lookup=None,
         )
 
-        result = crm_processor.apply_crm(bundle, crr_config)
+        result = crm_processor.get_crm_unified_bundle(bundle, crr_config)
 
-        assert len(result.errors) == 2
-        codes = {e.code for e in result.errors}
+        assert len(result.crm_errors) == 2
+        codes = {e.code for e in result.crm_errors}
         assert ERROR_INELIGIBLE_COLLATERAL in codes
         assert ERROR_INVALID_GUARANTEE in codes
 
@@ -284,7 +199,7 @@ class TestCRMErrorAttributes:
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Collateral errors should reference CRR Art. 223-224."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_with_bad_collateral(), crr_config)
+        bundle = crm_processor.get_crm_unified_bundle(_bundle_with_bad_collateral(), crr_config)
 
         assert bundle.crm_errors[0].regulatory_reference == "CRR Art. 223-224"
 
@@ -292,7 +207,7 @@ class TestCRMErrorAttributes:
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Guarantee errors should reference CRR Art. 213-217."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_with_bad_guarantees(), crr_config)
+        bundle = crm_processor.get_crm_unified_bundle(_bundle_with_bad_guarantees(), crr_config)
 
         assert bundle.crm_errors[0].regulatory_reference == "CRR Art. 213-217"
 
@@ -300,6 +215,6 @@ class TestCRMErrorAttributes:
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """CRM data issues should be warnings (pipeline continues)."""
-        bundle = crm_processor.get_crm_adjusted_bundle(_bundle_with_bad_collateral(), crr_config)
+        bundle = crm_processor.get_crm_unified_bundle(_bundle_with_bad_collateral(), crr_config)
 
         assert all(e.severity == ErrorSeverity.WARNING for e in bundle.crm_errors)

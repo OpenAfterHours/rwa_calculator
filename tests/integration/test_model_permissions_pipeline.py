@@ -144,7 +144,7 @@ def _run_pipeline(
     """Run hierarchy + classifier + CRM and return the CRMAdjustedBundle."""
     resolved = resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_adjusted_bundle(classified, config)
+    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 def _run_to_classified(

@@ -28,7 +28,6 @@ from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.contracts.errors import LazyFrameResult
 from rwa_calc.data.tables.crr_equity_rw import (
     get_equity_rw_table,
     lookup_equity_rw,
@@ -72,8 +71,6 @@ def create_equity_bundle(
     equity_frame = pl.LazyFrame(exposures_data)
     return CRMAdjustedBundle(
         exposures=pl.LazyFrame(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
         equity_exposures=equity_frame,
     )
 
@@ -482,12 +479,12 @@ class TestEquityRWACalculation:
 class TestEquityBundleProcessing:
     """Test equity calculator bundle processing."""
 
-    def test_calculate_returns_lazyframe_result(
+    def test_result_bundle_carries_results_frame(
         self,
         equity_calculator: EquityCalculator,
         sa_config: CalculationConfig,
     ):
-        """Calculate method returns LazyFrameResult."""
+        """get_equity_result_bundle returns a results frame."""
         bundle = create_equity_bundle(
             [
                 {
@@ -497,9 +494,8 @@ class TestEquityBundleProcessing:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        assert isinstance(result, LazyFrameResult)
-        assert result.frame is not None
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        assert result.results is not None
 
     def test_multiple_exposures_processed(
         self,
@@ -521,8 +517,8 @@ class TestEquityBundleProcessing:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         assert len(df) == 2
 
         # Check first exposure
@@ -543,12 +539,10 @@ class TestEquityBundleProcessing:
         """Empty equity exposures returns empty result."""
         bundle = CRMAdjustedBundle(
             exposures=pl.LazyFrame(),
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
             equity_exposures=None,
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         assert len(df) == 0
 
     def test_get_equity_result_bundle_returns_bundle(
@@ -736,8 +730,8 @@ class TestEquityEdgeCases:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         assert df["risk_weight"][0] == pytest.approx(1.00)
 
     def test_unknown_equity_type_defaults_to_other(
@@ -755,8 +749,8 @@ class TestEquityEdgeCases:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         assert df["risk_weight"][0] == pytest.approx(1.00)
 
     def test_zero_ead_produces_zero_rwa(
@@ -789,8 +783,8 @@ class TestEquityEdgeCases:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         # Should use fair_value (1m), not carrying_value (0.9m)
         assert df["ead_final"][0] == pytest.approx(1_000_000)
         assert df["rwa"][0] == pytest.approx(1_000_000)
@@ -810,8 +804,8 @@ class TestEquityEdgeCases:
                 },
             ]
         )
-        result = equity_calculator.calculate(bundle, sa_config)
-        df = result.frame.collect()
+        result = equity_calculator.get_equity_result_bundle(bundle, sa_config)
+        df = result.results.collect()
         assert df["ead_final"][0] == pytest.approx(900_000)
 
 

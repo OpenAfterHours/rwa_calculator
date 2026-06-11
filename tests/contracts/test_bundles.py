@@ -12,10 +12,8 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CounterpartyLookup,
     CRMAdjustedBundle,
-    IRBResultBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
-    SAResultBundle,
     create_empty_classified_bundle,
     create_empty_counterparty_lookup,
     create_empty_crm_adjusted_bundle,
@@ -151,23 +149,21 @@ class TestResolvedHierarchyBundle:
 class TestClassifiedExposuresBundle:
     """Tests for ClassifiedExposuresBundle dataclass."""
 
-    def test_create_with_split_exposures(self):
-        """Should create bundle with SA and IRB splits."""
+    def test_create_with_unified_frame(self):
+        """Should create bundle around the single unified frame."""
         bundle = ClassifiedExposuresBundle(
             all_exposures=pl.LazyFrame({"ref": ["E1", "E2", "E3"]}),
-            sa_exposures=pl.LazyFrame({"ref": ["E1"]}),
-            irb_exposures=pl.LazyFrame({"ref": ["E2", "E3"]}),
         )
 
         assert bundle.all_exposures.collect().shape[0] == 3
-        assert bundle.sa_exposures.collect().shape[0] == 1
-        assert bundle.irb_exposures.collect().shape[0] == 2
 
-    def test_optional_slotting_exposures(self):
-        """Slotting exposures should be optional."""
+    def test_no_approach_split_fields(self):
+        """Approach splits live on the unified frame, not bundle fields."""
         bundle = create_empty_classified_bundle()
 
-        assert bundle.slotting_exposures is None
+        assert not hasattr(bundle, "sa_exposures")
+        assert not hasattr(bundle, "irb_exposures")
+        assert not hasattr(bundle, "slotting_exposures")
 
     def test_optional_audit_trail(self):
         """Classification audit should be optional."""
@@ -183,71 +179,18 @@ class TestCRMAdjustedBundle:
         """Should create bundle with CRM-adjusted data."""
         bundle = CRMAdjustedBundle(
             exposures=pl.LazyFrame({"ref": ["E1"], "final_ead": [1000.0]}),
-            sa_exposures=pl.LazyFrame({"ref": ["E1"]}),
-            irb_exposures=pl.LazyFrame(),
         )
 
         assert bundle.exposures.collect().shape[0] == 1
 
-    def test_optional_audit_trail(self):
-        """CRM audit should be optional."""
+    def test_optional_allocation_audit(self):
+        """Collateral allocation audit should be optional."""
         bundle = create_empty_crm_adjusted_bundle()
 
-        assert bundle.crm_audit is None
         assert bundle.collateral_allocation is None
+        assert bundle.collateral_link_allocation is None
 
 
-class TestSAResultBundle:
-    """Tests for SAResultBundle dataclass."""
-
-    def test_create_sa_results(self):
-        """Should create bundle with SA results."""
-        bundle = SAResultBundle(
-            results=pl.LazyFrame(
-                {
-                    "ref": ["E1"],
-                    "sa_rwa": [100.0],
-                }
-            )
-        )
-
-        assert bundle.results.collect().shape[0] == 1
-
-    def test_errors_default_empty(self):
-        """Errors should default to empty list."""
-        bundle = SAResultBundle(results=pl.LazyFrame())
-
-        assert bundle.errors == []
-
-
-class TestIRBResultBundle:
-    """Tests for IRBResultBundle dataclass."""
-
-    def test_create_irb_results(self):
-        """Should create bundle with IRB results."""
-        bundle = IRBResultBundle(
-            results=pl.LazyFrame(
-                {
-                    "ref": ["E1"],
-                    "irb_rwa": [150.0],
-                }
-            ),
-            expected_loss=pl.LazyFrame(
-                {
-                    "ref": ["E1"],
-                    "el": [5.0],
-                }
-            ),
-        )
-
-        assert bundle.results.collect().shape[0] == 1
-        assert bundle.expected_loss.collect().shape[0] == 1
-
-    def test_optional_expected_loss(self):
-        """Expected loss should be optional."""
-        bundle = IRBResultBundle(results=pl.LazyFrame())
-
-        assert bundle.expected_loss is None
 
 
 class TestAggregatedResultBundle:

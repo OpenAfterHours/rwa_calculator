@@ -112,12 +112,6 @@ def create_classified_bundle(
 
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=exposures.filter(pl.col("approach") == ApproachType.SA.value),
-        irb_exposures=exposures.filter(
-            (pl.col("approach") == ApproachType.FIRB.value)
-            | (pl.col("approach") == ApproachType.AIRB.value)
-        ),
-        slotting_exposures=exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value),
         equity_exposures=None,
         collateral=collateral,
         guarantees=None,
@@ -169,7 +163,7 @@ class TestFIRBLGDWithCollateral:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Fully secured by cash: LGD should be 0%
@@ -208,7 +202,7 @@ class TestFIRBLGDWithCollateral:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Fully secured by real estate: LGD should be 35%
@@ -247,7 +241,7 @@ class TestFIRBLGDWithCollateral:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # RE overcollateralisation: effectively_secured = 500K / 1.4 = 357,143
@@ -277,7 +271,7 @@ class TestFIRBLGDWithCollateral:
             # No collateral
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Subordinated unsecured: LGD should be 75%
@@ -325,7 +319,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Fully secured by RE: subordinated LGDS = 65% (Art. 230 Table 5)
@@ -366,7 +360,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Fully secured by other physical: subordinated LGDS = 70% (Art. 230 Table 5)
@@ -405,7 +399,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # RE overcollateralisation: effectively_secured = 500K / 1.4 = 357,143
@@ -446,7 +440,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Financial collateral LGDS = 0% (same for senior and subordinated)
@@ -485,7 +479,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Senior RE LGDS = 35% (unchanged)
@@ -528,7 +522,7 @@ class TestAIRBLGDNoAdjustment:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, airb_config)
+        result = processor.get_crm_unified_bundle(bundle, airb_config)
         df = result.exposures.collect()
 
         # A-IRB should keep modelled LGD (0.25), not supervisory
@@ -571,7 +565,7 @@ class TestMultiLevelCollateralForLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # EXP001: 600k EAD, gets 60% of 500k = 300k collateral
@@ -617,7 +611,7 @@ class TestMultiLevelCollateralForLGD:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # RE overcollateralisation at CP level:
@@ -669,7 +663,7 @@ class TestCollateralCoverageAudit:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Effectively secured = 750K / 1.4 = 535,714
@@ -718,7 +712,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # effectively_secured = 1.4M / 1.4 = 1M = EAD → fully secured
@@ -757,7 +751,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # effectively_secured = 1M / 1.4 = 714,286
@@ -803,7 +797,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # After 20% haircut: 1,562,500 * 0.80 = 1,250,000
@@ -844,7 +838,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Below 30% threshold → non-financial collateral ignored → unsecured LGD
@@ -883,7 +877,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Meets 30% threshold → apply overcollateralisation
@@ -924,7 +918,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Financial: no overcollateralisation, no min threshold
@@ -966,7 +960,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # Cash at facility: eff_secured = 300K/1.0 = 300K (financial, no overcoll)
@@ -1011,7 +1005,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # RE 200K < 30% of 1M → non-financial zeroed out
@@ -1052,7 +1046,7 @@ class TestFIRBOvercollateralisation:
             },
         )
 
-        result = processor.get_crm_adjusted_bundle(bundle, firb_config)
+        result = processor.get_crm_unified_bundle(bundle, firb_config)
         df = result.exposures.collect()
 
         # CP total EAD = 1.5M

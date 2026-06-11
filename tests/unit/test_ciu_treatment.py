@@ -247,8 +247,6 @@ def _make_look_through_bundle(
     ciu_holdings = pl.LazyFrame(holdings_data) if holdings_data else None
     return CRMAdjustedBundle(
         exposures=pl.LazyFrame(),
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
         equity_exposures=equity_frame,
         ciu_holdings=ciu_holdings,
     )

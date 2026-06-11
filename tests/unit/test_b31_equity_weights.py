@@ -275,8 +275,6 @@ class TestEquityTransitionalFloorInBundle:
         # Create a minimal CRM-adjusted bundle with equity exposures
         bundle = CRMAdjustedBundle(
             exposures=pl.LazyFrame(),
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
             equity_exposures=self._make_bundle("listed"),
         )
 
@@ -306,8 +304,6 @@ class TestEquityTransitionalFloorInBundle:
         # Path 2: get_equity_result_bundle
         bundle = CRMAdjustedBundle(
             exposures=pl.LazyFrame(),
-            sa_exposures=pl.LazyFrame(),
-            irb_exposures=pl.LazyFrame(),
             equity_exposures=self._make_bundle("listed"),
         )
         bundle_result = calculator.get_equity_result_bundle(bundle, config)

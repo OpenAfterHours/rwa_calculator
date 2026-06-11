@@ -183,30 +183,12 @@ class RealEstateSplitter:
             is_basel_3_1=config.is_basel_3_1,
         )
 
-        # Approach-split frames mirror the unified frame and are not used in
-        # the single-pass pipeline path; we only rebuild them when callers
-        # have populated them explicitly. The pipeline orchestrator splits
-        # by approach later, after the calculator runs on the unified frame.
-        sa_exposures = data.sa_exposures
-        if sa_exposures is not None:
-            sa_split, _, _ = _split_unified_frame(
-                sa_exposures,
-                rrep=rrep,
-                crep=crep,
-                is_basel_3_1=config.is_basel_3_1,
-            )
-        else:
-            sa_split = sa_exposures
-
         return CRMAdjustedBundle(
             exposures=unified,
-            sa_exposures=sa_split if sa_exposures is not None else data.sa_exposures,
-            irb_exposures=data.irb_exposures,
-            slotting_exposures=data.slotting_exposures,
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
-            crm_audit=data.crm_audit,
             collateral_allocation=data.collateral_allocation,
+            collateral_link_allocation=data.collateral_link_allocation,
             re_split_audit=audit,
             securitisation_audit=data.securitisation_audit,
             crm_errors=list(data.crm_errors) + errors,

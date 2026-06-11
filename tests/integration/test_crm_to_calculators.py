@@ -138,6 +138,25 @@ def _make_bundle_with_ratings(
     )
 
 
+def _sa_branch(crm_bundle: CRMAdjustedBundle) -> pl.LazyFrame:
+    """Mirror the pipeline's SA branch filter (~IRB & ~slotting)."""
+    is_irb = pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+    is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
+    return crm_bundle.exposures.filter(~is_irb & ~is_slotting)
+
+
+def _irb_branch(crm_bundle: CRMAdjustedBundle) -> pl.LazyFrame:
+    """Mirror the pipeline's IRB branch filter."""
+    return crm_bundle.exposures.filter(
+        pl.col("approach").is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+    )
+
+
+def _slotting_branch(crm_bundle: CRMAdjustedBundle) -> pl.LazyFrame:
+    """Mirror the pipeline's slotting branch filter."""
+    return crm_bundle.exposures.filter(pl.col("approach") == ApproachType.SLOTTING.value)
+
+
 def _run_pipeline(
     resolver: HierarchyResolver,
     classifier: ExposureClassifier,
@@ -148,7 +167,7 @@ def _run_pipeline(
     """Run hierarchy + classifier + CRM and return the CRM-adjusted bundle."""
     resolved = resolver.resolve(bundle, config)
     classified = classifier.classify(resolved, config)
-    return crm_processor.get_crm_adjusted_bundle(classified, config)
+    return crm_processor.get_crm_unified_bundle(classified, config)
 
 
 # =============================================================================
@@ -170,8 +189,7 @@ class TestSABranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, crr_config)
-        df = sa_result.results.collect()
+        df = sa_calculator.calculate_branch(_sa_branch(crm_bundle), crr_config).collect()
 
         assert df.height >= 1
         assert df["risk_weight"][0] == pytest.approx(1.0)
@@ -187,8 +205,7 @@ class TestSABranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, crr_config)
-        df = sa_result.results.collect()
+        df = sa_calculator.calculate_branch(_sa_branch(crm_bundle), crr_config).collect()
 
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row.height >= 1
@@ -210,8 +227,7 @@ class TestSABranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, crr_config)
-        df = sa_result.results.collect()
+        df = sa_calculator.calculate_branch(_sa_branch(crm_bundle), crr_config).collect()
 
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row.height >= 1
@@ -235,8 +251,7 @@ class TestSABranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor_b31, basel31_config, bundle
         )
-        sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, basel31_config)
-        df = sa_result.results.collect()
+        df = sa_calculator.calculate_branch(_sa_branch(crm_bundle), basel31_config).collect()
 
         loan_row = df.filter(pl.col("exposure_type") == "loan")
         assert loan_row.height >= 1
@@ -266,8 +281,7 @@ class TestIRBBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        df = irb_calculator.calculate_branch(_irb_branch(crm_bundle), crr_firb_config).collect()
 
         assert df.height >= 1
         # CRR FIRB senior unsecured LGD = 45%
@@ -291,8 +305,9 @@ class TestIRBBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_full_irb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_full_irb_config)
-        df = irb_result.results.collect()
+        df = irb_calculator.calculate_branch(
+            _irb_branch(crm_bundle), crr_full_irb_config
+        ).collect()
 
         airb_rows = df.filter(pl.col("approach") == ApproachType.AIRB.value)
         assert airb_rows.height >= 1
@@ -313,8 +328,7 @@ class TestIRBBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        df = irb_calculator.calculate_branch(_irb_branch(crm_bundle), crr_firb_config).collect()
 
         assert df.height >= 1
         pd_col = "pd_floored" if "pd_floored" in df.columns else "pd"
@@ -334,8 +348,7 @@ class TestIRBBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        df = irb_result.results.collect()
+        df = irb_calculator.calculate_branch(_irb_branch(crm_bundle), crr_firb_config).collect()
 
         assert df.height >= 1
         assert "expected_loss" in df.columns
@@ -369,8 +382,7 @@ class TestIRBBranch:
         crm_crr = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_firb_config, bundle
         )
-        irb_crr = irb_calculator.get_irb_result_bundle(crm_crr, crr_firb_config)
-        df_crr = irb_crr.results.collect()
+        df_crr = irb_calculator.calculate_branch(_irb_branch(crm_crr), crr_firb_config).collect()
 
         assert df_crr.height >= 1
         # CRR should have scaling_factor = 1.06
@@ -385,8 +397,7 @@ class TestIRBBranch:
         crm_b31 = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor_b31, b31_firb_config, bundle
         )
-        irb_b31 = irb_calculator.get_irb_result_bundle(crm_b31, b31_firb_config)
-        df_b31 = irb_b31.results.collect()
+        df_b31 = irb_calculator.calculate_branch(_irb_branch(crm_b31), b31_firb_config).collect()
 
         assert df_b31.height >= 1
         # Basel 3.1 should have scaling_factor = 1.0
@@ -422,14 +433,16 @@ class TestSlottingBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
-        df = slotting_result.results.collect()
+        errors: list = []
+        df = slotting_calculator.calculate_branch(
+            _slotting_branch(crm_bundle), crr_config, errors=errors
+        ).collect()
 
         # No slotting exposures in a simple corporate portfolio
         assert df.height == 0
-        assert len(slotting_result.errors) == 0
+        assert len(errors) == 0
 
-    def test_slotting_result_bundle_has_required_fields(
+    def test_slotting_branch_returns_lazyframe(
         self,
         hierarchy_resolver,
         classifier,
@@ -437,7 +450,7 @@ class TestSlottingBranch:
         slotting_calculator,
         crr_config,
     ):
-        """SlottingResultBundle has results and errors fields."""
+        """calculate_branch returns a LazyFrame for the slotting subset."""
         bundle = make_raw_data_bundle(
             counterparties=[make_counterparty(entity_type="corporate")],
             loans=[make_loan()],
@@ -445,30 +458,9 @@ class TestSlottingBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_config, bundle
         )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
+        result = slotting_calculator.calculate_branch(_slotting_branch(crm_bundle), crr_config)
 
-        # Bundle has the expected attributes
-        assert hasattr(slotting_result, "results")
-        assert hasattr(slotting_result, "errors")
-        assert hasattr(slotting_result, "calculation_audit")
-        # Results is a LazyFrame
-        assert isinstance(slotting_result.results, pl.LazyFrame)
-
-    def test_slotting_calculator_handles_none_exposures(self, slotting_calculator, crr_config):
-        """slotting_exposures=None → empty result."""
-        # Construct a CRMAdjustedBundle with slotting_exposures=None directly
-        empty_lf = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
-        crm_bundle = CRMAdjustedBundle(
-            exposures=empty_lf,
-            sa_exposures=empty_lf,
-            irb_exposures=empty_lf,
-            slotting_exposures=None,
-        )
-        slotting_result = slotting_calculator.get_slotting_result_bundle(crm_bundle, crr_config)
-        df = slotting_result.results.collect()
-
-        assert df.height == 0
-        assert len(slotting_result.errors) == 0
+        assert isinstance(result, pl.LazyFrame)
 
 
 # =============================================================================
@@ -491,20 +483,22 @@ class TestSplitCorrectness:
         )
 
         sa_refs = set(
-            crm_bundle.sa_exposures.select("exposure_reference")
+            _sa_branch(crm_bundle)
+            .select("exposure_reference")
             .collect()["exposure_reference"]
             .to_list()
         )
         irb_refs = set(
-            crm_bundle.irb_exposures.select("exposure_reference")
+            _irb_branch(crm_bundle)
+            .select("exposure_reference")
             .collect()["exposure_reference"]
             .to_list()
         )
-        slotting_df = crm_bundle.slotting_exposures
-        slotting_refs = (
-            set(slotting_df.select("exposure_reference").collect()["exposure_reference"].to_list())
-            if slotting_df is not None
-            else set()
+        slotting_refs = set(
+            _slotting_branch(crm_bundle)
+            .select("exposure_reference")
+            .collect()["exposure_reference"]
+            .to_list()
         )
 
         # No overlap between branches
@@ -526,13 +520,9 @@ class TestSplitCorrectness:
         )
 
         total = crm_bundle.exposures.collect().height
-        sa_count = crm_bundle.sa_exposures.collect().height
-        irb_count = crm_bundle.irb_exposures.collect().height
-        slotting_count = (
-            crm_bundle.slotting_exposures.collect().height
-            if crm_bundle.slotting_exposures is not None
-            else 0
-        )
+        sa_count = _sa_branch(crm_bundle).collect().height
+        irb_count = _irb_branch(crm_bundle).collect().height
+        slotting_count = _slotting_branch(crm_bundle).collect().height
 
         assert sa_count + irb_count + slotting_count == total
 
@@ -554,14 +544,14 @@ class TestSplitCorrectness:
         )
 
         # SA branch should contain sovereign exposures
-        sa_result = sa_calculator.get_sa_result_bundle(crm_bundle, crr_firb_config)
-        sa_df = sa_result.results.collect()
+        sa_df = sa_calculator.calculate_branch(_sa_branch(crm_bundle), crr_firb_config).collect()
         sa_approaches = set(sa_df["approach"].unique().to_list())
         assert ApproachType.SA.value in sa_approaches
 
         # IRB branch should contain corporate exposures
-        irb_result = irb_calculator.get_irb_result_bundle(crm_bundle, crr_firb_config)
-        irb_df = irb_result.results.collect()
+        irb_df = irb_calculator.calculate_branch(
+            _irb_branch(crm_bundle), crr_firb_config
+        ).collect()
         irb_approaches = set(irb_df["approach"].unique().to_list())
         assert irb_approaches.issubset({ApproachType.FIRB.value, ApproachType.AIRB.value})
 

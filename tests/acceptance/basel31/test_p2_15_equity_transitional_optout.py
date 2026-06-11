@@ -148,8 +148,6 @@ def p215_bundle() -> CRMAdjustedBundle:
 
     return CRMAdjustedBundle(
         exposures=empty,
-        sa_exposures=empty,
-        irb_exposures=empty,
         equity_exposures=equity_exposures,
         ciu_holdings=ciu_holdings,
     )

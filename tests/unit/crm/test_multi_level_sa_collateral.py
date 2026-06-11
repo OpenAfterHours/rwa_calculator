@@ -82,9 +82,6 @@ def _make_bundle(
     """Build a ClassifiedExposuresBundle with collateral only."""
     return ClassifiedExposuresBundle(
         all_exposures=exposures,
-        sa_exposures=pl.LazyFrame(),
-        irb_exposures=pl.LazyFrame(),
-        slotting_exposures=pl.LazyFrame(),
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),
         collateral=collateral,
@@ -203,7 +200,7 @@ def _run_crm_with_liq_period(
         pl.lit(liquidation_period_days).alias("liquidation_period_days")
     )
     bundle = _make_bundle(exposures, collateral)
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     df: pl.DataFrame = result.exposures.collect()
     return df
 
@@ -232,7 +229,7 @@ def _run_crm(
     }
     collateral = pl.LazyFrame(collateral_rows, schema=collateral_schema)
     bundle = _make_bundle(exposures, collateral)
-    result = processor.get_crm_adjusted_bundle(bundle, config)
+    result = processor.get_crm_unified_bundle(bundle, config)
     df: pl.DataFrame = result.exposures.collect()
     return df
 

@@ -34,12 +34,8 @@ import polars as pl
 
 # Import namespace to ensure it's registered
 import rwa_calc.engine.irb.namespace  # noqa: F401
-from rwa_calc.contracts.bundles import CRMAdjustedBundle, IRBResultBundle
 from rwa_calc.contracts.errors import (
     CalculationError,
-    ErrorCategory,
-    ErrorSeverity,
-    LazyFrameResult,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
@@ -61,81 +57,20 @@ class IRBCalculator:
     - CRR: Single PD floor (0.03%), no LGD floors, 1.06 scaling
     - Basel 3.1: Differentiated PD floors, LGD floors for A-IRB, no scaling
 
-    All methods delegate to the IRB namespace for formula calculations,
-    then apply supporting factors and wrap results.
+    Delegates to the IRB namespace for formula calculations, then applies
+    supporting factors and standardises the output for the aggregator.
 
     Usage:
         calculator = IRBCalculator()
-        result = calculator.calculate(crm_bundle, config)
+        result = calculator.calculate_branch(irb_exposures, config)
     """
-
-    def calculate(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate RWA using IRB approach.
-
-        Args:
-            data: CRM-adjusted exposures (uses irb_exposures)
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with IRB RWA calculations
-        """
-        bundle = self.get_irb_result_bundle(data, config)
-
-        # Convert bundle errors to CalculationErrors, preserving any
-        # CalculationError objects already created by sub-components
-        calc_errors: list[CalculationError] = []
-        for err in bundle.errors:
-            if isinstance(err, CalculationError):
-                calc_errors.append(err)
-            else:
-                calc_errors.append(
-                    CalculationError(
-                        code="IRB001",
-                        message=str(err),
-                        severity=ErrorSeverity.ERROR,
-                        category=ErrorCategory.CALCULATION,
-                    )
-                )
-
-        return LazyFrameResult(
-            frame=bundle.results,
-            errors=calc_errors,
-        )
-
-    def get_irb_result_bundle(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> IRBResultBundle:
-        """
-        Calculate IRB RWA and return as a bundle with audit trail.
-
-        Args:
-            data: CRM-adjusted exposures
-            config: Calculation configuration
-
-        Returns:
-            IRBResultBundle with results, expected loss, and audit trail
-        """
-        sf_errors: list[CalculationError] = []
-        exposures = self._run_irb_chain(data.irb_exposures, config, sf_errors=sf_errors)
-
-        return IRBResultBundle(
-            results=exposures,
-            expected_loss=exposures.irb.select_expected_loss(),
-            calculation_audit=exposures.irb.build_audit(),
-            errors=sf_errors,
-        )
 
     def calculate_branch(
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.
@@ -143,87 +78,13 @@ class IRBCalculator:
         Args:
             exposures: Pre-filtered IRB rows only
             config: Calculation configuration
+            errors: Optional error accumulator for data quality warnings
+                (SF001 SME aggregation, EL shortfall/excess diagnostics)
 
         Returns:
             LazyFrame with IRB RWA columns populated
         """
-        return self._run_irb_chain(exposures, config)
-
-    def calculate_expected_loss(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> LazyFrameResult:
-        """
-        Calculate expected loss for IRB exposures.
-
-        EL = PD × LGD × EAD
-
-        Emits IRB004/IRB005 warnings when PD/LGD columns are absent and
-        supervisory defaults (PD=1%, LGD=45%) are substituted.
-
-        Args:
-            data: CRM-adjusted exposures
-            config: Calculation configuration
-
-        Returns:
-            LazyFrameResult with expected loss calculations
-        """
-        exposures = data.irb_exposures
-        errors: list[CalculationError] = []
-
-        # Ensure required columns — emit warnings when absent
-        schema = exposures.collect_schema()
-        if "pd" not in schema.names():
-            exposures = exposures.with_columns(pl.lit(0.01).alias("pd"))
-            errors.append(
-                CalculationError(
-                    code="IRB004",
-                    message=(
-                        "PD column absent from IRB exposures; defaulting to 1%. "
-                        "Expected loss figures may be unreliable. "
-                        "Ensure PD is computed upstream (IRB namespace prepare_columns)."
-                    ),
-                    severity=ErrorSeverity.WARNING,
-                    category=ErrorCategory.DATA_QUALITY,
-                    regulatory_reference="CRR Art. 160 / PRA Art. 160",
-                    field_name="pd",
-                    expected_value="PD from internal model or supervisory floor",
-                    actual_value="default 0.01",
-                )
-            )
-        if "lgd" not in schema.names():
-            exposures = exposures.with_columns(pl.lit(0.45).alias("lgd"))
-            errors.append(
-                CalculationError(
-                    code="IRB005",
-                    message=(
-                        "LGD column absent from IRB exposures; defaulting to 45%. "
-                        "Expected loss figures may be unreliable. "
-                        "Ensure LGD is computed upstream (F-IRB supervisory or A-IRB own estimate)."
-                    ),
-                    severity=ErrorSeverity.WARNING,
-                    category=ErrorCategory.DATA_QUALITY,
-                    regulatory_reference="CRR Art. 161 / PRA Art. 161",
-                    field_name="lgd",
-                    expected_value="LGD from supervisory table or own estimate",
-                    actual_value="default 0.45",
-                )
-            )
-
-        # Ensure ead_final exists so output schema is stable regardless of input
-        # (mirrors engine/irb/namespace.py::prepare_columns).
-        if "ead_final" not in schema.names():
-            exposures = exposures.with_columns(pl.col("ead").alias("ead_final"))
-
-        exposures = exposures.with_columns(
-            (pl.col("pd") * pl.col("lgd") * pl.col("ead_final")).alias("expected_loss"),
-        )
-
-        return LazyFrameResult(
-            frame=exposures.select("exposure_reference", "pd", "lgd", "ead_final", "expected_loss"),
-            errors=errors,
-        )
+        return self._run_irb_chain(exposures, config, sf_errors=errors)
 
     def _run_irb_chain(
         self,

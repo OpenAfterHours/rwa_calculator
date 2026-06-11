@@ -3,7 +3,6 @@ Error handling contracts for RWA calculator.
 
 Provides structured error representation using the Result pattern:
 - CalculationError: Immutable error details with regulatory references
-- LazyFrameResult: Combines LazyFrame output with accumulated errors
 
 This approach enables:
 - Error accumulation without exceptions (process all exposures)
@@ -14,15 +13,13 @@ This approach enables:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import polars as pl
 
 
 @dataclass(frozen=True)
@@ -82,76 +79,6 @@ class CalculationError:
             "expected_value": self.expected_value,
             "actual_value": self.actual_value,
         }
-
-
-@dataclass
-class LazyFrameResult:
-    """
-    Result container combining a LazyFrame with accumulated errors.
-
-    Implements the Result pattern for LazyFrame operations, allowing
-    errors to be collected without throwing exceptions. This enables
-    processing all exposures and reporting all issues.
-
-    Attributes:
-        frame: The resulting LazyFrame (may be partial if errors occurred)
-        errors: List of errors/warnings encountered during processing
-
-    Usage:
-        result = processor.apply_crm(data, config)
-        if result.has_critical_errors:
-            # Handle critical failures
-        else:
-            # Continue with result.frame, log result.warnings
-    """
-
-    frame: pl.LazyFrame
-    errors: list[CalculationError] = field(default_factory=list)
-
-    @property
-    def has_errors(self) -> bool:
-        """Check if any errors (not warnings) occurred."""
-        return any(e.severity in (ErrorSeverity.ERROR, ErrorSeverity.CRITICAL) for e in self.errors)
-
-    @property
-    def has_critical_errors(self) -> bool:
-        """Check if any critical errors occurred."""
-        return any(e.severity == ErrorSeverity.CRITICAL for e in self.errors)
-
-    @property
-    def warnings(self) -> list[CalculationError]:
-        """Get only warning-level issues."""
-        return [e for e in self.errors if e.severity == ErrorSeverity.WARNING]
-
-    @property
-    def critical_errors(self) -> list[CalculationError]:
-        """Get only critical errors."""
-        return [e for e in self.errors if e.severity == ErrorSeverity.CRITICAL]
-
-    def errors_by_category(self, category: ErrorCategory) -> list[CalculationError]:
-        """Filter errors by category."""
-        return [e for e in self.errors if e.category == category]
-
-    def errors_by_exposure(self, exposure_reference: str) -> list[CalculationError]:
-        """Get all errors for a specific exposure."""
-        return [e for e in self.errors if e.exposure_reference == exposure_reference]
-
-    def add_error(self, error: CalculationError) -> None:
-        """Add an error to the result."""
-        self.errors.append(error)
-
-    def add_errors(self, errors: list[CalculationError]) -> None:
-        """Add multiple errors to the result."""
-        self.errors.extend(errors)
-
-    def merge(self, other: LazyFrameResult) -> LazyFrameResult:
-        """
-        Merge another result's errors into this one.
-
-        Note: Does not modify frames - caller must handle frame combination.
-        """
-        combined_errors = self.errors + other.errors
-        return LazyFrameResult(frame=self.frame, errors=combined_errors)
 
 
 # =============================================================================

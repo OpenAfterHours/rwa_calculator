@@ -1,7 +1,13 @@
-"""Tests for the materialise module — disk-spill and in-memory strategies."""
+"""Tests for stage-edge materialisation — eager edges, spill mode, event capture.
+
+Migration Phase 1 (docs/plans/target-architecture-migration.md): stages
+exchange materialised frames; spill failure raises (never a silent in-memory
+fallback); every edge records an EdgeEvent into the run capture.
+"""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -10,10 +16,13 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.materialise import (
-    _spill_files,
-    cleanup_spill_files,
-    materialise_barrier,
+    SpillError,
+    begin_edge_capture,
+    current_edge_events,
+    end_edge_capture,
     materialise_branches,
+    materialise_edge,
+    plan_node_count,
 )
 
 # ---------------------------------------------------------------------------
@@ -23,25 +32,15 @@ from rwa_calc.engine.materialise import (
 
 @pytest.fixture()
 def cpu_config() -> CalculationConfig:
-    """Config with cpu engine — uses in-memory collect."""
-    return CalculationConfig.crr(reporting_date=date(2024, 12, 31), collect_engine="cpu")
+    """Default config — in-memory edges."""
+    return CalculationConfig.crr(reporting_date=date(2024, 12, 31))
 
 
 @pytest.fixture()
-def streaming_config(tmp_path: Path) -> CalculationConfig:
-    """Config with streaming engine — uses disk-spill via sink_parquet."""
-    return CalculationConfig.crr(
-        reporting_date=date(2024, 12, 31),
-        collect_engine="streaming",
-        spill_dir=tmp_path,
-    )
-
-
-@pytest.fixture(autouse=True)
-def _cleanup_spill():
-    """Ensure spill files are cleaned up after each test."""
-    yield
-    cleanup_spill_files()
+def spill_config(tmp_path: Path) -> CalculationConfig:
+    """Config with spill-to-parquet edges."""
+    config = CalculationConfig.crr(reporting_date=date(2024, 12, 31), spill_dir=tmp_path)
+    return replace(config, spill_edges=True)
 
 
 def _sample_lf() -> pl.LazyFrame:
@@ -54,71 +53,159 @@ def _sample_lf() -> pl.LazyFrame:
 
 
 # ---------------------------------------------------------------------------
-# materialise_barrier
+# materialise_edge — in-memory
 # ---------------------------------------------------------------------------
 
 
-class TestMaterialiseBarrier:
-    """Tests for materialise_barrier."""
+class TestMaterialiseEdgeInMemory:
+    """In-memory edge semantics (the default)."""
 
-    def test_cpu_mode_returns_correct_data(self, cpu_config: CalculationConfig) -> None:
-        lf = _sample_lf()
-        result = materialise_barrier(lf, cpu_config, "test_cpu")
-        df = result.collect()
+    def test_returns_lazyframe_with_same_data(self, cpu_config: CalculationConfig) -> None:
+        result = materialise_edge(_sample_lf(), cpu_config, "edge_test")
 
-        assert df.shape == (3, 2)
-        assert df["id"].to_list() == [1, 2, 3]
-        assert df["value"].to_list() == [10.0, 20.0, 30.0]
+        assert isinstance(result, pl.LazyFrame)
+        assert result.collect().to_dicts() == _sample_lf().collect().to_dicts()
 
-    def test_streaming_mode_returns_correct_data(self, streaming_config: CalculationConfig) -> None:
-        lf = _sample_lf()
-        result = materialise_barrier(lf, streaming_config, "test_streaming")
-        df = result.collect()
+    def test_result_plan_is_shallow(self, cpu_config: CalculationConfig) -> None:
+        deep = _sample_lf()
+        for i in range(50):
+            deep = deep.with_columns((pl.col("value") + i).alias(f"v{i}"))
 
-        assert df.shape == (3, 2)
-        assert df["id"].to_list() == [1, 2, 3]
-        assert df["value"].to_list() == [10.0, 20.0, 30.0]
+        result = materialise_edge(deep, cpu_config, "depth_test")
 
-    def test_streaming_mode_creates_spill_file(
-        self, streaming_config: CalculationConfig, tmp_path: Path
+        assert plan_node_count(result) < plan_node_count(deep)
+
+    def test_no_spill_files_created(self, cpu_config: CalculationConfig, tmp_path: Path) -> None:
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), cpu_config, "no_spill")
+        end_edge_capture(token)
+
+        assert list(tmp_path.glob("*.parquet")) == []
+
+
+# ---------------------------------------------------------------------------
+# materialise_edge — spill mode
+# ---------------------------------------------------------------------------
+
+
+class TestMaterialiseEdgeSpill:
+    """Spill-to-parquet edge semantics (opt-in)."""
+
+    def test_spill_roundtrip_preserves_data(self, spill_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        result = materialise_edge(_sample_lf(), spill_config, "spill_roundtrip")
+        rows = result.collect().to_dicts()
+        events = end_edge_capture(token)
+
+        assert rows == _sample_lf().collect().to_dicts()
+        assert events[0].spilled is True
+
+    def test_spill_files_cleaned_up_at_capture_end(
+        self, spill_config: CalculationConfig, tmp_path: Path
     ) -> None:
-        lf = _sample_lf()
-        materialise_barrier(lf, streaming_config, "test_spill")
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), spill_config, "spill_cleanup")
+        assert len(list(tmp_path.glob("*.parquet"))) == 1
 
-        parquet_files = list(tmp_path.glob("rwa_test_spill_*.parquet"))
-        assert len(parquet_files) >= 1
+        end_edge_capture(token)
 
-    def test_cpu_mode_no_spill_files(self, cpu_config: CalculationConfig, tmp_path: Path) -> None:
-        lf = _sample_lf()
-        materialise_barrier(lf, cpu_config, "test_no_spill")
+        assert list(tmp_path.glob("*.parquet")) == []
 
-        parquet_files = list(tmp_path.glob("rwa_*.parquet"))
-        assert len(parquet_files) == 0
+    def test_spill_failure_raises_never_falls_back(self, spill_config: CalculationConfig) -> None:
+        """A sink failure must raise SpillError, not silently collect in-memory."""
 
-    def test_streaming_preserves_schema(self, streaming_config: CalculationConfig) -> None:
-        lf = pl.LazyFrame(
-            {
-                "str_col": ["a", "b"],
-                "int_col": [1, 2],
-                "float_col": [1.5, 2.5],
-                "bool_col": [True, False],
-            }
+        # map_elements with a Python callable cannot be sunk by the streaming
+        # engine in all cases; force failure deterministically with a plan
+        # that raises during execution.
+        def _boom(_: int) -> int:
+            raise ValueError("forced sink failure")
+
+        failing = _sample_lf().with_columns(
+            pl.col("id").map_elements(_boom, return_dtype=pl.Int64).alias("boom")
         )
-        result = materialise_barrier(lf, streaming_config, "schema_test")
-        schema = result.collect_schema()
 
-        assert schema["str_col"] == pl.String
-        assert schema["int_col"] == pl.Int64
-        assert schema["float_col"] == pl.Float64
-        assert schema["bool_col"] == pl.Boolean
+        with pytest.raises(SpillError, match="spill-to-parquet failed for edge 'spill_fail'"):
+            materialise_edge(failing, spill_config, "spill_fail")
 
-    def test_empty_lazyframe(self, streaming_config: CalculationConfig) -> None:
-        lf = pl.LazyFrame({"id": pl.Series([], dtype=pl.Int64)})
-        result = materialise_barrier(lf, streaming_config, "empty_test")
-        df = result.collect()
+    def test_streaming_collect_engine_is_deprecated_alias(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """collect_engine='streaming' still spills, with a deprecation warning."""
+        config = CalculationConfig.crr(
+            reporting_date=date(2024, 12, 31),
+            collect_engine="streaming",
+            spill_dir=tmp_path,
+        )
+        token = begin_edge_capture()
+        with caplog.at_level("WARNING", logger="rwa_calc.engine.materialise"):
+            materialise_edge(_sample_lf(), config, "deprecated_streaming")
+            materialise_edge(_sample_lf(), config, "deprecated_streaming_2")
+        events = end_edge_capture(token)
 
-        assert df.shape == (0, 1)
-        assert df.schema["id"] == pl.Int64
+        assert all(e.spilled for e in events)
+        deprecations = [r for r in caplog.records if "deprecated" in r.message]
+        assert len(deprecations) == 1, "deprecation warning must fire once per run"
+
+
+# ---------------------------------------------------------------------------
+# Edge-event capture
+# ---------------------------------------------------------------------------
+
+
+class TestEdgeCapture:
+    """The per-run materialisation map."""
+
+    def test_events_record_label_rows_and_timing(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), cpu_config, "capture_a")
+        materialise_edge(_sample_lf().head(2), cpu_config, "capture_b")
+        events = end_edge_capture(token)
+
+        assert [e.label for e in events] == ["capture_a", "capture_b"]
+        assert [e.rows for e in events] == [3, 2]
+        assert all(e.columns == 2 for e in events)
+        assert all(e.wall_ms >= 0 for e in events)
+        assert all(e.estimated_bytes > 0 for e in events)
+
+    def test_current_edge_events_snapshots_mid_run(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), cpu_config, "mid_run")
+
+        snapshot = current_edge_events()
+
+        assert [e.label for e in snapshot] == ["mid_run"]
+        end_edge_capture(token)
+        assert current_edge_events() == []
+
+    def test_plan_nodes_recorded_only_when_requested(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture(count_plan_nodes=True)
+        materialise_edge(_sample_lf(), cpu_config, "with_nodes")
+        events = end_edge_capture(token)
+        assert events[0].plan_nodes is not None and events[0].plan_nodes > 0
+
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), cpu_config, "without_nodes")
+        events = end_edge_capture(token)
+        assert events[0].plan_nodes is None
+
+    def test_no_capture_active_is_silent(self, cpu_config: CalculationConfig) -> None:
+        """Edges outside an orchestrated run (unit tests, notebooks) just work."""
+        result = materialise_edge(_sample_lf(), cpu_config, "no_capture")
+
+        assert result.collect().height == 3
+        assert current_edge_events() == []
+
+    def test_event_as_dict_is_manifest_ready(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        materialise_edge(_sample_lf(), cpu_config, "manifest")
+        events = end_edge_capture(token)
+
+        payload = events[0].as_dict()
+
+        assert payload["label"] == "manifest"
+        assert payload["rows"] == 3
+        assert payload["spilled"] is False
+        assert "plan_nodes" not in payload
 
 
 # ---------------------------------------------------------------------------
@@ -127,85 +214,55 @@ class TestMaterialiseBarrier:
 
 
 class TestMaterialiseBranches:
-    """Tests for materialise_branches."""
+    """Calculator-branch collection."""
 
-    def test_cpu_mode_returns_correct_data(self, cpu_config: CalculationConfig) -> None:
-        branches = [
-            pl.LazyFrame({"id": [1], "val": [10.0]}),
-            pl.LazyFrame({"id": [2], "val": [20.0]}),
-            pl.LazyFrame({"id": [3], "val": [30.0]}),
-        ]
-        results = materialise_branches(branches, cpu_config, ["sa", "irb", "slotting"])
+    def test_collects_all_branches_in_order(self, cpu_config: CalculationConfig) -> None:
+        lf = _sample_lf()
+        branches = [lf.filter(pl.col("id") == 1), lf.filter(pl.col("id") > 1)]
 
-        assert len(results) == 3
-        assert all(isinstance(r, pl.DataFrame) for r in results)
-        assert results[0]["id"].to_list() == [1]
-        assert results[1]["id"].to_list() == [2]
-        assert results[2]["id"].to_list() == [3]
+        first, second = materialise_branches(branches, cpu_config, ["one", "rest"])
 
-    def test_streaming_mode_returns_correct_data(self, streaming_config: CalculationConfig) -> None:
-        branches = [
-            pl.LazyFrame({"id": [1], "val": [10.0]}),
-            pl.LazyFrame({"id": [2], "val": [20.0]}),
-            pl.LazyFrame({"id": [3], "val": [30.0]}),
-        ]
-        results = materialise_branches(branches, streaming_config, ["sa", "irb", "slotting"])
+        assert isinstance(first, pl.DataFrame)
+        assert (first.height, second.height) == (1, 2)
 
-        assert len(results) == 3
-        assert results[0]["id"].to_list() == [1]
-        assert results[1]["val"].to_list() == [20.0]
-        assert results[2]["id"].to_list() == [3]
+    def test_branch_events_recorded(self, cpu_config: CalculationConfig) -> None:
+        lf = _sample_lf()
+        token = begin_edge_capture()
+        materialise_branches(
+            [lf.filter(pl.col("id") == 1), lf.filter(pl.col("id") > 1)],
+            cpu_config,
+            ["one", "rest"],
+        )
+        events = end_edge_capture(token)
 
-    def test_streaming_mode_creates_spill_files(
-        self, streaming_config: CalculationConfig, tmp_path: Path
-    ) -> None:
-        branches = [
-            pl.LazyFrame({"id": [1]}),
-            pl.LazyFrame({"id": [2]}),
-        ]
-        materialise_branches(branches, streaming_config, ["a", "b"])
+        assert [(e.label, e.rows) for e in events] == [("one", 1), ("rest", 2)]
 
-        parquet_files = list(tmp_path.glob("rwa_*.parquet"))
-        assert len(parquet_files) >= 2
+    def test_spill_mode_roundtrip(self, spill_config: CalculationConfig) -> None:
+        lf = _sample_lf()
+        token = begin_edge_capture()
+        first, second = materialise_branches(
+            [lf.filter(pl.col("id") == 1), lf.filter(pl.col("id") > 1)],
+            spill_config,
+            ["one", "rest"],
+        )
+        events = end_edge_capture(token)
+
+        assert (first.height, second.height) == (1, 2)
+        assert all(e.spilled for e in events)
 
 
 # ---------------------------------------------------------------------------
-# cleanup_spill_files
+# plan_node_count
 # ---------------------------------------------------------------------------
 
 
-class TestCleanup:
-    """Tests for cleanup_spill_files."""
+class TestPlanNodeCount:
+    """The depth-ceiling metric."""
 
-    def test_cleanup_removes_files(
-        self, streaming_config: CalculationConfig, tmp_path: Path
-    ) -> None:
-        lf = _sample_lf()
-        materialise_barrier(lf, streaming_config, "cleanup_test")
+    def test_grows_with_plan_depth(self) -> None:
+        shallow = _sample_lf()
+        deep = shallow
+        for i in range(20):
+            deep = deep.with_columns((pl.col("value") * i).alias(f"d{i}"))
 
-        parquet_files = list(tmp_path.glob("rwa_*.parquet"))
-        assert len(parquet_files) >= 1
-
-        cleanup_spill_files()
-
-        remaining = list(tmp_path.glob("rwa_*.parquet"))
-        assert len(remaining) == 0
-        assert len(_spill_files) == 0
-
-    def test_cleanup_is_idempotent(self) -> None:
-        cleanup_spill_files()
-        cleanup_spill_files()  # Should not raise
-
-    def test_cleanup_handles_already_deleted_files(
-        self, streaming_config: CalculationConfig, tmp_path: Path
-    ) -> None:
-        lf = _sample_lf()
-        materialise_barrier(lf, streaming_config, "already_deleted")
-
-        # Manually delete the file before cleanup
-        for f in tmp_path.glob("rwa_*.parquet"):
-            f.unlink()
-
-        # Should not raise
-        cleanup_spill_files()
-        assert len(_spill_files) == 0
+        assert plan_node_count(deep) > plan_node_count(shallow)

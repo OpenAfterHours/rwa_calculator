@@ -60,7 +60,7 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
-from rwa_calc.engine.materialise import materialise_barrier
+from rwa_calc.engine.materialise import materialise_edge
 from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.observability.audit_cache import sink_audit
 
@@ -552,7 +552,7 @@ class CRMProcessor:
         errors.extend(look_through_errors)
 
         # Steps 1-3: provisions -> CCF -> init EAD -> materialise barrier
-        exposures = self._run_ead_pipeline(data, config, "crm_post_ead_fanout")
+        exposures = self._run_ead_pipeline(data, config)
 
         # Step 3.5: Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
@@ -603,7 +603,7 @@ class CRMProcessor:
         # Without this collect, the full pipeline plan is re-evaluated per
         # branch and the plan depth causes Polars optimizer segfaults.
         # In streaming mode, spills to disk instead of loading into memory.
-        exposures = materialise_barrier(exposures, config, "crm_post_audit_fanout")
+        exposures = materialise_edge(exposures, config, "crm_post_audit_fanout")
 
         # Split by approach for output
         sa_exposures = exposures.filter(pl.col("approach") == ApproachType.SA.value)
@@ -668,8 +668,10 @@ class CRMProcessor:
         )
         errors.extend(look_through_errors)
 
-        # Steps 1-3: provisions -> CCF -> init EAD -> materialise barrier
-        exposures = self._run_ead_pipeline(data, config, "crm_post_ead_unified")
+        # Steps 1-3: provisions -> CCF -> init EAD (lazy; the stage input is
+        # eager-backed via the classifier_exit edge, and the chain materialises
+        # at the crm_pre_guarantee checkpoint / crm_exit edge below)
+        exposures = self._run_ead_pipeline(data, config)
 
         # Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
@@ -708,23 +710,30 @@ class CRMProcessor:
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
         exposures = self._apply_life_insurance_step(exposures, collateral, config)
 
-        # Materialise after collateral before guarantee processing.
-        # Collateral adds 3 lookup joins + haircuts + unified allocation;
-        # without this collect, the guarantee module's 3-path concat
-        # (no-guarantee / single / multi-guarantor split) re-evaluates the
-        # full collateral plan per branch, causing ~4x slowdown at 100K scale.
+        # The single sanctioned INTRA-STAGE checkpoint (migration Phase 1).
+        # Empirically irreducible on Polars 1.37: the guarantee module's
+        # 3-path concat (no-guarantee / single / multi-guarantor split)
+        # re-evaluates the full collateral plan per branch without it
+        # (~4x slowdown at 100K scale), and removing it alone SIGSEGVs on
+        # deep plans. Guarded by the plan-node ceiling tests
+        # (tests/integration/test_stage_edges.py); re-validate per Polars
+        # upgrade before attempting removal.
         if (
             has_required_columns(guarantees_lf, self.GUARANTEE_REQUIRED_COLUMNS)
             and data.counterparty_lookup is not None
         ):
-            exposures = materialise_barrier(exposures, config, "crm_pre_guarantee_unified")
+            exposures = materialise_edge(exposures, config, "crm_pre_guarantee_unified")
             exposures = self._apply_guarantees_step(exposures, guarantees_lf, data, config, errors)
         else:
             self._collect_guarantee_skip_errors(guarantees_lf, data, errors)
-            exposures = materialise_barrier(exposures, config, "crm_no_guarantee")
 
         exposures = self._finalize_ead(exposures)
         exposures = self._add_crm_audit(exposures)
+
+        # Stage-exit edge (producer-side): materialise before the audit
+        # projections below derive from `exposures`, so they read in-memory
+        # data instead of re-executing the guarantee plan.
+        exposures = materialise_edge(exposures, config, "crm_exit")
 
         collateral_allocation = (
             self._build_collateral_allocation(exposures) if collateral_applied else None
@@ -759,9 +768,8 @@ class CRMProcessor:
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
-        barrier_label: str,
     ) -> pl.LazyFrame:
-        """Run provisions -> CCF -> init_ead and apply the materialise barrier."""
+        """Run provisions -> CCF -> init_ead (lazy; no intra-stage barrier)."""
         exposures = data.all_exposures
         # Step 1: Resolve provisions BEFORE CCF (CRR Art. 111(2))
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
@@ -772,11 +780,7 @@ class CRMProcessor:
         # Uses nominal_after_provision when available
         exposures = self._apply_ccf(exposures, config)
         # Step 3: Initialize EAD columns
-        exposures = self._initialize_ead(exposures)
-        # Materialise the deep lazy plan once.  Without this, downstream join
-        # collects each re-execute the full upstream plan, and the plan depth
-        # causes Polars optimizer segfaults.  In streaming mode, spills to disk.
-        return materialise_barrier(exposures, config, barrier_label)
+        return self._initialize_ead(exposures)
 
     def _merge_netting_collateral(
         self,

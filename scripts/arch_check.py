@@ -4,7 +4,7 @@ Architectural linter for RWA Calculator.
 Checks machine-verifiable invariants from CLAUDE.md:
 1. Every src/ module has `from __future__ import annotations`
 2. No ABC imports (Protocol only)
-3. No raw .collect().lazy() outside materialise.py (use materialise_barrier)
+3. No raw .collect().lazy() outside materialise.py (use materialise_edge)
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
 5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
@@ -222,6 +222,7 @@ RATCHET_MAX_METRICS = (
     "engine_fill_null_sites",
     "engine_presence_guard_sites",
     "engine_collect_schema_sites",
+    "engine_eager_collect_sites",
     "max_engine_module_loc",
 )
 
@@ -328,7 +329,7 @@ def check_no_abc(path: Path) -> list[str]:
 
 
 def check_no_collect_lazy(path: Path) -> list[str]:
-    """No .collect().lazy() outside materialise.py -- use materialise_barrier()."""
+    """No .collect().lazy() outside materialise.py -- use materialise_edge()."""
     violations = []
     pattern = re.compile(r"\.collect\(\)\s*\.lazy\(\)")
     for py_file in sorted(path.rglob("*.py")):
@@ -343,9 +344,7 @@ def check_no_collect_lazy(path: Path) -> list[str]:
             if stripped.startswith(("#", '"""', "'''")):
                 continue
             if pattern.search(line):
-                violations.append(
-                    f"  {py_file}:{i}: .collect().lazy() -- use materialise_barrier()"
-                )
+                violations.append(f"  {py_file}:{i}: .collect().lazy() -- use materialise_edge()")
     return violations
 
 
@@ -699,6 +698,10 @@ _COLLECT_SCHEMA_PATTERN = re.compile(r"\.collect_schema\(")
 # but a *consistent* one: the ratchet tracks the trend, not the exact census.
 _PRESENCE_GUARD_PATTERN = re.compile(r"""["'][\w .-]+["']\s+(?:not\s+)?in\s+""")
 _CITES_PATTERN = re.compile(r"@cites\(")
+# Raw eager collects in engine/** (excl. collect_schema). Phase 1 discipline:
+# stage-edge collects live in materialise.py; the remaining engine sites are
+# small-lookup collects whose census is the allowlist — it may not grow.
+_EAGER_COLLECT_PATTERN = re.compile(r"\.collect\(\)|collect_all\(")
 
 
 def _count_pattern_lines(text: str, pattern: re.Pattern[str]) -> int:
@@ -713,7 +716,7 @@ def _count_pattern_lines(text: str, pattern: re.Pattern[str]) -> int:
 
 def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
     """Measure the defensive-surface metrics over `path` (the package root)."""
-    fill_null = presence = collect_schema = max_loc = 0
+    fill_null = presence = collect_schema = eager_collects = max_loc = 0
     for py_file in _iter_engine_files(path):
         try:
             text = py_file.read_text(encoding="utf-8")
@@ -722,6 +725,8 @@ def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
         fill_null += _count_pattern_lines(text, _FILL_NULL_PATTERN)
         presence += _count_pattern_lines(text, _PRESENCE_GUARD_PATTERN)
         collect_schema += _count_pattern_lines(text, _COLLECT_SCHEMA_PATTERN)
+        if py_file.name != "materialise.py":
+            eager_collects += _count_pattern_lines(text, _EAGER_COLLECT_PATTERN)
         max_loc = max(max_loc, text.count("\n") + 1)
 
     cites = 0
@@ -738,6 +743,7 @@ def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
         "engine_fill_null_sites": fill_null,
         "engine_presence_guard_sites": presence,
         "engine_collect_schema_sites": collect_schema,
+        "engine_eager_collect_sites": eager_collects,
         "max_engine_module_loc": max_loc,
         "cites_decorators": cites,
     }
@@ -964,7 +970,7 @@ def main() -> int:
     checks = [
         ("from __future__ import annotations", check_future_annotations),
         ("No ABC imports (use Protocol)", check_no_abc),
-        ("No .collect().lazy() (use materialise_barrier)", check_no_collect_lazy),
+        ("No .collect().lazy() (use materialise_edge)", check_no_collect_lazy),
         ("No engine= in collect (use materialise.py)", check_no_engine_arg),
         (
             "No regulatory scalars in engine/ (use data/tables/)",

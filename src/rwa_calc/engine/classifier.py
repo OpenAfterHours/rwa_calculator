@@ -78,7 +78,7 @@ from rwa_calc.domain.enums import (
     PermissionMode,
     SpecialisedLendingType,
 )
-from rwa_calc.engine.materialise import materialise_barrier
+from rwa_calc.engine.materialise import materialise_edge
 from rwa_calc.engine.utils import partition_by_nullable
 
 if TYPE_CHECKING:
@@ -180,13 +180,11 @@ class ExposureClassifier:
         )
         classified = self._derive_exposure_subclass(classified, config, schema_names)
 
-        # Single materialisation barrier — both diagnostic emits below run
+        # Stage-exit edge (producer-side): the diagnostic emits below run
         # against in-memory data instead of re-executing the upstream lazy
-        # plan, and the bundle returned downstream (CRMProcessor) reuses the
-        # same materialised data instead of paying upstream cost a third time.
-        # At 100K scale this saves ~880 ms / ~14 % of total pipeline time
-        # vs the previous "emit-then-materialise-later" arrangement.
-        classified = materialise_barrier(classified, config, "classifier_output")
+        # plan, and CRMProcessor receives an eager-backed frame. Laziness is
+        # strictly intra-stage (migration Phase 1).
+        classified = materialise_edge(classified, config, "classifier_exit")
 
         classification_errors.extend(
             self._collect_beel_on_non_defaulted_warnings(classified, schema_names)

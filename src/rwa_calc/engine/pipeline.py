@@ -67,9 +67,11 @@ from rwa_calc.contracts.protocols import (
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
-    cleanup_spill_files,
-    materialise_barrier,
+    begin_edge_capture,
+    current_edge_events,
+    end_edge_capture,
     materialise_branches,
+    materialise_edge,
 )
 from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
@@ -253,6 +255,7 @@ class PipelineOrchestrator:
         self._ccr_errors = []
 
         run_id, run_id_token = new_run_id()
+        edge_capture_token = begin_edge_capture()
         run_start = time.perf_counter()
         started_at = datetime.now(UTC)
         try:
@@ -384,8 +387,19 @@ class PipelineOrchestrator:
 
             return result
         finally:
-            # Clean up any temp parquet files created during materialization
-            cleanup_spill_files()
+            # Close the run's edge capture: deletes spill files and logs the
+            # materialisation map (every stage-edge collect in one place).
+            edge_events = end_edge_capture(edge_capture_token)
+            if edge_events:
+                logger.info(
+                    "materialisation map: %s",
+                    "; ".join(
+                        f"{e.label}={e.rows}r/{e.estimated_bytes >> 20}MiB/{e.wall_ms}ms"
+                        + ("/spill" if e.spilled else "")
+                        for e in edge_events
+                    ),
+                    extra={"stage": "pipeline", "edge_count": len(edge_events)},
+                )
             clear_run_id(run_id_token)
 
     # =========================================================================
@@ -507,7 +521,9 @@ class PipelineOrchestrator:
             )
             result = replace(
                 result,
-                exposures=new_exposures,
+                # Stage-exit edge: hierarchy output crosses to the CCR stage /
+                # Classifier as an eager-backed frame (migration Phase 1).
+                exposures=materialise_edge(new_exposures, config, "hierarchy_exit"),
                 securitisation_audit=self._securitisation_resolved,
             )
             # Accumulate hierarchy errors
@@ -612,7 +628,11 @@ class PipelineOrchestrator:
                     [resolved.exposures, ccr_exposure_rows],
                     how="diagonal_relaxed",
                 )
-                return replace(resolved, exposures=new_exposures)
+                # Stage-exit edge (only when CCR rows were appended).
+                return replace(
+                    resolved,
+                    exposures=materialise_edge(new_exposures, config, "ccr_exit"),
+                )
         except Exception as e:
             self._errors.append(
                 PipelineError(
@@ -770,6 +790,13 @@ class PipelineOrchestrator:
         try:
             with stage_timer(logger, "re_splitter"):
                 result = self._re_splitter.split(crm_adjusted, config)
+            # Stage-exit edge: the calculators' branch split forks the plan
+            # three ways, so their input must be eager-backed (this edge
+            # replaces the old pipeline_pre_branch barrier one stage later).
+            result = replace(
+                result,
+                exposures=materialise_edge(result.exposures, config, "re_split_exit"),
+            )
             if result.crm_errors:
                 # Splitter accumulates errors into the CRM bucket so existing
                 # error reporting continues to capture them.
@@ -818,14 +845,11 @@ class PipelineOrchestrator:
 
         try:
             with stage_timer(logger, "calculators"):
-                exposures = crm_adjusted.exposures  # Lazy (shallow plan on materialised data)
-
-                # Materialise CRM output before calculator split.
-                # Even though CRM now materialises inputs before guarantee joins,
-                # the guarantee plan (joins + finalize + audit) is still deep enough
-                # that collect_all would re-evaluate it per branch without this.
-                # In streaming mode, spills to disk instead of loading into memory.
-                exposures = materialise_barrier(exposures, config, "pipeline_pre_branch")
+                # Eager-backed via the re_split_exit stage edge; the only lazy
+                # work below this point is e_star + (floor-enabled) unified SA
+                # + the per-branch calculator chains, collected at
+                # materialise_branches.
+                exposures = crm_adjusted.exposures
 
                 # Compute Art. 501 E* (SME tier threshold input) across the full
                 # unified frame so SA / IRB / slotting siblings in the same
@@ -1110,6 +1134,9 @@ def _persist_audit_artifacts(
             },
             "artifacts": artifacts,
             "error_count": len(result.errors),
+            # Every stage-edge collect of this run: label, rows, columns,
+            # estimated bytes, wall ms, spill mode (migration Phase 1).
+            "materialisation_map": [e.as_dict() for e in current_edge_events()],
         }
         manifest_path = run_dir / "manifest.json"
         tmp_path = run_dir / "manifest.json.tmp"

@@ -60,8 +60,9 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
-from rwa_calc.engine.materialise import materialise_barrier, sink_audit
+from rwa_calc.engine.materialise import materialise_barrier
 from rwa_calc.engine.utils import has_required_columns
+from rwa_calc.observability.audit_cache import sink_audit
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -680,10 +681,29 @@ class CRMProcessor:
             exposures, collateral, data, config, errors
         )
 
+        # Step 3.8: Pre-compute FCSM columns if Simple Method is elected
+        # (Art. 222). Mirrors Step 3.6 of get_crm_adjusted_bundle: must run
+        # BEFORE the Comprehensive Method (still needed for IRB LGD).
+        use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
+        if use_simple_method:
+            if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
+                exposures = compute_fcsm_columns(exposures, collateral, config)
+            else:
+                # Add default (zero) FCSM columns when no valid collateral
+                from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns
+
+                exposures = _add_default_fcsm_columns(exposures)
+
         # Step 4: Apply collateral (unified path — no misdirected-AIRB diagnostic)
         exposures, collateral_applied = self._apply_collateral_unified_step(
             exposures, collateral, config, errors
         )
+
+        # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
+        # The Comprehensive pipeline reduced SA EAD by collateral_adjusted_value,
+        # but Art. 222 does not reduce EAD — it substitutes risk weights instead.
+        if use_simple_method:
+            exposures = undo_sa_ead_reduction(exposures)
 
         # Pre-compute life insurance method columns (Art. 232) for SA RW mapping
         exposures = self._apply_life_insurance_step(exposures, collateral, config)

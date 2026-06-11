@@ -706,12 +706,49 @@ _EAGER_COLLECT_PATTERN = re.compile(r"\.collect\(\)|collect_all\(")
 
 def _count_pattern_lines(text: str, pattern: re.Pattern[str]) -> int:
     """Count pattern occurrences, skipping comment-only lines."""
+    code_lines = _code_line_numbers(text)
     count = 0
-    for line in text.split("\n"):
+    for lineno, line in enumerate(text.split("\n"), 1):
+        if code_lines is not None and lineno not in code_lines:
+            continue
         if line.strip().startswith("#"):
             continue
         count += len(pattern.findall(line))
     return count
+
+
+def _code_line_numbers(text: str) -> set[int] | None:
+    """Line numbers carrying actual code tokens (not docstrings/comments).
+
+    A docstring or comment that *mentions* ``.collect()`` or ``.fill_null(``
+    must not move the ratchet metrics. Lines whose only tokens are STRING /
+    COMMENT / whitespace are excluded; a line like ``"col" in cols`` still
+    qualifies because ``in`` and ``cols`` are code tokens on the same line.
+    Returns None (count all lines) when tokenisation fails.
+    """
+    import io
+    import tokenize
+
+    non_code = {
+        tokenize.COMMENT,
+        tokenize.STRING,
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.ENCODING,
+        tokenize.ENDMARKER,
+    }
+    code_lines: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type in non_code:
+                continue
+            for lineno in range(tok.start[0], tok.end[0] + 1):
+                code_lines.add(lineno)
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return None
+    return code_lines
 
 
 def _measure_ratchet_metrics(path: Path) -> dict[str, int]:

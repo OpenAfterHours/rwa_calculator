@@ -447,6 +447,18 @@ class ExposureClassifier:
         if "institution_cqs" in cp_col_names:
             select_cols.append(pl.col("institution_cqs").alias("cp_institution_cqs"))
 
+        # Internal-model id resolved by the rating-inheritance pipeline onto the
+        # counterparty lookup. Traditional lending rows already carry ``model_id``
+        # (hierarchy._attach_counterparty_rating renames internal_model_id ->
+        # model_id per exposure), but synthetic CCR rows are appended AFTER that
+        # attach and reach the classifier with ``model_id = null``. Surfacing the
+        # counterparty's ``internal_model_id`` here lets _resolve_model_permissions
+        # coalesce it into ``model_id`` so an IRB-permissioned counterparty's CCR
+        # derivative exposure routes through F-IRB/A-IRB instead of falling back
+        # to SA (CRR Art. 153(1) corporate IRB; CRR Art. 162(2)(b) derivative M).
+        if "internal_model_id" in cp_col_names:
+            select_cols.append(pl.col("internal_model_id").alias("cp_internal_model_id"))
+
         cp_cols = counterparties.select(select_cols)
 
         joined = exposures.join(
@@ -1419,7 +1431,27 @@ class ExposureClassifier:
               model_slotting_permitted (bool)
 
         Exposures without a model_id get all flags as False (→ SA fallback).
+
+        Synthetic CCR rows reach this stage with ``model_id = null`` because the
+        rating-inheritance attach that renames ``internal_model_id`` -> ``model_id``
+        only runs over hierarchy-resolved lending rows. When the counterparty
+        lookup carried an ``internal_model_id`` it was surfaced as
+        ``cp_internal_model_id`` by ``_add_counterparty_attributes``; coalescing it
+        into ``model_id`` here lets an IRB-permissioned counterparty's CCR
+        derivative exposure resolve a model permission instead of falling back to
+        SA. The coalesce is a no-op for lending rows whose ``model_id`` is already
+        populated (CRR Art. 153(1); CRR Art. 162(2)(b)).
         """
+        # Recover model_id for rows that carry only the counterparty's resolved
+        # internal_model_id (synthetic CCR rows). No-op when model_id is already set.
+        if "cp_internal_model_id" in schema_names:
+            exposures = exposures.with_columns(
+                pl.coalesce(pl.col("model_id"), pl.col("cp_internal_model_id")).alias("model_id")
+                if "model_id" in schema_names
+                else pl.col("cp_internal_model_id").alias("model_id")
+            )
+            schema_names = schema_names | {"model_id"}
+
         # Ensure model_id column exists on exposures
         if "model_id" not in schema_names:
             return exposures.with_columns(

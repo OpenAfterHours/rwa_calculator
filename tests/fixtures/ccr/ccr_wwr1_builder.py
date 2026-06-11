@@ -121,16 +121,7 @@ from .wwr_builder import (
     CCR010_ERROR_CODE as CCR010_ERROR_CODE,
 )
 from .wwr_builder import (
-    CCR010_REGULATORY_REF as CCR010_REGULATORY_REF,
-)
-from .wwr_builder import (
     CCR011_ERROR_CODE as CCR011_ERROR_CODE,
-)
-from .wwr_builder import (
-    CCR011_REGULATORY_REF as CCR011_REGULATORY_REF,
-)
-from .wwr_builder import (
-    CCR_WWR_SEVERITY as CCR_WWR_SEVERITY,
 )
 from .wwr_builder import (
     CP_WWR_01_REF as CP_WWR_01_REF,
@@ -168,6 +159,35 @@ from .wwr_builder import (
 from .wwr_builder import (
     make_p827_trades as make_p827_trades,
 )
+
+# Public surface re-exported for the orchestrator-gate test-writers. The WWR-gate
+# constants (SYNTHETIC_NS_ID, WWR_LGD_OVERRIDE_VALUE, EXPECTED_CCR0xx_COUNT,
+# CCR0xx_ERROR_CODE) keep their single source of truth in wwr_builder; listing
+# them here marks them as intentional re-exports (not unused imports).
+__all__ = [
+    "CCR010_ERROR_CODE",
+    "CCR011_ERROR_CODE",
+    "CCR_WWR1_COUNTERPARTY_REF",
+    "CCR_WWR1_COUNTRY_CODE",
+    "CCR_WWR1_ENTITY_TYPE",
+    "CCR_WWR1_EXPECTED_INSTITUTION_RW",
+    "CCR_WWR1_RATING_AGENCY",
+    "CCR_WWR1_RATING_CQS",
+    "CCR_WWR1_RATING_DATE",
+    "CCR_WWR1_RATING_REF",
+    "CCR_WWR1_RATING_TYPE",
+    "CCR_WWR1_RATING_VALUE",
+    "CP_WWR_01_REF",
+    "EXPECTED_CCR010_COUNT",
+    "EXPECTED_CCR011_COUNT",
+    "NS_WWR_01_ID",
+    "SYNTHETIC_NS_ID",
+    "T_NORMAL_01_ID",
+    "T_WWR_01_ID",
+    "WWR_LGD_OVERRIDE_VALUE",
+    "build_raw_data_bundle_ccr_wwr1",
+    "save_ccr_wwr1_fixtures",
+]
 
 # ---------------------------------------------------------------------------
 # CCR-WWR-1-specific counterparty / rating constants.

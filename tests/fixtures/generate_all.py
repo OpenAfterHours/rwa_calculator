@@ -538,6 +538,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             "ccr",
             _generate_p823_ls,
         ),
+        (
+            "P8.31 (CCR-IRB-1 — 5y GBP IR swap, F-IRB corporate CP_IRB_001, MOD_CORP_FIRB)",
+            "ccr",
+            _generate_ccr_irb1,
+        ),
     ]
 
     for group_name, subdir, generator_func in generators:
@@ -2903,6 +2908,40 @@ def _generate_p823_ls(output_dir: Path) -> list[tuple[str, int]]:
         for mod in (
             "ccr.p823_ls_builder",
             CCR_GOLDEN_A1_MODULE,
+            CCR_TRADE_BUILDER_MODULE,
+            CCR_NETTING_SET_BUILDER_MODULE,
+            CCR_MARGIN_BUILDER_MODULE,
+        ):
+            sys.modules.pop(mod, None)
+
+
+def _generate_ccr_irb1(output_dir: Path) -> list[tuple[str, int]]:
+    """
+    Generate P8.31 / CCR-IRB-1 fixture parquet files and smoke-check the bundle.
+
+    Writes four parquet files to the ``ccr/`` output directory:
+        ccr_irb1_trades.parquet           — 1 row (T_IRB_001, 5y GBP IR swap)
+        ccr_irb1_netting_sets.parquet     — 1 row (NS_IRB_001, CP_IRB_001)
+        ccr_irb1_margin_agreements.parquet — 0 rows
+        ccr_irb1_ccr_collateral.parquet   — 0 rows
+
+    The model permission row (MOD_CORP_FIRB) is added to the shared
+    model_permissions.parquet by the Model Permissions generator — it is
+    NOT written by this function.
+
+    Structural invariants for the CCR-IRB-1 scenario are validated by
+    ``save_ccr_irb1_smoke_check()`` before the parquet files are returned.
+    """
+    fixtures_root = str(output_dir.parent)
+    sys.path.insert(0, fixtures_root)
+    try:
+        from ccr.golden_ccr_irb1 import save_ccr_irb1_smoke_check
+
+        return save_ccr_irb1_smoke_check()
+    finally:
+        sys.path.remove(fixtures_root)
+        for mod in (
+            "ccr.golden_ccr_irb1",
             CCR_TRADE_BUILDER_MODULE,
             CCR_NETTING_SET_BUILDER_MODULE,
             CCR_MARGIN_BUILDER_MODULE,

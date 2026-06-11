@@ -393,7 +393,9 @@ def test_valid_risk_types_input_length_is_nine() -> None:
 #   CRR Art. 280a / 280b — is_index discriminator
 # ===========================================================================
 
-_P8_35_EXPECTED_COLUMN_COUNT = 30  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
+_P8_35_EXPECTED_COLUMN_COUNT = (
+    30  # 23 pre-P8.33 + 5 (P8.33) + 1 (P8.35: credit_quality) + 1 (P8.29: is_legacy_cva_exempt)
+)
 _P8_33_COMMODITY_BUCKETS = {"ELECTRICITY", "OIL_GAS", "METALS", "AGRICULTURAL", "OTHER"}
 
 

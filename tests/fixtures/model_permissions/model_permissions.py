@@ -88,6 +88,7 @@ def _corporate_permissions() -> list[ModelPermission]:
     Covers:
         - UK_CORP_PD_01: FIRB for corporates (UK, all books)
         - UK_CORP_AIRB_01: AIRB for corporates (UK, excludes TRADE_FINANCE book)
+        - MOD_CORP_FIRB: FIRB for corporates (UK) — CCR-IRB-1 / P8.31 scenario
     """
     return [
         # FIRB corporate model — approved for all UK corporate exposures
@@ -106,6 +107,17 @@ def _corporate_permissions() -> list[ModelPermission]:
             approach="advanced_irb",
             country_codes="GB",
             excluded_book_codes="TRADE_FINANCE",
+        ),
+        # CCR-IRB-1 / P8.31: FIRB corporate model for CCR synthetic-row IRB routing.
+        # CP_IRB_001 carries rating model_id="MOD_CORP_FIRB"; once engine/ccr/
+        # pipeline_adapter.py is fixed to propagate model_id onto the synthetic
+        # exposure row, the classifier matches this permission and routes to F-IRB.
+        # CRR Art. 153(1) + Art. 161(1)(a): corporate F-IRB, LGD=45% senior unsecured.
+        ModelPermission(
+            model_id="MOD_CORP_FIRB",
+            exposure_class="corporate",
+            approach="foundation_irb",
+            country_codes="GB",
         ),
     ]
 

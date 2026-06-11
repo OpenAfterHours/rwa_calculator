@@ -227,21 +227,6 @@ validated = validate_lgd_range(lf=exposures, lgd_column="lgd", min_lgd=0.0, max_
 
 **Returns:** `pl.LazyFrame` — with `_valid_lgd` column.
 
-### `validate_risk_type()`
-
-Validates that risk type values are one of the recognised codes (`FR`, `MR`, `MLR`, `LR`)
-or full values (`full_risk`, `medium_risk`, `medium_low_risk`, `low_risk`).
-Comparison is case-insensitive.
-
-```python
-from rwa_calc.contracts.validation import validate_risk_type
-
-validated = validate_risk_type(lf=facilities, column="risk_type")
-# Adds _valid_risk_type boolean column
-```
-
-**Returns:** `pl.LazyFrame` — with `_valid_risk_type` column.
-
 ### `validate_ccf_modelled()`
 
 Validates that modelled CCF values are in [0.0, 1.5]. Null values are treated as valid
@@ -257,28 +242,13 @@ validated = validate_ccf_modelled(lf=facilities, column="ccf_modelled")
 
 **Returns:** `pl.LazyFrame` — with `_valid_ccf_modelled` column.
 
-### `normalize_risk_type()`
-
-Normalises risk type short codes to canonical full values. First lowercases the column,
-then maps: `FR` → `full_risk`, `MR` → `medium_risk`, `MLR` → `medium_low_risk`,
-`LR` → `low_risk`. Values already in full form pass through unchanged.
-
-```python
-from rwa_calc.contracts.validation import normalize_risk_type
-
-normalized = normalize_risk_type(lf=facilities, column="risk_type")
-```
-
-**Constants used:**
-
-| Short Code | Full Value |
-|-----------|------------|
-| `fr` | `full_risk` |
-| `mr` | `medium_risk` |
-| `mlr` | `medium_low_risk` |
-| `lr` | `low_risk` |
-
-**Returns:** `pl.LazyFrame` — with normalised `risk_type` column.
+!!! note "Risk-type validation lives in the data layer"
+    Input `risk_type` values are validated by the bundle-level value validation
+    below (`COLUMN_VALUE_CONSTRAINTS` in `data/schemas.py` defines
+    `VALID_RISK_TYPES_INPUT` and `RISK_TYPE_SYNONYMS`), and short codes are
+    normalised inside the CCF lookup (`data/tables/ccf.py`). The former
+    standalone `validate_risk_type()` / `normalize_risk_type()` helpers were
+    dead code and have been removed.
 
 ---
 

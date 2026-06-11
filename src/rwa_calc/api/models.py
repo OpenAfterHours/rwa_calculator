@@ -379,6 +379,13 @@ class ReconciliationResponse:
     framework: str | None = None
     reporting_date: date | None = None
     errors: list[APIError] = field(default_factory=list)
+    # Per-frame collect cache: the bundle frames are lazy views over one
+    # shared reconciliation plan, so a raw ``.collect()`` per accessor call
+    # re-executes that plan every time. Accessors collect once via
+    # ``_collect_cached`` and reuse the eager DataFrame thereafter.
+    _collect_cache: dict[str, pl.DataFrame] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def from_bundle(
@@ -410,13 +417,11 @@ class ReconciliationResponse:
 
     def collect_component_reconciliation(self) -> pl.DataFrame:
         """Collect the per-key reconciliation frame."""
-        df: pl.DataFrame = self.bundle.component_reconciliation.collect()
-        return df
+        return self._collect_cached("component_reconciliation")
 
     def collect_summary_by_component(self) -> pl.DataFrame:
         """Collect the headline per-component summary (bucket counts, break rate)."""
-        df: pl.DataFrame = self.bundle.summary_by_component.collect()
-        return df
+        return self._collect_cached("summary_by_component")
 
     def scan_class_allocation(self) -> pl.LazyFrame:
         """Lazy by-risk-class allocation tie-out (ours vs legacy EAD/RWA)."""
@@ -424,23 +429,27 @@ class ReconciliationResponse:
 
     def collect_class_allocation(self) -> pl.DataFrame:
         """Collect the by-risk-class allocation tie-out (ours vs legacy EAD/RWA)."""
-        df: pl.DataFrame = self.bundle.class_allocation.collect()
-        return df
+        return self._collect_cached("class_allocation")
 
     def collect_summary_by_bucket(self) -> pl.DataFrame:
         """Collect the row-level bucket counts."""
-        df: pl.DataFrame = self.bundle.summary_by_bucket.collect()
-        return df
+        return self._collect_cached("summary_by_bucket")
+
+    def collect_summary_by_exposure_class(self) -> pl.DataFrame:
+        """Collect the break summary grouped by our exposure class."""
+        return self._collect_cached("summary_by_exposure_class")
+
+    def collect_summary_by_approach(self) -> pl.DataFrame:
+        """Collect the break summary grouped by our approach."""
+        return self._collect_cached("summary_by_approach")
 
     def collect_breaks_detail(self) -> pl.DataFrame:
         """Collect the long-format break worklist (ranked by materiality)."""
-        df: pl.DataFrame = self.bundle.breaks_detail.collect()
-        return df
+        return self._collect_cached("breaks_detail")
 
     def collect_totals_tie_out(self) -> pl.DataFrame:
         """Collect the per-component portfolio tie-out (sum legacy vs sum ours)."""
-        df: pl.DataFrame = self.bundle.totals_tie_out.collect()
-        return df
+        return self._collect_cached("totals_tie_out")
 
     def to_csv(self, output_dir: Path) -> ExportResult:
         """Export the reconciliation frames to CSV files."""
@@ -460,8 +469,22 @@ class ReconciliationResponse:
         if not self.success:
             return False
         breaks: pl.DataFrame = (
-            self.bundle.summary_by_bucket.filter(pl.col("row_bucket") == "break")
+            self._collect_cached("summary_by_bucket")
+            .filter(pl.col("row_bucket") == "break")
             .select(pl.col("count").sum())
-            .collect()
         )
         return bool(breaks.height and (breaks.item() or 0) > 0)
+
+    def _collect_cached(self, name: str) -> pl.DataFrame:
+        """Collect ``bundle.<name>`` once and reuse the eager DataFrame.
+
+        The reconciliation frames are lazy views sharing one underlying
+        reconciliation plan; collecting a view on every accessor call would
+        re-execute that plan each time (the REST reconcile endpoint reads
+        six views per request). The cache dict is the standard mutable-cache
+        escape hatch on a frozen dataclass — it never leaves this class.
+        """
+        if name not in self._collect_cache:
+            df: pl.DataFrame = getattr(self.bundle, name).collect()
+            self._collect_cache[name] = df
+        return self._collect_cache[name]

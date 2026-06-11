@@ -1,0 +1,25 @@
+# Local-only hooks (repo: local + language: system) — no network dependencies.
+# Mirrors the CI "Lint & Format" job (.github/workflows/ci.yml).
+repos:
+  - repo: local
+    hooks:
+      - id: arch-check
+        name: Architectural invariants (scripts/arch_check.py)
+        entry: uv run python scripts/arch_check.py
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: ruff-check
+        name: Ruff lint (src, tests, scripts)
+        entry: uv run ruff check src tests scripts
+        language: system
+        pass_filenames: false
+        types: [python]
+
+      - id: ruff-format-check
+        name: Ruff format check (src, tests, scripts)
+        entry: uv run ruff format --check src tests scripts
+        language: system
+        pass_filenames: false
+        types: [python]

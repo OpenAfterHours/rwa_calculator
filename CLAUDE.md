@@ -140,7 +140,7 @@ tests/
 - **One assert per concept**: Each test verifies a single logical assertion (multiple `assert` is fine if testing one concept)
 - **Fixtures**: Use `@pytest.fixture` for shared setup. Test data builders live in `tests/fixtures/`
 - **Markers**: `@pytest.mark.benchmark` for perf tests, `@pytest.mark.slow` for 10M+ scale tests, `@pytest.mark.stress` for the 10K-row correctness-at-scale suite (`tests/acceptance/stress/`)
-- **Run tests**: `uv run pytest tests/` runs the dev-loop default — `-m 'not slow and not stress'`, distributed across workers via `pytest-xdist` (`-n auto --dist=loadfile`). To exercise the stress suite locally use `uv run pytest tests/ -m stress`; CI runs `uv run pytest tests/ -m 'not slow'` so stress + everything-non-slow is gated.
+- **Run tests**: `uv run pytest tests/` runs the dev-loop default — `-m 'not slow and not stress and not scale_1m and not benchmark'` with `--strict-markers`, distributed across workers via `pytest-xdist` (`-n auto --dist=loadfile`). To exercise the stress suite locally use `uv run pytest tests/ -m stress`; CI runs `-m 'not slow and not benchmark'` (stress included) plus a dedicated `benchmarks` job that uploads `benchmark-results.json` as the stored baseline artifact.
 - **xdist worker count**: `loadfile` pins each test file to one worker, so session-scoped pipeline fixtures (`pipeline_results`, `crr_sa_result_10k_df`, …) are built per worker, not per test. Polars threads inside each worker — if `-n auto` oversubscribes cores, cap with `-n 4` or `PYTEST_XDIST_WORKER_COUNT=4`.
 
 ## Error Handling

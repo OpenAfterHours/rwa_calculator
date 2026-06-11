@@ -111,10 +111,6 @@ from rwa_calc.contracts.protocols import (
 
 # Validation utilities
 from rwa_calc.contracts.validation import (
-    RISK_TYPE_CODE_TO_VALUE,
-    VALID_RISK_TYPE_CODES,
-    VALID_RISK_TYPES,
-    normalize_risk_type,
     validate_ccf_modelled,
     validate_classified_bundle,
     validate_crm_adjusted_bundle,
@@ -124,7 +120,6 @@ from rwa_calc.contracts.validation import (
     validate_raw_data_bundle,
     validate_required_columns,
     validate_resolved_hierarchy_bundle,
-    validate_risk_type,
     validate_schema,
     validate_schema_to_errors,
 )
@@ -216,8 +211,6 @@ __all__ = [
     "SchemaValidatorProtocol",
     "SlottingCalculatorProtocol",
     # Validation
-    "normalize_risk_type",
-    "RISK_TYPE_CODE_TO_VALUE",
     "validate_ccf_modelled",
     "validate_classified_bundle",
     "validate_crm_adjusted_bundle",
@@ -227,9 +220,6 @@ __all__ = [
     "validate_raw_data_bundle",
     "validate_required_columns",
     "validate_resolved_hierarchy_bundle",
-    "validate_risk_type",
     "validate_schema",
     "validate_schema_to_errors",
-    "VALID_RISK_TYPE_CODES",
-    "VALID_RISK_TYPES",
 ]

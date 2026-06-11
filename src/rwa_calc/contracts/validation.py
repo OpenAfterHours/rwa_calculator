@@ -464,60 +464,8 @@ def validate_lgd_range(
 
 
 # =============================================================================
-# RISK TYPE AND CCF VALIDATORS
+# CCF VALIDATORS
 # =============================================================================
-
-# Valid risk type codes (short form)
-VALID_RISK_TYPE_CODES = {"fr", "frc", "mr", "oc", "mlr", "lr"}
-
-# Valid risk type full values
-VALID_RISK_TYPES = {
-    "full_risk",
-    "full_risk_commitment",
-    "medium_risk",
-    "other_commit",
-    "medium_low_risk",
-    "low_risk",
-}
-
-# Mapping from codes to full values
-RISK_TYPE_CODE_TO_VALUE = {
-    "fr": "full_risk",
-    "frc": "full_risk_commitment",
-    "mr": "medium_risk",
-    "oc": "other_commit",
-    "mlr": "medium_low_risk",
-    "lr": "low_risk",
-}
-
-
-def validate_risk_type(
-    lf: pl.LazyFrame,
-    column: str = "risk_type",
-) -> pl.LazyFrame:
-    """
-    Add validation expression for risk_type values.
-
-    Validates that risk_type is one of:
-    - Codes: FR, MR, OC, MLR, LR (case insensitive)
-    - Full values: full_risk, medium_risk, other_commit, medium_low_risk, low_risk
-
-    Args:
-        lf: LazyFrame to validate
-        column: Name of risk_type column
-
-    Returns:
-        LazyFrame with _valid_risk_type column added
-    """
-    if column not in lf.collect_schema().names():
-        return lf
-
-    # Create combined set of valid values (both codes and full values)
-    all_valid = VALID_RISK_TYPE_CODES | VALID_RISK_TYPES
-
-    return lf.with_columns(
-        pl.col(column).str.to_lowercase().is_in(all_valid).alias("_valid_risk_type")
-    )
 
 
 def validate_ccf_modelled(
@@ -553,33 +501,6 @@ def validate_ccf_modelled(
         .then(pl.lit(True))  # Null is valid (optional field)
         .otherwise((pl.col(column) >= min_ccf) & (pl.col(column) <= max_ccf))
         .alias("_valid_ccf_modelled")
-    )
-
-
-def normalize_risk_type(
-    lf: pl.LazyFrame,
-    column: str = "risk_type",
-) -> pl.LazyFrame:
-    """
-    Normalize risk_type codes to full values.
-
-    Converts short codes (FR, MR, MLR, LR) to full values
-    (full_risk, medium_risk, medium_low_risk, low_risk).
-    Values already in full form are preserved.
-
-    Args:
-        lf: LazyFrame with risk_type column
-        column: Name of risk_type column
-
-    Returns:
-        LazyFrame with normalized risk_type values
-    """
-    if column not in lf.collect_schema().names():
-        return lf
-
-    # Normalize to lowercase first, then map codes to full values
-    return lf.with_columns(
-        pl.col(column).str.to_lowercase().replace(RISK_TYPE_CODE_TO_VALUE).alias(column)
     )
 
 

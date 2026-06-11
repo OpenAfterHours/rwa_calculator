@@ -7,6 +7,7 @@ Tests cover:
 - PerformanceMetrics dataclass
 - CalculationResponse dataclass
 - ValidationResponse dataclass
+- ReconciliationResponse collect-accessor caching
 """
 
 from __future__ import annotations
@@ -22,10 +23,12 @@ from rwa_calc.api.models import (
     APIError,
     CalculationResponse,
     PerformanceMetrics,
+    ReconciliationResponse,
     SummaryStatistics,
     ValidationRequest,
     ValidationResponse,
 )
+from rwa_calc.contracts.bundles import ReconciliationBundle
 
 # =============================================================================
 # ValidationRequest Tests
@@ -377,3 +380,76 @@ class TestValidationResponse:
         assert response.valid is False
         assert response.found_count == 1
         assert response.missing_count == 2
+
+
+# =============================================================================
+# ReconciliationResponse Tests — collect-accessor caching
+# =============================================================================
+
+
+def _reconciliation_response() -> ReconciliationResponse:
+    """Build a response over a tiny synthetic bundle (no engine run)."""
+    bundle = ReconciliationBundle(
+        component_reconciliation=pl.LazyFrame(
+            {"exposure_reference": ["L1", "L2"], "row_bucket": ["match", "break"]}
+        ),
+        summary_by_component=pl.LazyFrame({"component": ["ead"], "break_count": [1]}),
+        class_allocation=pl.LazyFrame({"exposure_class": ["corporate"]}),
+        summary_by_bucket=pl.LazyFrame({"row_bucket": ["break", "match"], "count": [1, 1]}),
+        summary_by_exposure_class=pl.LazyFrame(
+            {"exposure_class": ["corporate"], "break_count": [1]}
+        ),
+        summary_by_approach=pl.LazyFrame({"approach_applied": ["SA"], "break_count": [1]}),
+        breaks_detail=pl.LazyFrame({"exposure_reference": ["L2"], "component": ["rwa"]}),
+        totals_tie_out=pl.LazyFrame({"component": ["ead"], "delta": [0.0]}),
+    )
+    return ReconciliationResponse(success=True, bundle=bundle, legacy_file=Path("legacy.csv"))
+
+
+class TestReconciliationResponseCollectCache:
+    """Collect accessors materialise each bundle frame once and reuse it."""
+
+    def test_repeat_collect_returns_cached_dataframe(self) -> None:
+        """A second accessor call must return the same eager object, not a
+        re-execution of the underlying lazy plan."""
+        response = _reconciliation_response()
+
+        first = response.collect_totals_tie_out()
+        second = response.collect_totals_tie_out()
+
+        assert first is second
+
+    def test_each_accessor_caches_independently(self) -> None:
+        """All collect accessors are cached, one cache slot per frame."""
+        response = _reconciliation_response()
+        accessors = [
+            response.collect_component_reconciliation,
+            response.collect_summary_by_component,
+            response.collect_class_allocation,
+            response.collect_summary_by_bucket,
+            response.collect_summary_by_exposure_class,
+            response.collect_summary_by_approach,
+            response.collect_breaks_detail,
+            response.collect_totals_tie_out,
+        ]
+
+        for accessor in accessors:
+            assert accessor() is accessor()
+
+    def test_cached_dataframe_matches_bundle_frame(self) -> None:
+        """Caching is behaviour-neutral: same data as a direct collect."""
+        response = _reconciliation_response()
+
+        df = response.collect_summary_by_exposure_class()
+
+        assert df.equals(response.bundle.summary_by_exposure_class.collect())
+
+    def test_has_breaks_reuses_cached_bucket_frame(self) -> None:
+        """has_breaks reads the cached summary_by_bucket frame and still
+        reports breaks correctly."""
+        response = _reconciliation_response()
+
+        cached = response.collect_summary_by_bucket()
+
+        assert response.has_breaks is True
+        assert response.collect_summary_by_bucket() is cached

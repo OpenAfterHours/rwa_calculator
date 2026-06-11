@@ -15,6 +15,10 @@ _Per-pass audit narrative now lives in git history (`git log -p IMPLEMENTATION_P
 
 ---
 
+## Architecture Migration (cross-reference)
+
+> **2026-06-11:** A full architecture review produced a target architecture (regime-as-data rulepacks, producer-sealed eager stage edges, uniform stage model) and a phased (0–8) strangler migration plan: **`docs/plans/target-architecture-migration.md`**. Phase 0 (ratchets, gate hygiene, FCSM unified-path fix, reporting kernel dedup, dead-code deletion) is in progress on `feat/arch-migration-phase0`. Plan-curator: schedule migration work per phase from that document rather than minting parallel P-codes; phase-relevant existing items are called out in its "folds in" notes (e.g. P2.21 → Phase 4; P1.183/P2.16b → Phase 4 aggregate-stage conversion; P8.39/P8.53/P5.17 CCR wirings → Phase 4 "ordinary registered stage" work; P2.5/P2.7/P2.25/P2.27/P2.28/P4.20 → Phase 7 per-template modules). The do-not-do register in that plan is binding for all batches (notably: no bulk golden regeneration; no agent edits to `tests/oracle/`; Float/String nulls never filled to 0.0).
+
 ## Remaining Work — Prioritized Bullet List
 
 Items are sorted by priority. Each item notes its ID, status, and effort estimate (S/M/L).

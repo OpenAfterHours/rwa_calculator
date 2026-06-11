@@ -1,0 +1,442 @@
+{
+  "rwa_calc.data.tables.b31_risk_weights::_create_b31_covered_bond_df": [
+    "PS1/26, paragraph 129"
+  ],
+  "rwa_calc.data.tables.b31_risk_weights::get_b31_combined_cqs_risk_weights": [
+    "PS1/26, paragraph 122"
+  ],
+  "rwa_calc.data.tables.ccf::build_firb_ccf_expr": [
+    "CRR Art. 166"
+  ],
+  "rwa_calc.data.tables.ccf::build_product_to_risk_type_expr": [
+    "CRR Art. 111"
+  ],
+  "rwa_calc.data.tables.ccf::build_sa_ccf_expr": [
+    "CRR Art. 111"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::_create_covered_bond_df": [
+    "CRR Art. 129"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::_create_io_df": [
+    "CRR Art. 118"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::_create_mdb_df": [
+    "CRR Art. 117"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::_create_pse_df": [
+    "CRR Art. 116"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::_create_rgla_df": [
+    "CRR Art. 115"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::build_corporate_guarantor_rw_expr": [
+    "CRR Art. 122"
+  ],
+  "rwa_calc.data.tables.crr_risk_weights::build_institution_guarantor_rw_expr": [
+    "CRR Art. 119",
+    "CRR Art. 120",
+    "CRR Art. 121"
+  ],
+  "rwa_calc.data.tables.eu_sovereign::build_domestic_cgcb_guarantor_expr": [
+    "CRR Art. 114"
+  ],
+  "rwa_calc.data.tables.eu_sovereign::build_eu_domestic_currency_expr": [
+    "CRR Art. 114",
+    "CRR Art. 141"
+  ],
+  "rwa_calc.data.tables.firb_lgd::get_firb_lgd_table": [
+    "CRR Art. 161"
+  ],
+  "rwa_calc.data.tables.firb_lgd::get_firb_lgd_table_for_framework": [
+    "CRR Art. 161"
+  ],
+  "rwa_calc.data.tables.haircuts::get_haircut_table": [
+    "CRR Art. 224"
+  ],
+  "rwa_calc.data.tables.haircuts::get_maturity_band": [
+    "CRR Art. 224"
+  ],
+  "rwa_calc.data.tables.sa_ccr_factors::_build_sa_ccr_correlations_df": [
+    "CRR Art. 280"
+  ],
+  "rwa_calc.data.tables.sa_ccr_factors::_build_sa_ccr_supervisory_factors_df": [
+    "CRR Art. 280"
+  ],
+  "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
+    "PS1/26, paragraph 92"
+  ],
+  "rwa_calc.engine.aggregator.aggregator::OutputAggregator.aggregate": [
+    "PS1/26, paragraph 92"
+  ],
+  "rwa_calc.engine.ccf::CCFCalculator._apply_purchased_receivable_ccf": [
+    "PS1/26, paragraph 166.5"
+  ],
+  "rwa_calc.engine.ccf::CCFCalculator._compute_ccf": [
+    "CRR Art. 111",
+    "PS1/26, paragraph 111"
+  ],
+  "rwa_calc.engine.ccf::CCFCalculator.apply_ccf": [
+    "CRR Art. 111",
+    "CRR Art. 166"
+  ],
+  "rwa_calc.engine.ccf::_firb_ccf_for_col": [
+    "CRR Art. 166"
+  ],
+  "rwa_calc.engine.ccf::sa_ccf_expression": [
+    "CRR Art. 111"
+  ],
+  "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_commodity": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_credit": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_equity": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_fx": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.adjusted_notional::compute_adjusted_notional_ir": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.ccp::apply_ccp_risk_weight": [
+    "CRR Art. 306"
+  ],
+  "rwa_calc.engine.ccr.hedging_sets::assign_hedging_set": [
+    "CRR Art. 277"
+  ],
+  "rwa_calc.engine.ccr.hedging_sets::assign_ir_maturity_bucket": [
+    "CRR Art. 277"
+  ],
+  "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_margined": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.maturity_factor::compute_maturity_factor_unmargined": [
+    "CRR Art. 279"
+  ],
+  "rwa_calc.engine.ccr.pfe::compute_addon_per_asset_class": [
+    "CRR Art. 277"
+  ],
+  "rwa_calc.engine.ccr.pfe::compute_pfe": [
+    "CRR Art. 278"
+  ],
+  "rwa_calc.engine.ccr.sft_fccm::sft_rows_to_exposures": [
+    "CRR Art. 220",
+    "CRR Art. 223",
+    "CRR Art. 224",
+    "CRR Art. 226",
+    "CRR Art. 271"
+  ],
+  "rwa_calc.engine.ccr.supervisory_delta::compute_supervisory_delta_cdo_tranche": [
+    "CRR Art. 279a"
+  ],
+  "rwa_calc.engine.ccr.supervisory_delta::compute_supervisory_delta_linear": [
+    "CRR Art. 279a"
+  ],
+  "rwa_calc.engine.ccr.supervisory_delta::compute_supervisory_delta_option": [
+    "CRR Art. 279a"
+  ],
+  "rwa_calc.engine.ccr.wwr::apply_wwr_gate": [
+    "CRR Art. 291"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._align_irb_exposure_class": [
+    "CRR Art. 147"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._build_has_income_cover_expr": [
+    "PS1/26, paragraph 124E"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._build_is_defaulted_expr": [
+    "CRR Art. 178",
+    "CRR Art. 153"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._build_qualifies_as_retail_expr": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._derive_exposure_subclass": [
+    "PS1/26, paragraph 147A.1"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._re_split_per_component_eligibility": [
+    "PS1/26, paragraph 124.4"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier._resolve_model_permissions": [
+    "CRR Art. 143",
+    "CRR Art. 148",
+    "CRR Art. 150"
+  ],
+  "rwa_calc.engine.classifier::ExposureClassifier.classify": [
+    "CRR Art. 112",
+    "CRR Art. 147"
+  ],
+  "rwa_calc.engine.crm.collateral::apply_collateral": [
+    "PS1/26 Art. 230(2)",
+    "PS1/26 Art. 230(1)",
+    "CRR Art. 223",
+    "CRR Art. 230"
+  ],
+  "rwa_calc.engine.crm.collateral::apply_firb_supervisory_lgd_no_collateral": [
+    "CRR Art. 161"
+  ],
+  "rwa_calc.engine.crm.collateral::generate_netting_collateral": [
+    "CRR Art. 195",
+    "CRR Art. 219",
+    "CRR Art. 223"
+  ],
+  "rwa_calc.engine.crm.expressions::overcollateralisation_ratio_expr": [
+    "PS1/26 Art. 230(1)"
+  ],
+  "rwa_calc.engine.crm.guarantees::_apply_maturity_mismatch_to_guarantees": [
+    "CRR Art. 217"
+  ],
+  "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows": [
+    "CRR Art. 234"
+  ],
+  "rwa_calc.engine.crm.guarantees::apply_guarantees": [
+    "CRR Art. 213",
+    "CRR Art. 217"
+  ],
+  "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts": [
+    "CRR Art. 224"
+  ],
+  "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_maturity_mismatch": [
+    "CRR Art. 237",
+    "CRR Art. 238"
+  ],
+  "rwa_calc.engine.crm.life_insurance::compute_life_insurance_columns": [
+    "CRR Art. 232"
+  ],
+  "rwa_calc.engine.crm.link_allocation::CollateralLinkAllocator.allocate_links": [
+    "CRR Art. 230",
+    "CRR Art. 231"
+  ],
+  "rwa_calc.engine.crm.processor::CRMProcessor.apply_crm": [
+    "CRR Art. 194"
+  ],
+  "rwa_calc.engine.crm.provisions::resolve_provisions": [
+    "CRR Art. 111"
+  ],
+  "rwa_calc.engine.crm.simple_method::compute_fcsm_columns": [
+    "CRR Art. 222"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._apply_b31_equity_weights_sa": [
+    "PS1/26, paragraph 133"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._apply_equity_weights_pd_lgd": [
+    "CRR Art. 155(3)",
+    "CRR Art. 165"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._determine_approach": [
+    "CRR Art. 155(3)"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._equity_holding_higher_of_rw": [
+    "CRR Art. 155(2)",
+    "PS1/26, paragraph 4.8",
+    "PS1/26, paragraph 4.9"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator._net_short_positions": [
+    "CRR Art. 155(2)"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator.calculate": [
+    "CRR Art. 133",
+    "CRR Art. 155"
+  ],
+  "rwa_calc.engine.equity.calculator::EquityCalculator.calculate_branch": [
+    "CRR Art. 133"
+  ],
+  "rwa_calc.engine.equity.calculator::_append_ciu_branches": [
+    "PS1/26, paragraph 132"
+  ],
+  "rwa_calc.engine.hierarchy::HierarchyResolver._apply_short_term_rating_override": [
+    "CRR Art. 131",
+    "CRR Art. 140"
+  ],
+  "rwa_calc.engine.hierarchy::HierarchyResolver._attach_counterparty_rating": [
+    "CRR Art. 135",
+    "CRR Art. 136",
+    "CRR Art. 138",
+    "CRR Art. 139"
+  ],
+  "rwa_calc.engine.irb.formulas::_capital_k_expr_from_params": [
+    "CRR Art. 153(1)"
+  ],
+  "rwa_calc.engine.irb.formulas::_correlation_expr_from_pd": [
+    "CRR Art. 153(2)"
+  ],
+  "rwa_calc.engine.irb.formulas::_double_default_multiplier_expr": [
+    "CRR Art. 153(3)"
+  ],
+  "rwa_calc.engine.irb.formulas::_lgd_floor_blended_expression": [
+    "PS1/26, paragraph 164"
+  ],
+  "rwa_calc.engine.irb.formulas::_lgd_floor_expression": [
+    "CRR Art. 164",
+    "PS1/26, paragraph 164"
+  ],
+  "rwa_calc.engine.irb.formulas::_lgd_floor_expression_with_collateral": [
+    "PS1/26, paragraph 164"
+  ],
+  "rwa_calc.engine.irb.formulas::_maturity_adjustment_expr_from_pd": [
+    "CRR Art. 162(2)",
+    "CRR Art. 162(3)"
+  ],
+  "rwa_calc.engine.irb.formulas::_parametric_irb_risk_weight_expr": [
+    "CRR Art. 161"
+  ],
+  "rwa_calc.engine.irb.formulas::_pd_floor_expression": [
+    "CRR Art. 163",
+    "PS1/26, paragraph 163"
+  ],
+  "rwa_calc.engine.irb.formulas::apply_irb_formulas": [
+    "CRR Art. 151",
+    "CRR Art. 153",
+    "CRR Art. 154"
+  ],
+  "rwa_calc.engine.irb.formulas::calculate_correlation": [
+    "CRR Art. 153(1)"
+  ],
+  "rwa_calc.engine.irb.formulas::calculate_double_default_k": [
+    "CRR Art. 153(3)"
+  ],
+  "rwa_calc.engine.irb.formulas::calculate_k": [
+    "CRR Art. 153(1)"
+  ],
+  "rwa_calc.engine.irb.formulas::calculate_maturity_adjustment": [
+    "CRR Art. 162"
+  ],
+  "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa": [
+    "CRR Art. 122"
+  ],
+  "rwa_calc.engine.irb.guarantee::apply_guarantee_substitution": [
+    "CRR Art. 161(3)"
+  ],
+  "rwa_calc.engine.irb.namespace::IRBLazyFrame.apply_lgd_floor": [
+    "CRR Art. 164",
+    "PS1/26, paragraph 164"
+  ],
+  "rwa_calc.engine.irb.namespace::IRBLazyFrame.apply_pd_floor": [
+    "CRR Art. 163",
+    "PS1/26, paragraph 163"
+  ],
+  "rwa_calc.engine.irb.namespace::IRBLazyFrame.calculate_correlation": [
+    "CRR Art. 153(1)"
+  ],
+  "rwa_calc.engine.irb.namespace::IRBLazyFrame.calculate_k": [
+    "CRR Art. 153(1)"
+  ],
+  "rwa_calc.engine.irb.namespace::IRBLazyFrame.calculate_maturity_adjustment": [
+    "CRR Art. 162"
+  ],
+  "rwa_calc.engine.re_splitter::RealEstateSplitter.split": [
+    "CRR Art. 125",
+    "CRR Art. 126",
+    "PS1/26, paragraph 124F"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_currency_mismatch_multiplier": [
+    "PS1/26, paragraph 123B",
+    "PS1/26, paragraph 123B.3"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_due_diligence_override": [
+    "PS1/26, paragraph 110A"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_fcsm_rw_substitution": [
+    "CRR Art. 222"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_guarantee_substitution": [
+    "CRR Art. 213"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_life_insurance_rw_mapping": [
+    "CRR Art. 232"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_risk_weights": [
+    "CRR Art. 112"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.apply_supporting_factors": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.engine.sa.namespace::SALazyFrame.calculate_rwa": [
+    "CRR Art. 113"
+  ],
+  "rwa_calc.engine.sa.namespace::_apply_b31_risk_weight_overrides": [
+    "CRR Art. 134",
+    "CRR Art. 137"
+  ],
+  "rwa_calc.engine.sa.namespace::_apply_crr_risk_weight_overrides": [
+    "CRR Art. 134",
+    "CRR Art. 137"
+  ],
+  "rwa_calc.engine.sa.namespace::_apply_defaulted_risk_weight": [
+    "CRR Art. 127",
+    "PS1/26, paragraph 127"
+  ],
+  "rwa_calc.engine.sa.namespace::_b31_append_high_risk_branch": [
+    "PS1/26, paragraph 128"
+  ],
+  "rwa_calc.engine.sa.namespace::_b31_append_real_estate_branches": [
+    "PS1/26, paragraph 124"
+  ],
+  "rwa_calc.engine.sa.namespace::_b31_append_retail_branches": [
+    "PS1/26, paragraph 123"
+  ],
+  "rwa_calc.engine.sa.namespace::_b31_unrated_cb_rw_expr": [
+    "CRR Art. 129",
+    "PS1/26, paragraph 129"
+  ],
+  "rwa_calc.engine.sa.namespace::_crr_append_real_estate_branches": [
+    "CRR Art. 124"
+  ],
+  "rwa_calc.engine.sa.namespace::_crr_append_retail_branches": [
+    "CRR Art. 123"
+  ],
+  "rwa_calc.engine.sa.namespace::_crr_unrated_cb_rw_expr": [
+    "CRR Art. 129"
+  ],
+  "rwa_calc.engine.sa.namespace::_eca_meip_rw_expr": [
+    "CRR Art. 137"
+  ],
+  "rwa_calc.engine.sa.namespace::_prepare_risk_weight_lookup": [
+    "PS1/26, paragraph 139",
+    "PS1/26, paragraph 122"
+  ],
+  "rwa_calc.engine.securitisation.allocator::SecuritisationAllocator.allocate": [
+    "CRR Art. 109",
+    "CRR Art. 244",
+    "PS1/26, paragraph 147A"
+  ],
+  "rwa_calc.engine.slotting.calculator::SlottingCalculator.calculate_branch": [
+    "CRR Art. 153(5)"
+  ],
+  "rwa_calc.engine.slotting.namespace::SlottingLazyFrame.apply_slotting_weights": [
+    "CRR Art. 153(5)"
+  ],
+  "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.calculate_infrastructure_factor": [
+    "CRR Art. 501a"
+  ],
+  "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.calculate_sme_factor": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.engine.supporting_factors::compute_e_star_group_drawn": [
+    "CRR Art. 501"
+  ],
+  "rwa_calc.reporting.corep.generator::_c08_memorandum_cols": [
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.corep.generator::_compute_c07_values": [
+    "PS1/26, paragraph 1.3"
+  ],
+  "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_all_cr9": [
+    "PS1/26, paragraph 147.2"
+  ],
+  "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_cr8": [
+    "PS1/26, paragraph 147.2"
+  ],
+  "rwa_calc.reporting.pillar3.generator::Pillar3Generator._generate_cr9_1": [
+    "PS1/26, paragraph 147.2"
+  ],
+  "rwa_calc.reporting.pillar3.generator::_ov1_equity_subapproach_rwa": [
+    "PS1/26, paragraph 132"
+  ]
+}

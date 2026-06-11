@@ -41,6 +41,24 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.reporting.kernel import (
+    available_columns as _available_columns,
+)
+from rwa_calc.reporting.kernel import (
+    col_sum,
+    filter_by_approach,
+    null_row,
+    safe_sum_or_none,
+)
+from rwa_calc.reporting.kernel import (
+    filter_off_bs as _filter_off_bs,
+)
+from rwa_calc.reporting.kernel import (
+    filter_on_bs as _filter_on_bs,
+)
+from rwa_calc.reporting.kernel import (
+    pick as _pick,
+)
 from rwa_calc.reporting.pillar3.templates import (
     CMS1_COLUMNS,
     CMS1_ROWS,
@@ -83,10 +101,10 @@ from rwa_calc.reporting.pillar3.templates import (
 if TYPE_CHECKING:
     from decimal import Decimal
 
-    from rwa_calc.api.export import ExportResult
     from rwa_calc.api.service import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import Pillar3CapitalRatioOverrides
+    from rwa_calc.contracts.results import ExportResult
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +229,7 @@ class Pillar3Generator:
         output_path: Path,
     ) -> ExportResult:
         """Write Pillar III templates to an Excel workbook."""
-        from rwa_calc.api.export import ExportResult
+        from rwa_calc.contracts.results import ExportResult
 
         try:
             import xlsxwriter as xw
@@ -1052,38 +1070,22 @@ class Pillar3Generator:
 # ---------------------------------------------------------------------------
 
 
-def _available_columns(lf: pl.LazyFrame) -> set[str]:
-    """Get column names from a LazyFrame schema without collecting."""
-    return set(lf.collect_schema().names())
-
-
-def _pick(cols: set[str], *candidates: str) -> str | None:
-    """Return the first candidate column name that exists in *cols*."""
-    for c in candidates:
-        if c in cols:
-            return c
-    return None
-
-
 def _col_sum(data: pl.DataFrame, col_name: str | None) -> float | None:
-    """Sum a single column, returning None if absent or empty."""
-    if not col_name or col_name not in data.columns or data.height == 0:
-        return None
-    result = data.select(pl.col(col_name).sum()).item()
-    return float(result) if result is not None else None
+    """Sum a single column, returning None if absent or empty.
+
+    Thin adapter over ``kernel.col_sum`` keeping the Pillar 3 empty-frame
+    semantics (empty subset -> null cell, ``empty_as_none=True``).
+    """
+    return col_sum(data, set(data.columns), col_name, empty_as_none=True)
 
 
 def _safe_sum(data: pl.DataFrame, *col_names: str) -> float | None:
-    """Sum multiple columns, skipping absent ones."""
-    total = 0.0
-    found = False
-    for cn in col_names:
-        if cn in data.columns:
-            val = data.select(pl.col(cn).sum()).item()
-            if val is not None:
-                total += float(val)
-                found = True
-    return total if found else None
+    """Sum multiple columns, skipping absent ones.
+
+    Thin adapter over ``kernel.safe_sum_or_none`` keeping the Pillar 3
+    no-column-present semantics (-> null cell).
+    """
+    return safe_sum_or_none(data, set(data.columns), *col_names)
 
 
 def _approach_rwa(
@@ -1115,11 +1117,11 @@ def _ead_weighted_avg(
 
 
 def _null_row(row_def: P3Row, column_refs: list[str]) -> dict[str, object]:
-    """Build a row dict with all column values set to None."""
-    row: dict[str, object] = {"row_ref": row_def.ref, "row_name": row_def.name}
-    for ref in column_refs:
-        row[ref] = None
-    return row
+    """Build a row dict with all column values set to None.
+
+    Thin adapter over ``kernel.null_row`` taking a ``P3Row`` definition.
+    """
+    return null_row(row_def.ref, row_def.name, column_refs)
 
 
 def _make_row(
@@ -1146,11 +1148,14 @@ def _filter_by_approach(
     approach_value: str,
     cols: set[str],
 ) -> pl.LazyFrame:
-    """Filter results to a specific approach_applied value."""
-    approach_col = _pick(cols, "approach_applied", "approach")
-    if not approach_col:
-        return results.filter(pl.lit(False))
-    return results.filter(pl.col(approach_col) == approach_value)
+    """Filter results to a specific approach_applied value.
+
+    Thin adapter over ``kernel.filter_by_approach`` keeping the Pillar 3
+    legacy ``approach`` column alias as a fallback candidate.
+    """
+    return filter_by_approach(
+        results, approach_value, cols, candidates=("approach_applied", "approach")
+    )
 
 
 def _filter_irb_non_slotting(
@@ -1162,24 +1167,6 @@ def _filter_irb_non_slotting(
     if not approach_col:
         return results.filter(pl.lit(False))
     return results.filter(pl.col(approach_col).is_in(["foundation_irb", "advanced_irb"]))
-
-
-def _filter_on_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to on-balance-sheet exposures."""
-    if "bs_type" in cols:
-        return data.filter(pl.col("bs_type") == "ONB")
-    if "exposure_type" in data.columns:
-        return data.filter(pl.col("exposure_type") == "loan")
-    return data
-
-
-def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to off-balance-sheet exposures."""
-    if "bs_type" in cols:
-        return data.filter(pl.col("bs_type") == "OFB")
-    if "exposure_type" in data.columns:
-        return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
-    return data.filter(pl.lit(False))
 
 
 _OV1_RATIO_REFS: frozenset[str] = frozenset({"5a", "5b", "6a", "6b", "7a", "7b"})

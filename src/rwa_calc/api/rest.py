@@ -257,8 +257,8 @@ def reconcile(req: ReconcileRequest) -> dict:
         "totals_tie_out": _df(response.collect_totals_tie_out()),
         "summary_by_component": _df(response.collect_summary_by_component()),
         "summary_by_bucket": _df(response.collect_summary_by_bucket()),
-        "summary_by_exposure_class": _df(response.bundle.summary_by_exposure_class.collect()),
-        "summary_by_approach": _df(response.bundle.summary_by_approach.collect()),
+        "summary_by_exposure_class": _df(response.collect_summary_by_exposure_class()),
+        "summary_by_approach": _df(response.collect_summary_by_approach()),
         "breaks_detail": _df(response.collect_breaks_detail()),
         "errors": [dataclasses.asdict(e) for e in response.errors],
     }

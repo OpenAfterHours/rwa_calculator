@@ -1974,18 +1974,6 @@ class TestFullRiskCommitmentCCF:
 
     # --- Validation tests ---
 
-    def test_frc_in_valid_risk_type_codes(self) -> None:
-        """FRC should be in the validation sets."""
-        from rwa_calc.contracts.validation import (
-            RISK_TYPE_CODE_TO_VALUE,
-            VALID_RISK_TYPE_CODES,
-            VALID_RISK_TYPES,
-        )
-
-        assert "frc" in VALID_RISK_TYPE_CODES
-        assert "full_risk_commitment" in VALID_RISK_TYPES
-        assert RISK_TYPE_CODE_TO_VALUE["frc"] == "full_risk_commitment"
-
     def test_frc_in_valid_risk_types_input(self) -> None:
         """FRC should be in the input validation set."""
         from rwa_calc.data.schemas import VALID_RISK_TYPES_INPUT

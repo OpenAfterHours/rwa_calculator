@@ -78,12 +78,36 @@ from rwa_calc.reporting.corep.templates import (
     get_sa_risk_weight_bands,
     get_sa_row_sections,
 )
+from rwa_calc.reporting.kernel import (
+    available_columns as _available_columns,
+)
+from rwa_calc.reporting.kernel import (
+    col_sum as _col_sum_eager,
+)
+from rwa_calc.reporting.kernel import (
+    filter_by_approach as _filter_by_approach,
+)
+from rwa_calc.reporting.kernel import (
+    filter_off_bs as _filter_off_bs,
+)
+from rwa_calc.reporting.kernel import (
+    filter_on_bs as _filter_on_bs,
+)
+from rwa_calc.reporting.kernel import (
+    null_row as _null_row,
+)
+from rwa_calc.reporting.kernel import (
+    pick as _pick,
+)
+from rwa_calc.reporting.kernel import (
+    safe_sum as _safe_sum_eager,
+)
 
 if TYPE_CHECKING:
-    from rwa_calc.api.export import ExportResult
     from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
+    from rwa_calc.contracts.results import ExportResult
 
 logger = logging.getLogger(__name__)
 
@@ -319,7 +343,7 @@ class COREPGenerator:
         - "C 08.01 - Corporate", etc.
         - "C 08.02 - Corporate", etc.
         """
-        from rwa_calc.api.export import ExportResult
+        from rwa_calc.contracts.results import ExportResult
 
         try:
             import xlsxwriter  # noqa: F401
@@ -2266,11 +2290,6 @@ _EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, object]] = {
 # =============================================================================
 
 
-def _available_columns(lf: pl.LazyFrame) -> set[str]:
-    """Get the set of column names in a LazyFrame without collecting."""
-    return set(lf.collect_schema().names())
-
-
 def _irb_sub_split(
     sub_rwa: dict[tuple[str, str, bool | None, bool | None, str | None], float],
     approach: str,
@@ -2369,26 +2388,6 @@ def _irb_other_sme_split(
     return sme, nonsme
 
 
-def _pick(cols: set[str], *candidates: str) -> str | None:
-    """Return the first column name from candidates that exists in cols."""
-    for c in candidates:
-        if c in cols:
-            return c
-    return None
-
-
-def _filter_by_approach(
-    results: pl.LazyFrame,
-    approach_value: str,
-    cols: set[str],
-) -> pl.LazyFrame:
-    """Filter results to a specific approach_applied value."""
-    approach_col = _pick(cols, "approach_applied")
-    if approach_col is None:
-        return results.filter(pl.lit(False))
-    return results.filter(pl.col(approach_col) == approach_value)
-
-
 def _filter_by_irb_approach(
     results: pl.LazyFrame,
     cols: set[str],
@@ -2430,24 +2429,6 @@ def _filter_lfse(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame | None:
     if "apply_fi_scalar" in cols:
         return data.filter(pl.col("apply_fi_scalar") == True)  # noqa: E712
     return None
-
-
-def _filter_on_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to on-balance-sheet exposures."""
-    if "bs_type" in cols:
-        return data.filter(pl.col("bs_type") == "ONB")
-    if "exposure_type" in cols:
-        return data.filter(pl.col("exposure_type") == "loan")
-    return data.clear()
-
-
-def _filter_off_bs(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
-    """Filter to off-balance-sheet exposures."""
-    if "bs_type" in cols:
-        return data.filter(pl.col("bs_type") == "OFB")
-    if "exposure_type" in cols:
-        return data.filter(pl.col("exposure_type").is_in(["facility", "contingent"]))
-    return data.clear()
 
 
 def _filter_equity_transitional(
@@ -2784,14 +2765,6 @@ def _filter_section3_row(
     return None
 
 
-def _null_row(row_ref: str, row_name: str, column_refs: list[str]) -> dict[str, object]:
-    """Build a row dict with null values for all COREP columns."""
-    row: dict[str, object] = {"row_ref": row_ref, "row_name": row_name}
-    for ref in column_refs:
-        row[ref] = None
-    return row
-
-
 def _of_02_01_row(
     row_ref: str,
     row_name: str,
@@ -2815,32 +2788,6 @@ def _of_02_01_row(
     for ref in column_refs:
         row[ref] = values.get(ref)
     return row
-
-
-def _safe_sum_eager(data: pl.DataFrame, cols: set[str], *col_names: str) -> float:
-    """Sum multiple columns from an eager DataFrame. Missing columns skipped."""
-    total = 0.0
-    for c in col_names:
-        if c in cols:
-            total += float(data[c].fill_null(0.0).sum())
-    return total
-
-
-def _col_sum_eager(data: pl.DataFrame, cols: set[str], col_name: str | None) -> float | None:
-    """Sum a single column from an eager DataFrame."""
-    if col_name is None or col_name not in cols:
-        return None
-    return float(data[col_name].fill_null(0.0).sum())
-
-
-def _sum_cols_eager(data: pl.DataFrame, cols: set[str], *col_names: str) -> float:
-    """Sum multiple collateral-type columns, treating missing columns as 0."""
-    total = 0.0
-    for c in col_names:
-        v = _col_sum_eager(data, cols, c)
-        if v is not None:
-            total += v
-    return total
 
 
 def _sum_by_protection_type(
@@ -3105,7 +3052,7 @@ def _c07_crm_and_collateral_cols(
         values["0070"] = 0.0
 
     # 0080: (-) Other funded credit protection (non-financial collateral)
-    values["0080"] = _sum_cols_eager(
+    values["0080"] = _safe_sum_eager(
         data,
         cols,
         "collateral_re_value",
@@ -3222,7 +3169,7 @@ def _c08_crm_cols(
     cd_val = _sum_by_protection_type(data, cols, "credit_derivative")
     values["0050"] = cd_val if cd_val is not None else 0.0
 
-    values["0060"] = _sum_cols_eager(
+    values["0060"] = _safe_sum_eager(
         data,
         cols,
         "collateral_re_value",

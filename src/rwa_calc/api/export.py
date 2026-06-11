@@ -18,11 +18,12 @@ lazy scan accessors, so no redundant in-memory materialisation occurs.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+
+from rwa_calc.contracts.results import ExportResult
 
 if TYPE_CHECKING:
     from rwa_calc.api.models import CalculationResponse, ReconciliationResponse
@@ -35,21 +36,9 @@ logger = logging.getLogger(__name__)
 # Export Result
 # =============================================================================
 
-
-@dataclass(frozen=True)
-class ExportResult:
-    """
-    Result of an export operation.
-
-    Attributes:
-        format: Export format used ("parquet", "csv", "excel")
-        files: List of files written
-        row_count: Total number of data rows exported across all datasets
-    """
-
-    format: str
-    files: list[Path] = field(default_factory=list)
-    row_count: int = 0
+# ExportResult moved to rwa_calc.contracts.results (layering: contracts and
+# reporting must not import api). Re-exported here for backwards compatibility.
+__all__ = ["ExportResult", "ResultExporter"]
 
 
 # =============================================================================

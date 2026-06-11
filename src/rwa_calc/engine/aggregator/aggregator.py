@@ -91,7 +91,11 @@ class OutputAggregator:
                 no allocations were supplied.
 
         Returns:
-            AggregatedResultBundle with all summaries and adjustments.
+            AggregatedResultBundle with all summaries and adjustments. Every
+            frame field is eager-backed: the summary views are collected once
+            here (in two ``_collect_views`` batches, pre- and post-floor) and
+            wrapped back with ``.lazy()``, so a downstream collect call is a
+            near-free shallow collect rather than a plan re-execution.
         """
         # Combine for summaries (data already materialised — cheap concat).
         # ``combined_unmultiplied`` retains the full ead_final / rwa_final
@@ -132,6 +136,31 @@ class OutputAggregator:
         # by-approach summaries are deferred until AFTER the output floor is
         # applied below, so they reflect the floored per-row RWA (P1.130).
         pre_crm_summary = generate_pre_crm_summary(combined)
+
+        # Materialise the pre-floor views ONCE.  The calculator branches are
+        # already eager (collected by materialise_branches at the calculator
+        # edge), so these are plans over in-memory data; one pl.collect_all
+        # shares the common subplan (concat + residual multiplier) across the
+        # views.  Each frame is wrapped back with ``.lazy()`` so the bundle
+        # fields stay LazyFrame-typed (migration Phase 1 — no bundle type
+        # changes until the Phase 3 producer seal).
+        pre_floor_views: dict[str, pl.LazyFrame] = {
+            "combined": combined,
+            "pre_crm_summary": pre_crm_summary,
+        }
+        if securitisation_summary is not None:
+            pre_floor_views["securitisation_summary"] = securitisation_summary
+        if sec_audit_view is not None:
+            pre_floor_views["securitisation_audit"] = sec_audit_view
+        pre_floor_dfs = _collect_views(pre_floor_views)
+
+        combined_df = pre_floor_dfs["combined"]
+        combined = combined_df.lazy()
+        pre_crm_summary = pre_floor_dfs["pre_crm_summary"].lazy()
+        if securitisation_summary is not None:
+            securitisation_summary = pre_floor_dfs["securitisation_summary"].lazy()
+        if sec_audit_view is not None:
+            sec_audit_view = pre_floor_dfs["securitisation_audit"].lazy()
 
         # EL portfolio summary (T2 credit cap, CET1/T2 deductions)
         # Computed BEFORE the output floor because OF-ADJ depends on EL summary
@@ -177,17 +206,17 @@ class OutputAggregator:
             # We need a quick aggregate of SA-equivalent RWA for floor-eligible
             # exposures.  This duplicates some work in apply_floor_with_impact
             # but avoids restructuring the floor module's internal flow.
+            # Computed eagerly from ``combined_df`` (materialised above) so no
+            # extra plan execution is needed.
             from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
 
-            combined_cols = set(combined.collect_schema().names())
-            if "approach_applied" in combined_cols:
-                sa_rwa_col = "sa_rwa" if "sa_rwa" in combined_cols else "rwa_final"
+            if "approach_applied" in combined_df.columns:
+                sa_rwa_col = "sa_rwa" if "sa_rwa" in combined_df.columns else "rwa_final"
                 s_trea_pre = float(
-                    combined.filter(
+                    combined_df.filter(
                         pl.col("approach_applied").is_in(list(FLOOR_ELIGIBLE_APPROACHES))
                     )
                     .select(pl.col(sa_rwa_col).fill_null(0.0).sum())
-                    .collect()
                     .item()
                 )
             else:
@@ -223,22 +252,71 @@ class OutputAggregator:
         if config.supporting_factors.enabled:
             supporting_factor_impact = generate_supporting_factor_impact(combined)
 
+        # Materialise the post-floor views ONCE (same single-collect pattern
+        # as the pre-floor batch).  ``None`` fields stay None — only frames
+        # that were actually built are collected.
+        post_floor_views: dict[str, pl.LazyFrame] = {
+            "results": combined,
+            "post_crm_detailed": post_crm_detailed,
+            "post_crm_summary": post_crm_summary,
+            "summary_by_class": summary_by_class,
+            "summary_by_approach": summary_by_approach,
+        }
+        if floor_impact is not None:
+            post_floor_views["floor_impact"] = floor_impact
+        if supporting_factor_impact is not None:
+            post_floor_views["supporting_factor_impact"] = supporting_factor_impact
+        post_floor_dfs = _collect_views(post_floor_views)
+
         return AggregatedResultBundle(
-            results=combined,
+            results=post_floor_dfs["results"].lazy(),
             sa_results=sa_results,
             irb_results=irb_results,
             slotting_results=slotting_results,
             equity_results=equity_results,
-            floor_impact=floor_impact,
+            floor_impact=(
+                post_floor_dfs["floor_impact"].lazy() if floor_impact is not None else None
+            ),
             output_floor_summary=output_floor_summary,
-            supporting_factor_impact=supporting_factor_impact,
-            summary_by_class=summary_by_class,
-            summary_by_approach=summary_by_approach,
+            supporting_factor_impact=(
+                post_floor_dfs["supporting_factor_impact"].lazy()
+                if supporting_factor_impact is not None
+                else None
+            ),
+            summary_by_class=post_floor_dfs["summary_by_class"].lazy(),
+            summary_by_approach=post_floor_dfs["summary_by_approach"].lazy(),
             pre_crm_summary=pre_crm_summary,
-            post_crm_detailed=post_crm_detailed,
-            post_crm_summary=post_crm_summary,
+            post_crm_detailed=post_floor_dfs["post_crm_detailed"].lazy(),
+            post_crm_summary=post_floor_dfs["post_crm_summary"].lazy(),
             el_summary=el_summary,
             securitisation_summary=securitisation_summary,
             securitisation_audit=sec_audit_view,
             errors=[],
         )
+
+
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+
+def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:
+    """Materialise a batch of aggregator views together, in one pass.
+
+    The calculator branches arrive already eager (collected by
+    ``materialise_branches`` at the calculator edge), so every view here is a
+    plan over in-memory data.  Collecting the batch with a single
+    ``pl.collect_all`` lets Polars share the common subplans (the combined
+    concat + residual multiplier) across views via comm-subplan elimination.
+    The caller wraps each eager result back with ``.lazy()`` so the bundle
+    fields stay LazyFrame-typed; any downstream collect on them is then a
+    near-free shallow collect instead of a plan re-execution.
+
+    This is deliberately a plain ``pl.collect_all`` rather than
+    ``materialise_branches``: the latter records per-frame EdgeEvents in the
+    run capture, and the aggregator's internal summary views are not stage
+    edges (the documented edge inventory in
+    tests/integration/test_stage_edges.py pins the stage-exit sequence).
+    """
+    collected = pl.collect_all(list(views.values()))
+    return dict(zip(views, collected, strict=True))

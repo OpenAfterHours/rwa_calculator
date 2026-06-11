@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-06-10.
+Last generated: 2026-06-11.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -630,9 +630,9 @@ Last generated: 2026-06-10.
 
 ### CRR Art. 194 — Principles governing the eligibility of credit risk mitigation techniques
 
-??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:502"
+??? quote "`apply_crm` — src/rwa_calc/engine/crm/processor.py:503"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/processor.py:502:523"
+    --8<-- "src/rwa_calc/engine/crm/processor.py:503:524"
     ```
 
 

@@ -4,7 +4,7 @@ Architectural linter for RWA Calculator.
 Checks machine-verifiable invariants from CLAUDE.md:
 1. Every src/ module has `from __future__ import annotations`
 2. No ABC imports (Protocol only)
-3. No raw .collect().lazy() outside materialise.py (use materialise_barrier)
+3. No raw .collect().lazy() outside materialise.py (use materialise_edge)
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
 5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
@@ -21,16 +21,33 @@ Checks machine-verifiable invariants from CLAUDE.md:
     `References:` block in its module docstring (the CLAUDE.md mandated
     shape). Pure reshape / format / IO helpers are listed in
     ``REFERENCES_REQUIRED_EXEMPT``.
+11. Architecture-debt ratchet: measured defensive-surface metrics (engine
+    `.fill_null(` sites, string-literal column-presence guards,
+    `.collect_schema(` probes, max engine module LOC) may not INCREASE
+    above the committed baseline in ``scripts/arch_metrics.json``, and the
+    watchfire `@cites(` decorator count may not DECREASE below it.
+    Regenerate after an improvement with
+    ``python scripts/arch_check.py --update-baseline``.
+12. Import direction: contracts/ imports nothing above domain/data;
+    engine/ never imports api/ui/reporting/analysis; reporting/ never
+    imports api/ui; data/ and domain/ import nothing above themselves.
+    Known legacy inversions are allowlisted in
+    ``IMPORT_DIRECTION_ALLOWLIST`` and retired by the architecture
+    migration phases (docs/plans/target-architecture-migration.md).
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
 keeps the watchfire citation matrix honest. Check 10 prevents drift in the
 module-docstring citation contract (see docs/development/citation-tracking.md).
-Rare intentional exceptions are listed in the ALLOWLIST dicts below; adding
-a new entry there should be a deliberate, reviewed decision.
+Checks 11 and 12 are migration-plan Phase 0 guards (see
+docs/plans/target-architecture-migration.md). Rare intentional exceptions
+are listed in the ALLOWLIST dicts below; adding a new entry there should be
+a deliberate, reviewed decision.
 
 Usage:
-    python scripts/arch_check.py [path]  # defaults to src/rwa_calc/
+    python scripts/arch_check.py [path] [--update-baseline]
+    # path defaults to src/rwa_calc/; --update-baseline rewrites
+    # scripts/arch_metrics.json from the current measured state
 
 Exit codes:
     0 = all checks pass
@@ -40,6 +57,7 @@ Exit codes:
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from collections.abc import Callable, Iterator
@@ -189,6 +207,78 @@ SCHEMA_DEFAULTS_ALLOWLIST: set[str] = {
     "engine/equity/calculator.py",
 }
 
+# ---------------------------------------------------------------------------
+# Check 11 — architecture-debt ratchet (migration plan Phase 0)
+# ---------------------------------------------------------------------------
+
+# Committed baseline for the defensive-surface metrics. Counts may not
+# increase (and @cites may not decrease) relative to this file. After an
+# improvement, rewrite it with `python scripts/arch_check.py --update-baseline`
+# and commit the change alongside the improvement.
+RATCHET_BASELINE_PATH = Path(__file__).resolve().parent / "arch_metrics.json"
+
+# Metrics where the measured value may not INCREASE above the baseline.
+RATCHET_MAX_METRICS = (
+    "engine_fill_null_sites",
+    "engine_presence_guard_sites",
+    "engine_collect_schema_sites",
+    "engine_eager_collect_sites",
+    "max_engine_module_loc",
+)
+
+# Metrics where the measured value may not DECREASE below the baseline.
+RATCHET_MIN_METRICS = ("cites_decorators",)
+
+# Check 12 — import direction. Maps a top-level package under src/rwa_calc/
+# to the rwa_calc module prefixes it must never import (runtime OR
+# TYPE_CHECKING — the layering is conceptual, not just a runtime-cycle rule).
+IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
+    "contracts": (
+        "rwa_calc.api",
+        "rwa_calc.ui",
+        "rwa_calc.reporting",
+        "rwa_calc.engine",
+        "rwa_calc.analysis",
+    ),
+    "engine": ("rwa_calc.api", "rwa_calc.ui", "rwa_calc.reporting", "rwa_calc.analysis"),
+    "reporting": ("rwa_calc.api", "rwa_calc.ui"),
+    "data": (
+        "rwa_calc.api",
+        "rwa_calc.ui",
+        "rwa_calc.reporting",
+        "rwa_calc.engine",
+        "rwa_calc.contracts",
+        "rwa_calc.analysis",
+    ),
+    "domain": (
+        "rwa_calc.api",
+        "rwa_calc.ui",
+        "rwa_calc.reporting",
+        "rwa_calc.engine",
+        "rwa_calc.contracts",
+        "rwa_calc.data",
+        "rwa_calc.analysis",
+    ),
+}
+
+# Known legacy inversions, allowlisted until the migration phase that retires
+# them lands (docs/plans/target-architecture-migration.md). New entries
+# require explicit justification.
+IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
+    # TYPE_CHECKING-only: CalculationResponse return type on ResultExporter /
+    # report-generator protocols; CollateralLinkAllocation on the CRM
+    # protocol. Retired by Phase 4 (protocol diet) / Phase 7 (reporting input
+    # = sealed aggregator exit contract).
+    "contracts/protocols.py": {
+        "rwa_calc.api.models",
+        "rwa_calc.engine.crm.link_allocation",
+    },
+    # TYPE_CHECKING-only CalculationResponse on the generator entry points.
+    # Retired by Phase 7 (reporting consumes the sealed aggregator exit).
+    "reporting/corep/generator.py": {"rwa_calc.api.models"},
+    "reporting/pillar3/generator.py": {"rwa_calc.api.service"},
+}
+
 
 def _is_excluded(py_file: Path) -> bool:
     """Skip __init__.py (re-export modules) and ui/marimo/ (different execution model)."""
@@ -239,7 +329,7 @@ def check_no_abc(path: Path) -> list[str]:
 
 
 def check_no_collect_lazy(path: Path) -> list[str]:
-    """No .collect().lazy() outside materialise.py -- use materialise_barrier()."""
+    """No .collect().lazy() outside materialise.py -- use materialise_edge()."""
     violations = []
     pattern = re.compile(r"\.collect\(\)\s*\.lazy\(\)")
     for py_file in sorted(path.rglob("*.py")):
@@ -254,9 +344,7 @@ def check_no_collect_lazy(path: Path) -> list[str]:
             if stripped.startswith(("#", '"""', "'''")):
                 continue
             if pattern.search(line):
-                violations.append(
-                    f"  {py_file}:{i}: .collect().lazy() -- use materialise_barrier()"
-                )
+                violations.append(f"  {py_file}:{i}: .collect().lazy() -- use materialise_edge()")
     return violations
 
 
@@ -599,6 +687,247 @@ def check_module_references(path: Path) -> list[str]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Check 11 — architecture-debt ratchet (migration plan Phase 0)
+# ---------------------------------------------------------------------------
+
+_FILL_NULL_PATTERN = re.compile(r"\.fill_null\(")
+_COLLECT_SCHEMA_PATTERN = re.compile(r"\.collect_schema\(")
+# String-literal membership test — `"col" in cols` / `"col" not in df.columns`.
+# An approximation of "column-presence guard" (also catches dict-key probes),
+# but a *consistent* one: the ratchet tracks the trend, not the exact census.
+_PRESENCE_GUARD_PATTERN = re.compile(r"""["'][\w .-]+["']\s+(?:not\s+)?in\s+""")
+_CITES_PATTERN = re.compile(r"@cites\(")
+# Raw eager collects in engine/** (excl. collect_schema). Phase 1 discipline:
+# stage-edge collects live in materialise.py; the remaining engine sites are
+# small-lookup collects whose census is the allowlist — it may not grow.
+_EAGER_COLLECT_PATTERN = re.compile(r"\.collect\(\)|collect_all\(")
+
+
+def _count_pattern_lines(text: str, pattern: re.Pattern[str]) -> int:
+    """Count pattern occurrences, skipping comment-only lines."""
+    code_lines = _code_line_numbers(text)
+    count = 0
+    for lineno, line in enumerate(text.split("\n"), 1):
+        if code_lines is not None and lineno not in code_lines:
+            continue
+        if line.strip().startswith("#"):
+            continue
+        count += len(pattern.findall(line))
+    return count
+
+
+def _code_line_numbers(text: str) -> set[int] | None:
+    """Line numbers carrying actual code tokens (not docstrings/comments).
+
+    A docstring or comment that *mentions* ``.collect()`` or ``.fill_null(``
+    must not move the ratchet metrics. Lines whose only tokens are STRING /
+    COMMENT / whitespace are excluded; a line like ``"col" in cols`` still
+    qualifies because ``in`` and ``cols`` are code tokens on the same line.
+    Returns None (count all lines) when tokenisation fails.
+    """
+    import io
+    import tokenize
+
+    non_code = {
+        tokenize.COMMENT,
+        tokenize.STRING,
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.ENCODING,
+        tokenize.ENDMARKER,
+    }
+    code_lines: set[int] = set()
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type in non_code:
+                continue
+            for lineno in range(tok.start[0], tok.end[0] + 1):
+                code_lines.add(lineno)
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return None
+    return code_lines
+
+
+def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
+    """Measure the defensive-surface metrics over `path` (the package root)."""
+    fill_null = presence = collect_schema = eager_collects = max_loc = 0
+    for py_file in _iter_engine_files(path):
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        fill_null += _count_pattern_lines(text, _FILL_NULL_PATTERN)
+        presence += _count_pattern_lines(text, _PRESENCE_GUARD_PATTERN)
+        collect_schema += _count_pattern_lines(text, _COLLECT_SCHEMA_PATTERN)
+        if py_file.name != "materialise.py":
+            eager_collects += _count_pattern_lines(text, _EAGER_COLLECT_PATTERN)
+        max_loc = max(max_loc, text.count("\n") + 1)
+
+    cites = 0
+    for py_file in sorted(path.rglob("*.py")):
+        if _is_excluded(py_file):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        cites += _count_pattern_lines(text, _CITES_PATTERN)
+
+    return {
+        "engine_fill_null_sites": fill_null,
+        "engine_presence_guard_sites": presence,
+        "engine_collect_schema_sites": collect_schema,
+        "engine_eager_collect_sites": eager_collects,
+        "max_engine_module_loc": max_loc,
+        "cites_decorators": cites,
+    }
+
+
+def write_ratchet_baseline(path: Path) -> dict[str, int]:
+    """Measure and persist the ratchet baseline. Returns the metrics written."""
+    metrics = _measure_ratchet_metrics(path)
+    payload: dict[str, object] = {
+        "_comment": (
+            "Architecture-debt ratchet baseline (arch_check check 11). "
+            "Counts may not increase (cites_decorators may not decrease). "
+            "Regenerate after an improvement with: "
+            "python scripts/arch_check.py --update-baseline"
+        ),
+        **metrics,
+    }
+    RATCHET_BASELINE_PATH.write_text(
+        json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8"
+    )
+    return metrics
+
+
+def check_ratchet_metrics(path: Path) -> list[str]:
+    """Defensive-surface metrics may not regress vs scripts/arch_metrics.json.
+
+    See docs/plans/target-architecture-migration.md (Phase 0). The baseline is
+    a committed file; improvements are banked by rewriting it via
+    ``--update-baseline`` in the same commit as the improvement.
+    """
+    if not (path / "engine").is_dir():
+        return []  # not the package root (e.g. a subpath run) — skip
+    if not RATCHET_BASELINE_PATH.exists():
+        return [
+            f"  missing {RATCHET_BASELINE_PATH} — generate it with "
+            "`python scripts/arch_check.py --update-baseline` and commit it"
+        ]
+    try:
+        baseline = json.loads(RATCHET_BASELINE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"  unreadable {RATCHET_BASELINE_PATH}: {exc}"]
+
+    current = _measure_ratchet_metrics(path)
+    violations: list[str] = []
+    improvements: list[str] = []
+    for metric in RATCHET_MAX_METRICS:
+        base = baseline.get(metric)
+        if not isinstance(base, int):
+            violations.append(f"  baseline missing/invalid metric {metric!r}")
+            continue
+        if current[metric] > base:
+            violations.append(
+                f"  {metric}: {current[metric]} > baseline {base} — defensive "
+                "surface grew; remove the regression (preferred) or justify a "
+                "baseline bump in review"
+            )
+        elif current[metric] < base:
+            improvements.append(metric)
+    for metric in RATCHET_MIN_METRICS:
+        base = baseline.get(metric)
+        if not isinstance(base, int):
+            violations.append(f"  baseline missing/invalid metric {metric!r}")
+            continue
+        if current[metric] < base:
+            violations.append(
+                f"  {metric}: {current[metric]} < baseline {base} — the "
+                "citation matrix may never shrink (restore @cites or justify "
+                "a baseline rewrite in review)"
+            )
+        elif current[metric] > base:
+            improvements.append(metric)
+    if improvements and not violations:
+        print(
+            "[NOTE] ratchet metrics improved "
+            f"({', '.join(improvements)}) — bank it: "
+            "`python scripts/arch_check.py --update-baseline`"
+        )
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Check 12 — import direction (migration plan Phase 0)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_relative_import(module_parts: tuple[str, ...], node: ast.ImportFrom) -> str | None:
+    """Resolve a relative ImportFrom to an absolute dotted module name."""
+    if node.level == 0:
+        return node.module
+    if node.level > len(module_parts):
+        return None
+    base = module_parts[: len(module_parts) - node.level]
+    if node.module:
+        return ".".join((*base, node.module))
+    return ".".join(base) if base else None
+
+
+def _iter_imported_modules(
+    tree: ast.Module, module_parts: tuple[str, ...]
+) -> Iterator[tuple[int, str]]:
+    """Yield (lineno, absolute_module_name) for every import in the tree."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                yield node.lineno, alias.name
+        elif isinstance(node, ast.ImportFrom):
+            resolved = _resolve_relative_import(module_parts, node)
+            if resolved:
+                yield node.lineno, resolved
+
+
+def check_import_direction(path: Path) -> list[str]:
+    """Layer imports must point downward (IMPORT_DIRECTION_RULES).
+
+    Applies to runtime AND ``TYPE_CHECKING`` imports — the layering is
+    conceptual, not just a runtime-cycle rule. Known legacy inversions are
+    allowlisted in ``IMPORT_DIRECTION_ALLOWLIST`` with the migration phase
+    that retires them.
+    """
+    violations: list[str] = []
+    for py_file in sorted(path.rglob("*.py")):
+        rel_parts = py_file.relative_to(path).parts
+        layer = rel_parts[0] if len(rel_parts) > 1 else None
+        if layer not in IMPORT_DIRECTION_RULES:
+            continue
+        rel = py_file.relative_to(path).as_posix()
+        banned = IMPORT_DIRECTION_RULES[layer]
+        allowed = IMPORT_DIRECTION_ALLOWLIST.get(rel, set())
+        # rwa_calc.<layer>.<subpath> — for resolving relative imports
+        module_parts = ("rwa_calc", *rel_parts[:-1], py_file.stem)
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for lineno, module in _iter_imported_modules(tree, module_parts):
+            for prefix in banned:
+                if module == prefix or module.startswith(prefix + "."):
+                    if module in allowed or prefix in allowed:
+                        continue
+                    violations.append(
+                        f"  {py_file}:{lineno}: {layer}/ imports {module} — "
+                        "layering points downward (see check 12; allowlist "
+                        "requires a migration-phase justification)"
+                    )
+    return violations
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -661,15 +990,24 @@ def _print_watchfire_warnings(watchfire_warnings: list[str], leading_blank: bool
 
 
 def main() -> int:
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("src/rwa_calc")
+    argv = sys.argv[1:]
+    update_baseline = "--update-baseline" in argv
+    positional = [a for a in argv if not a.startswith("--")]
+    target = Path(positional[0]) if positional else Path("src/rwa_calc")
     if not target.exists():
         print(f"Error: {target} does not exist")
         return 1
 
+    if update_baseline:
+        metrics = write_ratchet_baseline(target)
+        print(f"arch_check: wrote ratchet baseline {RATCHET_BASELINE_PATH}")
+        for k, v in metrics.items():
+            print(f"  {k}: {v}")
+
     checks = [
         ("from __future__ import annotations", check_future_annotations),
         ("No ABC imports (use Protocol)", check_no_abc),
-        ("No .collect().lazy() (use materialise_barrier)", check_no_collect_lazy),
+        ("No .collect().lazy() (use materialise_edge)", check_no_collect_lazy),
         ("No engine= in collect (use materialise.py)", check_no_engine_arg),
         (
             "No regulatory scalars in engine/ (use data/tables/)",
@@ -690,6 +1028,14 @@ def main() -> int:
         (
             "Engine + data/schemas.py modules carry a `References:` docstring block",
             check_module_references,
+        ),
+        (
+            "Architecture-debt ratchet vs scripts/arch_metrics.json",
+            check_ratchet_metrics,
+        ),
+        (
+            "Import direction points downward (contracts/engine/reporting/data/domain)",
+            check_import_direction,
         ),
     ]
 

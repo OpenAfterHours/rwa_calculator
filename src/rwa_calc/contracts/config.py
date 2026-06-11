@@ -971,7 +971,16 @@ class CalculationConfig:
     # RWA impact. No-op when no collateral_links table is present; acts as an
     # A/B kill-switch against the single-beneficiary path.
     enable_collateral_link_splitting: bool = True
-    collect_engine: PolarsEngine = "cpu"  # Default to in-memory; use "streaming" for large datasets
+    # DEPRECATED: collect_engine="streaming" is the legacy spelling of
+    # spill_edges=True (accept-and-warn for one release; see
+    # docs/plans/target-architecture-migration.md Phase 1). There is one
+    # execution semantics: stages exchange materialised frames, in-memory by
+    # default, spilled to parquet when spill_edges is set.
+    collect_engine: PolarsEngine = "cpu"
+    # Spill stage-edge materialisations to parquet instead of holding them
+    # in memory (out-of-core mode for very large datasets). A sink failure
+    # raises SpillError — never a silent in-memory fallback.
+    spill_edges: bool = False
     spill_dir: Path | None = None  # Directory for disk-spill temp files (None = system temp)
     log_level: str = "INFO"  # stdlib logging level for the rwa_calc namespace
     log_format: Literal["text", "json"] = "text"  # "text" for humans, "json" for audit ingestion

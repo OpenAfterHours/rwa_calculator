@@ -166,15 +166,49 @@ One JSON document per run, written after all parquet artifacts commit:
     {"name": "collateral_haircuts.parquet", "bytes": 23456},
     …
   ],
-  "error_count": 0
+  "error_count": 0,
+  "materialisation_map": [
+    {"label": "hierarchy_exit", "rows": 10000, "columns": 96,
+     "estimated_bytes": 18874368, "wall_ms": 142.7, "spilled": false},
+    {"label": "classifier_exit", "rows": 10000, "columns": 121,
+     "estimated_bytes": 25690112, "wall_ms": 96.1, "spilled": false},
+    …
+  ]
 }
 ```
 
 The `config` block is a deliberately narrow snapshot — it does not echo
 every regulatory scalar (those live in `data/tables/`) and it does not echo
-the cache fields themselves (avoid recursion). `artifacts` lists every
-`*.parquet` actually present in the run directory at the time the manifest
-was written, with byte sizes for quick integrity checks.
+the cache fields themselves (avoid recursion). Note that `collect_engine`
+is a **deprecated** field: `"streaming"` is the legacy spelling of
+`spill_edges=True` (accept-and-warn for one release); the manifest still
+echoes it while the alias exists. `artifacts` lists every `*.parquet`
+actually present in the run directory at the time the manifest was written,
+with byte sizes for quick integrity checks.
+
+### `materialisation_map`
+
+One entry per **stage-edge materialisation** of the run, in execution order —
+the audit-trail record of every point where the pipeline collected a plan
+(see [Stage-Edge Materialisation](../architecture/pipeline-collect-barriers.md)).
+Each entry is the manifest form of an `EdgeEvent`
+(`engine/materialise.py`):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `label` | str | Stable edge label (`hierarchy_exit`, `classifier_exit`, `crm_pre_guarantee_unified`, `crm_exit`, `re_split_exit`, `sa_branch`, `irb_branch`, `slotting_branch`; `ccr_exit` when CCR inputs are present) |
+| `rows` | int | Row count of the materialised frame |
+| `columns` | int | Column count of the materialised frame |
+| `estimated_bytes` | int | In-memory mode: `DataFrame.estimated_size()`; spill mode: the spill parquet's on-disk size |
+| `wall_ms` | float | Wall-clock time of the collect (the three `*_branch` entries share one `collect_all` and report the same combined wall time) |
+| `spilled` | bool | `true` when the edge was sunk to parquet (`spill_edges=True` or the deprecated `collect_engine="streaming"`) instead of held in memory |
+| `plan_nodes` | int, optional | Unoptimised plan-node count of the incoming plan. Omitted on normal runs — only recorded when plan-node capture is on (the plan-node ceiling tests, `tests/integration/test_stage_edges.py`) |
+
+Which labels appear varies by run shape: `ccr_exit` only when `data.ccr` was
+supplied, `crm_pre_guarantee_unified` only when valid guarantee inputs were
+present. The same map is also logged at `INFO` as a one-line summary on
+**every** run (audit cache on or off); the manifest copy exists so the
+record survives with the run's artifacts.
 
 ## Diagnostic recipe — *"is `H_fx` firing on my collateral row?"*
 
@@ -304,18 +338,25 @@ The cache is opt-in for two reasons:
    kind of surprise that lands in a regulated-firm incident review;
    enabling the cache is a deliberate operator decision.
 
-The cache writer is `engine/materialise.sink_audit` — the **only** place
-`sink_parquet` is invoked outside the streaming-mode spill path
-(`scripts/arch_check.py` enforces this rule). New artifact types should be
-added by calling `sink_audit` from the existing CRM / orchestrator hook
-points; no new sink call sites should appear outside `materialise.py`.
+The cache writer is `observability/audit_cache.sink_audit` — operability
+code, deliberately kept out of `engine/materialise.py`, which owns only the
+stage-edge materialisation (`materialise_edge` / `materialise_branches`),
+the `EdgeEvent` capture, and the opt-in spill-to-parquet path. New
+artifact types should be added by calling `sink_audit` from the existing
+CRM / orchestrator hook points; avoid introducing ad-hoc parquet writes
+elsewhere.
 
 ## Related
 
 - [Observability](observability.md) — `run_id` lifecycle and log
   correlation.
+- [Stage-Edge Materialisation](../architecture/pipeline-collect-barriers.md)
+  — the edge inventory behind `materialisation_map`, spill-mode semantics,
+  and the plan-node ceiling tests.
 - `tests/unit/observability/test_audit_cache.py` — sink and prune semantics.
 - `tests/integration/test_audit_cache_pipeline.py` — end-to-end layout and
   RWA-parity regression.
+- `tests/integration/test_stage_edges.py` — edge inventory + plan-node
+  ceilings pinned against the manifest's `materialisation_map`.
 - `tests/contracts/test_audit_cache_contract.py` — column-set regression
   guards for the three CRM artifacts.

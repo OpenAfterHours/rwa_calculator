@@ -63,4 +63,51 @@ jobs:
         run: uv run python tests/fixtures/generate_all.py
 
       - name: Run tests
-        run: uv run pytest tests/ --benchmark-disable -m 'not slow'
+        run: uv run pytest tests/ --benchmark-disable -m 'not slow and not benchmark'
+
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Generate test fixtures
+        run: uv run python tests/fixtures/generate_all.py
+
+      # addopts is cleared so xdist (-n auto) and --benchmark-disable don't
+      # suppress pytest-benchmark; scale_1m benchmarks stay excluded via 'not slow'.
+      - name: Run benchmarks
+        run: uv run pytest tests/benchmarks -m 'benchmark and not slow' -o addopts= --benchmark-json=benchmark-results.json -v --tb=short
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+          if-no-files-found: error
+
+  spill:
+    name: Spill-Edge Parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # Exercises the spill-to-parquet edge path (config.spill_edges) so a
+      # SpillError regression surfaces here, not in production out-of-core
+      # runs. addopts is cleared so the marker filter / xdist defaults don't
+      # interfere with this targeted run; both files use in-memory builders,
+      # so no fixture generation step is needed.
+      - name: Spill parity + materialise tests
+        run: uv run pytest tests/integration/test_spill_edges_parity.py tests/unit/test_materialise.py -q -o addopts=

@@ -60,7 +60,7 @@ nav = [
     { "Pipeline Architecture" = "architecture/pipeline.md" },
     { "Data Flow" = "architecture/data-flow.md" },
     { "Component Overview" = "architecture/components.md" },
-    { "Pipeline Collect Barriers" = "architecture/pipeline-collect-barriers.md" },
+    { "Stage-Edge Materialisation" = "architecture/pipeline-collect-barriers.md" },
   ]},
   { "Features" = [
     "features/index.md",
@@ -145,6 +145,9 @@ nav = [
   { "Plans" = [
     "plans/index.md",
     { "Implementation Plan" = "plans/implementation-plan.md" },
+    { "Target Architecture & Migration" = "plans/target-architecture-migration.md" },
+    { "Boundary Hardening (Phase 3)" = "plans/engine-defensiveness-boundary-hardening.md" },
+    { "Single-Lazy-Plan Refactor (superseded)" = "plans/single-lazy-plan-refactor.md" },
   ]},
   { "Blog" = [
     "blog/index.md",

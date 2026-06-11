@@ -1,152 +1,217 @@
 """
-Materialization strategies for pipeline collect barriers.
+Stage-edge materialisation for the RWA pipeline.
 
 Pipeline position:
-    Used by CRMProcessor and PipelineOrchestrator at every .collect() barrier
+    Called by PipelineOrchestrator at every stage exit, and by CRMProcessor at
+    the two sanctioned intra-stage checkpoints (``crm_post_ead`` and
+    ``crm_pre_guarantee_unified`` — both benchmark-justified; see
+    docs/architecture/pipeline-collect-barriers.md).
 
 Key responsibilities:
-- Replace raw .collect().lazy() with strategy-aware materialization
-- Support disk-spill (streaming mode) for out-of-core datasets
-- Support in-memory (cpu mode) for backward compatibility
-- Manage temp file lifecycle
-- Persist opt-in audit artifacts under ``CalculationConfig.audit_cache_dir``
+- ``materialise_edge``: eager-collect a stage's output plan once at its exit
+- ``materialise_branches``: collect the calculator branches to DataFrames
+- ``EdgeEvent`` capture: the per-run materialisation map (label, rows, bytes,
+  wall time, spill mode, optional plan-node count)
+- Optional spill-to-parquet edge mode; a spill failure RAISES ``SpillError``
+  — never a silent in-memory fallback
 
-The pipeline has several points where lazy plans must be materialized to prevent
-Polars optimizer issues (deep plan re-execution, segfaults on >500-node plans).
-Previously these used .collect().lazy() which forces the full dataset into RAM.
+Architecture (migration Phase 1 — docs/plans/target-architecture-migration.md):
+stages exchange materialised frames and laziness is strictly intra-stage.
+Bundle fields remain ``pl.LazyFrame``-typed (a cheap ``.lazy()`` wrap over the
+eager frame) until the Phase 3 producer seal flips them to ``DataFrame``.
 
-This module provides two strategies controlled by config.collect_engine:
-- "cpu": .collect().lazy() — existing behavior, full in-memory
-- "streaming": sink_parquet → scan_parquet — caps memory at ~1 column batch
-
-It also owns the audit-cache writer ``sink_audit``: a side-effect that drops a
-parquet snapshot of a frame under ``<audit_cache_dir>/<run_id>/<name>.parquet``
-when the user has opted in via ``CalculationConfig.audit_cache_dir``. Keeping
-the sink here preserves the arch-check invariant that ``sink_parquet`` is only
-called from ``engine/materialise.py``.
+Why eager edges: the constraint on the old lazy-first design was recursive
+plan-tree DEPTH, not executor capacity. On very deep plans Polars hard-crashes
+(SIGSEGV) during plan construction, the optimizer pass inside ``collect()``,
+or Rust ``Drop`` teardown of the nested plan nodes — all BEFORE any executor
+runs, so the streaming engine does not avoid it. Measured on Polars 1.37: the
+crash threshold is ~25,000 plan nodes for trivial ``with_columns`` chains and
+far lower for heavy ``when/then`` + join expressions; unbounded depth also
+re-walks the full upstream per consumer during plan construction (~100x
+slowdown measured on a 150-row fixture). Materialising at every stage exit
+makes the inter-stage failure class unrepresentable; the per-edge plan-node
+ceiling tests (tests/integration/test_stage_edges.py) bound the residual
+intra-stage depth. The node threshold is a property of the installed Polars
+version and must be re-measured on every Polars upgrade. Full investigation:
+docs/plans/single-lazy-plan-refactor.md (superseded by this design).
 
 References:
-- docs/specifications/audit-cache.md
+- docs/architecture/pipeline-collect-barriers.md (stage-edge inventory)
+- docs/plans/target-architecture-migration.md (Phase 1)
 """
 
 from __future__ import annotations
 
-import atexit
 import logging
 import os
 import tempfile
+import time
+from contextvars import ContextVar, Token
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
-
-from rwa_calc.observability.context import current_run_id
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
 logger = logging.getLogger(__name__)
 
-# Module-level registry of temp files for cleanup
-_spill_files: list[Path] = []
 
+class SpillError(RuntimeError):
+    """A spill-to-parquet edge failed to sink.
 
-def sink_audit(
-    frame: pl.LazyFrame | pl.DataFrame,
-    config: CalculationConfig,
-    name: str,
-) -> None:
-    """Persist a frame as ``<audit_cache_dir>/<run_id>/<name>.parquet``.
-
-    Opt-in side-effect: no-ops when ``config.audit_cache_dir`` is ``None``,
-    which is the default. The artifact path is partitioned by the active
-    ``run_id`` from ``observability.context.current_run_id`` so each pipeline
-    run gets its own subdirectory matching the correlation id on every
-    LogRecord. Write is atomic via ``<name>.parquet.tmp`` + ``os.replace``;
-    a previous file at the destination is overwritten.
-
-    A ``LazyFrame`` is collected via ``sink_parquet`` (streaming); a
-    ``DataFrame`` is written via ``write_parquet``. Failures (disk full,
-    permission denied, streaming-unsupported expression) are logged at
-    WARNING and swallowed — audit caching must never break a real run.
-
-    See ``docs/specifications/audit-cache.md`` for the canonical layout.
+    Raised instead of silently falling back to an in-memory collect: the only
+    reason to enable spill mode is a memory ceiling, so a silent fallback
+    converts an explicit operator choice into an OOM at the worst moment.
     """
-    if config.audit_cache_dir is None:
-        return
 
-    run_id = current_run_id()
-    if run_id is None:
-        logger.warning(
-            "sink_audit(%s) skipped: no active run_id (call outside pipeline run?)",
-            name,
-        )
-        return
 
-    safe_name = name.replace("/", "_").replace(" ", "_")
-    run_dir = Path(config.audit_cache_dir) / run_id
-    final_path = run_dir / f"{safe_name}.parquet"
-    tmp_path = run_dir / f"{safe_name}.parquet.tmp"
+@dataclass(frozen=True)
+class EdgeEvent:
+    """One materialisation event in the per-run materialisation map."""
 
-    try:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        if isinstance(frame, pl.LazyFrame):
-            frame.sink_parquet(tmp_path)
-        else:
-            frame.write_parquet(tmp_path)
-        os.replace(tmp_path, final_path)
-        logger.info("wrote audit artifact %s", final_path)
-    except Exception as exc:
-        logger.warning("sink_audit(%s) failed: %s", name, exc)
-        # Best-effort cleanup of the half-written .tmp file.
+    label: str
+    rows: int
+    columns: int
+    estimated_bytes: int
+    wall_ms: float
+    spilled: bool
+    plan_nodes: int | None = None
+
+    def as_dict(self) -> dict[str, object]:
+        """Manifest-ready representation."""
+        payload: dict[str, object] = {
+            "label": self.label,
+            "rows": self.rows,
+            "columns": self.columns,
+            "estimated_bytes": self.estimated_bytes,
+            "wall_ms": self.wall_ms,
+            "spilled": self.spilled,
+        }
+        if self.plan_nodes is not None:
+            payload["plan_nodes"] = self.plan_nodes
+        return payload
+
+
+@dataclass
+class _EdgeCapture:
+    """Run-scoped mutable capture of edge events and spill-file lifecycle."""
+
+    count_plan_nodes: bool = False
+    events: list[EdgeEvent] = field(default_factory=list)
+    spill_paths: list[Path] = field(default_factory=list)
+    deprecation_warned: bool = False
+
+
+_capture: ContextVar[_EdgeCapture | None] = ContextVar("rwa_edge_capture", default=None)
+
+
+def begin_edge_capture(*, count_plan_nodes: bool = False) -> Token[_EdgeCapture | None]:
+    """Start a run-scoped edge capture.
+
+    The orchestrator calls this at run start; ``end_edge_capture`` (in the
+    run's ``finally``) returns the events and deletes any spill files.
+    ``count_plan_nodes=True`` additionally records the unoptimised plan-node
+    count of every incoming edge plan — used by the plan-node ceiling tests;
+    off by default because rendering the plan costs a full plan walk.
+    """
+    return _capture.set(_EdgeCapture(count_plan_nodes=count_plan_nodes))
+
+
+def current_edge_events() -> list[EdgeEvent]:
+    """Snapshot the events captured so far in this run (manifest hook)."""
+    cap = _capture.get()
+    return list(cap.events) if cap is not None else []
+
+
+def end_edge_capture(token: Token[_EdgeCapture | None]) -> list[EdgeEvent]:
+    """Finish the run's capture: delete spill files, return the event list."""
+    cap = _capture.get()
+    _capture.reset(token)
+    if cap is None:
+        return []
+    for path in cap.spill_paths:
         try:
-            if tmp_path.exists():
-                tmp_path.unlink()
+            if path.exists():
+                path.unlink()
+                logger.debug("cleaned up spill file %s", path)
         except OSError:
-            pass
+            logger.warning("failed to clean up spill file %s", path)
+    return list(cap.events)
 
 
-def prune_audit_cache(config: CalculationConfig) -> None:
-    """Trim ``audit_cache_dir`` to the ``audit_cache_max_runs`` newest subdirs.
+def plan_node_count(lf: pl.LazyFrame) -> int:
+    """Count non-blank lines of the UNOPTIMISED logical plan rendering.
 
-    No-op when either ``audit_cache_dir`` or ``audit_cache_max_runs`` is
-    ``None``. Subdirectories are sorted by mtime; the oldest beyond the cap
-    are removed. Non-directory entries are left alone. Failures are logged
-    at WARNING and swallowed.
+    This is the depth-ceiling metric used by the per-edge plan-node ceiling
+    tests. It is a *consistent proxy* for native plan-tree size, not an exact
+    node census; ceilings pinned against it must be re-measured on every
+    Polars upgrade (calibration history: a ">500 nodes" comment survived for
+    months while the measured SIGSEGV threshold was ~25,000).
     """
-    if config.audit_cache_dir is None or config.audit_cache_max_runs is None:
-        return
-    _prune_audit_cache(Path(config.audit_cache_dir), config.audit_cache_max_runs)
+    rendered = lf.explain(optimized=False)
+    return sum(1 for line in rendered.splitlines() if line.strip())
 
 
-def materialise_barrier(
+def materialise_edge(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     label: str,
 ) -> pl.LazyFrame:
+    """Materialise a stage's output plan once, at its exit.
+
+    In-memory by default (``lf.collect()`` then a cheap ``.lazy()`` wrap).
+    With ``config.spill_edges`` (or the deprecated
+    ``collect_engine="streaming"``) the frame is sunk to parquet and scanned
+    back, capping peak memory at roughly one column batch; a sink failure
+    raises :class:`SpillError` — never a silent in-memory fallback.
+
+    Every call records an :class:`EdgeEvent` into the run's capture (when one
+    is active) for the per-run materialisation map.
     """
-    Materialise a LazyFrame at a pipeline barrier point.
+    cap = _capture.get()
+    nodes = plan_node_count(lf) if cap is not None and cap.count_plan_nodes else None
 
-    Replaces the pattern ``lf.collect().lazy()`` with a strategy that
-    respects ``config.collect_engine``:
+    started = time.perf_counter()
+    if _spill_requested(config, cap):
+        spill_path = _sink_to_parquet(lf, config, label, cap)
+        out = pl.scan_parquet(spill_path)
+        rows = int(out.select(pl.len()).collect().item())
+        columns = len(out.collect_schema().names())
+        estimated_bytes = spill_path.stat().st_size
+        spilled = True
+        result = out
+    else:
+        df = lf.collect()
+        rows = df.height
+        columns = df.width
+        estimated_bytes = df.estimated_size()
+        spilled = False
+        result = df.lazy()
+    wall_ms = round((time.perf_counter() - started) * 1000.0, 2)
 
-    - ``"cpu"``: In-memory collect (existing behavior).
-    - ``"streaming"``: Sink to a temp parquet file, then scan it back.
-      This caps peak memory to approximately one column-batch at a time.
-
-    Args:
-        lf: LazyFrame to materialise
-        config: Calculation configuration (provides collect_engine and spill_dir)
-        label: Human-readable label for temp file naming and logging
-
-    Returns:
-        A fresh LazyFrame backed by either in-memory data or a parquet scan
-    """
-    if config.collect_engine == "cpu":
-        return lf.collect().lazy()
-
-    # Streaming mode: sink to parquet for out-of-core support
-    return _spill_to_disk(lf, config, label)
+    event = EdgeEvent(
+        label=label,
+        rows=rows,
+        columns=columns,
+        estimated_bytes=estimated_bytes,
+        wall_ms=wall_ms,
+        spilled=spilled,
+        plan_nodes=nodes,
+    )
+    if cap is not None:
+        cap.events.append(event)
+    logger.debug(
+        "edge %s materialised %d rows x %d cols in %.1f ms (%s)",
+        label,
+        rows,
+        columns,
+        wall_ms,
+        "spill" if spilled else "in-memory",
+    )
+    return result
 
 
 def materialise_branches(
@@ -154,114 +219,97 @@ def materialise_branches(
     config: CalculationConfig,
     labels: list[str],
 ) -> list[pl.DataFrame]:
+    """Materialise the calculator branches, replacing ``pl.collect_all()``.
+
+    In-memory mode collects all branches in one ``pl.collect_all`` call;
+    spill mode sinks each branch sequentially (peak memory = one branch).
+    Each branch records an :class:`EdgeEvent`.
     """
-    Materialise multiple branches, replacing ``pl.collect_all()``.
+    cap = _capture.get()
+    node_counts = (
+        [plan_node_count(lf) for lf in branches]
+        if cap is not None and cap.count_plan_nodes
+        else [None] * len(branches)
+    )
 
-    - ``"cpu"``: Uses ``pl.collect_all()`` which leverages CSE (Common
-      Subexpression Elimination) to compute shared upstream plans once.
-    - ``"streaming"``: Sinks each branch to parquet sequentially, then
-      reads back as DataFrames. Peak memory = one branch at a time.
+    started = time.perf_counter()
+    if _spill_requested(config, cap):
+        results: list[pl.DataFrame] = []
+        for lf, label in zip(branches, labels, strict=True):
+            spill_path = _sink_to_parquet(lf, config, cap=cap, label=label)
+            results.append(pl.read_parquet(spill_path))
+        spilled = True
+    else:
+        results = list(pl.collect_all(branches))
+        spilled = False
+    wall_ms = round((time.perf_counter() - started) * 1000.0, 2)
 
-    Args:
-        branches: LazyFrames to materialise
-        config: Calculation configuration
-        labels: Human-readable labels for each branch
-
-    Returns:
-        List of DataFrames in the same order as input branches
-    """
-    if config.collect_engine == "cpu":
-        result: list[pl.DataFrame] = pl.collect_all(branches)
-        return result
-
-    # Streaming mode: sink each branch individually
-    results: list[pl.DataFrame] = []
-    for lf, label in zip(branches, labels, strict=True):
-        scanned = _spill_to_disk(lf, config, label)
-        results.append(scanned.collect())
+    if cap is not None:
+        for df, label, nodes in zip(results, labels, node_counts, strict=True):
+            cap.events.append(
+                EdgeEvent(
+                    label=label,
+                    rows=df.height,
+                    columns=df.width,
+                    estimated_bytes=df.estimated_size(),
+                    # collect_all computes branches together; attribute the
+                    # shared wall time to each branch rather than inventing
+                    # a split.
+                    wall_ms=wall_ms,
+                    spilled=spilled,
+                    plan_nodes=nodes,
+                )
+            )
     return results
 
 
-def cleanup_spill_files() -> None:
-    """Remove all temp parquet files created during materialization."""
-    for path in _spill_files:
-        try:
-            if path.exists():
-                path.unlink()
-                logger.debug("Cleaned up spill file: %s", path)
-        except OSError:
-            logger.warning("Failed to clean up spill file: %s", path)
-    _spill_files.clear()
+def _spill_requested(config: CalculationConfig, cap: _EdgeCapture | None) -> bool:
+    """True when the run asked for spill-to-parquet edges.
+
+    ``collect_engine="streaming"`` is the deprecated spelling — accepted with
+    a once-per-run warning for one release; use ``spill_edges=True``.
+    """
+    if getattr(config, "spill_edges", False):
+        return True
+    if config.collect_engine == "streaming":
+        if cap is None or not cap.deprecation_warned:
+            logger.warning(
+                "config.collect_engine='streaming' is deprecated; "
+                "use spill_edges=True (same semantics: spill-to-parquet edges)"
+            )
+            if cap is not None:
+                cap.deprecation_warned = True
+        return True
+    return False
 
 
-def _spill_to_disk(
+def _sink_to_parquet(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     label: str,
-) -> pl.LazyFrame:
-    """Sink a LazyFrame to a temp parquet file and scan it back.
-
-    Falls back to in-memory collect if sink_parquet fails (e.g., unsupported
-    expression types in the streaming engine).
-
-    Args:
-        lf: LazyFrame to sink
-        config: Calculation configuration
-        label: Label for temp file naming
-
-    Returns:
-        LazyFrame backed by the parquet scan
-    """
+    cap: _EdgeCapture | None,
+) -> Path:
+    """Sink a LazyFrame to a temp parquet file; raise ``SpillError`` on failure."""
     spill_dir = config.spill_dir if config.spill_dir is not None else None
     safe_label = label.replace("/", "_").replace(" ", "_")
 
+    fd, tmp_path_str = tempfile.mkstemp(
+        suffix=".parquet",
+        prefix=f"rwa_{safe_label}_",
+        dir=spill_dir,
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_path_str)
+    if cap is not None:
+        cap.spill_paths.append(tmp_path)
+
     try:
-        fd, tmp_path_str = tempfile.mkstemp(
-            suffix=".parquet",
-            prefix=f"rwa_{safe_label}_",
-            dir=spill_dir,
-        )
-        # Close the file descriptor — sink_parquet will write to the path
-        import os
-
-        os.close(fd)
-        tmp_path = Path(tmp_path_str)
-
         lf.sink_parquet(tmp_path)
-        _spill_files.append(tmp_path)
-        logger.debug("Spilled %s to %s", label, tmp_path)
-        return pl.scan_parquet(tmp_path)
-    except Exception:
-        logger.warning(
-            "sink_parquet failed for %s, falling back to in-memory collect",
-            label,
-        )
-        return lf.collect().lazy()
-
-
-def _prune_audit_cache(audit_dir: Path, max_runs: int) -> None:
-    """Delete oldest run subdirectories until at most ``max_runs`` remain."""
-    if max_runs <= 0:
-        return
-    try:
-        if not audit_dir.exists():
-            return
-        run_dirs = [p for p in audit_dir.iterdir() if p.is_dir()]
-    except OSError as exc:
-        logger.warning("prune_audit_cache: cannot list %s: %s", audit_dir, exc)
-        return
-
-    # Newest first; everything past index max_runs - 1 is stale.
-    run_dirs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    for stale in run_dirs[max_runs:]:
-        try:
-            for child in stale.iterdir():
-                child.unlink()
-            stale.rmdir()
-            logger.info("pruned audit run dir %s", stale)
-        except OSError as exc:
-            logger.warning("prune_audit_cache: failed to remove %s: %s", stale, exc)
-
-
-# Register cleanup at interpreter exit as a safety net
-atexit.register(cleanup_spill_files)
+    except Exception as exc:
+        raise SpillError(
+            f"spill-to-parquet failed for edge '{label}' at {tmp_path}: {exc}. "
+            "Spill mode exists to cap memory, so an in-memory fallback is "
+            "never substituted — fix the sink failure or disable spill_edges."
+        ) from exc
+    logger.debug("spilled edge %s to %s", label, tmp_path)
+    return tmp_path

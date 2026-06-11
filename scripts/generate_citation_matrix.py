@@ -1,31 +1,45 @@
-"""Regenerate ``docs/development/citation-matrix.md`` from live ``@cites`` annotations.
+"""Regenerate citation-coverage artefacts from live ``@cites`` annotations.
 
-Invokes ``watchfire matrix --format json`` once per indexed instrument
-(CRR, PS1/26), then builds an article-grouped page with click-to-expand
-``??? quote`` collapsibles containing ``pymdownx.snippets`` directives that
-pull the live function source from disk at Zensical build time.
+Two outputs, kept in sync by a single command:
+
+1. ``docs/development/citation-matrix.md`` — invokes ``watchfire matrix
+   --format json`` once per indexed instrument (CRR, PS1/26), then builds an
+   article-grouped page with click-to-expand ``??? quote`` collapsibles
+   containing ``pymdownx.snippets`` directives that pull the live function
+   source from disk at Zensical build time.
+2. ``tests/contracts/data/citation_snapshot.json`` — a machine-readable
+   snapshot mapping ``"module::attr_path"`` to the canonical citation list
+   each decorated function carries (outermost decorator first).
+   ``tests/contracts/test_watchfire_coverage.py`` diffs the live tree
+   against this snapshot so citation coverage can never silently shrink.
 
 Usage:
-    uv run python scripts/generate_citation_matrix.py
+    uv run python scripts/generate_citation_matrix.py                  # both outputs
+    uv run python scripts/generate_citation_matrix.py --snapshot-only  # snapshot only
 
 Exit codes:
-    0 = matrix regenerated successfully
+    0 = artefacts regenerated successfully
     1 = watchfire matrix invocation failed
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
+import importlib
 import json
 import subprocess
 import sys
+from collections.abc import Iterator
 from datetime import date
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_ROOT = REPO_ROOT / "src"
 OUTPUT_PATH = REPO_ROOT / "docs" / "development" / "citation-matrix.md"
+SNAPSHOT_PATH = REPO_ROOT / "tests" / "contracts" / "data" / "citation_snapshot.json"
 
 
 PREAMBLE = """# Citation Coverage Matrix
@@ -357,31 +371,109 @@ def _render_instrument_section(
     return "\n".join(out)
 
 
-def main() -> int:
-    warnings: list[str] = []
-    sections: list[str] = []
-    for instrument_key, section_heading in INSTRUMENTS:
-        matrix = _run_matrix_json(instrument_key)
-        if instrument_key == "CRR":
-            sections.append(_render_crr_section(section_heading, matrix, warnings))
-        else:
-            sections.append(_render_instrument_section(section_heading, matrix, warnings))
+def iter_cited_functions(src_root: Path = SRC_ROOT) -> Iterator[tuple[str, str]]:
+    """Yield ``(module_path, attr_path)`` for every ``@cites``-decorated function.
 
-    body = PREAMBLE.format(generated_on=date.today().isoformat()) + "\n".join(sections)
-    if warnings:
-        body += (
-            "\n---\n\n"
-            "## Generator warnings\n\n"
-            "The following sites could not be resolved to a function definition "
-            "via AST; the snippet falls back to a fixed window. Investigate and "
-            "fix the underlying issue (renamed function, refactored file, etc.).\n\n"
-            + "\n".join(warnings)
-            + "\n"
-        )
+    Scans module-level functions and methods of module-level classes in
+    ``src/rwa_calc/`` — the same shapes the coverage test resolves at runtime
+    via ``getattr`` chains. ``attr_path`` is the bare function name for
+    module-level functions and ``ClassName.method`` for methods.
+    """
+    for py_file in sorted((src_root / "rwa_calc").rglob("*.py")):
+        tree = _parse(py_file)
+        module_path = _module_path_for(py_file, src_root)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                if _has_cites_decorator(node):
+                    yield module_path, node.name
+            elif isinstance(node, ast.ClassDef):
+                for child in node.body:
+                    if isinstance(
+                        child, ast.FunctionDef | ast.AsyncFunctionDef
+                    ) and _has_cites_decorator(child):
+                        yield module_path, f"{node.name}.{child.name}"
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(body, encoding="utf-8")
-    print(f"wrote {OUTPUT_PATH.relative_to(REPO_ROOT)}")
+
+def collect_citation_state(src_root: Path = SRC_ROOT) -> dict[str, list[str]]:
+    """Build ``{"module::attr_path": [canonical citations]}`` from the live tree.
+
+    Citations are listed in ``__watchfire__`` order (outermost decorator
+    first, matching how watchfire builds the attribute), so the snapshot pins
+    both the citation set and the decorator stacking order per function.
+    """
+    state: dict[str, list[str]] = {}
+    for module_path, attr_path in iter_cited_functions(src_root):
+        obj: Any = importlib.import_module(module_path)
+        for part in attr_path.split("."):
+            obj = getattr(obj, part)
+        citations = getattr(obj, "__watchfire__", ())
+        state[f"{module_path}::{attr_path}"] = [c.canonical() for c in citations]
+    return state
+
+
+def write_snapshot() -> None:
+    """Write the committed citation snapshot consumed by the coverage test."""
+    state = collect_citation_state()
+    SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SNAPSHOT_PATH.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote {SNAPSHOT_PATH.relative_to(REPO_ROOT)} ({len(state)} functions)")
+
+
+def _module_path_for(py_file: Path, src_root: Path) -> str:
+    """Map ``src/rwa_calc/engine/ccf.py`` -> ``rwa_calc.engine.ccf``."""
+    parts = py_file.relative_to(src_root).with_suffix("").parts
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _has_cites_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """True if any decorator on ``node`` is ``cites(...)`` / ``watchfire.cites(...)``."""
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if isinstance(target, ast.Name) and target.id == "cites":
+            return True
+        if isinstance(target, ast.Attribute) and target.attr == "cites":
+            return True
+    return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--snapshot-only",
+        action="store_true",
+        help="write only tests/contracts/data/citation_snapshot.json (skip the docs page)",
+    )
+    args = parser.parse_args(argv)
+
+    if not args.snapshot_only:
+        warnings: list[str] = []
+        sections: list[str] = []
+        for instrument_key, section_heading in INSTRUMENTS:
+            matrix = _run_matrix_json(instrument_key)
+            if instrument_key == "CRR":
+                sections.append(_render_crr_section(section_heading, matrix, warnings))
+            else:
+                sections.append(_render_instrument_section(section_heading, matrix, warnings))
+
+        body = PREAMBLE.format(generated_on=date.today().isoformat()) + "\n".join(sections)
+        if warnings:
+            body += (
+                "\n---\n\n"
+                "## Generator warnings\n\n"
+                "The following sites could not be resolved to a function definition "
+                "via AST; the snippet falls back to a fixed window. Investigate and "
+                "fix the underlying issue (renamed function, refactored file, etc.).\n\n"
+                + "\n".join(warnings)
+                + "\n"
+            )
+
+        OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT_PATH.write_text(body, encoding="utf-8")
+        print(f"wrote {OUTPUT_PATH.relative_to(REPO_ROOT)}")
+
+    write_snapshot()
     return 0
 
 

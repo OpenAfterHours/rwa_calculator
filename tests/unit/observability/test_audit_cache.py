@@ -1,4 +1,4 @@
-"""Unit tests for the opt-in audit cache helpers in ``engine/materialise.py``.
+"""Unit tests for the opt-in audit cache helpers in ``observability/audit_cache.py``.
 
 Covers ``sink_audit`` (the per-frame writer surfaced to the CRM stages) and
 ``prune_audit_cache`` (the size-cap helper invoked at the start of each run).
@@ -28,8 +28,8 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.materialise import prune_audit_cache, sink_audit
 from rwa_calc.observability import clear_run_id, new_run_id
+from rwa_calc.observability.audit_cache import prune_audit_cache, sink_audit
 from rwa_calc.observability.logging_setup import _NAMESPACE
 
 
@@ -137,7 +137,7 @@ def test_sink_audit_warns_and_skips_when_no_run_id(
     tmp_path: Path,
 ) -> None:
     """No active run_id => log WARNING, write nothing, do not raise."""
-    caplog.set_level(logging.WARNING, logger="rwa_calc.engine.materialise")
+    caplog.set_level(logging.WARNING, logger="rwa_calc.observability.audit_cache")
 
     sink_audit(pl.DataFrame({"x": [1]}), crr_config_with_cache, "orphan")
 
@@ -152,7 +152,7 @@ def test_sink_audit_swallows_failure(
     tmp_path: Path,
 ) -> None:
     """Disk / permission errors are logged at WARNING and never re-raised."""
-    caplog.set_level(logging.WARNING, logger="rwa_calc.engine.materialise")
+    caplog.set_level(logging.WARNING, logger="rwa_calc.observability.audit_cache")
 
     def _boom(self, *_args, **_kwargs):  # noqa: ANN001 - mirroring polars signature
         raise OSError("simulated disk full")

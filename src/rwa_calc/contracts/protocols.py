@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from rwa_calc.api.export import ExportResult
     from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
@@ -44,6 +43,7 @@ if TYPE_CHECKING:
         OutputFloorConfig,
     )
     from rwa_calc.contracts.errors import CalculationError, LazyFrameResult
+    from rwa_calc.contracts.results import ExportResult
     from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocation
 
 

@@ -116,11 +116,13 @@ pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --benchmark-disable -m 'not slow and not stress and not scale_1m' -n auto --dist=loadfile"
+addopts = "-v --tb=short --strict-markers --benchmark-disable -m 'not slow and not stress and not scale_1m and not benchmark' -n auto --dist=loadfile"
 markers = [
-    "benchmark: mark test as a benchmark (deselect with --benchmark-skip)",
+    "benchmark: mark test as a benchmark (excluded from the default dev loop; run via -m benchmark)",
     "slow: mark test as slow (1M scale, may take several minutes)",
     "stress: mark test as a correctness-at-scale validation (10K+ rows, opt-in; CI runs with -m 'not slow')",
+    "scale_10k: benchmark at 10K counterparty scale",
+    "scale_100k: benchmark at 100K counterparty scale",
     "scale_1m: benchmark at 1M counterparty scale (opt-in via -m scale_1m; ~60s+ run, ~1.5 GB peak memory)",
 ]
 
@@ -177,4 +179,5 @@ dev = [
     "curfew>=0.1.0",
     "watchfire==0.3.1",  # arch_check pre-commit gate runs `watchfire check`; must be in the default-synced group
     "httpx>=0.27.0",  # FastAPI TestClient; the REST/UI test gate needs it in the default-synced group
+    "psutil>=5.9.0",  # scripts/profile_memory.py peak-RSS sampling (degrades gracefully if absent)
 ]

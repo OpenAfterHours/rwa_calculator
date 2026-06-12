@@ -336,6 +336,17 @@ conformance rewritten to real-implementation isinstance + typed assignment.
 
 ### Phase 3 — Producer-sealed edge contracts and defensive-guard retirement
 
+**Status (2026-06-12, branch `feat/phase3`):** the edge chain is COMPLETE —
+every stage exit loader→aggregator carries a producer seal, with the
+aggregator exit as the reporting input contract; guard ratchet banked at
+549→377 presence / 469→446 fill_null / 191→166 collect_schema; both
+divergences resolved (recorded FIX decisions). Remaining tail: the Wave-2
+guarantor null-equivalence rework (flip the 19 conditional columns and
+delete the substitution presence guards), the `has_required_columns`
+bare-except fix (design note in §6), the test-lint ratchet, and the docs
+close-out. Decision log (§6) records the conditional-column lesson, the
+parity re-baselines, and four engine findings.
+
 Executes [engine-defensiveness-boundary-hardening](engine-defensiveness-boundary-hardening.md)
 in full, upgraded with seal-strips-scratch, branded frames, and conservative-direction
 annotations.

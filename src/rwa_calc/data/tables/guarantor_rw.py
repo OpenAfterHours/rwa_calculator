@@ -3,9 +3,9 @@ Shared guarantor / entity SA risk-weight expression builder.
 
 Pipeline position:
     Compiled by the guarantee-substitution stages — the IRB branch
-    (``engine/irb/guarantee.py::_compute_guarantor_rw_sa``) today, with the
-    SA namespace (``engine/sa/namespace.py::_build_guarantor_rw_expr``) and
-    the hierarchy SA-RW preview adopting in follow-up commits. The builder
+    (``engine/irb/guarantee.py::_compute_guarantor_rw_sa``) and the SA
+    namespace (``engine/sa/namespace.py::_build_guarantor_rw_expr``), with
+    the hierarchy SA-RW preview adopting in a follow-up commit. The builder
     is the single rulepack-compiled source for "what SA risk weight does
     this guarantor / entity attract?".
 

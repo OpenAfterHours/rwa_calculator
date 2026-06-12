@@ -84,7 +84,6 @@ from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
-    B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
     B31_COVERED_BOND_UNRATED_FROM_SCRA,
@@ -133,12 +132,10 @@ from rwa_calc.data.tables.crr_risk_weights import (
     INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
-    MDB_RISK_WEIGHTS_TABLE_2B,
     MDB_UNRATED_RW,
     OTHER_ITEMS_CASH_RW,
     OTHER_ITEMS_COLLECTION_RW,
     OTHER_ITEMS_DEFAULT_RW,
-    PSE_RISK_WEIGHTS_OWN_RATING,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
@@ -147,7 +144,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
-    RGLA_RISK_WEIGHTS_OWN_RATING,
     RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
@@ -159,6 +155,7 @@ from rwa_calc.data.tables.eu_sovereign import (
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
 )
+from rwa_calc.data.tables.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.domain.enums import CQS, CRMCollateralMethod, EquityType
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
@@ -884,123 +881,27 @@ def _build_guarantor_rw_expr(
     is_basel_3_1: bool,
     institution_short_term_flag_col: str | None = None,
 ) -> pl.Expr:
-    """Build the full when/then chain that maps a guarantor to its RW.
+    """Compile the shared guarantor RW chain with the SA path's bindings.
 
-    Uses ``guarantor_exposure_class`` (derived from ENTITY_TYPE_TO_SA_CLASS by
-    the CRM processor) rather than regex on entity_type, ensuring all valid
-    entity types are covered.
-
-    Branch order (first match wins):
-        no guarantee -> null
-        domestic CGCB sovereign (Art. 114(4)/(7)) -> 0%
-        CGCB CQS table
-        CCP (CRR Art. 306, CRE54.14-15)
-        Named MDB (Art. 117(2)) / International Organisation (Art. 118)
-        MDB Table 2B (Art. 117(1))
-        Institution (ECRA / SCRA via build_institution_guarantor_rw_expr —
-            short-term Art. 120(2) Table 4 when the borrower exposure's
-            residual maturity ≤ 3 months, otherwise long-term Table 3)
-        PSE (Art. 116(2) Table 2A, sovereign-derived for unrated)
-        RGLA (Art. 115(1)(b) Table 1B, sovereign-derived for unrated)
-        Corporate (Art. 122 corporate CQS table)
-        else -> null (no substitution)
+    Thin wrapper over ``data/tables/guarantor_rw.build_guarantor_rw_expr`` —
+    the single rulepack-compiled source for the guarantor branch chain
+    (branch order, tables and the unrated PSE/RGLA approximation are
+    documented there). The SA path binds its ``guarantor_*`` column names,
+    the Art. 114(4)/(7) domestic-CGCB currency test, the Art. 120(2)
+    short-term institution scratch flag, and the ``guaranteed_portion``
+    no-guarantee guard.
     """
-    gec = pl.col("guarantor_exposure_class").fill_null("")
-    guarantor_country_is_gb = pl.col("guarantor_country_code").fill_null("") == "GB"
-    # PSE/RGLA Art. 116(2)/115(1)(b) unrated fallback: domestic-GB guarantors
-    # get the RGLA/PSE 20% domestic-currency treatment; otherwise the
-    # conservative 100% PSE/RGLA unrated default applies.
-    sovereign_derived_unrated = (
-        pl.when(guarantor_country_is_gb)
-        .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
-        .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
-    )
-
-    cgcb_unrated = float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED])
-    corporate_unrated = float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])
-
-    return (
-        pl.when(pl.col("guaranteed_portion") <= 0)
-        .then(pl.lit(None).cast(pl.Float64))
-        # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS.
-        .when((gec == "central_govt_central_bank") & is_domestic_guarantor)
-        .then(pl.lit(0.0))
-        # CGCB guarantors via CQS (Table 1 — sovereign weights).
-        .when(gec == "central_govt_central_bank")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-                cgcb_unrated,
-            )
-        )
-        # CCP guarantors: 2% proprietary / 4% client-cleared
-        # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights.
-        .when(pl.col("guarantor_entity_type") == "ccp")
-        .then(
-            pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
-            .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
-            .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
-        )
-        # International Organisation (Art. 118): 0% unconditional.
-        .when(gec == "international_organisation")
-        .then(pl.lit(_SA_SHARED_RW["io"]))
-        # Named MDB (Art. 117(2)): 0% unconditional.
-        .when((gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named"))
-        .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
-        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
-        .when(gec == "mdb")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                MDB_RISK_WEIGHTS_TABLE_2B,
-                _SA_SHARED_RW["mdb_unrated"],
-            )
-        )
-        # Institution guarantors — RW driven from INSTITUTION_RISK_WEIGHTS_CRR /
-        # INSTITUTION_RISK_WEIGHTS_B31_ECRA so the dicts remain the single source
-        # of truth. When the borrower exposure's residual maturity ≤ 3 months
-        # (CRR/PS1/26 Art. 120(2)), the short-term Table 4 dicts apply instead.
-        .when(gec == "institution")
-        .then(
-            build_institution_guarantor_rw_expr(
-                "guarantor_cqs",
-                is_basel_3_1,
-                short_term_flag_col=institution_short_term_flag_col,
-                scra_grade_col="guarantor_scra_grade",
-            )
-        )
-        # PSE guarantors — Art. 116(2) Table 2A for rated, sovereign-derived for unrated.
-        .when(gec == "pse")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                PSE_RISK_WEIGHTS_OWN_RATING,
-                sovereign_derived_unrated,
-            )
-        )
-        # RGLA guarantors — Art. 115(1)(b) Table 1B for rated, sovereign-derived for unrated.
-        .when(gec == "rgla")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                RGLA_RISK_WEIGHTS_OWN_RATING,
-                sovereign_derived_unrated,
-            )
-        )
-        # Corporate guarantors — Art. 122 corporate CQS table.
-        # Basel 3.1 (PRA PS1/26 Art. 122(2) Table 6): CQS3 = 75% (CRR: 100%);
-        # PRA retains CQS5 = 150%. Gated on framework so CRR runs are
-        # unchanged.
-        .when(gec.is_in(["corporate", "corporate_sme"]))
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                B31_CORPORATE_RISK_WEIGHTS if is_basel_3_1 else CORPORATE_RISK_WEIGHTS,
-                corporate_unrated,
-            )
-        )
-        .otherwise(pl.lit(None).cast(pl.Float64))
+    return build_guarantor_rw_expr(
+        exposure_class_col="guarantor_exposure_class",
+        entity_type_col="guarantor_entity_type",
+        cqs_col="guarantor_cqs",
+        country_code_col="guarantor_country_code",
+        ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
+        scra_grade_col="guarantor_scra_grade",
+        is_basel_3_1=is_basel_3_1,
+        domestic_cgcb_expr=is_domestic_guarantor,
+        short_term_flag_col=institution_short_term_flag_col,
+        no_guarantee_expr=pl.col("guaranteed_portion") <= 0,
     )
 
 

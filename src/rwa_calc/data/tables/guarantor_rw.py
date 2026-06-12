@@ -4,16 +4,20 @@ Shared guarantor / entity SA risk-weight expression builder.
 Pipeline position:
     Compiled by the guarantee-substitution stages — the IRB branch
     (``engine/irb/guarantee.py::_compute_guarantor_rw_sa``) and the SA
-    namespace (``engine/sa/namespace.py::_build_guarantor_rw_expr``), with
-    the hierarchy SA-RW preview adopting in a follow-up commit. The builder
-    is the single rulepack-compiled source for "what SA risk weight does
-    this guarantor / entity attract?".
+    namespace (``engine/sa/namespace.py::_build_guarantor_rw_expr``) — and
+    by the hierarchy facility-share selection
+    (``engine/stages/hierarchy/facility_undrawn.py`` via
+    ``build_entity_rw_expr``). The builder is the single rulepack-compiled
+    source for "what SA risk weight does this guarantor / entity attract?".
 
 Key responsibilities:
 - Reproduce the SA-side guarantor branch chain and order exactly
   (see ``engine/sa/namespace.py::_build_guarantor_rw_expr``), parameterised
   on column names and caller-owned expressions so SA, IRB and the hierarchy
   preview can all compile the same chain.
+- Provide the entity-level SA-RW preview (``build_entity_rw_expr``) that
+  routes an entity-type column through the ``ENTITY_TYPES_BY_SA_CLASS``
+  buckets for the hierarchy facility-share riskiest-counterparty selection.
 - Drive every regulatory value from the canonical table constants in
   ``crr_risk_weights`` / ``b31_risk_weights`` — this module declares zero
   new scalars.
@@ -32,6 +36,8 @@ References:
   ``build_institution_guarantor_rw_expr``)
 - CRR Art. 122: corporate risk weights (via
   ``build_corporate_guarantor_rw_expr``)
+- CRR Art. 123: retail flat 75% (entity preview)
+- CRR Art. 128: high-risk items flat 150% (entity preview)
 - CRR Art. 235 / PRA PS1/26 Art. 235: SA risk-weight substitution method
   (RWSM) for unfunded credit protection
 - CRR Art. 306, CRE54.14-15: QCCP 2% / 4% risk weights
@@ -49,6 +55,8 @@ from watchfire import cites
 
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    HIGH_RISK_RW,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_RISK_WEIGHTS_TABLE_2B,
@@ -57,12 +65,14 @@ from rwa_calc.data.tables.crr_risk_weights import (
     PSE_UNRATED_DEFAULT_RW,
     QCCP_CLIENT_CLEARED_RW,
     QCCP_PROPRIETARY_RW,
+    RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_OWN_RATING,
     build_corporate_guarantor_rw_expr,
     build_institution_guarantor_rw_expr,
 )
-from rwa_calc.domain.enums import CQS
+from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
+from rwa_calc.domain.enums import CQS, ExposureClass
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -148,15 +158,10 @@ def build_guarantor_rw_expr(
         null where no substitution treatment exists.
     """
     gec = pl.col(exposure_class_col).fill_null("")
-    guarantor_country_is_gb = pl.col(country_code_col).fill_null("") == "GB"
     # PSE/RGLA Art. 116(2)/115(1)(b) unrated fallback: domestic-GB guarantors
     # get the RGLA/PSE 20% domestic-currency treatment; otherwise the
     # conservative 100% PSE/RGLA unrated default applies.
-    sovereign_derived_unrated = (
-        pl.when(guarantor_country_is_gb)
-        .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
-        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
-    )
+    sovereign_derived_unrated = _pse_rgla_unrated_fallback_expr(country_code_col)
 
     cgcb_unrated = float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED])
 
@@ -242,9 +247,165 @@ def build_guarantor_rw_expr(
     )
 
 
+@cites("CRR Art. 114")
+@cites("CRR Art. 115")
+@cites("CRR Art. 116")
+@cites("CRR Art. 117")
+@cites("CRR Art. 118")
+@cites("CRR Art. 122")
+@cites("CRR Art. 123")
+def build_entity_rw_expr(
+    *,
+    entity_type_col: str,
+    cqs_col: str,
+    is_basel_3_1: bool,
+    country_code_col: str | None = None,
+) -> pl.Expr:
+    """Build the entity-level SA risk-weight preview expression.
+
+    Compiled by the hierarchy facility-share selection
+    (``engine/stages/hierarchy/facility_undrawn.py::
+    _derive_facility_share_counterparty``) to rank candidate counterparties
+    by SA-equivalent risk weight. The preview is non-binding: the chosen
+    counterparty still flows through the full classifier and SA/IRB pipeline
+    downstream. Keeping the preview SA-only avoids a circular dependency with
+    the classifier's IRB approach gating.
+
+    Routes the lowercased ``entity_type`` through the SA exposure-class
+    buckets (``ENTITY_TYPES_BY_SA_CLASS``) and maps CQS -> RW via the same
+    table branches as :func:`build_guarantor_rw_expr`:
+
+        sovereign (CGCB CQS Table 1, Art. 114)
+        International Organisation (Art. 118) -> 0%
+        Named MDB (Art. 117(2)) -> 0%
+        MDB Table 2B (Art. 117(1))
+        Institution (Art. 120 Table 3 / PS1/26 ECRA via
+            ``build_institution_guarantor_rw_expr``)
+        PSE (Art. 116(2) Table 2A, GB/other approximation for unrated)
+        RGLA (Art. 115(1)(b) Table 1B, GB/other approximation for unrated)
+        Corporate + covered bond (Art. 122 CRR Table 5 — see note below)
+        Retail (Art. 123 flat 75%)
+        High risk (Art. 128 flat 150%)
+        else -> 1.0 (conservative preview default for unmatched entity
+            types, e.g. equity / other items)
+
+    Branch-parity notes (the pre-existing preview branches are preserved
+    value-for-value):
+
+    - The corporate branch always prices from ``CORPORATE_RISK_WEIGHTS``
+      (CRR Art. 122 Table 5), NOT the Basel 3.1 Table 6 — matching the
+      historical preview. Covered bonds use the corporate-equivalent CQS RWs
+      in the preview; the precise covered-bond table only applies in real
+      SA pricing.
+    - The unrated PSE / RGLA fallback is the documented SA-side
+      approximation (see :func:`build_guarantor_rw_expr`): GB -> 20%
+      domestic-currency treatment, other / unknown country -> 100% unrated
+      default. When ``country_code_col`` is ``None`` the 100% default
+      applies unconditionally.
+
+    Args:
+        entity_type_col: Name of the entity-type column. Null-filled to ""
+            and lowercased before bucket routing.
+        cqs_col: Name of the integer CQS column; null / out-of-range values
+            fall to each table's unrated default.
+        is_basel_3_1: Select the PS1/26 institution ECRA table when True,
+            CRR Art. 120 Table 3 when False. All other preview branches are
+            framework-identical by construction (see corporate note above).
+        country_code_col: Optional name of the country-code column driving
+            the unrated PSE / RGLA GB-vs-other approximation. ``None`` falls
+            back to the conservative 100% unrated default.
+
+    Returns:
+        Float64 Polars expression evaluating to the entity's SA-equivalent
+        preview risk weight (never null — unmatched entity types yield 1.0).
+    """
+    et = pl.col(entity_type_col).fill_null("").str.to_lowercase()
+
+    sovereign_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value])
+    io_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.INTERNATIONAL_ORGANISATION.value])
+    mdb_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.MDB.value])
+    institution_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.INSTITUTION.value])
+    pse_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.PSE.value])
+    rgla_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.RGLA.value])
+    corporate_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CORPORATE.value])
+    covered_bond_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.COVERED_BOND.value])
+    retail_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.RETAIL_OTHER.value])
+    high_risk_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.HIGH_RISK.value])
+
+    unrated_pse_rgla = _pse_rgla_unrated_fallback_expr(country_code_col)
+
+    return (
+        # CGCB (Art. 114 Table 1 — sovereign weights).
+        pl.when(et.is_in(sovereign_types))
+        .then(
+            _cqs_table_lookup_expr(
+                cqs_col,
+                CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+                float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED]),
+            )
+        )
+        # International Organisation (Art. 118): 0% unconditional.
+        .when(et.is_in(io_types))
+        .then(pl.lit(float(IO_ZERO_RW)))
+        # Named MDB (Art. 117(2)): 0% unconditional — carved out ahead of Table 2B.
+        .when(et == "mdb_named")
+        .then(pl.lit(float(MDB_NAMED_ZERO_RW)))
+        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
+        .when(et.is_in(mdb_types))
+        .then(_cqs_table_lookup_expr(cqs_col, MDB_RISK_WEIGHTS_TABLE_2B, float(MDB_UNRATED_RW)))
+        # Institution — Art. 120 Table 3 / PS1/26 ECRA via the shared builder
+        # so the dicts remain the single source of truth.
+        .when(et.is_in(institution_types))
+        .then(build_institution_guarantor_rw_expr(cqs_col, is_basel_3_1))
+        # PSE — Art. 116(2) Table 2A for rated, GB/other approximation for unrated.
+        .when(et.is_in(pse_types))
+        .then(_cqs_table_lookup_expr(cqs_col, PSE_RISK_WEIGHTS_OWN_RATING, unrated_pse_rgla))
+        # RGLA — Art. 115(1)(b) Table 1B for rated, GB/other approximation for unrated.
+        .when(et.is_in(rgla_types))
+        .then(_cqs_table_lookup_expr(cqs_col, RGLA_RISK_WEIGHTS_OWN_RATING, unrated_pse_rgla))
+        # Corporate + covered bond — CRR Art. 122 Table 5 (preview parity:
+        # not framework-switched; see docstring).
+        .when(et.is_in(corporate_types + covered_bond_types))
+        .then(
+            _cqs_table_lookup_expr(
+                cqs_col,
+                CORPORATE_RISK_WEIGHTS,
+                float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED]),
+            )
+        )
+        # Retail (Art. 123): flat 75%.
+        .when(et.is_in(retail_types))
+        .then(pl.lit(float(RETAIL_RISK_WEIGHT)))
+        # High-risk items (Art. 128): flat 150%.
+        .when(et.is_in(high_risk_types))
+        .then(pl.lit(float(HIGH_RISK_RW)))
+        # Conservative preview default for unmatched entity types.
+        .otherwise(pl.lit(1.0))
+    )
+
+
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
+
+
+def _pse_rgla_unrated_fallback_expr(country_code_col: str | None) -> pl.Expr:
+    """Unrated PSE / RGLA fallback: GB -> 20% domestic treatment, else -> 100%.
+
+    The documented SA-side approximation (no guarantor sovereign-CQS join
+    exists in the CRM column production): a GB entity receives the 20%
+    RGLA / PSE domestic-currency treatment (Art. 115(5)), any other — or
+    unknown (``country_code_col=None``) — country the conservative 100%
+    unrated default. NOT the full Art. 116(1) Table 2 / Art. 115(1)(a)
+    Table 1A sovereign-derived lookup.
+    """
+    if country_code_col is None:
+        return pl.lit(float(PSE_UNRATED_DEFAULT_RW))
+    return (
+        pl.when(pl.col(country_code_col).fill_null("") == "GB")
+        .then(pl.lit(float(RGLA_DOMESTIC_CURRENCY_RW)))
+        .otherwise(pl.lit(float(PSE_UNRATED_DEFAULT_RW)))
+    )
 
 
 def _cqs_table_lookup_expr(

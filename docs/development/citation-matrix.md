@@ -82,9 +82,14 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/eu_sovereign.py:138:167"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:71"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:81"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
+    ```
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:250"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
     ```
 
 
@@ -95,9 +100,14 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:416:428"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:72"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:82"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
+    ```
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:251"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
     ```
 
 
@@ -108,9 +118,14 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:361:372"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:73"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:83"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
+    ```
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:252"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
     ```
 
 
@@ -121,9 +136,14 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:462:470"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:74"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:84"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
+    ```
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:253"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
     ```
 
 
@@ -134,9 +154,14 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:486:500"
     ```
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:75"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:85"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
+    ```
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:254"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
     ```
 
 
@@ -171,6 +196,11 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:523:579"
     ```
 
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:255"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
+    ```
+
 ??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:187"
     ```python
     --8<-- "src/rwa_calc/engine/irb/guarantee.py:187:284"
@@ -178,6 +208,11 @@ Last generated: 2026-06-12.
 
 
 ### CRR Art. 123 — Retail exposures
+
+??? quote "`build_entity_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:256"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:250:384"
+    ```
 
 ??? quote "`_crr_append_retail_branches` — src/rwa_calc/engine/sa/namespace.py:693"
     ```python
@@ -817,9 +852,9 @@ Last generated: 2026-06-12.
 
 ### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
 
-??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:76"
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:86"
     ```python
-    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:81:247"
     ```
 
 ??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:188"

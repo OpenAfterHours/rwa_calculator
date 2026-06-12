@@ -3,8 +3,9 @@ Entity-type to exposure-class mappings.
 
 Pipeline position:
     Consumed by ``engine.classifier`` (entity_type → SA/IRB class via
-    ``replace_strict``), ``engine.stages.hierarchy.facility_undrawn``
-    (SA RW preview), and the
+    ``replace_strict``), ``data.tables.guarantor_rw`` (entity / guarantor
+    SA-RW expression builders, including the hierarchy facility-share
+    SA RW preview), and the
     SA / IRB / CRM guarantee branches that need to derive a guarantor's
     SA exposure class from its entity_type.
 
@@ -14,7 +15,7 @@ Key responsibilities:
 - Map every supported ``entity_type`` to its IRB exposure class — different
   from the SA class for RGLA / PSE counterparties (CRR Art. 147(3)/(4)(b)).
 - Provide the inverse SA-class → tuple-of-entity-types mapping used by the
-  hierarchy resolver's SA RW preview.
+  entity-level SA RW preview (``data.tables.guarantor_rw.build_entity_rw_expr``).
 
 References:
 - CRR Art. 112 Table A2 — SA exposure classes
@@ -108,7 +109,8 @@ ENTITY_TYPE_TO_IRB_CLASS: dict[str, str] = {
 
 # Inverse of ENTITY_TYPE_TO_SA_CLASS: SA exposure class → tuple of entity_types.
 # Derived at module load so any addition to ENTITY_TYPE_TO_SA_CLASS automatically
-# flows through to consumers (e.g. the SA RW preview in engine/hierarchy.py).
+# flows through to consumers (e.g. the entity-level SA RW preview
+# `build_entity_rw_expr` in data/tables/guarantor_rw.py).
 ENTITY_TYPES_BY_SA_CLASS: dict[str, tuple[str, ...]] = {
     sa_class: tuple(et for et, c in ENTITY_TYPE_TO_SA_CLASS.items() if c == sa_class)
     for sa_class in dict.fromkeys(ENTITY_TYPE_TO_SA_CLASS.values())

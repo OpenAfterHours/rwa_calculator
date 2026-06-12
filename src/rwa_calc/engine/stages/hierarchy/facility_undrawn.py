@@ -12,8 +12,8 @@ Key responsibilities:
 - Expand Multiple Option Facility (MOF) parents into per-sub CCF-descending
   waterfall rows plus an optional residual row.
 - Facility Share riskiest-counterparty override via the non-binding
-  SA-equivalent risk-weight preview (``_preview_sa_rw_expr`` — relocates to
-  an SA-owned expression module in a later slice).
+  SA-equivalent risk-weight preview, compiled from the shared
+  ``build_entity_rw_expr`` builder (``data/tables/guarantor_rw``).
 - Project the canonical facility_undrawn exposure schema, emitting the
   ``original_counterparty_reference`` / ``mof_risk_type_source`` audit
   columns (Site A of the ``_FACILITY_QRRE_COUPLED_COLUMNS`` coupling).
@@ -22,7 +22,8 @@ References:
 - CRR Art. 166(8)(d) / Art. 166(10): commitment vs issued-item CCF buckets
 - CRR Art. 195 / 219: on-balance-sheet netting of drawn balances
 - CRR Art. 147(5) / CRE30.55: QRRE classification fields
-- CRR Art. 114, 120, 122, 123: SA risk weights read by the RW preview
+- CRR Art. 114-128: SA risk weights read by the RW preview (see
+  ``data/tables/guarantor_rw.build_entity_rw_expr``)
 - PRA PS1/26 Art. 111(1) Table A1 Row 4(b): residential mortgage commitments
 - PRA PS1/26 Art. 166E(5): revolving purchased-receivables commitments
 - PRA PS1/26 Art. 124(3) / Art. 124K: under-construction (ADC) flag
@@ -36,17 +37,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    CORPORATE_RISK_WEIGHTS,
-    HIGH_RISK_RW,
-    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
-    INSTITUTION_RISK_WEIGHTS_CRR,
-    MDB_RISK_WEIGHTS_TABLE_2B,
-    RETAIL_RISK_WEIGHT,
-)
-from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
-from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.data.tables.guarantor_rw import build_entity_rw_expr
 from rwa_calc.engine.ccf import sa_ccf_expression
 from rwa_calc.engine.stages.hierarchy.graph import (
     filter_mappings_by_child_type,
@@ -815,19 +806,21 @@ def _derive_facility_share_counterparty(
     sub-facilities span multiple obligors triggers riskiest-CP allocation
     even when nothing has been drawn yet (the all-undrawn case).
 
-    The risk-weight preview uses :func:`_preview_sa_rw_expr` and is
-    non-binding: the chosen counterparty still flows through the full
-    classifier and SA/IRB pipeline downstream.
+    The risk-weight preview uses the shared
+    :func:`rwa_calc.data.tables.guarantor_rw.build_entity_rw_expr` builder
+    and is non-binding: the chosen counterparty still flows through the
+    full classifier and SA/IRB pipeline downstream.
 
     Args:
         facilities: Facilities frame, used for the root-facility schema only.
         facility_mappings: Mappings between facilities and children.
         loans: Loans frame; descendant counterparties come from here.
         contingents: Contingents frame (optional); descendants also come from here.
-        counterparty_lookup: Used to look up ``entity_type`` and ``cqs``
-            per candidate counterparty.
+        counterparty_lookup: Used to look up ``entity_type``, ``cqs`` and
+            ``country_code`` (when present) per candidate counterparty.
         root_lookup: Output of :func:`graph.build_facility_root_lookup`.
-        is_basel_3_1: Frame switch passed to :func:`_preview_sa_rw_expr`.
+        is_basel_3_1: Framework switch passed to
+            :func:`rwa_calc.data.tables.guarantor_rw.build_entity_rw_expr`.
 
     Returns:
         LazyFrame with columns:
@@ -928,7 +921,8 @@ def _derive_facility_share_counterparty(
         pl.col("_member_count") > 1
     )
 
-    # Pull entity_type + cqs from the resolved counterparty lookup.
+    # Pull entity_type + cqs (+ country_code when present) from the resolved
+    # counterparty lookup.
     cp_cols = set(counterparty_lookup.counterparties.collect_schema().names())
     cp_select = [pl.col("counterparty_reference")]
     if "entity_type" in cp_cols:
@@ -939,16 +933,22 @@ def _derive_facility_share_counterparty(
         cp_select.append(pl.col("cqs").alias("_share_cqs"))
     else:
         cp_select.append(pl.lit(None).cast(pl.Int8).alias("_share_cqs"))
+    # country_code drives the unrated PSE / RGLA GB-vs-other approximation in
+    # the preview. No presence probe: CounterpartyLookup frames are
+    # brand-validated against the cp_lookup_counterparties edge, which
+    # declares (and injects) country_code — the column is always present.
+    cp_select.append(pl.col("country_code").alias("_share_country_code"))
 
     candidates = candidates.join(
         counterparty_lookup.counterparties.select(cp_select),
         on="counterparty_reference",
         how="left",
     ).with_columns(
-        _preview_sa_rw_expr(
+        build_entity_rw_expr(
             entity_type_col="_share_entity_type",
             cqs_col="_share_cqs",
             is_basel_3_1=is_basel_3_1,
+            country_code_col="_share_country_code",
         ).alias("_preview_rw")
     )
 
@@ -967,70 +967,4 @@ def _derive_facility_share_counterparty(
         )
         .group_by("facility_reference")
         .agg(pl.col("counterparty_reference").first().alias("share_counterparty_reference"))
-    )
-
-
-def _preview_sa_rw_expr(
-    entity_type_col: str,
-    cqs_col: str,
-    is_basel_3_1: bool,
-) -> pl.Expr:
-    """SA-equivalent risk weight preview for facility-share counterparty selection.
-
-    Routes the candidate counterparty's ``entity_type`` to the matching CRR /
-    PRA PS1/26 SA risk weight table and returns the RW for its CQS. Used only
-    to pick the riskiest counterparty in a Facility Share — the chosen
-    counterparty still goes through the full classifier and SA/IRB pipeline
-    downstream, so this lookup is non-binding. Keeping the preview SA-only
-    avoids a circular dependency with the classifier's IRB approach gating.
-
-    References:
-        - CRR Art. 114, 120, 122, 123 / PRA PS1/26 equivalents
-    """
-    et = pl.col(entity_type_col).fill_null("").str.to_lowercase()
-    cqs = pl.col(cqs_col).fill_null(0).cast(pl.Int8)
-
-    inst_table = INSTITUTION_RISK_WEIGHTS_B31_ECRA if is_basel_3_1 else INSTITUTION_RISK_WEIGHTS_CRR
-
-    def _cqs_lookup(table: dict[CQS, object]) -> pl.Expr:
-        return (
-            pl.when(cqs == 1)
-            .then(pl.lit(float(table[CQS.CQS1])))
-            .when(cqs == 2)
-            .then(pl.lit(float(table[CQS.CQS2])))
-            .when(cqs == 3)
-            .then(pl.lit(float(table[CQS.CQS3])))
-            .when(cqs == 4)
-            .then(pl.lit(float(table[CQS.CQS4])))
-            .when(cqs == 5)
-            .then(pl.lit(float(table[CQS.CQS5])))
-            .when(cqs == 6)
-            .then(pl.lit(float(table[CQS.CQS6])))
-            .otherwise(pl.lit(float(table[CQS.UNRATED])))
-        )
-
-    sovereign_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value])
-    institution_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.INSTITUTION.value])
-    corporate_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.CORPORATE.value])
-    retail_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.RETAIL_OTHER.value])
-    high_risk_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.HIGH_RISK.value])
-    mdb_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.MDB.value])
-    covered_bond_types = list(ENTITY_TYPES_BY_SA_CLASS[ExposureClass.COVERED_BOND.value])
-
-    return (
-        pl.when(et.is_in(sovereign_types))
-        .then(_cqs_lookup(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS))
-        .when(et.is_in(institution_types))
-        .then(_cqs_lookup(inst_table))
-        # SA covered_bond uses corporate-equivalent CQS RWs in the preview;
-        # the precise covered-bond table only kicks in for IRB/SA SL pricing.
-        .when(et.is_in(corporate_types + covered_bond_types))
-        .then(_cqs_lookup(CORPORATE_RISK_WEIGHTS))
-        .when(et.is_in(retail_types))
-        .then(pl.lit(float(RETAIL_RISK_WEIGHT)))
-        .when(et.is_in(high_risk_types))
-        .then(pl.lit(float(HIGH_RISK_RW)))
-        .when(et.is_in(mdb_types))
-        .then(_cqs_lookup(MDB_RISK_WEIGHTS_TABLE_2B))
-        .otherwise(pl.lit(1.0))
     )

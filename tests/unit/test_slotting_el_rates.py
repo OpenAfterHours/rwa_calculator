@@ -5,7 +5,7 @@ Tests verify:
 - CRR Table B EL rate constants match PRA Art. 158(6)
 - B31 Table B EL rate constants match PRA PS1/26 Art. 158(6)
 - Scalar lookup functions for both frameworks
-- Polars namespace EL rate lookup (vectorised)
+- Vectorised EL rate lookup (slotting transforms)
 - EL computation in slotting calculator (expected_loss = el_rate × ead_final)
 - EL shortfall/excess for slotting exposures
 - Aggregator integration: slotting EL included in portfolio EL summary
@@ -25,8 +25,6 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-# Ensure slotting namespace is registered
-import rwa_calc.engine.slotting.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_slotting import (
     B31_SLOTTING_EL_RATES,
@@ -41,6 +39,14 @@ from rwa_calc.data.tables.crr_slotting import (
     lookup_slotting_el_rate,
 )
 from rwa_calc.domain.enums import SlottingCategory
+from rwa_calc.engine.slotting.transforms import (
+    apply_all,
+    apply_el_rates,
+    apply_slotting_weights,
+    calculate_rwa,
+    compute_el_shortfall_excess,
+    prepare_columns,
+)
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad_slotting
 
@@ -242,7 +248,7 @@ class TestB31SlottingELRateLookup:
 
 
 # =============================================================================
-# Polars Namespace — EL Rate Lookup
+# Slotting Transforms — EL Rate Lookup
 # =============================================================================
 
 
@@ -271,8 +277,8 @@ def basic_slotting_frame() -> pl.LazyFrame:
     )
 
 
-class TestSlottingNamespaceELRateLookup:
-    """Polars namespace EL rate lookup tests."""
+class TestSlottingTransformsELRateLookup:
+    """Slotting transforms EL rate lookup tests."""
 
     def test_crr_non_hvcre_long_maturity_el_rates(
         self, basic_slotting_frame: pl.LazyFrame, crr_config: CalculationConfig
@@ -280,10 +286,10 @@ class TestSlottingNamespaceELRateLookup:
         """CRR non-HVCRE >= 2.5yr: Strong=0.4%, Good=0.8%, Satisfactory=2.8%, Weak=8%, Default=50%."""
         result = (
             _pad(basic_slotting_frame)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
@@ -302,10 +308,10 @@ class TestSlottingNamespaceELRateLookup:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
@@ -330,10 +336,10 @@ class TestSlottingNamespaceELRateLookup:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
@@ -353,10 +359,10 @@ class TestSlottingNamespaceELRateLookup:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(b31_config)
-            .slotting.apply_slotting_weights(b31_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(b31_config)
+            .pipe(prepare_columns, b31_config)
+            .pipe(apply_slotting_weights, b31_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, b31_config)
         ).collect()
 
         el_rates = result["slotting_el_rate"].to_list()
@@ -378,10 +384,10 @@ class TestSlottingELComputation:
         """EL = el_rate × EAD for each exposure."""
         result = (
             _pad(basic_slotting_frame)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         el = result["expected_loss"].to_list()
@@ -405,10 +411,10 @@ class TestSlottingELComputation:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         assert result["expected_loss"][0] == pytest.approx(0.0)
@@ -427,10 +433,10 @@ class TestSlottingELComputation:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
         ).collect()
 
         assert result["risk_weight"][0] == pytest.approx(0.0)  # K=0
@@ -459,11 +465,11 @@ class TestSlottingELShortfallExcess:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
-            .slotting.compute_el_shortfall_excess()
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
+            .pipe(compute_el_shortfall_excess)
         ).collect()
 
         el = 0.008 * 10_000_000.0  # 80k
@@ -484,11 +490,11 @@ class TestSlottingELShortfallExcess:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
-            .slotting.compute_el_shortfall_excess()
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
+            .pipe(compute_el_shortfall_excess)
         ).collect()
 
         el = 80_000.0  # 0.8% × 10m
@@ -509,11 +515,11 @@ class TestSlottingELShortfallExcess:
         )
         result = (
             _pad(lf)
-            .slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(crr_config)
-            .slotting.compute_el_shortfall_excess()
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, crr_config)
+            .pipe(compute_el_shortfall_excess)
         ).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
@@ -571,7 +577,7 @@ class TestSlottingCalculatorBranchEL:
         self, basic_slotting_frame: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """apply_all() chains EL computation after RWA."""
-        result = _pad(basic_slotting_frame).slotting.apply_all(crr_config).collect()
+        result = _pad(basic_slotting_frame).pipe(apply_all, crr_config).collect()
 
         assert "expected_loss" in result.columns
         assert "el_shortfall" in result.columns
@@ -708,7 +714,7 @@ def test_crr_el_rate_parametrized(
     expected_rate: float,
     crr_config: CalculationConfig,
 ) -> None:
-    """Parametrized: verify all CRR EL rate lookups via namespace."""
+    """Parametrized: verify all CRR EL rate lookups via the transforms."""
     lf = pl.LazyFrame(
         {
             "slotting_category": [category],
@@ -720,10 +726,10 @@ def test_crr_el_rate_parametrized(
     )
     result = (
         _pad(lf)
-        .slotting.prepare_columns(crr_config)
-        .slotting.apply_slotting_weights(crr_config)
-        .slotting.calculate_rwa()
-        .slotting.apply_el_rates(crr_config)
+        .pipe(prepare_columns, crr_config)
+        .pipe(apply_slotting_weights, crr_config)
+        .pipe(calculate_rwa)
+        .pipe(apply_el_rates, crr_config)
     ).collect()
 
     assert result["slotting_el_rate"][0] == pytest.approx(expected_rate)

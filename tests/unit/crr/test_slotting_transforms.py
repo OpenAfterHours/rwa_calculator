@@ -1,14 +1,14 @@
-"""Unit tests for the Slotting Polars namespace.
+"""Unit tests for the Slotting transforms (plain typed functions).
 
 Tests cover:
-- Namespace registration and availability
+- Public function surface of rwa_calc.engine.slotting.transforms
 - Column preparation
 - CRR slotting weights (all SL via Table 1, is_hvcre ignored — P1.177)
 - Basel 3.1 slotting weights (non-HVCRE, HVCRE, PF pre-operational)
 - RWA calculation
 - Full pipeline (apply_all)
-- Method chaining
-- Expression namespace methods
+- Pipe composition
+- Expression-level lookup functions
 
 References:
 - CRR Art. 153(5): Supervisory slotting approach (Table 1 only under UK CRR)
@@ -23,8 +23,15 @@ import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
-import rwa_calc.engine.slotting.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.slotting.transforms import (
+    apply_all,
+    apply_slotting_weights,
+    build_audit,
+    calculate_rwa,
+    lookup_rw,
+    prepare_columns,
+)
 
 # =============================================================================
 # Fixtures
@@ -82,34 +89,30 @@ def hvcre_exposures() -> pl.LazyFrame:
 
 
 # =============================================================================
-# Namespace Registration Tests
+# Function Surface Tests
 # =============================================================================
 
 
-class TestSlottingNamespaceRegistration:
-    """Tests for namespace registration and availability."""
+class TestSlottingTransformsSurface:
+    """Tests for the transforms module's public function surface."""
 
-    def test_lazyframe_namespace_registered(self, basic_slotting_exposures: pl.LazyFrame) -> None:
-        """LazyFrame should have .slotting namespace available."""
-        assert hasattr(basic_slotting_exposures, "slotting")
+    def test_lazyframe_functions_callable(self) -> None:
+        """All LazyFrame-level transforms must be callable free functions."""
+        for fn in (
+            prepare_columns,
+            apply_slotting_weights,
+            calculate_rwa,
+            apply_all,
+            build_audit,
+        ):
+            assert callable(fn), f"Not callable: {fn!r}"
 
-    def test_expr_namespace_registered(self) -> None:
-        """Expression should have .slotting namespace available."""
-        expr = pl.col("slotting_category")
-        assert hasattr(expr, "slotting")
+    def test_expression_functions_callable(self) -> None:
+        """All expression-level transforms must be callable free functions."""
+        from rwa_calc.engine.slotting.transforms import lookup_el_rate
 
-    def test_namespace_methods_available(self, basic_slotting_exposures: pl.LazyFrame) -> None:
-        """Namespace should have expected methods."""
-        slotting = basic_slotting_exposures.slotting
-        expected_methods = [
-            "prepare_columns",
-            "apply_slotting_weights",
-            "calculate_rwa",
-            "apply_all",
-            "build_audit",
-        ]
-        for method in expected_methods:
-            assert hasattr(slotting, method), f"Missing method: {method}"
+        for fn in (lookup_rw, lookup_el_rate):
+            assert callable(fn), f"Not callable: {fn!r}"
 
 
 # =============================================================================
@@ -139,7 +142,7 @@ class TestPrepareColumns:
                 }
             )
         )
-        result = lf.slotting.prepare_columns().collect()
+        result = prepare_columns(lf).collect()
 
         assert "is_short_maturity" in result.columns
         assert "is_pre_operational" in result.columns
@@ -150,7 +153,7 @@ class TestPrepareColumns:
         self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """prepare_columns should preserve existing columns."""
-        result = basic_slotting_exposures.slotting.prepare_columns().collect()
+        result = prepare_columns(basic_slotting_exposures).collect()
 
         assert result["slotting_category"][0] == "strong"
         assert result["is_hvcre"][0] == False  # noqa: E712
@@ -175,7 +178,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2026, 7, 1)],  # ~0.5yr from 2024-12-31
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = prepare_columns(lf, crr_config).collect()
 
         assert result["is_short_maturity"][0] is True
 
@@ -190,7 +193,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2030, 1, 1)],  # ~5yr from 2024-12-31
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = prepare_columns(lf, crr_config).collect()
 
         assert result["is_short_maturity"][0] is False
 
@@ -206,7 +209,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2028, 7, 2)],  # 2.501yr from 2026-01-01 (>=2.5yr)
             }
         )
-        result = lf.slotting.prepare_columns(config).collect()
+        result = prepare_columns(lf, config).collect()
 
         assert result["is_short_maturity"][0] is False
 
@@ -222,7 +225,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2028, 7, 1)],  # 2.499yr from 2026-01-01 (<2.5yr)
             }
         )
-        result = lf.slotting.prepare_columns(config).collect()
+        result = prepare_columns(lf, config).collect()
 
         assert result["is_short_maturity"][0] is True
 
@@ -237,7 +240,7 @@ class TestMaturityDerivation:
                 "maturity_date": pl.Series([None], dtype=pl.Date),
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = prepare_columns(lf, crr_config).collect()
 
         assert result["is_short_maturity"][0] is False
 
@@ -255,7 +258,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2030, 1, 1)],  # Long maturity
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = prepare_columns(lf, crr_config).collect()
 
         # Should preserve the explicit True, not recalculate from date
         assert result["is_short_maturity"][0] is True
@@ -271,7 +274,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2029, 12, 31)],  # ~5yr from 2024-12-31
             }
         )
-        result = lf.slotting.prepare_columns(crr_config).collect()
+        result = prepare_columns(lf, crr_config).collect()
 
         assert "remaining_maturity_years" in result.columns
         assert result["remaining_maturity_years"][0] == pytest.approx(5.0, abs=0.01)
@@ -285,7 +288,7 @@ class TestMaturityDerivation:
                 "maturity_date": [date(2026, 6, 1)],
             }
         )
-        result = lf.slotting.prepare_columns().collect()
+        result = prepare_columns(lf).collect()
 
         assert result["is_short_maturity"][0] is False
 
@@ -301,9 +304,7 @@ class TestMaturityDerivation:
             }
         )
         result = (
-            lf.slotting.prepare_columns(crr_config)
-            .slotting.apply_slotting_weights(crr_config)
-            .collect()
+            lf.pipe(prepare_columns, crr_config).pipe(apply_slotting_weights, crr_config).collect()
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.50)
@@ -329,7 +330,7 @@ class TestCRRSlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
     def test_crr_good_90_percent(self, crr_config: CalculationConfig) -> None:
@@ -344,7 +345,7 @@ class TestCRRSlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.90)
 
     def test_crr_satisfactory_115_percent(self, crr_config: CalculationConfig) -> None:
@@ -359,7 +360,7 @@ class TestCRRSlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.15)
 
     def test_crr_weak_250_percent(self, crr_config: CalculationConfig) -> None:
@@ -374,7 +375,7 @@ class TestCRRSlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(2.50)
 
     def test_crr_default_0_percent(self, crr_config: CalculationConfig) -> None:
@@ -389,7 +390,7 @@ class TestCRRSlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.0)
 
 
@@ -413,7 +414,7 @@ class TestCRRSlottingWeightsShortMaturity:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.50)
 
     def test_crr_short_good_70_percent(self, crr_config: CalculationConfig) -> None:
@@ -428,7 +429,7 @@ class TestCRRSlottingWeightsShortMaturity:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
 
@@ -457,7 +458,7 @@ class TestCRRSlottingHVCREIgnored:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
     def test_crr_hvcre_good_ninety_percent(self, crr_config: CalculationConfig) -> None:
@@ -472,7 +473,7 @@ class TestCRRSlottingHVCREIgnored:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.90)
 
     def test_crr_hvcre_satisfactory_one_fifteen_percent(
@@ -489,7 +490,7 @@ class TestCRRSlottingHVCREIgnored:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.15)
 
     def test_crr_hvcre_short_strong_fifty_percent(self, crr_config: CalculationConfig) -> None:
@@ -504,7 +505,7 @@ class TestCRRSlottingHVCREIgnored:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.50)
 
     def test_crr_hvcre_short_good_seventy_percent(self, crr_config: CalculationConfig) -> None:
@@ -519,7 +520,7 @@ class TestCRRSlottingHVCREIgnored:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(crr_config).collect()
+        result = apply_slotting_weights(lf, crr_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
 
@@ -543,7 +544,7 @@ class TestBasel31SlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
     def test_basel31_good_90_percent(self, basel31_config: CalculationConfig) -> None:
@@ -558,7 +559,7 @@ class TestBasel31SlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.90)
 
     def test_basel31_satisfactory_115_percent(self, basel31_config: CalculationConfig) -> None:
@@ -573,7 +574,7 @@ class TestBasel31SlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.15)
 
     def test_basel31_weak_250_percent(self, basel31_config: CalculationConfig) -> None:
@@ -588,7 +589,7 @@ class TestBasel31SlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(2.50)
 
     def test_basel31_default_0_percent(self, basel31_config: CalculationConfig) -> None:
@@ -603,7 +604,7 @@ class TestBasel31SlottingWeights:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.0)
 
 
@@ -627,7 +628,7 @@ class TestBasel31SlottingWeightsHVCRE:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.95)
 
     def test_basel31_hvcre_good_120_percent(self, basel31_config: CalculationConfig) -> None:
@@ -642,7 +643,7 @@ class TestBasel31SlottingWeightsHVCRE:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.20)
 
     def test_basel31_hvcre_satisfactory_140_percent(
@@ -659,7 +660,7 @@ class TestBasel31SlottingWeightsHVCRE:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.40)
 
     def test_basel31_hvcre_weak_250_percent(self, basel31_config: CalculationConfig) -> None:
@@ -674,7 +675,7 @@ class TestBasel31SlottingWeightsHVCRE:
                 "is_pre_operational": [False],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(2.50)
 
 
@@ -706,7 +707,7 @@ class TestBasel31SlottingWeightsPFPreOp:
                 "is_pre_operational": [True],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.70)
 
     def test_basel31_pf_preop_good_same_as_standard(
@@ -723,7 +724,7 @@ class TestBasel31SlottingWeightsPFPreOp:
                 "is_pre_operational": [True],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.90)
 
     def test_basel31_pf_preop_satisfactory_same_as_standard(
@@ -740,7 +741,7 @@ class TestBasel31SlottingWeightsPFPreOp:
                 "is_pre_operational": [True],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.15)
 
     def test_basel31_pf_preop_weak_same_as_standard(
@@ -757,7 +758,7 @@ class TestBasel31SlottingWeightsPFPreOp:
                 "is_pre_operational": [True],
             }
         )
-        result = lf.slotting.apply_slotting_weights(basel31_config).collect()
+        result = apply_slotting_weights(lf, basel31_config).collect()
         assert result["risk_weight"][0] == pytest.approx(2.50)
 
 
@@ -797,7 +798,7 @@ class TestCalculateRWA:
                 "risk_weight": [0.70],
             }
         )
-        result = lf.slotting.calculate_rwa().collect()
+        result = calculate_rwa(lf).collect()
         assert result["rwa"][0] == pytest.approx(700_000.0)
 
     def test_rwa_all_categories(
@@ -805,9 +806,9 @@ class TestCalculateRWA:
     ) -> None:
         """RWA should be calculated for all exposures."""
         result = (
-            basic_slotting_exposures.slotting.prepare_columns()
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
+            basic_slotting_exposures.pipe(prepare_columns)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
             .collect()
         )
 
@@ -828,7 +829,7 @@ class TestApplyAll:
         self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """apply_all should add all expected columns."""
-        result = basic_slotting_exposures.slotting.apply_all(crr_config).collect()
+        result = apply_all(basic_slotting_exposures, crr_config).collect()
 
         expected_columns = [
             "slotting_category",
@@ -844,7 +845,7 @@ class TestApplyAll:
     ) -> None:
         """Number of rows should be preserved."""
         original_count = basic_slotting_exposures.collect().shape[0]
-        result = basic_slotting_exposures.slotting.apply_all(crr_config).collect()
+        result = apply_all(basic_slotting_exposures, crr_config).collect()
         assert result.shape[0] == original_count
 
 
@@ -861,9 +862,9 @@ class TestMethodChaining:
     ) -> None:
         """Full pipeline should work with method chaining."""
         result = (
-            basic_slotting_exposures.slotting.prepare_columns()
-            .slotting.apply_slotting_weights(crr_config)
-            .slotting.calculate_rwa()
+            basic_slotting_exposures.pipe(prepare_columns)
+            .pipe(apply_slotting_weights, crr_config)
+            .pipe(calculate_rwa)
             .collect()
         )
 
@@ -872,19 +873,17 @@ class TestMethodChaining:
 
 
 # =============================================================================
-# Expression Namespace Tests
+# Expression Function Tests
 # =============================================================================
 
 
-class TestExprNamespace:
-    """Tests for expression namespace methods."""
+class TestExprFunctions:
+    """Tests for expression-level lookup functions."""
 
     def test_lookup_rw_crr(self) -> None:
         """lookup_rw should return correct CRR weights (>=2.5yr default)."""
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory", "weak", "default"]})
-        result = df.with_columns(
-            pl.col("category").slotting.lookup_rw(is_crr=True).alias("risk_weight")
-        )
+        result = df.with_columns(lookup_rw(pl.col("category"), is_crr=True).alias("risk_weight"))
 
         assert result["risk_weight"][0] == pytest.approx(0.70)  # strong
         assert result["risk_weight"][1] == pytest.approx(0.90)  # good
@@ -900,7 +899,7 @@ class TestExprNamespace:
         """
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory"]})
         result = df.with_columns(
-            pl.col("category").slotting.lookup_rw(is_crr=True, is_hvcre=True).alias("risk_weight")
+            lookup_rw(pl.col("category"), is_crr=True, is_hvcre=True).alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.70)  # strong — Table 1
@@ -911,7 +910,7 @@ class TestExprNamespace:
         """lookup_rw should return correct Basel 3.1 non-HVCRE weights."""
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory"]})
         result = df.with_columns(
-            pl.col("category").slotting.lookup_rw(is_crr=False, is_hvcre=False).alias("risk_weight")
+            lookup_rw(pl.col("category"), is_crr=False, is_hvcre=False).alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.70)  # strong
@@ -922,7 +921,7 @@ class TestExprNamespace:
         """lookup_rw should return correct Basel 3.1 HVCRE weights."""
         df = pl.DataFrame({"category": ["strong", "good", "satisfactory"]})
         result = df.with_columns(
-            pl.col("category").slotting.lookup_rw(is_crr=False, is_hvcre=True).alias("risk_weight")
+            lookup_rw(pl.col("category"), is_crr=False, is_hvcre=True).alias("risk_weight")
         )
 
         assert result["risk_weight"][0] == pytest.approx(0.95)  # strong
@@ -942,9 +941,7 @@ class TestBuildAudit:
         self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """build_audit should include slotting_calculation string."""
-        result = (
-            basic_slotting_exposures.slotting.apply_all(crr_config).slotting.build_audit().collect()
-        )
+        result = basic_slotting_exposures.pipe(apply_all, crr_config).pipe(build_audit).collect()
 
         assert "slotting_calculation" in result.columns
         calc_str = result["slotting_calculation"][0]

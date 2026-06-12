@@ -164,8 +164,8 @@ def lookup_b31_slotting_rw(
     """
     Look up Basel 3.1 slotting risk weight.
 
-    Convenience function for single lookups. For bulk processing,
-    use the Polars namespace (``col("slotting_category").slotting.lookup_rw(...)``).
+    Convenience function for single lookups. For bulk processing, use the
+    vectorised expression (``rwa_calc.engine.slotting.transforms.lookup_rw``).
 
     Args:
         category: Slotting category (strong, good, satisfactory, weak, default)

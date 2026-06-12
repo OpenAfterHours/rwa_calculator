@@ -44,6 +44,13 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import CalculationError
+from rwa_calc.engine.slotting.transforms import (
+    apply_el_rates,
+    apply_slotting_weights,
+    calculate_rwa,
+    compute_el_shortfall_excess,
+    prepare_columns,
+)
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -102,16 +109,16 @@ class SlottingCalculator:
             LazyFrame with slotting RWA, expected_loss, el_shortfall, el_excess
         """
         exposures = (
-            exposures.slotting.prepare_columns(config)
-            .slotting.apply_slotting_weights(config)
-            .slotting.calculate_rwa()
+            exposures.pipe(prepare_columns, config)
+            .pipe(apply_slotting_weights, config)
+            .pipe(calculate_rwa)
         )
 
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
         exposures = self._apply_supporting_factors(exposures, config, errors=errors)
 
-        exposures = exposures.slotting.apply_el_rates(config).slotting.compute_el_shortfall_excess(
-            errors=errors
+        exposures = exposures.pipe(apply_el_rates, config).pipe(
+            compute_el_shortfall_excess, errors=errors
         )
 
         # Standardize output for aggregator

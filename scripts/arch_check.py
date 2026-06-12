@@ -89,7 +89,7 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     # Inverse standard-normal at 0.999 used by IRB formulas (mathematical, not reg)
     "engine/irb/formulas.py": {"G_999"},
     # CRR Art. 153(5) short-maturity threshold — candidate for relocation
-    "engine/slotting/namespace.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
+    "engine/slotting/transforms.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
@@ -155,7 +155,6 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/irb/namespace.py",
     "engine/irb/stats_backend.py",
     "engine/sa/namespace.py",
-    "engine/slotting/namespace.py",
     "engine/aggregator/_crm_reporting.py",
     "engine/aggregator/_el_summary.py",
     "engine/aggregator/_equity_prep.py",

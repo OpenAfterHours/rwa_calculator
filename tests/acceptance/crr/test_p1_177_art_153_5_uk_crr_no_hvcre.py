@@ -19,6 +19,8 @@ from typing import Any
 import polars as pl
 import pytest
 
+from rwa_calc.engine.slotting.transforms import lookup_rw
+
 # Expected post-fix values (CRR Art. 153(5) Table 1, Strong >=2.5yr)
 EXPECTED_EAD = 5_000_000.0
 EXPECTED_RISK_WEIGHT = 0.70
@@ -49,16 +51,14 @@ class TestCRRE9_UKCRRNoHVCRE:
 
         Arrange: Polars LazyFrame with slotting_category='strong', is_hvcre=True,
                  is_short_maturity=False; CRR framework.
-        Act: Apply slotting.lookup_rw(is_crr=True, is_hvcre=col('is_hvcre'),
+        Act: Apply lookup_rw(is_crr=True, is_hvcre=col('is_hvcre'),
              is_short=col('is_short_maturity')).
         Assert: risk_weight == 0.70 (Table 1, not EU Table 2's 0.95).
 
-        This test directly exercises the namespace lookup_rw path that the
+        This test directly exercises the lookup_rw transform path that the
         engine-implementer must fix.
         """
         # Arrange — single-row LazyFrame representing the CRR-E9 fixture
-        import rwa_calc.engine.slotting.namespace  # noqa: F401 — register namespace
-
         lf = pl.LazyFrame(
             {
                 "exposure_reference": [EXPOSURE_REFERENCE],
@@ -71,7 +71,8 @@ class TestCRRE9_UKCRRNoHVCRE:
 
         # Act — apply the CRR slotting risk weight lookup
         result_df = lf.with_columns(
-            risk_weight=pl.col("slotting_category").slotting.lookup_rw(
+            risk_weight=lookup_rw(
+                pl.col("slotting_category"),
                 is_crr=True,
                 is_hvcre=pl.col("is_hvcre"),
                 is_short=pl.col("is_short_maturity"),
@@ -92,12 +93,10 @@ class TestCRRE9_UKCRRNoHVCRE:
         CRR-E9: RWA = EAD x RW = 5,000,000 x 0.70 = 3,500,000 under UK CRR.
 
         Arrange: EAD=5_000_000, is_hvcre=True, strong, >=2.5yr.
-        Act: Apply full slotting weight + RWA calculation via namespace.
+        Act: Apply full slotting weight + RWA calculation via the transforms.
         Assert: rwa == 3_500_000.0 (not the pre-fix 4_750_000.0).
         """
         # Arrange
-        import rwa_calc.engine.slotting.namespace  # noqa: F401 — register namespace
-
         lf = pl.LazyFrame(
             {
                 "exposure_reference": [EXPOSURE_REFERENCE],
@@ -111,7 +110,8 @@ class TestCRRE9_UKCRRNoHVCRE:
         # Act
         result_df = (
             lf.with_columns(
-                risk_weight=pl.col("slotting_category").slotting.lookup_rw(
+                risk_weight=lookup_rw(
+                    pl.col("slotting_category"),
                     is_crr=True,
                     is_hvcre=pl.col("is_hvcre"),
                     is_short=pl.col("is_short_maturity"),
@@ -142,8 +142,6 @@ class TestCRRE9_UKCRRNoHVCRE:
         Assert: result is NOT 0.95.
         """
         # Arrange
-        import rwa_calc.engine.slotting.namespace  # noqa: F401 — register namespace
-
         lf = pl.LazyFrame(
             {
                 "slotting_category": ["strong"],
@@ -154,7 +152,8 @@ class TestCRRE9_UKCRRNoHVCRE:
 
         # Act
         result_df = lf.with_columns(
-            risk_weight=pl.col("slotting_category").slotting.lookup_rw(
+            risk_weight=lookup_rw(
+                pl.col("slotting_category"),
                 is_crr=True,
                 is_hvcre=pl.col("is_hvcre"),
                 is_short=pl.col("is_short_maturity"),

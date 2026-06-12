@@ -29,6 +29,8 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, PermissionMode
+from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.orchestrator import (
     CLASSIFIED,
     CRM_ADJUSTED,
@@ -46,6 +48,8 @@ from rwa_calc.engine.pipeline import (
 from rwa_calc.engine.stages import classify as classify_stage
 from rwa_calc.engine.stages import crm as crm_stage
 from rwa_calc.engine.stages import hierarchy as hierarchy_stage
+from rwa_calc.engine.stages.classify import ExposureClassifier
+from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.context import make_context
 from tests.fixtures.raw_bundle import make_raw_bundle
@@ -681,6 +685,129 @@ class TestPipelineBundleErrorPropagation:
         assert result.output_floor_summary is not None, (
             "P1.131 regression: output_floor_summary lost during bundle reconstruction"
         )
+
+
+class TestStageErrorChannel:
+    """Slice 8 (P2.21): stage data-quality errors reach the result verbatim.
+
+    The lossy PIPELINE_* rewriting of bundle-attached CalculationErrors is
+    deleted: hierarchy / classification / CRM / equity errors keep their
+    original code, severity, category, and reference fields on
+    ``result.errors``. Only stage CRASHES still mint ``PIPELINE_<STAGE>``
+    codes (a crash has no original code) — pinned by
+    ``TestPipelineErrorHandling.test_stage_error_returns_error_result``.
+
+    Each test injects a delegating component that appends a sentinel
+    CalculationError to the real bundle; ``sentinel in result.errors`` uses
+    frozen-dataclass equality, so it pins every field surviving untouched.
+    """
+
+    def test_hierarchy_error_reaches_result_with_original_code(self, mock_raw_data, crr_config):
+        """A hierarchy_errors WARNING survives verbatim — not PIPELINE_HIERARCHY_RESOLVER."""
+        # Arrange
+        sentinel = CalculationError(
+            code="HIE002",
+            message="sentinel: parent reference not found",
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.HIERARCHY,
+            counterparty_reference="CP999",
+        )
+
+        class SentinelResolver:
+            def resolve(self, data, config):
+                result = HierarchyResolver().resolve(data, config)
+                return replace(result, hierarchy_errors=[*result.hierarchy_errors, sentinel])
+
+        pipeline = PipelineOrchestrator(hierarchy_resolver=SentinelResolver())
+
+        # Act
+        result = pipeline.run_with_data(mock_raw_data, crr_config)
+
+        # Assert
+        assert sentinel in result.errors
+        assert not any(e.code == "PIPELINE_HIERARCHY_RESOLVER" for e in result.errors)
+
+    def test_classification_error_reaches_result_with_original_code(
+        self, mock_raw_data, crr_config
+    ):
+        """A classification_errors WARNING survives verbatim — not PIPELINE_CLASSIFIER."""
+        # Arrange
+        sentinel = CalculationError(
+            code="CLS006",
+            message="sentinel: model permission unmatched",
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.CLASSIFICATION,
+            counterparty_reference="CP999",
+        )
+
+        class SentinelClassifier:
+            def classify(self, resolved, config):
+                result = ExposureClassifier().classify(resolved, config)
+                return replace(
+                    result,
+                    classification_errors=[*result.classification_errors, sentinel],
+                )
+
+        pipeline = PipelineOrchestrator(classifier=SentinelClassifier())
+
+        # Act
+        result = pipeline.run_with_data(mock_raw_data, crr_config)
+
+        # Assert
+        assert sentinel in result.errors
+        assert not any(e.code == "PIPELINE_CLASSIFIER" for e in result.errors)
+
+    def test_crm_error_reaches_result_with_original_code(self, mock_raw_data, crr_config):
+        """A crm_errors WARNING survives verbatim — not PIPELINE_CRM_PROCESSOR."""
+        # Arrange
+        sentinel = CalculationError(
+            code="CRM003",
+            message="sentinel: collateral allocation issue",
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.CRM,
+            exposure_reference="LN001",
+        )
+
+        class SentinelCRMProcessor:
+            def get_crm_unified_bundle(self, classified, config):
+                processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+                result = processor.get_crm_unified_bundle(classified, config)
+                return replace(result, crm_errors=[*result.crm_errors, sentinel])
+
+        pipeline = PipelineOrchestrator(crm_processor=SentinelCRMProcessor())
+
+        # Act
+        result = pipeline.run_with_data(mock_raw_data, crr_config)
+
+        # Assert
+        assert sentinel in result.errors
+        assert not any(e.code == "PIPELINE_CRM_PROCESSOR" for e in result.errors)
+
+    def test_equity_error_reaches_result_with_original_code(self, mock_raw_data, crr_config):
+        """EquityResultBundle.errors are CalculationErrors passed verbatim (no fifth-shape
+        mapping) — not PIPELINE_EQUITY_CALCULATOR."""
+        # Arrange
+        sentinel = CalculationError(
+            code="EQ001",
+            message="sentinel: equity calculation warning",
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.CALCULATION,
+            exposure_reference="EQ_X",
+        )
+
+        class SentinelEquityCalculator:
+            def get_equity_result_bundle(self, data, config):
+                result = EquityCalculator().get_equity_result_bundle(data, config)
+                return replace(result, errors=[*result.errors, sentinel])
+
+        pipeline = PipelineOrchestrator(equity_calculator=SentinelEquityCalculator())
+
+        # Act
+        result = pipeline.run_with_data(mock_raw_data, crr_config)
+
+        # Assert
+        assert sentinel in result.errors
+        assert not any(e.code == "PIPELINE_EQUITY_CALCULATOR" for e in result.errors)
 
 
 class TestPipelineUtilities:

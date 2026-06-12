@@ -8,8 +8,9 @@ Key responsibilities:
 - Run ``ExposureClassifier.classify`` over the resolved hierarchy bundle
   (the classifier seals its own exit — ``classifier_exit`` or
   ``classifier_exit_ccr``, brand-selected by its input).
-- Copy classification errors onto the PIPELINE_ERRORS channel (verbatim
-  pre-fold behaviour; the error-channel slice unifies this).
+- Forward classification errors (CLS*, DQ008) to the STAGE_ERRORS channel
+  verbatim — original code/severity/category preserved into
+  ``AggregatedResultBundle.errors`` (error-channel slice, P2.21).
 - Opt-in audit cache: sink the per-exposure classification reason trail.
 
 References:
@@ -26,8 +27,7 @@ from rwa_calc.engine.orchestrator import (
     CLASSIFIED,
     COMPONENTS,
     RESOLVED_HIERARCHY,
-    PipelineError,
-    append_pipeline_error,
+    append_stage_errors,
 )
 from rwa_calc.observability.audit_cache import sink_audit
 
@@ -50,16 +50,9 @@ def run(
 
     result = components.classifier.classify(resolved, run_config)
 
-    for error in result.classification_errors:
-        ctx = append_pipeline_error(
-            ctx,
-            PipelineError(
-                stage="classifier",
-                error_type=getattr(error, "error_type", "unknown"),
-                message=getattr(error, "message", str(error)),
-                context=getattr(error, "context", {}),
-            ),
-        )
+    # Unified error channel: classification errors reach the result
+    # verbatim — original code/severity/category preserved, never PIPELINE_*.
+    ctx = append_stage_errors(ctx, *result.classification_errors)
 
     # Opt-in audit cache: per-exposure classification reason trail.
     if result.classification_audit is not None:

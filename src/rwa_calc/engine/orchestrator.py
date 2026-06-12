@@ -18,10 +18,11 @@ Key responsibilities:
   for today's class-shaped stages. Components are built per run — never
   cached across runs — so the historical stale-``CRMProcessor`` failure
   mode (framework switch on a reused orchestrator) is unrepresentable.
-- The pipeline error channel: ``PipelineError`` records stage crashes;
-  ``convert_pipeline_error`` rewrites them to ``PIPELINE_<STAGE>`` codes
-  (lossy — scheduled for deletion by the Phase 4 error-channel slice,
-  P2.21).
+- The error channels: ``STAGE_ERRORS`` carries stage data-quality
+  ``CalculationError``s verbatim (original code/severity/category/context
+  preserved — the unified channel, P2.21); ``PipelineError`` +
+  ``convert_pipeline_error`` record stage CRASHES only, as
+  ``PIPELINE_<STAGE>`` codes (a crash has no original code).
 
 References:
 - CRR Art. 92: Own funds requirements (the 8% multiplier the pipeline serves)
@@ -71,14 +72,18 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Error types (the lossy PIPELINE_* channel — deleted by the error-channel
-# unification slice, P2.21)
+# Error types (the stage-CRASH channel — PIPELINE_<STAGE> codes)
 # =============================================================================
 
 
 @dataclass
 class PipelineError:
-    """Error encountered during pipeline execution."""
+    """A stage crash (unexpected exception) during pipeline execution.
+
+    Crash-only since the error-channel unification slice (P2.21): stage
+    data-quality ``CalculationError``s travel the STAGE_ERRORS channel
+    verbatim and are never converted into this type.
+    """
 
     stage: str
     error_type: str
@@ -87,11 +92,11 @@ class PipelineError:
 
 
 def convert_pipeline_error(error: PipelineError) -> CalculationError:
-    """Convert PipelineError to the standard error format.
+    """Convert a stage-crash PipelineError to the standard error format.
 
-    Lossy by construction: the original code, severity, category, and
-    context are destroyed. Preserved verbatim from the pre-fold
-    orchestrator; the error-channel unification slice deletes it.
+    Crashes have no original code, so the ``PIPELINE_<STAGE>`` code is
+    minted here. Real data-quality CalculationErrors never pass through
+    this function — they reach the result verbatim via STAGE_ERRORS.
     """
     from rwa_calc.contracts.errors import CalculationError, ErrorCategory, ErrorSeverity
 
@@ -141,11 +146,15 @@ SA_RESULTS: ArtifactKey[pl.DataFrame] = ArtifactKey("sa_results")
 IRB_RESULTS: ArtifactKey[pl.DataFrame] = ArtifactKey("irb_results")
 SLOTTING_RESULTS: ArtifactKey[pl.DataFrame] = ArtifactKey("slotting_results")
 
-# Error channels. Three parallel channels survive from the pre-fold
-# orchestrator and are merged in a fixed order by the facade; the
-# error-channel unification slice collapses them.
+# Error channels, merged in a fixed order by the facade:
+# - STAGE_ERRORS: stage data-quality CalculationErrors, verbatim — original
+#   code/severity/category and all reference fields preserved (the unified
+#   channel, P2.21).
+# - PIPELINE_ERRORS: stage crashes only (converted to PIPELINE_<STAGE>).
+# - BRANCH_ERRORS: calculator-branch warnings, merged by the aggregate
+#   stage ahead of the facade merge (original codes).
 PIPELINE_ERRORS: ArtifactKey[tuple[PipelineError, ...]] = ArtifactKey("pipeline_errors")
-CCR_ERRORS: ArtifactKey[tuple[CalculationError, ...]] = ArtifactKey("ccr_errors")
+STAGE_ERRORS: ArtifactKey[tuple[CalculationError, ...]] = ArtifactKey("stage_errors")
 BRANCH_ERRORS: ArtifactKey[tuple[CalculationError, ...]] = ArtifactKey("branch_errors")
 
 # Set by the fold when a stage raised; value is the failed StageSpec's halt
@@ -211,8 +220,21 @@ def run_stages(
 
 
 def append_pipeline_error(ctx: PipelineContext, error: PipelineError) -> PipelineContext:
-    """Append one PipelineError to the context's PIPELINE_ERRORS channel."""
+    """Append one stage-crash PipelineError to the PIPELINE_ERRORS channel."""
     return ctx.put(PIPELINE_ERRORS, (*ctx.get_or(PIPELINE_ERRORS, ()), error))
+
+
+def append_stage_errors(ctx: PipelineContext, *errors: CalculationError) -> PipelineContext:
+    """Append stage data-quality CalculationErrors to STAGE_ERRORS, verbatim.
+
+    The unified error channel (error-channel slice, P2.21): bundle-attached
+    errors keep their original code, severity, category, and every reference
+    field all the way to ``AggregatedResultBundle.errors`` — they are never
+    rewritten to ``PIPELINE_<STAGE>`` codes.
+    """
+    if not errors:
+        return ctx
+    return ctx.put(STAGE_ERRORS, (*ctx.get_or(STAGE_ERRORS, ()), *errors))
 
 
 # =============================================================================

@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING, Any
 
 from rwa_calc.contracts.context import ArtifactKey, PipelineContext
 from rwa_calc.engine.orchestrator import (
-    CCR_ERRORS,
     COMPONENTS,
     PIPELINE_ERRORS,
     SECURITISATION_RESOLVED,
+    STAGE_ERRORS,
     build_components,
 )
 
@@ -45,14 +45,16 @@ def make_context(
             ``build_components``.
 
     Returns:
-        A context carrying empty error channels, a None securitisation
-        lookup, optional components, and the supplied artifacts.
+        A context carrying empty error channels (PIPELINE_ERRORS for stage
+        crashes, STAGE_ERRORS for verbatim stage data-quality errors), a
+        None securitisation lookup, optional components, and the supplied
+        artifacts.
     """
     ctx = (
         PipelineContext.empty()
         .put(SECURITISATION_RESOLVED, None)
         .put(PIPELINE_ERRORS, ())
-        .put(CCR_ERRORS, ())
+        .put(STAGE_ERRORS, ())
     )
     if config is not None:
         ctx = ctx.put(COMPONENTS, build_components(config, **component_overrides))

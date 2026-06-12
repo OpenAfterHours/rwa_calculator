@@ -9,9 +9,9 @@ Key responsibilities:
   (the processor owns its intra-stage checkpoints — ``crm_post_ead`` and
   ``crm_pre_guarantee_unified`` — and its exit seal, ``crm_exit`` /
   ``crm_exit_ccr``).
-- Copy CRM errors onto the PIPELINE_ERRORS channel using the error's own
-  code as the error_type (verbatim pre-fold behaviour; the error-channel
-  slice unifies this).
+- Forward CRM errors (CRM*) to the STAGE_ERRORS channel verbatim —
+  original code/severity/category preserved into
+  ``AggregatedResultBundle.errors`` (error-channel slice, P2.21).
 
 References:
 - CRR Art. 192-241: Credit risk mitigation
@@ -27,8 +27,7 @@ from rwa_calc.engine.orchestrator import (
     CLASSIFIED,
     COMPONENTS,
     CRM_ADJUSTED,
-    PipelineError,
-    append_pipeline_error,
+    append_stage_errors,
 )
 
 if TYPE_CHECKING:
@@ -50,14 +49,8 @@ def run(
 
     result = components.crm_processor.get_crm_unified_bundle(classified, run_config)
 
-    for error in result.crm_errors:
-        ctx = append_pipeline_error(
-            ctx,
-            PipelineError(
-                stage="crm_processor",
-                error_type=error.code,
-                message=error.message,
-            ),
-        )
+    # Unified error channel: CRM errors reach the result verbatim —
+    # original code/severity/category preserved, never PIPELINE_*.
+    ctx = append_stage_errors(ctx, *result.crm_errors)
 
     return ctx.put(CRM_ADJUSTED, result)

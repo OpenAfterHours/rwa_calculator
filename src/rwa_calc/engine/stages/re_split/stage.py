@@ -12,9 +12,10 @@ Key responsibilities:
 - Materialise + re-brand the stage exit under the splitter's own brand
   (``re_split_exit`` / ``re_split_exit_ccr``) — the calculators' branch
   split forks the plan three ways, so their input must be eager-backed.
-- Copy NEW splitter errors onto the PIPELINE_ERRORS channel, skipping
-  errors already accounted for by the CRM stage (verbatim pre-fold
-  dedup; the error-channel slice unifies this).
+- Forward NEW splitter errors (RE*) to the STAGE_ERRORS channel verbatim,
+  skipping errors already accounted for by the CRM stage (frozen-dataclass
+  equality dedup) — original code/severity/category preserved
+  (error-channel slice, P2.21).
 - Opt-in audit cache: sink the per-parent secured/residual reconciliation.
 
 References:
@@ -37,8 +38,7 @@ from rwa_calc.engine.materialise import materialise_sealed_edge
 from rwa_calc.engine.orchestrator import (
     COMPONENTS,
     CRM_ADJUSTED,
-    PipelineError,
-    append_pipeline_error,
+    append_stage_errors,
 )
 from rwa_calc.observability.audit_cache import sink_audit
 
@@ -80,18 +80,11 @@ def run(
 
     # Splitter accumulates errors into the CRM bucket so existing error
     # reporting continues to capture them; skip duplicates already
-    # accounted for upstream by the CRM stage.
-    for error in result.crm_errors:
-        if error in crm_adjusted.crm_errors:
-            continue
-        ctx = append_pipeline_error(
-            ctx,
-            PipelineError(
-                stage="re_splitter",
-                error_type=error.code,
-                message=error.message,
-            ),
-        )
+    # accounted for upstream by the CRM stage (frozen-dataclass equality).
+    # Unified error channel: NEW splitter errors (RE*) reach the result
+    # verbatim — original code/severity/category preserved, never PIPELINE_*.
+    new_errors = [error for error in result.crm_errors if error not in crm_adjusted.crm_errors]
+    ctx = append_stage_errors(ctx, *new_errors)
 
     # Opt-in audit cache: per-parent secured/residual split reconciliation.
     # Only present when at least one exposure triggered RE splitting.

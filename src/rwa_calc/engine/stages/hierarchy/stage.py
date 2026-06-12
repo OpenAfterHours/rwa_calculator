@@ -12,8 +12,9 @@ Key responsibilities:
 - Materialise + seal the stage exit against the ``hierarchy_exit`` contract
   (the resolver's ``hierarchy_resolved`` pure-plan seal plus the
   securitisation lookup columns attached here).
-- Copy hierarchy errors onto the PIPELINE_ERRORS channel (verbatim
-  pre-fold behaviour; the error-channel slice unifies this).
+- Forward hierarchy errors (HIE*, DQ004/DQ005) to the STAGE_ERRORS channel
+  verbatim — original code/severity/category/context preserved into
+  ``AggregatedResultBundle.errors`` (error-channel slice, P2.21).
 - Opt-in audit cache: sink the dual-track rating-inheritance frame.
 
 References:
@@ -34,8 +35,7 @@ from rwa_calc.engine.orchestrator import (
     RAW_DATA,
     RESOLVED_HIERARCHY,
     SECURITISATION_RESOLVED,
-    PipelineError,
-    append_pipeline_error,
+    append_stage_errors,
 )
 from rwa_calc.engine.securitisation.allocator import attach_securitisation_lookup
 from rwa_calc.observability.audit_cache import sink_audit
@@ -74,16 +74,9 @@ def run(
         securitisation_audit=securitisation_resolved,
     )
 
-    for error in result.hierarchy_errors:
-        ctx = append_pipeline_error(
-            ctx,
-            PipelineError(
-                stage="hierarchy_resolver",
-                error_type=getattr(error, "error_type", "unknown"),
-                message=getattr(error, "message", str(error)),
-                context=getattr(error, "context", {}),
-            ),
-        )
+    # Unified error channel: hierarchy errors reach the result verbatim —
+    # original code/severity/category preserved, never PIPELINE_*.
+    ctx = append_stage_errors(ctx, *result.hierarchy_errors)
 
     # Opt-in audit cache: dual-track best-rating resolution per CP.
     sink_audit(

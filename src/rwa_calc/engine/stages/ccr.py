@@ -11,9 +11,9 @@ Key responsibilities:
   exposures via ``diagonal_relaxed`` concat, so the unified pipeline
   consumes them without CCR-aware special-casing downstream.
 - Apply the Art. 272(4) legal-enforceability gate and the Art. 291(4)-(5)
-  WWR gate before the EAD chain runs; propagate their CCR010/CCR011
-  diagnostics to the CCR_ERRORS channel as raw CalculationErrors (never
-  downgraded to PipelineErrors).
+  WWR gate before the EAD chain runs; forward their CCR001/CCR010/CCR011
+  diagnostics to the STAGE_ERRORS channel verbatim — original
+  code/severity/category preserved (error-channel slice, P2.21).
 - Inherit resolved counterparty rating columns onto each synthetic row so
   the SA institution lookup (CRR Art. 120(1) Table 3) and IRB routing see
   the same ratings as traditional lending rows.
@@ -38,9 +38,9 @@ import polars as pl
 from rwa_calc.contracts.edges import CCR_EXIT_EDGE
 from rwa_calc.engine.materialise import materialise_sealed_edge
 from rwa_calc.engine.orchestrator import (
-    CCR_ERRORS,
     RAW_DATA,
     RESOLVED_HIERARCHY,
+    append_stage_errors,
 )
 
 if TYPE_CHECKING:
@@ -77,9 +77,9 @@ def run(
     # specific-WWR trades break out into their own synthetic netting sets
     # (LGD = 100%).
     raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(data.ccr))
-    # Propagate the gates' CCR010/CCR011 diagnostics to the result bundle
-    # as raw CalculationErrors (not downgraded PipelineErrors).
-    ctx = ctx.put(CCR_ERRORS, tuple(raw_ccr_gated.errors))
+    # Unified error channel: the gates' CCR001/CCR010/CCR011 diagnostics
+    # reach the result verbatim — original code/severity/category preserved.
+    ctx = append_stage_errors(ctx, *raw_ccr_gated.errors)
     ccr_exposure_rows = ccr_rows_to_exposures(
         raw_ccr_gated,
         run_config.ccr,

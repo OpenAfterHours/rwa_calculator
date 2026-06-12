@@ -19,9 +19,11 @@ Key responsibilities:
   config per run.
 - Per-run component construction (injected overrides honoured) and the
   Rulepack-v0 build.
-- Error-channel merge: loader/securitisation bundle errors, raw CCR
-  diagnostics, branch-calculator warnings, and converted PIPELINE_*
-  errors, in the pre-fold order (unified by the error-channel slice).
+- Error-channel merge (unified, P2.21): loader/securitisation bundle
+  errors, then stage data-quality errors (STAGE_ERRORS — original
+  codes/severity/category preserved verbatim), then converted stage-crash
+  PIPELINE_* errors; branch-calculator warnings are already on
+  ``result.errors`` from the aggregate stage.
 
 Usage:
     from rwa_calc.engine.pipeline import create_pipeline
@@ -59,13 +61,13 @@ from rwa_calc.engine.materialise import (
 )
 from rwa_calc.engine.orchestrator import (
     BRANCH_ERRORS,
-    CCR_ERRORS,
     COMPONENTS,
     HALTED,
     PIPELINE_ERRORS,
     RAW_DATA,
     RESULT,
     SECURITISATION_RESOLVED,
+    STAGE_ERRORS,
     PipelineError,
     build_components,
     convert_pipeline_error,
@@ -301,7 +303,7 @@ class PipelineOrchestrator:
                 .put(COMPONENTS, components)
                 .put(SECURITISATION_RESOLVED, None)
                 .put(PIPELINE_ERRORS, initial_errors)
-                .put(CCR_ERRORS, ())
+                .put(STAGE_ERRORS, ())
             )
 
             ctx = run_stages(ctx, rulepack, config, PIPELINE_STAGES)
@@ -324,15 +326,19 @@ class PipelineOrchestrator:
             else:
                 result = ctx.get(RESULT)
 
-            # Add loader validation errors, CCR-stage diagnostics, and
-            # pipeline errors to the result. CCR errors (e.g. WWR gate
-            # CCR010/CCR011) are raw CalculationErrors and join the same
-            # channel as loader CalculationErrors so they reach the result
-            # unchanged.
+            # Unified error channel (P2.21): ``result.errors`` already
+            # carries the branch-calculator warnings (merged by the
+            # aggregate stage, original codes). Append, in order:
+            # loader/securitisation bundle errors (DQ*, SEC*), stage
+            # data-quality errors from STAGE_ERRORS (HIE*, CLS*, CCR*,
+            # CRM*, RE*, equity — CalculationErrors verbatim, original
+            # code/severity/category/context preserved), then converted
+            # stage-CRASH PipelineErrors (PIPELINE_<STAGE> — a crash has
+            # no original code).
             final_data = ctx.get(RAW_DATA)
             loader_errors = list(final_data.errors) if final_data.errors else []
             converted_errors = [convert_pipeline_error(e) for e in pipeline_errors]
-            extra_errors = loader_errors + list(ctx.get(CCR_ERRORS)) + converted_errors
+            extra_errors = loader_errors + list(ctx.get(STAGE_ERRORS)) + converted_errors
             if extra_errors:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)

@@ -266,7 +266,6 @@ def build_components(
     on reuse (the documented two-orchestrator workaround in comparison.py).
     """
     from rwa_calc.engine.aggregator import OutputAggregator
-    from rwa_calc.engine.classifier import ExposureClassifier
     from rwa_calc.engine.crm.processor import CRMProcessor
     from rwa_calc.engine.equity.calculator import EquityCalculator
     from rwa_calc.engine.irb.calculator import IRBCalculator
@@ -274,6 +273,7 @@ def build_components(
     from rwa_calc.engine.sa.calculator import SACalculator
     from rwa_calc.engine.securitisation.allocator import SecuritisationAllocator
     from rwa_calc.engine.slotting.calculator import SlottingCalculator
+    from rwa_calc.engine.stages.classify import ExposureClassifier
     from rwa_calc.engine.stages.hierarchy import HierarchyResolver
 
     return StageComponents(

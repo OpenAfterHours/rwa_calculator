@@ -24,7 +24,10 @@ _ROOT = Path(rwa_calc.__file__).resolve().parent
 # Files that carry the "114(3)/(4)" compound and must switch to "114(4)/(7)".
 _STANDARD_SCOPE: list[tuple[str, Path]] = [
     ("engine/sa/namespace.py", _ROOT / "engine" / "sa" / "namespace.py"),
-    ("engine/classifier.py", _ROOT / "engine" / "classifier.py"),
+    (
+        "engine/stages/classify/approach.py",
+        _ROOT / "engine" / "stages" / "classify" / "approach.py",
+    ),
     ("engine/irb/guarantee.py", _ROOT / "engine" / "irb" / "guarantee.py"),
 ]
 

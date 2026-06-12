@@ -167,7 +167,7 @@ CRR_COVERAGE_NOTES: dict[str, tuple[str, str]] = {
     ),
     "147A": (
         "IRB approach restrictions (Basel 3.1)",
-        "Implemented in `engine/classifier.py::_apply_b31_approach_"
+        "Implemented in `engine/stages/classify/approach.py::_apply_b31_approach_"
         "restrictions`. CRR-side decoration is deferred — Art. 147A is a "
         "Basel 3.1 amendment with no original CRR equivalent, and watchfire's "
         "bundled CRR index does not cover the `A` suffix (see "

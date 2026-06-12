@@ -140,35 +140,6 @@
   "rwa_calc.engine.ccr.wwr::apply_wwr_gate": [
     "CRR Art. 291"
   ],
-  "rwa_calc.engine.classifier::ExposureClassifier._align_irb_exposure_class": [
-    "CRR Art. 147"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._build_has_income_cover_expr": [
-    "PS1/26, paragraph 124E"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._build_is_defaulted_expr": [
-    "CRR Art. 178",
-    "CRR Art. 153"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._build_qualifies_as_retail_expr": [
-    "CRR Art. 123",
-    "PS1/26, paragraph 123A"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._derive_exposure_subclass": [
-    "PS1/26, paragraph 147A.1"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._re_split_per_component_eligibility": [
-    "PS1/26, paragraph 124.4"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier._resolve_model_permissions": [
-    "CRR Art. 143",
-    "CRR Art. 148",
-    "CRR Art. 150"
-  ],
-  "rwa_calc.engine.classifier::ExposureClassifier.classify": [
-    "CRR Art. 112",
-    "CRR Art. 147"
-  ],
   "rwa_calc.engine.crm.collateral::apply_collateral": [
     "PS1/26 Art. 230(2)",
     "PS1/26 Art. 230(1)",
@@ -398,6 +369,35 @@
   ],
   "rwa_calc.engine.slotting.namespace::SlottingLazyFrame.apply_slotting_weights": [
     "CRR Art. 153(5)"
+  ],
+  "rwa_calc.engine.stages.classify.approach::_align_irb_exposure_class": [
+    "CRR Art. 147"
+  ],
+  "rwa_calc.engine.stages.classify.attributes::_build_has_income_cover_expr": [
+    "PS1/26, paragraph 124E"
+  ],
+  "rwa_calc.engine.stages.classify.attributes::_build_is_defaulted_expr": [
+    "CRR Art. 178",
+    "CRR Art. 153"
+  ],
+  "rwa_calc.engine.stages.classify.attributes::_build_qualifies_as_retail_expr": [
+    "CRR Art. 123",
+    "PS1/26, paragraph 123A"
+  ],
+  "rwa_calc.engine.stages.classify.classifier::ExposureClassifier.classify": [
+    "CRR Art. 112",
+    "CRR Art. 147"
+  ],
+  "rwa_calc.engine.stages.classify.permissions::resolve_model_permissions": [
+    "CRR Art. 143",
+    "CRR Art. 148",
+    "CRR Art. 150"
+  ],
+  "rwa_calc.engine.stages.classify.re_split_flags::_re_split_per_component_eligibility": [
+    "PS1/26, paragraph 124.4"
+  ],
+  "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
+    "PS1/26, paragraph 147A.1"
   ],
   "rwa_calc.engine.stages.hierarchy.enrich::apply_short_term_rating_override": [
     "CRR Art. 131",

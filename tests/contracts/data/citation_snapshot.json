@@ -288,11 +288,6 @@
   "rwa_calc.engine.irb.namespace::IRBLazyFrame.calculate_maturity_adjustment": [
     "CRR Art. 162"
   ],
-  "rwa_calc.engine.re_splitter::RealEstateSplitter.split": [
-    "CRR Art. 125",
-    "CRR Art. 126",
-    "PS1/26, paragraph 124F"
-  ],
   "rwa_calc.engine.sa.namespace::SALazyFrame.apply_currency_mismatch_multiplier": [
     "PS1/26, paragraph 123B",
     "PS1/26, paragraph 123B.3"
@@ -393,9 +388,6 @@
     "CRR Art. 148",
     "CRR Art. 150"
   ],
-  "rwa_calc.engine.stages.classify.re_split_flags::_re_split_per_component_eligibility": [
-    "PS1/26, paragraph 124.4"
-  ],
   "rwa_calc.engine.stages.classify.subtypes::derive_exposure_subclass": [
     "PS1/26, paragraph 147A.1"
   ],
@@ -408,6 +400,14 @@
     "CRR Art. 136",
     "CRR Art. 138",
     "CRR Art. 139"
+  ],
+  "rwa_calc.engine.stages.re_split.flagging::_re_split_per_component_eligibility": [
+    "PS1/26, paragraph 124.4"
+  ],
+  "rwa_calc.engine.stages.re_split.splitter::RealEstateSplitter.split": [
+    "CRR Art. 125",
+    "CRR Art. 126",
+    "PS1/26, paragraph 124F"
   ],
   "rwa_calc.engine.supporting_factors::SupportingFactorCalculator.apply_factors": [
     "CRR Art. 501"

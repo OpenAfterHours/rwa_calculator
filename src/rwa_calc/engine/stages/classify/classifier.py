@@ -15,7 +15,8 @@ Key responsibilities:
   ``ClassifiedExposuresBundle`` (pass-through frames + audit trail).
 
 The step implementations live in the sibling sub-modules (``attributes``,
-``subtypes``, ``re_split_flags``, ``permissions``, ``approach``, ``audit``).
+``subtypes``, ``permissions``, ``approach``, ``audit``) plus the co-located
+RE-split candidate flagging in ``stages/re_split/flagging.py`` (Slice 4).
 
 References:
 - CRR Art. 112-134: Exposure classes
@@ -62,14 +63,14 @@ from rwa_calc.engine.stages.classify.permissions import (
     emit_model_permission_diagnostics,
     resolve_model_permissions,
 )
-from rwa_calc.engine.stages.classify.re_split_flags import (
-    flag_property_reclassification_candidates,
-)
 from rwa_calc.engine.stages.classify.subtypes import (
     classify_exposure_subtypes,
     derive_exposure_subclass,
     reclassify_corporate_to_retail,
     sync_irb_exposure_class,
+)
+from rwa_calc.engine.stages.re_split.flagging import (
+    flag_property_reclassification_candidates,
 )
 
 if TYPE_CHECKING:

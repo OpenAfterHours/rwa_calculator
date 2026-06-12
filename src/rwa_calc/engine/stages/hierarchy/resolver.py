@@ -39,7 +39,7 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.edges import HIERARCHY_RESOLVED_EDGE, seal
-from rwa_calc.engine.fx_converter import FXConverter
+from rwa_calc.engine.stages.fx import convert_resolved_frames
 from rwa_calc.engine.stages.hierarchy.enrich import (
     add_collateral_ltv,
     apply_short_term_rating_override,
@@ -124,28 +124,17 @@ class HierarchyResolver:
         # The converter methods also preserve ``original_currency`` when conversion
         # is disabled or no FX rates are supplied, so downstream FX-mismatch checks
         # (Art. 224 H_fx on collateral, guarantees) always have the pre-conversion
-        # currency pair available.
-        fx_converter = FXConverter()
-        exposures = fx_converter.convert_exposures(exposures, data.fx_rates, config)
-        collateral = (
-            fx_converter.convert_collateral(data.collateral, data.fx_rates, config)
-            if data.collateral is not None
-            else None
-        )
-        guarantees = (
-            fx_converter.convert_guarantees(data.guarantees, data.fx_rates, config)
-            if data.guarantees is not None
-            else None
-        )
-        provisions = (
-            fx_converter.convert_provisions(data.provisions, data.fx_rates, config)
-            if data.provisions is not None
-            else None
-        )
-        equity_exposures = (
-            fx_converter.convert_equity_exposures(data.equity_exposures, data.fx_rates, config)
-            if data.equity_exposures is not None
-            else None
+        # currency pair available. The unify -> FX -> enrich ordering is
+        # load-bearing — do not move this call (LTV / property coverage /
+        # lending-group totals below assume reporting-currency amounts).
+        exposures, collateral, guarantees, provisions, equity_exposures = convert_resolved_frames(
+            exposures,
+            data.collateral,
+            data.guarantees,
+            data.provisions,
+            data.equity_exposures,
+            data.fx_rates,
+            config,
         )
 
         exposures = self._add_collateral_ltv(exposures, collateral)

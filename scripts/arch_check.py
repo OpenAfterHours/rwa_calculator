@@ -182,7 +182,6 @@ REFERENCES_REQUIRED_EXEMPT: set[str] = {
     "engine/aggregator/_equity_prep.py",
     _PATH_AGGREGATOR_SCHEMAS,
     _PATH_UTILS,
-    "engine/fx_converter.py",
     "engine/fx_rate_sync.py",
     "engine/materialise.py",
     "engine/loader.py",

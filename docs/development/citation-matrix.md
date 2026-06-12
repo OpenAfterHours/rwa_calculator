@@ -56,9 +56,9 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/engine/sa/namespace.py:1732:1774"
     ```
 
-??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:101"
+??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:102"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:101:176"
+    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:102:177"
     ```
 
 
@@ -175,17 +175,17 @@ Last generated: 2026-06-12.
 
 ### CRR Art. 125 — Exposures fully and completely secured by mortgages on residential property
 
-??? quote "`split` — src/rwa_calc/engine/re_splitter.py:169"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:169"
     ```python
-    --8<-- "src/rwa_calc/engine/re_splitter.py:169:211"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:169:211"
     ```
 
 
 ### CRR Art. 126 — Exposures fully and completely secured by mortgages on commercial immovable property
 
-??? quote "`split` — src/rwa_calc/engine/re_splitter.py:170"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:170"
     ```python
-    --8<-- "src/rwa_calc/engine/re_splitter.py:169:211"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:169:211"
     ```
 
 
@@ -365,9 +365,9 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/engine/stages/classify/approach.py:302:322"
     ```
 
-??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:102"
+??? quote "`classify` — src/rwa_calc/engine/stages/classify/classifier.py:103"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:101:176"
+    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:102:177"
     ```
 
 
@@ -1058,9 +1058,9 @@ Last generated: 2026-06-12.
 
 ### PS1/26, paragraph 124.4 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_re_split_per_component_eligibility` — src/rwa_calc/engine/stages/classify/re_split_flags.py:226"
+??? quote "`_re_split_per_component_eligibility` — src/rwa_calc/engine/stages/re_split/flagging.py:226"
     ```python
-    --8<-- "src/rwa_calc/engine/stages/classify/re_split_flags.py:226:267"
+    --8<-- "src/rwa_calc/engine/stages/re_split/flagging.py:226:267"
     ```
 
 
@@ -1074,9 +1074,9 @@ Last generated: 2026-06-12.
 
 ### PS1/26, paragraph 124F — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`split` — src/rwa_calc/engine/re_splitter.py:171"
+??? quote "`split` — src/rwa_calc/engine/stages/re_split/splitter.py:171"
     ```python
-    --8<-- "src/rwa_calc/engine/re_splitter.py:169:211"
+    --8<-- "src/rwa_calc/engine/stages/re_split/splitter.py:169:211"
     ```
 
 

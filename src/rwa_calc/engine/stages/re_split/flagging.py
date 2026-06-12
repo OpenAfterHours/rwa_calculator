@@ -1,13 +1,13 @@
 """
-Real-estate loan-split candidate flagging for the classification stage.
+Real-estate loan-split candidate flagging (the splitter's decision brain).
 
 Pipeline position:
     HierarchyResolver -> ExposureClassifier (stages/classify) -> CRMProcessor
-    Sub-module of the classify stage package; consumed by ``classifier``
-    after subtype classification. The ``re_split_*`` candidate columns it
-    emits are consumed only by the downstream ``RealEstateSplitter`` stage
-    (``engine/re_splitter.py``) — this module is deliberately self-contained
-    so the Slice-4 re_split co-location decision never has to move it again.
+    Sub-module of the re_split stage package (co-located in Slice 4);
+    invoked by ``stages/classify/classifier.py`` after subtype
+    classification. The ``re_split_*`` candidate columns it emits are
+    consumed only by the downstream ``RealEstateSplitter`` stage
+    (``splitter`` in this package).
 
 Key responsibilities:
 - Flag SA-bound exposures eligible for the RE loan-split

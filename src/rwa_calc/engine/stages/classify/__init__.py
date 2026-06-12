@@ -12,13 +12,14 @@ Layout:
   flags, shared SME size-test expression
 - ``subtypes``       — SME / retail / QRRE subtype classification,
   corporate→retail reclassification, IRB-class sync, B31 subclass
-- ``re_split_flags`` — RE loan-split candidate flagging for the
-  downstream ``RealEstateSplitter``
 - ``permissions``    — model-permission resolution, permission
   expressions, CLS006 diagnostics
 - ``approach``       — approach decision ladder + B31 Art. 147A
   restrictions
 - ``audit``          — audit trail + input / BEEL data-quality warnings
+
+RE loan-split candidate flagging is co-located with the splitter in
+``stages/re_split/flagging.py`` (Slice 4) and invoked from ``classifier``.
 
 ``rwa_calc.engine.classifier`` remains as a thin back-compat shim
 re-exporting ``ExposureClassifier`` from here.

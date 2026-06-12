@@ -647,3 +647,131 @@ CP_LOOKUP_EDGES: dict[str, EdgeContract] = {
     "rating_inheritance": CP_LOOKUP_RATING_INHERITANCE_EDGE,
 }
 """CounterpartyLookup field name -> edge contract."""
+
+
+# ---------------------------------------------------------------------------
+# Edge definitions — classifier exit
+# ---------------------------------------------------------------------------
+
+
+def _classifier_added_columns() -> dict[str, EdgeColumn]:
+    """The columns the classifier adds to the hierarchy frame.
+
+    Seeded from the observed schema (2026-06-12), regime-stable across
+    CRR/B31. The model-permission audit columns are OPTIONAL: they exist
+    only when a model_permissions table was supplied — declared with null
+    defaults so the downstream shape is uniform either way.
+    """
+    return {
+        # cp_* enrichment join from the sealed counterparty lookup
+        "cp_entity_type": EdgeColumn(dtype=pl.String),
+        "cp_country_code": EdgeColumn(dtype=pl.String),
+        "cp_annual_revenue": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 501(2)(b)",
+            null_meaning="null = turnover unknown (assets fallback) — never 0.0",
+        ),
+        "cp_total_assets": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 153(4)"),
+        "cp_default_status": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 178"),
+        "cp_apply_fi_scalar": EdgeColumn(dtype=pl.Boolean),
+        "cp_is_managed_as_retail": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 123A"),
+        "cp_is_natural_person": EdgeColumn(dtype=pl.Boolean),
+        "cp_qualifying_property_count": EdgeColumn(dtype=pl.Int32),
+        "cp_is_social_housing": EdgeColumn(dtype=pl.Boolean),
+        "cp_is_financial_sector_entity": EdgeColumn(
+            dtype=pl.Boolean, citation="PS1/26 Art. 147A"
+        ),
+        "cp_scra_grade": EdgeColumn(dtype=pl.String, citation="PS1/26 Art. 121"),
+        "cp_is_investment_grade": EdgeColumn(dtype=pl.Boolean),
+        "cp_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 305-306"),
+        "cp_is_qccp": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 107"),
+        "cp_borrower_income_currency": EdgeColumn(dtype=pl.String),
+        "cp_sovereign_cqs": EdgeColumn(dtype=pl.Int32),
+        "cp_local_currency": EdgeColumn(dtype=pl.String),
+        "cp_eca_score": EdgeColumn(dtype=pl.Int8, citation="CRR Art. 137"),
+        "cp_institution_cqs": EdgeColumn(dtype=pl.Int8),
+        "cp_internal_model_id": EdgeColumn(dtype=pl.String),
+        # SME determination (CRR Art. 501 / PS1/26 Art. 153(4))
+        "sme_size_metric_gbp": EdgeColumn(dtype=pl.Float64),
+        "sme_size_source": EdgeColumn(dtype=pl.String),
+        "is_sme": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501"),
+        # Specialised lending join (null when no SL table)
+        "sl_type": EdgeColumn(dtype=pl.String),
+        "slotting_category": EdgeColumn(dtype=pl.String, citation="CRR Art. 153(5)"),
+        "is_hvcre": EdgeColumn(dtype=pl.Boolean),
+        # Exposure classification (CRR Art. 112/147; PS1/26 Art. 112/147)
+        "exposure_class_sa": EdgeColumn(dtype=pl.String),
+        "exposure_class_irb": EdgeColumn(dtype=pl.String),
+        "exposure_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "exposure_class_for_sa": EdgeColumn(dtype=pl.String),
+        "exposure_subclass": EdgeColumn(dtype=pl.String),
+        "is_mortgage": EdgeColumn(dtype=pl.Boolean),
+        "is_infrastructure": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 501a"),
+        "is_adc": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 124K"),
+        "qualifies_as_retail": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 123"),
+        "retail_threshold_exclusion_applied": EdgeColumn(dtype=pl.Boolean),
+        "requires_fi_scalar": EdgeColumn(dtype=pl.Boolean),
+        "reclassified_to_retail": EdgeColumn(dtype=pl.Boolean),
+        "has_property_collateral": EdgeColumn(dtype=pl.Boolean),
+        # RE-split precursors consumed by the RealEstateSplitter
+        "re_split_target_class": EdgeColumn(dtype=pl.String),
+        "re_split_mode": EdgeColumn(dtype=pl.String),
+        "re_split_property_type": EdgeColumn(dtype=pl.String),
+        "re_split_property_value": EdgeColumn(dtype=pl.Float64),
+        "re_split_residential_value": EdgeColumn(dtype=pl.Float64),
+        "re_split_commercial_value": EdgeColumn(dtype=pl.Float64),
+        "re_split_residential_eligible": EdgeColumn(dtype=pl.Boolean),
+        "re_split_commercial_eligible": EdgeColumn(dtype=pl.Boolean),
+        "re_split_cre_rental_coverage_met": EdgeColumn(
+            dtype=pl.Boolean, citation="CRR Art. 126(2)(d)"
+        ),
+        "re_split_force_other_re": EdgeColumn(dtype=pl.Boolean),
+        # Approach routing
+        "approach": EdgeColumn(dtype=pl.String, citation="CRR Art. 143"),
+        # Model-permission audit columns — present only when a
+        # model_permissions table was supplied; injected as typed nulls
+        # otherwise so the downstream shape is uniform.
+        "model_airb_permitted": EdgeColumn(dtype=pl.Boolean, required=False),
+        "model_firb_permitted": EdgeColumn(dtype=pl.Boolean, required=False),
+        "model_slotting_permitted": EdgeColumn(dtype=pl.Boolean, required=False),
+        "ppu_reason": EdgeColumn(dtype=pl.String, required=False),
+    }
+
+
+def _classifier_exit_columns() -> dict[str, EdgeColumn]:
+    columns = dict(_hierarchy_resolved_columns())
+    # Securitisation lookup columns: required in the orchestrated pipeline
+    # (the attach is unconditional) but OPTIONAL here so resolver-direct
+    # classifier invocation in tests stays constructible — injected as
+    # typed nulls in that case.
+    columns["securitisation_residual_pct"] = EdgeColumn(
+        dtype=pl.Float64, required=False, citation="CRR Art. 244"
+    )
+    columns["securitisation_pool_allocations"] = EdgeColumn(
+        dtype=pl.List(pl.Struct({"pool_reference": pl.String, "allocation_pct": pl.Float64})),
+        required=False,
+        citation="CRR Art. 244",
+    )
+    columns.update(_classifier_added_columns())
+    return columns
+
+
+CLASSIFIER_EXIT_EDGE: EdgeContract = EdgeContract(
+    name="classifier_exit",
+    columns=_classifier_exit_columns(),
+)
+
+
+CLASSIFIER_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
+    name="classifier_exit_ccr",
+    columns={
+        **_classifier_exit_columns(),
+        # SA-CCR provenance pass-through — the classifier selects this
+        # contract when its input carries the ccr_exit brand.
+        **{
+            col_name: col
+            for col_name, col in CCR_EXIT_EDGE.columns.items()
+            if col_name not in HIERARCHY_EXIT_EDGE.columns
+        },
+    },
+)

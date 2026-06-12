@@ -36,7 +36,11 @@ from rwa_calc.engine.pipeline import (
     create_test_pipeline,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
-from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
+from tests.fixtures.resolved_bundle import (
+    make_classified_bundle,
+    make_counterparty_lookup,
+    make_resolved_bundle,
+)
 
 # =============================================================================
 # Test Fixtures
@@ -347,7 +351,7 @@ def mock_classified_bundle() -> ClassifiedExposuresBundle:
         (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
     )
 
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=all_exposures,
         classification_errors=[],
     )

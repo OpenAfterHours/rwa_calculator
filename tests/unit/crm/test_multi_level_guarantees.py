@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
+from tests.unit.crm._crm_bundles import with_ancestor_facilities
 
 from conftest import _counterparty_lookup
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -74,8 +75,8 @@ class TestFacilityLevelGuarantee:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -142,8 +143,8 @@ class TestFacilityLevelGuarantee:
                 "pd": [0.01, 0.0001],
             }
         )
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -207,8 +208,8 @@ class TestFacilityLevelGuarantee:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -272,8 +273,8 @@ class TestFacilityLevelGuarantee:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -338,8 +339,8 @@ class TestCounterpartyLevelGuarantee:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -410,8 +411,8 @@ class TestMixedLevelGuarantees:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -479,8 +480,8 @@ class TestLoanLevelGuaranteeUnchanged:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -545,8 +546,8 @@ class TestLoanLevelGuaranteeUnchanged:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )
@@ -613,8 +614,8 @@ class TestBasel31FacilityGuarantee:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
-            all_exposures=exposures,
+        classified_bundle = make_classified_bundle(
+            all_exposures=with_ancestor_facilities(exposures),
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
         )

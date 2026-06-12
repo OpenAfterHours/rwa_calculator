@@ -61,6 +61,11 @@ SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
     "ResolvedHierarchyBundle.ciu_holdings": "raw_ciu_holdings",
     "ResolvedHierarchyBundle.specialised_lending": "raw_specialised_lending",
     "ResolvedHierarchyBundle.model_permissions": "raw_model_permissions",
+    # Classifier exit: the unified frame the CRM stage consumes. The CCR
+    # variant carries the SA-CCR provenance pass-through columns.
+    "ClassifiedExposuresBundle.all_exposures": ("classifier_exit", "classifier_exit_ccr"),
+    "ClassifiedExposuresBundle.collateral_links": "raw_collateral_links",
+    "ClassifiedExposuresBundle.ciu_holdings": "raw_ciu_holdings",
 } | {
     f"RawDataBundle.{_field}": f"raw_{_field}"
     for _field in (
@@ -957,10 +962,14 @@ def create_empty_resolved_hierarchy_bundle() -> ResolvedHierarchyBundle:
 
 
 def create_empty_classified_bundle() -> ClassifiedExposuresBundle:
-    """Create an empty ClassifiedExposuresBundle for testing."""
-    import polars as pl
+    """Create an empty ClassifiedExposuresBundle for testing.
 
-    return ClassifiedExposuresBundle(all_exposures=pl.LazyFrame())
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the classifier_exit edge contract.
+    """
+    from rwa_calc.contracts.edges import CLASSIFIER_EXIT_EDGE
+
+    return ClassifiedExposuresBundle(all_exposures=CLASSIFIER_EXIT_EDGE.empty_frame())
 
 
 def create_empty_crm_adjusted_bundle() -> CRMAdjustedBundle:

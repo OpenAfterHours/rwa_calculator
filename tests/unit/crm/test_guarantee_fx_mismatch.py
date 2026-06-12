@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from conftest import _counterparty_lookup
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -43,6 +43,7 @@ def _make_exposure(
             "nominal_amount": [0.0],
             "risk_type": [None],
             "currency": [currency],
+            "original_currency": [currency],
         }
     )
 
@@ -98,7 +99,7 @@ class TestGuaranteeFXMismatchHaircut:
         exposures = _make_exposure(currency="GBP")
         guarantees = _make_guarantee(amount=500_000.0, currency="EUR")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -124,7 +125,7 @@ class TestGuaranteeFXMismatchHaircut:
         exposures = _make_exposure(currency="GBP")
         guarantees = _make_guarantee(amount=500_000.0, currency="GBP")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -148,7 +149,7 @@ class TestGuaranteeFXMismatchHaircut:
         """Exposure with no guarantee → guarantee_fx_haircut = 0."""
         exposures = _make_exposure(currency="GBP")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=None,
             counterparty_lookup=_counterparty_lookup(
@@ -172,7 +173,7 @@ class TestGuaranteeFXMismatchHaircut:
         exposures = _make_exposure(ead=ead, currency="GBP")
         guarantees = _make_guarantee(amount=ead, currency="USD")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -206,7 +207,7 @@ class TestGuaranteeFXMismatchHaircut:
         # Guarantee vastly exceeds exposure — should still fully cover after haircut
         guarantees = _make_guarantee(amount=200_000_000.0, currency="EUR")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -232,7 +233,7 @@ class TestGuaranteeFXMismatchHaircut:
         exposures = _make_exposure(currency="GBP")
         guarantees = _make_guarantee(amount=500_000.0, currency="EUR")
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -266,7 +267,7 @@ class TestGuaranteeFXMismatchHaircut:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -301,7 +302,7 @@ class TestGuaranteeFXMismatchHaircut:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(
@@ -356,7 +357,7 @@ class TestMultiGuarantorFXMismatch:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),

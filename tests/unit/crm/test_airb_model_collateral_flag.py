@@ -33,6 +33,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 from tests.unit.crm._crm_bundles import empty_counterparty_lookup
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
@@ -123,7 +124,7 @@ _COLL_SCHEMA: dict[str, pl.DataType] = {
     "collateral_type": pl.String,
     "market_value": pl.Float64,
     "currency": pl.String,
-    "issuer_cqs": pl.Int64,
+    "issuer_cqs": pl.Int8,  # production loader dtype (COLLATERAL_SCHEMA)
     "issuer_type": pl.String,
     "residual_maturity_years": pl.Float64,
     "is_eligible_financial_collateral": pl.Boolean,
@@ -134,7 +135,7 @@ _COLL_SCHEMA: dict[str, pl.DataType] = {
 
 
 def _make_bundle(exposures: pl.LazyFrame, collateral: pl.LazyFrame) -> ClassifiedExposuresBundle:
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),

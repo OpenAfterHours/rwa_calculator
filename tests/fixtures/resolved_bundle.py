@@ -27,11 +27,17 @@ from typing import Any
 import polars as pl
 
 from rwa_calc.contracts.bundles import (
+    ClassifiedExposuresBundle,
     CounterpartyLookup,
     ResolvedHierarchyBundle,
     create_empty_counterparty_lookup,
 )
-from rwa_calc.contracts.edges import CP_LOOKUP_EDGES, HIERARCHY_EXIT_EDGE, seal_lenient
+from rwa_calc.contracts.edges import (
+    CLASSIFIER_EXIT_EDGE,
+    CP_LOOKUP_EDGES,
+    HIERARCHY_EXIT_EDGE,
+    seal_lenient,
+)
 from tests.fixtures.raw_bundle import seal_raw_table
 
 
@@ -97,3 +103,35 @@ def make_counterparty_lookup(
             sealed, _missing = seal_lenient(lf, edge)
             frames[field_name] = sealed
     return CounterpartyLookup(**frames)
+
+
+def seal_classifier_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
+    """Seal a hand-rolled classified frame against the classifier_exit edge.
+
+    Lenient by design: missing declared columns become typed nulls (the
+    CRM stage's input is always the full contract shape).
+    """
+    lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    sealed, _missing = seal_lenient(lf, CLASSIFIER_EXIT_EDGE)
+    return sealed
+
+
+def make_classified_bundle(
+    all_exposures: pl.LazyFrame | pl.DataFrame,
+    **kwargs: Any,
+) -> ClassifiedExposuresBundle:
+    """Drop-in replacement for direct ``ClassifiedExposuresBundle(...)``.
+
+    Same keyword surface; ``all_exposures`` is sealed against
+    classifier_exit, registered pass-through fields are sealed against
+    their loader edges, everything else passes through untouched.
+    """
+    from tests.fixtures.raw_bundle import seal_raw_table
+
+    for raw_field in ("collateral_links", "ciu_holdings"):
+        frame = kwargs.get(raw_field)
+        if frame is not None:
+            kwargs[raw_field] = seal_raw_table(frame, raw_field)
+    return ClassifiedExposuresBundle(
+        all_exposures=seal_classifier_exit(all_exposures), **kwargs
+    )

@@ -21,7 +21,7 @@ from datetime import date
 
 import polars as pl
 import pytest
-from tests.fixtures.resolved_bundle import make_counterparty_lookup
+from tests.fixtures.resolved_bundle import make_classified_bundle, make_counterparty_lookup
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -96,7 +96,7 @@ def _make_bundle(
                 "rating_type": pl.String,
             },
         )
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         counterparty_lookup=make_counterparty_lookup(

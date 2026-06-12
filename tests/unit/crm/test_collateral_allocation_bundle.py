@@ -19,6 +19,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -64,7 +65,7 @@ def _make_bundle(
     exposures: pl.LazyFrame,
     collateral: pl.LazyFrame | None = None,
 ) -> ClassifiedExposuresBundle:
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         counterparty_lookup=create_empty_counterparty_lookup(),
@@ -206,22 +207,43 @@ class TestCollateralAllocationPopulated:
 
         assert isinstance(bundle.collateral_allocation, pl.LazyFrame)
 
-    def test_allocation_none_without_collateral(
+    def test_allocation_zero_without_collateral(
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """Without collateral, collateral_allocation should remain None."""
+        """Without a collateral table, the allocation carries zero collateral.
+
+        Post classifier-exit seal, production-shaped exposures always carry a
+        (typed-null) ``netting_agreement_reference``, so the CRM netting merge
+        always supplies an (empty) synthetic collateral frame and the
+        allocation projection is built — exactly as in a production run with
+        no collateral. Every allocation value is zero.
+        """
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, None), crr_config)
 
-        assert bundle.collateral_allocation is None
+        assert bundle.collateral_allocation is not None
+        alloc = bundle.collateral_allocation.collect()
+        assert alloc.shape[0] == 1
+        assert alloc["total_collateral_for_lgd"][0] == pytest.approx(0.0)
 
     def test_allocation_none_with_invalid_collateral(
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """Collateral with missing required columns should leave allocation as None."""
+        """Collateral with unusable required columns should leave allocation as None.
+
+        The table carries the required column names (so it survives the CRM
+        netting merge, which silently replaces a name-missing table with the
+        synthetic netting frame) but malformed values — the post-seal CRM001
+        skip path.
+        """
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
-        bad_collateral = pl.LazyFrame({"some_column": [1.0]})
+        bad_collateral = pl.LazyFrame(
+            {
+                "beneficiary_reference": ["E1"],
+                "market_value": ["not-a-number"],  # malformed: text in a numeric column
+            }
+        )
 
         bundle = processor.get_crm_unified_bundle(
             _make_bundle(exposures, bad_collateral), crr_config
@@ -463,15 +485,22 @@ class TestCollateralAllocationUnifiedBundle:
         alloc = bundle.collateral_allocation.collect()
         assert alloc.shape[0] == 1
 
-    def test_unified_allocation_none_without_collateral(
+    def test_unified_allocation_zero_without_collateral(
         self, processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """Unified bundle without collateral should have allocation as None."""
+        """Unified bundle without collateral carries a zero-value allocation.
+
+        See ``test_allocation_zero_without_collateral`` — the sealed exposure
+        frame always carries ``netting_agreement_reference``, so the netting
+        merge always supplies an (empty) synthetic collateral frame.
+        """
         exposures = pl.LazyFrame([_sa_exposure("E1", 1_000_000)])
 
         bundle = processor.get_crm_unified_bundle(_make_bundle(exposures, None), crr_config)
 
-        assert bundle.collateral_allocation is None
+        assert bundle.collateral_allocation is not None
+        alloc = bundle.collateral_allocation.collect()
+        assert alloc["total_collateral_for_lgd"][0] == pytest.approx(0.0)
 
     def test_unified_allocation_values_match(
         self, processor: CRMProcessor, crr_config: CalculationConfig

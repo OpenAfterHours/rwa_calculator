@@ -24,7 +24,8 @@ from datetime import date
 
 import polars as pl
 import pytest
-from tests.unit.crm._crm_bundles import empty_counterparty_lookup
+from tests.fixtures.resolved_bundle import make_classified_bundle
+from tests.unit.crm._crm_bundles import empty_counterparty_lookup, with_ancestor_facilities
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -80,7 +81,7 @@ def _make_bundle(
     collateral: pl.LazyFrame,
 ) -> ClassifiedExposuresBundle:
     """Build a ClassifiedExposuresBundle with collateral only."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),
@@ -112,6 +113,7 @@ def _sa_exposure(
         "seniority": "senior",
         "parent_facility_reference": facility_ref,
         "currency": currency,
+        "original_currency": currency,
         "maturity_date": None,
     }
 
@@ -137,6 +139,7 @@ def _irb_exposure(
         "seniority": "senior",
         "parent_facility_reference": facility_ref,
         "currency": "GBP",
+        "original_currency": "GBP",
         "maturity_date": None,
     }
 
@@ -181,7 +184,7 @@ def _run_crm_with_liq_period(
     P1.186: used by tests that pin a specific liquidation period to isolate
     logic other than the secured-lending period default (which changed to 20).
     """
-    exposures = pl.LazyFrame(exposure_rows)
+    exposures = with_ancestor_facilities(pl.LazyFrame(exposure_rows))
     collateral_schema = {
         "collateral_reference": pl.String,
         "beneficiary_reference": pl.String,
@@ -189,7 +192,7 @@ def _run_crm_with_liq_period(
         "collateral_type": pl.String,
         "market_value": pl.Float64,
         "currency": pl.String,
-        "issuer_cqs": pl.Int64,
+        "issuer_cqs": pl.Int8,  # production loader dtype (COLLATERAL_SCHEMA)
         "issuer_type": pl.String,
         "residual_maturity_years": pl.Float64,
         "is_eligible_financial_collateral": pl.Boolean,
@@ -212,7 +215,7 @@ def _run_crm(
     collateral_rows: list[dict],
 ) -> pl.DataFrame:
     """Run CRM pipeline and return collected result."""
-    exposures = pl.LazyFrame(exposure_rows)
+    exposures = with_ancestor_facilities(pl.LazyFrame(exposure_rows))
     collateral_schema = {
         "collateral_reference": pl.String,
         "beneficiary_reference": pl.String,
@@ -220,7 +223,7 @@ def _run_crm(
         "collateral_type": pl.String,
         "market_value": pl.Float64,
         "currency": pl.String,
-        "issuer_cqs": pl.Int64,
+        "issuer_cqs": pl.Int8,  # production loader dtype (COLLATERAL_SCHEMA)
         "issuer_type": pl.String,
         "residual_maturity_years": pl.Float64,
         "is_eligible_financial_collateral": pl.Boolean,

@@ -42,6 +42,12 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.edges import (
+    CLASSIFIER_EXIT_CCR_EDGE,
+    CLASSIFIER_EXIT_EDGE,
+    seal,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.errors import (
     ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_MODEL_PERMISSION_UNMATCHED,
@@ -186,7 +192,18 @@ class ExposureClassifier:
         classification_errors.extend(self._collect_beel_on_non_defaulted_warnings(classified))
         if has_model_permissions:
             classification_errors.extend(self._emit_model_permission_diagnostics(classified))
-            classified = classified.drop("_model_permission_diagnostic")
+
+        # Producer seal (Phase 3): validates the contract and strips
+        # intra-stage scratch (including _model_permission_diagnostic) —
+        # pure plan ops over the eager-backed frame. CCR runs carry the
+        # SA-CCR provenance columns through, so the contract is selected
+        # by the input frame's brand.
+        exit_edge = (
+            CLASSIFIER_EXIT_CCR_EDGE
+            if sealed_edge_of(data.exposures) == "ccr_exit"
+            else CLASSIFIER_EXIT_EDGE
+        )
+        classified = seal(classified, exit_edge)
 
         return self._build_bundle(classified, data, classification_errors)
 

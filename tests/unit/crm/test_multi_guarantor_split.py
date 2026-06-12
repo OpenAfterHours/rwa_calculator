@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from conftest import _counterparty_lookup
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -87,7 +87,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -157,7 +157,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -218,7 +218,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -278,7 +278,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties),
@@ -327,7 +327,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -375,7 +375,7 @@ class TestMultiGuarantorSplit:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),

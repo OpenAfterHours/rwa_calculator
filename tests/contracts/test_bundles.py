@@ -7,7 +7,11 @@ empty bundles for testing.
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
-from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
+from tests.fixtures.resolved_bundle import (
+    make_classified_bundle,
+    make_counterparty_lookup,
+    make_resolved_bundle,
+)
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
@@ -153,7 +157,7 @@ class TestClassifiedExposuresBundle:
 
     def test_create_with_unified_frame(self):
         """Should create bundle around the single unified frame."""
-        bundle = ClassifiedExposuresBundle(
+        bundle = make_classified_bundle(
             all_exposures=pl.LazyFrame({"ref": ["E1", "E2", "E3"]}),
         )
 

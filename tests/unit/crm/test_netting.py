@@ -29,6 +29,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 from tests.unit.crm._crm_bundles import empty_counterparty_lookup
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
@@ -83,6 +84,7 @@ def _netting_exposure(
     """
     return {
         "exposure_reference": ref,
+        "exposure_type": "loan",
         "counterparty_reference": cp_ref,
         "exposure_class": "corporate",
         "approach": approach,
@@ -94,6 +96,7 @@ def _netting_exposure(
         "seniority": "senior",
         "parent_facility_reference": facility_ref,
         "currency": currency,
+        "original_currency": currency,
         "maturity_date": None,
         "netting_agreement_reference": agreement_ref,
     }
@@ -104,7 +107,7 @@ def _make_bundle(
     collateral: pl.LazyFrame | None = None,
 ) -> ClassifiedExposuresBundle:
     """Build a ClassifiedExposuresBundle with optional collateral."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         counterparty_lookup=empty_counterparty_lookup(),

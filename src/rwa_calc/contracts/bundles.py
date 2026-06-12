@@ -25,12 +25,33 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from rwa_calc.contracts.edges import require_brand
 from rwa_calc.domain.enums import EquityApproach
 
 if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.contracts.errors import CalculationError
+
+# Registry of bundle frame fields that must carry a sealed-edge brand,
+# keyed "BundleClassName.field_name" -> edge name. Grows edge-by-edge as
+# the Phase 3 strangler seals each stage exit; bundle ``__post_init__``
+# validates every registered field of its class. While a field is
+# unregistered, unbranded frames are accepted (the pre-seal status quo).
+SEALED_FRAME_FIELDS: dict[str, str] = {}
+
+
+def _validate_sealed_frames(bundle: object) -> None:
+    """Require the registered brand on every sealed frame field of ``bundle``."""
+    owner = type(bundle).__name__
+    for key, edge_name in SEALED_FRAME_FIELDS.items():
+        bundle_name, _, field_name = key.partition(".")
+        if bundle_name != owner:
+            continue
+        frame = getattr(bundle, field_name, None)
+        if frame is None:
+            continue
+        require_brand(frame, edge_name, owner=owner, field_name=field_name)
 
 
 @dataclass(frozen=True)
@@ -94,6 +115,9 @@ class RawDataBundle:
     securitisation_allocations: pl.LazyFrame | None = None
     ccr: RawCCRBundle | None = None
     errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -161,6 +185,9 @@ class ResolvedHierarchyBundle:
     securitisation_audit: pl.LazyFrame | None = None
     hierarchy_errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 @dataclass(frozen=True)
 class ClassifiedExposuresBundle:
@@ -197,6 +224,9 @@ class ClassifiedExposuresBundle:
     # ResolvedHierarchyBundle. Untouched by the classifier.
     securitisation_audit: pl.LazyFrame | None = None
     classification_errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -240,6 +270,9 @@ class CRMAdjustedBundle:
     # reconciliation views.
     securitisation_audit: pl.LazyFrame | None = None
     crm_errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -463,6 +496,9 @@ class EquityResultBundle:
     approach: EquityApproach = EquityApproach.SA
     errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 @dataclass(frozen=True)
 class ELPortfolioSummary:
@@ -640,6 +676,9 @@ class AggregatedResultBundle:
     securitisation_summary: pl.LazyFrame | None = None
     securitisation_audit: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 # =============================================================================

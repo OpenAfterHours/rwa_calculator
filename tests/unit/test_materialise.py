@@ -16,6 +16,12 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.edges import (
+    EdgeColumn,
+    EdgeContract,
+    EdgeContractViolation,
+    sealed_edge_of,
+)
 from rwa_calc.engine.materialise import (
     SpillError,
     begin_edge_capture,
@@ -23,6 +29,7 @@ from rwa_calc.engine.materialise import (
     end_edge_capture,
     materialise_branches,
     materialise_edge,
+    materialise_sealed_edge,
     plan_node_count,
 )
 
@@ -285,3 +292,62 @@ class TestPlanNodeCount:
             deep = deep.with_columns((pl.col("value") * i).alias(f"d{i}"))
 
         assert plan_node_count(deep) > plan_node_count(shallow)
+
+
+# ---------------------------------------------------------------------------
+# materialise_sealed_edge (migration Phase 3)
+# ---------------------------------------------------------------------------
+
+
+class TestMaterialiseSealedEdge:
+    """Conform + materialise + brand at a sealed stage exit."""
+
+    @staticmethod
+    def _edge() -> EdgeContract:
+        return EdgeContract(
+            name="test_sealed_edge",
+            columns={
+                "id": EdgeColumn(dtype=pl.Int64),
+                "value": EdgeColumn(dtype=pl.Float64),
+                "is_flagged": EdgeColumn(
+                    dtype=pl.Boolean, required=False, default=False, fill_null_default=True
+                ),
+            },
+        )
+
+    def test_returns_branded_eager_backed_frame(self, cpu_config: CalculationConfig) -> None:
+        out = materialise_sealed_edge(_sample_lf(), cpu_config, self._edge())
+
+        assert sealed_edge_of(out) == "test_sealed_edge"
+        assert plan_node_count(out) <= 2
+
+    def test_output_is_contract_shaped(self, cpu_config: CalculationConfig) -> None:
+        lf = _sample_lf().with_columns(pl.lit(1).alias("_scratch"))
+
+        out = materialise_sealed_edge(lf, cpu_config, self._edge()).collect()
+
+        assert out.columns == ["id", "value", "is_flagged"]
+        assert out["is_flagged"].to_list() == [False, False, False]
+
+    def test_violation_raises_before_any_collect(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        with pytest.raises(EdgeContractViolation):
+            materialise_sealed_edge(_sample_lf().drop("value"), cpu_config, self._edge())
+        events = end_edge_capture(token)
+
+        assert events == []
+
+    def test_edge_event_recorded_under_edge_name(self, cpu_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        materialise_sealed_edge(_sample_lf(), cpu_config, self._edge())
+        events = end_edge_capture(token)
+
+        assert [e.label for e in events] == ["test_sealed_edge"]
+
+    def test_spill_mode_output_also_branded(self, spill_config: CalculationConfig) -> None:
+        token = begin_edge_capture()
+        out = materialise_sealed_edge(_sample_lf(), spill_config, self._edge())
+        events = end_edge_capture(token)
+
+        assert sealed_edge_of(out) == "test_sealed_edge"
+        assert events[0].spilled is True

@@ -53,8 +53,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.edges import brand
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.edges import EdgeContract
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +215,26 @@ def materialise_edge(
         "spill" if spilled else "in-memory",
     )
     return result
+
+
+def materialise_sealed_edge(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    edge: EdgeContract,
+) -> pl.LazyFrame:
+    """Conform ``lf`` to its edge contract, materialise, and brand.
+
+    The Phase 3 producer-seal variant of :func:`materialise_edge`: the plan
+    is conformed BEFORE the collect — contract violations raise without
+    executing the plan, and the materialised frame is already
+    contract-shaped (producer-owned defaults injected, undeclared scratch
+    stripped, canonical column order). The eager-backed wrap is branded
+    with the edge name so bundle ``__post_init__`` validation
+    (``contracts.bundles.SEALED_FRAME_FIELDS``) can verify provenance.
+    """
+    conformed = edge.conform(lf)
+    out = materialise_edge(conformed, config, edge.name)
+    return brand(out, edge.name)
 
 
 def materialise_branches(

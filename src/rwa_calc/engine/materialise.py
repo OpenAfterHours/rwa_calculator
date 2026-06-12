@@ -221,6 +221,7 @@ def materialise_sealed_edge(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     edge: EdgeContract,
+    label: str | None = None,
 ) -> pl.LazyFrame:
     """Conform ``lf`` to its edge contract, materialise, and brand.
 
@@ -231,9 +232,14 @@ def materialise_sealed_edge(
     stripped, canonical column order). The eager-backed wrap is branded
     with the edge name so bundle ``__post_init__`` validation
     (``contracts.bundles.SEALED_FRAME_FIELDS``) can verify provenance.
+
+    ``label`` overrides the EdgeEvent label when one contract serves more
+    than one edge (e.g. the CCR stage re-seals against the hierarchy_exit
+    contract under the ``ccr_exit`` event label) — the BRAND always carries
+    the contract name.
     """
     conformed = edge.conform(lf)
-    out = materialise_edge(conformed, config, edge.name)
+    out = materialise_edge(conformed, config, label or edge.name)
     return brand(out, edge.name)
 
 

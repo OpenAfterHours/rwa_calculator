@@ -46,7 +46,6 @@ from rwa_calc.contracts.errors import (
     ERROR_FSE_COLUMN_MISSING,
     ERROR_LARGE_CORP_REVENUE_NULL,
     ERROR_MODEL_PERMISSION_UNMATCHED,
-    ERROR_QRRE_COLUMNS_MISSING,
     ERROR_RETAIL_POOL_MGMT_MISSING,
     CalculationError,
     ErrorCategory,
@@ -156,7 +155,7 @@ class ExposureClassifier:
         # schema-conditional expressions without re-scanning the LazyFrame.
         schema_names = set(exposures.collect_schema().names())
 
-        classification_errors = self._collect_input_warnings(data, schema_names, config)
+        classification_errors = self._collect_input_warnings(data, config)
 
         classified = self._derive_independent_flags(exposures, config, schema_names)
         classified = self._classify_exposure_subtypes(classified, config, schema_names)
@@ -523,18 +522,13 @@ class ExposureClassifier:
     def _collect_input_warnings(
         self,
         data: ResolvedHierarchyBundle,
-        schema_names: set[str],
         config: CalculationConfig,
     ) -> list[CalculationError]:
         """Collect non-blocking warnings for missing or null input data.
 
-        Three categories of warning fire here, all surfaced as
+        Two categories of warning fire here, all surfaced as
         ``CalculationError`` entries with severity WARNING:
 
-        - **QRRE prerequisites** (CRR Art. 147(5)): when ``is_revolving`` or
-          ``facility_limit`` are absent from the exposure schema, qualifying
-          revolving retail silently routes to RETAIL_OTHER instead of
-          RETAIL_QRRE. Regime-agnostic.
         - **B3.1 optional CP columns** (Art. 123A(1)(b)(iii) and 147A(1)(e)):
           when ``is_managed_as_retail`` or ``is_financial_sector_entity`` is
           missing from the *original* counterparty schema (not the
@@ -546,31 +540,14 @@ class ExposureClassifier:
           the engine treats the row as large-corp by default (see
           ``_is_large_corp`` in ``_assign_approach``) and emits CLS008.
 
-        The QRRE check reads the post-join exposures schema; the CP-side
-        checks read the original counterparty schema. The null-revenue
-        check materialises a count and is the only branch that triggers a
-        ``.collect()``.
+        Both checks read the original counterparty schema — the exposures
+        frame is sealed against the ``hierarchy_exit`` edge contract, so
+        exposure-side columns (e.g. the QRRE drivers ``is_revolving`` /
+        ``facility_limit``) are always present and need no absence check.
+        The null-revenue check materialises a count and is the only branch
+        that triggers a ``.collect()``.
         """
         errors: list[CalculationError] = []
-
-        # QRRE prerequisites — exposures-schema check, regime-agnostic.
-        # Missing columns cause all revolving retail to silently become
-        # RETAIL_OTHER.
-        missing_qrre_cols = [c for c in ("is_revolving", "facility_limit") if c not in schema_names]
-        if missing_qrre_cols:
-            errors.append(
-                classification_warning(
-                    code=ERROR_QRRE_COLUMNS_MISSING,
-                    message=(
-                        f"QRRE classification disabled — column(s) "
-                        f"{', '.join(missing_qrre_cols)} missing from exposure data. "
-                        f"All qualifying revolving retail exposures will be classified "
-                        f"as RETAIL_OTHER instead of RETAIL_QRRE, which may affect "
-                        f"risk weights and IRB parameters."
-                    ),
-                    regulatory_reference="CRR Art. 147(5)",
-                )
-            )
 
         # B3.1 optional CP columns — fire when missing under B3.1 only.
         # Reads the ORIGINAL CP schema, not schema_names (which always has

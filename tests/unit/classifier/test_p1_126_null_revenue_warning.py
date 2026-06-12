@@ -32,6 +32,7 @@ from tests.fixtures.p1_126.p1_126 import (
     make_scenario_b_bundle,
     make_scenario_c_bundle,
 )
+from tests.fixtures.resolved_bundle import seal_hierarchy_exit
 
 # =============================================================================
 # Helpers
@@ -53,7 +54,7 @@ def _add_internal_pd_to_bundle(
     Arrange phase before passing to the Act step.
     """
     enriched_exposures = bundle.exposures.with_columns(pl.lit(internal_pd).alias("internal_pd"))
-    return replace(bundle, exposures=enriched_exposures)
+    return replace(bundle, exposures=seal_hierarchy_exit(enriched_exposures))
 
 
 # =============================================================================

@@ -42,6 +42,7 @@ from rwa_calc.domain.enums import (
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.generator import COREPGenerator
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 # =============================================================================
 # Helpers (same pattern as test_b31_approach_restrictions.py)
@@ -149,7 +150,7 @@ def _make_bundle(
         exposures = exposures.with_columns(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,

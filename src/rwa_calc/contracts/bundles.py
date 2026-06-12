@@ -42,7 +42,13 @@ if TYPE_CHECKING:
 # RawDataBundle: all 18 frame fields sealed at the loader edge — frames
 # must come from a loader (ParquetLoader/CSVLoader) or a contract-derived
 # builder (tests/fixtures/raw_bundle.make_raw_bundle / seal_raw_table).
-SEALED_FRAME_FIELDS: dict[str, str] = {
+# ResolvedHierarchyBundle.exposures: sealed by the resolver
+# (hierarchy_resolved, pure-plan) and re-sealed by the orchestrator after
+# the securitisation attach (hierarchy_exit — also the brand the CCR stage
+# re-applies); either brand is legitimate on the field.
+SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
+    "ResolvedHierarchyBundle.exposures": ("hierarchy_resolved", "hierarchy_exit", "ccr_exit"),
+} | {
     f"RawDataBundle.{_field}": f"raw_{_field}"
     for _field in (
         "facilities",
@@ -931,11 +937,17 @@ def create_empty_counterparty_lookup() -> CounterpartyLookup:
 
 
 def create_empty_resolved_hierarchy_bundle() -> ResolvedHierarchyBundle:
-    """Create an empty ResolvedHierarchyBundle for testing."""
+    """Create an empty ResolvedHierarchyBundle for testing.
+
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the hierarchy_exit edge contract.
+    """
     import polars as pl
 
+    from rwa_calc.contracts.edges import HIERARCHY_EXIT_EDGE
+
     return ResolvedHierarchyBundle(
-        exposures=pl.LazyFrame(),
+        exposures=HIERARCHY_EXIT_EDGE.empty_frame(),
         counterparty_lookup=create_empty_counterparty_lookup(),
         lending_group_totals=pl.LazyFrame(),
         collateral=None,

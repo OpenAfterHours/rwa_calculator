@@ -36,6 +36,7 @@ from datetime import date
 import polars as pl
 
 from rwa_calc.contracts.bundles import CounterpartyLookup, ResolvedHierarchyBundle
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -242,7 +243,7 @@ def _make_bundle(
     counterparties: pl.LazyFrame,
     counterparty_reference: str,
 ) -> ResolvedHierarchyBundle:
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=_make_exposure(counterparty_reference),
         counterparty_lookup=CounterpartyLookup(
             counterparties=_enrich_counterparty(counterparties),

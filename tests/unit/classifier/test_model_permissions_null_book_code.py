@@ -38,6 +38,7 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 if TYPE_CHECKING:
     pass
@@ -90,7 +91,7 @@ def _make_resolved_bundle(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,

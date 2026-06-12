@@ -26,6 +26,7 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 if TYPE_CHECKING:
     pass
@@ -358,7 +359,7 @@ def create_resolved_bundle(
                 ]
             )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,
@@ -733,6 +734,10 @@ class TestSpecialisedLendingSMEClassification:
                 "interest": [0.0],
                 "lgd": [0.45],
                 "seniority": ["senior"],
+                # Loader-edge Boolean default (LOAN_SCHEMA fills null->False);
+                # the lenient test seal would inject a typed null instead,
+                # which voids the Art. 501 SME-factor eligibility predicate.
+                "is_buy_to_let": [False],
                 "exposure_has_parent": [False],
                 "root_facility_reference": [None],
                 "facility_hierarchy_depth": [1],

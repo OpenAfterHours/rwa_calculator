@@ -54,7 +54,7 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
-from rwa_calc.contracts.edges import RAW_TABLE_EDGES
+from rwa_calc.contracts.edges import HIERARCHY_RESOLVED_EDGE, RAW_TABLE_EDGES, seal
 from rwa_calc.contracts.errors import (
     ERROR_DUPLICATE_KEY,
     ERROR_HIERARCHY_DEPTH,
@@ -207,7 +207,11 @@ class HierarchyResolver:
         )
 
         return ResolvedHierarchyBundle(
-            exposures=exposures,
+            # Producer seal (Phase 3): pure plan-level conform + brand — no
+            # materialisation here. The orchestrator re-seals against the
+            # full hierarchy_exit contract after attaching the
+            # securitisation lookup, where the stage-exit collect happens.
+            exposures=seal(exposures, HIERARCHY_RESOLVED_EDGE),
             counterparty_lookup=counterparty_lookup,
             collateral=collateral,
             collateral_links=data.collateral_links,

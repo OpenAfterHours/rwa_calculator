@@ -41,6 +41,7 @@ from rwa_calc.domain.enums import (
     ExposureClass,
 )
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 # =============================================================================
 # Fixtures
@@ -159,7 +160,7 @@ def _make_bundle(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         lending_group_totals=pl.LazyFrame(
             schema={

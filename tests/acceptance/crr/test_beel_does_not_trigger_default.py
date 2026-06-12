@@ -31,6 +31,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -141,7 +142,7 @@ def _build_bundle(
             pl.lit(None).cast(pl.Int8).alias("cqs"),
         ]
     )
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,

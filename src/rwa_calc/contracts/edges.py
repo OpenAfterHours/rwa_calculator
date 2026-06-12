@@ -260,24 +260,34 @@ def sealed_edge_of(lf: pl.LazyFrame) -> str | None:
     return getattr(lf, _BRAND_ATTR, None)
 
 
-def require_brand(lf: pl.LazyFrame, edge_name: str, *, owner: str, field_name: str) -> None:
-    """Raise unless ``lf`` carries exactly the ``edge_name`` brand.
+def require_brand(
+    lf: pl.LazyFrame,
+    edge_name: str | tuple[str, ...],
+    *,
+    owner: str,
+    field_name: str,
+) -> None:
+    """Raise unless ``lf`` carries one of the accepted edge brands.
 
     Called from bundle ``__post_init__`` for fields registered in
-    ``contracts.bundles.SEALED_FRAME_FIELDS``.
+    ``contracts.bundles.SEALED_FRAME_FIELDS``. A tuple means the field
+    legitimately carries more than one producer's seal (e.g. a frame that
+    is replaced by a later optional stage sealing the same shape).
     """
+    accepted = (edge_name,) if isinstance(edge_name, str) else edge_name
     found = sealed_edge_of(lf)
-    if found == edge_name:
+    if found in accepted:
         return
+    wanted = " or ".join(f"'{name}'" for name in accepted)
     if found is None:
         raise EdgeContractViolation(
-            f"{owner}.{field_name} requires a frame sealed for edge '{edge_name}', "
+            f"{owner}.{field_name} requires a frame sealed for edge {wanted}, "
             "got an unsealed frame — construct it via the stage producer or a "
             "contract-derived test builder (transforming a sealed frame removes "
             "its brand)"
         )
     raise EdgeContractViolation(
-        f"{owner}.{field_name} requires a frame sealed for edge '{edge_name}', "
+        f"{owner}.{field_name} requires a frame sealed for edge {wanted}, "
         f"got a frame sealed for '{found}'"
     )
 
@@ -348,11 +358,194 @@ def _raw_table_edges() -> dict[str, EdgeContract]:
         "securitisation_allocations": schemas.SECURITISATION_ALLOCATION_SCHEMA,
     }
     return {
-        field_name: EdgeContract(
-            name=f"raw_{field_name}", columns=edge_columns_from_specs(schema)
-        )
+        field_name: EdgeContract(name=f"raw_{field_name}", columns=edge_columns_from_specs(schema))
         for field_name, schema in table_schemas.items()
     }
 
 
 RAW_TABLE_EDGES: dict[str, EdgeContract] = _raw_table_edges()
+
+
+# ---------------------------------------------------------------------------
+# Edge definitions — hierarchy exit
+# ---------------------------------------------------------------------------
+
+
+def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
+    """The 78 columns HierarchyResolver always emits on the unified frame.
+
+    Seeded from the observed schema (scripts/dump_hierarchy_exit_schema.py,
+    2026-06-12): shape-stable across minimal/rich inputs and CRR/B31 after
+    the loader-edge guard deletion — every column is required because the
+    producer emits all of them unconditionally (absent inputs surface as
+    typed nulls / neutral values, never as absent columns).
+    """
+    return {
+        "exposure_reference": EdgeColumn(dtype=pl.String),
+        "exposure_type": EdgeColumn(dtype=pl.String),
+        "product_type": EdgeColumn(dtype=pl.String),
+        "book_code": EdgeColumn(dtype=pl.String),
+        "counterparty_reference": EdgeColumn(dtype=pl.String),
+        "value_date": EdgeColumn(dtype=pl.Date),
+        "maturity_date": EdgeColumn(dtype=pl.Date),
+        "currency": EdgeColumn(dtype=pl.String),
+        "drawn_amount": EdgeColumn(dtype=pl.Float64),
+        "interest": EdgeColumn(dtype=pl.Float64),
+        "undrawn_amount": EdgeColumn(dtype=pl.Float64),
+        "nominal_amount": EdgeColumn(dtype=pl.Float64),
+        "lgd": EdgeColumn(
+            dtype=pl.Float64,
+            null_meaning="null = no modelled LGD supplied (FIRB/SA rows)",
+        ),
+        "lgd_unsecured": EdgeColumn(dtype=pl.Float64),
+        "has_sufficient_collateral_data": EdgeColumn(
+            dtype=pl.Boolean,
+            citation="CRR Art. 169A/169B",
+            null_meaning="loader fills null->False; False = Foundation fallback",
+        ),
+        "beel": EdgeColumn(
+            dtype=pl.Float64,
+            citation="PS1/26 Art. 181(1)(h)(ii)",
+        ),
+        "seniority": EdgeColumn(dtype=pl.String),
+        "risk_type": EdgeColumn(dtype=pl.String),
+        "underlying_risk_type": EdgeColumn(dtype=pl.String),
+        "ccf_modelled": EdgeColumn(dtype=pl.Float64),
+        "ead_modelled": EdgeColumn(dtype=pl.Float64),
+        "is_short_term_trade_lc": EdgeColumn(dtype=pl.Boolean),
+        "is_obs_commitment": EdgeColumn(dtype=pl.Boolean),
+        "is_uk_residential_mortgage_commitment": EdgeColumn(dtype=pl.Boolean),
+        "is_purchased_receivable_commitment": EdgeColumn(dtype=pl.Boolean),
+        "is_payroll_loan": EdgeColumn(dtype=pl.Boolean),
+        "is_buy_to_let": EdgeColumn(dtype=pl.Boolean),
+        "is_under_construction": EdgeColumn(dtype=pl.Boolean),
+        "has_one_day_maturity_floor": EdgeColumn(dtype=pl.Boolean),
+        "is_sft": EdgeColumn(dtype=pl.Boolean),
+        "effective_maturity": EdgeColumn(dtype=pl.Float64),
+        "netting_agreement_reference": EdgeColumn(dtype=pl.String),
+        "facility_termination_date": EdgeColumn(dtype=pl.Date),
+        "ltv": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 124-126 / PS1/26 Art. 124C-124K",
+            null_meaning="null = no loan-level LTV; never fabricated",
+        ),
+        "property_type": EdgeColumn(dtype=pl.String),
+        "has_income_cover": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 126(2)"),
+        "is_defaulted": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 178"),
+        "purchased_receivables_subtype": EdgeColumn(dtype=pl.String),
+        "exposure_collateral_type": EdgeColumn(dtype=pl.String),
+        "exposure_security_cqs": EdgeColumn(dtype=pl.Int8),
+        "exposure_security_residual_maturity_years": EdgeColumn(dtype=pl.Float64),
+        "ava_amount": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+        "other_own_funds_reductions": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 159"),
+        "original_counterparty_reference": EdgeColumn(dtype=pl.String),
+        "mof_risk_type_source": EdgeColumn(dtype=pl.String),
+        "is_revolving": EdgeColumn(dtype=pl.Boolean),
+        "is_qrre_transactor": EdgeColumn(dtype=pl.Boolean),
+        "facility_limit": EdgeColumn(dtype=pl.Float64),
+        "source_facility_reference": EdgeColumn(dtype=pl.String),
+        "mapped_parent_facility": EdgeColumn(dtype=pl.String),
+        "parent_facility_reference": EdgeColumn(dtype=pl.String),
+        "exposure_has_parent": EdgeColumn(dtype=pl.Boolean),
+        "ancestor_facilities": EdgeColumn(dtype=pl.List(pl.String)),
+        "root_facility_reference": EdgeColumn(dtype=pl.String),
+        "facility_hierarchy_depth": EdgeColumn(dtype=pl.Int8),
+        "cqs": EdgeColumn(
+            dtype=pl.Int8,
+            null_meaning="external-rating concept only; null = unrated (never inferred)",
+        ),
+        "pd": EdgeColumn(dtype=pl.Float64),
+        "internal_pd": EdgeColumn(
+            dtype=pl.Float64,
+            null_meaning="null = no internal rating; gates ALL IRB branches",
+        ),
+        "external_cqs": EdgeColumn(dtype=pl.Int8),
+        "external_rating_is_issue_specific": EdgeColumn(
+            dtype=pl.Boolean, citation="PS1/26 Art. 139(2B)"
+        ),
+        "model_id": EdgeColumn(dtype=pl.String),
+        "has_short_term_ecai": EdgeColumn(dtype=pl.Boolean),
+        "original_currency": EdgeColumn(dtype=pl.String),
+        "original_amount": EdgeColumn(dtype=pl.Float64),
+        "fx_rate_applied": EdgeColumn(dtype=pl.Float64),
+        "is_qualifying_re": EdgeColumn(
+            dtype=pl.Boolean,
+            null_meaning="hierarchy fills null->True (unreported RE qualifies unless flagged)",
+        ),
+        "prior_charge_ltv": EdgeColumn(dtype=pl.Float64),
+        "total_exposure_amount": EdgeColumn(dtype=pl.Float64),
+        "residential_collateral_value": EdgeColumn(dtype=pl.Float64),
+        "property_collateral_value": EdgeColumn(dtype=pl.Float64),
+        "residential_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
+        "commercial_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
+        "has_facility_property_collateral": EdgeColumn(dtype=pl.Boolean),
+        "re_collateral_non_qualifying": EdgeColumn(dtype=pl.Boolean),
+        "exposure_for_retail_threshold": EdgeColumn(dtype=pl.Float64),
+        "lending_group_reference": EdgeColumn(
+            dtype=pl.String,
+            citation="CRR Art. 4(1)(39)",
+            null_meaning="null = group-of-one (no lending-group mapping)",
+        ),
+        "lending_group_total_exposure": EdgeColumn(dtype=pl.Float64),
+        "lending_group_adjusted_exposure": EdgeColumn(dtype=pl.Float64),
+    }
+
+
+HIERARCHY_RESOLVED_EDGE: EdgeContract = EdgeContract(
+    name="hierarchy_resolved",
+    columns=_hierarchy_resolved_columns(),
+)
+
+
+HIERARCHY_EXIT_EDGE: EdgeContract = EdgeContract(
+    name="hierarchy_exit",
+    columns={
+        **_hierarchy_resolved_columns(),
+        # attach_securitisation_lookup runs unconditionally with canonical
+        # defaults (1.0 / empty list) when no allocations are supplied, so
+        # both columns are REQUIRED at this edge (CRR Art. 244-246).
+        "securitisation_residual_pct": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 244"),
+        "securitisation_pool_allocations": EdgeColumn(
+            dtype=pl.List(pl.Struct({"pool_reference": pl.String, "allocation_pct": pl.Float64})),
+            citation="CRR Art. 244",
+        ),
+    },
+)
+
+
+CCR_EXIT_EDGE: EdgeContract = EdgeContract(
+    name="ccr_exit",
+    columns={
+        **HIERARCHY_EXIT_EDGE.columns,
+        # CCR synthetic-row provenance (CRR Art. 274-280 SA-CCR): present on
+        # the post-concat frame for every run with a derivatives book —
+        # diagonal_relaxed fills them as nulls on traditional lending rows.
+        "source_netting_set_id": EdgeColumn(dtype=pl.String),
+        "ccr_method": EdgeColumn(dtype=pl.String),
+        "cp_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean),
+        "wwr_lgd_override": EdgeColumn(dtype=pl.Float64),
+        "addon_aggregate": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 278"),
+        "addon_by_asset_class": EdgeColumn(
+            dtype=pl.Struct(
+                {
+                    "interest_rate": pl.Float64,
+                    "fx": pl.Float64,
+                    "credit": pl.Float64,
+                    "equity": pl.Float64,
+                    "commodity": pl.Float64,
+                }
+            ),
+            citation="CRR Art. 277",
+        ),
+        "pfe_multiplier": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 278"),
+        "pfe_addon": EdgeColumn(dtype=pl.Float64),
+        "rc_unmargined": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 275"),
+        "rc_margined": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 275"),
+        "rc": EdgeColumn(dtype=pl.Float64),
+        "alpha_applied": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 274(2)"),
+        "transitional_add_on": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 274(2A)"),
+        "ead_ccr": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 274(3)"),
+    },
+)
+"""The CCR stage exit: the hierarchy_exit shape plus the SA-CCR synthetic-row
+provenance columns. Only produced when the run has a derivatives book."""

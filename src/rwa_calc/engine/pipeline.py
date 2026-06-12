@@ -51,6 +51,7 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.edges import CCR_EXIT_EDGE, HIERARCHY_EXIT_EDGE
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     CRMProcessorProtocol,
@@ -72,6 +73,7 @@ from rwa_calc.engine.materialise import (
     end_edge_capture,
     materialise_branches,
     materialise_edge,
+    materialise_sealed_edge,
 )
 from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
@@ -522,8 +524,11 @@ class PipelineOrchestrator:
             result = replace(
                 result,
                 # Stage-exit edge: hierarchy output crosses to the CCR stage /
-                # Classifier as an eager-backed frame (migration Phase 1).
-                exposures=materialise_edge(new_exposures, config, "hierarchy_exit"),
+                # Classifier as an eager-backed frame (migration Phase 1),
+                # sealed against the full hierarchy_exit contract — the
+                # resolver's hierarchy_resolved seal plus the securitisation
+                # lookup columns attached above (migration Phase 3).
+                exposures=materialise_sealed_edge(new_exposures, config, HIERARCHY_EXIT_EDGE),
                 securitisation_audit=self._securitisation_resolved,
             )
             # Accumulate hierarchy errors
@@ -628,10 +633,12 @@ class PipelineOrchestrator:
                     [resolved.exposures, ccr_exposure_rows],
                     how="diagonal_relaxed",
                 )
-                # Stage-exit edge (only when CCR rows were appended).
+                # Stage-exit edge (only when CCR rows were appended): the
+                # hierarchy_exit shape plus the SA-CCR provenance columns —
+                # synthetic rows may not otherwise reshape the frame.
                 return replace(
                     resolved,
-                    exposures=materialise_edge(new_exposures, config, "ccr_exit"),
+                    exposures=materialise_sealed_edge(new_exposures, config, CCR_EXIT_EDGE),
                 )
         except Exception as e:
             self._errors.append(

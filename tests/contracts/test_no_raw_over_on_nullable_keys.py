@@ -51,7 +51,7 @@ LINE_ALLOWLIST: dict[str, frozenset[int]] = {
     # `.over("counterparty_reference")` calls operate on a frame with no
     # null-keyed rows. See the comment block above the per_agency_latest
     # filter in engine/hierarchy.py.
-    "src/rwa_calc/engine/hierarchy.py": frozenset({433, 434}),
+    "src/rwa_calc/engine/hierarchy.py": frozenset({437, 438}),
 }
 
 

@@ -30,6 +30,7 @@ from tests.fixtures.p1_125.p1_125 import (
     make_counterparty_with_fse_column,
     make_counterparty_without_fse_column,
 )
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 # =============================================================================
 # Fixtures
@@ -88,7 +89,7 @@ def _make_bundle(counterparties: pl.LazyFrame) -> ResolvedHierarchyBundle:
         }
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=make_corporate_exposure(),
         counterparty_lookup=CounterpartyLookup(
             counterparties=enriched_cp,

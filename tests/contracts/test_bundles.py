@@ -7,6 +7,7 @@ empty bundles for testing.
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
@@ -129,7 +130,7 @@ class TestResolvedHierarchyBundle:
 
     def test_create_with_resolved_data(self):
         """Should create bundle with resolved hierarchy data."""
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=pl.LazyFrame({"exposure_ref": ["E1", "E2"]}),
             counterparty_lookup=create_empty_counterparty_lookup(),
             collateral=pl.LazyFrame(),

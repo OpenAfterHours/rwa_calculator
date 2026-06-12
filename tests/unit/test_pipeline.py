@@ -37,6 +37,7 @@ from rwa_calc.engine.pipeline import (
     create_test_pipeline,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
+from tests.fixtures.resolved_bundle import make_resolved_bundle
 
 # =============================================================================
 # Test Fixtures
@@ -307,7 +308,7 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
         rating_inheritance=rating_inheritance,
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=counterparty_lookup,
         collateral=pl.LazyFrame(),

@@ -253,6 +253,14 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     #   "subordinated"  -> Art. 161(1)(f) LGD = 100%
     #   "dilution_risk" -> Art. 161(1)(g) LGD = 100% (B3.1) / 75% (CRR)
     "purchased_receivables_subtype": ColumnSpec(pl.String, required=False),
+    # CRR Art. 159(1) Pool B components (c)/(d): additional value adjustments
+    # (AVAs per Art. 34/105) and other own funds reductions associated with the
+    # exposure. Enter the per-exposure Pool B exactly once at the IRB EL
+    # shortfall stage (engine/irb/adjustments.py compute_el_shortfall_excess);
+    # hierarchy passes them through from the loan row. Null (not 0.0) when
+    # unreported — absence of data must not imply a zero AVA.
+    "ava_amount": ColumnSpec(pl.Float64, required=False),
+    "other_own_funds_reductions": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 223(5) FCCM exposure volatility haircut (HE) inputs. Populated when
     # the exposure itself is a debt security (typical for SFTs where the firm lends
     # out a bond — the bond carries its own price-volatility risk on the exposure
@@ -261,6 +269,21 @@ LOAN_SCHEMA: dict[str, ColumnSpec] = {
     "exposure_collateral_type": ColumnSpec(pl.String, required=False),
     "exposure_security_cqs": ColumnSpec(pl.Int8, required=False),
     "exposure_security_residual_maturity_years": ColumnSpec(pl.Float64, required=False),
+    # CRR Art. 124-126 / PRA PS1/26 Art. 124C-124K: loan-level real-estate
+    # inputs for exposures whose LTV / property data live on the loan row
+    # rather than a separate collateral row (e.g. CRE Art. 126(2)(d)
+    # proportion-split scenarios). HierarchyResolver passes these through to
+    # the unified exposure frame; without them the SA real-estate branch
+    # cannot route the exposure. Null (never 0.0 / "") when unreported —
+    # absence of data must not fabricate an LTV or a property type.
+    "ltv": ColumnSpec(pl.Float64, required=False),
+    "property_type": ColumnSpec(pl.String, required=False),
+    # CRR Art. 126(2): the preferential 50% CRE risk weight requires
+    # demonstrated income cover (rental income >= 1.5x interest payments).
+    # Unknown defaults to False — without evidence the preferential treatment
+    # is withheld (conservative), matching the engine's fill_null(False)
+    # handling and the CLASSIFIER_OUTPUT_SCHEMA default.
+    "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
     # Note: CCF fields (risk_type, ccf_modelled, is_short_term_trade_lc) are NOT included
     # because CCF only applies to off-balance sheet items (undrawn commitments, contingents).
     # Drawn loans are already on-balance sheet, so EAD = drawn_amount + interest directly.
@@ -309,6 +332,10 @@ CONTINGENTS_SCHEMA: dict[str, ColumnSpec] = {
     # under construction — drives the ADC classification derivation in the
     # classifier (combined with a corporate / non-natural-person gate).
     "is_under_construction": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 126(2): preferential 50% CRE RW requires demonstrated income
+    # cover. Mirrored from LOAN_SCHEMA so contingent rows carry the same
+    # unknown->False conservative default; see the LOAN_SCHEMA notes.
+    "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sft": ColumnSpec(pl.Boolean, default=False, required=False),
     "effective_maturity": ColumnSpec(pl.Float64, required=False),
@@ -445,7 +472,14 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     # same counterparty (otherwise double-counted). When True, the row is
     # routed only to AIRB exposures whose modelled LGD is preserved.
     "is_airb_model_collateral": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_main_index": ColumnSpec(pl.Boolean, default=False, required=False),
+    # CRR Art. 224 Table 4 / PRA PS1/26: distinguishes main-index equity (15%
+    # haircut CRR / 20% Basel 3.1) from other listed equity (25% / 30%). No
+    # Boolean default on purpose: null means "index membership unreported" and
+    # the haircut engine (engine/crm/haircuts.py) resolves null -> main-index
+    # for backward compatibility (pinned by tests/unit/crm/test_equity_main_index.py).
+    # A schema default of False would silently re-rate unreported equity to the
+    # higher other-listed haircut at the loader seal.
+    "is_main_index": ColumnSpec(pl.Boolean, required=False),
     "valuation_date": ColumnSpec(pl.Date, required=False),
     "valuation_type": ColumnSpec(pl.String, required=False),
     "property_type": ColumnSpec(pl.String, required=False),
@@ -634,9 +668,11 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "business_age_years": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 155(3): True -> institution has sufficient Art. 178 default-
     # definition data, so the 1.5x PD/LGD scaling does NOT apply. False/null ->
-    # the 1.5x scaling applies. Default True is the non-conservative branch, so
-    # the 1.5x edge case must set this explicitly False.
-    "has_default_definition_info": ColumnSpec(pl.Boolean, default=True, required=False),
+    # the 1.5x scaling applies. Skipping the scaling is the preferential
+    # treatment and requires affirmative attestation, so unknown -> False
+    # (apply the 1.5x — conservative). Recorded FIX decision 2026-06-12:
+    # the previous default=True made the code contradict this very comment.
+    "has_default_definition_info": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 155(2) non-trading-book short-position netting inputs.
     # position_value: signed market value (+long / -short). When absent the
     #   equity calculator falls back to the fair_value/carrying_value/ead chain
@@ -1644,7 +1680,14 @@ CRM_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
 # Columns produced by the classification stage: SME / retail / RE / SL flags
 # derived from counterparty attributes + exposure amounts + regulatory rules.
 CLASSIFIER_OUTPUT_SCHEMA: dict[str, ColumnSpec] = {
-    "qualifies_as_retail": ColumnSpec(pl.Boolean, default=True, required=False),
+    # CRR Art. 123 / PS1/26 Art. 123A / CRE20.65-67: the 75% retail weight
+    # is PREFERENTIAL — available only when the qualifying criteria are
+    # demonstrated. Unknown -> False (100% non-qualifying retail), the
+    # conservative direction. Recorded FIX decision 2026-06-12 (was True,
+    # diverging from b31_risk_weights' coalesce-False); the classifier
+    # always recomputes this in-pipeline, so only direct-invocation paths
+    # are affected and no goldens change.
+    "qualifies_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_defaulted": ColumnSpec(pl.Boolean, default=False, required=False),
     "has_income_cover": ColumnSpec(pl.Boolean, default=False, required=False),

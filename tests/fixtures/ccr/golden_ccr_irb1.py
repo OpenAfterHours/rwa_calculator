@@ -119,6 +119,7 @@ from rwa_calc.data.schemas import (
     MODEL_PERMISSIONS_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .margin_builder import create_margin_agreements
 from .netting_set_builder import NettingSet, create_netting_sets
@@ -422,7 +423,7 @@ def build_raw_data_bundle_ccr_irb1() -> RawDataBundle:
         - CRR Art. 161(1)(a) (F-IRB senior unsecured LGD = 45%)
         - CRR Art. 274(2) (SA-CCR EAD = alpha × (RC + PFE))
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_irb_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

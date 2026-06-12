@@ -12,11 +12,9 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import polars as pl
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import create_empty_raw_data_bundle
 from rwa_calc.contracts.errors import (
     ERROR_COLLATERAL_LINK_DUPLICATE,
     ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY,
@@ -27,9 +25,7 @@ from rwa_calc.contracts.validation import validate_collateral_links
 
 def _bundle(collateral_links: pl.LazyFrame | None):
     """A minimal raw bundle: two loans, one facility, one collateral item."""
-    base = create_empty_raw_data_bundle()
-    return replace(
-        base,
+    return make_raw_bundle(
         loans=pl.LazyFrame({"loan_reference": ["L1", "L2"]}),
         facilities=pl.LazyFrame({"facility_reference": ["F9"]}),
         counterparties=pl.LazyFrame({"counterparty_reference": ["CP1"]}),

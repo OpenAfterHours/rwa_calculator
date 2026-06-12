@@ -42,7 +42,6 @@ from polars.testing import assert_frame_equal
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
@@ -57,6 +56,7 @@ from tests.fixtures.p1_145.p1_145 import (
     create_p1145_counterparty,
     create_p1145_loan,
 )
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:
     pass
@@ -134,9 +134,9 @@ def _make_resolved_bundle(
         pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={

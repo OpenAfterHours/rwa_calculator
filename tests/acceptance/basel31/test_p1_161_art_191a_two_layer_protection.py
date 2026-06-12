@@ -55,6 +55,7 @@ from rwa_calc.data.schemas import (
     ORG_MAPPING_SCHEMA,
 )
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -92,7 +93,7 @@ def _build_run_a_bundle() -> RawDataBundle:
     LazyFrames because this scenario only uses drawn loan data — no undrawn
     facility rows or hierarchy mappings are required.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),
@@ -115,7 +116,7 @@ def _build_run_b_bundle() -> RawDataBundle:
     The guarantee_run_b.parquet contains the new field look_through_election="funded_only"
     which triggers the Art. 191A(2)(e)(i) funded-only look-through path in the engine.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

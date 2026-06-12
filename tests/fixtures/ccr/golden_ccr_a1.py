@@ -76,6 +76,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .margin_builder import create_margin_agreements
 from .netting_set_builder import NettingSet, create_netting_sets
@@ -313,7 +314,7 @@ def build_raw_data_bundle_with_ccr_a1() -> RawDataBundle:
         - CRR Art. 271 (CCR scope)
         - CRR Art. 120(1) Table 3 (institution CQS 2 → 50% RW)
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),
@@ -348,7 +349,7 @@ def build_raw_data_bundle_no_ccr() -> RawDataBundle:
     References:
         - CRR Art. 271 (CCR scope — firm with no derivatives book is outside scope)
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

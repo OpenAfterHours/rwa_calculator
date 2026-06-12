@@ -118,6 +118,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .golden_ccr_a1 import (
     CCR_A1_RATING_AGENCY,
@@ -315,7 +316,7 @@ def build_p823_bundle(is_long_settlement: bool) -> RawDataBundle:
     netting_sets_df = _build_netting_set(ns_id)
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparty_df.lazy(),
         facilities=facilities,
         loans=loans,

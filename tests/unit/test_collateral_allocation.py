@@ -17,6 +17,7 @@ import pytest
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # =============================================================================
 # Fixtures
@@ -54,7 +55,7 @@ def create_raw_bundle(
     if collateral_data:
         collateral = pl.DataFrame(collateral_data).lazy()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparties,
         loans=loans,
         contingents=None,

@@ -17,8 +17,18 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.protocols import OutputAggregatorProtocol
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 class TestOutputAggregatorProtocolCompliance:
@@ -41,16 +51,20 @@ class TestEmptyInputs:
         aggregator = OutputAggregator()
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
 
         assert result.results is not None
         assert result.results.collect().shape[0] == 0
-        assert result.el_summary is None
+        # Phase 3: sealed branch inputs always carry the EL columns, so an
+        # empty portfolio yields a zero-valued summary rather than None.
+        assert result.el_summary is not None
+        assert float(result.el_summary.total_irb_rwa) == 0.0
+        assert float(result.el_summary.total_el_shortfall) == 0.0
         assert result.floor_impact is None
         assert result.errors == []
 
@@ -60,9 +74,9 @@ class TestEmptyInputs:
         aggregator = OutputAggregator()
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -109,9 +123,9 @@ class TestEmptyInputs:
         )
 
         result = aggregator.aggregate(
-            sa_results=sa,
-            irb_results=irb,
-            slotting_results=slotting,
+            sa_results=pad_sa_branch(sa),
+            irb_results=pad_irb_branch(irb),
+            slotting_results=pad_slotting_branch(slotting),
             equity_bundle=None,
             config=config,
         )

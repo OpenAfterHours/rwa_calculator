@@ -11,9 +11,9 @@ Tests the implementation of Tasks 1.1-1.4 from the pre-post-crm-counterparty-pla
 from __future__ import annotations
 
 import polars as pl
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from conftest import _counterparty_lookup
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -52,7 +52,7 @@ class TestPreCRMAttributePreservation:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
@@ -94,7 +94,7 @@ class TestPreCRMAttributePreservation:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             counterparty_lookup=_counterparty_lookup(counterparties),
         )
@@ -157,7 +157,7 @@ class TestGuarantorExposureClassDerivation:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -218,7 +218,7 @@ class TestGuarantorExposureClassDerivation:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -282,7 +282,7 @@ class TestPostCRMCompositeAttributes:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=guarantees,
             counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -326,7 +326,7 @@ class TestPostCRMCompositeAttributes:
             }
         )
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             counterparty_lookup=_counterparty_lookup(counterparties),
         )

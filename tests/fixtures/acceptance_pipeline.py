@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -77,7 +77,7 @@ def run_parquet_pipeline(
     ratings = pl.scan_parquet(fixtures_dir / "rating.parquet")
     model_permissions = pl.scan_parquet(fixtures_dir / "model_permission.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

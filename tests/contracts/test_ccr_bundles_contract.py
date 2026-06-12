@@ -24,6 +24,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Import the modules under test at module scope — these always succeed
@@ -506,7 +507,7 @@ def test_raw_data_bundle_accepts_ccr_keyword_argument() -> None:
 
     # Act — construct RawDataBundle with ccr= explicitly set
     # create_empty_raw_data_bundle does not accept **kwargs, so we build directly
-    instance = bundles.RawDataBundle(
+    instance = make_raw_bundle(
         facilities=pl.LazyFrame(),
         loans=pl.LazyFrame(),
         counterparties=pl.LazyFrame(),

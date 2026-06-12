@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from conftest import _counterparty_lookup
-from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -44,6 +44,7 @@ def _make_exposure(
             "nominal_amount": [0.0],
             "risk_type": [None],
             "currency": [currency],
+            "original_currency": [currency],
         }
     )
 
@@ -127,7 +128,7 @@ def _run_crm(
     if rating_inheritance is None:
         rating_inheritance = _default_rating_inheritance()
 
-    classified_bundle = ClassifiedExposuresBundle(
+    classified_bundle = make_classified_bundle(
         all_exposures=exposures,
         guarantees=guarantees,
         counterparty_lookup=_counterparty_lookup(counterparties, rating_inheritance),
@@ -343,7 +344,7 @@ class TestNoGuaranteeRestructuringColumn:
         """Exposure with no guarantee → guarantee_restructuring_haircut = 0."""
         exposures = _make_exposure()
 
-        classified_bundle = ClassifiedExposuresBundle(
+        classified_bundle = make_classified_bundle(
             all_exposures=exposures,
             guarantees=None,
             counterparty_lookup=_counterparty_lookup(

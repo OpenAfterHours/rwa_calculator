@@ -17,6 +17,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -60,13 +61,32 @@ def _minimal_exposures() -> pl.LazyFrame:
     )
 
 
+def _bad_collateral() -> pl.LazyFrame:
+    """A collateral table whose required columns are unusable (CRM001 trigger).
+
+    Post classifier-exit seal, exposures always carry a (typed-null)
+    ``netting_agreement_reference``, so the CRM netting merge always runs: a
+    table missing the required column NAMES outright is silently replaced by
+    the well-formed synthetic netting frame before the CRM001 check. A table
+    that carries the names but malformed values (market_value as text) still
+    reaches the check and is reported as unusable — the production-facing
+    CRM001 path.
+    """
+    return pl.LazyFrame(
+        {
+            "beneficiary_reference": ["EXP001"],
+            "market_value": ["not-a-number"],  # malformed: text in a numeric column
+        }
+    )
+
+
 def _bundle_with_bad_collateral() -> ClassifiedExposuresBundle:
-    """Bundle with collateral that is missing required columns."""
-    return ClassifiedExposuresBundle(
+    """Bundle with collateral whose required columns are unusable."""
+    return make_classified_bundle(
         all_exposures=_minimal_exposures(),
         equity_exposures=None,
         ciu_holdings=None,
-        collateral=pl.LazyFrame({"some_column": [1.0]}),  # missing required cols
+        collateral=_bad_collateral(),
         guarantees=None,
         provisions=None,
         counterparty_lookup=None,
@@ -75,7 +95,7 @@ def _bundle_with_bad_collateral() -> ClassifiedExposuresBundle:
 
 def _bundle_with_bad_guarantees() -> ClassifiedExposuresBundle:
     """Bundle with guarantee data that is missing required columns."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=_minimal_exposures(),
         equity_exposures=None,
         ciu_holdings=None,
@@ -88,7 +108,7 @@ def _bundle_with_bad_guarantees() -> ClassifiedExposuresBundle:
 
 def _bundle_with_no_counterparty_lookup() -> ClassifiedExposuresBundle:
     """Bundle with valid guarantees but missing counterparty lookup."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=_minimal_exposures(),
         equity_exposures=None,
         ciu_holdings=None,
@@ -107,7 +127,7 @@ def _bundle_with_no_counterparty_lookup() -> ClassifiedExposuresBundle:
 
 def _bundle_no_crm_data() -> ClassifiedExposuresBundle:
     """Bundle with no CRM data — no errors expected."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=_minimal_exposures(),
         equity_exposures=None,
         ciu_holdings=None,
@@ -118,14 +138,13 @@ def _bundle_no_crm_data() -> ClassifiedExposuresBundle:
     )
 
 
-
 class TestCRMErrorPropagationUnifiedBundle:
     """Test errors propagate through get_crm_unified_bundle."""
 
     def test_bad_collateral_emits_warning(
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
-        """Collateral with missing columns should emit CRM001 warning."""
+        """Collateral with unusable required columns should emit CRM001 warning."""
         bundle = crm_processor.get_crm_unified_bundle(_bundle_with_bad_collateral(), crr_config)
 
         assert len(bundle.crm_errors) == 1
@@ -174,11 +193,11 @@ class TestMultipleErrorAccumulation:
         self, crm_processor: CRMProcessor, crr_config: CalculationConfig
     ) -> None:
         """Both collateral and guarantee issues surface together."""
-        bundle = ClassifiedExposuresBundle(
+        bundle = make_classified_bundle(
             all_exposures=_minimal_exposures(),
             equity_exposures=None,
             ciu_holdings=None,
-            collateral=pl.LazyFrame({"some_column": [1.0]}),
+            collateral=_bad_collateral(),
             guarantees=pl.LazyFrame({"some_column": [1.0]}),
             provisions=None,
             counterparty_lookup=None,

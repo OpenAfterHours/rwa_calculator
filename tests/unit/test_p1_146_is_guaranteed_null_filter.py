@@ -27,6 +27,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import pad_irb_branch, pad_slotting_branch
 from tests.fixtures.p1_146.p1_146 import (
     EXP_NULL_REF,
     POST_CRM_CORPORATE_EXPOSURE_COUNT,
@@ -36,7 +37,11 @@ from tests.fixtures.p1_146.p1_146 import (
     build_sa_results,
 )
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -75,8 +80,8 @@ class TestP1146IsGuaranteedNullFilter:
         # Act
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -107,8 +112,8 @@ class TestP1146IsGuaranteedNullFilter:
         # Act
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -150,8 +155,8 @@ class TestP1146IsGuaranteedNullFilter:
         # Act
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -192,8 +197,8 @@ class TestP1146IsGuaranteedNullFilter:
         # Act
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )

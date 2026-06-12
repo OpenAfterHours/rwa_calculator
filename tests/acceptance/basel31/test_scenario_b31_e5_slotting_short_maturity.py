@@ -36,6 +36,7 @@ from tests.acceptance.basel31.conftest import (
     assert_rwa_within_tolerance,
     get_result_for_exposure,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Exposure references — these are loan_references from the fixture builder,
@@ -94,7 +95,6 @@ def b31_e5_slotting_results_df() -> pl.DataFrame:
     """
     from workbooks.shared.fixture_loader import load_fixtures
 
-    from rwa_calc.contracts.bundles import RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
     from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -141,7 +141,7 @@ def b31_e5_slotting_results_df() -> pl.DataFrame:
         }
     )
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=fixtures.facilities,
         loans=fixtures.loans,
         contingents=fixtures.contingents,

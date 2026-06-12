@@ -14,6 +14,14 @@ from pathlib import Path
 
 import polars as pl
 
+# Repo root on sys.path: the per-P-code generator modules import the
+# contract-derived builders as ``from tests.fixtures...`` (migration
+# Phase 3), which resolves under pytest but not when this script loads
+# them standalone from their own directories.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 # Fixture parquet filenames (referenced from multiple generators / integrity checks).
 COUNTERPARTIES_PARQUET = "counterparties.parquet"
 MODEL_PERMISSIONS_PARQUET = "model_permissions.parquet"
@@ -896,17 +904,26 @@ def _generate_p1125(output_dir: Path) -> list[tuple[str, int]]:
         bundle_b = make_scenario_b_bundle()
         bundle_c = make_scenario_c_bundle()
 
-        # Confirm the critical schema invariants.
-        cp_cols_a = bundle_a.counterparty_lookup.counterparties.collect_schema().names()
-        cp_cols_b = bundle_b.counterparty_lookup.counterparties.collect_schema().names()
-        cp_cols_c = bundle_c.counterparty_lookup.counterparties.collect_schema().names()
+        # Confirm the critical schema invariants. Under the Phase 3 sealed
+        # CounterpartyLookup contract the column ALWAYS exists — the old
+        # "absent column" state is unrepresentable; Scenarios A/C now pin
+        # the all-null form and Scenario B real values (mirrors the
+        # sealed-frame invariant rewrite in test_p1_125_fse_column_warning).
+        cp_a = bundle_a.counterparty_lookup.counterparties.collect()
+        cp_b = bundle_b.counterparty_lookup.counterparties.collect()
+        cp_c = bundle_c.counterparty_lookup.counterparties.collect()
 
-        if "is_financial_sector_entity" in cp_cols_a:
-            raise AssertionError("Scenario A: is_financial_sector_entity must be absent")
-        if "is_financial_sector_entity" not in cp_cols_b:
+        for label, frame in (("A", cp_a), ("C", cp_c)):
+            if "is_financial_sector_entity" not in frame.columns:
+                raise AssertionError(
+                    f"Scenario {label}: sealed lookup must carry is_financial_sector_entity"
+                )
+            if frame["is_financial_sector_entity"].null_count() != frame.height:
+                raise AssertionError(
+                    f"Scenario {label}: is_financial_sector_entity must be all-null (unreported)"
+                )
+        if "is_financial_sector_entity" not in cp_b.columns:
             raise AssertionError("Scenario B: is_financial_sector_entity must be present")
-        if "is_financial_sector_entity" in cp_cols_c:
-            raise AssertionError("Scenario C: is_financial_sector_entity must be absent")
 
         # No parquet files written — report zero files, zero records.
         return [(PYTHON_ONLY_NO_PARQUET, 0)]

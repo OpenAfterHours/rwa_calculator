@@ -64,8 +64,8 @@ from tests.fixtures.p1_165.p1_165 import (
     PD,
     REPORTING_DATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
@@ -108,7 +108,7 @@ def _run_pipeline_p165() -> object:
         }
     )
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

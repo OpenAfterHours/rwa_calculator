@@ -1010,6 +1010,7 @@ class TestB31QRRETransactor:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_qrre_transactor": [False],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -1120,12 +1121,19 @@ class TestB31NonRegulatoryRetail:
 
         assert df["risk_weight"][0] == pytest.approx(0.45)
 
-    def test_null_qualifies_as_retail_defaults_to_qualifying(
+    def test_null_qualifies_as_retail_is_non_qualifying(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """Null qualifies_as_retail should default to qualifying (75% RW)."""
+        """Null qualifies_as_retail -> non-qualifying -> 100% RW.
+
+        The 75% weight is preferential (Art. 123(3)(c) / Art. 123A /
+        CRE20.65-67): unknown qualification must not receive it. Recorded
+        FIX decision 2026-06-12 (previously null defaulted to qualifying).
+        The classifier always emits a non-null value in-pipeline; this
+        pins the direct-invocation path.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["RTL_NULL001"],
@@ -1142,7 +1150,7 @@ class TestB31NonRegulatoryRetail:
         result = sa_calculator.calculate_branch(exposures, b31_config)
         df = result.collect()
 
-        assert df["risk_weight"][0] == pytest.approx(0.75)
+        assert df["risk_weight"][0] == pytest.approx(1.0)
 
 
 # =============================================================================
@@ -3540,6 +3548,7 @@ class TestB31PayrollPensionLoan:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_payroll_loan": [True],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -3564,6 +3573,7 @@ class TestB31PayrollPensionLoan:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_payroll_loan": [True],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -3587,6 +3597,7 @@ class TestB31PayrollPensionLoan:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_payroll_loan": [False],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -3611,6 +3622,7 @@ class TestB31PayrollPensionLoan:
                 "is_infrastructure": [False],
                 "is_qrre_transactor": [True],
                 "is_payroll_loan": [True],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -3635,6 +3647,7 @@ class TestB31PayrollPensionLoan:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_payroll_loan": [None],
+                "qualifies_as_retail": [True],
             },
             schema_overrides={"is_payroll_loan": pl.Boolean},
         ).lazy()
@@ -3658,6 +3671,7 @@ class TestB31PayrollPensionLoan:
                 "cqs": [None],
                 "is_sme": [False],
                 "is_infrastructure": [False],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 
@@ -3681,6 +3695,7 @@ class TestB31PayrollPensionLoan:
                 "is_sme": [False],
                 "is_infrastructure": [False],
                 "is_payroll_loan": [True],
+                "qualifies_as_retail": [True],
             }
         ).lazy()
 

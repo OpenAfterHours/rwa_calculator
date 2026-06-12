@@ -79,7 +79,12 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
     schema = lf.collect_schema()
     cols = schema.names()
 
-    # Check if guarantee columns exist
+    # Run-level sentinel gate: guarantor_entity_type is the one crm_exit
+    # column still CONDITIONAL (inject=False) — present iff the CRM guarantee
+    # sub-step ran. Keying on it keeps this machinery (and its derived audit
+    # columns: rwa_irb_original, guarantor_rw*, guarantee_status, ...) off
+    # unguaranteed runs; see contracts/edges.py. The guaranteed_portion check
+    # covers direct (non-pipeline) invocation.
     if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
         return lf
 
@@ -734,18 +739,12 @@ def _adjust_expected_loss(
         _is_irb_non_dd = pl.col("_is_pd_substitution") & ~pl.col("_is_dd_applied")
 
         # Mirror the per-row F-IRB LGD selection used in _apply_parameter_substitution
-        # so EL is computed against the same supervisory LGD as RW.
-        _schema_names = lf.collect_schema().names()
-        seniority_el = (
-            pl.col("guarantor_seniority").cast(pl.String).fill_null("senior")
-            if "guarantor_seniority" in _schema_names
-            else pl.lit("senior")
-        )
-        is_fse_el = (
-            pl.col("guarantor_is_financial_sector_entity").fill_null(False)
-            if "guarantor_is_financial_sector_entity" in _schema_names
-            else pl.lit(False)
-        )
+        # so EL is computed against the same supervisory LGD as RW. Both columns
+        # are guaranteed present on this path: use_parameter_substitution is True,
+        # so _apply_parameter_substitution already ran
+        # _ensure_parameter_substitution_columns on this same frame.
+        seniority_el = pl.col("guarantor_seniority").cast(pl.String).fill_null("senior")
+        is_fse_el = pl.col("guarantor_is_financial_sector_entity").fill_null(False)
         guarantor_supervisory_lgd_el = (
             pl.when(seniority_el == "subordinated")
             .then(pl.lit(firb_lgd_subordinated))

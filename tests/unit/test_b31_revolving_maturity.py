@@ -21,6 +21,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - registers namespace
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 # =============================================================================
 # Fixtures
@@ -66,7 +67,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # M should be 5.0 (capped), derived from facility_termination_date
         assert result["maturity"][0] == pytest.approx(5.0, abs=0.05)
 
@@ -84,7 +85,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # M should be ~1.0, derived from maturity_date (not termination date)
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)
 
@@ -99,10 +100,11 @@ class TestB31RevolvingMaturity:
                 "facility_termination_date": [date(2029, 12, 31)],  # 5yr from CRR reporting
                 "is_revolving": [True],
                 "exposure_class": ["CORPORATE"],
+                "approach": ["foundation_irb"],
             }
         )
 
-        result = lf.irb.prepare_columns(crr_config).collect()
+        result = _pad(lf).irb.prepare_columns(crr_config).collect()
         # CRR ignores termination date — M from maturity_date ≈ 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)
 
@@ -122,7 +124,7 @@ class TestB31RevolvingMaturity:
             }
         ).cast({"facility_termination_date": pl.Date})
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # Null termination date → fall back to maturity_date → M ≈ 3.0
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -141,7 +143,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # No termination date column → use maturity_date → M ≈ 3.0
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -159,7 +161,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # 10 years from reporting but capped at 5.0
         assert result["maturity"][0] == pytest.approx(5.0, abs=0.01)
 
@@ -177,7 +179,7 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # 0.25yr from reporting but floored at 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.01)
 
@@ -203,7 +205,7 @@ class TestB31RevolvingMaturity:
             }
         ).cast({"facility_termination_date": pl.Date})
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # Row 0: revolving + termination date → M ≈ 4.0
         assert result["maturity"][0] == pytest.approx(4.0, abs=0.05)
         # Row 1: non-revolving → M ≈ 1.0 (from maturity_date)
@@ -227,7 +229,7 @@ class TestB31RevolvingMaturity:
             }
         ).cast({"is_revolving": pl.Boolean})
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # Null is_revolving → treated as non-revolving → M from maturity_date ≈ 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)
 
@@ -252,7 +254,8 @@ class TestB31RevolvingMaturity:
             }
         )
         rwa_non_revolving = (
-            lf_non_revolving.irb.prepare_columns(b31_config)
+            _pad(lf_non_revolving)
+            .irb.prepare_columns(b31_config)
             .irb.apply_all_formulas(b31_config)
             .collect()["rwa"][0]
         )
@@ -267,7 +270,8 @@ class TestB31RevolvingMaturity:
             }
         )
         rwa_revolving = (
-            lf_revolving.irb.prepare_columns(b31_config)
+            _pad(lf_revolving)
+            .irb.prepare_columns(b31_config)
             .irb.apply_all_formulas(b31_config)
             .collect()["rwa"][0]
         )
@@ -291,7 +295,9 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        )
         # Retail always gets MA = 1.0 regardless of maturity source
         assert result["maturity_adjustment"][0] == pytest.approx(1.0)
 
@@ -310,6 +316,6 @@ class TestB31RevolvingMaturity:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
         # No is_revolving column → treated as non-revolving → M from maturity_date ≈ 1.0
         assert result["maturity"][0] == pytest.approx(1.0, abs=0.05)

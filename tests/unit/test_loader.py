@@ -28,6 +28,7 @@ from rwa_calc.engine.loader import (
     enforce_schema,
     normalize_columns,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
     pass
@@ -1049,7 +1050,7 @@ class TestBundleValidation:
         """Loader validation should catch invalid categorical column values."""
         from rwa_calc.engine.loader import _run_bundle_validation
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=pl.LazyFrame(),
             counterparties=pl.LazyFrame({"entity_type": ["sovereign", "INVALID_TYPE"]}),
@@ -1065,7 +1066,7 @@ class TestBundleValidation:
         """_run_bundle_validation returns empty list when all values are valid."""
         from rwa_calc.engine.loader import _run_bundle_validation
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=pl.LazyFrame(),
             counterparties=pl.LazyFrame({"entity_type": ["sovereign", "corporate"]}),
@@ -1078,7 +1079,7 @@ class TestBundleValidation:
 
     def test_errors_field_default_is_empty_list(self) -> None:
         """RawDataBundle.errors defaults to an empty list."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=pl.LazyFrame(),
             counterparties=pl.LazyFrame(),
@@ -1086,3 +1087,85 @@ class TestBundleValidation:
             lending_mappings=pl.LazyFrame(),
         )
         assert bundle.errors == []
+
+
+# =============================================================================
+# Phase 3: loader edge seal
+# =============================================================================
+
+
+class TestLoaderEdgeSeal:
+    """Every bundle table is sealed against its loader edge contract."""
+
+    @pytest.fixture()
+    def sealed_dir(self, tmp_path: Path) -> Path:
+        (tmp_path / "counterparty").mkdir()
+        (tmp_path / "exposures").mkdir()
+        pl.DataFrame(
+            {"counterparty_reference": ["CP1"], "entity_type": ["corporate"]}
+        ).write_parquet(tmp_path / "counterparty" / "counterparties.parquet")
+        pl.DataFrame(
+            {
+                "loan_reference": ["L1"],
+                "counterparty_reference": ["CP1"],
+                "drawn_amount": [1000.0],
+                "smuggled_scratch": [42],
+            }
+        ).write_parquet(tmp_path / "exposures" / "loans.parquet")
+        pl.DataFrame(
+            {"facility_reference": ["F1"], "counterparty_reference": ["CP1"]}
+        ).write_parquet(tmp_path / "exposures" / "facilities.parquet")
+        # Legacy 'node_type' spelling — the loader translates it exactly once.
+        pl.DataFrame(
+            {
+                "parent_facility_reference": ["F1"],
+                "child_reference": ["L1"],
+                "node_type": ["loan"],
+            }
+        ).write_parquet(tmp_path / "exposures" / "facility_mapping.parquet")
+        return tmp_path
+
+    def test_loaded_tables_carry_their_edge_brand(self, sealed_dir: Path) -> None:
+        from rwa_calc.contracts.edges import sealed_edge_of
+
+        bundle = ParquetLoader(sealed_dir).load()
+
+        assert sealed_edge_of(bundle.loans) == "raw_loans"
+        assert sealed_edge_of(bundle.counterparties) == "raw_counterparties"
+        assert sealed_edge_of(bundle.facility_mappings) == "raw_facility_mappings"
+
+    def test_node_type_alias_translated_to_child_type(self, sealed_dir: Path) -> None:
+        bundle = ParquetLoader(sealed_dir).load()
+
+        mapping_cols = bundle.facility_mappings.collect_schema().names()
+        assert "child_type" in mapping_cols
+        assert "node_type" not in mapping_cols
+        assert bundle.facility_mappings.collect()["child_type"].to_list() == ["loan"]
+
+    def test_undeclared_input_columns_are_stripped(self, sealed_dir: Path) -> None:
+        bundle = ParquetLoader(sealed_dir).load()
+
+        assert "smuggled_scratch" not in bundle.loans.collect_schema().names()
+
+    def test_loaded_table_is_schema_complete(self, sealed_dir: Path) -> None:
+        from rwa_calc.data.schemas import LOAN_SCHEMA
+
+        bundle = ParquetLoader(sealed_dir).load()
+
+        assert bundle.loans.collect_schema().names() == list(LOAN_SCHEMA)
+
+    def test_missing_required_column_emits_dq001_with_typed_null(self, sealed_dir: Path) -> None:
+        # Drop the required counterparty_reference from loans.
+        pl.DataFrame({"loan_reference": ["L1"], "drawn_amount": [10.0]}).write_parquet(
+            sealed_dir / "exposures" / "loans.parquet"
+        )
+
+        bundle = ParquetLoader(sealed_dir).load()
+
+        dq001 = [
+            e
+            for e in bundle.errors
+            if e.code == "DQ001" and e.field_name == "counterparty_reference"
+        ]
+        assert len(dq001) == 1
+        assert bundle.loans.collect()["counterparty_reference"].to_list() == [None]

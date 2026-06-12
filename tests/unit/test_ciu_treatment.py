@@ -24,6 +24,7 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.equity import EquityCalculator
+from tests.fixtures.resolved_bundle import make_crm_bundle
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 # =============================================================================
@@ -245,7 +246,7 @@ def _make_look_through_bundle(
     """Helper to create a CRMAdjustedBundle with CIU look-through data."""
     equity_frame = pl.LazyFrame(equity_data)
     ciu_holdings = pl.LazyFrame(holdings_data) if holdings_data else None
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=pl.LazyFrame(),
         equity_exposures=equity_frame,
         ciu_holdings=ciu_holdings,

@@ -21,6 +21,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 import rwa_calc.engine.slotting.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
@@ -45,28 +46,38 @@ def basel31_config() -> CalculationConfig:
 @pytest.fixture
 def basic_slotting_exposures() -> pl.LazyFrame:
     """Return basic slotting exposures with various categories."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["SL001", "SL002", "SL003", "SL004", "SL005"],
-            "ead_final": [1_000_000.0, 500_000.0, 250_000.0, 100_000.0, 50_000.0],
-            "slotting_category": ["strong", "good", "satisfactory", "weak", "default"],
-            "is_hvcre": [False, False, False, False, False],
-            "sl_type": ["project_finance", "object_finance", "commodities_finance", "ipre", "ipre"],
-        }
+    return _pad(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["SL001", "SL002", "SL003", "SL004", "SL005"],
+                "ead_final": [1_000_000.0, 500_000.0, 250_000.0, 100_000.0, 50_000.0],
+                "slotting_category": ["strong", "good", "satisfactory", "weak", "default"],
+                "is_hvcre": [False, False, False, False, False],
+                "sl_type": [
+                    "project_finance",
+                    "object_finance",
+                    "commodities_finance",
+                    "ipre",
+                    "ipre",
+                ],
+            }
+        )
     )
 
 
 @pytest.fixture
 def hvcre_exposures() -> pl.LazyFrame:
     """Return HVCRE exposures."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["HVCRE001", "HVCRE002", "HVCRE003"],
-            "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
-            "slotting_category": ["strong", "good", "satisfactory"],
-            "is_hvcre": [True, True, True],
-            "sl_type": ["hvcre", "hvcre", "hvcre"],
-        }
+    return _pad(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["HVCRE001", "HVCRE002", "HVCRE003"],
+                "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
+                "slotting_category": ["strong", "good", "satisfactory"],
+                "is_hvcre": [True, True, True],
+                "sl_type": ["hvcre", "hvcre", "hvcre"],
+            }
+        )
     )
 
 
@@ -110,21 +121,30 @@ class TestPrepareColumns:
     """Tests for column preparation."""
 
     def test_adds_missing_columns(self, crr_config: CalculationConfig) -> None:
-        """prepare_columns should add missing columns with defaults."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_reference": ["SL001"],
-                "ead": [100_000.0],
-            }
+        """prepare_columns adds the derived/non-contract columns only.
+
+        The crm_exit edge guarantees ead_final / slotting_category /
+        is_hvcre / sl_type on the sealed branch input, so prepare_columns
+        no longer injects them — it owns is_short_maturity (derived) and
+        is_pre_operational (non-contract input) defaults.
+        """
+        lf = _pad(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["SL001"],
+                    "ead_final": [100_000.0],
+                    "slotting_category": ["satisfactory"],
+                    "is_hvcre": [False],
+                    "sl_type": ["project_finance"],
+                }
+            )
         )
         result = lf.slotting.prepare_columns().collect()
 
-        assert "ead_final" in result.columns
-        assert "slotting_category" in result.columns
-        assert "is_hvcre" in result.columns
-        assert "sl_type" in result.columns
         assert "is_short_maturity" in result.columns
         assert "is_pre_operational" in result.columns
+        assert result["is_short_maturity"][0] == False  # noqa: E712
+        assert result["is_pre_operational"][0] == False  # noqa: E712
 
     def test_preserves_existing_columns(
         self, basic_slotting_exposures: pl.LazyFrame, crr_config: CalculationConfig

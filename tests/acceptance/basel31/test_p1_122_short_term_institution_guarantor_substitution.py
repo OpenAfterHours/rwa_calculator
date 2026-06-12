@@ -64,6 +64,7 @@ from tests.fixtures.p1_122.p1_122 import (
     EXPECTED_RWA_CRR_POSTFIX,
     LOAN_REF,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -108,7 +109,7 @@ def _build_bundle() -> RawDataBundle:
     schema — the p1_122 scenario has a single loan/facility pair linked
     directly, so no hierarchy-mapping rows are needed.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

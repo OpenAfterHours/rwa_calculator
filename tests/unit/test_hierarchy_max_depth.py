@@ -21,6 +21,7 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_HIERARCHY_DEPTH
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -119,7 +120,7 @@ def depth_truncation_bundle() -> RawDataBundle:
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=empty_lf,
         loans=loans,
         counterparties=counterparties,

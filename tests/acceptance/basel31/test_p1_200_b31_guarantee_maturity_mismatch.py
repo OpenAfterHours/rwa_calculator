@@ -64,6 +64,7 @@ from tests.fixtures.p1_200.p1_200 import (
     LOAN_REF,
     REPORTING_DATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -108,7 +109,7 @@ def _build_bundle() -> RawDataBundle:
     with the correct schemas — the P1.200 scenario has a single drawn
     loan with no facility hierarchy rows required.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

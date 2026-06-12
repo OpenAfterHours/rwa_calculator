@@ -39,8 +39,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
@@ -133,7 +133,7 @@ def p1_197_slotting_results() -> dict[str, dict]:
     facility_mappings = pl.scan_parquet(_FIXTURES_DIR / "facility_mapping.parquet")
     specialised_lending = pl.scan_parquet(_FIXTURES_DIR / "sl_metadata.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

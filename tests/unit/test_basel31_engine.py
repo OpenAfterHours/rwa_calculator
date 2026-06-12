@@ -42,10 +42,18 @@ from rwa_calc.engine.irb.formulas import (
     _lgd_floor_expression_with_collateral,
     _pd_floor_expression,
     _polars_correlation_expr,
-    apply_irb_formulas,
     calculate_correlation,
 )
+from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
+
+
+def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Test shim: pad hand frames with the crm_exit contract columns the
+    sealed branch input guarantees, then invoke the real function."""
+    return _apply_irb_formulas_raw(_pad(lf), config)
+
 
 # =============================================================================
 # FIXTURES
@@ -325,7 +333,7 @@ class TestPDFloors:
                 "pd": [0.0001],
             }
         )
-        result = lf.irb.apply_pd_floor(crr_config).collect()
+        result = _pad(lf).irb.apply_pd_floor(crr_config).collect()
         assert result["pd_floored"][0] == pytest.approx(0.0003)
 
     def test_namespace_apply_pd_floor_basel31(
@@ -339,7 +347,7 @@ class TestPDFloors:
                 "pd": [0.0001],
             }
         )
-        result = lf.irb.apply_pd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_pd_floor(basel31_config).collect()
         # QRRE revolver default is 0.10%
         assert result["pd_floored"][0] == pytest.approx(0.0010)
 
@@ -356,7 +364,12 @@ class TestPDFloors:
                 "ead_final": [1_000_000.0],
             }
         )
-        result = lf.irb.apply_all_formulas(basel31_config).collect()
+        result = (
+            _pad(lf)
+            .irb.prepare_columns(basel31_config)
+            .irb.apply_all_formulas(basel31_config)
+            .collect()
+        )
         assert result["pd_floored"][0] == pytest.approx(0.0005)
 
     def test_multiple_classes_differentiated_floors(
@@ -721,7 +734,7 @@ class TestLGDFloors:
                 "lgd": [0.10],
             }
         )
-        result = lf.irb.apply_lgd_floor(crr_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(crr_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
     def test_namespace_apply_lgd_floor_basel31_airb(
@@ -737,7 +750,7 @@ class TestLGDFloors:
                 "is_airb": [True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25)
 
     def test_namespace_apply_lgd_floor_basel31_firb_no_floor(
@@ -753,7 +766,7 @@ class TestLGDFloors:
                 "is_airb": [False],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         # F-IRB: no floor applied
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
@@ -971,7 +984,7 @@ class TestLGDFloors:
                 "is_airb": [True, True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         # Both get 25% floor — corporate subordinated same as senior (Art. 161(5))
         assert result["lgd_floored"][0] == pytest.approx(0.25)
         assert result["lgd_floored"][1] == pytest.approx(0.25)
@@ -1122,7 +1135,7 @@ class TestLGDFloors:
                 "is_airb": [True, True, True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         # Retail other: 30% (Art. 164(4)(b)(ii))
         assert result["lgd_floored"][0] == pytest.approx(0.30)
         # Retail QRRE: 50% (Art. 164(4)(b)(i))
@@ -1142,7 +1155,7 @@ class TestLGDFloors:
                 "is_airb": [True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.05)
 
     def test_retail_lgd_above_floor_unchanged(
@@ -1160,7 +1173,7 @@ class TestLGDFloors:
                 "is_airb": [True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.40)
 
     # --- P1.8: Generic 'immovable' collateral_type routing for RRE/CRE ---
@@ -1330,7 +1343,7 @@ class TestLGDFloors:
                 "collateral_type": ["immovable"],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.05)
 
     def test_mixed_immovable_collateral_types_batch(
@@ -1388,7 +1401,12 @@ class TestLGDFloors:
                 "approach": [ApproachType.AIRB.value, ApproachType.FIRB.value],
             }
         )
-        result = lf.irb.apply_all_formulas(basel31_config).collect()
+        result = (
+            _pad(lf)
+            .irb.prepare_columns(basel31_config)
+            .irb.apply_all_formulas(basel31_config)
+            .collect()
+        )
         # A-IRB: LGD floored to 25%
         assert result["lgd_floored"][0] == pytest.approx(0.25)
         # F-IRB: LGD unchanged at 10%
@@ -1635,7 +1653,7 @@ class TestFIRBSupervisoryLGD:
                 "approach": [ApproachType.FIRB.value],
             }
         )
-        result = lf.irb.apply_firb_lgd(crr_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(crr_config).collect()
         assert result["lgd"][0] == pytest.approx(0.45)
 
     def test_namespace_apply_firb_lgd_basel31(
@@ -1651,7 +1669,7 @@ class TestFIRBSupervisoryLGD:
                 "approach": [ApproachType.FIRB.value],
             }
         )
-        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.40)
 
     def test_namespace_firb_lgd_airb_retains_own_lgd(
@@ -1667,7 +1685,7 @@ class TestFIRBSupervisoryLGD:
                 "approach": [ApproachType.AIRB.value],
             }
         )
-        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.30)
 
     # --- FSE vs non-FSE LGD (Art. 161(1)(a) vs (aa)) ---
@@ -1686,7 +1704,7 @@ class TestFIRBSupervisoryLGD:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.45)
 
     def test_namespace_b31_non_fse_firb_lgd_40pct(
@@ -1703,7 +1721,7 @@ class TestFIRBSupervisoryLGD:
                 "cp_is_financial_sector_entity": [False],
             }
         )
-        result = lf.irb.apply_firb_lgd(basel31_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(basel31_config).collect()
         assert result["lgd"][0] == pytest.approx(0.40)
 
     def test_namespace_crr_fse_ignored(
@@ -1720,7 +1738,7 @@ class TestFIRBSupervisoryLGD:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = lf.irb.apply_firb_lgd(crr_config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(crr_config).collect()
         assert result["lgd"][0] == pytest.approx(0.45)
 
     # --- Covered bond LGD ---

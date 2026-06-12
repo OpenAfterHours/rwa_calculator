@@ -50,6 +50,16 @@ from rwa_calc.contracts.config import (
     SupportingFactors,
 )
 
+# Producer-sealed edge contracts (migration Phase 3)
+from rwa_calc.contracts.edges import (
+    EdgeColumn,
+    EdgeContract,
+    EdgeContractViolation,
+    edge_columns_from_specs,
+    seal,
+    sealed_edge_of,
+)
+
 # Error handling contracts
 from rwa_calc.contracts.errors import (
     ERROR_APPROACH_NOT_PERMITTED,
@@ -164,6 +174,13 @@ __all__ = [
     "ERROR_PD_OUT_OF_RANGE",
     "ERROR_TYPE_MISMATCH",
     "ERROR_UNKNOWN_EXPOSURE_CLASS",
+    # Edge contracts (migration Phase 3)
+    "EdgeColumn",
+    "EdgeContract",
+    "EdgeContractViolation",
+    "edge_columns_from_specs",
+    "seal",
+    "sealed_edge_of",
     # Bundles
     "AggregatedResultBundle",
     "ELPortfolioSummary",

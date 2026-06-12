@@ -44,6 +44,7 @@ from tests.fixtures.p1_191.p1_191 import (
     FAC_B,
     FAC_C,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # Exposure references after HierarchyResolver: committed, no-loan facilities
 # become facility_undrawn rows with the suffix "_UNDRAWN".
@@ -91,7 +92,7 @@ _EMPTY_FACILITY_MAPPINGS = pl.LazyFrame(
 
 def _build_raw_bundle() -> RawDataBundle:
     """Return the P1.191 RawDataBundle (parquet fixtures, no mapped loans)."""
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=_EMPTY_LOANS,
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

@@ -25,12 +25,96 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from rwa_calc.contracts.edges import require_brand
 from rwa_calc.domain.enums import EquityApproach
 
 if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.contracts.errors import CalculationError
+
+# Registry of bundle frame fields that must carry a sealed-edge brand,
+# keyed "BundleClassName.field_name" -> edge name. Grows edge-by-edge as
+# the Phase 3 strangler seals each stage exit; bundle ``__post_init__``
+# validates every registered field of its class. While a field is
+# unregistered, unbranded frames are accepted (the pre-seal status quo).
+#
+# RawDataBundle: all 18 frame fields sealed at the loader edge — frames
+# must come from a loader (ParquetLoader/CSVLoader) or a contract-derived
+# builder (tests/fixtures/raw_bundle.make_raw_bundle / seal_raw_table).
+# ResolvedHierarchyBundle.exposures: sealed by the resolver
+# (hierarchy_resolved, pure-plan) and re-sealed by the orchestrator after
+# the securitisation attach (hierarchy_exit — also the brand the CCR stage
+# re-applies); either brand is legitimate on the field.
+SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
+    "ResolvedHierarchyBundle.exposures": ("hierarchy_resolved", "hierarchy_exit", "ccr_exit"),
+    "CounterpartyLookup.counterparties": "cp_lookup_counterparties",
+    "CounterpartyLookup.parent_mappings": "cp_lookup_parents",
+    "CounterpartyLookup.ultimate_parent_mappings": "cp_lookup_ultimate_parents",
+    "CounterpartyLookup.rating_inheritance": "cp_lookup_rating_inheritance",
+    # Untransformed pass-throughs: the resolver forwards the loader-sealed
+    # objects unchanged, so the raw_* brands are still attached. (The
+    # FX-converted side frames — collateral/guarantees/provisions/
+    # equity_exposures — are transformed and get their own contracts with
+    # the CRM edge work.)
+    "ResolvedHierarchyBundle.collateral_links": "raw_collateral_links",
+    "ResolvedHierarchyBundle.ciu_holdings": "raw_ciu_holdings",
+    "ResolvedHierarchyBundle.specialised_lending": "raw_specialised_lending",
+    "ResolvedHierarchyBundle.model_permissions": "raw_model_permissions",
+    # Classifier exit: the unified frame the CRM stage consumes. The CCR
+    # variant carries the SA-CCR provenance pass-through columns.
+    "ClassifiedExposuresBundle.all_exposures": ("classifier_exit", "classifier_exit_ccr"),
+    "ClassifiedExposuresBundle.collateral_links": "raw_collateral_links",
+    "ClassifiedExposuresBundle.ciu_holdings": "raw_ciu_holdings",
+    # CRM exit / RE-split exit: the unified frame the calculators' branch
+    # split consumes. Two producers (CRMProcessor, then the splitter's
+    # replace at the orchestrator edge), each with a CCR variant.
+    "CRMAdjustedBundle.exposures": (
+        "crm_exit",
+        "crm_exit_ccr",
+        "re_split_exit",
+        "re_split_exit_ccr",
+    ),
+    "CRMAdjustedBundle.ciu_holdings": "raw_ciu_holdings",
+    # Aggregator exit: the combined results frame is the reporting input
+    # contract (Phase 7 consumes it as such).
+    "AggregatedResultBundle.results": "aggregator_exit",
+} | {
+    f"RawDataBundle.{_field}": f"raw_{_field}"
+    for _field in (
+        "facilities",
+        "loans",
+        "counterparties",
+        "facility_mappings",
+        "org_mappings",
+        "lending_mappings",
+        "contingents",
+        "collateral",
+        "collateral_links",
+        "guarantees",
+        "provisions",
+        "ratings",
+        "equity_exposures",
+        "ciu_holdings",
+        "specialised_lending",
+        "fx_rates",
+        "model_permissions",
+        "securitisation_allocations",
+    )
+}
+
+
+def _validate_sealed_frames(bundle: object) -> None:
+    """Require the registered brand on every sealed frame field of ``bundle``."""
+    owner = type(bundle).__name__
+    for key, edge_name in SEALED_FRAME_FIELDS.items():
+        bundle_name, _, field_name = key.partition(".")
+        if bundle_name != owner:
+            continue
+        frame = getattr(bundle, field_name, None)
+        if frame is None:
+            continue
+        require_brand(frame, edge_name, owner=owner, field_name=field_name)
 
 
 @dataclass(frozen=True)
@@ -95,6 +179,9 @@ class RawDataBundle:
     ccr: RawCCRBundle | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 @dataclass(frozen=True)
 class CounterpartyLookup:
@@ -115,6 +202,9 @@ class CounterpartyLookup:
     parent_mappings: pl.LazyFrame
     ultimate_parent_mappings: pl.LazyFrame
     rating_inheritance: pl.LazyFrame
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -161,6 +251,9 @@ class ResolvedHierarchyBundle:
     securitisation_audit: pl.LazyFrame | None = None
     hierarchy_errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 @dataclass(frozen=True)
 class ClassifiedExposuresBundle:
@@ -197,6 +290,9 @@ class ClassifiedExposuresBundle:
     # ResolvedHierarchyBundle. Untouched by the classifier.
     securitisation_audit: pl.LazyFrame | None = None
     classification_errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -240,6 +336,9 @@ class CRMAdjustedBundle:
     # reconciliation views.
     securitisation_audit: pl.LazyFrame | None = None
     crm_errors: list[CalculationError] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -463,6 +562,9 @@ class EquityResultBundle:
     approach: EquityApproach = EquityApproach.SA
     errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 @dataclass(frozen=True)
 class ELPortfolioSummary:
@@ -641,6 +743,9 @@ class AggregatedResultBundle:
     securitisation_audit: pl.LazyFrame | None = None
     errors: list[CalculationError] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
+
 
 # =============================================================================
 # HELPER FUNCTIONS FOR BUNDLE CREATION
@@ -810,16 +915,16 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
     """
     Create an empty RawDataBundle for testing.
 
-    Returns a bundle with empty LazyFrames that conform to
-    expected schemas.
+    Returns a bundle whose required tables are empty, schema-complete,
+    SEALED frames from the loader edge contracts.
     """
-    import polars as pl
+    from rwa_calc.contracts.edges import RAW_TABLE_EDGES
 
     return RawDataBundle(
-        facilities=pl.LazyFrame(),
-        loans=pl.LazyFrame(),
-        counterparties=pl.LazyFrame(),
-        facility_mappings=pl.LazyFrame(),
+        facilities=RAW_TABLE_EDGES["facilities"].empty_frame(),
+        loans=RAW_TABLE_EDGES["loans"].empty_frame(),
+        counterparties=RAW_TABLE_EDGES["counterparties"].empty_frame(),
+        facility_mappings=RAW_TABLE_EDGES["facility_mappings"].empty_frame(),
         lending_mappings=None,
         org_mappings=None,
         contingents=None,
@@ -834,43 +939,33 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
 
 
 def create_empty_counterparty_lookup() -> CounterpartyLookup:
-    """Create an empty CounterpartyLookup for testing."""
-    import polars as pl
+    """Create an empty CounterpartyLookup for testing.
+
+    Every frame is an empty, schema-complete, SEALED frame from its
+    cp_lookup_* edge contract.
+    """
+    from rwa_calc.contracts.edges import CP_LOOKUP_EDGES
 
     return CounterpartyLookup(
-        counterparties=pl.LazyFrame(schema={"counterparty_reference": pl.String}),
-        parent_mappings=pl.LazyFrame(
-            schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }
-        ),
-        ultimate_parent_mappings=pl.LazyFrame(
-            schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }
-        ),
-        rating_inheritance=pl.LazyFrame(
-            schema={
-                "counterparty_reference": pl.String,
-                "internal_pd": pl.Float64,
-                "internal_model_id": pl.String,
-                "external_cqs": pl.Int8,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-            }
-        ),
+        counterparties=CP_LOOKUP_EDGES["counterparties"].empty_frame(),
+        parent_mappings=CP_LOOKUP_EDGES["parent_mappings"].empty_frame(),
+        ultimate_parent_mappings=CP_LOOKUP_EDGES["ultimate_parent_mappings"].empty_frame(),
+        rating_inheritance=CP_LOOKUP_EDGES["rating_inheritance"].empty_frame(),
     )
 
 
 def create_empty_resolved_hierarchy_bundle() -> ResolvedHierarchyBundle:
-    """Create an empty ResolvedHierarchyBundle for testing."""
+    """Create an empty ResolvedHierarchyBundle for testing.
+
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the hierarchy_exit edge contract.
+    """
     import polars as pl
 
+    from rwa_calc.contracts.edges import HIERARCHY_EXIT_EDGE
+
     return ResolvedHierarchyBundle(
-        exposures=pl.LazyFrame(),
+        exposures=HIERARCHY_EXIT_EDGE.empty_frame(),
         counterparty_lookup=create_empty_counterparty_lookup(),
         lending_group_totals=pl.LazyFrame(),
         collateral=None,
@@ -880,17 +975,25 @@ def create_empty_resolved_hierarchy_bundle() -> ResolvedHierarchyBundle:
 
 
 def create_empty_classified_bundle() -> ClassifiedExposuresBundle:
-    """Create an empty ClassifiedExposuresBundle for testing."""
-    import polars as pl
+    """Create an empty ClassifiedExposuresBundle for testing.
 
-    return ClassifiedExposuresBundle(all_exposures=pl.LazyFrame())
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the classifier_exit edge contract.
+    """
+    from rwa_calc.contracts.edges import CLASSIFIER_EXIT_EDGE
+
+    return ClassifiedExposuresBundle(all_exposures=CLASSIFIER_EXIT_EDGE.empty_frame())
 
 
 def create_empty_crm_adjusted_bundle() -> CRMAdjustedBundle:
-    """Create an empty CRMAdjustedBundle for testing."""
-    import polars as pl
+    """Create an empty CRMAdjustedBundle for testing.
 
-    return CRMAdjustedBundle(exposures=pl.LazyFrame())
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the crm_exit edge contract.
+    """
+    from rwa_calc.contracts.edges import CRM_EXIT_EDGE
+
+    return CRMAdjustedBundle(exposures=CRM_EXIT_EDGE.empty_frame())
 
 
 def create_empty_reconciliation_bundle() -> ReconciliationBundle:

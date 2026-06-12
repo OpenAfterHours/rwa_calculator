@@ -6,9 +6,16 @@ empty bundles for testing.
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
+from tests.fixtures.resolved_bundle import (
+    make_aggregated_bundle,
+    make_classified_bundle,
+    make_counterparty_lookup,
+    make_crm_bundle,
+    make_resolved_bundle,
+)
 
 from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
     ClassifiedExposuresBundle,
     CounterpartyLookup,
     CRMAdjustedBundle,
@@ -27,7 +34,7 @@ class TestRawDataBundle:
 
     def test_create_with_lazyframes(self):
         """Should create bundle with LazyFrames."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame({"id": [1, 2]}),
             loans=pl.LazyFrame({"id": [3, 4]}),
             contingents=pl.LazyFrame({"id": [5]}),
@@ -70,7 +77,7 @@ class TestCounterpartyLookup:
 
     def test_create_with_lookups(self):
         """Should create lookup with hierarchy mappings as LazyFrames."""
-        lookup = CounterpartyLookup(
+        lookup = make_counterparty_lookup(
             counterparties=pl.LazyFrame({"counterparty_reference": ["A", "B", "C"]}),
             parent_mappings=pl.LazyFrame(
                 {
@@ -128,7 +135,7 @@ class TestResolvedHierarchyBundle:
 
     def test_create_with_resolved_data(self):
         """Should create bundle with resolved hierarchy data."""
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=pl.LazyFrame({"exposure_ref": ["E1", "E2"]}),
             counterparty_lookup=create_empty_counterparty_lookup(),
             collateral=pl.LazyFrame(),
@@ -151,7 +158,7 @@ class TestClassifiedExposuresBundle:
 
     def test_create_with_unified_frame(self):
         """Should create bundle around the single unified frame."""
-        bundle = ClassifiedExposuresBundle(
+        bundle = make_classified_bundle(
             all_exposures=pl.LazyFrame({"ref": ["E1", "E2", "E3"]}),
         )
 
@@ -177,7 +184,7 @@ class TestCRMAdjustedBundle:
 
     def test_create_with_crm_data(self):
         """Should create bundle with CRM-adjusted data."""
-        bundle = CRMAdjustedBundle(
+        bundle = make_crm_bundle(
             exposures=pl.LazyFrame({"ref": ["E1"], "final_ead": [1000.0]}),
         )
 
@@ -191,15 +198,13 @@ class TestCRMAdjustedBundle:
         assert bundle.collateral_link_allocation is None
 
 
-
-
 class TestAggregatedResultBundle:
     """Tests for AggregatedResultBundle dataclass."""
 
     def test_create_aggregated_results(self):
         """Should create bundle with aggregated results."""
-        bundle = AggregatedResultBundle(
-            results=pl.LazyFrame({"final_rwa": [100.0, 150.0]}),
+        bundle = make_aggregated_bundle(
+            results=pl.LazyFrame({"rwa_final": [100.0, 150.0]}),
             sa_results=pl.LazyFrame({"sa_rwa": [100.0]}),
             irb_results=pl.LazyFrame({"irb_rwa": [150.0]}),
         )
@@ -208,7 +213,7 @@ class TestAggregatedResultBundle:
 
     def test_optional_impact_analysis(self):
         """Impact analysis frames should be optional."""
-        bundle = AggregatedResultBundle(results=pl.LazyFrame())
+        bundle = make_aggregated_bundle(results=pl.LazyFrame())
 
         assert bundle.floor_impact is None
         assert bundle.supporting_factor_impact is None

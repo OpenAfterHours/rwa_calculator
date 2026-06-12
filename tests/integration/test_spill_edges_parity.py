@@ -40,6 +40,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import GUARANTEE_SCHEMA
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -109,7 +110,9 @@ def _build_bundle() -> RawDataBundle:
     )
     return replace(
         bundle,
-        guarantees=_rows_to_lazyframe([_guarantee_row()], GUARANTEE_SCHEMA),
+        guarantees=seal_raw_table(
+            _rows_to_lazyframe([_guarantee_row()], GUARANTEE_SCHEMA), "guarantees"
+        ),
     )
 
 

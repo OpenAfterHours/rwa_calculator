@@ -20,12 +20,12 @@ import pytest
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:
     pass
@@ -358,9 +358,9 @@ def create_resolved_bundle(
                 ]
             )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -733,6 +733,10 @@ class TestSpecialisedLendingSMEClassification:
                 "interest": [0.0],
                 "lgd": [0.45],
                 "seniority": ["senior"],
+                # Loader-edge Boolean default (LOAN_SCHEMA fills null->False);
+                # the lenient test seal would inject a typed null instead,
+                # which voids the Art. 501 SME-factor eligibility predicate.
+                "is_buy_to_let": [False],
                 "exposure_has_parent": [False],
                 "root_facility_reference": [None],
                 "facility_hierarchy_depth": [1],
@@ -817,6 +821,13 @@ class TestSpecialisedLendingSMEClassification:
         # that classifier-emitted is_sme flag produces the right factor when piped
         # into the slotting calculator.
         sl_rows = classified.all_exposures.filter(pl.col("sl_type").is_not_null())
+        # The classifier exit precedes CRM, so the CRM-owned columns do not
+        # exist yet; mirror the CRM output for this pipeline-bypass test
+        # (EAD = drawn, no provisions resolved).
+        sl_rows = sl_rows.with_columns(
+            pl.col("drawn_amount").alias("ead_final"),
+            pl.lit(0.0).alias("provision_allocated"),
+        )
 
         slotting_result = SlottingCalculator().calculate_branch(sl_rows, crr_config).collect()
 

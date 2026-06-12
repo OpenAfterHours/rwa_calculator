@@ -25,6 +25,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.data.schemas import ADDITIVE_OUTPUT_FIELDS
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import RawDataBundle
@@ -226,7 +227,6 @@ def build_raw_bundle(
     Returns:
         A RawDataBundle built from the fixture LazyFrames.
     """
-    from rwa_calc.contracts.bundles import RawDataBundle
 
     ratings = fixtures.ratings
     if enrich:
@@ -234,7 +234,7 @@ def build_raw_bundle(
 
         ratings = enrich_ratings_with_model_id(ratings)
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=fixtures.facilities,
         loans=fixtures.loans,
         contingents=fixtures.contingents,

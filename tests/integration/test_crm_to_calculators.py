@@ -29,6 +29,7 @@ from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -119,7 +120,7 @@ def _make_bundle_with_ratings(
     )
     ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None
     # Reconstruct with ratings (frozen dataclass — use __class__ constructor)
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=bundle.facilities,
         loans=bundle.loans,
         counterparties=bundle.counterparties,
@@ -305,9 +306,7 @@ class TestIRBBranch:
         crm_bundle = _run_pipeline(
             hierarchy_resolver, classifier, crm_processor, crr_full_irb_config, bundle
         )
-        df = irb_calculator.calculate_branch(
-            _irb_branch(crm_bundle), crr_full_irb_config
-        ).collect()
+        df = irb_calculator.calculate_branch(_irb_branch(crm_bundle), crr_full_irb_config).collect()
 
         airb_rows = df.filter(pl.col("approach") == ApproachType.AIRB.value)
         assert airb_rows.height >= 1
@@ -549,9 +548,7 @@ class TestSplitCorrectness:
         assert ApproachType.SA.value in sa_approaches
 
         # IRB branch should contain corporate exposures
-        irb_df = irb_calculator.calculate_branch(
-            _irb_branch(crm_bundle), crr_firb_config
-        ).collect()
+        irb_df = irb_calculator.calculate_branch(_irb_branch(crm_bundle), crr_firb_config).collect()
         irb_approaches = set(irb_df["approach"].unique().to_list())
         assert irb_approaches.issubset({ApproachType.FIRB.value, ApproachType.AIRB.value})
 

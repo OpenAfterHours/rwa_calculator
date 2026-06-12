@@ -9,9 +9,9 @@ ordered waterfall, and sorted summary tables — without any UI-framework deps.
 from __future__ import annotations
 
 import polars as pl
+from tests.fixtures.resolved_bundle import make_aggregated_bundle
 
 from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
     CapitalImpactBundle,
     ComparisonBundle,
 )
@@ -29,7 +29,7 @@ def _comparison_bundle(
 ) -> ComparisonBundle:
     """Build a ComparisonBundle whose only meaningful fields are the summaries."""
     empty = pl.LazyFrame()
-    agg = AggregatedResultBundle(results=empty)
+    agg = make_aggregated_bundle(results=empty)
     return ComparisonBundle(
         crr_results=agg,
         b31_results=agg,

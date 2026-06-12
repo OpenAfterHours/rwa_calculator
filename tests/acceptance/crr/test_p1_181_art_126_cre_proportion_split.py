@@ -56,8 +56,8 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -134,7 +134,7 @@ def p1_181_sa_results() -> dict[str, dict]:
         }
     )
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

@@ -21,6 +21,8 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
+from tests.fixtures.resolved_bundle import make_classified_bundle
+from tests.unit.crm._crm_bundles import normalise_collateral, with_ancestor_facilities
 
 # =============================================================================
 # Fixtures
@@ -87,6 +89,8 @@ def create_classified_bundle(
                 pl.col("parent_facility_reference").cast(pl.String),
             ]
         )
+    # Production hierarchy always emits the facility-ancestor closure.
+    exposures = with_ancestor_facilities(exposures)
 
     collateral = None
     if collateral_data:
@@ -105,12 +109,12 @@ def create_classified_bundle(
         for key, value in coll_defaults.items():
             if key not in collateral_data:
                 collateral_data[key] = value
-        collateral = pl.DataFrame(collateral_data).lazy()
+        collateral = normalise_collateral(pl.DataFrame(collateral_data).lazy())
 
     # Create empty CounterpartyLookup
     counterparty_lookup = create_empty_counterparty_lookup()
 
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         collateral=collateral,

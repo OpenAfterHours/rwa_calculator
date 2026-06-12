@@ -26,8 +26,8 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
@@ -328,7 +328,7 @@ def _run_pipeline(
 ):
     """Run the CRR SA pipeline and return the orchestrator result."""
     fac_map, lend_map = _empty_mappings()
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(facilities, schema=_FACILITY_SCHEMA),
         loans=pl.LazyFrame(loans, schema=_LOAN_SCHEMA),
         counterparties=pl.LazyFrame(counterparties, schema=_COUNTERPARTY_SCHEMA),

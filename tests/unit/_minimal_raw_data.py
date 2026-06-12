@@ -19,6 +19,7 @@ from datetime import date
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 
 def make_minimal_raw_data(*, maturity_date: date = date(2028, 1, 1)) -> RawDataBundle:
@@ -82,7 +83,7 @@ def make_minimal_raw_data(*, maturity_date: date = date(2028, 1, 1)) -> RawDataB
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

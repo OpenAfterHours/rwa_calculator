@@ -25,9 +25,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -62,7 +62,7 @@ def p1_112_sa_result() -> dict:
         }
     )
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_aggregated_bundle
 
 from rwa_calc.api.formatters import ResultFormatter
 from rwa_calc.api.models import CalculationResponse
@@ -69,7 +70,7 @@ def sample_result_bundle() -> AggregatedResultBundle:
         }
     )
 
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=results,
         sa_results=sa_results,
         irb_results=irb_results,
@@ -83,7 +84,7 @@ def sample_result_bundle() -> AggregatedResultBundle:
 @pytest.fixture
 def empty_result_bundle() -> AggregatedResultBundle:
     """Create an empty AggregatedResultBundle."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": pl.Series([], dtype=pl.String),
@@ -98,7 +99,7 @@ def empty_result_bundle() -> AggregatedResultBundle:
 @pytest.fixture
 def error_result_bundle() -> AggregatedResultBundle:
     """Create a bundle with errors."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -353,7 +354,7 @@ class TestComputeSummaryLazyApproachStats:
         self, approach_applied: list[str], ead: list[float], rwa: list[float]
     ) -> AggregatedResultBundle:
         """Helper to create a bundle with given approach data."""
-        return AggregatedResultBundle(
+        return make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": [f"EXP{i}" for i in range(len(approach_applied))],
@@ -470,8 +471,13 @@ class TestComputeSummaryLazyApproachStats:
         assert response.summary.total_rwa_irb == Decimal("200000")
 
     def test_no_approach_column(self, cache: ResultsCache) -> None:
-        """Should return zeros when approach_applied column is missing."""
-        bundle = AggregatedResultBundle(
+        """Should return zeros when approach_applied carries no values.
+
+        Phase 3: sealed results always carry the column, so the absent-column
+        ramp becomes a typed-null column after the seal — per-approach totals
+        must still be zero.
+        """
+        bundle = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],

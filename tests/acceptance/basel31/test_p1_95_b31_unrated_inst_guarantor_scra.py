@@ -82,6 +82,7 @@ from tests.fixtures.p1_95.p1_95 import (
     LOAN_REF_C,
     LOAN_REF_NULL,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -118,7 +119,7 @@ def _build_bundle() -> RawDataBundle:
     facility_mappings and lending_mappings are empty frames with the correct
     schema — no hierarchy rows are needed for this scenario.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loans.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparties.parquet"),

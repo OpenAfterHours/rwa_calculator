@@ -90,6 +90,8 @@ from __future__ import annotations
 
 import polars as pl
 
+from tests.fixtures.contract_columns import pad_sa_branch
+
 # ---------------------------------------------------------------------------
 # Scenario constants — referenced by tests for assertion values
 # ---------------------------------------------------------------------------
@@ -175,30 +177,36 @@ def build_sa_results() -> pl.LazyFrame:
     Columns mirror the fields used by ``_crm_reporting.py`` helpers.  The
     ``is_guaranteed`` column is explicitly cast to ``pl.Boolean`` so the null value
     is a true Polars Boolean null (not a Python ``None`` in an object column).
+
+    The frame is padded to the sa_branch edge shape (Phase 3 sealed inputs).
+    ``is_guaranteed`` is NOT fill-null'd by the contract, so the bug-trigger
+    Boolean null survives the pad.
     """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [EXP_GUAR_REF, EXP_PLAIN_REF, EXP_NULL_REF],
-            "counterparty_reference": [CP_GUAR_REF, CP_PLAIN_REF, CP_NULL_REF],
-            "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
-            "approach_applied": ["SA", "SA", "SA"],
-            "ead_final": [EAD_GUAR, EAD_PLAIN, EAD_NULL],
-            "risk_weight": [RW_GUAR_BLENDED, RW_PLAIN, RW_NULL],
-            "rwa_final": [RWA_GUAR, RWA_PLAIN, RWA_NULL],
-            "pre_crm_exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
-            "post_crm_exposure_class_guaranteed": [
-                "CENTRAL_GOVT_CENTRAL_BANK",
-                "CORPORATE",
-                "CORPORATE",
-            ],
-            "is_guaranteed": pl.Series(
-                [True, False, None],
-                dtype=pl.Boolean,
-            ),
-            "guaranteed_portion": [GUARANTEED_PORTION, 0.0, 0.0],
-            "unguaranteed_portion": [UNGUARANTEED_PORTION, EAD_PLAIN, EAD_NULL],
-            "guarantor_reference": [GUARANTOR_REF, None, None],
-            "pre_crm_risk_weight": [RW_PRE_CRM_GUAR, RW_PLAIN, RW_NULL],
-            "guarantor_rw": [RW_GUARANTOR, None, None],
-        }
+    return pad_sa_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": [EXP_GUAR_REF, EXP_PLAIN_REF, EXP_NULL_REF],
+                "counterparty_reference": [CP_GUAR_REF, CP_PLAIN_REF, CP_NULL_REF],
+                "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
+                "approach_applied": ["SA", "SA", "SA"],
+                "ead_final": [EAD_GUAR, EAD_PLAIN, EAD_NULL],
+                "risk_weight": [RW_GUAR_BLENDED, RW_PLAIN, RW_NULL],
+                "rwa_final": [RWA_GUAR, RWA_PLAIN, RWA_NULL],
+                "pre_crm_exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
+                "post_crm_exposure_class_guaranteed": [
+                    "CENTRAL_GOVT_CENTRAL_BANK",
+                    "CORPORATE",
+                    "CORPORATE",
+                ],
+                "is_guaranteed": pl.Series(
+                    [True, False, None],
+                    dtype=pl.Boolean,
+                ),
+                "guaranteed_portion": [GUARANTEED_PORTION, 0.0, 0.0],
+                "unguaranteed_portion": [UNGUARANTEED_PORTION, EAD_PLAIN, EAD_NULL],
+                "guarantor_reference": [GUARANTOR_REF, None, None],
+                "pre_crm_risk_weight": [RW_PRE_CRM_GUAR, RW_PLAIN, RW_NULL],
+                "guarantor_rw": [RW_GUARANTOR, None, None],
+            }
+        )
     )

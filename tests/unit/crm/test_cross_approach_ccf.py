@@ -21,10 +21,10 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle, make_counterparty_lookup
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
@@ -96,10 +96,10 @@ def _make_bundle(
                 "rating_type": pl.String,
             },
         )
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=counterparties,
             parent_mappings=empty_mappings,
             ultimate_parent_mappings=empty_ultimate,

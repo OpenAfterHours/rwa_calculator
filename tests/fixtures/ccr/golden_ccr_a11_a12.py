@@ -106,6 +106,7 @@ from rwa_calc.data.schemas import (
     RATINGS_SCHEMA,
     TRADE_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .margin_builder import create_margin_agreements
 from .netting_set_builder import NettingSet, create_netting_sets
@@ -512,7 +513,7 @@ def build_raw_data_bundle_ccr_a11() -> RawDataBundle:
     References:
         CRR Art. 271(2), 223(5), 224 Table 1, 226(2), 120 Table 3.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_inst_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),
@@ -540,7 +541,7 @@ def build_raw_data_bundle_ccr_a12() -> RawDataBundle:
     References:
         CRR Art. 271(2), 223(5), 224 Table 1, 226(2), 120 Table 3.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_inst_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

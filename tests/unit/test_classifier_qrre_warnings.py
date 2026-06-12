@@ -1,16 +1,19 @@
-"""Unit tests for QRRE classification warning when columns are missing.
+"""Unit tests for QRRE driver columns under the sealed hierarchy_exit edge.
+
+The hierarchy_exit edge contract (contracts/edges.py) declares is_revolving,
+facility_limit and is_qrre_transactor, so every constructible classifier
+input carries them — absent at most as typed nulls, never as missing
+columns. The historical CLS004 "QRRE columns missing" warning branch was
+deleted as dead code; these tests pin the replacement invariant instead.
 
 Tests cover:
-- Warning emitted when is_revolving column is missing
-- Warning emitted when facility_limit column is missing
-- Warning emitted when both columns are missing
-- No warning when both columns are present
-- Warning attributes (code, severity, category, regulatory reference)
-- QRRE classification works correctly when columns are present
+- Sealed exposures frames always carry the QRRE driver columns
+- CLS004 (ERROR_QRRE_COLUMNS_MISSING) is never emitted on sealed input
+- QRRE classification works correctly with populated / null driver columns
 
 References:
 - CRR Art. 147(5): QRRE qualifying criteria
-- P6.12: QRRE classification silently disabled when columns absent
+- contracts/edges.py: HIERARCHY_EXIT_EDGE (Phase 3 producer-sealed edge)
 """
 
 from __future__ import annotations
@@ -21,17 +24,13 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_QRRE_COLUMNS_MISSING
-from rwa_calc.domain.enums import (
-    ErrorCategory,
-    ErrorSeverity,
-    ExposureClass,
-)
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Fixtures
@@ -141,9 +140,9 @@ def _make_bundle(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -190,131 +189,52 @@ def _make_bundle(
 
 
 # =============================================================================
-# Tests: Missing column warnings
+# Tests: sealed-edge invariant (QRRE driver columns are always present)
 # =============================================================================
+#
+# The historical TestQRREMissingColumnWarnings class asserted that CLS004
+# fired when is_revolving / facility_limit were absent from the exposures
+# frame. Under the hierarchy_exit seal those states are unrepresentable
+# (the seal injects declared-but-absent columns as typed nulls), so the
+# absence-warning tests were deleted and replaced by the invariant below.
 
 
-class TestQRREMissingColumnWarnings:
-    """Test that classifier emits warnings when QRRE columns are absent."""
+class TestQRRESealedFrameInvariant:
+    """The sealed edge makes the QRRE column-absence state unrepresentable."""
 
-    def test_both_columns_missing_emits_warning(
+    def test_sealed_frame_always_carries_qrre_driver_columns(
         self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
     ) -> None:
-        """When both is_revolving and facility_limit are missing, emit one warning."""
+        """Exposures built without QRRE columns still carry them after the seal."""
         exposures = _retail_exposures(include_is_revolving=False, include_facility_limit=False)
         bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
 
-        assert len(result.classification_errors) == 1
-        error = result.classification_errors[0]
-        assert error.code == ERROR_QRRE_COLUMNS_MISSING
-        assert "is_revolving" in error.message
-        assert "facility_limit" in error.message
+        schema = bundle.exposures.collect_schema()
+        assert schema.get("is_revolving") == pl.Boolean
+        assert schema.get("facility_limit") == pl.Float64
+        assert schema.get("is_qrre_transactor") == pl.Boolean
 
-    def test_only_is_revolving_missing(
+    @pytest.mark.parametrize("config_fixture", ["crr_config", "b31_config"])
+    def test_no_qrre_column_warning_on_sealed_input(
         self,
         classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
+        config_fixture: str,
+        request: pytest.FixtureRequest,
     ) -> None:
-        """When only is_revolving is missing, warning mentions only that column."""
-        exposures = _retail_exposures(include_is_revolving=False, include_facility_limit=True)
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
+        """CLS004 is never emitted: the sealed input always has the columns.
 
-        assert len(result.classification_errors) == 1
-        error = result.classification_errors[0]
-        assert "is_revolving" in error.message
-        assert "facility_limit" not in error.message
-
-    def test_only_facility_limit_missing(
-        self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """When only facility_limit is missing, warning mentions only that column."""
-        exposures = _retail_exposures(include_is_revolving=True, include_facility_limit=False)
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
-
-        assert len(result.classification_errors) == 1
-        error = result.classification_errors[0]
-        assert "facility_limit" in error.message
-        assert "is_revolving" not in error.message
-
-    def test_both_columns_present_no_warning(
-        self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """When both columns are present, no QRRE warning should be emitted."""
-        exposures = _retail_exposures(include_is_revolving=True, include_facility_limit=True)
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
-
-        qrre_warnings = [e for e in result.classification_errors if e.code == "CLS004"]
-        assert len(qrre_warnings) == 0
-
-    def test_warning_severity_is_warning(
-        self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """QRRE missing column warning should be WARNING severity, not ERROR."""
-        exposures = _retail_exposures()
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
-
-        error = result.classification_errors[0]
-        assert error.severity == ErrorSeverity.WARNING
-
-    def test_warning_category_is_classification(
-        self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """QRRE warning should use CLASSIFICATION error category."""
-        exposures = _retail_exposures()
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
-
-        error = result.classification_errors[0]
-        assert error.category == ErrorCategory.CLASSIFICATION
-
-    def test_warning_regulatory_reference(
-        self,
-        classifier: ExposureClassifier,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """Warning should reference CRR Art. 147(5) for QRRE criteria."""
-        exposures = _retail_exposures()
-        bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, crr_config)
-
-        error = result.classification_errors[0]
-        assert error.regulatory_reference == "CRR Art. 147(5)"
-
-    def test_warning_fires_for_basel_3_1_too(
-        self,
-        classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
-    ) -> None:
-        """QRRE column warning fires under Basel 3.1 as well as CRR.
-
-        Filter by code rather than total count: under Basel 3.1 the bundle's
-        minimal counterparty schema (no `is_financial_sector_entity`) also
-        triggers CLS007 (Art. 147A(1)(e) FSE column-missing warning). The
-        QRRE-specific assertion is that exactly one CLS004 fires here.
+        Other warnings may legitimately fire (e.g. CLS007 under Basel 3.1
+        for the minimal counterparty schema), so filter by code.
         """
-        exposures = _retail_exposures()
+        config = request.getfixturevalue(config_fixture)
+        exposures = _retail_exposures(include_is_revolving=False, include_facility_limit=False)
         bundle = _make_bundle(exposures, _retail_counterparties())
-        result = classifier.classify(bundle, b31_config)
+        result = classifier.classify(bundle, config)
 
         qrre_warnings = [
             e for e in result.classification_errors if e.code == ERROR_QRRE_COLUMNS_MISSING
         ]
-        assert len(qrre_warnings) == 1
+        assert qrre_warnings == []
 
 
 # =============================================================================

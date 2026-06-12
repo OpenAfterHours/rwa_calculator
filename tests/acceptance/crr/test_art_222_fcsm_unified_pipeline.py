@@ -57,6 +57,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -155,7 +156,7 @@ def _build_bundle() -> RawDataBundle:
         schema=dtypes_of(COLLATERAL_SCHEMA),
     ).lazy()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

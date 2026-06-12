@@ -18,12 +18,23 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
+from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -47,46 +58,50 @@ def basel31_config() -> CalculationConfig:
 @pytest.fixture
 def sa_results() -> pl.LazyFrame:
     """Sample SA results with approach_applied and rwa_final already set."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "counterparty_reference": ["CP001", "CP002", "CP003"],
-            "exposure_class": ["CORPORATE", "RETAIL", "CENTRAL_GOVT_CENTRAL_BANK"],
-            "approach_applied": ["SA", "SA", "SA"],
-            "ead_final": [1000000.0, 500000.0, 2000000.0],
-            "risk_weight": [1.0, 0.75, 0.0],
-            "rwa_pre_factor": [1000000.0, 375000.0, 0.0],
-            "supporting_factor": [0.7619, 1.0, 1.0],
-            "rwa_post_factor": [761900.0, 375000.0, 0.0],
-            "rwa_final": [761900.0, 375000.0, 0.0],
-            "supporting_factor_applied": [True, False, False],
-            "is_sme": [True, False, False],
-            "is_infrastructure": [False, False, False],
-        }
+    return pad_sa_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "counterparty_reference": ["CP001", "CP002", "CP003"],
+                "exposure_class": ["CORPORATE", "RETAIL", "CENTRAL_GOVT_CENTRAL_BANK"],
+                "approach_applied": ["SA", "SA", "SA"],
+                "ead_final": [1000000.0, 500000.0, 2000000.0],
+                "risk_weight": [1.0, 0.75, 0.0],
+                "rwa_pre_factor": [1000000.0, 375000.0, 0.0],
+                "supporting_factor": [0.7619, 1.0, 1.0],
+                "rwa_post_factor": [761900.0, 375000.0, 0.0],
+                "rwa_final": [761900.0, 375000.0, 0.0],
+                "supporting_factor_applied": [True, False, False],
+                "is_sme": [True, False, False],
+                "is_infrastructure": [False, False, False],
+            }
+        )
     )
 
 
 @pytest.fixture
 def irb_results() -> pl.LazyFrame:
     """Sample IRB results with approach_applied and rwa_final already set."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP004", "EXP005"],
-            "counterparty_reference": ["CP004", "CP005"],
-            "exposure_class": ["CORPORATE", "CORPORATE"],
-            "approach": ["FIRB", "AIRB"],
-            "approach_applied": ["FIRB", "AIRB"],
-            "ead_final": [5000000.0, 3000000.0],
-            "pd_floored": [0.01, 0.005],
-            "lgd_floored": [0.45, 0.35],
-            "correlation": [0.18, 0.15],
-            "k": [0.08, 0.05],
-            "maturity_adjustment": [1.1, 1.05],
-            "risk_weight": [0.88, 0.525],
-            "rwa": [4400000.0, 1575000.0],
-            "rwa_final": [4400000.0, 1575000.0],
-            "expected_loss": [225000.0, 52500.0],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP004", "EXP005"],
+                "counterparty_reference": ["CP004", "CP005"],
+                "exposure_class": ["CORPORATE", "CORPORATE"],
+                "approach": ["FIRB", "AIRB"],
+                "approach_applied": ["FIRB", "AIRB"],
+                "ead_final": [5000000.0, 3000000.0],
+                "pd_floored": [0.01, 0.005],
+                "lgd_floored": [0.45, 0.35],
+                "correlation": [0.18, 0.15],
+                "k": [0.08, 0.05],
+                "maturity_adjustment": [1.1, 1.05],
+                "risk_weight": [0.88, 0.525],
+                "rwa": [4400000.0, 1575000.0],
+                "rwa_final": [4400000.0, 1575000.0],
+                "expected_loss": [225000.0, 52500.0],
+            }
+        )
     )
 
 
@@ -97,28 +112,30 @@ def partially_guaranteed_irb_results() -> pl.LazyFrame:
     Splits into 400k unguaranteed -> CORPORATE/FIRB and 600k guaranteed ->
     RETAIL/standardised (the guarantor's class/approach).
     """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach": ["FIRB"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [1000000.0],
-            "risk_weight": [0.5],
-            "rwa": [500000.0],
-            "rwa_final": [500000.0],
-            "guarantor_approach": ["sa"],
-            "guarantee_ratio": [0.6],
-            "is_guaranteed": [True],
-            "guaranteed_portion": [600000.0],
-            "unguaranteed_portion": [400000.0],
-            "counterparty_reference": ["BORROWER01"],
-            "guarantor_reference": ["GUARANTOR01"],
-            "pre_crm_exposure_class": ["CORPORATE"],
-            "post_crm_exposure_class_guaranteed": ["RETAIL"],
-            "pre_crm_risk_weight": [0.5],
-            "guarantor_rw": [0.75],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach": ["FIRB"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [1000000.0],
+                "risk_weight": [0.5],
+                "rwa": [500000.0],
+                "rwa_final": [500000.0],
+                "guarantor_approach": ["sa"],
+                "guarantee_ratio": [0.6],
+                "is_guaranteed": [True],
+                "guaranteed_portion": [600000.0],
+                "unguaranteed_portion": [400000.0],
+                "counterparty_reference": ["BORROWER01"],
+                "guarantor_reference": ["GUARANTOR01"],
+                "pre_crm_exposure_class": ["CORPORATE"],
+                "post_crm_exposure_class_guaranteed": ["RETAIL"],
+                "pre_crm_risk_weight": [0.5],
+                "guarantor_rw": [0.75],
+            }
+        )
     )
 
 
@@ -137,22 +154,24 @@ class TestOutputFloor:
     ) -> None:
         """Floor should bind when IRB RWA < 72.5% SA RWA."""
         # IRB RWA = 50m, SA RWA = 100m, Floor = 72.5m
-        irb_results = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["FIRB"],
-                "ead_final": [100000000.0],
-                "risk_weight": [0.5],
-                "rwa_final": [50000000.0],
-                "sa_rwa": [100000000.0],
-            }
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["FIRB"],
+                    "ead_final": [100000000.0],
+                    "risk_weight": [0.5],
+                    "rwa_final": [50000000.0],
+                    "sa_rwa": [100000000.0],
+                }
+            )
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=basel31_config,
         )
@@ -174,22 +193,24 @@ class TestOutputFloor:
         basel31_config: CalculationConfig,
     ) -> None:
         """Floor should not bind when IRB RWA > 72.5% SA RWA."""
-        irb_results = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["FIRB"],
-                "ead_final": [100000000.0],
-                "risk_weight": [0.8],
-                "rwa_final": [80000000.0],
-                "sa_rwa": [100000000.0],
-            }
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["FIRB"],
+                    "ead_final": [100000000.0],
+                    "risk_weight": [0.8],
+                    "rwa_final": [80000000.0],
+                    "sa_rwa": [100000000.0],
+                }
+            )
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=basel31_config,
         )
@@ -211,33 +232,37 @@ class TestOutputFloor:
         basel31_config: CalculationConfig,
     ) -> None:
         """Floor should only apply to IRB exposures, not SA."""
-        sa_results = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP_SA"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["SA"],
-                "ead_final": [1000000.0],
-                "risk_weight": [1.0],
-                "rwa_final": [1000000.0],
-                "sa_rwa": [1000000.0],
-            }
+        sa_results = pad_sa_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP_SA"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["SA"],
+                    "ead_final": [1000000.0],
+                    "risk_weight": [1.0],
+                    "rwa_final": [1000000.0],
+                    "sa_rwa": [1000000.0],
+                }
+            )
         )
-        irb_results = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP_IRB"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["FIRB"],
-                "ead_final": [100000000.0],
-                "risk_weight": [0.5],
-                "rwa_final": [50000000.0],
-                "sa_rwa": [100000000.0],
-            }
+        irb_results = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP_IRB"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["FIRB"],
+                    "ead_final": [100000000.0],
+                    "risk_weight": [0.5],
+                    "rwa_final": [50000000.0],
+                    "sa_rwa": [100000000.0],
+                }
+            )
         )
 
         result = aggregator.aggregate(
             sa_results=sa_results,
             irb_results=irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=basel31_config,
         )
@@ -267,16 +292,18 @@ class TestOutputFloorTransitionalPhaseIn:
     @pytest.fixture
     def _floor_data(self) -> pl.LazyFrame:
         """Standard IRB=50m (combined), SA=100m floor test data."""
-        return pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["FIRB"],
-                "ead_final": [100_000_000.0],
-                "risk_weight": [0.5],
-                "rwa_final": [50_000_000.0],
-                "sa_rwa": [100_000_000.0],
-            }
+        return pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["FIRB"],
+                    "ead_final": [100_000_000.0],
+                    "risk_weight": [0.5],
+                    "rwa_final": [50_000_000.0],
+                    "sa_rwa": [100_000_000.0],
+                }
+            )
         )
 
     def _run_floor_test(
@@ -288,9 +315,9 @@ class TestOutputFloorTransitionalPhaseIn:
         """Run aggregation with floor and return (rwa_final, floor_impact)."""
         config = CalculationConfig.basel_3_1(reporting_date=reporting_date)
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=irb_data,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -407,8 +434,8 @@ class TestSupportingFactorImpact:
         """Should generate supporting factor impact for SA results."""
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -441,7 +468,7 @@ class TestSummaryGeneration:
         result = aggregator.aggregate(
             sa_results=sa_results,
             irb_results=irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -460,16 +487,18 @@ class TestSummaryGeneration:
         crr_config: CalculationConfig,
     ) -> None:
         """Should generate summary by approach."""
-        slotting_results = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP006"],
-                "counterparty_reference": ["CP006"],
-                "exposure_class": ["SPECIALISED_LENDING"],
-                "approach_applied": ["SLOTTING"],
-                "ead_final": [10000000.0],
-                "risk_weight": [0.7],
-                "rwa_final": [7000000.0],
-            }
+        slotting_results = pad_slotting_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP006"],
+                    "counterparty_reference": ["CP006"],
+                    "exposure_class": ["SPECIALISED_LENDING"],
+                    "approach_applied": ["SLOTTING"],
+                    "ead_final": [10000000.0],
+                    "risk_weight": [0.7],
+                    "rwa_final": [7000000.0],
+                }
+            )
         )
 
         result = aggregator.aggregate(
@@ -495,8 +524,8 @@ class TestSummaryGeneration:
         """Summary totals should be correct."""
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -526,9 +555,9 @@ class TestSummaryPostCRMBasis:
         - 600k guaranteed -> RETAIL (guarantor's class)
         """
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=partially_guaranteed_irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -556,9 +585,9 @@ class TestSummaryPostCRMBasis:
         unguaranteed portion -> FIRB, guaranteed portion -> standardised.
         """
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=partially_guaranteed_irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -584,8 +613,8 @@ class TestSummaryPostCRMBasis:
         """Non-guaranteed exposures should produce identical summaries."""
         result = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -613,9 +642,9 @@ class TestPostCRMDetailedReportingApproach:
     ) -> None:
         """Post-CRM detailed view should include reporting_approach column."""
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=partially_guaranteed_irb_results,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -638,27 +667,22 @@ class TestPostCRMDetailedReportingApproach:
 class TestELPortfolioSummary:
     """Tests for EL portfolio summary via OutputAggregator (CRR Art. 62(d), Art. 158-159)."""
 
-    def test_returns_none_when_no_irb_results(
-        self,
-        aggregator: OutputAggregator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """Should return None when IRB results have no EL columns."""
-        result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
-            equity_bundle=None,
-            config=crr_config,
-        )
-        assert result.el_summary is None
+    def test_returns_none_when_no_irb_results(self) -> None:
+        """Should return None when IRB results have no EL columns.
 
-    def test_returns_none_when_no_el_columns(
-        self,
-        aggregator: OutputAggregator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """Should return None when IRB results lack el_shortfall/el_excess columns."""
+        Phase 3: sealed branch inputs always carry the EL columns, so the
+        column-absence ramp is only reachable through the helper directly
+        (aggregate() with sealed empties yields a zero-valued summary).
+        """
+        el = compute_el_portfolio_summary(EMPTY, EMPTY)
+        assert el is None
+
+    def test_returns_none_when_no_el_columns(self) -> None:
+        """Should return None when IRB results lack el_shortfall/el_excess columns.
+
+        Phase 3: sealed branch inputs always carry the EL columns, so the
+        column-absence ramp is only reachable through the helper directly.
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -666,14 +690,8 @@ class TestELPortfolioSummary:
                 "rwa_post_factor": [1000000.0],
             }
         )
-        result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
-            equity_bundle=None,
-            config=crr_config,
-        )
-        assert result.el_summary is None
+        el = compute_el_portfolio_summary(irb, EMPTY)
+        assert el is None
 
     def test_basic_shortfall_computation(
         self,
@@ -694,9 +712,9 @@ class TestELPortfolioSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=pad_irb_branch(irb),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -727,9 +745,9 @@ class TestELPortfolioSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=pad_irb_branch(irb),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -760,9 +778,9 @@ class TestELPortfolioSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=pad_irb_branch(irb),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -789,9 +807,9 @@ class TestELPortfolioSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=pad_irb_branch(irb),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -820,9 +838,9 @@ class TestELPortfolioSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
+            sa_results=EMPTY_SA,
+            irb_results=pad_irb_branch(irb),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -839,12 +857,13 @@ class TestELPortfolioSummary:
         assert float(el.cet1_deduction) == pytest.approx(20000.0)
         assert float(el.t2_deduction) == pytest.approx(0.0)
 
-    def test_uses_rwa_final_fallback(
-        self,
-        aggregator: OutputAggregator,
-        crr_config: CalculationConfig,
-    ) -> None:
-        """Should fall back to rwa_final when rwa_post_factor is not available."""
+    def test_uses_rwa_final_fallback(self) -> None:
+        """Should fall back to rwa_final when rwa_post_factor is not available.
+
+        Phase 3: sealed branch inputs always carry ``rwa_post_factor``, so
+        the fallback ramp is only reachable through the helper directly
+        with a frame that genuinely lacks the column.
+        """
         irb = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
@@ -855,15 +874,7 @@ class TestELPortfolioSummary:
             }
         )
 
-        result = aggregator.aggregate(
-            sa_results=EMPTY,
-            irb_results=irb,
-            slotting_results=EMPTY,
-            equity_bundle=None,
-            config=crr_config,
-        )
-
-        el = result.el_summary
+        el = compute_el_portfolio_summary(irb, None)
         assert el is not None
         assert float(el.total_irb_rwa) == pytest.approx(2000000.0)
         assert float(el.t2_credit_cap) == pytest.approx(12000.0)

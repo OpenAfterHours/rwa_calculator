@@ -31,8 +31,13 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
 from rwa_calc.domain.enums import InstitutionType, ReportingBasis
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -54,16 +59,18 @@ def _b31_config(
 
 def _irb_frame(rwa: float = 50_000.0, sa_rwa: float = 100_000.0) -> pl.LazyFrame:
     """Single IRB exposure where floor binds when applicable (50k < 72.5k)."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP1"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [100_000.0],
-            "risk_weight": [rwa / 100_000.0],
-            "rwa_final": [rwa],
-            "sa_rwa": [sa_rwa],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP1"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [100_000.0],
+                "risk_weight": [rwa / 100_000.0],
+                "rwa_final": [rwa],
+                "sa_rwa": [sa_rwa],
+            }
+        )
     )
 
 
@@ -271,7 +278,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.CONSOLIDATED,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Floor disabled for intl subsidiary → RWA stays at 50k
         assert df["rwa_final"][0] == pytest.approx(50_000.0, rel=0.001)
@@ -285,7 +292,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.INDIVIDUAL,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Floor binds: 72.5% * 100k = 72.5k > 50k
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
@@ -299,7 +306,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.SUB_CONSOLIDATED,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
 
@@ -310,7 +317,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.INDIVIDUAL,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Exempt → RWA stays at 50k
         assert df["rwa_final"][0] == pytest.approx(50_000.0, rel=0.001)
@@ -325,7 +332,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.SUB_CONSOLIDATED,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         assert df["rwa_final"][0] == pytest.approx(50_000.0, rel=0.001)
         assert result.output_floor_summary is None
@@ -337,7 +344,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.CONSOLIDATED,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
         assert result.output_floor_summary is not None
@@ -346,7 +353,7 @@ class TestAggregatorEntityTypeCarveOuts:
         """Default B31 config (no entity type) still applies floor — backward compat."""
         config = _b31_config()  # No entity type specified
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
 
@@ -357,7 +364,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.CONSOLIDATED,
         )
         irb = _irb_frame(rwa=50_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         assert result.output_floor_summary is None
         assert result.floor_impact is None
 
@@ -370,7 +377,7 @@ class TestAggregatorEntityTypeCarveOuts:
             reporting_basis=ReportingBasis.INDIVIDUAL,
         )
         irb = _irb_frame(rwa=90_000.0, sa_rwa=100_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Even though IRB > SA threshold, exempt entity gets no floor processing
         assert df["rwa_final"][0] == pytest.approx(90_000.0, rel=0.001)

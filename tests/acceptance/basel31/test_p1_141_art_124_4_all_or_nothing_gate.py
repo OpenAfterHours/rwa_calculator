@@ -78,6 +78,7 @@ from tests.fixtures.p1_141.p1_141 import (
     EXPECTED_RWA_TOTAL,
     REPORTING_DATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -120,7 +121,7 @@ def _build_bundle() -> RawDataBundle:
     collateral = collateral_raw.with_columns(
         pl.lit("real_estate").alias("collateral_type"),
     )
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

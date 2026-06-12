@@ -27,6 +27,7 @@ from typing import Any
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -94,7 +95,7 @@ def build_p1_190_bundle(scenario: str, fac_ref: str, loan_ref: str) -> RawDataBu
         },
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / f"facility_{scenario}.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / f"loan_{scenario}.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / f"counterparty_{scenario}.parquet"),

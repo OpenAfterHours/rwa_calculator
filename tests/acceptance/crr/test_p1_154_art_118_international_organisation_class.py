@@ -68,6 +68,7 @@ from tests.fixtures.p1_154.p1_154 import (
     IMF_LIMIT,
     MDB_LIMIT,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -138,7 +139,7 @@ def _build_bundle() -> RawDataBundle:
     facilities = pl.scan_parquet(_FIXTURES_DIR / "facilities.parquet")
     ratings = pl.scan_parquet(_FIXTURES_DIR / "ratings.parquet")
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities,
         loans=pl.LazyFrame(schema=dtypes_of(LOAN_SCHEMA)),
         counterparties=counterparties,

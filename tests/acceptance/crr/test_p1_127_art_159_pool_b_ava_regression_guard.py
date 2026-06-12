@@ -38,7 +38,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import AggregatedResultBundle, ELPortfolioSummary, RawDataBundle
+from rwa_calc.contracts.bundles import AggregatedResultBundle, ELPortfolioSummary
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -67,6 +67,7 @@ from tests.fixtures.p1_127.p1_127 import (  # noqa: E402
     EXPECTED_TOTAL_PROV,
     EXPECTED_TOTAL_SHORTFALL,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Double-count sentinel values
@@ -109,7 +110,7 @@ def p1_127_pipeline_results() -> AggregatedResultBundle:
     Returns: AggregatedResultBundle with el_summary populated.
     """
     # Arrange
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

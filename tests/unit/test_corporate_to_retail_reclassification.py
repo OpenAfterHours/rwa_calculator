@@ -19,12 +19,12 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 _TEST_MODEL_ID = "TEST_MODEL"
 
@@ -91,7 +91,7 @@ def create_test_bundle(
     ).lazy()
 
     # Create CounterpartyLookup with all required fields
-    counterparty_lookup = CounterpartyLookup(
+    counterparty_lookup = make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=pl.LazyFrame(
             schema={
@@ -118,7 +118,7 @@ def create_test_bundle(
         ),
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         collateral=pl.DataFrame().lazy(),
         guarantees=pl.DataFrame().lazy(),
@@ -495,9 +495,11 @@ class TestPropertyCollateralReclassification:
                 "maturity_date": [date(2029, 1, 1)],
                 "currency": ["GBP"],
                 "residential_collateral_value": [400000.0],  # Has property collateral
+                # Hierarchy-resolver channel (hierarchy_exit contract column):
+                # total property collateral = the residential component.
+                "property_collateral_value": [400000.0],
                 "lending_group_adjusted_exposure": [100000.0],
                 "exposure_for_retail_threshold": [100000.0],
-                "collateral_type": ["residential"],
             },
             counterparties_data={
                 "counterparty_reference": ["CP001"],
@@ -544,7 +546,6 @@ class TestPropertyCollateralReclassification:
                 "property_collateral_value": [400000.0],  # But has commercial property
                 "lending_group_adjusted_exposure": [500000.0],  # Full exposure for threshold
                 "exposure_for_retail_threshold": [500000.0],
-                "collateral_type": ["commercial"],
             },
             counterparties_data={
                 "counterparty_reference": ["CP001"],
@@ -587,7 +588,6 @@ class TestPropertyCollateralReclassification:
                 "property_collateral_value": [0.0],  # No property collateral at all
                 "lending_group_adjusted_exposure": [500000.0],
                 "exposure_for_retail_threshold": [500000.0],
-                "collateral_type": ["financial"],  # Not property
             },
             counterparties_data={
                 "counterparty_reference": ["CP001"],
@@ -1047,7 +1047,7 @@ class TestModelPermissionReclassification:
             },
         )
         # Override the bundle's model_permissions with hybrid permissions
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=bundle.exposures,
             collateral=bundle.collateral,
             guarantees=bundle.guarantees,
@@ -1100,7 +1100,7 @@ class TestModelPermissionReclassification:
                 "is_managed_as_retail": [True],
             },
         )
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=bundle.exposures,
             collateral=bundle.collateral,
             guarantees=bundle.guarantees,
@@ -1170,7 +1170,7 @@ class TestModelPermissionReclassification:
                 "is_managed_as_retail": [True],
             },
         )
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=bundle.exposures,
             collateral=bundle.collateral,
             guarantees=bundle.guarantees,
@@ -1221,7 +1221,7 @@ class TestModelPermissionReclassification:
                 "is_managed_as_retail": [False],  # NOT managed as retail
             },
         )
-        bundle = ResolvedHierarchyBundle(
+        bundle = make_resolved_bundle(
             exposures=bundle.exposures,
             collateral=bundle.collateral,
             guarantees=bundle.guarantees,

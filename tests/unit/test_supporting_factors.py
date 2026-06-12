@@ -42,7 +42,7 @@ def _make_exposures(
     include_btl: bool = True,
     include_drawn: bool = True,
     include_counterparty: bool = True,
-    include_lending_group: bool = False,
+    include_lending_group: bool = True,
     include_res_coll: bool = True,
 ) -> pl.LazyFrame:
     """Build a LazyFrame of exposures for supporting factor tests.
@@ -51,6 +51,11 @@ def _make_exposures(
         ref, cp, ead, rwa, drawn (defaults to ead), interest (defaults to 0),
         is_sme (True), is_infra (False), is_btl (False), lending_group (None),
         res_coll (defaults to 0.0 — residential_collateral_value covering this row).
+
+    ``lending_group_reference`` is a crm_exit contract column and is now
+    carried by default (null-valued unless a row sets ``lending_group``) —
+    the engine reads it directly and falls back to counterparty on null
+    VALUES rather than column absence.
     """
     data: dict = {
         "exposure_reference": [r["ref"] for r in rows],
@@ -529,11 +534,18 @@ class TestMissingCounterpartyReferenceWarning:
         calculator: SupportingFactorCalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """No warning when is_sme column is absent (no SME exposures)."""
+        """No warning when no exposures are SME-flagged.
+
+        ``is_sme`` is a crm_exit contract column the engine reads directly,
+        so the frame carries it (all False) with the group-key columns.
+        """
         data = {
             "exposure_reference": ["E1"],
+            "counterparty_reference": ["CP1"],
+            "lending_group_reference": [None],
             "ead_final": [1_000_000.0],
             "rwa_pre_factor": [400_000.0],
+            "is_sme": [False],
             "is_infrastructure": [False],
         }
         exposures = pl.LazyFrame(data)
@@ -887,15 +899,15 @@ class TestLendingGroupAggregation:
         e2 = result.filter(pl.col("exposure_reference") == "E2")
         assert e2["supporting_factor"][0] == pytest.approx(1.0)
 
-    def test_no_lending_group_column_uses_counterparty_only(
+    def test_null_lending_group_values_use_counterparty_only(
         self,
         calculator: SupportingFactorCalculator,
         crr_config: CalculationConfig,
     ) -> None:
         """
-        Frame without lending_group_reference column at all: counterparty
-        fallback path runs cleanly and no SF001 warning is emitted (because
-        counterparty_reference IS present).
+        Frame with null lending_group_reference values throughout: the
+        counterparty fallback path runs cleanly and no SF001 warning is
+        emitted (because counterparty_reference IS present).
         """
         threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
 
@@ -904,7 +916,6 @@ class TestLendingGroupAggregation:
                 {"ref": "E1", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000},
                 {"ref": "E2", "cp": "CP1", "ead": 2_000_000, "rwa": 800_000},
             ],
-            include_lending_group=False,
         )
 
         errors: list[CalculationError] = []

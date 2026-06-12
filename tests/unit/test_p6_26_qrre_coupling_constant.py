@@ -19,9 +19,9 @@ import polars as pl
 import pytest
 
 import rwa_calc.engine.hierarchy as hierarchy_module
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Test 1 — constant existence and value
@@ -164,7 +164,7 @@ def test_qrre_columns_propagate_unchanged_through_resolver() -> None:
     This test must PASS today and must continue to pass after P6.26 lands.
     """
     # Arrange
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=_FACILITIES,
         loans=_LOANS,
         counterparties=_COUNTERPARTIES,

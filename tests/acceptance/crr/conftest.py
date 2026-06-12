@@ -36,6 +36,7 @@ from tests.acceptance.acceptance_helpers import (  # noqa: E402
     get_scenarios_by_group,
     make_irb_bundle,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle  # noqa: E402
 
 # Re-exported so explicit-path imports
 # (``from tests.acceptance.crr.conftest import ...``) keep resolving unchanged.
@@ -505,7 +506,6 @@ def run_single_guarantee_sa_pipeline(
     Returns:
         The SA results DataFrame (all rows, including guarantee sub-rows).
     """
-    from rwa_calc.contracts.bundles import RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.domain.enums import PermissionMode
     from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -513,7 +513,7 @@ def run_single_guarantee_sa_pipeline(
     single_guar = pl.scan_parquet(fixtures_dir / "guarantee.parquet").filter(
         pl.col("guarantee_reference") == guarantee_ref
     )
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={
                 "facility_reference": pl.String,

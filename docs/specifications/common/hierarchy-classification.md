@@ -154,18 +154,20 @@ parent headroom = 100m − 20m = 80m
 
 #### Type Column Handling
 
-The engine's contract is a single discriminator column `child_type`. The resolver
-normalises three accepted input shapes at its boundary via
-`_normalise_facility_mappings`:
+The engine's contract is a single discriminator column `child_type`, guaranteed
+to exist by the loader edge seal — the resolver itself carries no presence
+guards. The loader handles the three accepted input shapes exactly once at
+load:
 
-| Input Shape | Treatment |
-|-------------|-----------|
+| Input Shape | Treatment (at the loader) |
+|-------------|---------------------------|
 | `child_type` present | Pass through unchanged. **Producers MUST emit this form.** |
-| `node_type` present, `child_type` absent | Renamed to `child_type` on entry (legacy alias). Do not introduce new `node_type` producers. |
-| Neither column present | `child_type` synthesised as null. The downstream filter chain treats null as "no children of any type" — single-level mappings only, no facility hierarchy traversal, no loan or contingent aggregation against the parent. |
+| `node_type` present, `child_type` absent | Renamed to `child_type` at load (legacy alias in `engine/loader.py` `_INPUT_COLUMN_ALIASES`). Do not introduce new `node_type` producers. |
+| Neither column present | `child_type` injected as typed nulls by the seal. The downstream filter chain treats null as "no children of any type" — single-level mappings only, no facility hierarchy traversal, no loan or contingent aggregation against the parent. |
 
-A frame with both `child_type` and `node_type` raises `ValueError` — the loader
-contract should prevent that shape.
+A file carrying both `child_type` and `node_type` is structurally ambiguous:
+the loader's alias rename collides at schema resolution and the load wrappers
+surface it (required table → `DataLoadError`; optional table → DQ007).
 
 ## Exposure Classification
 

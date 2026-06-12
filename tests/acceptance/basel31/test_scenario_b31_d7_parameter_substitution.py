@@ -42,6 +42,7 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 
 def _compute_expected_irb_rw(
@@ -165,7 +166,8 @@ def _create_crm_and_irb_result(
 
     # Run full IRB formula pipeline and guarantee substitution
     result = (
-        exposures_with_guarantee.irb.classify_approach(config)
+        _pad(exposures_with_guarantee)
+        .irb.classify_approach(config)
         .irb.apply_firb_lgd(config)
         .irb.prepare_columns(config)
         .irb.apply_all_formulas(config)

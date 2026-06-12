@@ -118,6 +118,7 @@ from rwa_calc.data.schemas import (
     MODEL_PERMISSIONS_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions
@@ -674,7 +675,7 @@ def load_p1_122b_bundle() -> RawDataBundle:
     drives the SCRA risk-weight lookup in the SA guarantee fallback branch.
     """
     data_dir = Path(__file__).parent / "data"
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(data_dir / "facility.parquet"),
         loans=pl.scan_parquet(data_dir / "loan.parquet"),
         counterparties=pl.scan_parquet(data_dir / "counterparty.parquet"),

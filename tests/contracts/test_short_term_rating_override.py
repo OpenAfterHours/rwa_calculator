@@ -25,6 +25,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
@@ -174,7 +175,7 @@ def _bundle_for(
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

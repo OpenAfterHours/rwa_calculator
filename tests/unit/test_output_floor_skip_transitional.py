@@ -32,8 +32,13 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 # =============================================================================
@@ -230,16 +235,18 @@ class TestCalculationConfigSkipTransitionalFloor:
 
 def _irb_frame(rwa: float = 50_000.0, sa_rwa: float = 100_000.0) -> pl.LazyFrame:
     """Single IRB exposure where floor binds (50k < 72.5k)."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP1"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "rwa_final": [rwa],
-            "sa_rwa": [sa_rwa],
-            "ead_final": [200_000.0],
-            "risk_weight": [0.25],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP1"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "rwa_final": [rwa],
+                "sa_rwa": [sa_rwa],
+                "ead_final": [200_000.0],
+                "risk_weight": [0.25],
+            }
+        )
     )
 
 
@@ -259,9 +266,9 @@ class TestEndToEndSkipTransitional:
         )
         aggregator = OutputAggregator()
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=_irb_frame(),
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -284,9 +291,9 @@ class TestEndToEndSkipTransitional:
         )
         aggregator = OutputAggregator()
         result = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=_irb_frame(),
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )

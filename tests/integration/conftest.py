@@ -46,6 +46,7 @@ from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.observability.logging_setup import _NAMESPACE
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # =============================================================================
 # LOGGING STATE RESET
@@ -451,7 +452,7 @@ def make_raw_data_bundle(
     if ratings is not None:
         bundle_kwargs["ratings"] = _rows_to_lazyframe(ratings, RATINGS_SCHEMA)
 
-    return RawDataBundle(**bundle_kwargs)
+    return make_raw_bundle(**bundle_kwargs)
 
 
 # =============================================================================

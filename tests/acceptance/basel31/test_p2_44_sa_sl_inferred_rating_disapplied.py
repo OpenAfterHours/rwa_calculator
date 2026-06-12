@@ -78,6 +78,7 @@ from tests.fixtures.p2_44.p2_44 import (
     EXPECTED_SL_TYPE,
     EXPOSURE_REF,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture directory
@@ -122,7 +123,7 @@ def _build_p2_44_bundle() -> RawDataBundle:
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

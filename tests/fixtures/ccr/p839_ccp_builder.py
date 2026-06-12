@@ -102,6 +102,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .margin_builder import create_margin_agreements
 from .netting_set_builder import create_netting_sets, make_netting_set
@@ -304,7 +305,7 @@ def build_p839_bundle(is_client_cleared: bool) -> RawDataBundle:
 
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparty_df.lazy(),
         facilities=facilities,
         loans=loans,
@@ -361,7 +362,7 @@ def build_p839_two_counterparty_book() -> RawDataBundle:
 
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparties_df.lazy(),
         facilities=facilities,
         loans=loans,

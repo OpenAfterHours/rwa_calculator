@@ -83,18 +83,15 @@ _ONE_DAY_YEARS = 1.0 / 365.0
 # =============================================================================
 
 
-def _maturity_base_expr(config: CalculationConfig, names: set[str]) -> pl.Expr:
+def _maturity_base_expr(config: CalculationConfig) -> pl.Expr:
     """Build the base maturity expression from maturity_date/termination/default."""
-    if "maturity_date" not in names:
-        return pl.lit(2.5)
-
     maturity_from_date = (
         pl.when(pl.col("maturity_date").is_not_null())
         .then(_exact_fractional_years_expr(config.reporting_date, "maturity_date").clip(1.0, 5.0))
         .otherwise(pl.lit(2.5))
     )
 
-    if config.is_basel_3_1 and "facility_termination_date" in names and "is_revolving" in names:
+    if config.is_basel_3_1:
         # B31 Art. 162(2A)(k): revolving + non-null termination date → use termination date
         maturity_from_termination = (
             pl.when(pl.col("facility_termination_date").is_not_null())
@@ -115,13 +112,13 @@ def _maturity_base_expr(config: CalculationConfig, names: set[str]) -> pl.Expr:
 
 
 def _apply_firb_sft_supervisory_maturity(
-    maturity_expr: pl.Expr, config: CalculationConfig, names: set[str]
+    maturity_expr: pl.Expr, config: CalculationConfig
 ) -> pl.Expr:
     """CRR Art. 162(1): F-IRB fixed supervisory maturity for repo-style SFTs (0.5y).
 
     B31 deleted Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A).
     """
-    if not (config.is_crr and "is_sft" in names):
+    if not config.is_crr:
         return maturity_expr
     return (
         pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("is_sft").fill_null(False))
@@ -130,7 +127,7 @@ def _apply_firb_sft_supervisory_maturity(
     )
 
 
-def _effective_one_day_floor_flag(config: CalculationConfig, names: set[str]) -> pl.Expr:
+def _effective_one_day_floor_flag(config: CalculationConfig) -> pl.Expr:
     """Compose the Art. 162(3) one-day maturity floor flag.
 
     Per CRR Art. 162(3) second sub-paragraph point (b), self-liquidating short-term
@@ -139,12 +136,8 @@ def _effective_one_day_floor_flag(config: CalculationConfig, names: set[str]) ->
     from ``is_short_term_trade_lc=True`` under CRR. An explicit caller-supplied
     True is preserved by ORing the derived flag onto the input column.
     """
-    input_floor_flag = (
-        pl.col("has_one_day_maturity_floor").fill_null(False)
-        if "has_one_day_maturity_floor" in names
-        else pl.lit(False)
-    )
-    if not (config.is_crr and "is_short_term_trade_lc" in names and "maturity_date" in names):
+    input_floor_flag = pl.col("has_one_day_maturity_floor").fill_null(False)
+    if not config.is_crr:
         return input_floor_flag
 
     residual_years = (
@@ -160,28 +153,27 @@ def _effective_one_day_floor_flag(config: CalculationConfig, names: set[str]) ->
     return input_floor_flag | derived_floor_flag
 
 
-def _build_maturity_exprs(config: CalculationConfig, names: set[str]) -> list[pl.Expr]:
+def _build_maturity_exprs(config: CalculationConfig) -> list[pl.Expr]:
     """Build the full maturity priority chain as a list of aliased expressions.
 
     Returns two expressions: ``maturity`` and ``has_one_day_maturity_floor``.
     See ``IRBLazyFrame.prepare_columns`` for the priority chain documentation.
     """
-    maturity_expr = _maturity_base_expr(config, names)
-    maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, config, names)
+    maturity_expr = _maturity_base_expr(config)
+    maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, config)
 
-    effective_floor_flag = _effective_one_day_floor_flag(config, names)
+    effective_floor_flag = _effective_one_day_floor_flag(config)
     maturity_expr = (
         pl.when(effective_floor_flag).then(pl.lit(_ONE_DAY_YEARS)).otherwise(maturity_expr)
     )
 
     # Explicit firm-supplied effective_maturity — highest priority.
     # Clipped to [1 day, 5 years]; nulls fall through to the chain above.
-    if "effective_maturity" in names:
-        maturity_expr = (
-            pl.when(pl.col("effective_maturity").is_not_null())
-            .then(pl.col("effective_maturity").clip(_ONE_DAY_YEARS, 5.0))
-            .otherwise(maturity_expr)
-        )
+    maturity_expr = (
+        pl.when(pl.col("effective_maturity").is_not_null())
+        .then(pl.col("effective_maturity").clip(_ONE_DAY_YEARS, 5.0))
+        .otherwise(maturity_expr)
+    )
 
     return [
         maturity_expr.alias("maturity"),
@@ -205,17 +197,9 @@ def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[p
     """
     exprs: list[pl.Expr] = []
 
-    if "pd" not in names:
-        exprs.append(pl.lit(0.01).alias("pd"))
-
-    if "ead_final" not in names:
-        ead_expr = pl.col("ead") if "ead" in names else pl.lit(0.0)
-        exprs.append(ead_expr.alias("ead_final"))
-
     # Maturity priority chain — see ``prepare_columns`` docstring for details.
-    maturity_already_set = "maturity" in names
-    if not maturity_already_set:
-        exprs.extend(_build_maturity_exprs(config, names))
+    if "maturity" not in names:
+        exprs.extend(_build_maturity_exprs(config))
 
     if "turnover_m" not in names:
         # CRR Art. 153(4) third subparagraph: substitute total assets of the
@@ -229,40 +213,12 @@ def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[p
         # counterparties the classifier already flagged as SME — otherwise a
         # corporate with assets in the band (EUR 43m, EUR 50m equivalent) would
         # receive the IRB SME correlation reduction despite not being SME-classed.
-        size_metric = (
-            pl.col("sme_size_metric_gbp")
-            if "sme_size_metric_gbp" in names
-            else (pl.col("cp_annual_revenue") if "cp_annual_revenue" in names else None)
+        turnover_expr = (
+            pl.when(pl.col("is_sme").cast(pl.Boolean).fill_null(False))
+            .then(pl.col("sme_size_metric_gbp") / 1_000_000.0)
+            .otherwise(pl.lit(None).cast(pl.Float64))
         )
-        if size_metric is None:
-            turnover_expr = pl.lit(None).cast(pl.Float64)
-        elif "is_sme" in names:
-            turnover_expr = (
-                pl.when(pl.col("is_sme").cast(pl.Boolean).fill_null(False))
-                .then(size_metric / 1_000_000.0)
-                .otherwise(pl.lit(None).cast(pl.Float64))
-            )
-        else:
-            turnover_expr = size_metric / 1_000_000.0
         exprs.append(turnover_expr.alias("turnover_m"))
-
-    if "exposure_class" not in names:
-        exprs.append(pl.lit("CORPORATE").alias("exposure_class"))
-
-    if "is_defaulted" not in names:
-        exprs.append(pl.lit(False).alias("is_defaulted"))
-    if "beel" not in names:
-        exprs.append(pl.lit(0.0).alias("beel"))
-
-    # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
-    # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
-    # lending, and short-term self-liquidating trade transactions.
-    # When the maturity branch above ran, it has already appended the
-    # derived flag; we only need to default-False if neither the input
-    # column nor the derived expression were materialised.
-    needs_floor_default = "has_one_day_maturity_floor" not in names and maturity_already_set
-    if needs_floor_default:
-        exprs.append(pl.lit(False).alias("has_one_day_maturity_floor"))
 
     return exprs
 
@@ -277,26 +233,23 @@ def _lgd_floored_expr(config: CalculationConfig, schema_names: set[str], lgd_col
     if not config.is_basel_3_1:
         return pl.col(lgd_col).alias("lgd_floored")
 
-    has_seniority = "seniority" in schema_names
-    has_exposure_class = "exposure_class" in schema_names
     if "collateral_type" in schema_names:
         lgd_floor_expr = _lgd_floor_expression_with_collateral(
             config,
-            has_seniority=has_seniority,
-            has_exposure_class=has_exposure_class,
+            has_seniority=True,
+            has_exposure_class=True,
         )
     else:
         lgd_floor_expr = _lgd_floor_expression(
             config,
-            has_seniority=has_seniority,
-            has_exposure_class=has_exposure_class,
+            has_seniority=True,
+            has_exposure_class=True,
         )
     # Art. 164(4)(c) blended floor for retail with mixed collateral
-    if "crm_alloc_financial" in schema_names and has_exposure_class:
-        blended_expr = _lgd_floor_blended_expression(config)
-        lgd_floor_expr = (
-            pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
-        )
+    blended_expr = _lgd_floor_blended_expression(config)
+    lgd_floor_expr = (
+        pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
+    )
     is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
     floored_lgd = pl.max_horizontal(pl.col(lgd_col), lgd_floor_expr)
     return pl.when(is_airb).then(floored_lgd).otherwise(pl.col(lgd_col)).alias("lgd_floored")
@@ -373,26 +326,7 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with F-IRB LGD applied
         """
-        schema = self._lf.collect_schema()
-        schema_names = schema.names()
-        has_seniority = "seniority" in schema_names
-        has_lgd_post_crm = "lgd_post_crm" in schema_names
-        has_pr_subtype = "purchased_receivables_subtype" in schema_names
-
         lf = self._lf
-        if "lgd" not in schema_names:
-            lf = lf.with_columns(
-                [
-                    pl.lit(None).cast(pl.Float64).alias("lgd"),
-                ]
-            )
-        elif schema["lgd"] != pl.Float64:
-            # Cast lgd to Float64 if it's not already (handles String type from Excel imports)
-            lf = lf.with_columns(
-                [
-                    pl.col("lgd").cast(pl.Float64, strict=False).alias("lgd"),
-                ]
-            )
 
         # Use framework-appropriate supervisory LGD values
         lgd_table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
@@ -407,8 +341,7 @@ class IRBLazyFrame:
 
         # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
         # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
-        has_fse_col = config.is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names
-        if has_fse_col:
+        if config.is_basel_3_1:
             fse_lgd = float(lgd_table["unsecured_senior_fse"])
             default_lgd_expr = (
                 pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
@@ -422,10 +355,7 @@ class IRBLazyFrame:
         # F-IRB fallback for null lgd and as the override base for purchased
         # receivables routing below).
         seniority_based_lgd_expr = (
-            pl.when(
-                has_seniority
-                and pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub")
-            )
+            pl.when(pl.col("seniority").fill_null("senior").str.to_lowercase().str.contains("sub"))
             .then(pl.lit(sub_lgd))
             .otherwise(default_lgd_expr)
         )
@@ -435,19 +365,16 @@ class IRBLazyFrame:
         # subordinated purchased receivables (100%) and dilution risk (100% B3.1
         # / 75% CRR) deviate from the standard subordinated (75%) and senior
         # (40%/45%) supervisory LGDs respectively.
-        if has_pr_subtype:
-            pr_subtype = pl.col("purchased_receivables_subtype")
-            firb_lgd_expr = (
-                pl.when(pr_subtype == "senior")
-                .then(pl.lit(pr_senior_lgd))
-                .when(pr_subtype == "subordinated")
-                .then(pl.lit(pr_sub_lgd))
-                .when(pr_subtype == "dilution_risk")
-                .then(pl.lit(pr_dilution_lgd))
-                .otherwise(seniority_based_lgd_expr)
-            )
-        else:
-            firb_lgd_expr = seniority_based_lgd_expr
+        pr_subtype = pl.col("purchased_receivables_subtype")
+        firb_lgd_expr = (
+            pl.when(pr_subtype == "senior")
+            .then(pl.lit(pr_senior_lgd))
+            .when(pr_subtype == "subordinated")
+            .then(pl.lit(pr_sub_lgd))
+            .when(pr_subtype == "dilution_risk")
+            .then(pl.lit(pr_dilution_lgd))
+            .otherwise(seniority_based_lgd_expr)
+        )
 
         lf = lf.with_columns(
             [
@@ -458,36 +385,19 @@ class IRBLazyFrame:
             ]
         )
 
-        # For lgd_input, use lgd_post_crm (from CRM processor) if available
+        # For lgd_input, use lgd_post_crm (from CRM processor).
         # This ensures collateral-adjusted LGD is used for F-IRB risk weight calculation.
         # Purchased-receivables sub-type LGDs (Art. 161(1)(e)/(f)/(g)) override the
         # CRM-derived lgd_post_crm because they are unsecured supervisory rates that
         # do not benefit from generic seniority/collateral adjustments.
-        if has_lgd_post_crm:
-            if has_pr_subtype:
-                pr_subtype = pl.col("purchased_receivables_subtype")
-                lgd_input_expr = (
-                    pl.when(
-                        (pl.col("approach") == ApproachType.FIRB.value) & pr_subtype.is_not_null()
-                    )
-                    .then(pl.col("lgd"))
-                    .when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.col("lgd_post_crm"))
-                    .otherwise(pl.col("lgd"))
-                )
-            else:
-                lgd_input_expr = (
-                    pl.when(pl.col("approach") == ApproachType.FIRB.value)
-                    .then(pl.col("lgd_post_crm"))
-                    .otherwise(pl.col("lgd"))
-                )
-            return lf.with_columns([lgd_input_expr.alias("lgd_input")])
-        else:
-            return lf.with_columns(
-                [
-                    pl.col("lgd").alias("lgd_input"),
-                ]
-            )
+        lgd_input_expr = (
+            pl.when((pl.col("approach") == ApproachType.FIRB.value) & pr_subtype.is_not_null())
+            .then(pl.col("lgd"))
+            .when(pl.col("approach") == ApproachType.FIRB.value)
+            .then(pl.col("lgd_post_crm"))
+            .otherwise(pl.col("lgd"))
+        )
+        return lf.with_columns([lgd_input_expr.alias("lgd_input")])
 
     def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
         """
@@ -539,8 +449,7 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with pd_floored column
         """
-        has_transactor = "is_qrre_transactor" in self._lf.collect_schema().names()
-        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+        pd_floor_expr = _pd_floor_expression(config)
         return self._lf.with_columns(
             pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
         )
@@ -575,31 +484,26 @@ class IRBLazyFrame:
         lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
 
         if config.is_basel_3_1:
-            has_collateral_type = "collateral_type" in schema_names
-            has_seniority = "seniority" in schema_names
-            has_exposure_class = "exposure_class" in schema_names
-            has_alloc = "crm_alloc_financial" in schema_names
-            if has_collateral_type:
+            if "collateral_type" in schema_names:
                 lgd_floor_expr = _lgd_floor_expression_with_collateral(
                     config,
-                    has_seniority=has_seniority,
-                    has_exposure_class=has_exposure_class,
+                    has_seniority=True,
+                    has_exposure_class=True,
                 )
             else:
                 lgd_floor_expr = _lgd_floor_expression(
                     config,
-                    has_seniority=has_seniority,
-                    has_exposure_class=has_exposure_class,
+                    has_seniority=True,
+                    has_exposure_class=True,
                 )
 
             # Art. 164(4)(c) blended floor for retail with mixed collateral
-            if has_alloc and has_exposure_class:
-                blended_expr = _lgd_floor_blended_expression(config)
-                # Use blended floor where applicable (retail_other/qrre with collateral),
-                # fall back to single-type floor otherwise
-                lgd_floor_expr = (
-                    pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
-                )
+            # Use blended floor where applicable (retail_other/qrre with collateral),
+            # fall back to single-type floor otherwise
+            blended_expr = _lgd_floor_blended_expression(config)
+            lgd_floor_expr = (
+                pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
+            )
 
             # LGD floors only apply to A-IRB (CRE30.41); F-IRB uses supervisory LGD
             is_airb = (
@@ -630,16 +534,10 @@ class IRBLazyFrame:
         Returns:
             LazyFrame with correlation column
         """
-        # requires_fi_scalar defaults to False if not set by classifier.
-        lf = ensure_columns(
-            self._lf,
-            {"requires_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False)},
-        )
-
         # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
         eur_gbp_rate = float(config.eur_gbp_rate)
         sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
-        return lf.with_columns(
+        return self._lf.with_columns(
             _polars_correlation_expr(
                 eur_gbp_rate=eur_gbp_rate,
                 is_b31=config.is_basel_3_1,
@@ -689,13 +587,7 @@ class IRBLazyFrame:
             .str.contains("RETAIL")
         )
 
-        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd.
-        lf = ensure_columns(
-            self._lf,
-            {"has_one_day_maturity_floor": ColumnSpec(pl.Boolean, default=False, required=False)},
-        )
-
-        return lf.with_columns(
+        return self._lf.with_columns(
             pl.when(is_retail)
             .then(pl.lit(1.0))
             .otherwise(_polars_maturity_adjustment_expr())
@@ -812,7 +704,7 @@ class IRBLazyFrame:
         """
         Apply full IRB formula pipeline in 4 batched with_columns.
 
-        Batch 1: Ensure defaults + PD floor + LGD floor (read only input cols)
+        Batch 1: PD floor + LGD floor (read only input cols)
         Batch 2: Correlation + maturity adjustment (read pd_floored from batch 1)
         Batch 3: K (reads correlation from batch 2)
         Batch 4: RWA + risk weight + expected loss (read k, maturity_adjustment)
@@ -828,24 +720,11 @@ class IRBLazyFrame:
         schema_names = set(schema.names())
         lf = self._lf
 
-        # --- Batch 1: defaults + PD floor + LGD floor ---
+        # --- Batch 1: PD floor + LGD floor ---
         batch1: list[pl.Expr] = []
 
-        if "turnover_m" not in schema_names:
-            batch1.append(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-        if "maturity" not in schema_names:
-            batch1.append(pl.lit(2.5).alias("maturity"))
-        if "requires_fi_scalar" not in schema_names:
-            batch1.append(pl.lit(False).alias("requires_fi_scalar"))
-        # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd
-        # to suppress the 1y M floor for daily-margined SFTs/derivatives, margin
-        # lending, and short-term self-liquidating trade transactions.
-        if "has_one_day_maturity_floor" not in schema_names:
-            batch1.append(pl.lit(False).alias("has_one_day_maturity_floor"))
-
         # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-        has_transactor = "is_qrre_transactor" in schema_names
-        pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+        pd_floor_expr = _pd_floor_expression(config)
         batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
         # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)

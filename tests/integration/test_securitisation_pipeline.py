@@ -25,6 +25,7 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 _REPORTING_DATE = date(2025, 12, 31)
 _VALUE_DATE = date(2024, 1, 1)
@@ -160,7 +161,7 @@ def _allocs(rows: list[dict]) -> pl.LazyFrame:
 
 
 def _bundle(loans: list[dict], allocs: pl.LazyFrame | None = None) -> RawDataBundle:
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=pl.LazyFrame(_counterparty_row()),
         facilities=_empty_facility_frame(),
         loans=_loans(loans),

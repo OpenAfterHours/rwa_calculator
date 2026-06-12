@@ -74,8 +74,8 @@ from tests.fixtures.p1_123.p1_123 import (
     LOAN_REF_RUNB,
     PRE_FIX_EAD_BIND,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
@@ -136,7 +136,7 @@ def _run_pipeline_p1123() -> object:
     loans = pl.scan_parquet(_FIXTURES_DIR / "loans.parquet")
     collateral = pl.scan_parquet(_FIXTURES_DIR / "collateral.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

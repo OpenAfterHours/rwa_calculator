@@ -12,7 +12,7 @@ Tests cover:
 - SME auto-qualification: SME with cp_is_managed_as_retail=False → still retail
 - Null handling: cp_is_managed_as_retail=null → qualifies (backward compat)
 - CRR unchanged: condition 3 not applied under CRR
-- Warning emission when pool management data is absent
+- Sealed-lookup invariant: pool management column always present, CLS005 never fires
 - Impact on risk weights (75% qualifying retail vs 100% non-qualifying)
 - Edge cases: threshold + condition 3 interaction
 
@@ -30,17 +30,15 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_RETAIL_POOL_MGMT_MISSING
 from rwa_calc.domain.enums import (
-    ErrorCategory,
-    ErrorSeverity,
     ExposureClass,
 )
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Fixtures
@@ -159,7 +157,7 @@ def _make_bundle(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         lending_group_totals=pl.LazyFrame(
             schema={
@@ -167,7 +165,7 @@ def _make_bundle(
                 "total_exposure": pl.Float64,
             }
         ),
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -362,68 +360,48 @@ class TestCRRUnchanged:
 
 
 # =============================================================================
-# Warning emission
+# Sealed-edge invariant (pool-management column is always present)
 # =============================================================================
+#
+# The historical TestPoolManagementWarning absence tests asserted that CLS005
+# fired when is_managed_as_retail was absent from the counterparty schema.
+# Under the CP_LOOKUP_COUNTERPARTIES_EDGE seal that state is unrepresentable
+# (the seal injects declared-but-absent columns as typed nulls), so the
+# absence-warning tests were deleted and replaced by the invariant below.
 
 
-class TestPoolManagementWarning:
-    """Warning when cp_is_managed_as_retail is absent under B31."""
+class TestPoolManagementSealedFrameInvariant:
+    """The sealed lookup makes the pool-management column-absence state unrepresentable."""
 
-    def test_b31_warning_when_column_absent(
-        self, classifier: ExposureClassifier, b31_config: CalculationConfig
-    ) -> None:
-        """B31 emits CLS005 when is_managed_as_retail not in counterparty data."""
+    def test_sealed_lookup_always_carries_pool_management_column(self) -> None:
+        """A lookup built without is_managed_as_retail still carries it after the seal."""
         bundle = _make_bundle(
             _exposures(),
             _counterparties(include_managed_as_retail=False),
         )
-        result = classifier.classify(bundle, b31_config)
-        cls_errors = [
-            e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
-        ]
-        assert len(cls_errors) == 1
 
-    def test_b31_warning_severity(
-        self, classifier: ExposureClassifier, b31_config: CalculationConfig
+        schema = bundle.counterparty_lookup.counterparties.collect_schema()
+        assert schema.get("is_managed_as_retail") == pl.Boolean
+
+    @pytest.mark.parametrize("config_fixture", ["b31_config", "crr_config"])
+    def test_no_cls005_on_sealed_input_when_column_omitted_at_build(
+        self,
+        classifier: ExposureClassifier,
+        config_fixture: str,
+        request: pytest.FixtureRequest,
     ) -> None:
-        """CLS005 has WARNING severity."""
+        """CLS005 is never emitted: the sealed lookup always has the column."""
+        config = request.getfixturevalue(config_fixture)
         bundle = _make_bundle(
             _exposures(),
             _counterparties(include_managed_as_retail=False),
         )
-        result = classifier.classify(bundle, b31_config)
-        cls_errors = [
-            e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
-        ]
-        assert cls_errors[0].severity == ErrorSeverity.WARNING
+        result = classifier.classify(bundle, config)
 
-    def test_b31_warning_category(
-        self, classifier: ExposureClassifier, b31_config: CalculationConfig
-    ) -> None:
-        """CLS005 has CLASSIFICATION category."""
-        bundle = _make_bundle(
-            _exposures(),
-            _counterparties(include_managed_as_retail=False),
-        )
-        result = classifier.classify(bundle, b31_config)
         cls_errors = [
             e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
         ]
-        assert cls_errors[0].category == ErrorCategory.CLASSIFICATION
-
-    def test_b31_warning_regulatory_reference(
-        self, classifier: ExposureClassifier, b31_config: CalculationConfig
-    ) -> None:
-        """CLS005 references Art. 123A(1)(b)(iii)."""
-        bundle = _make_bundle(
-            _exposures(),
-            _counterparties(include_managed_as_retail=False),
-        )
-        result = classifier.classify(bundle, b31_config)
-        cls_errors = [
-            e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
-        ]
-        assert "123A" in (cls_errors[0].regulatory_reference or "")
+        assert cls_errors == []
 
     def test_b31_no_warning_when_column_present(
         self, classifier: ExposureClassifier, b31_config: CalculationConfig
@@ -434,20 +412,6 @@ class TestPoolManagementWarning:
             _counterparties(is_managed_as_retail=True),
         )
         result = classifier.classify(bundle, b31_config)
-        cls_errors = [
-            e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
-        ]
-        assert len(cls_errors) == 0
-
-    def test_crr_no_warning_even_when_absent(
-        self, classifier: ExposureClassifier, crr_config: CalculationConfig
-    ) -> None:
-        """CRR: no CLS005 warning regardless of column presence."""
-        bundle = _make_bundle(
-            _exposures(),
-            _counterparties(include_managed_as_retail=False),
-        )
-        result = classifier.classify(bundle, crr_config)
         cls_errors = [
             e for e in result.classification_errors if e.code == ERROR_RETAIL_POOL_MGMT_MISSING
         ]

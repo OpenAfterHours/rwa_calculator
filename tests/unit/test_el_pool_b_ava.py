@@ -117,12 +117,18 @@ class TestPoolBIRBShortfallExcess:
         assert result["el_excess"][0] == pytest.approx(0.0)
 
     def test_missing_ava_column_backward_compat(self) -> None:
-        """When ava_amount column absent, behaves as before (ava=0)."""
+        """Null AVA / other-OFR values (contract columns present) act as zero."""
         lf = pl.LazyFrame(
             {
                 "expected_loss": [10_000.0],
                 "provision_allocated": [6_000.0],
-            }
+                "ava_amount": [None],
+                "other_own_funds_reductions": [None],
+            },
+            schema_overrides={
+                "ava_amount": pl.Float64,
+                "other_own_funds_reductions": pl.Float64,
+            },
         )
         result = compute_el_shortfall_excess(lf).collect()
         # pool_b = 6000; shortfall = 10000 - 6000 = 4000
@@ -130,13 +136,15 @@ class TestPoolBIRBShortfallExcess:
         assert result["el_excess"][0] == pytest.approx(0.0)
 
     def test_missing_other_ofr_column_backward_compat(self) -> None:
-        """When other_own_funds_reductions column absent, behaves as before."""
+        """Null other_own_funds_reductions (contract column present) acts as zero."""
         lf = pl.LazyFrame(
             {
                 "expected_loss": [10_000.0],
                 "provision_allocated": [6_000.0],
                 "ava_amount": [2_000.0],
-            }
+                "other_own_funds_reductions": [None],
+            },
+            schema_overrides={"other_own_funds_reductions": pl.Float64},
         )
         result = compute_el_shortfall_excess(lf).collect()
         # pool_b = 6000 + 2000 = 8000; shortfall = 10000 - 8000 = 2000

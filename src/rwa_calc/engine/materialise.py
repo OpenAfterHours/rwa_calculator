@@ -53,8 +53,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.contracts.edges import brand
+
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.edges import EdgeContract
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +215,52 @@ def materialise_edge(
         "spill" if spilled else "in-memory",
     )
     return result
+
+
+def materialise_sealed_edge(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    edge: EdgeContract,
+    label: str | None = None,
+) -> pl.LazyFrame:
+    """Conform ``lf`` to its edge contract, materialise, and brand.
+
+    The Phase 3 producer-seal variant of :func:`materialise_edge`: the plan
+    is conformed BEFORE the collect — contract violations raise without
+    executing the plan, and the materialised frame is already
+    contract-shaped (producer-owned defaults injected, undeclared scratch
+    stripped, canonical column order). The eager-backed wrap is branded
+    with the edge name so bundle ``__post_init__`` validation
+    (``contracts.bundles.SEALED_FRAME_FIELDS``) can verify provenance.
+
+    ``label`` overrides the EdgeEvent label when one contract serves more
+    than one edge (e.g. the CCR stage re-seals against the hierarchy_exit
+    contract under the ``ccr_exit`` event label) — the BRAND always carries
+    the contract name.
+    """
+    conformed = edge.conform(lf)
+    out = materialise_edge(conformed, config, label or edge.name)
+    return brand(out, edge.name)
+
+
+def materialise_sealed_branches(
+    branches: list[pl.LazyFrame],
+    config: CalculationConfig,
+    edges: list[EdgeContract],
+) -> list[pl.DataFrame]:
+    """Conform each calculator branch to its contract, collect, and brand.
+
+    The branch-exit seal (Phase 3): each plan is conformed BEFORE the
+    shared ``collect_all`` (violations raise without executing), and each
+    collected DataFrame carries its edge brand — ``setattr`` works on
+    DataFrames exactly as on LazyFrames, and the brand is likewise lost on
+    any transformation.
+    """
+    conformed = [edge.conform(lf) for lf, edge in zip(branches, edges, strict=True)]
+    results = materialise_branches(conformed, config, [edge.name for edge in edges])
+    for df, edge in zip(results, edges, strict=True):
+        brand(df, edge.name)  # type: ignore[arg-type]
+    return results
 
 
 def materialise_branches(

@@ -26,9 +26,78 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_DUPLICATE_KEY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle, seal_raw_table
+from tests.fixtures.resolved_bundle import make_counterparty_lookup
 
 if TYPE_CHECKING:
     pass
+
+
+# =============================================================================
+# Seal shims — mirror the loader edge for direct private-helper calls
+# =============================================================================
+#
+# Hierarchy private helpers assume loader-sealed (schema-complete) input
+# tables: every RawDataBundle frame is sealed at the loader edge, so the
+# engine no longer carries column-presence guards. Tests that build minimal
+# hand-rolled frames and call private helpers directly must apply the same
+# lenient seal the production loader applies; these shims do exactly that.
+
+
+def _calc_undrawn(resolver, facilities, loans, contingents, mappings, *args, **kwargs):
+    """Call ``_calculate_facility_undrawn`` with loader-sealed input frames."""
+    return resolver._calculate_facility_undrawn(
+        seal_raw_table(facilities, "facilities"),
+        seal_raw_table(loans, "loans"),
+        None if contingents is None else seal_raw_table(contingents, "contingents"),
+        seal_raw_table(mappings, "facility_mappings"),
+        *args,
+        **kwargs,
+    )
+
+
+def _unify(resolver, loans, contingents, facilities, mappings, *args, **kwargs):
+    """Call ``_unify_exposures`` with loader-sealed input frames."""
+    return resolver._unify_exposures(
+        seal_raw_table(loans, "loans"),
+        None if contingents is None else seal_raw_table(contingents, "contingents"),
+        None if facilities is None else seal_raw_table(facilities, "facilities"),
+        seal_raw_table(mappings, "facility_mappings"),
+        *args,
+        **kwargs,
+    )
+
+
+def _cp_lookup(resolver, counterparties, org_mappings, ratings):
+    """Call ``_build_counterparty_lookup`` with loader-sealed input frames."""
+    return resolver._build_counterparty_lookup(
+        seal_raw_table(counterparties, "counterparties"),
+        None if org_mappings is None else seal_raw_table(org_mappings, "org_mappings"),
+        None if ratings is None else seal_raw_table(ratings, "ratings"),
+    )
+
+
+def _rating_inheritance(resolver, counterparties, ratings, ultimate_parents):
+    """Call ``_build_rating_inheritance_lazy`` with loader-sealed input frames.
+
+    ``ultimate_parents`` is a hierarchy-internal intermediate frame, not a raw
+    table, so it passes through unsealed.
+    """
+    return resolver._build_rating_inheritance_lazy(
+        seal_raw_table(counterparties, "counterparties"),
+        seal_raw_table(ratings, "ratings"),
+        ultimate_parents,
+    )
+
+
+def _root_lookup(resolver, mappings):
+    """Call ``_build_facility_root_lookup`` with a loader-sealed mappings frame."""
+    return resolver._build_facility_root_lookup(seal_raw_table(mappings, "facility_mappings"))
+
+
+def _ancestor_closure(resolver, mappings):
+    """Call ``_build_facility_ancestor_closure`` with a loader-sealed mappings frame."""
+    return resolver._build_facility_ancestor_closure(seal_raw_table(mappings, "facility_mappings"))
 
 
 # =============================================================================
@@ -252,7 +321,7 @@ def simple_raw_data_bundle(
     simple_facility_mappings: pl.LazyFrame,
 ) -> RawDataBundle:
     """Simple raw data bundle for testing."""
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(),
         loans=simple_loans,
         contingents=simple_contingents,
@@ -352,7 +421,8 @@ class TestBuildRatingInheritanceLazy:
         """Entity with own rating should use its own ratings."""
         ultimate_parents = resolver._build_ultimate_parent_lazy(simple_org_mappings)
 
-        rating_inheritance = resolver._build_rating_inheritance_lazy(
+        rating_inheritance = _rating_inheritance(
+            resolver,
             simple_counterparties,
             simple_ratings,
             ultimate_parents,
@@ -374,7 +444,8 @@ class TestBuildRatingInheritanceLazy:
         """Unrated child inherits parent's internal rating but not external."""
         ultimate_parents = resolver._build_ultimate_parent_lazy(simple_org_mappings)
 
-        rating_inheritance = resolver._build_rating_inheritance_lazy(
+        rating_inheritance = _rating_inheritance(
+            resolver,
             simple_counterparties,
             simple_ratings,
             ultimate_parents,
@@ -404,7 +475,8 @@ class TestBuildRatingInheritanceLazy:
         )
         ultimate_parents = resolver._build_ultimate_parent_lazy(empty_mappings)
 
-        rating_inheritance = resolver._build_rating_inheritance_lazy(
+        rating_inheritance = _rating_inheritance(
+            resolver,
             simple_counterparties,
             simple_ratings,
             ultimate_parents,
@@ -634,9 +706,7 @@ class TestInheritanceTruthTable:
             assert child_row["ultimate_parent_reference"][0] == "ULT", scenario
             assert child_row["hierarchy_depth"][0] == 2, scenario
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         child = result.filter(pl.col("counterparty_reference") == "CHILD")
         assert len(child) == 1, f"expected exactly one CHILD row in {scenario}"
@@ -699,9 +769,7 @@ class TestDualRatingResolution:
             }
         )
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         cp = result.filter(pl.col("counterparty_reference") == "CP001")
         assert cp["internal_pd"][0] == pytest.approx(0.0063)
@@ -741,9 +809,7 @@ class TestDualRatingResolution:
             }
         )
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         cp = result.filter(pl.col("counterparty_reference") == "CP001")
         assert cp["internal_pd"][0] == pytest.approx(0.005)  # Newer internal
@@ -775,9 +841,7 @@ class TestDualRatingResolution:
         ).lazy()
         ultimate_parents = resolver._build_ultimate_parent_lazy(org_mappings)
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         child = result.filter(pl.col("counterparty_reference") == "CHILD")
         # Own internal retained
@@ -818,9 +882,7 @@ class TestDualRatingResolution:
         ).lazy()
         ultimate_parents = resolver._build_ultimate_parent_lazy(org_mappings)
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         # Parent keeps own external rating
         parent = result.filter(pl.col("counterparty_reference") == "PARENT")
@@ -860,9 +922,7 @@ class TestDualRatingResolution:
             }
         )
 
-        result = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        result = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
 
         cp = result.filter(pl.col("counterparty_reference") == "CP001")
         assert cp["internal_pd"][0] is None
@@ -891,9 +951,7 @@ class TestArt138ExternalRatingResolution:
                 "hierarchy_depth": pl.Int32,
             }
         )
-        df = resolver._build_rating_inheritance_lazy(
-            counterparties, ratings, ultimate_parents
-        ).collect()
+        df = _rating_inheritance(resolver, counterparties, ratings, ultimate_parents).collect()
         assert isinstance(df, pl.DataFrame)
         return df
 
@@ -1057,13 +1115,15 @@ class TestUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Loans and contingents should be unified correctly."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             simple_loans,
             simple_contingents,
             None,  # No facilities for this test
@@ -1093,13 +1153,15 @@ class TestUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Exposure references should be preserved during unification."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             simple_loans,
             simple_contingents,
             None,  # No facilities for this test
@@ -1127,13 +1189,15 @@ class TestUnifyExposures:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Facility hierarchy info should be added to exposures."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             simple_loans,
             simple_contingents,
             None,  # No facilities for this test
@@ -1165,7 +1229,7 @@ class TestLendingGroupAggregation:
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
         """Lending group totals should be correctly calculated."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=lending_group_loans,
             contingents=pl.LazyFrame(
@@ -1223,7 +1287,7 @@ class TestLendingGroupAggregation:
         lending_group_mappings: pl.LazyFrame,
     ) -> None:
         """Standalone counterparty with one exposure aggregates to its own drawn."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=lending_group_loans,
             contingents=pl.LazyFrame(
@@ -1305,7 +1369,7 @@ class TestLendingGroupAggregation:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=loans,
             contingents=pl.LazyFrame(
@@ -1430,7 +1494,7 @@ class TestEdgeCases:
         crr_config: CalculationConfig,
     ) -> None:
         """Should handle empty loans and contingents."""
-        empty_bundle = RawDataBundle(
+        empty_bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=pl.LazyFrame(
                 schema={
@@ -1527,7 +1591,7 @@ class TestEdgeCases:
         crr_config: CalculationConfig,
     ) -> None:
         """Should handle case with no org hierarchy."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=simple_loans,
             contingents=simple_contingents,
@@ -1635,7 +1699,8 @@ class TestFacilityUndrawnCalculation:
     ) -> None:
         """Normal facility should have undrawn = limit - drawn."""
         # FAC001: limit=5M, drawn=4.5M (LOAN001 + LOAN002), undrawn=500k
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities_with_undrawn,
             loans_for_facilities,
             None,
@@ -1659,7 +1724,8 @@ class TestFacilityUndrawnCalculation:
     ) -> None:
         """Fully drawn facility (undrawn=0) should not create exposure."""
         # FAC002: limit=1M, drawn=1M (LOAN003), undrawn=0
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities_with_undrawn,
             loans_for_facilities,
             None,
@@ -1680,7 +1746,8 @@ class TestFacilityUndrawnCalculation:
     ) -> None:
         """Facility with no linked loans should be 100% undrawn."""
         # FAC004: limit=1M, no linked loans, undrawn=1M
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities_with_undrawn,
             loans_for_facilities,
             None,
@@ -1739,7 +1806,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Should not create exposure since undrawn is capped at 0
@@ -1795,7 +1862,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Undrawn should be exactly the limit (1M), not limit + |negative| (1.05M)
@@ -1854,7 +1921,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Undrawn = 1M - 400k = 600k (NOT 1M - 300k = 700k)
@@ -1907,7 +1974,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Both loans are negative, so total_drawn = 0, undrawn = full limit
@@ -1966,7 +2033,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Facility undrawn should be full limit (interest doesn't reduce headroom)
@@ -2030,7 +2097,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         fac = df.filter(pl.col("exposure_reference") == "FAC_NETTING_UNDRAWN")
@@ -2090,7 +2157,7 @@ class TestFacilityUndrawnCalculation:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # 60 + 60 = 120m drawn, undrawn = max(0, 100 - 120) = 0 → row suppressed
@@ -2110,7 +2177,8 @@ class TestFacilityUndrawnCalculation:
         # The LR-with-zero-CCF treatment under CRR is for the on-pipeline row;
         # genuine uncommitted (committed=False) suppression is covered by the
         # dedicated tests below.
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities_with_undrawn,
             loans_for_facilities,
             None,
@@ -2134,7 +2202,8 @@ class TestFacilityUndrawnCalculation:
         # FAC003: limit=500k, drawn=700k (LOAN004), but loan is mapped to FAC003
         # Wait - looking at the test data, LOAN004 (700k) is mapped to FAC003 (limit 500k)
         # This would result in negative undrawn, which should be capped at 0
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities_with_undrawn,
             loans_for_facilities,
             None,
@@ -2193,7 +2262,7 @@ class TestFacilityUndrawnCalculation:
             }
         )
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         assert len(df) == 1
@@ -2230,7 +2299,7 @@ class TestFacilityUndrawnCalculation:
             }
         )
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         assert len(df) == 0
@@ -2276,7 +2345,7 @@ class TestFacilityUndrawnCalculation:
             }
         )
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # No facility_undrawn row at all — undrawn headroom carries no commitment
@@ -2323,7 +2392,7 @@ class TestFacilityUndrawnCalculation:
             }
         )
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Null committed → treated as True → undrawn row IS generated.
@@ -2382,13 +2451,15 @@ class TestFacilityUndrawnInUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             loans,
             None,  # No contingents
             facilities,
@@ -2464,13 +2535,15 @@ class TestFacilityUndrawnInUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             None,
             facilities,
@@ -2559,13 +2632,15 @@ class TestFacilityUndrawnInUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             contingents,
             facilities,
@@ -2642,7 +2717,7 @@ class TestFacilityUndrawnInUnifyExposures:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -2745,7 +2820,7 @@ class TestFacilityUndrawnInUnifyExposures:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -2885,7 +2960,8 @@ class TestSameFacilityAndLoanReference:
         Loan REF001: drawn=600k
         Expected undrawn = 1M - 600k = 400k
         """
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             same_ref_facility,
             same_ref_loan,
             None,
@@ -2925,7 +3001,7 @@ class TestSameFacilityAndLoanReference:
             ]
         )
 
-        counterparty_lookup = CounterpartyLookup(
+        counterparty_lookup = make_counterparty_lookup(
             counterparties=enriched_counterparties,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -2952,7 +3028,8 @@ class TestSameFacilityAndLoanReference:
             ),
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             same_ref_loan,
             None,  # No contingents
             same_ref_facility,
@@ -3003,7 +3080,7 @@ class TestSameFacilityAndLoanReference:
             ]
         )
 
-        counterparty_lookup = CounterpartyLookup(
+        counterparty_lookup = make_counterparty_lookup(
             counterparties=enriched_counterparties,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -3030,7 +3107,8 @@ class TestSameFacilityAndLoanReference:
             ),
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             same_ref_loan,
             None,
             same_ref_facility,
@@ -3061,7 +3139,7 @@ class TestSameFacilityAndLoanReference:
         crr_config: CalculationConfig,
     ) -> None:
         """Full resolve() should work correctly with same facility/loan reference."""
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=same_ref_facility,
             loans=same_ref_loan,
             contingents=None,
@@ -3168,7 +3246,7 @@ class TestSameFacilityAndLoanReference:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -3282,7 +3360,7 @@ class TestSameFacilityAndLoanReference:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -3374,7 +3452,7 @@ class TestSameFacilityAndLoanReference:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -3429,7 +3507,7 @@ class TestLendingGroupDuplicateMembership:
                 pl.lit(None).cast(pl.Float64).alias("pd"),
             ]
         )
-        return CounterpartyLookup(
+        return make_counterparty_lookup(
             counterparties=enriched,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -3507,7 +3585,7 @@ class TestLendingGroupDuplicateMembership:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=None,
             loans=loans,
             contingents=None,
@@ -3590,7 +3668,7 @@ class TestLendingGroupDuplicateMembership:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=None,
             loans=loans,
             contingents=None,
@@ -3676,7 +3754,7 @@ class TestNegativeDrawnAmountInHierarchy:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=loans,
             contingents=pl.LazyFrame(
@@ -3773,7 +3851,7 @@ class TestNegativeDrawnAmountInHierarchy:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=pl.LazyFrame(),
             loans=loans,
             contingents=pl.LazyFrame(
@@ -3883,7 +3961,7 @@ class TestDuplicateMappingBugFixes:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         # Should produce 1 undrawn row with correct amount
@@ -3948,13 +4026,15 @@ class TestDuplicateMappingBugFixes:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             loans,
             None,
             facilities,
@@ -3978,12 +4058,13 @@ class TestDuplicateMappingBugFixes:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """facility_mappings with neither child_type nor node_type column.
+        """facility_mappings supplied with no type column → null child_type values.
 
-        Post-normalisation contract: the resolver boundary synthesises a null
-        ``child_type`` column for legacy mappings via ``_normalise_facility_mappings``.
-        Null ``child_type`` is treated as "no children of any type", so loan
-        aggregation does not run and the facility's undrawn equals its full limit.
+        Sealed-edge contract: the loader seal injects ``child_type`` as a typed
+        null column when the input file omits it (mirrored here by the seal
+        shim). Null ``child_type`` is treated as "no children of any type", so
+        loan aggregation does not run and the facility's undrawn equals its
+        full limit.
 
         The right fix in production data is to emit ``child_type='loan'`` on
         loan mappings — once specified, aggregation works (covered by
@@ -4029,7 +4110,7 @@ class TestDuplicateMappingBugFixes:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         fac = df.filter(pl.col("exposure_reference") == "FAC_NOTYPE_UNDRAWN")
@@ -4086,7 +4167,7 @@ class TestDuplicateMappingBugFixes:
             }
         ).lazy()
 
-        facility_undrawn = resolver._calculate_facility_undrawn(facilities, loans, None, mappings)
+        facility_undrawn = _calc_undrawn(resolver, facilities, loans, None, mappings)
         df = facility_undrawn.collect()
 
         fac = df.filter(pl.col("exposure_reference") == "FAC_TYPED_UNDRAWN")
@@ -4199,7 +4280,7 @@ class TestLargerDatasetFacilityUndrawn:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=facilities,
             loans=loans,
             contingents=None,
@@ -4266,7 +4347,7 @@ class TestBuildFacilityRootLookup:
             }
         ).lazy()
 
-        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        lookup = _root_lookup(resolver, facility_mappings)
         df = lookup.collect()
 
         assert len(df) == 1
@@ -4288,7 +4369,7 @@ class TestBuildFacilityRootLookup:
             }
         ).lazy()
 
-        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        lookup = _root_lookup(resolver, facility_mappings)
         df = lookup.collect()
 
         # Both sub1 and sub2 should be in lookup
@@ -4315,7 +4396,7 @@ class TestBuildFacilityRootLookup:
             }
         ).lazy()
 
-        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        lookup = _root_lookup(resolver, facility_mappings)
         df = lookup.collect()
 
         assert len(df) == 2
@@ -4326,10 +4407,10 @@ class TestBuildFacilityRootLookup:
         self,
         resolver: HierarchyResolver,
     ) -> None:
-        """No child_type column → cannot detect sub-facilities, return empty.
+        """No child_type column supplied → cannot detect sub-facilities, return empty.
 
-        Post-normalisation, ``_normalise_facility_mappings`` synthesises a null
-        ``child_type``; the downstream filter (``== "facility"``) yields zero
+        The loader seal (mirrored by the seal shim) injects ``child_type`` as
+        typed nulls; the downstream filter (``== "facility"``) yields zero
         rows, ``facility_edges`` is empty, and the empty-result short-circuit
         fires.
         """
@@ -4340,7 +4421,7 @@ class TestBuildFacilityRootLookup:
             }
         ).lazy()
 
-        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        lookup = _root_lookup(resolver, facility_mappings)
         df = lookup.collect()
 
         assert len(df) == 0
@@ -4358,7 +4439,7 @@ class TestBuildFacilityRootLookup:
             }
         ).lazy()
 
-        lookup = resolver._build_facility_root_lookup(facility_mappings)
+        lookup = _root_lookup(resolver, facility_mappings)
         df = lookup.collect()
 
         assert len(df) == 0
@@ -4380,7 +4461,7 @@ class TestBuildFacilityAncestorClosure:
             }
         ).lazy()
 
-        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+        df = _ancestor_closure(resolver, facility_mappings).collect()
 
         row = df.filter(pl.col("child_facility_reference") == "FAC_CHILD")
         assert sorted(row["ancestor_facilities"][0].to_list()) == ["FAC_CHILD", "FAC_PARENT"]
@@ -4398,7 +4479,7 @@ class TestBuildFacilityAncestorClosure:
             }
         ).lazy()
 
-        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+        df = _ancestor_closure(resolver, facility_mappings).collect()
 
         sub2 = df.filter(pl.col("child_facility_reference") == "FAC_SUB2")
         assert sorted(sub2["ancestor_facilities"][0].to_list()) == [
@@ -4421,7 +4502,7 @@ class TestBuildFacilityAncestorClosure:
             }
         ).lazy()
 
-        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+        df = _ancestor_closure(resolver, facility_mappings).collect()
 
         assert len(df) == 0
 
@@ -4438,7 +4519,7 @@ class TestBuildFacilityAncestorClosure:
             }
         ).lazy()
 
-        df = resolver._build_facility_ancestor_closure(facility_mappings).collect()
+        df = _ancestor_closure(resolver, facility_mappings).collect()
 
         assert len(df) == 0
 
@@ -4514,9 +4595,10 @@ class TestMultiLevelFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -4579,9 +4661,10 @@ class TestMultiLevelFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -4643,9 +4726,10 @@ class TestMultiLevelFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -4709,13 +4793,15 @@ class TestMultiLevelUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             loans,
             None,
             facilities,
@@ -4775,13 +4861,15 @@ class TestMultiLevelUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             loans,
             None,
             facilities,
@@ -4825,13 +4913,15 @@ class TestMultiLevelUnifyExposures:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
         )
 
-        exposures, errors = resolver._unify_exposures(
+        exposures, errors = _unify(
+            resolver,
             loans,
             None,
             None,
@@ -4926,9 +5016,10 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             contingents,
@@ -5009,9 +5100,10 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             contingents,
@@ -5032,7 +5124,8 @@ class TestContingentInFacilityUndrawn:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """ONB contingent in unified exposures should have drawn_amount = nominal, nominal = 0."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
@@ -5082,7 +5175,8 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             contingents,
             None,
@@ -5104,7 +5198,8 @@ class TestContingentInFacilityUndrawn:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """OFB contingent retains current behaviour: drawn=0, nominal=X, CCF fields preserved."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
@@ -5154,7 +5249,8 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             contingents,
             None,
@@ -5179,7 +5275,8 @@ class TestContingentInFacilityUndrawn:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """ONB contingent should have null risk_type, ccf_modelled, is_short_term_trade_lc."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
@@ -5229,7 +5326,8 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             contingents,
             None,
@@ -5251,7 +5349,8 @@ class TestContingentInFacilityUndrawn:
         simple_ratings: pl.LazyFrame,
     ) -> None:
         """Contingent without bs_type should behave as OFB (current default behaviour)."""
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
+        counterparty_lookup, _ = _cp_lookup(
+            resolver,
             simple_counterparties,
             simple_org_mappings,
             simple_ratings,
@@ -5301,7 +5400,8 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        exposures, _ = resolver._unify_exposures(
+        exposures, _ = _unify(
+            resolver,
             loans,
             contingents,
             None,
@@ -5387,9 +5487,10 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             contingents,
@@ -5491,9 +5592,10 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             contingents,
@@ -5600,9 +5702,10 @@ class TestContingentInFacilityUndrawn:
             }
         ).lazy()
 
-        facility_root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        facility_root_lookup = _root_lookup(resolver, facility_mappings)
 
-        facility_undrawn = resolver._calculate_facility_undrawn(
+        facility_undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             contingents,
@@ -5674,9 +5777,10 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
 
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -5750,8 +5854,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -5819,10 +5924,11 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
 
         config_b31 = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -5896,8 +6002,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -5961,8 +6068,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6023,8 +6131,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6101,8 +6210,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6176,8 +6286,9 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
-        undrawn = resolver._calculate_facility_undrawn(
+        root_lookup = _root_lookup(resolver, facility_mappings)
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6248,9 +6359,10 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
 
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6340,13 +6452,12 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            counterparties, org_mappings, ratings
-        )
+        counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6434,13 +6545,12 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            counterparties, org_mappings, ratings
-        )
+        counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6532,13 +6642,12 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            counterparties, org_mappings, ratings
-        )
+        counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6638,13 +6747,12 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            counterparties, org_mappings, ratings
-        )
+        counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6752,13 +6860,12 @@ class TestMOFAndFacilityShare:
             }
         ).lazy()
 
-        counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            counterparties, org_mappings, ratings
-        )
+        counterparty_lookup, _ = _cp_lookup(resolver, counterparties, org_mappings, ratings)
 
-        root_lookup = resolver._build_facility_root_lookup(facility_mappings)
+        root_lookup = _root_lookup(resolver, facility_mappings)
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        undrawn = resolver._calculate_facility_undrawn(
+        undrawn = _calc_undrawn(
+            resolver,
             facilities,
             loans,
             None,
@@ -6864,7 +6971,7 @@ class TestOrgMappingDuplicateChild:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=None,
             loans=loans,
             contingents=None,
@@ -7000,7 +7107,7 @@ class TestOrgMappingDuplicateChild:
             }
         ).lazy()
 
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             facilities=None,
             loans=loans,
             contingents=None,

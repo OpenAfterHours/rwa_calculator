@@ -112,13 +112,14 @@ def has_rows(lf: pl.LazyFrame) -> bool:
     Returns:
         True if LazyFrame has at least one row, False otherwise
     """
-    try:
-        schema = lf.collect_schema()
-        if len(schema) == 0:
-            return False
-        return lf.head(1).collect().height > 0
-    except Exception:
+    # No exception swallowing (migration Phase 3): a plan that cannot
+    # resolve its schema or collect one row is a programming error and
+    # must surface — the loader's optional-file paths catch around their
+    # own calls and own the lenient behaviour.
+    schema = lf.collect_schema()
+    if len(schema) == 0:
         return False
+    return lf.head(1).collect().height > 0
 
 
 def has_required_columns(
@@ -142,8 +143,10 @@ def has_required_columns(
         return False
     if required_columns is None:
         return True
-    try:
-        schema = data.collect_schema()
-        return required_columns.issubset(set(schema.names()))
-    except Exception:
-        return False
+    # No exception swallowing (migration Phase 3): the bare except here
+    # made "firm has no guarantees" and "refactor broke the plan"
+    # indistinguishable — a schema-resolution failure now raises. Boundary
+    # leniency (e.g. malformed direct-API collateral) is owned by the
+    # calling stage with a precise data-quality message.
+    schema = data.collect_schema()
+    return required_columns.issubset(set(schema.names()))

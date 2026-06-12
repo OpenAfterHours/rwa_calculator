@@ -32,6 +32,7 @@ from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -100,7 +101,10 @@ def _bundle_with_ratings(
     ratings: list[dict[str, Any]],
 ) -> RawDataBundle:
     """Add ratings data to an existing RawDataBundle."""
-    return replace(bundle, ratings=_rows_to_lazyframe(ratings, RATINGS_SCHEMA))
+    return replace(
+        bundle,
+        ratings=seal_raw_table(_rows_to_lazyframe(ratings, RATINGS_SCHEMA), "ratings"),
+    )
 
 
 def _airb_single_cp_bundle() -> RawDataBundle:
@@ -765,7 +769,7 @@ class TestModelPermissionsMinimalSchema:
                     loans=[make_loan(book_code="LEGACY")],
                     facilities=[make_facility()],
                 ),
-                model_permissions=model_perms,
+                model_permissions=seal_raw_table(model_perms, "model_permissions"),
             ),
             ratings=[
                 _make_internal_rating(

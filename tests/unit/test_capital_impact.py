@@ -34,6 +34,7 @@ from rwa_calc.engine.comparison import (
     _compute_exposure_attribution,
     _compute_portfolio_waterfall,
 )
+from tests.fixtures.resolved_bundle import make_aggregated_bundle
 
 # =============================================================================
 # Test Fixtures
@@ -61,7 +62,7 @@ def _make_crr_results(
         data["rwa_pre_factor"] = rwa_pre_factors
     if supporting_factors is not None:
         data["supporting_factor"] = supporting_factors
-    return AggregatedResultBundle(results=pl.LazyFrame(data), errors=[])
+    return make_aggregated_bundle(results=pl.LazyFrame(data), errors=[])
 
 
 def _make_b31_results(
@@ -86,7 +87,7 @@ def _make_b31_results(
     if floor_impact_data is not None:
         floor_impact = pl.LazyFrame(floor_impact_data)
 
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(data),
         floor_impact=floor_impact,
         errors=[],
@@ -770,7 +771,7 @@ class TestEdgeCases:
 
     def test_no_rwa_pre_factor_column_defaults_to_rwa_final(self) -> None:
         """When rwa_pre_factor is missing, supporting impact should be 0."""
-        crr = AggregatedResultBundle(
+        crr = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],
@@ -779,7 +780,9 @@ class TestEdgeCases:
                     "ead_final": [1_000_000.0],
                     "risk_weight": [1.0],
                     "rwa_final": [100_000.0],
-                    # No rwa_pre_factor, no supporting_factor columns
+                    # No rwa_pre_factor / supporting_factor values: the seal
+                    # injects them as typed nulls, which the attribution
+                    # fill_nulls back to rwa_final / 1.0 (impact = 0).
                 }
             ),
             errors=[],

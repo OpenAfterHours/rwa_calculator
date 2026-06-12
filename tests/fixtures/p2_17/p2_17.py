@@ -81,6 +81,7 @@ import polars as pl
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, LOAN_SCHEMA
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -344,7 +345,7 @@ def build_p2_17_bundle(*, fixtures_dir: Path) -> RawDataBundle:
         fixtures_dir: Path to the fixtures directory (unused; accepted for
             interface compatibility with other bundle builders).
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=None,
         loans=create_p217_loans().lazy(),
         counterparties=create_p217_counterparties().lazy(),

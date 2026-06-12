@@ -5,6 +5,7 @@ against expected definitions.
 """
 
 import polars as pl
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.validation import (
@@ -446,7 +447,7 @@ class TestValidateBundleValues:
             ),
         }
         defaults.update(overrides)
-        return RawDataBundle(**defaults)
+        return make_raw_bundle(**defaults)
 
     def test_valid_bundle_returns_empty(self):
         """Bundle with all valid values should return no errors."""

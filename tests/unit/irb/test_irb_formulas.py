@@ -29,12 +29,12 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.formulas import (
     G_999,
-    apply_irb_formulas,
     calculate_correlation,
     calculate_double_default_k,
     calculate_expected_loss,
@@ -43,7 +43,15 @@ from rwa_calc.engine.irb.formulas import (
     calculate_maturity_adjustment,
     get_correlation_params,
 )
+from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
+
+
+def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Test shim: pad hand frames with the crm_exit contract columns the
+    sealed branch input guarantees, then invoke the real function."""
+    return _apply_irb_formulas_raw(_pad(lf), config)
+
 
 # =============================================================================
 # STATS BACKEND TESTS (previously zero coverage)
@@ -1179,7 +1187,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.45, abs=1e-6)
 
     def test_crr_firb_subordinated_75pct(self) -> None:
@@ -1195,7 +1203,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["subordinated"],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.75, abs=1e-6)
 
     def test_b31_firb_non_fse_senior_40pct(self) -> None:
@@ -1212,7 +1220,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [False],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.40, abs=1e-6)
 
     def test_b31_firb_fse_senior_45pct(self) -> None:
@@ -1229,7 +1237,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.45, abs=1e-6)
 
     def test_b31_firb_subordinated_75pct(self) -> None:
@@ -1246,7 +1254,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.75, abs=1e-6)
 
     def test_airb_keeps_own_lgd(self) -> None:
@@ -1262,7 +1270,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.30, abs=1e-6)
 
     def test_firb_uses_lgd_post_crm_when_available(self) -> None:
@@ -1278,7 +1286,7 @@ class TestFIRBLGDPipeline:
                 "approach": [ApproachType.FIRB.value],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd_input"][0] == pytest.approx(0.20, abs=1e-6)
 
     def test_b31_missing_fse_column_defaults_to_non_fse(self) -> None:
@@ -1294,7 +1302,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = lf.irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).irb.apply_firb_lgd(config).collect()
         assert result["lgd"][0] == pytest.approx(0.40, abs=1e-6)
 
 

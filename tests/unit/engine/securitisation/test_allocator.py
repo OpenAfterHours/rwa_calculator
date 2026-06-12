@@ -11,6 +11,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -35,7 +36,7 @@ _CONFIG = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
 def _bundle(allocs: pl.LazyFrame | None, *, loans: list[str] | None = None) -> RawDataBundle:
     """Build a minimal RawDataBundle with the listed loan_references known."""
     loan_refs = loans or ["L001", "L002", "L003"]
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

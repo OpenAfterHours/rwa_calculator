@@ -33,6 +33,7 @@ from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import seal_hierarchy_exit
 from tests.fixtures.sme_assets_fallback.sme_assets_fallback import (
     LOAN_REF,
     make_large_by_assets_bundle,
@@ -45,7 +46,7 @@ from tests.fixtures.sme_assets_fallback.sme_assets_fallback import (
 def _add_internal_pd(bundle: ResolvedHierarchyBundle) -> ResolvedHierarchyBundle:
     """Ensure exposures carry internal_pd for the model-permissions diagnostic."""
     enriched = bundle.exposures.with_columns(pl.lit(0.005).alias("internal_pd"))
-    return replace(bundle, exposures=enriched)
+    return replace(bundle, exposures=seal_hierarchy_exit(enriched))
 
 
 @pytest.fixture

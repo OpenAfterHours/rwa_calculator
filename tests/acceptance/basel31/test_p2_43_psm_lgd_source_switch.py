@@ -85,6 +85,7 @@ from tests.fixtures.p2_43.p2_43 import (
     PD_BORROWER,
     PD_GUARANTOR,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # =============================================================================
 # Scenario expected values (hand-calculation in module docstring above)
@@ -150,7 +151,7 @@ def _build_p2_43_bundle() -> RawDataBundle:
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

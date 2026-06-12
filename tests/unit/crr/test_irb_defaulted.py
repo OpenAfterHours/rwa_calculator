@@ -19,6 +19,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401
@@ -81,7 +82,9 @@ class TestDefaultedK:
     def test_firb_k_is_zero(self, crr_config: CalculationConfig) -> None:
         """F-IRB defaulted: K=0."""
         lf = _make_defaulted_lf(approach="foundation_irb", is_airb=False, lgd=0.45, beel=0.0)
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
 
     def test_airb_k_lgd_minus_beel(self, crr_config: CalculationConfig) -> None:
@@ -93,7 +96,9 @@ class TestDefaultedK:
             beel=0.50,
             exposure_class="RETAIL_OTHER",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
     def test_airb_k_floored_at_zero_when_beel_exceeds_lgd(
@@ -107,7 +112,9 @@ class TestDefaultedK:
             beel=0.55,
             exposure_class="RETAIL_OTHER",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
 
     def test_airb_k_with_zero_beel(self, crr_config: CalculationConfig) -> None:
@@ -119,7 +126,9 @@ class TestDefaultedK:
             beel=0.0,
             exposure_class="CORPORATE",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["k"][0] == pytest.approx(0.60, abs=1e-10)
 
 
@@ -134,7 +143,9 @@ class TestDefaultedRWA:
     def test_firb_rwa_is_zero(self, crr_config: CalculationConfig) -> None:
         """F-IRB defaulted: RWA=0."""
         lf = _make_defaulted_lf(approach="foundation_irb", is_airb=False, ead_final=500_000.0)
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["rwa"][0] == pytest.approx(0.0, abs=1e-6)
         assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-6)
 
@@ -148,7 +159,9 @@ class TestDefaultedRWA:
             ead_final=25_000.0,
             exposure_class="RETAIL_OTHER",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # K=0.15, scaling=1.0 (retail), RWA = 0.15 * 12.5 * 1.0 * 25000 = 46,875
         expected_rwa = 0.15 * 12.5 * 1.0 * 25_000.0
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -163,7 +176,9 @@ class TestDefaultedRWA:
             ead_final=500_000.0,
             exposure_class="CORPORATE",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # K=0.15, no scaling, RWA = 0.15 * 12.5 * 500000 = 937,500
         expected_rwa = 0.15 * 12.5 * 500_000.0
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -179,7 +194,10 @@ class TestDefaultedRWA:
             exposure_class="CORPORATE",
         )
         result = (
-            lf.irb.prepare_columns(basel31_config).irb.apply_all_formulas(basel31_config).collect()
+            _pad(lf)
+            .irb.prepare_columns(basel31_config)
+            .irb.apply_all_formulas(basel31_config)
+            .collect()
         )
         # K=0.15, scaling=1.0 (Basel 3.1), RWA = 0.15 * 12.5 * 1.0 * 500000 = 937,500
         expected_rwa = 0.15 * 12.5 * 1.0 * 500_000.0
@@ -188,13 +206,17 @@ class TestDefaultedRWA:
     def test_defaulted_correlation_is_zero(self, crr_config: CalculationConfig) -> None:
         """Defaulted exposures bypass Vasicek: correlation=0."""
         lf = _make_defaulted_lf(approach="foundation_irb", is_airb=False)
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["correlation"][0] == pytest.approx(0.0, abs=1e-10)
 
     def test_defaulted_maturity_adjustment_is_one(self, crr_config: CalculationConfig) -> None:
         """Defaulted exposures: maturity adjustment=1.0 (not applicable)."""
         lf = _make_defaulted_lf(approach="foundation_irb", is_airb=False)
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["maturity_adjustment"][0] == pytest.approx(1.0, abs=1e-10)
 
 
@@ -214,7 +236,9 @@ class TestDefaultedExpectedLoss:
             lgd=0.45,
             ead_final=500_000.0,
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # lgd_floored = 0.45 (CRR no LGD floor), EL = 0.45 * 500000 = 225,000
         assert result["expected_loss"][0] == pytest.approx(0.45 * 500_000.0, rel=1e-6)
 
@@ -228,7 +252,9 @@ class TestDefaultedExpectedLoss:
             ead_final=25_000.0,
             exposure_class="RETAIL_OTHER",
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # EL = BEEL * EAD = 0.50 * 25000 = 12,500
         assert result["expected_loss"][0] == pytest.approx(0.50 * 25_000.0, rel=1e-6)
 
@@ -257,7 +283,9 @@ class TestDefaultedPipeline:
                 "beel": [0.0, 0.0],
             }
         )
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # Performing row should have non-zero K
         assert result["k"][0] > 0.0
         assert result["rwa"][0] > 0.0
@@ -280,7 +308,9 @@ class TestDefaultedPipeline:
             }
         )
         # Should run without errors (prepare_columns adds is_defaulted=False)
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         assert result["k"][0] > 0.0
         assert result["rwa"][0] > 0.0
 
@@ -300,7 +330,9 @@ class TestDefaultedPipeline:
             }
         )
         # prepare_columns adds beel=0.0
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        )
         # A-IRB with BEEL=0: K = max(0, 0.45 - 0) = 0.45
         assert result["k"][0] == pytest.approx(0.45, abs=1e-10)
 
@@ -321,7 +353,7 @@ class TestDefaultedPipeline:
                 "beel": [0.0],
             }
         )
-        result = apply_irb_formulas(lf, crr_config).collect()
+        result = apply_irb_formulas(_pad(lf), crr_config).collect()
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
         assert result["rwa"][0] == pytest.approx(0.0, abs=1e-6)
 
@@ -338,7 +370,8 @@ class TestDefaultedAudit:
         """F-IRB defaulted audit string indicates K=0."""
         lf = _make_defaulted_lf(approach="foundation_irb", is_airb=False)
         result = (
-            lf.irb.prepare_columns(crr_config)
+            _pad(lf)
+            .irb.prepare_columns(crr_config)
             .irb.apply_all_formulas(crr_config)
             .irb.build_audit()
             .collect()
@@ -357,7 +390,8 @@ class TestDefaultedAudit:
             exposure_class="RETAIL_OTHER",
         )
         result = (
-            lf.irb.prepare_columns(crr_config)
+            _pad(lf)
+            .irb.prepare_columns(crr_config)
             .irb.apply_all_formulas(crr_config)
             .irb.build_audit()
             .collect()

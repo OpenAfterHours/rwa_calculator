@@ -69,6 +69,7 @@ from tests.fixtures.p1_142.p1_142 import (
     LOAN_BREACH_REF,
     LOAN_CTRL_REF,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -94,7 +95,7 @@ def _build_bundle() -> RawDataBundle:
     Collateral is_income_producing is null on both rows — the engine must
     derive the income-producing flag from counterparty qualifying_property_count.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={
                 "facility_reference": pl.String,

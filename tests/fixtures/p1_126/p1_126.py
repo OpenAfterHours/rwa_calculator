@@ -54,7 +54,8 @@ from datetime import date
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import CounterpartyLookup, ResolvedHierarchyBundle
+from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants
@@ -376,9 +377,9 @@ def make_bundle(
     """
     enriched_cp = _enrich_counterparty(counterparties)
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=make_corporate_exposure(counterparty_reference),
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=_empty_schema_lf(
                 {

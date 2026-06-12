@@ -54,8 +54,8 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import (
@@ -251,7 +251,7 @@ def _run_pipeline_d15() -> object:
             "child_counterparty_reference": pl.String,
         }
     )
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             [_repo_facility("FAC_D15", "CP_D15")],
             schema=_FACILITY_SCHEMA,

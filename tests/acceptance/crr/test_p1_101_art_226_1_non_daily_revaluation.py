@@ -65,8 +65,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 from tests.acceptance.conftest import find_exposure_rows, total_field
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
@@ -137,7 +137,7 @@ def _run_pipeline_reval() -> object:
     # collateral fixture does NOT carry revaluation_frequency_days.
     collateral = pl.scan_parquet(_FIXTURES_DIR / "collateral.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

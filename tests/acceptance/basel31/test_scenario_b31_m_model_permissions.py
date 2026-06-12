@@ -34,10 +34,10 @@ from datetime import date
 
 import polars as pl
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Test data builders
@@ -334,7 +334,7 @@ def _run_pipeline(
 ):
     """Run the B31 pipeline with IRB permissions and return the orchestrator result."""
     fac_map, lend_map = _empty_mappings()
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

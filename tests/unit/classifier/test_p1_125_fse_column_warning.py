@@ -1,17 +1,21 @@
-"""Unit tests for CLS007: FSE column absent → classifier warning under Basel 3.1.
+"""Unit tests for the is_financial_sector_entity sealed-lookup invariant.
+
+The counterparty lookup is sealed against ``CP_LOOKUP_COUNTERPARTIES_EDGE``
+(contracts/edges.py), which declares ``is_financial_sector_entity`` — every
+constructible classifier input carries the column, absent at most as typed
+nulls, never as a missing column. The historical CLS007 "FSE column missing"
+warning branch was deleted as dead code; these tests pin the replacement
+invariant instead.
 
 Tests cover:
-- Scenario A: B31 + counterparty schema OMITS is_financial_sector_entity → CLS007 emitted
-- Scenario B: B31 + counterparty schema INCLUDES is_financial_sector_entity → no CLS007
-- Scenario C: CRR + counterparty schema OMITS is_financial_sector_entity → no CLS007 (gating)
-- CLS007 attributes: code, severity (WARNING), category (CLASSIFICATION),
-  regulatory_reference (PRA PS1/26 Art. 147A(1)(e)), message contains column name
+- Sealed lookups always carry is_financial_sector_entity (typed Boolean)
+- CLS007 is never emitted on sealed input (column present or omitted at
+  build time, B31 or CRR)
 
 References:
 - PRA PS1/26 Art. 147A(1)(e): Financial Sector Entities restricted to F-IRB under Basel 3.1
-- P1.125: FSE column missing → CLS007 warning under B31
-- tests/unit/test_classifier_qrre_warnings.py: analogous CLS004 pattern
-- tests/unit/test_art123a_retail_criteria.py: analogous CLS005 pattern
+- contracts/edges.py: CP_LOOKUP_COUNTERPARTIES_EDGE (Phase 3 producer-sealed edge)
+- tests/unit/test_classifier_qrre_warnings.py: analogous CLS004 sealed-invariant pattern
 """
 
 from __future__ import annotations
@@ -21,15 +25,15 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import CounterpartyLookup, ResolvedHierarchyBundle
+from rwa_calc.contracts.bundles import ResolvedHierarchyBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.classifier import ExposureClassifier
 from tests.fixtures.p1_125.p1_125 import (
     make_corporate_exposure,
     make_counterparty_with_fse_column,
     make_counterparty_without_fse_column,
 )
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Fixtures
@@ -88,9 +92,9 @@ def _make_bundle(counterparties: pl.LazyFrame) -> ResolvedHierarchyBundle:
         }
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=make_corporate_exposure(),
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -119,96 +123,42 @@ def _make_bundle(counterparties: pl.LazyFrame) -> ResolvedHierarchyBundle:
 
 
 # =============================================================================
-# Scenario A: B31 + column absent → CLS007
+# Sealed-edge invariant: the FSE column-absence state is unrepresentable
 # =============================================================================
+#
+# The historical TestScenarioA_B31ColumnAbsent class asserted that CLS007
+# fired when is_financial_sector_entity was absent from the counterparty
+# schema. Under the CP_LOOKUP_COUNTERPARTIES_EDGE seal that state is
+# unrepresentable (the seal injects declared-but-absent columns as typed
+# nulls), so the absence-warning tests were deleted and replaced by the
+# invariant below.
 
 
-class TestScenarioA_B31ColumnAbsent:
-    """B31 framework: CLS007 warning is emitted when is_financial_sector_entity is absent."""
+class TestFSESealedFrameInvariant:
+    """The sealed lookup makes the FSE column-absence state unrepresentable."""
 
-    def test_cls007_emitted_when_fse_column_absent_under_b31(
-        self,
-        classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
-    ) -> None:
-        """Scenario A: exactly one CLS007 warning when counterparty omits FSE column."""
-        # Arrange
+    def test_sealed_lookup_always_carries_fse_column(self) -> None:
+        """A lookup built without the FSE column still carries it after the seal."""
         bundle = _make_bundle(make_counterparty_without_fse_column())
 
-        # Act
-        result = classifier.classify(bundle, b31_config)
+        schema = bundle.counterparty_lookup.counterparties.collect_schema()
+        assert schema.get("is_financial_sector_entity") == pl.Boolean
 
-        # Assert
-        cls007_errors = [e for e in result.classification_errors if e.code == "CLS007"]
-        assert len(cls007_errors) == 1
-
-    def test_cls007_has_warning_severity(
+    @pytest.mark.parametrize("config_fixture", ["b31_config", "crr_config"])
+    def test_no_cls007_on_sealed_input_when_column_omitted_at_build(
         self,
         classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
+        config_fixture: str,
+        request: pytest.FixtureRequest,
     ) -> None:
-        """CLS007 must be WARNING severity, not ERROR."""
-        # Arrange
+        """CLS007 is never emitted: the sealed lookup always has the column."""
+        config = request.getfixturevalue(config_fixture)
         bundle = _make_bundle(make_counterparty_without_fse_column())
 
-        # Act
-        result = classifier.classify(bundle, b31_config)
+        result = classifier.classify(bundle, config)
 
-        # Assert
         cls007_errors = [e for e in result.classification_errors if e.code == "CLS007"]
-        assert len(cls007_errors) == 1
-        assert cls007_errors[0].severity == ErrorSeverity.WARNING
-
-    def test_cls007_has_classification_category(
-        self,
-        classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
-    ) -> None:
-        """CLS007 must carry CLASSIFICATION error category."""
-        # Arrange
-        bundle = _make_bundle(make_counterparty_without_fse_column())
-
-        # Act
-        result = classifier.classify(bundle, b31_config)
-
-        # Assert
-        cls007_errors = [e for e in result.classification_errors if e.code == "CLS007"]
-        assert len(cls007_errors) == 1
-        assert cls007_errors[0].category == ErrorCategory.CLASSIFICATION
-
-    def test_cls007_regulatory_reference_cites_art_147a(
-        self,
-        classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
-    ) -> None:
-        """CLS007 regulatory_reference must cite PRA PS1/26 Art. 147A(1)(e)."""
-        # Arrange
-        bundle = _make_bundle(make_counterparty_without_fse_column())
-
-        # Act
-        result = classifier.classify(bundle, b31_config)
-
-        # Assert
-        cls007_errors = [e for e in result.classification_errors if e.code == "CLS007"]
-        assert len(cls007_errors) == 1
-        assert cls007_errors[0].regulatory_reference == "PRA PS1/26 Art. 147A(1)(e)"
-
-    def test_cls007_message_mentions_fse_column(
-        self,
-        classifier: ExposureClassifier,
-        b31_config: CalculationConfig,
-    ) -> None:
-        """CLS007 message must mention the missing column name is_financial_sector_entity."""
-        # Arrange
-        bundle = _make_bundle(make_counterparty_without_fse_column())
-
-        # Act
-        result = classifier.classify(bundle, b31_config)
-
-        # Assert
-        cls007_errors = [e for e in result.classification_errors if e.code == "CLS007"]
-        assert len(cls007_errors) == 1
-        assert "is_financial_sector_entity" in cls007_errors[0].message
+        assert cls007_errors == []
 
 
 # =============================================================================

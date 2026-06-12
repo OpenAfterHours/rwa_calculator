@@ -29,10 +29,15 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator.aggregator import OutputAggregator
 from rwa_calc.engine.sa.calculator import SACalculator
+from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
 # --- Helpers ---
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 def _irb_corporate_frame(
@@ -44,16 +49,18 @@ def _irb_corporate_frame(
     ref: str = "EXP1",
 ) -> pl.LazyFrame:
     """Build a minimal IRB corporate exposure with pre-baked sa_rwa."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [ref],
-            "exposure_class": [exposure_class],
-            "approach_applied": ["FIRB"],
-            "ead_final": [ead],
-            "risk_weight": [rwa / ead if ead > 0 else 0.0],
-            "rwa_final": [rwa],
-            "sa_rwa": [sa_rwa],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": [ref],
+                "exposure_class": [exposure_class],
+                "approach_applied": ["FIRB"],
+                "ead_final": [ead],
+                "risk_weight": [rwa / ead if ead > 0 else 0.0],
+                "rwa_final": [rwa],
+                "sa_rwa": [sa_rwa],
+            }
+        )
     )
 
 
@@ -215,7 +222,7 @@ class TestOutputFloorSTeaIG:
         config = _b31_config(use_ig=False)
         # sa_rwa = 1M (100% of EAD) — simulating no IG assessment
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=1_000_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         assert summary.s_trea == pytest.approx(1_000_000.0)
@@ -225,7 +232,7 @@ class TestOutputFloorSTeaIG:
         config = _b31_config(use_ig=True)
         # sa_rwa = 650k (65% of EAD) — simulating IG assessment
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=650_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         assert summary.s_trea == pytest.approx(650_000.0)
@@ -235,7 +242,7 @@ class TestOutputFloorSTeaIG:
         config = _b31_config(use_ig=True)
         # sa_rwa = 1.35M (135% of EAD) — simulating non-IG assessment
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=1_350_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         assert summary.s_trea == pytest.approx(1_350_000.0)
@@ -249,7 +256,7 @@ class TestOutputFloorSTeaIG:
         config = _b31_config(use_ig=True)
         # IG corporate: sa_rwa = 650k
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=650_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         # Floor threshold = 72.5% × 650k = 471,250
@@ -266,7 +273,7 @@ class TestOutputFloorSTeaIG:
         # Without IG: floor binds (725k > 500k)
         config_no_ig = _b31_config(use_ig=False)
         irb_no_ig = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=1_000_000)
-        result_no_ig = aggregator.aggregate(EMPTY, irb_no_ig, EMPTY, None, config_no_ig)
+        result_no_ig = aggregator.aggregate(EMPTY_SA, irb_no_ig, EMPTY_SLOTTING, None, config_no_ig)
         assert result_no_ig.output_floor_summary is not None
         assert result_no_ig.output_floor_summary.portfolio_floor_binding is True
         assert result_no_ig.output_floor_summary.shortfall == pytest.approx(225_000.0)
@@ -274,7 +281,7 @@ class TestOutputFloorSTeaIG:
         # With IG: floor does NOT bind (471.25k < 500k)
         config_ig = _b31_config(use_ig=True)
         irb_ig = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=650_000)
-        result_ig = aggregator.aggregate(EMPTY, irb_ig, EMPTY, None, config_ig)
+        result_ig = aggregator.aggregate(EMPTY_SA, irb_ig, EMPTY_SLOTTING, None, config_ig)
         assert result_ig.output_floor_summary is not None
         assert result_ig.output_floor_summary.portfolio_floor_binding is False
         assert result_ig.output_floor_summary.shortfall == pytest.approx(0.0)
@@ -289,7 +296,7 @@ class TestOutputFloorSTeaIG:
         config = _b31_config(use_ig=True)
         # Non-IG corporate: sa_rwa = 1.35M
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=1_350_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         # Floor threshold = 72.5% × 1.35M = 978,750
@@ -303,18 +310,20 @@ class TestOutputFloorSTeaIG:
         corporate counterparties. S-TREA is the sum of all sa_rwa values.
         """
         config = _b31_config(use_ig=True)
-        irb = pl.LazyFrame(
-            {
-                "exposure_reference": ["IG_CORP", "NON_IG_CORP"],
-                "exposure_class": ["CORPORATE", "CORPORATE"],
-                "approach_applied": ["FIRB", "FIRB"],
-                "ead_final": [1_000_000.0, 1_000_000.0],
-                "risk_weight": [0.5, 0.5],
-                "rwa_final": [500_000.0, 500_000.0],
-                "sa_rwa": [650_000.0, 1_350_000.0],  # IG=65%, non-IG=135%
-            }
+        irb = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["IG_CORP", "NON_IG_CORP"],
+                    "exposure_class": ["CORPORATE", "CORPORATE"],
+                    "approach_applied": ["FIRB", "FIRB"],
+                    "ead_final": [1_000_000.0, 1_000_000.0],
+                    "risk_weight": [0.5, 0.5],
+                    "rwa_final": [500_000.0, 500_000.0],
+                    "sa_rwa": [650_000.0, 1_350_000.0],  # IG=65%, non-IG=135%
+                }
+            )
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         summary = result.output_floor_summary
         assert summary is not None
         # S-TREA = 650k + 1.35M = 2M (average 100%, same as no-IG in aggregate)
@@ -329,7 +338,7 @@ class TestOutputFloorSTeaIG:
         """
         config = _b31_config(use_ig=True)
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=650_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Floor does not bind → rwa_final = pre-floor IRB RWA
         assert float(df["rwa_final"][0]) == pytest.approx(500_000.0)
@@ -341,7 +350,7 @@ class TestOutputFloorSTeaIG:
         """
         config = _b31_config(use_ig=False)
         irb = _irb_corporate_frame(ead=1_000_000, rwa=500_000, sa_rwa=1_000_000)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
         df = result.results.collect()
         # Floor binds: rwa_final = 500k + 225k shortfall = 725k
         assert float(df["rwa_final"][0]) == pytest.approx(725_000.0)

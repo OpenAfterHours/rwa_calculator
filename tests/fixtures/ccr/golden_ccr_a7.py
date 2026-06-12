@@ -85,6 +85,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import CCR_COLLATERAL_SCHEMA
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .golden_ccr_a1 import (
     _build_cp_001_counterparty,
@@ -233,7 +234,7 @@ def build_raw_data_bundle_with_ccr_a7() -> RawDataBundle:
     No fx_rates table required — commodity adjusted notional uses
     market_price × number_of_units (both already in GBP) per Art. 279b(1)(c).
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

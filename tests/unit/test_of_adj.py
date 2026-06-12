@@ -35,8 +35,13 @@ import pytest
 from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.aggregator._floor import GCRA_CAP_RATE, compute_of_adj
+from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -65,21 +70,23 @@ def _irb_frame(
     shortfall: float = 0.0,
 ) -> pl.LazyFrame:
     """IRB frame with EL columns for OF-ADJ testing."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [200_000_000.0],
-            "risk_weight": [rwa / 200_000_000.0],
-            "rwa_post_factor": [rwa],
-            "rwa_final": [rwa],
-            "sa_rwa": [sa_rwa],
-            "expected_loss": [100_000.0],
-            "provision_allocated": [100_000.0 + excess],
-            "el_shortfall": [shortfall],
-            "el_excess": [excess],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [200_000_000.0],
+                "risk_weight": [rwa / 200_000_000.0],
+                "rwa_post_factor": [rwa],
+                "rwa_final": [rwa],
+                "sa_rwa": [sa_rwa],
+                "expected_loss": [100_000.0],
+                "provision_allocated": [100_000.0 + excess],
+                "el_shortfall": [shortfall],
+                "el_excess": [excess],
+            }
+        )
     )
 
 
@@ -213,7 +220,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config()
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -233,7 +240,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config()
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, shortfall=400_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -251,7 +258,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config(gcra_amount=500_000.0)
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -268,7 +275,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config(sa_t2_credit=400_000.0)
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -284,7 +291,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config(art_40_deductions=100_000.0)
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -303,7 +310,7 @@ class TestOfAdjAggregator:
             gcra_amount=200_000.0, sa_t2_credit=100_000.0, art_40_deductions=50_000.0
         )
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -322,7 +329,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config(gcra_amount=2_000_000.0)
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -333,18 +340,20 @@ class TestOfAdjAggregator:
     def test_of_adj_zero_when_no_el_summary_no_config(self, aggregator: OutputAggregator) -> None:
         """No EL data and no config inputs → OF-ADJ = 0 (backward compat)."""
         config = _b31_config()
-        irb = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "exposure_class": ["CORPORATE"],
-                "approach_applied": ["FIRB"],
-                "ead_final": [200_000_000.0],
-                "risk_weight": [0.25],
-                "rwa_final": [50_000_000.0],
-                "sa_rwa": [100_000_000.0],
-            }
+        irb = pad_irb_branch(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "exposure_class": ["CORPORATE"],
+                    "approach_applied": ["FIRB"],
+                    "ead_final": [200_000_000.0],
+                    "risk_weight": [0.25],
+                    "rwa_final": [50_000_000.0],
+                    "sa_rwa": [100_000_000.0],
+                }
+            )
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -361,7 +370,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config(gcra_amount=500_000.0)
         irb = _irb_frame(rwa=70_000_000.0, sa_rwa=100_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -374,7 +383,7 @@ class TestOfAdjAggregator:
         """Under CRR, output floor is disabled — no OF-ADJ computed."""
         config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         assert result.output_floor_summary is None
 
@@ -384,7 +393,7 @@ class TestOfAdjAggregator:
             gcra_amount=300_000.0, sa_t2_credit=200_000.0, art_40_deductions=75_000.0
         )
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None
@@ -403,7 +412,7 @@ class TestOfAdjAggregator:
         """
         config = _b31_config()
         irb = _irb_frame(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, config)
+        result = aggregator.aggregate(EMPTY_SA, irb, EMPTY_SLOTTING, None, config)
 
         summary = result.output_floor_summary
         assert summary is not None

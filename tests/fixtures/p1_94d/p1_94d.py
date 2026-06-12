@@ -102,6 +102,7 @@ from rwa_calc.data.schemas import (
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario constants — single source of truth for test-writer assertions
@@ -532,7 +533,7 @@ def build_p1_94d_bundle(*, fixtures_dir: Path | None = None) -> RawDataBundle:
         counterparties_lf = create_p194d_counterparty().lazy()
         loans_lf = create_p194d_loans().lazy()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=create_p194d_empty_facilities().lazy(),
         loans=loans_lf,
         counterparties=counterparties_lf,

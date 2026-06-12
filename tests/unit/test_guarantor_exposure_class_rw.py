@@ -51,7 +51,7 @@ def _sa_guarantee_result(
     """
     data: dict[str, list] = {
         "exposure_reference": ["EXP001"],
-        "ead": [1_000_000.0],
+        "ead_final": [1_000_000.0],
         "risk_weight": [1.0],
         "guaranteed_portion": [1_000_000.0],
         "unguaranteed_portion": [0.0],

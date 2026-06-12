@@ -44,6 +44,7 @@ from rwa_calc.data.schemas import GUARANTEE_SCHEMA
 from rwa_calc.engine import pipeline as pipeline_module
 from rwa_calc.engine.materialise import begin_edge_capture
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -133,7 +134,9 @@ def _run_and_read_map(
     if with_guarantee:
         bundle = replace(
             bundle,
-            guarantees=_rows_to_lazyframe([_guarantee_row()], GUARANTEE_SCHEMA),
+            guarantees=seal_raw_table(
+                _rows_to_lazyframe([_guarantee_row()], GUARANTEE_SCHEMA), "guarantees"
+            ),
         )
 
     config = CalculationConfig.crr(

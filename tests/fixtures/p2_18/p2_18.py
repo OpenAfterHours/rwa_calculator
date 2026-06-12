@@ -89,6 +89,7 @@ from datetime import date
 from pathlib import Path
 
 import polars as pl
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.data.column_spec import dtypes_of
@@ -468,7 +469,7 @@ def build_p2_18_bundle(*, fixtures_dir: Path) -> RawDataBundle:
     provisions_lf = create_p218_empty_provisions().lazy()
     ratings_lf = create_p218_empty_ratings().lazy()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities_lf,
         loans=loan_lf,
         counterparties=counterparty_lf,

@@ -18,6 +18,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.schemas import (
@@ -68,14 +69,15 @@ class TestIRBPrepareColumnsPropagation:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert "has_one_day_maturity_floor" in result.columns
         assert result["has_one_day_maturity_floor"][0] is True
 
     def test_flag_defaulted_to_false_when_absent(self, b31_config: CalculationConfig) -> None:
-        """When the flag is missing from the input, prepare_columns must
-        default-add it to False so downstream formulas can read it safely."""
+        """A null/contract-default flag normalises to False so downstream
+        formulas can read it safely (the crm_exit edge guarantees the
+        column is present on the sealed branch input)."""
         lf = pl.LazyFrame(
             {
                 "pd": [0.01],
@@ -86,7 +88,7 @@ class TestIRBPrepareColumnsPropagation:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert "has_one_day_maturity_floor" in result.columns
         assert result["has_one_day_maturity_floor"][0] is False
@@ -110,7 +112,9 @@ class TestMaturityAdjustmentEndToEnd:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        )
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
         assert result["maturity_adjustment"][0] < 1.0
@@ -128,7 +132,9 @@ class TestMaturityAdjustmentEndToEnd:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        result = (
+            _pad(lf).irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+        )
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
         assert result["maturity_adjustment"][0] == pytest.approx(1.0, abs=1e-9)
@@ -147,7 +153,13 @@ class TestMaturityAdjustmentEndToEnd:
             }
         )
 
-        result = lf.irb.prepare_columns(crr_config).irb.apply_all_formulas(crr_config).collect()
+        result = (
+            _pad(lf)
+            .irb.classify_approach(crr_config)
+            .irb.prepare_columns(crr_config)
+            .irb.apply_all_formulas(crr_config)
+            .collect()
+        )
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
         assert result["maturity_adjustment"][0] < 1.0
@@ -181,10 +193,14 @@ class TestMaturityAdjustmentEndToEnd:
         )
 
         base_result = (
-            base_lf.irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+            _pad(base_lf)
+            .irb.prepare_columns(b31_config)
+            .irb.apply_all_formulas(b31_config)
+            .collect()
         )
         carve_out_result = (
-            carve_out_lf.irb.prepare_columns(b31_config)
+            _pad(carve_out_lf)
+            .irb.prepare_columns(b31_config)
             .irb.apply_all_formulas(b31_config)
             .collect()
         )

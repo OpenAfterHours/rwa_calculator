@@ -31,6 +31,7 @@ from rwa_calc.engine.comparison import (
     _compute_summary_by_class,
     _validate_configs,
 )
+from tests.fixtures.resolved_bundle import make_aggregated_bundle
 from tests.unit._minimal_raw_data import make_minimal_raw_data
 
 # =============================================================================
@@ -53,7 +54,7 @@ def b31_config() -> CalculationConfig:
 @pytest.fixture
 def mock_crr_results() -> AggregatedResultBundle:
     """Mock CRR pipeline results with 3 exposures."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
@@ -71,7 +72,7 @@ def mock_crr_results() -> AggregatedResultBundle:
 @pytest.fixture
 def mock_b31_results() -> AggregatedResultBundle:
     """Mock Basel 3.1 pipeline results (same exposures, different values)."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
@@ -183,7 +184,7 @@ class TestExposureDeltas:
 
     def test_zero_delta_when_identical(self):
         """Identical results should produce zero deltas."""
-        results = AggregatedResultBundle(
+        results = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],
@@ -205,7 +206,7 @@ class TestExposureDeltas:
 
     def test_full_outer_join_handles_mismatched_exposures(self):
         """Exposures in only one framework should still appear with nulls filled."""
-        crr = AggregatedResultBundle(
+        crr = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001", "CRR_ONLY"],
@@ -218,7 +219,7 @@ class TestExposureDeltas:
             ),
             errors=[],
         )
-        b31 = AggregatedResultBundle(
+        b31 = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001", "B31_ONLY"],
@@ -329,7 +330,7 @@ class TestComparisonBundle:
 
     def test_bundle_error_accumulation(self):
         """Bundle should accumulate errors from both pipelines."""
-        crr = AggregatedResultBundle(
+        crr = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],
@@ -342,7 +343,7 @@ class TestComparisonBundle:
             ),
             errors=["crr_error_1"],
         )
-        b31 = AggregatedResultBundle(
+        b31 = make_aggregated_bundle(
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],

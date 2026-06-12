@@ -11,6 +11,7 @@ import polars as pl
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.engine.loader import _run_bundle_validation
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 
 def _make_minimal_bundle(**overrides) -> RawDataBundle:
@@ -97,11 +98,11 @@ def _make_minimal_bundle(**overrides) -> RawDataBundle:
         "lending_mappings": lending_mappings,
     }
     defaults.update(overrides)
-    bundle = RawDataBundle(**defaults)
+    bundle = make_raw_bundle(**defaults)
     # Run loader-level validation to match real loader behaviour
     errors = _run_bundle_validation(bundle)
     if errors:
-        return RawDataBundle(**{**defaults, "errors": errors})
+        return make_raw_bundle(**{**defaults, "errors": errors})
     return bundle
 
 

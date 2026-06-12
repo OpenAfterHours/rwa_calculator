@@ -383,26 +383,18 @@ def apply_irb_formulas(
     apply_scaling = config.is_crr
     scaling_factor = 1.06 if apply_scaling else 1.0
 
-    # Ensure required columns exist
+    # Ensure calculator-internal derived columns exist (maturity / turnover_m
+    # are produced by ``prepare_columns`` on the namespace path and are not
+    # crm_exit contract columns).
     schema = exposures.collect_schema()
     schema_names = schema.names()
     if "maturity" not in schema_names:
         exposures = exposures.with_columns(pl.lit(2.5).alias("maturity"))
     if "turnover_m" not in schema_names:
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-    # Ensure requires_fi_scalar column exists (for FI scalar in correlation)
-    # This is normally set by the classifier, default to False if not present
-    if "requires_fi_scalar" not in schema_names:
-        exposures = exposures.with_columns(pl.lit(False).alias("requires_fi_scalar"))
-    # Art. 162(3) carve-out flag — read by _maturity_adjustment_expr_from_pd to
-    # suppress the 1y M floor for daily-margined SFTs/derivatives, margin lending,
-    # and short-term self-liquidating trade transactions.
-    if "has_one_day_maturity_floor" not in schema_names:
-        exposures = exposures.with_columns(pl.lit(False).alias("has_one_day_maturity_floor"))
 
     # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-    has_transactor = "is_qrre_transactor" in schema_names
-    pd_floor_expr = _pd_floor_expression(config, has_transactor_col=has_transactor)
+    pd_floor_expr = _pd_floor_expression(config)
     exposures = exposures.with_columns(
         pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
     )
@@ -411,28 +403,23 @@ def apply_irb_formulas(
     # LGD floors only apply to A-IRB own-estimate LGDs (CRE30.41).
     # F-IRB supervisory LGDs are regulatory values and don't need flooring.
     if config.is_basel_3_1:
-        has_collateral_type = "collateral_type" in schema_names
-        has_seniority = "seniority" in schema_names
-        has_exposure_class = "exposure_class" in schema_names
-        has_alloc = "crm_alloc_financial" in schema_names
-        if has_collateral_type:
+        if "collateral_type" in schema_names:
             lgd_floor_expr = _lgd_floor_expression_with_collateral(
                 config,
-                has_seniority=has_seniority,
-                has_exposure_class=has_exposure_class,
+                has_seniority=True,
+                has_exposure_class=True,
             )
         else:
             lgd_floor_expr = _lgd_floor_expression(
                 config,
-                has_seniority=has_seniority,
-                has_exposure_class=has_exposure_class,
+                has_seniority=True,
+                has_exposure_class=True,
             )
         # Art. 164(4)(c) blended floor for retail with mixed collateral
-        if has_alloc and has_exposure_class:
-            blended_expr = _lgd_floor_blended_expression(config)
-            lgd_floor_expr = (
-                pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
-            )
+        blended_expr = _lgd_floor_blended_expression(config)
+        lgd_floor_expr = (
+            pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
+        )
         is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in schema_names else pl.lit(False)
         floored_lgd = pl.max_horizontal(pl.col("lgd"), lgd_floor_expr)
         exposures = exposures.with_columns(

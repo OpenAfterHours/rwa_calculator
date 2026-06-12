@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from rwa_calc.contracts.bundles import RawDataBundle
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,7 +52,7 @@ def build_sa_loan_bundle(fixtures_dir: Path) -> RawDataBundle:
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

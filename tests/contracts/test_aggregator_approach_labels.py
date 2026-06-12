@@ -18,6 +18,11 @@ from __future__ import annotations
 from datetime import date
 
 import polars as pl
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
 # Import builder helpers from integration conftest — they are plain functions,
 # not pytest fixtures, so a direct import is valid outside the conftest scope.
@@ -30,7 +35,12 @@ from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.aggregator._schemas import EQUITY_APPROACHES, SA_APPROACHES
 from rwa_calc.engine.equity.calculator import EquityCalculator
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 # =============================================================================
@@ -56,9 +66,9 @@ def test_aggregator_emits_lowercase_equity_approach() -> None:
     # Act
     equity_result = equity_calculator.get_equity_result_bundle(crm_bundle, config)
     agg_result = aggregator.aggregate(
-        sa_results=EMPTY,
-        irb_results=EMPTY,
-        slotting_results=EMPTY,
+        sa_results=EMPTY_SA,
+        irb_results=EMPTY_IRB,
+        slotting_results=EMPTY_SLOTTING,
         equity_bundle=equity_result,
         config=config,
     )

@@ -21,6 +21,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.slotting import SlottingCalculator
+from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad_slotting
 from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
 # =============================================================================
@@ -212,7 +213,7 @@ class TestSlottingSMESupportingFactor:
                 "interest": [0.0],
             }
         )
-        result = slotting_calculator.calculate_branch(lf, crr_config).collect()
+        result = slotting_calculator.calculate_branch(_pad_slotting(lf), crr_config).collect()
         sf = result["supporting_factor"][0]
         assert sf == pytest.approx(0.7619)
 
@@ -246,7 +247,7 @@ class TestSlottingCombinedFactors:
                 "interest": [0.0],
             }
         )
-        result = slotting_calculator.calculate_branch(lf, crr_config).collect()
+        result = slotting_calculator.calculate_branch(_pad_slotting(lf), crr_config).collect()
         sf = result["supporting_factor"][0]
         # min(0.7619, 0.75) = 0.75
         assert sf == pytest.approx(0.75)
@@ -278,7 +279,7 @@ class TestSlottingMixedBatch:
                 "is_infrastructure": [True, False, True],
             }
         )
-        result = slotting_calculator.calculate_branch(lf, crr_config).collect()
+        result = slotting_calculator.calculate_branch(_pad_slotting(lf), crr_config).collect()
         sfs = result["supporting_factor"].to_list()
         rwas = result["rwa"].to_list()
 
@@ -321,7 +322,7 @@ class TestSlottingELUnaffectedByFactor:
                 "is_infrastructure": [True],
             }
         )
-        result = slotting_calculator.calculate_branch(lf, crr_config).collect()
+        result = slotting_calculator.calculate_branch(_pad_slotting(lf), crr_config).collect()
 
         # EL = 0.4% × 10m = 40,000 — unaffected by 0.75 factor
         assert result["expected_loss"][0] == pytest.approx(10_000_000.0 * 0.004)

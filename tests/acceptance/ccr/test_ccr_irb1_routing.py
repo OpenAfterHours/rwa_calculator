@@ -64,6 +64,7 @@ from tests.fixtures.ccr.golden_ccr_irb1 import (
     build_raw_data_bundle_ccr_irb1,
     create_ccr_irb1_model_permission,
 )
+from tests.fixtures.raw_bundle import seal_raw_table
 
 # ---------------------------------------------------------------------------
 # Expected output (single source of truth — loaded from CCR-IRB-1.json)
@@ -105,7 +106,9 @@ def ccr_irb1_result() -> dict:
     """
     # Arrange
     base_bundle = build_raw_data_bundle_ccr_irb1()
-    model_permissions_lf = create_ccr_irb1_model_permission().lazy()
+    model_permissions_lf = seal_raw_table(
+        create_ccr_irb1_model_permission().lazy(), "model_permissions"
+    )
     bundle = dataclasses.replace(base_bundle, model_permissions=model_permissions_lf)
 
     config = CalculationConfig.crr(

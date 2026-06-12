@@ -37,6 +37,7 @@ from rwa_calc.engine.comparison import (
     _build_timeline_lazyframe,
     _extract_floor_metrics,
 )
+from tests.fixtures.resolved_bundle import make_aggregated_bundle
 from tests.unit._minimal_raw_data import make_minimal_raw_data
 
 # =============================================================================
@@ -53,7 +54,7 @@ def permission_mode() -> PermissionMode:
 @pytest.fixture
 def mock_result_with_floor() -> AggregatedResultBundle:
     """Mock pipeline result with floor impact data."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002"],
@@ -92,7 +93,7 @@ def mock_result_with_floor() -> AggregatedResultBundle:
 @pytest.fixture
 def mock_result_no_floor() -> AggregatedResultBundle:
     """Mock pipeline result without floor impact (SA-only)."""
-    return AggregatedResultBundle(
+    return make_aggregated_bundle(
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],

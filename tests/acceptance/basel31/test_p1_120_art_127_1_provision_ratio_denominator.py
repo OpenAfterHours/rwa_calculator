@@ -52,7 +52,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_120.p1_120 import (
@@ -67,6 +66,7 @@ from tests.fixtures.p1_120.p1_120 import (
     PROVISION_AMOUNT,
     PROVISION_RATIO,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -120,7 +120,7 @@ def _run_pipeline_p1120() -> object:
     collateral = pl.scan_parquet(_FIXTURES_DIR / "collateral.parquet")
     provisions = pl.scan_parquet(_FIXTURES_DIR / "provision.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=counterparties,

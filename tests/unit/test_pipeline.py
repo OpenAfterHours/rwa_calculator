@@ -21,7 +21,6 @@ import pytest
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     CRMAdjustedBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
@@ -35,6 +34,13 @@ from rwa_calc.engine.pipeline import (
     PipelineOrchestrator,
     create_pipeline,
     create_test_pipeline,
+)
+from tests.fixtures.raw_bundle import make_raw_bundle
+from tests.fixtures.resolved_bundle import (
+    make_classified_bundle,
+    make_counterparty_lookup,
+    make_crm_bundle,
+    make_resolved_bundle,
 )
 
 # =============================================================================
@@ -220,7 +226,7 @@ def mock_raw_data() -> RawDataBundle:
         }
     )
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities,
         loans=loans,
         contingents=contingents,
@@ -288,7 +294,7 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
         }
     )
 
-    counterparty_lookup = CounterpartyLookup(
+    counterparty_lookup = make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=pl.LazyFrame(
             schema={
@@ -306,7 +312,7 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
         rating_inheritance=rating_inheritance,
     )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
         counterparty_lookup=counterparty_lookup,
         collateral=pl.LazyFrame(),
@@ -342,11 +348,9 @@ def mock_classified_bundle() -> ClassifiedExposuresBundle:
     )
 
     all_exposures.filter(pl.col("approach") == "SA")
-    all_exposures.filter(
-        (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
-    )
+    all_exposures.filter((pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB"))
 
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=all_exposures,
         classification_errors=[],
     )
@@ -387,11 +391,9 @@ def mock_crm_bundle() -> CRMAdjustedBundle:
     )
 
     exposures.filter(pl.col("approach") == "SA")
-    exposures.filter(
-        (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
-    )
+    exposures.filter((pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB"))
 
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=exposures,
         crm_errors=[],
     )

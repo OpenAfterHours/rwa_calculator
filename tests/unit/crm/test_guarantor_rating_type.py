@@ -17,10 +17,10 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle, make_counterparty_lookup
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
 )
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.crm.guarantees import apply_guarantees
@@ -65,9 +65,9 @@ def crm_processor() -> CRMProcessor:
 @pytest.fixture
 def guaranteed_audit_bundle() -> ClassifiedExposuresBundle:
     """Fully-populated guaranteed bundle shared by the CRM audit-trail tests."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=_base_exposure(),
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=_counterparty_lookup(),
             parent_mappings=pl.LazyFrame({"child": [], "parent": []}),
             ultimate_parent_mappings=pl.LazyFrame({"ref": [], "ult": []}),
@@ -317,7 +317,7 @@ class TestGuarantorRatingTypeInAudit:
         crr_config: CalculationConfig,
     ) -> None:
         """Audit: no guarantee -> guarantor_rating_type is null."""
-        data = ClassifiedExposuresBundle(
+        data = make_classified_bundle(
             all_exposures=_base_exposure(),
             counterparty_lookup=None,
             classification_errors=[],
@@ -353,7 +353,7 @@ class TestGuarantorRatingTypeEdgeCases:
         crr_config: CalculationConfig,
     ) -> None:
         """Exposure without any guarantee should have null rating_type."""
-        data = ClassifiedExposuresBundle(
+        data = make_classified_bundle(
             all_exposures=_base_exposure(),
             counterparty_lookup=None,
             classification_errors=[],

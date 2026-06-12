@@ -26,6 +26,8 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
+from tests.unit.crm._crm_bundles import normalise_collateral
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -53,7 +55,10 @@ def crr_processor() -> CRMProcessor:
     return CRMProcessor(is_basel_3_1=False)
 
 
-def _bundle(rows: dict[str, list]) -> ClassifiedExposuresBundle:
+def _bundle(
+    rows: dict[str, list],
+    provisions: pl.LazyFrame | None = None,
+) -> ClassifiedExposuresBundle:
     """Build a minimal ClassifiedExposuresBundle from a per-row dict."""
     n = len(next(iter(rows.values())))
     defaults: dict[str, list] = {
@@ -79,12 +84,12 @@ def _bundle(rows: dict[str, list]) -> ClassifiedExposuresBundle:
         rows.setdefault(k, v)
 
     lf = pl.DataFrame(rows).lazy()
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=lf,
         equity_exposures=None,
         collateral=None,
         guarantees=None,
-        provisions=None,
+        provisions=provisions,
         counterparty_lookup=create_empty_counterparty_lookup(),
         classification_audit=None,
         classification_errors=[],
@@ -231,7 +236,22 @@ def test_ead_for_crm_mixed_row(crr_processor: CRMProcessor, crr_config: Calculat
 def test_ead_for_crm_after_provision_on_nominal(
     crr_processor: CRMProcessor, crr_config: CalculationConfig
 ) -> None:
-    """A provision on the off-BS nominal should reduce ead_for_crm in step."""
+    """A provision on the off-BS nominal should reduce ead_for_crm in step.
+
+    Post classifier-exit seal the resolved provision columns are CRM-internal
+    (stripped from hand-rolled classified frames), so the 20m provision is
+    supplied through the provisions table exactly as production does. The
+    exposure is SA because only SA deducts provisions from the nominal
+    (CRR Art. 111(2)); IRB feeds provisions to the EL shortfall instead.
+    """
+    provisions = pl.LazyFrame(
+        {
+            "provision_reference": ["PROV1"],
+            "beneficiary_type": ["contingent"],
+            "beneficiary_reference": ["CONT1"],
+            "amount": [20.0],
+        }
+    )
     bundle = _bundle(
         {
             "exposure_reference": ["CONT1"],
@@ -239,13 +259,10 @@ def test_ead_for_crm_after_provision_on_nominal(
             "exposure_type": ["contingent"],
             "drawn_amount": [0.0],
             "nominal_amount": [100.0],
-            "nominal_after_provision": [80.0],  # 20m provision on the off-BS leg
-            "provision_on_drawn": [0.0],
-            "provision_allocated": [20.0],
-            "provision_deducted": [20.0],
-            "provision_on_nominal": [20.0],
+            "approach": [ApproachType.SA.value],
             "risk_type": ["fr"],
-        }
+        },
+        provisions=provisions,
     )
 
     df = _run(crr_processor, crr_config, bundle)
@@ -303,9 +320,9 @@ def _bundle_with_collateral(
     }
     for k, v in coll_defaults.items():
         collateral_rows.setdefault(k, v)
-    coll_lf = pl.DataFrame(collateral_rows).lazy()
+    coll_lf = normalise_collateral(pl.DataFrame(collateral_rows).lazy())
 
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=bundle.all_exposures,
         equity_exposures=None,
         collateral=coll_lf,

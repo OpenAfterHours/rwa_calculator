@@ -27,6 +27,8 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
+from tests.unit.crm._crm_bundles import normalise_collateral, with_ancestor_facilities
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
@@ -102,6 +104,8 @@ def _create_bundle(
     exposures = pl.DataFrame(exposures_data).lazy()
     if "parent_facility_reference" in exposures.collect_schema().names():
         exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
+    # Production hierarchy always emits the facility-ancestor closure.
+    exposures = with_ancestor_facilities(exposures)
 
     coll_n = len(next(iter(collateral_data.values())))
     coll_defaults = {
@@ -122,11 +126,11 @@ def _create_bundle(
     for key, value in coll_defaults.items():
         if key not in collateral_data:
             collateral_data[key] = value
-    collateral = pl.DataFrame(collateral_data).lazy()
+    collateral = normalise_collateral(pl.DataFrame(collateral_data).lazy())
 
     empty_cp = create_empty_counterparty_lookup()
 
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         collateral=collateral,
@@ -520,7 +524,7 @@ class TestSequentialFillEdgeCases:
             exposures = exposures.with_columns(pl.col("parent_facility_reference").cast(pl.String))
 
         empty_cp = create_empty_counterparty_lookup()
-        bundle = ClassifiedExposuresBundle(
+        bundle = make_classified_bundle(
             all_exposures=exposures,
             equity_exposures=None,
             collateral=None,

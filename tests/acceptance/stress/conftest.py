@@ -32,6 +32,7 @@ from tests.fixtures.irb_test_helpers import (
     create_full_irb_model_permissions,
     enrich_ratings_with_model_id,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle
@@ -533,7 +534,7 @@ def create_raw_bundle(
         ratings = enrich_ratings_with_model_id(ratings)
         model_permissions = create_full_irb_model_permissions()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=dataset["counterparties"],
         facilities=dataset["facilities"],
         loans=dataset["loans"],

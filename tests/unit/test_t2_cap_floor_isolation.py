@@ -37,8 +37,13 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._schemas import T2_CREDIT_CAP_RATE
+from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -62,21 +67,23 @@ def _irb_frame_with_el(
     Default values produce a binding floor scenario:
     IRB RWA 50m vs SA RWA 100m × 72.5% = 72.5m floor.
     """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [200_000_000.0],
-            "risk_weight": [rwa / 200_000_000.0],
-            "rwa_post_factor": [rwa],
-            "rwa_final": [rwa],
-            "sa_rwa": [sa_rwa],
-            "expected_loss": [100_000.0],
-            "provision_allocated": [100_000.0 + excess],
-            "el_shortfall": [0.0],
-            "el_excess": [excess],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [200_000_000.0],
+                "risk_weight": [rwa / 200_000_000.0],
+                "rwa_post_factor": [rwa],
+                "rwa_final": [rwa],
+                "sa_rwa": [sa_rwa],
+                "expected_loss": [100_000.0],
+                "provision_allocated": [100_000.0 + excess],
+                "el_shortfall": [0.0],
+                "el_excess": [excess],
+            }
+        )
     )
 
 
@@ -101,7 +108,9 @@ class TestT2CapFloorIsolation:
         T2 cap must be 50m × 0.6% = 300k (not 76.25m × 0.6% = 457.5k).
         """
         irb = _irb_frame_with_el(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         # Verify floor actually binds
         assert result.output_floor_summary is not None
@@ -127,7 +136,9 @@ class TestT2CapFloorIsolation:
     ) -> None:
         """T2 cap formula: total_irb_rwa × 0.006 (Art. 62(d))."""
         irb = _irb_frame_with_el(rwa=80_000_000.0, sa_rwa=200_000_000.0, excess=1_000_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         el = result.el_summary
         assert el is not None
@@ -145,7 +156,9 @@ class TestT2CapFloorIsolation:
         and credit = 435k, overstating T2 capital by 135k.
         """
         irb = _irb_frame_with_el(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         el = result.el_summary
         assert el is not None
@@ -158,7 +171,9 @@ class TestT2CapFloorIsolation:
     ) -> None:
         """When floor does not bind, T2 cap still uses IRB RWA (same value)."""
         irb = _irb_frame_with_el(rwa=80_000_000.0, sa_rwa=100_000_000.0, excess=200_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         # Floor does not bind: 72.5% × 100m = 72.5m < 80m
         el = result.el_summary
@@ -170,7 +185,9 @@ class TestT2CapFloorIsolation:
         """Under CRR (no floor), T2 cap uses IRB RWA directly."""
         crr_config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         irb = _irb_frame_with_el(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, crr_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, crr_config
+        )
 
         el = result.el_summary
         assert el is not None
@@ -218,7 +235,9 @@ class TestT2CapWithSlottingAndFloor:
                 "el_excess": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, slotting, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), pad_slotting_branch(slotting), None, b31_config
+        )
 
         # Floor may or may not bind — doesn't matter for this test
         el = result.el_summary
@@ -240,7 +259,9 @@ class TestT2CapCapitalImpact:
         It shows why the correct (pre-floor) basis matters.
         """
         irb = _irb_frame_with_el(rwa=50_000_000.0, sa_rwa=100_000_000.0, excess=500_000.0)
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         el = result.el_summary
         assert el is not None
@@ -276,7 +297,9 @@ class TestT2CapCapitalImpact:
                 "el_excess": [40_000.0, 30_000.0, 30_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
 
         # Pre-floor IRB RWA = 20m + 12m + 18m = 50m
         # SA RWA = 80m + 45m + 60m = 185m

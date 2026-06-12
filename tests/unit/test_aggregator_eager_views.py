@@ -26,12 +26,22 @@ from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.materialise import plan_node_count
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
 # =============================================================================
 # Fixtures / constants
 # =============================================================================
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 # A DataFrame.lazy() wrapper renders as a single DF node in the unoptimised
 # plan; allow one line of slack for renderer changes across Polars versions.
@@ -61,38 +71,42 @@ def aggregator() -> OutputAggregator:
 @pytest.fixture
 def sa_results() -> pl.LazyFrame:
     """SA results carrying supporting-factor columns (CRR impact view)."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001", "EXP002"],
-            "counterparty_reference": ["CP001", "CP002"],
-            "exposure_class": ["CORPORATE", "RETAIL"],
-            "approach_applied": ["SA", "SA"],
-            "ead_final": [1_000_000.0, 500_000.0],
-            "risk_weight": [1.0, 0.75],
-            "rwa_pre_factor": [1_000_000.0, 375_000.0],
-            "supporting_factor": [0.7619, 1.0],
-            "rwa_post_factor": [761_900.0, 375_000.0],
-            "rwa_final": [761_900.0, 375_000.0],
-            "supporting_factor_applied": [True, False],
-            "is_sme": [True, False],
-            "is_infrastructure": [False, False],
-        }
+    return pad_sa_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002"],
+                "counterparty_reference": ["CP001", "CP002"],
+                "exposure_class": ["CORPORATE", "RETAIL"],
+                "approach_applied": ["SA", "SA"],
+                "ead_final": [1_000_000.0, 500_000.0],
+                "risk_weight": [1.0, 0.75],
+                "rwa_pre_factor": [1_000_000.0, 375_000.0],
+                "supporting_factor": [0.7619, 1.0],
+                "rwa_post_factor": [761_900.0, 375_000.0],
+                "rwa_final": [761_900.0, 375_000.0],
+                "supporting_factor_applied": [True, False],
+                "is_sme": [True, False],
+                "is_infrastructure": [False, False],
+            }
+        )
     )
 
 
 @pytest.fixture
 def irb_results_with_sa_rwa() -> pl.LazyFrame:
     """IRB results with sa_rwa so the Basel 3.1 output floor can run."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP003"],
-            "exposure_class": ["CORPORATE"],
-            "approach_applied": ["FIRB"],
-            "ead_final": [100_000_000.0],
-            "risk_weight": [0.5],
-            "rwa_final": [50_000_000.0],
-            "sa_rwa": [100_000_000.0],
-        }
+    return pad_irb_branch(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP003"],
+                "exposure_class": ["CORPORATE"],
+                "approach_applied": ["FIRB"],
+                "ead_final": [100_000_000.0],
+                "risk_weight": [0.5],
+                "rwa_final": [50_000_000.0],
+                "sa_rwa": [100_000_000.0],
+            }
+        )
     )
 
 
@@ -130,7 +144,7 @@ class TestAggregatorEagerBackedViews:
         bundle = aggregator.aggregate(
             sa_results=sa_results,
             irb_results=irb_results_with_sa_rwa,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -148,9 +162,9 @@ class TestAggregatorEagerBackedViews:
         config = CalculationConfig.basel_3_1(reporting_date=date(2032, 1, 1))
 
         bundle = aggregator.aggregate(
-            sa_results=EMPTY,
+            sa_results=EMPTY_SA,
             irb_results=irb_results_with_sa_rwa,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -169,8 +183,8 @@ class TestAggregatorEagerBackedViews:
 
         bundle = aggregator.aggregate(
             sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )
@@ -192,7 +206,7 @@ class TestAggregatorEagerBackedViews:
         bundle = aggregator.aggregate(
             sa_results=sa_results,
             irb_results=irb_results_with_sa_rwa,
-            slotting_results=EMPTY,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=config,
         )

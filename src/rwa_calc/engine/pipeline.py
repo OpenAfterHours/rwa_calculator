@@ -51,6 +51,14 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
+from rwa_calc.contracts.edges import (
+    CALC_BRANCH_EDGES,
+    CCR_EXIT_EDGE,
+    HIERARCHY_EXIT_EDGE,
+    RE_SPLIT_EXIT_CCR_EDGE,
+    RE_SPLIT_EXIT_EDGE,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     CRMProcessorProtocol,
@@ -70,8 +78,8 @@ from rwa_calc.engine.materialise import (
     begin_edge_capture,
     current_edge_events,
     end_edge_capture,
-    materialise_branches,
-    materialise_edge,
+    materialise_sealed_branches,
+    materialise_sealed_edge,
 )
 from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
@@ -522,8 +530,11 @@ class PipelineOrchestrator:
             result = replace(
                 result,
                 # Stage-exit edge: hierarchy output crosses to the CCR stage /
-                # Classifier as an eager-backed frame (migration Phase 1).
-                exposures=materialise_edge(new_exposures, config, "hierarchy_exit"),
+                # Classifier as an eager-backed frame (migration Phase 1),
+                # sealed against the full hierarchy_exit contract — the
+                # resolver's hierarchy_resolved seal plus the securitisation
+                # lookup columns attached above (migration Phase 3).
+                exposures=materialise_sealed_edge(new_exposures, config, HIERARCHY_EXIT_EDGE),
                 securitisation_audit=self._securitisation_resolved,
             )
             # Accumulate hierarchy errors
@@ -628,10 +639,12 @@ class PipelineOrchestrator:
                     [resolved.exposures, ccr_exposure_rows],
                     how="diagonal_relaxed",
                 )
-                # Stage-exit edge (only when CCR rows were appended).
+                # Stage-exit edge (only when CCR rows were appended): the
+                # hierarchy_exit shape plus the SA-CCR provenance columns —
+                # synthetic rows may not otherwise reshape the frame.
                 return replace(
                     resolved,
-                    exposures=materialise_edge(new_exposures, config, "ccr_exit"),
+                    exposures=materialise_sealed_edge(new_exposures, config, CCR_EXIT_EDGE),
                 )
         except Exception as e:
             self._errors.append(
@@ -793,9 +806,19 @@ class PipelineOrchestrator:
             # Stage-exit edge: the calculators' branch split forks the plan
             # three ways, so their input must be eager-backed (this edge
             # replaces the old pipeline_pre_branch barrier one stage later).
+            # The splitter's pure-plan seal carries the contract; this
+            # materialises and re-brands the eager-backed wrap under the
+            # same contract (selected by the splitter's brand).
+            exit_edge = (
+                RE_SPLIT_EXIT_CCR_EDGE
+                if sealed_edge_of(result.exposures) == "re_split_exit_ccr"
+                else RE_SPLIT_EXIT_EDGE
+            )
             result = replace(
                 result,
-                exposures=materialise_edge(result.exposures, config, "re_split_exit"),
+                exposures=materialise_sealed_edge(
+                    result.exposures, config, exit_edge, label="re_split_exit"
+                ),
             )
             if result.crm_errors:
                 # Splitter accumulates errors into the CRM bucket so existing
@@ -904,10 +927,16 @@ class PipelineOrchestrator:
                 # Collect all branches. In cpu mode, uses collect_all with CSE so
                 # shared upstream computes once. In streaming mode, sinks each
                 # branch to disk sequentially (peak memory = 1 branch at a time).
-                sa_df, irb_df, slotting_df = materialise_branches(
+                # Each branch is conformed to its edge contract before the
+                # shared collect and branded after (Phase 3 branch-exit seal).
+                sa_df, irb_df, slotting_df = materialise_sealed_branches(
                     [sa_result, irb_result, slotting_result],
                     config,
-                    ["sa_branch", "irb_branch", "slotting_branch"],
+                    [
+                        CALC_BRANCH_EDGES["sa_branch"],
+                        CALC_BRANCH_EDGES["irb_branch"],
+                        CALC_BRANCH_EDGES["slotting_branch"],
+                    ],
                 )
                 sa_rows = sa_df.height
                 irb_rows = irb_df.height
@@ -985,18 +1014,16 @@ class PipelineOrchestrator:
     # =========================================================================
 
     def _create_error_result(self) -> AggregatedResultBundle:
-        """Create error result when pipeline fails."""
+        """Create error result when pipeline fails.
+
+        The empty results frame comes from the aggregator-exit contract so
+        the error bundle satisfies the same sealed-field registration as a
+        successful run (schema-complete, zero rows).
+        """
+        from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE
+
         return AggregatedResultBundle(
-            results=pl.LazyFrame(
-                {
-                    "exposure_reference": pl.Series([], dtype=pl.String),
-                    "approach_applied": pl.Series([], dtype=pl.String),
-                    "exposure_class": pl.Series([], dtype=pl.String),
-                    "ead_final": pl.Series([], dtype=pl.Float64),
-                    "risk_weight": pl.Series([], dtype=pl.Float64),
-                    "rwa_final": pl.Series([], dtype=pl.Float64),
-                }
-            ),
+            results=AGGREGATOR_EXIT_EDGE.empty_frame(),
             errors=[self._convert_pipeline_error(e) for e in self._errors],
         )
 

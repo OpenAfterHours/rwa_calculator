@@ -23,6 +23,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - imports register namespace
@@ -47,32 +48,36 @@ def basel31_config() -> CalculationConfig:
 @pytest.fixture
 def basic_lazyframe() -> pl.LazyFrame:
     """Return a basic LazyFrame with IRB columns."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "pd": [0.01, 0.05, 0.0001],  # Last one below CRR floor
-            "lgd": [0.45, 0.35, 0.40],
-            "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
-            "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
-            "maturity": [2.5, 3.0, 5.0],
-            "approach": ["foundation_irb", "foundation_irb", "foundation_irb"],
-        }
+    return _pad(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "pd": [0.01, 0.05, 0.0001],  # Last one below CRR floor
+                "lgd": [0.45, 0.35, 0.40],
+                "ead_final": [1_000_000.0, 500_000.0, 250_000.0],
+                "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
+                "maturity": [2.5, 3.0, 5.0],
+                "approach": ["foundation_irb", "foundation_irb", "foundation_irb"],
+            }
+        )
     )
 
 
 @pytest.fixture
 def retail_lazyframe() -> pl.LazyFrame:
     """Return a LazyFrame with retail exposures."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "pd": [0.02, 0.03, 0.01],
-            "lgd": [0.30, 0.25, 0.15],
-            "ead_final": [100_000.0, 50_000.0, 200_000.0],
-            "exposure_class": ["RETAIL_MORTGAGE", "RETAIL_QRRE", "RETAIL"],
-            "maturity": [5.0, 2.5, 3.0],
-            "approach": ["advanced_irb", "advanced_irb", "advanced_irb"],
-        }
+    return _pad(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "pd": [0.02, 0.03, 0.01],
+                "lgd": [0.30, 0.25, 0.15],
+                "ead_final": [100_000.0, 50_000.0, 200_000.0],
+                "exposure_class": ["RETAIL_MORTGAGE", "RETAIL_QRRE", "RETAIL"],
+                "maturity": [5.0, 2.5, 3.0],
+                "approach": ["advanced_irb", "advanced_irb", "advanced_irb"],
+            }
+        )
     )
 
 
@@ -86,17 +91,19 @@ def sme_lazyframe() -> pl.LazyFrame:
     - GBP 21.83m → EUR 25m (mid SME)
     - GBP 87.32m → EUR 100m (large corp, above 50m threshold)
     """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP001", "EXP002", "EXP003"],
-            "pd": [0.01, 0.01, 0.01],
-            "lgd": [0.45, 0.45, 0.45],
-            "ead_final": [1_000_000.0, 1_000_000.0, 1_000_000.0],
-            "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
-            "maturity": [2.5, 2.5, 2.5],
-            "turnover_m": [4.366, 21.83, 87.32],  # GBP values converting to EUR 5m, 25m, 100m
-            "approach": ["foundation_irb", "foundation_irb", "foundation_irb"],
-        }
+    return _pad(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "pd": [0.01, 0.01, 0.01],
+                "lgd": [0.45, 0.45, 0.45],
+                "ead_final": [1_000_000.0, 1_000_000.0, 1_000_000.0],
+                "exposure_class": ["CORPORATE", "CORPORATE", "CORPORATE"],
+                "maturity": [2.5, 2.5, 2.5],
+                "turnover_m": [4.366, 21.83, 87.32],  # GBP values converting to EUR 5m, 25m, 100m
+                "approach": ["foundation_irb", "foundation_irb", "foundation_irb"],
+            }
+        )
     )
 
 
@@ -193,7 +200,7 @@ class TestApplyLgdFloor:
                 "lgd": [0.10, 0.20, 0.45],  # All below Basel 3.1 unsecured floor
             }
         )
-        result = lf.irb.apply_lgd_floor(crr_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(crr_config).collect()
 
         # All LGDs should be unchanged
         assert result["lgd_floored"][0] == pytest.approx(0.10)
@@ -208,7 +215,7 @@ class TestApplyLgdFloor:
                 "is_airb": [True, True, True],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
 
         # First two should be floored to 0.25
         assert result["lgd_floored"][0] == pytest.approx(0.25)
@@ -224,7 +231,7 @@ class TestApplyLgdFloor:
                 "is_airb": [False, False, False],
             }
         )
-        result = lf.irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
 
         # F-IRB: all LGDs unchanged (no floor)
         assert result["lgd_floored"][0] == pytest.approx(0.10)
@@ -358,7 +365,8 @@ class TestCalculateK:
         )
 
         result = (
-            lf.irb.apply_pd_floor(crr_config)
+            _pad(lf)
+            .irb.apply_pd_floor(crr_config)
             .irb.apply_lgd_floor(crr_config)
             .irb.calculate_correlation(crr_config)
             .irb.calculate_k(crr_config)
@@ -386,7 +394,7 @@ class TestCalculateMaturityAdjustment:
             }
         )
 
-        result = lf.irb.calculate_maturity_adjustment(crr_config).collect()
+        result = _pad(lf).irb.calculate_maturity_adjustment(crr_config).collect()
         assert result["maturity_adjustment"][0] > 1.0
         assert result["maturity_adjustment"][0] < 1.5  # Reasonable bound
 
@@ -400,7 +408,7 @@ class TestCalculateMaturityAdjustment:
             }
         )
 
-        result = lf.irb.calculate_maturity_adjustment(crr_config).collect()
+        result = _pad(lf).irb.calculate_maturity_adjustment(crr_config).collect()
         assert result["maturity_adjustment"][0] < result["maturity_adjustment"][1]
         assert result["maturity_adjustment"][1] < result["maturity_adjustment"][2]
 
@@ -451,7 +459,8 @@ class TestExactFractionalYears:
         )
 
         result = (
-            lf.irb.classify_approach(config)
+            _pad(lf)
+            .irb.classify_approach(config)
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .collect()
@@ -480,7 +489,8 @@ class TestExactFractionalYears:
         )
 
         result = (
-            lf.irb.classify_approach(config)
+            _pad(lf)
+            .irb.classify_approach(config)
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .collect()
@@ -510,7 +520,8 @@ class TestExactFractionalYears:
         )
 
         result = (
-            lf.irb.classify_approach(config)
+            _pad(lf)
+            .irb.classify_approach(config)
             .irb.apply_firb_lgd(config)
             .irb.prepare_columns(config)
             .collect()
@@ -537,7 +548,8 @@ class TestExactFractionalYears:
         )
 
         result = (
-            lf.irb.classify_approach(crr_config)
+            _pad(lf)
+            .irb.classify_approach(crr_config)
             .irb.apply_firb_lgd(crr_config)
             .irb.prepare_columns(crr_config)
             .irb.apply_all_formulas(crr_config)
@@ -717,7 +729,8 @@ class TestMethodChaining:
         )
 
         result = (
-            lf.irb.apply_pd_floor(crr_config)
+            _pad(lf)
+            .irb.apply_pd_floor(crr_config)
             .irb.apply_lgd_floor(crr_config)
             .irb.calculate_correlation(crr_config)
             .irb.calculate_k(crr_config)
@@ -1087,7 +1100,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1101,7 +1114,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(38_750.0)
@@ -1115,7 +1128,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [25_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1129,7 +1142,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [0.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1143,7 +1156,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [5_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(5_000.0)
@@ -1157,7 +1170,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0, 50_000.0, 20_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         # EXP001: shortfall = 15k, excess = 0
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
@@ -1177,7 +1190,7 @@ class TestELShortfallExcess:
                 "expected_loss": [10_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1190,7 +1203,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [10_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1209,7 +1222,7 @@ class TestELShortfallExcess:
                 "provision_allocated": pl.Float64,
             },
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(5_000.0)
@@ -1228,7 +1241,7 @@ class TestELShortfallExcess:
                 "provision_allocated": pl.Float64,
             },
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1242,7 +1255,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1256,7 +1269,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(38_750.0)
@@ -1270,7 +1283,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1284,7 +1297,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = lf.irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(40_000.0)

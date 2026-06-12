@@ -45,6 +45,7 @@ from tests.fixtures.p2_36.p2_36 import (
     INSTITUTION_LOAN_REF,
     SOVEREIGN_LOAN_REF,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PDFloors
@@ -94,7 +95,7 @@ def _build_p236_bundle() -> RawDataBundle:
             "child_type": pl.String,
         }
     )
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

@@ -23,6 +23,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.single_exposure import calculate_single_irb_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -553,7 +554,7 @@ class TestIRBCalculatorBranchProcessing:
         ).lazy()
         errors: list = []
 
-        result = irb_calculator.calculate_branch(exposures, crr_config, errors=errors)
+        result = irb_calculator.calculate_branch(_pad(exposures), crr_config, errors=errors)
 
         assert isinstance(result, pl.LazyFrame)
         assert isinstance(errors, list)
@@ -576,7 +577,7 @@ class TestIRBCalculatorBranchProcessing:
             }
         ).lazy()
 
-        df = irb_calculator.calculate_branch(exposures, crr_config).collect()
+        df = irb_calculator.calculate_branch(_pad(exposures), crr_config).collect()
 
         assert len(df) == 3
         assert "rwa" in df.columns
@@ -604,7 +605,7 @@ class TestIRBCalculatorBranchProcessing:
             }
         ).lazy()
 
-        df = irb_calculator.calculate_branch(exposures, crr_config).collect()
+        df = irb_calculator.calculate_branch(_pad(exposures), crr_config).collect()
 
         assert "approach_applied" in df.columns
         assert "rwa_final" in df.columns
@@ -724,7 +725,7 @@ class TestIRBAuditTrail:
             }
         ).lazy()
 
-        result = irb_calculator.calculate_branch(exposures, crr_config)
+        result = irb_calculator.calculate_branch(_pad(exposures), crr_config)
         audit_df = result.irb.build_audit().collect()
 
         assert "irb_calculation" in audit_df.columns

@@ -21,8 +21,9 @@ import pytest
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # Default reporting date for benchmarks
 BENCHMARK_REPORTING_DATE = date(2026, 1, 1)
@@ -50,7 +51,7 @@ def create_pipeline(raw_data: RawDataBundle) -> PipelineOrchestrator:
 
 def create_raw_data_bundle(dataset: dict[str, pl.LazyFrame]) -> RawDataBundle:
     """Create a RawDataBundle from benchmark dataset."""
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=dataset["counterparties"],
         facilities=dataset["facilities"],
         loans=dataset["loans"],
@@ -333,11 +334,14 @@ class TestComponentBenchmarks100K:
 
         crm = CRMProcessor()
         crm_adjusted = crm.get_crm_unified_bundle(classified, config)
+        # Branch entry point (Phase 2 deleted the bundle-based calculate):
+        # filter the unified frame to the SA branch, as the orchestrator does.
+        sa_exposures = crm_adjusted.exposures.filter(pl.col("approach") == ApproachType.SA.value)
 
         sa_calc = SACalculator()
 
         result = benchmark.pedantic(
-            lambda: sa_calc.calculate(crm_adjusted, config),
+            lambda: sa_calc.calculate_branch(sa_exposures, config).collect(),
             rounds=3,
             warmup_rounds=1,
             iterations=1,

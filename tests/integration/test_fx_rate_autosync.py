@@ -20,6 +20,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.observability import RunIdFilter
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import make_counterparty, make_loan, make_raw_data_bundle
 
@@ -37,7 +38,7 @@ def _bundle_with_fx_rate(rate: float) -> RawDataBundle:
             "rate": [rate],
         }
     )
-    return dataclasses.replace(bundle, fx_rates=fx_rates)
+    return dataclasses.replace(bundle, fx_rates=seal_raw_table(fx_rates, "fx_rates"))
 
 
 def _run(

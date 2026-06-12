@@ -83,6 +83,7 @@ from tests.fixtures.p1_30e.p1_30e import (  # noqa: E402
     PROTECTED_WIDTH,
     SENIOR_WIDTH,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Reporting date: 2026-06-01 — within CRR validity (to 31 Dec 2026);
@@ -129,7 +130,7 @@ def _make_bundle() -> RawDataBundle:
     Returns:
         RawDataBundle ready for pipeline execution.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={
                 "facility_reference": pl.String,

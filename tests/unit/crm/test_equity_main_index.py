@@ -24,8 +24,8 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.tables.haircuts import (
     lookup_collateral_haircut,
@@ -470,7 +470,7 @@ class TestOtherListedEquityPipeline:
                 "child_counterparty_reference": pl.String,
             }
         )
-        bundle = RawDataBundle(
+        bundle = make_raw_bundle(
             counterparties=pl.LazyFrame(
                 {
                     "counterparty_reference": ["CP1"],

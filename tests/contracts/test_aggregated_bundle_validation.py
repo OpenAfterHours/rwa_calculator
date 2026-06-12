@@ -42,6 +42,21 @@ def validate_aggregated_bundle(*args, **kwargs):  # type: ignore[return]
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _unregister_results_brand(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deregister the aggregator_exit brand for this module (Phase 3).
+
+    These tests pin ``validate_aggregated_bundle`` bounds-checking on
+    column-exact minimal frames — including the missing-column ramp, which a
+    lenient seal would mask by injecting typed nulls. Deregistering
+    ``AggregatedResultBundle.results`` pins the unregistered strangler ramp,
+    mirroring tests/contracts/test_edge_contracts.py::TestBundleBrandValidation.
+    """
+    from rwa_calc.contracts import bundles as bundles_module
+
+    monkeypatch.delitem(bundles_module.SEALED_FRAME_FIELDS, "AggregatedResultBundle.results")
+
+
 def _make_results_lf(
     exposure_references: list[str],
     risk_weights: list[float | None],

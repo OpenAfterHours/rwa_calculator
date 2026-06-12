@@ -392,6 +392,30 @@ def optional_file_load_error(
     )
 
 
+def missing_required_column_error(*, table: str, column: str) -> CalculationError:
+    """Create a DQ001 error for a required input column missing at load.
+
+    Used by the loader's edge seal (migration Phase 3): a required column
+    absent from an input table is injected as a typed-null column so the
+    pipeline can continue with the rows that survive downstream null
+    handling, and one of these errors records the gap. This implements
+    the ``ColumnSpec.required`` contract that was previously documentary
+    only.
+    """
+    return CalculationError(
+        code=ERROR_MISSING_FIELD,
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.SCHEMA_VALIDATION,
+        message=(
+            f"Required column '{column}' missing from input table '{table}'; "
+            "injected as typed nulls — affected calculations will degrade "
+            "per downstream null semantics"
+        ),
+        field_name=column,
+        actual_value=table,
+    )
+
+
 def reconciliation_warning(
     code: str,
     message: str,

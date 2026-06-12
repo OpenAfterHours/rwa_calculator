@@ -22,9 +22,9 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle, seal_raw_table
 
 # Default reporting date for benchmarks
 BENCHMARK_REPORTING_DATE = date(2026, 1, 1)
@@ -51,7 +51,7 @@ class TestHierarchyBenchmark10K:
         Target: < 1 second
         """
         # Create RawDataBundle from generated data
-        raw_data = RawDataBundle(
+        raw_data = make_raw_bundle(
             counterparties=dataset_10k["counterparties"],
             facilities=dataset_10k["facilities"],
             loans=dataset_10k["loans"],
@@ -91,9 +91,9 @@ class TestHierarchyBenchmark10K:
 
         Tests _build_counterparty_lookup specifically.
         """
-        counterparties = dataset_10k["counterparties"]
-        org_mappings = dataset_10k["org_mappings"]
-        ratings = dataset_10k["ratings"]
+        counterparties = seal_raw_table(dataset_10k["counterparties"], "counterparties")
+        org_mappings = seal_raw_table(dataset_10k["org_mappings"], "org_mappings")
+        ratings = seal_raw_table(dataset_10k["ratings"], "ratings")
 
         resolver = HierarchyResolver()
 
@@ -120,15 +120,15 @@ class TestHierarchyBenchmark10K:
         # First build the counterparty lookup
         resolver = HierarchyResolver()
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            dataset_10k["counterparties"],
-            dataset_10k["org_mappings"],
-            dataset_10k["ratings"],
+            seal_raw_table(dataset_10k["counterparties"], "counterparties"),
+            seal_raw_table(dataset_10k["org_mappings"], "org_mappings"),
+            seal_raw_table(dataset_10k["ratings"], "ratings"),
         )
 
-        loans = dataset_10k["loans"]
-        contingents = dataset_10k["contingents"]
-        facilities = dataset_10k["facilities"]
-        facility_mappings = dataset_10k["facility_mappings"]
+        loans = seal_raw_table(dataset_10k["loans"], "loans")
+        contingents = seal_raw_table(dataset_10k["contingents"], "contingents")
+        facilities = seal_raw_table(dataset_10k["facilities"], "facilities")
+        facility_mappings = seal_raw_table(dataset_10k["facility_mappings"], "facility_mappings")
 
         # Benchmark unification
         def unify():
@@ -161,7 +161,7 @@ class TestHierarchyBenchmark100K:
 
         Target: < 5 seconds
         """
-        raw_data = RawDataBundle(
+        raw_data = make_raw_bundle(
             counterparties=dataset_100k["counterparties"],
             facilities=dataset_100k["facilities"],
             loans=dataset_100k["loans"],
@@ -203,9 +203,9 @@ class TestHierarchyBenchmark100K:
 
         Target: < 2 seconds
         """
-        counterparties = dataset_100k["counterparties"]
-        org_mappings = dataset_100k["org_mappings"]
-        ratings = dataset_100k["ratings"]
+        counterparties = seal_raw_table(dataset_100k["counterparties"], "counterparties")
+        org_mappings = seal_raw_table(dataset_100k["org_mappings"], "org_mappings")
+        ratings = seal_raw_table(dataset_100k["ratings"], "ratings")
 
         resolver = HierarchyResolver()
 
@@ -235,9 +235,9 @@ class TestHierarchyBenchmark100K:
         org_stats = dataset_100k_stats.get("org_hierarchy", {})
         print(f"\nOrg hierarchy stats: {org_stats}")
 
-        counterparties = dataset_100k["counterparties"]
-        org_mappings = dataset_100k["org_mappings"]
-        ratings = dataset_100k["ratings"]
+        counterparties = seal_raw_table(dataset_100k["counterparties"], "counterparties")
+        org_mappings = seal_raw_table(dataset_100k["org_mappings"], "org_mappings")
+        ratings = seal_raw_table(dataset_100k["ratings"], "ratings")
 
         resolver = HierarchyResolver()
 
@@ -280,15 +280,15 @@ class TestHierarchyBenchmark100K:
         # First build the counterparty lookup
         resolver = HierarchyResolver()
         counterparty_lookup, _ = resolver._build_counterparty_lookup(
-            dataset_100k["counterparties"],
-            dataset_100k["org_mappings"],
-            dataset_100k["ratings"],
+            seal_raw_table(dataset_100k["counterparties"], "counterparties"),
+            seal_raw_table(dataset_100k["org_mappings"], "org_mappings"),
+            seal_raw_table(dataset_100k["ratings"], "ratings"),
         )
 
-        loans = dataset_100k["loans"]
-        contingents = dataset_100k["contingents"]
-        facilities = dataset_100k["facilities"]
-        facility_mappings = dataset_100k["facility_mappings"]
+        loans = seal_raw_table(dataset_100k["loans"], "loans")
+        contingents = seal_raw_table(dataset_100k["contingents"], "contingents")
+        facilities = seal_raw_table(dataset_100k["facilities"], "facilities")
+        facility_mappings = seal_raw_table(dataset_100k["facility_mappings"], "facility_mappings")
 
         def unify():
             return resolver._unify_exposures(
@@ -341,7 +341,7 @@ class TestHierarchyBenchmark1M:
 
         Target: < 60 seconds
         """
-        raw_data = RawDataBundle(
+        raw_data = make_raw_bundle(
             counterparties=dataset_1m["counterparties"],
             facilities=dataset_1m["facilities"],
             loans=dataset_1m["loans"],
@@ -392,7 +392,7 @@ class TestHierarchyMemoryBenchmark:
 
         Target: < 100 MB peak
         """
-        raw_data = RawDataBundle(
+        raw_data = make_raw_bundle(
             counterparties=dataset_10k["counterparties"],
             facilities=dataset_10k["facilities"],
             loans=dataset_10k["loans"],
@@ -429,7 +429,7 @@ class TestHierarchyMemoryBenchmark:
 
         Target: < 500 MB peak
         """
-        raw_data = RawDataBundle(
+        raw_data = make_raw_bundle(
             counterparties=dataset_100k["counterparties"],
             facilities=dataset_100k["facilities"],
             loans=dataset_100k["loans"],

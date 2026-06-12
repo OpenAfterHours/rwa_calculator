@@ -26,6 +26,7 @@ from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -187,7 +188,7 @@ def _build_bundle(
     ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA)
     guarantees_lf = _rows_to_lazyframe(guarantees_rows, GUARANTEE_SCHEMA)
     fx_rates_lf = _rows_to_lazyframe(_fx_rates(), FX_RATES_SCHEMA)
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=bundle.facilities,
         loans=bundle.loans,
         counterparties=bundle.counterparties,

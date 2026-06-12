@@ -59,8 +59,8 @@ from tests.fixtures.p1_118.p1_118 import (
     EXPECTED_M_B,
     REPORTING_DATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import LOAN_SCHEMA
@@ -106,7 +106,7 @@ def _run_pipeline_p1118() -> object:
     facility_mappings = pl.scan_parquet(_FIXTURES_DIR / "facility_mapping.parquet")
     lending_mappings = pl.scan_parquet(_FIXTURES_DIR / "lending_mapping.parquet")
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

@@ -43,6 +43,12 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
 )
+from rwa_calc.contracts.edges import (
+    CRM_EXIT_CCR_EDGE,
+    CRM_EXIT_EDGE,
+    seal,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.errors import (
     ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
     ERROR_INELIGIBLE_COLLATERAL,
@@ -540,7 +546,7 @@ class CRMProcessor:
         exposures = self._run_ead_pipeline(data, config)
 
         # Generate synthetic collateral from netting (CRR Art. 195)
-        exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf)
+        exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf, errors)
 
         # Step 3.7: Split each finite collateral value across its linked
         # beneficiaries (CRR Art. 230-231) when a collateral_links table is
@@ -614,6 +620,18 @@ class CRMProcessor:
         if config.audit_cache_dir is not None:
             sink_audit(self._build_crm_audit(exposures), config, "crm_audit")
 
+        # Producer seal (Phase 3): contract validated, intra-stage scratch
+        # stripped — pure plan ops over the eager-backed frame, after the
+        # audit projections above have read it. CCR runs carry the SA-CCR
+        # provenance columns through, so the contract is selected by the
+        # input frame's brand.
+        exit_edge = (
+            CRM_EXIT_CCR_EDGE
+            if sealed_edge_of(data.all_exposures) == "classifier_exit_ccr"
+            else CRM_EXIT_EDGE
+        )
+        exposures = seal(exposures, exit_edge)
+
         return CRMAdjustedBundle(
             exposures=exposures,
             equity_exposures=data.equity_exposures,
@@ -658,10 +676,20 @@ class CRMProcessor:
         self,
         exposures: pl.LazyFrame,
         collateral_lf: pl.LazyFrame | None,
+        errors: list[CalculationError],
     ) -> tuple[pl.LazyFrame, pl.LazyFrame | None]:
         """Generate synthetic netting collateral and merge with input collateral.
 
         Returns the (possibly joined) exposures frame and the merged collateral.
+
+        A supplied collateral table whose column dtypes are incompatible with
+        the canonical collateral schema (e.g. a String ``market_value``) is a
+        DATA-QUALITY condition: it is reported precisely and dropped — the
+        synthetic netting collateral is kept, since it derives from the
+        exposures frame alone (CRR Art. 219) and is unaffected by a malformed
+        collateral file. Previously this case surfaced as a broken concat plan
+        that ``has_required_columns``' bare except misreported as "missing
+        required columns" (silent-skip layer, migration Phase 3).
         """
         netting_collateral = collateral_mod.generate_netting_collateral(exposures)
         collateral: pl.LazyFrame | None = collateral_lf
@@ -673,7 +701,30 @@ class CRMProcessor:
         if collateral is not None and has_required_columns(
             collateral, self.COLLATERAL_REQUIRED_COLUMNS
         ):
-            collateral = pl.concat([collateral, netting_collateral], how="diagonal")
+            user_schema = dict(collateral.collect_schema())
+            synth_schema = dict(netting_collateral.collect_schema())
+            mismatches = {
+                name: (user_schema[name], synth_schema[name])
+                for name in user_schema.keys() & synth_schema.keys()
+                if user_schema[name] != synth_schema[name]
+            }
+            if mismatches:
+                detail = "; ".join(
+                    f"{name}: got {got}, expected {expected}"
+                    for name, (got, expected) in sorted(mismatches.items())
+                )
+                errors.append(
+                    crm_warning(
+                        ERROR_INELIGIBLE_COLLATERAL,
+                        "Collateral data provided with incompatible column dtypes "
+                        f"({detail}); collateral table dropped — on-balance-sheet "
+                        "netting (derived from exposures) still applies",
+                        regulatory_reference="CRR Art. 223-224",
+                    )
+                )
+                collateral = netting_collateral
+            else:
+                collateral = pl.concat([collateral, netting_collateral], how="diagonal")
         else:
             collateral = netting_collateral
         return exposures, collateral
@@ -744,6 +795,21 @@ class CRMProcessor:
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
+        if collateral is not None:
+            # A collateral table was supplied but is unusable (missing
+            # required columns / unreadable schema): CRM001 was recorded
+            # above, and the stage must still emit its full output
+            # contract (Phase 3 producer seal). Run the collateral step
+            # with an empty, schema-valid table so every collateral-derived
+            # column lands at its neutral no-collateral value — identical
+            # to the genuine no-collateral path, with no duplicated column
+            # inventory to drift.
+            from rwa_calc.contracts.edges import RAW_TABLE_EDGES
+
+            exposures = self.apply_collateral(
+                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config
+            )
+            return exposures, False
         # No collateral: still need to set F-IRB supervisory LGD based on
         # seniority. Under B31, AIRB Foundation/169B exposures also get
         # formula-based LGD.

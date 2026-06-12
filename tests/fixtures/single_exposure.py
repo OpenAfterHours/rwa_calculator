@@ -21,7 +21,7 @@ from decimal import Decimal
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.firb_lgd import lookup_firb_lgd
+from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework, lookup_firb_lgd
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.sa.calculator import SACalculator
@@ -73,6 +73,7 @@ def calculate_single_sa_exposure(
     data: dict = {
         "exposure_reference": ["SINGLE"],
         "ead_final": [float(ead)],
+        "ead_gross": [float(ead)],
         "exposure_class": [exposure_class],
         "cqs": [cqs],
         "ltv": [float(ltv) if ltv is not None else None],
@@ -142,25 +143,64 @@ def calculate_single_irb_exposure(
     """Calculate IRB RWA for a single exposure via calculate_branch."""
     seniority = "subordinated" if is_subordinated else "senior"
 
+    # The IRB branch input is sealed in production (crm_exit edge) — the
+    # calculator reads contract columns directly, so the hand frame must
+    # carry them with production-realistic values.
     data: dict = {
         "exposure_reference": ["SINGLE"],
-        "ead": [float(ead)],
+        "ead_final": [float(ead)],
+        "ead_gross": [float(ead)],
         "pd": [float(pd)],
         "maturity": [float(maturity)],
         "exposure_class": [exposure_class],
         "seniority": [seniority],
+        "lgd": [float(lgd) if lgd is not None else None],
+        "purchased_receivables_subtype": [None],
+        "cp_is_financial_sector_entity": [False],
+        "is_sme": [False],
+        "sme_size_metric_gbp": [None],
+        "is_infrastructure": [False],
+        "is_qrre_transactor": [False],
+        "requires_fi_scalar": [False],
+        "has_one_day_maturity_floor": [False],
+        "is_defaulted": [False],
+        "beel": [0.0],
+        "total_collateral_for_lgd": [0.0],
+        "crm_alloc_financial": [0.0],
+        "crm_alloc_covered_bond": [0.0],
+        "crm_alloc_receivables": [0.0],
+        "crm_alloc_real_estate": [0.0],
+        "crm_alloc_other_physical": [0.0],
+        "crm_alloc_life_insurance": [0.0],
+        "provision_allocated": [0.0],
+        "ava_amount": [0.0],
+        "other_own_funds_reductions": [0.0],
     }
-
-    if lgd is not None:
-        data["lgd"] = [float(lgd)]
 
     if turnover_m is not None:
         data["turnover_m"] = [float(turnover_m)]
 
+    # lgd_post_crm mirrors what the CRM stage would emit: the supervisory
+    # LGD for the collateral type when secured, the own/supervisory
+    # unsecured LGD otherwise (F-IRB reads lgd_post_crm as lgd_input).
     if collateral_type is not None:
         data["lgd_post_crm"] = [float(lookup_firb_lgd(collateral_type, is_subordinated))]
+    elif lgd is not None:
+        data["lgd_post_crm"] = [float(lgd)]
+    else:
+        table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
+        data["lgd_post_crm"] = [
+            float(table["subordinated" if is_subordinated else "unsecured_senior"])
+        ]
 
-    df = pl.DataFrame(data).lazy()
+    df = pl.DataFrame(
+        data,
+        schema_overrides={
+            "lgd": pl.Float64,
+            "purchased_receivables_subtype": pl.String,
+            "sme_size_metric_gbp": pl.Float64,
+        },
+    ).lazy()
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]
 
 
@@ -216,20 +256,26 @@ def calculate_single_slotting_exposure(
     is_sme: bool | None = None,
 ) -> dict:
     """Calculate slotting RWA for a single exposure via calculate_branch."""
+    # The slotting branch input is sealed in production (crm_exit edge) —
+    # contract columns are read directly, so carry them explicitly with
+    # production-realistic values.
     data: dict = {
         "exposure_reference": ["SINGLE"],
-        "ead": [float(ead)],
+        "ead_final": [float(ead)],
+        "approach": ["slotting"],
         "slotting_category": [category],
         "is_hvcre": [is_hvcre],
         "sl_type": [sl_type],
         "is_short_maturity": [is_short_maturity],
         "is_pre_operational": [is_pre_operational],
+        "maturity_date": [None],
+        "is_infrastructure": [bool(is_infrastructure) if is_infrastructure is not None else False],
+        "is_sme": [bool(is_sme) if is_sme is not None else False],
+        "provision_allocated": [0.0],
+        "ava_amount": [0.0],
+        "other_own_funds_reductions": [0.0],
     }
-    if is_infrastructure is not None:
-        data["is_infrastructure"] = [is_infrastructure]
-    if is_sme is not None:
-        data["is_sme"] = [is_sme]
 
-    df = pl.DataFrame(data).lazy()
+    df = pl.DataFrame(data, schema_overrides={"maturity_date": pl.Date}).lazy()
 
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]

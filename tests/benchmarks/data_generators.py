@@ -40,7 +40,7 @@ logger = logging.getLogger("rwa_calc.benchmarks")
 # Default directory for cached benchmark data
 BENCHMARK_DATA_DIR = Path(__file__).parent / "data"
 
-from rwa_calc.data.column_spec import dtypes_of  # noqa: E402
+from rwa_calc.data.column_spec import dtypes_of, ensure_columns  # noqa: E402
 from rwa_calc.data.schemas import (  # noqa: E402
     COLLATERAL_SCHEMA,
     CONTINGENTS_SCHEMA,
@@ -202,6 +202,7 @@ def generate_counterparties(config: BenchmarkDataConfig) -> pl.LazyFrame:
                 "is_core_market_participant": pl.Series(np.zeros(n, dtype=bool)),
             }
         )
+        .pipe(ensure_columns, COUNTERPARTY_SCHEMA)
         .cast(dtypes_of(COUNTERPARTY_SCHEMA))
         .lazy()
     )
@@ -290,6 +291,7 @@ def generate_org_mappings(
                 "child_counterparty_reference": child_refs,
             }
         )
+        .pipe(ensure_columns, ORG_MAPPING_SCHEMA)
         .cast(dtypes_of(ORG_MAPPING_SCHEMA))
         .lazy()
     )
@@ -434,6 +436,7 @@ def generate_facilities(
                 "purchased_receivables_subtype": pl.Series([None] * n_facilities, dtype=pl.String),
             }
         )
+        .pipe(ensure_columns, FACILITY_SCHEMA)
         .cast(dtypes_of(FACILITY_SCHEMA))
         .lazy()
     )
@@ -602,42 +605,50 @@ def generate_loans(
             loan_refs.append(f"LOAN_{i:08d}")
 
     # Build DataFrame - use polars for date arithmetic
-    df = pl.DataFrame(
-        {
-            "loan_reference": loan_refs,
-            "product_type": product_types,
-            "book_code": book_codes,
-            "counterparty_reference": cp_refs_arr[cp_assignments],
-            "value_date": pl.Series([base_date] * n_loans),
-            "maturity_date": [base_date + timedelta(days=int(d)) for d in maturity_days],
-            "currency": currencies,
-            "drawn_amount": drawn_amounts,
-            "interest": np.zeros(n_loans),  # Accrued interest
-            "lgd": lgd,
-            "beel": np.zeros(n_loans),
-            "seniority": seniority,
-            "lgd_unsecured": np.full(n_loans, None),  # A-IRB unsecured LGD
-            "has_sufficient_collateral_data": np.full(n_loans, None),  # LGD modelling flag
-            "is_payroll_loan": np.full(n_loans, None),  # Payroll loan flag
-            "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
-            "is_defaulted": np.full(n_loans, None),  # CRR Art. 178 row-level default flag
-            "is_under_construction": np.full(n_loans, None),  # P1.140 ADC
-            "has_one_day_maturity_floor": np.full(n_loans, None),  # Repo/SFT 1-day floor
-            "is_sft": np.full(n_loans, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
-            "netting_agreement_reference": np.full(n_loans, None),  # CRR Art. 195/219 netting set
-            "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
-            "due_diligence_override_rw": np.full(n_loans, None),  # Art. 110A override RW (B31 only)
-            "is_hedged": np.full(n_loans, None),  # P1.94a B31 currency-mismatch gate
-            "hedge_coverage_ratio": np.zeros(n_loans),  # P1.94b 90%-coverage hedge gate
-            "effective_maturity": np.full(n_loans, None),  # Art. 162(3) numeric M override
-            "purchased_receivables_subtype": pl.Series([None] * n_loans, dtype=pl.String),
-            "exposure_collateral_type": pl.Series([None] * n_loans, dtype=pl.String),
-            "exposure_security_cqs": pl.Series([None] * n_loans, dtype=pl.Int8),
-            "exposure_security_residual_maturity_years": pl.Series(
-                [None] * n_loans, dtype=pl.Float64
-            ),
-        }
-    ).cast(dtypes_of(LOAN_SCHEMA))
+    df = (
+        pl.DataFrame(
+            {
+                "loan_reference": loan_refs,
+                "product_type": product_types,
+                "book_code": book_codes,
+                "counterparty_reference": cp_refs_arr[cp_assignments],
+                "value_date": pl.Series([base_date] * n_loans),
+                "maturity_date": [base_date + timedelta(days=int(d)) for d in maturity_days],
+                "currency": currencies,
+                "drawn_amount": drawn_amounts,
+                "interest": np.zeros(n_loans),  # Accrued interest
+                "lgd": lgd,
+                "beel": np.zeros(n_loans),
+                "seniority": seniority,
+                "lgd_unsecured": np.full(n_loans, None),  # A-IRB unsecured LGD
+                "has_sufficient_collateral_data": np.full(n_loans, None),  # LGD modelling flag
+                "is_payroll_loan": np.full(n_loans, None),  # Payroll loan flag
+                "is_buy_to_let": np.full(n_loans, None),  # BTL flag for SME supporting factor
+                "is_defaulted": np.full(n_loans, None),  # CRR Art. 178 row-level default flag
+                "is_under_construction": np.full(n_loans, None),  # P1.140 ADC
+                "has_one_day_maturity_floor": np.full(n_loans, None),  # Repo/SFT 1-day floor
+                "is_sft": np.full(n_loans, None),  # CRR Art. 162(1): SFT F-IRB 0.5y maturity
+                "netting_agreement_reference": np.full(
+                    n_loans, None
+                ),  # CRR Art. 195/219 netting set
+                "due_diligence_performed": np.full(n_loans, None),  # Art. 110A (B31 only)
+                "due_diligence_override_rw": np.full(
+                    n_loans, None
+                ),  # Art. 110A override RW (B31 only)
+                "is_hedged": np.full(n_loans, None),  # P1.94a B31 currency-mismatch gate
+                "hedge_coverage_ratio": np.zeros(n_loans),  # P1.94b 90%-coverage hedge gate
+                "effective_maturity": np.full(n_loans, None),  # Art. 162(3) numeric M override
+                "purchased_receivables_subtype": pl.Series([None] * n_loans, dtype=pl.String),
+                "exposure_collateral_type": pl.Series([None] * n_loans, dtype=pl.String),
+                "exposure_security_cqs": pl.Series([None] * n_loans, dtype=pl.Int8),
+                "exposure_security_residual_maturity_years": pl.Series(
+                    [None] * n_loans, dtype=pl.Float64
+                ),
+            }
+        )
+        .pipe(ensure_columns, LOAN_SCHEMA)
+        .cast(dtypes_of(LOAN_SCHEMA))
+    )
 
     return df.lazy()
 
@@ -734,6 +745,7 @@ def generate_facility_mappings(
                 "child_type": all_types,
             }
         )
+        .pipe(ensure_columns, FACILITY_MAPPING_SCHEMA)
         .cast(dtypes_of(FACILITY_MAPPING_SCHEMA))
         .lazy()
     )
@@ -892,6 +904,7 @@ def generate_ratings(
                 ),
             }
         )
+        .pipe(ensure_columns, RATINGS_SCHEMA)
         .cast(dtypes_of(RATINGS_SCHEMA))
         .lazy()
     )
@@ -1025,6 +1038,7 @@ def generate_contingents(
                 ),
             }
         )
+        .pipe(ensure_columns, CONTINGENTS_SCHEMA)
         .cast(dtypes_of(CONTINGENTS_SCHEMA))
         .lazy()
     )
@@ -1220,6 +1234,7 @@ def generate_collateral(
                 .alias("property_ltv"),
             ]
         )
+        .pipe(ensure_columns, COLLATERAL_SCHEMA)
         .cast(dtypes_of(COLLATERAL_SCHEMA))
         .lazy()
     )

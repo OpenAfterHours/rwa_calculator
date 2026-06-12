@@ -83,6 +83,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -186,7 +187,7 @@ def _build_bundle() -> RawDataBundle:
     loans = pl.scan_parquet(_FIXTURES_DIR / "loan.parquet")
     fx_rates = pl.scan_parquet(_FIXTURES_DIR / "fx_rates.parquet")
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(
             schema={"facility_reference": pl.String, "counterparty_reference": pl.String}
         ),

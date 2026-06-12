@@ -67,7 +67,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from tests.fixtures.p1_151.p1_151 import (
@@ -83,6 +82,7 @@ from tests.fixtures.p1_151.p1_151 import (
     PD,
     REPORTING_DATE,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -171,7 +171,7 @@ def _run_pipeline_p1151() -> object:
         }
     )
 
-    bundle = RawDataBundle(
+    bundle = make_raw_bundle(
         facilities=facilities,
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

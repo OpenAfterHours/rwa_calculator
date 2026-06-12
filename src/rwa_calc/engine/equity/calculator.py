@@ -100,7 +100,7 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "business_age_years": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 155(3): True -> firm has Art. 178 default-definition data so the
     # 1.5x PD/LGD scaling does NOT apply; False/null -> 1.5x scaling applies.
-    "has_default_definition_info": ColumnSpec(pl.Boolean, default=True, required=False),
+    "has_default_definition_info": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 # Sentinel for null CQS in join operations (data processing convention)
@@ -866,7 +866,7 @@ class EquityCalculator:
         )
 
         # Art. 155(3): 1.5x scaling where the firm lacks Art. 178 default data.
-        no_default_info = ~pl.col("has_default_definition_info").fill_null(True)
+        no_default_info = ~pl.col("has_default_definition_info").fill_null(False)
         rw_scaling = (
             pl.when(no_default_info).then(pl.lit(no_default_info_scaling)).otherwise(pl.lit(1.0))
         )

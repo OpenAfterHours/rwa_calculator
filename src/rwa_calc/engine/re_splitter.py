@@ -98,6 +98,12 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
+from rwa_calc.contracts.edges import (
+    RE_SPLIT_EXIT_CCR_EDGE,
+    RE_SPLIT_EXIT_EDGE,
+    seal,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.errors import (
     ERROR_RE_CRR_RENTAL_COVERAGE_FAILED,
     ERROR_RE_MIXED_PROPERTY_TYPES,
@@ -183,8 +189,18 @@ class RealEstateSplitter:
             is_basel_3_1=config.is_basel_3_1,
         )
 
+        # Producer seal (Phase 3): pure plan-level conform + brand — the
+        # orchestrator materialises and re-seals at the re_split_exit stage
+        # edge. Contract selected by the input frame's brand (CCR runs carry
+        # the SA-CCR provenance columns through the split).
+        exit_edge = (
+            RE_SPLIT_EXIT_CCR_EDGE
+            if sealed_edge_of(data.exposures) == "crm_exit_ccr"
+            else RE_SPLIT_EXIT_EDGE
+        )
+
         return CRMAdjustedBundle(
-            exposures=unified,
+            exposures=seal(unified, exit_edge),
             equity_exposures=data.equity_exposures,
             ciu_holdings=data.ciu_holdings,
             collateral_allocation=data.collateral_allocation,

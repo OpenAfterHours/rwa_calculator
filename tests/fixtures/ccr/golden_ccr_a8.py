@@ -93,6 +93,7 @@ from rwa_calc.contracts.bundles import (
 )
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import CCR_COLLATERAL_SCHEMA
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .golden_ccr_a1 import (
     _build_cp_001_counterparty,
@@ -245,7 +246,7 @@ def build_raw_data_bundle_with_ccr_a8() -> RawDataBundle:
     Load-bearing: the ELECTRICITY SF_CM = 0.40 (not the 0.18 catch-all) is
     the discriminating assertion for this scenario vs CCR-A7.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_cp_001_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

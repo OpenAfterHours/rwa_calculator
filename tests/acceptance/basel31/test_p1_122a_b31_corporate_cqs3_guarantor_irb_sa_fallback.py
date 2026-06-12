@@ -67,6 +67,7 @@ from tests.fixtures.p1_122a.p1_122a import (
     EXPECTED_RWA_CRR,
     LOAN_REF,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture path
@@ -131,7 +132,7 @@ def _build_bundle() -> RawDataBundle:
     facility_mappings and lending_mappings are empty frames (no hierarchy rows needed
     for a single loan/facility pair linked directly via counterparty_reference).
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.scan_parquet(_FIXTURES_DIR / "facility.parquet"),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

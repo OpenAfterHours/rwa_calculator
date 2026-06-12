@@ -42,6 +42,7 @@ from tests.fixtures.irb_test_helpers import (
     create_full_irb_model_permissions,
     enrich_ratings_with_model_id,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -102,7 +103,7 @@ def _make_bundle_with_ratings(
     ratings_lf = _rows_to_lazyframe(ratings, RATINGS_SCHEMA) if ratings else None
     if ratings_lf is not None and model_permissions is not None:
         ratings_lf = enrich_ratings_with_model_id(ratings_lf)
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=bundle.facilities,
         loans=bundle.loans,
         counterparties=bundle.counterparties,

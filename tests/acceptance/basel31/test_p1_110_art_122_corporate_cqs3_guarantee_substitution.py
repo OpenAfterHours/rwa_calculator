@@ -48,6 +48,7 @@ from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import FACILITY_MAPPING_SCHEMA, FACILITY_SCHEMA, LENDING_MAPPING_SCHEMA
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -84,7 +85,7 @@ def _build_bundle() -> RawDataBundle:
     this scenario only uses drawn loan data — no undrawn facility rows
     or hierarchy mappings are required.
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=pl.LazyFrame(schema=dtypes_of(FACILITY_SCHEMA)),
         loans=pl.scan_parquet(_FIXTURES_DIR / "loan.parquet"),
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

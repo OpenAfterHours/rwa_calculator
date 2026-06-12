@@ -15,8 +15,17 @@ import pytest
 from rwa_calc.contracts.bundles import AggregatedResultBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -63,9 +72,9 @@ def single_guaranteed_crm_result(
     )
 
     return aggregator.aggregate(
-        sa_results=sa_results,
-        irb_results=EMPTY,
-        slotting_results=EMPTY,
+        sa_results=pad_sa_branch(sa_results),
+        irb_results=EMPTY_IRB,
+        slotting_results=EMPTY_SLOTTING,
         equity_bundle=None,
         config=crr_config,
     )
@@ -124,9 +133,9 @@ class TestPostCRMDetailedView:
         )
 
         result = aggregator.aggregate(
-            sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            sa_results=pad_sa_branch(sa_results),
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -169,9 +178,9 @@ class TestPreCRMSummary:
         )
 
         result = aggregator.aggregate(
-            sa_results=sa_results,
-            irb_results=EMPTY,
-            slotting_results=EMPTY,
+            sa_results=pad_sa_branch(sa_results),
+            irb_results=EMPTY_IRB,
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )
@@ -258,9 +267,9 @@ class TestMixedSAIRBPortfolio:
         )
 
         result = aggregator.aggregate(
-            sa_results=sa_results,
-            irb_results=irb_results,
-            slotting_results=EMPTY,
+            sa_results=pad_sa_branch(sa_results),
+            irb_results=pad_irb_branch(irb_results),
+            slotting_results=EMPTY_SLOTTING,
             equity_bundle=None,
             config=crr_config,
         )

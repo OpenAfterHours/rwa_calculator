@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_classified_bundle
 
 from rwa_calc.contracts.bundles import ClassifiedExposuresBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -124,7 +125,7 @@ def create_classified_bundle(
     exposures: pl.LazyFrame,
 ) -> ClassifiedExposuresBundle:
     """Helper to create a ClassifiedExposuresBundle for testing."""
-    return ClassifiedExposuresBundle(
+    return make_classified_bundle(
         all_exposures=exposures,
         equity_exposures=None,
         classification_audit=None,

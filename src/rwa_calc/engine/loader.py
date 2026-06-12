@@ -39,7 +39,12 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     TradeBundle,
 )
-from rwa_calc.contracts.errors import CalculationError, optional_file_load_error
+from rwa_calc.contracts.edges import RAW_TABLE_EDGES, brand, seal_lenient
+from rwa_calc.contracts.errors import (
+    CalculationError,
+    missing_required_column_error,
+    optional_file_load_error,
+)
 from rwa_calc.contracts.protocols import LoaderProtocol
 from rwa_calc.data.column_spec import (
     ColumnSpec,
@@ -49,26 +54,8 @@ from rwa_calc.data.column_spec import (
 )
 from rwa_calc.data.schemas import (
     CCR_COLLATERAL_SCHEMA,
-    CIU_HOLDINGS_SCHEMA,
-    COLLATERAL_LINK_SCHEMA,
-    COLLATERAL_SCHEMA,
-    CONTINGENTS_SCHEMA,
-    COUNTERPARTY_SCHEMA,
-    EQUITY_EXPOSURE_SCHEMA,
-    FACILITY_MAPPING_SCHEMA,
-    FACILITY_SCHEMA,
-    FX_RATES_SCHEMA,
-    GUARANTEE_SCHEMA,
-    LENDING_MAPPING_SCHEMA,
-    LOAN_SCHEMA,
     MARGIN_AGREEMENT_SCHEMA,
-    MODEL_PERMISSIONS_SCHEMA,
     NETTING_SET_SCHEMA,
-    ORG_MAPPING_SCHEMA,
-    PROVISION_SCHEMA,
-    RATINGS_SCHEMA,
-    SECURITISATION_ALLOCATION_SCHEMA,
-    SPECIALISED_LENDING_SCHEMA,
     TRADE_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
@@ -168,6 +155,57 @@ def normalize_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
         LazyFrame with normalized column names
     """
     return lf.rename(lambda col: col.lower().replace(" ", "_"))
+
+
+# Legacy input-column spellings, translated to canonical names at load.
+# The loader is the ONLY place input aliases are translated (migration
+# Phase 3: alias translation happens here exactly once) — downstream
+# stages see canonical names only.
+_INPUT_COLUMN_ALIASES: dict[str, dict[str, str]] = {
+    "facility_mappings": {"node_type": "child_type"},
+}
+
+
+def _translate_input_aliases(lf: pl.LazyFrame, field_name: str) -> pl.LazyFrame:
+    """Rename legacy column spellings on an input table to canonical names.
+
+    ``strict=False`` makes the rename a no-op when the legacy spelling is
+    absent — no schema probe needed. A file carrying BOTH spellings is
+    structurally ambiguous: the rename collides at schema resolution and
+    the load wrappers surface it (required table → ``DataLoadError``;
+    optional table → DQ007 + treated as absent).
+    """
+    aliases = _INPUT_COLUMN_ALIASES.get(field_name)
+    if not aliases:
+        return lf
+    return lf.rename(dict(aliases), strict=False)
+
+
+def _seal_table(
+    lf: pl.LazyFrame,
+    field_name: str,
+    enforce_schemas: bool,
+    errors: list[CalculationError],
+) -> pl.LazyFrame:
+    """Seal one input table against its loader edge contract.
+
+    Lenient by design — the loader is the data-quality boundary: missing
+    required columns become typed nulls plus one DQ001 error each, dtype
+    mismatches are cast with invalid values nulled, undeclared columns
+    are stripped, Boolean defaults filled, and the frame is branded for
+    bundle ``__post_init__`` validation.
+    """
+    edge = RAW_TABLE_EDGES[field_name]
+    if not enforce_schemas:
+        # RWA_ALLOW_UNSAFE_LOAD escape hatch (env-gated, test-only): brand
+        # without conforming so bundle construction still works. The brand
+        # on this path is attested, not verified.
+        return brand(lf, edge.name)
+    sealed, missing = seal_lenient(lf, edge)
+    errors.extend(
+        missing_required_column_error(table=field_name, column=column) for column in missing
+    )
+    return sealed
 
 
 @dataclass
@@ -270,10 +308,41 @@ def _load_file(
     base_path: Path,
     scan_fn: ScanFn,
     enforce_schemas: bool,
+    errors: list[CalculationError],
+    field_name: str,
+    relative_path: str | Path,
+) -> pl.LazyFrame:
+    """Load a required table: normalize + alias translation + edge seal.
+
+    Missing required COLUMNS accumulate DQ001 errors via the lenient seal;
+    a missing FILE remains a hard ``DataLoadError`` (the pipeline cannot
+    run without the required tables).
+    """
+    full_path = base_path / relative_path
+    try:
+        lf = _translate_input_aliases(normalize_columns(scan_fn(full_path)), field_name)
+        return _seal_table(lf, field_name, enforce_schemas, errors)
+    except DataLoadError:
+        raise
+    except FileNotFoundError:
+        raise DataLoadError(f"File not found: {full_path}", source=relative_path) from None
+    except Exception as e:
+        raise DataLoadError(f"Failed to load file: {e}", source=relative_path) from e
+
+
+def _load_table_standalone(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
     relative_path: str | Path,
     schema: dict[str, pl.DataType] | None = None,
 ) -> pl.LazyFrame:
-    """Load a required file using *scan_fn*, with normalize + schema enforcement."""
+    """Standalone single-file load (no bundle field): normalize + enforce.
+
+    Pre-seal behaviour, kept for the loaders' public single-table
+    convenience methods — there is no ``RawDataBundle`` field (and so no
+    edge contract) on this path.
+    """
     full_path = base_path / relative_path
     try:
         lf = normalize_columns(scan_fn(full_path))
@@ -293,26 +362,68 @@ def _load_file_optional(
     errors: list[CalculationError],
     field_name: str,
     relative_path: str | Path | None,
-    schema: dict[str, pl.DataType] | None = None,
 ) -> pl.LazyFrame | None:
-    """Load an optional file — returns None if missing, empty, or unreadable.
+    """Load an optional table — None if missing, empty, or unreadable.
 
     A missing file (``FileNotFoundError``) is the legitimate
     "optional not configured" case and is logged at DEBUG only.
     Any other failure (corrupt parquet, OSError, PermissionError,
-    Polars ``ComputeError``, schema-cast failure) appends a single
-    DQ007 ``CalculationError`` to *errors* and emits one WARNING
-    log line — the field is still treated as absent so the
-    pipeline can continue.
+    Polars ``ComputeError``, schema-cast failure, ambiguous alias
+    columns) appends a single DQ007 ``CalculationError`` to *errors*
+    and emits one WARNING log line — the field is still treated as
+    absent so the pipeline can continue. A present table is sealed
+    against its loader edge contract (alias translation + lenient
+    conform + brand).
+    """
+    if relative_path is None:
+        return None
+    try:
+        lf = _translate_input_aliases(
+            normalize_columns(scan_fn(base_path / relative_path)), field_name
+        )
+        # Force schema resolution so corrupt parquet / scan failures
+        # surface here rather than being swallowed by ``has_rows``'
+        # broad except clause downstream.
+        lf.collect_schema()
+        if not has_rows(lf):
+            return None
+        return _seal_table(lf, field_name, enforce_schemas, errors)
+    except FileNotFoundError:
+        logger.debug("optional input %s not present; treating as absent", relative_path)
+        return None
+    except Exception as exc:
+        logger.warning(
+            "optional input %s could not be loaded (%s: %s); treating as absent",
+            relative_path,
+            type(exc).__name__,
+            exc,
+        )
+        errors.append(
+            optional_file_load_error(relative_path=relative_path, field_name=field_name, exc=exc)
+        )
+        return None
+
+
+def _load_table_standalone_optional(
+    base_path: Path,
+    scan_fn: ScanFn,
+    enforce_schemas: bool,
+    relative_path: str | Path | None,
+    schema: dict[str, pl.DataType] | None = None,
+) -> pl.LazyFrame | None:
+    """Standalone optional load (no bundle field): None if missing/empty.
+
+    Pre-seal behaviour, kept for the loaders' public single-table
+    convenience methods — no ``RawDataBundle`` field means no edge
+    contract and no error accumulation target on this path.
     """
     if relative_path is None:
         return None
     try:
         lf = normalize_columns(scan_fn(base_path / relative_path))
-        # Force schema resolution so corrupt parquet / scan failures
-        # surface here rather than being swallowed by ``has_rows``'
-        # broad except clause downstream.
-        lf.collect_schema()
+        # No corrupt-surface schema probe here: this path has no error
+        # accumulation target, so ``has_rows``' broad except yielding None
+        # is the same outcome either way.
         if not has_rows(lf):
             return None
         if enforce_schemas and schema is not None:
@@ -327,9 +438,6 @@ def _load_file_optional(
             relative_path,
             type(exc).__name__,
             exc,
-        )
-        errors.append(
-            optional_file_load_error(relative_path=relative_path, field_name=field_name, exc=exc)
         )
         return None
 
@@ -479,9 +587,9 @@ def _run_bundle_validation(bundle: RawDataBundle) -> list[CalculationError]:
 
 
 def _build_bundle(
-    load: Callable[[str | Path | None, dict[str, pl.DataType] | None], pl.LazyFrame],
+    load: Callable[[list[CalculationError], str, str | Path], pl.LazyFrame],
     load_optional: Callable[
-        [list[CalculationError], str, str | Path | None, dict[str, pl.DataType] | None],
+        [list[CalculationError], str, str | Path | None],
         pl.LazyFrame | None,
     ],
     config: DataSourceConfig,
@@ -491,9 +599,12 @@ def _build_bundle(
 ) -> RawDataBundle:
     """Build a RawDataBundle — single implementation shared by all loaders.
 
-    Optional-file load failures (corrupt parquet, OSError, etc.) are
-    accumulated into ``load_errors`` via ``_load_file_optional`` and
-    merged with the categorical-validation errors before constructing
+    Every table is sealed against its loader edge contract
+    (``RAW_TABLE_EDGES``) on load: alias translation, lenient conform
+    (missing required columns → DQ001 errors + typed nulls), scratch
+    strip, brand. Optional-file load failures (corrupt parquet, OSError,
+    etc.) are accumulated into ``load_errors`` via ``_load_file_optional``
+    and merged with the categorical-validation errors before constructing
     the final bundle. The CCR composite bundle (P8.5) is wired via
     ``_build_raw_ccr_bundle`` which uses *base_path* / *scan_fn* directly
     because it needs zero-row tolerance — generic ``_load_file_optional``
@@ -501,49 +612,36 @@ def _build_bundle(
     """
     load_errors: list[CalculationError] = []
 
-    def _opt(
-        field_name: str,
-        relative_path: str | Path | None,
-        schema: dict[str, pl.DataType] | None,
-    ) -> pl.LazyFrame | None:
-        return load_optional(load_errors, field_name, relative_path, schema)
+    def _req(field_name: str, relative_path: str | Path | None) -> pl.LazyFrame:
+        if relative_path is None:
+            raise DataLoadError(f"Required table '{field_name}' has no configured path")
+        return load(load_errors, field_name, relative_path)
+
+    def _opt(field_name: str, relative_path: str | Path | None) -> pl.LazyFrame | None:
+        return load_optional(load_errors, field_name, relative_path)
 
     ccr_bundle = _build_raw_ccr_bundle(base_path, scan_fn, enforce_schemas, config, load_errors)
 
     bundle = RawDataBundle(
-        facilities=load(config.facilities_file, FACILITY_SCHEMA),
-        loans=load(config.loans_file, LOAN_SCHEMA),
-        counterparties=load(config.counterparties_file, COUNTERPARTY_SCHEMA),
-        facility_mappings=load(config.facility_mappings_file, FACILITY_MAPPING_SCHEMA),
-        org_mappings=_opt("org_mappings", config.org_mappings_file, ORG_MAPPING_SCHEMA),
-        lending_mappings=_opt(
-            "lending_mappings", config.lending_mappings_file, LENDING_MAPPING_SCHEMA
-        ),
-        contingents=_opt("contingents", config.contingents_file, CONTINGENTS_SCHEMA),
-        collateral=_opt("collateral", config.collateral_file, COLLATERAL_SCHEMA),
-        collateral_links=_opt(
-            "collateral_links", config.collateral_links_file, COLLATERAL_LINK_SCHEMA
-        ),
-        guarantees=_opt("guarantees", config.guarantees_file, GUARANTEE_SCHEMA),
-        provisions=_opt("provisions", config.provisions_file, PROVISION_SCHEMA),
-        ratings=_opt("ratings", config.ratings_file, RATINGS_SCHEMA),
-        equity_exposures=_opt(
-            "equity_exposures", config.equity_exposures_file, EQUITY_EXPOSURE_SCHEMA
-        ),
-        ciu_holdings=_opt("ciu_holdings", config.ciu_holdings_file, CIU_HOLDINGS_SCHEMA),
-        specialised_lending=_opt(
-            "specialised_lending",
-            config.specialised_lending_file,
-            SPECIALISED_LENDING_SCHEMA,
-        ),
-        fx_rates=_opt("fx_rates", config.fx_rates_file, FX_RATES_SCHEMA),
-        model_permissions=_opt(
-            "model_permissions", config.model_permissions_file, MODEL_PERMISSIONS_SCHEMA
-        ),
+        facilities=_req("facilities", config.facilities_file),
+        loans=_req("loans", config.loans_file),
+        counterparties=_req("counterparties", config.counterparties_file),
+        facility_mappings=_req("facility_mappings", config.facility_mappings_file),
+        org_mappings=_opt("org_mappings", config.org_mappings_file),
+        lending_mappings=_opt("lending_mappings", config.lending_mappings_file),
+        contingents=_opt("contingents", config.contingents_file),
+        collateral=_opt("collateral", config.collateral_file),
+        collateral_links=_opt("collateral_links", config.collateral_links_file),
+        guarantees=_opt("guarantees", config.guarantees_file),
+        provisions=_opt("provisions", config.provisions_file),
+        ratings=_opt("ratings", config.ratings_file),
+        equity_exposures=_opt("equity_exposures", config.equity_exposures_file),
+        ciu_holdings=_opt("ciu_holdings", config.ciu_holdings_file),
+        specialised_lending=_opt("specialised_lending", config.specialised_lending_file),
+        fx_rates=_opt("fx_rates", config.fx_rates_file),
+        model_permissions=_opt("model_permissions", config.model_permissions_file),
         securitisation_allocations=_opt(
-            "securitisation_allocations",
-            config.securitisation_allocations_file,
-            SECURITISATION_ALLOCATION_SCHEMA,
+            "securitisation_allocations", config.securitisation_allocations_file
         ),
         ccr=ccr_bundle,
     )
@@ -587,7 +685,7 @@ class ParquetLoader(LoaderProtocol):
         relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
-        return _load_file(
+        return _load_table_standalone(
             self.base_path, pl.scan_parquet, self.enforce_schemas, relative_path, schema
         )
 
@@ -596,14 +694,11 @@ class ParquetLoader(LoaderProtocol):
         relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
-        # Standalone convenience entry point — discard any DQ007 since
-        # there is no bundle to attach to in this path.
-        return _load_file_optional(
+        # Standalone convenience entry point — no bundle field, no edge seal.
+        return _load_table_standalone_optional(
             self.base_path,
             pl.scan_parquet,
             self.enforce_schemas,
-            [],
-            "",
             relative_path,
             schema,
         )
@@ -657,7 +752,7 @@ class CSVLoader(LoaderProtocol):
         relative_path: str | Path,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame:
-        return _load_file(
+        return _load_table_standalone(
             self.base_path, self._scan_csv, self.enforce_schemas, relative_path, schema
         )
 
@@ -666,14 +761,11 @@ class CSVLoader(LoaderProtocol):
         relative_path: str | Path | None,
         schema: dict[str, pl.DataType] | None = None,
     ) -> pl.LazyFrame | None:
-        # Standalone convenience entry point — discard any DQ007 since
-        # there is no bundle to attach to in this path.
-        return _load_file_optional(
+        # Standalone convenience entry point — no bundle field, no edge seal.
+        return _load_table_standalone_optional(
             self.base_path,
             self._scan_csv,
             self.enforce_schemas,
-            [],
-            "",
             relative_path,
             schema,
         )

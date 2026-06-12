@@ -93,6 +93,7 @@ from rwa_calc.data.schemas import (
     PROVISION_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario identity constants
@@ -423,7 +424,7 @@ def build_p5_15_bundle(*, fixtures_dir: Path) -> RawDataBundle:
         fixtures_dir: Path to the fixtures directory (unused; accepted for
             interface compatibility with other bundle builders).
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=create_p515_empty_facilities().lazy(),
         loans=create_p515_loans().lazy(),
         counterparties=create_p515_counterparties().lazy(),

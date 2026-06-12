@@ -31,10 +31,10 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
@@ -141,9 +141,9 @@ def _build_bundle(
             pl.lit(None).cast(pl.Int8).alias("cqs"),
         ]
     )
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={

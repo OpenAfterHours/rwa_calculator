@@ -32,8 +32,18 @@ import pytest
 from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.aggregator import OutputAggregator
+from tests.fixtures.contract_columns import (
+    pad_irb_branch,
+    pad_sa_branch,
+    pad_slotting_branch,
+)
 
+# Padded zero-row branch frames mirroring the orchestrator's sealed branch
+# collect — empty branches still carry the full edge schema in production.
 EMPTY = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
+EMPTY_SA = pad_sa_branch(EMPTY)
+EMPTY_IRB = pad_irb_branch(EMPTY)
+EMPTY_SLOTTING = pad_slotting_branch(EMPTY)
 
 
 @pytest.fixture
@@ -70,7 +80,9 @@ class TestPortfolioLevelFloorBinding:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
         # Floor: 72.5% * 100k = 72.5k > IRB 50k → binds
         assert df["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
@@ -90,7 +102,9 @@ class TestPortfolioLevelFloorBinding:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
         # Floor: 72.5% * 100k = 72.5k < IRB 80k → doesn't bind
         assert df["rwa_final"][0] == pytest.approx(80_000.0, rel=0.001)
@@ -122,7 +136,9 @@ class TestPortfolioLevelFloorBinding:
                 "sa_rwa": [100_000.0, 100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect().sort("exposure_reference")
 
         assert df["rwa_final"][0] == pytest.approx(47_500.0, rel=0.001)  # EXP1
@@ -159,7 +175,9 @@ class TestPortfolioLevelFloorBinding:
                 "sa_rwa": [100_000.0, 100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect().sort("exposure_reference")
 
         # Portfolio floor doesn't bind — both keep original RWA
@@ -202,7 +220,9 @@ class TestProRataDistribution:
                 "sa_rwa": [300_000.0, 100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect().sort("exposure_reference")
 
         assert df["rwa_final"][0] == pytest.approx(200_000.0, rel=0.001)  # EXP1 (75%)
@@ -224,7 +244,9 @@ class TestProRataDistribution:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         impact = result.floor_impact.collect()
 
         # Shortfall = 72.5k - 50k = 22.5k, 100% to this exposure
@@ -247,7 +269,9 @@ class TestProRataDistribution:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         impact = result.floor_impact.collect()
 
         assert impact["floor_impact_rwa"][0] == pytest.approx(0.0, abs=0.01)
@@ -277,7 +301,9 @@ class TestSlottingInFloorScope:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, EMPTY, slotting, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, EMPTY_IRB, pad_slotting_branch(slotting), None, b31_config
+        )
         df = result.results.collect()
 
         # Floor: 72.5% * 100k = 72.5k > slotting 70k → binds
@@ -319,7 +345,9 @@ class TestSlottingInFloorScope:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, slotting, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), pad_slotting_branch(slotting), None, b31_config
+        )
         df = result.results.collect().sort("exposure_reference")
 
         assert df["rwa_final"][0] == pytest.approx(77_500.0, rel=0.001)  # IRB1
@@ -341,7 +369,9 @@ class TestSlottingInFloorScope:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, EMPTY, slotting, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, EMPTY_IRB, pad_slotting_branch(slotting), None, b31_config
+        )
         impact = result.floor_impact.collect()
 
         assert len(impact) == 1
@@ -383,7 +413,9 @@ class TestSAExcludedFromFloor:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(sa, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            pad_sa_branch(sa), pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect().sort("exposure_reference")
 
         # IRB floor binds: 72.5k > 30k
@@ -409,7 +441,9 @@ class TestSAExcludedFromFloor:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(sa, EMPTY, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            pad_sa_branch(sa), EMPTY_IRB, EMPTY_SLOTTING, None, b31_config
+        )
         impact = result.floor_impact.collect()
         assert len(impact) == 0
 
@@ -437,7 +471,9 @@ class TestOutputFloorSummary:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         summary = result.output_floor_summary
 
         assert summary is not None
@@ -468,7 +504,9 @@ class TestOutputFloorSummary:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         summary = result.output_floor_summary
 
         assert summary is not None
@@ -505,7 +543,9 @@ class TestOutputFloorSummary:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(sa, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            pad_sa_branch(sa), pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         summary = result.output_floor_summary
 
         # U-TREA and S-TREA should only reflect the IRB exposure
@@ -538,7 +578,9 @@ class TestOutputFloorSummary:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, slotting, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), pad_slotting_branch(slotting), None, b31_config
+        )
         summary = result.output_floor_summary
 
         assert summary.u_trea == pytest.approx(120_000.0, rel=0.001)  # 50k + 70k
@@ -547,7 +589,7 @@ class TestOutputFloorSummary:
     def test_no_summary_when_floor_disabled(self, aggregator: OutputAggregator) -> None:
         """CRR config (floor disabled) → no OutputFloorSummary."""
         crr_config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        result = aggregator.aggregate(EMPTY, EMPTY, EMPTY, None, crr_config)
+        result = aggregator.aggregate(EMPTY_SA, EMPTY_IRB, EMPTY_SLOTTING, None, crr_config)
         assert result.output_floor_summary is None
 
 
@@ -563,7 +605,7 @@ class TestPortfolioFloorEdgeCases:
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
         """Empty portfolio (no exposures) should produce default summary."""
-        result = aggregator.aggregate(EMPTY, EMPTY, EMPTY, None, b31_config)
+        result = aggregator.aggregate(EMPTY_SA, EMPTY_IRB, EMPTY_SLOTTING, None, b31_config)
         summary = result.output_floor_summary
 
         assert summary is not None
@@ -587,7 +629,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [0.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
 
         # Floor: 72.5% * 0 = 0 < IRB 50k → doesn't bind
@@ -610,7 +654,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [None],
             }
         ).cast({"sa_rwa": pl.Float64})
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
 
         assert df["rwa_final"][0] == pytest.approx(50_000.0, rel=0.001)
@@ -642,7 +688,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [100_000.0, 100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
         total = df["rwa_final"].sum()
 
@@ -667,7 +715,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [100_000.0, 37_500.0],
             }
         )
-        result = aggregator.aggregate(sa, EMPTY, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            pad_sa_branch(sa), EMPTY_IRB, EMPTY_SLOTTING, None, b31_config
+        )
         summary = result.output_floor_summary
 
         assert summary.u_trea == pytest.approx(0.0, abs=0.01)
@@ -689,7 +739,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         df = result.results.collect()
 
         # floor_rwa = sa_rwa * floor_pct (per-exposure benchmark)
@@ -710,7 +762,9 @@ class TestPortfolioFloorEdgeCases:
                 "sa_rwa": [100_000.0, 100_000.0],
             }
         )
-        result = aggregator.aggregate(EMPTY, irb, EMPTY, None, b31_config)
+        result = aggregator.aggregate(
+            EMPTY_SA, pad_irb_branch(irb), EMPTY_SLOTTING, None, b31_config
+        )
         impact = result.floor_impact.collect()
 
         # Both should be True (portfolio floor binds)

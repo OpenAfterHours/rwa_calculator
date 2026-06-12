@@ -27,6 +27,7 @@ from rwa_calc.data.schemas import COLLATERAL_LINK_SCHEMA, COLLATERAL_SCHEMA
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -65,7 +66,15 @@ def _two_loan_bundle(*, collateral, collateral_links):
         make_loan(loan_reference="LN_B", counterparty_reference="CP_B", drawn_amount=1_000_000.0),
     ]
     bundle = make_raw_data_bundle(counterparties=counterparties, facilities=facilities, loans=loans)
-    return replace(bundle, collateral=collateral, collateral_links=collateral_links)
+    return replace(
+        bundle,
+        collateral=None if collateral is None else seal_raw_table(collateral, "collateral"),
+        collateral_links=(
+            None
+            if collateral_links is None
+            else seal_raw_table(collateral_links, "collateral_links")
+        ),
+    )
 
 
 def _collateral_lf(beneficiary_reference: str) -> pl.LazyFrame:

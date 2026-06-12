@@ -24,6 +24,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 _REPORTING_DATE = date(2026, 12, 31)
 _VALUE_DATE = date(2024, 1, 1)
@@ -50,7 +51,7 @@ def _build_corporate_with_residential_collateral_bundle() -> RawDataBundle:
             "child_counterparty_reference": pl.String,
         }
     )
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=pl.LazyFrame(
             {
                 "counterparty_reference": ["CP1"],

@@ -34,6 +34,7 @@ from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.raw_bundle import seal_raw_table
 
 from .conftest import (
     _rows_to_lazyframe,
@@ -98,7 +99,7 @@ def _nested_bundle(collateral: pl.LazyFrame):
         contingents=contingents,
         facility_mappings=facility_mappings,
     )
-    return replace(bundle, collateral=collateral)
+    return replace(bundle, collateral=seal_raw_table(collateral, "collateral"))
 
 
 def _facility_cash(

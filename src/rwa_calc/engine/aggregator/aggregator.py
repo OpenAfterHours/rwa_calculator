@@ -31,6 +31,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import AggregatedResultBundle
+from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE, seal
 from rwa_calc.engine.aggregator._crm_reporting import (
     generate_post_crm_detailed,
     generate_post_crm_summary,
@@ -269,7 +270,10 @@ class OutputAggregator:
         post_floor_dfs = _collect_views(post_floor_views)
 
         return AggregatedResultBundle(
-            results=post_floor_dfs["results"].lazy(),
+            # Producer seal (Phase 3): the aggregator's combined results
+            # frame is the reporting input contract — pure plan ops over
+            # the eager-backed wrap.
+            results=seal(post_floor_dfs["results"].lazy(), AGGREGATOR_EXIT_EDGE),
             sa_results=sa_results,
             irb_results=irb_results,
             slotting_results=slotting_results,

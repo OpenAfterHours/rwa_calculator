@@ -133,6 +133,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 from .golden_ccr_a1 import (
     CCR_A1_ASSET_CLASS,
@@ -407,7 +408,7 @@ def build_p829_bundle(
     netting_sets_df = _build_netting_set(ns_id, cp_ref)
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparty_df.lazy(),
         facilities=facilities,
         loans=loans,
@@ -456,7 +457,7 @@ def build_p829_two_ns_book() -> RawDataBundle:
 
     facilities, loans, facility_mappings, lending_mappings = _build_empty_lending_frames()
 
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=counterparties_df.lazy(),
         facilities=facilities,
         loans=loans,

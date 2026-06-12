@@ -112,6 +112,7 @@ from rwa_calc.data.schemas import (
     LOAN_SCHEMA,
     RATINGS_SCHEMA,
 )
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # Re-import the P8.27 LazyFrame factories and scenario constants so test-writers
 # can import everything from one module.  These are intentionally *not* shadowed
@@ -363,7 +364,7 @@ def build_raw_data_bundle_ccr_wwr1() -> RawDataBundle:
         - CRR Art. 291 (WWR treatment)
         - CRR Art. 120(1) Table 3 (institution CQS 2 → 50% RW)
     """
-    return RawDataBundle(
+    return make_raw_bundle(
         counterparties=_build_counterparty(),
         facilities=_build_empty_facilities(),
         loans=_build_empty_loans(),

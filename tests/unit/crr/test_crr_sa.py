@@ -1087,6 +1087,9 @@ class TestSACalculatorBranchProcessing:
                 "cqs": [1, 2, None],
                 "is_sme": [False, False, False],
                 "is_infrastructure": [False, False, False],
+                # CRR Art. 123: the 75% retail weight requires demonstrated
+                # qualification (classifier-emitted in production).
+                "qualifies_as_retail": [None, None, True],
             }
         ).lazy()
 

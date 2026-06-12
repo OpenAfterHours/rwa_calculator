@@ -98,7 +98,14 @@ def _configs() -> dict[str, CalculationConfig]:
 
 
 def _canonical(df: pl.DataFrame) -> pl.DataFrame:
-    """Sort rows by every sortable column so snapshots are order-independent."""
+    """Sort rows AND columns so snapshots are order-independent.
+
+    Column order is not a regulatory output property — Phase 3 edge seals
+    emit canonical contract order, which legitimately differs from the
+    pre-seal append order. Missing/extra columns and value drift still
+    fail the comparison.
+    """
+    df = df.select(sorted(df.columns))
     sortable = [
         name
         for name, dtype in df.schema.items()
@@ -167,7 +174,9 @@ def compare(baseline_dir: Path) -> int:
             failures.append(f"{name}/{added}: frame absent in baseline, present now")
 
         for field_name in sorted(baseline_frames & current_frames):
-            expected = pl.read_parquet(run_dir / f"{field_name}.parquet")
+            # Re-canonicalise the stored baseline too — snapshots written
+            # before the column-order normalisation carry capture-era order.
+            expected = _canonical(pl.read_parquet(run_dir / f"{field_name}.parquet"))
             try:
                 if field_name in _SUM_AGGREGATE_FRAMES:
                     assert_frame_equal(

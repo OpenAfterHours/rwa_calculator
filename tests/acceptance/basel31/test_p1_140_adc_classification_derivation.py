@@ -53,6 +53,7 @@ from rwa_calc.contracts.config import CalculationConfig, PermissionMode
 from rwa_calc.data.schemas import FACILITY_SCHEMA, LOAN_SCHEMA
 from rwa_calc.engine.loader import ensure_columns
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from tests.fixtures.raw_bundle import make_raw_bundle
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -99,7 +100,7 @@ def _build_bundle() -> RawDataBundle:
     fac_base = pl.scan_parquet(_FIXTURES_DIR / "facility.parquet")
     facilities = ensure_columns(fac_base, FACILITY_SCHEMA)
 
-    return RawDataBundle(
+    return make_raw_bundle(
         facilities=facilities,
         loans=loans,
         counterparties=pl.scan_parquet(_FIXTURES_DIR / "counterparty.parquet"),

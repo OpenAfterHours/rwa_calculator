@@ -21,12 +21,12 @@ from datetime import date
 import polars as pl
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Helpers
@@ -143,9 +143,9 @@ def _make_bundle(
             pl.col("lending_group_total_exposure").alias("lending_group_adjusted_exposure"),
         )
 
-    return ResolvedHierarchyBundle(
+    return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={

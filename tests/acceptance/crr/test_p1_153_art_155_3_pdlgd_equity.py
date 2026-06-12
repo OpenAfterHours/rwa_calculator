@@ -380,3 +380,38 @@ class TestP1153_CRRart1553_PdLgdEquityApproach:
             f"Art. 155(2)(a)). Got {actual_rw:.4f}. "
             f"With equity_pd_lgd=True the engine must use the PD/LGD formula (≈1.918731)."
         )
+
+
+class TestArt1553UnknownDefaultDefinitionInfo:
+    """Unknown Art. 178 data adequacy -> the 1.5x scaling APPLIES.
+
+    Skipping the 1.5x is the preferential treatment (CRR Art. 155(3) final
+    subparagraph) and requires affirmative attestation that the institution
+    holds sufficient default-definition data. Recorded FIX decision
+    2026-06-12: null/absent previously skipped the scaling, contradicting
+    the documented contract on EQUITY_EXPOSURE_SCHEMA.
+    """
+
+    def test_null_flag_applies_1_5x_scaling(
+        self,
+        equity_calculator: EquityCalculator,
+        crr_irb_pdlgd_config: CalculationConfig,
+    ) -> None:
+        lf = _build_equity_exposure_lf().with_columns(
+            pl.lit(None).cast(pl.Boolean).alias("has_default_definition_info")
+        )
+
+        row = equity_calculator.calculate_branch(lf, crr_irb_pdlgd_config).collect().to_dicts()[0]
+
+        assert row["risk_weight"] == pytest.approx(float(EXPECTED_RISK_WEIGHT) * 1.5, rel=1e-6)
+
+    def test_absent_flag_applies_1_5x_scaling(
+        self,
+        equity_calculator: EquityCalculator,
+        crr_irb_pdlgd_config: CalculationConfig,
+    ) -> None:
+        lf = _build_equity_exposure_lf().drop("has_default_definition_info")
+
+        row = equity_calculator.calculate_branch(lf, crr_irb_pdlgd_config).collect().to_dicts()[0]
+
+        assert row["risk_weight"] == pytest.approx(float(EXPECTED_RISK_WEIGHT) * 1.5, rel=1e-6)

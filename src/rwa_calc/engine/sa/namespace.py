@@ -1790,13 +1790,12 @@ class SALazyFrame:
         paragraphs 4 to 6".
 
         This method is a no-op when the Comprehensive Method is elected (default)
-        or when fcsm_collateral_value is zero/absent.
+        or when fcsm_collateral_value is zero/null — the crm_exit contract
+        injects both fcsm_* columns as typed nulls when the FCSM sub-step did
+        not run, and ``fill_null(0.0)`` makes an all-null column equivalent to
+        the historical absent-column early return.
         """
         if config.crm_collateral_method != CRMCollateralMethod.SIMPLE:
-            return self._lf
-
-        schema = self._lf.collect_schema()
-        if "fcsm_collateral_value" not in schema.names():  # arch-exempt: early-exit guard
             return self._lf
 
         ead = pl.col("ead_final").fill_null(0.0)
@@ -1874,7 +1873,13 @@ class SALazyFrame:
         exposures = self._lf
         cols = exposures.collect_schema().names()
 
-        # Return early when no guarantee data is present.
+        # Run-level sentinel gate: guarantor_entity_type is the one crm_exit
+        # column still CONDITIONAL (inject=False) — present iff the CRM
+        # guarantee sub-step ran. Keying on it keeps this machinery (and its
+        # derived audit columns: pre_crm_risk_weight, guarantor_rw,
+        # is_guarantee_beneficial, guarantee_status, guarantee_benefit_rw)
+        # off unguaranteed runs; see contracts/edges.py. The
+        # guaranteed_portion check covers direct (non-pipeline) invocation.
         if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
             return exposures
 
@@ -1911,14 +1916,16 @@ class SALazyFrame:
             short_term_expr.fill_null(False).alias(short_term_flag_col),
         )
 
-        # Look up guarantor's RW based on exposure class + CQS.
+        # Look up guarantor's RW based on exposure class + CQS. The short-term
+        # flag is calculator scratch consumed only by this expression — drop it
+        # immediately so it never leaks into the branch/aggregator frames.
         exposures = exposures.with_columns(
             _build_guarantor_rw_expr(
                 is_domestic_guarantor,
                 config.is_basel_3_1,
                 institution_short_term_flag_col=short_term_flag_col,
             ).alias("guarantor_rw"),
-        )
+        ).drop(short_term_flag_col)
 
         # Check if guarantee is beneficial (guarantor RW < borrower RW)
         # Non-beneficial guarantees should NOT be applied per CRR Art. 213

@@ -43,6 +43,8 @@ _EXEMPT_PREFIXES = ("tests/fixtures/",)
 _EXEMPT_FILES = {
     "tests/contracts/test_edge_contracts.py",
     "tests/contracts/test_aggregated_bundle_validation.py",
+    # This file: the token tuple below would count itself.
+    "tests/contracts/test_builder_conformance.py",
 }
 
 

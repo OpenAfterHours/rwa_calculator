@@ -880,52 +880,55 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         # Provisions
         "provision_allocated": EdgeColumn(dtype=pl.Float64),
         "provision_deducted": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(2)"),
-        # Path-dependent CONDITIONAL columns (inject=False): emitted only
-        # when the producing sub-step ran (guarantee / provision / MOF /
-        # FCSM). Declared so they are validated and never stripped, but NOT
-        # injected when absent — downstream consumers are still
-        # presence-gated, and blanket null-injection made the SA/IRB
-        # guarantee-substitution machinery execute on null data (moved IRB
-        # risk weights; caught by the parity gate 2026-06-12). Flip each
-        # group to inject=True alongside its consumer guard deletion.
-        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
-        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        # Path-dependent OPTIONAL columns: real values only when the
+        # producing sub-step ran (guarantee / provision / FCSM); injected as
+        # typed nulls otherwise so the downstream shape is uniform. The
+        # Wave-2 guarantor rework verified the consumers null-path-equivalent
+        # (an all-null column yields the same values as the historical absent
+        # column). ONE sentinel stays conditional: guarantor_entity_type
+        # below.
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantee_currency": EdgeColumn(
-            dtype=pl.String, required=False, inject=False, citation="CRR Art. 233(3)"
+            dtype=pl.String, required=False, citation="CRR Art. 233(3)"
         ),
         "includes_restructuring": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False, citation="CRR Art. 233(2)"
+            dtype=pl.Boolean, required=False, citation="CRR Art. 233(2)"
         ),
-        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        # guarantor_entity_type stays CONDITIONAL (inject=False): it is the
+        # run-level presence SENTINEL for the SA/IRB guarantee-substitution
+        # machinery (engine/sa/namespace.py, engine/irb/guarantee.py), which
+        # both gate on exactly this column. Lazy column addition is
+        # row-independent, so once that machinery executes it emits its
+        # derived audit columns (guarantor_rw, guarantee_status,
+        # pre_crm_risk_weight, ...) regardless of values — an injected
+        # all-null sentinel would put those columns (and pre_crm_summary's
+        # total_rwa_pre_crm aggregate) on every unguaranteed run: the exact
+        # shape divergence the 2026-06-12 decision-log lesson recorded.
+        # Presence here means "the CRM guarantee sub-step ran".
         "guarantor_entity_type": EdgeColumn(
             dtype=pl.String, required=False, inject=False, citation="CRR Art. 235"
         ),
-        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False
-        ),
-        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_cqs": EdgeColumn(
-            dtype=pl.Int8, required=False, inject=False, citation="CRR Art. 235"
-        ),
-        "guarantor_pd": EdgeColumn(
-            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"
-        ),
-        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        # Financial Collateral Simple Method (CRR Art. 222): emitted only
-        # under the SIMPLE election; the SA consumer fill_null(0.0)s both,
-        # so contract-injected nulls on Comprehensive runs are a no-op.
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, citation="CRR Art. 235"),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, citation="CRR Art. 161/236"),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
+        # Financial Collateral Simple Method (CRR Art. 222): real values only
+        # under the SIMPLE election; typed nulls otherwise. The SA consumer
+        # fill_null(0.0)s both and is config-gated, so injected nulls on
+        # Comprehensive runs are a no-op.
         "fcsm_collateral_value": EdgeColumn(
-            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 222"
+            dtype=pl.Float64, required=False, citation="CRR Art. 222"
         ),
-        "fcsm_collateral_rw": EdgeColumn(
-            dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 222"
-        ),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, citation="CRR Art. 222"),
     }
 
 
@@ -979,9 +982,9 @@ RE_SPLIT_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
 # Generated from observed schemas: the four-config parity snapshot
 # (required = present in every config) plus guarantee / FCSM / provision /
 # CCR-bearing harvests (conditional, inject=False — validated when the
-# producing path ran, never injected). _inst_guarantor_short_term is
-# calculator scratch that currently leaks downstream; declared conditional
-# to preserve behaviour, flagged for the Wave-2 guarantor rework.
+# producing path ran, never injected). _inst_guarantor_short_term scratch is
+# dropped at source by the SA guarantee substitution (Wave-2 guarantor
+# rework) and is no longer declared on any edge.
 
 
 SA_BRANCH_EDGE: EdgeContract = EdgeContract(
@@ -1208,35 +1211,32 @@ SA_BRANCH_EDGE: EdgeContract = EdgeContract(
         "sa_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         # Path-dependent conditionals harvested from guarantee / FCSM /
         # provision-bearing runs (2026-06-12 gap dump).
-        "_inst_guarantor_short_term": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "ead_calculation_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
+        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantee_benefit_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
-        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False),
+        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_status": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, inject=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False),
         "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False
-        ),
-        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantor_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False),
         "is_guarantee_beneficial": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
-        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False),
         "pre_crm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "pre_fcsm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
         # SA-CCR provenance pass-through (CCR runs only).
         "source_netting_set_id": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "ccr_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
@@ -1513,46 +1513,43 @@ IRB_BRANCH_EDGE: EdgeContract = EdgeContract(
         "sl_project_phase": EdgeColumn(dtype=pl.String, required=False, inject=False),
         # Path-dependent conditionals harvested from guarantee / FCSM /
         # provision-bearing runs (2026-06-12 gap dump).
-        "_inst_guarantor_short_term": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "double_default_unfunded_protection": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False
         ),
         "expected_loss_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
+        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantee_benefit_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
-        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False),
+        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_method_used": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_status": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, inject=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False),
         "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False
-        ),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
         "guarantor_is_financial_sector_entity": EdgeColumn(
             dtype=pl.Boolean, required=False, inject=False
         ),
-        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantor_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantor_rw_irb": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantor_rw_post_nbd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False),
         "irb_lgd_double_default": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "is_double_default_eligible": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "is_guarantee_beneficial": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
-        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False),
         "pre_crm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "pre_crm_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
         "risk_weight_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rw_direct": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rwa_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
@@ -1818,33 +1815,30 @@ SLOTTING_BRANCH_EDGE: EdgeContract = EdgeContract(
         "sl_project_phase": EdgeColumn(dtype=pl.String, required=False, inject=False),
         # Path-dependent conditionals harvested from guarantee / FCSM /
         # provision-bearing runs (2026-06-12 gap dump).
-        "_inst_guarantor_short_term": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
-        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
+        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantee_benefit_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
-        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False),
+        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_status": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, inject=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False),
         "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False
-        ),
-        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantor_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False),
         "is_guarantee_beneficial": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
-        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False),
         "pre_crm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
         # SA-CCR provenance pass-through (CCR runs only).
         "source_netting_set_id": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "ccr_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
@@ -2135,48 +2129,45 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "sa_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         # Path-dependent conditionals harvested from guarantee / FCSM /
         # provision-bearing runs (2026-06-12 gap dump).
-        "_inst_guarantor_short_term": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "double_default_unfunded_protection": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False
         ),
         "ead_calculation_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "expected_loss_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False),
+        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantee_benefit_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
-        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False),
+        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_method_used": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
         "guarantee_status": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, inject=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False),
         "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(
-            dtype=pl.Boolean, required=False, inject=False
-        ),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
         "guarantor_is_financial_sector_entity": EdgeColumn(
             dtype=pl.Boolean, required=False, inject=False
         ),
-        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantor_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantor_rw_irb": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantor_rw_post_nbd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
-        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False),
         "irb_lgd_double_default": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "is_double_default_eligible": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "is_guarantee_beneficial": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
-        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False),
         "pre_crm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "pre_crm_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "pre_fcsm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
-        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False),
         "risk_weight_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rw_direct": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rwa_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),

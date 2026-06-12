@@ -46,6 +46,8 @@ def _frame_with_expected_loss() -> pl.LazyFrame:
             "exposure_reference": ["EXP_001"],
             "expected_loss": [10_000.0],
             "provision_allocated": [6_000.0],
+            "ava_amount": [0.0],
+            "other_own_funds_reductions": [0.0],
         }
     )
 
@@ -151,6 +153,8 @@ class TestSlottingELShortfallErrorReporting:
                 "exposure_reference": ["SL_001"],
                 "expected_loss": [5_000.0],
                 "provision_allocated": [3_000.0],
+                "ava_amount": [0.0],
+                "other_own_funds_reductions": [0.0],
             }
         )
         lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
@@ -212,6 +216,8 @@ class TestIRBNamespaceELShortfallErrorReporting:
                 "exposure_reference": ["EXP_001"],
                 "expected_loss": [10_000.0],
                 "provision_allocated": [6_000.0],
+                "ava_amount": [0.0],
+                "other_own_funds_reductions": [0.0],
             }
         )
         lf.irb.compute_el_shortfall_excess(errors=errors).collect()

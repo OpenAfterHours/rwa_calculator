@@ -20,6 +20,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
@@ -54,7 +55,10 @@ def _firb_frame(
     lf = lf.with_columns(maturity_col)
     if is_sft is not None:
         lf = lf.with_columns(pl.lit(is_sft).alias("is_sft"))
-    return lf
+    # Pad the remaining crm_exit contract columns (is_sft=None falls back to
+    # the padded False default — column absence is no longer possible at the
+    # sealed branch input).
+    return _pad(lf)
 
 
 class TestFIRBRepoSFTMaturity:
@@ -76,7 +80,8 @@ class TestFIRBRepoSFTMaturity:
 
         assert result["maturity"][0] == pytest.approx(2.5)
 
-    def test_firb_sft_absent_column_keeps_default(self, crr_config: CalculationConfig) -> None:
+    def test_firb_sft_null_flag_keeps_default(self, crr_config: CalculationConfig) -> None:
+        """is_sft False/null (contract default) keeps the 2.5y supervisory M."""
         lf = _firb_frame(is_sft=None, maturity_date=None)
 
         result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
@@ -108,7 +113,9 @@ class TestFIRBRepoSFTMaturity:
             }
         )
 
-        result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        result = (
+            _pad(lf).irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        )
 
         # A-IRB uses maturity_date (clamped to [1, 5]) — not forced to 0.5y.
         assert result["maturity"][0] != pytest.approx(0.5)

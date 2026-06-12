@@ -256,12 +256,11 @@ class SupportingFactorCalculator:
         factor_tier2 = float(config.supporting_factors.sme_factor_above_threshold)
         infra_factor = float(config.supporting_factors.infrastructure_factor)
 
-        # Check for required columns
+        # Check for optional columns (is_sme / is_infrastructure /
+        # lending_group_reference are crm_exit contract columns and read
+        # directly).
         schema = exposures.collect_schema()
-        has_sme = "is_sme" in schema.names()
-        has_infra = "is_infrastructure" in schema.names()
         has_counterparty = "counterparty_reference" in schema.names()
-        has_lending_group = "lending_group_reference" in schema.names()
         has_btl = "is_buy_to_let" in schema.names()
         has_defaulted = "is_defaulted" in schema.names()
         has_drawn = "drawn_amount" in schema.names()
@@ -288,145 +287,129 @@ class SupportingFactorCalculator:
         # absent (test harnesses that bypass the pipeline) we fall back to the
         # legacy per-branch windowed sum.
         has_e_star_pre_computed = "e_star_group_drawn" in schema.names()
-        if has_sme:
-            if has_e_star_pre_computed:
-                # Pre-computed unified-frame E* (CRR Art. 501 cross-approach).
-                # Mirror to ``total_cp_drawn`` so downstream consumers and the
-                # output schema stay stable.
-                exposures = exposures.with_columns(
-                    pl.col("e_star_group_drawn").alias("total_cp_drawn")
+        if has_e_star_pre_computed:
+            # Pre-computed unified-frame E* (CRR Art. 501 cross-approach).
+            # Mirror to ``total_cp_drawn`` so downstream consumers and the
+            # output schema stay stable.
+            exposures = exposures.with_columns(pl.col("e_star_group_drawn").alias("total_cp_drawn"))
+            ead_for_tier = pl.col("total_cp_drawn")
+        elif has_counterparty:
+            group_key_expr = (
+                pl.when(pl.col("lending_group_reference").is_not_null())
+                .then(pl.col("lending_group_reference"))
+                .otherwise(pl.col("counterparty_reference"))
+            ).alias("_sme_group_key")
+
+            exposures = exposures.with_columns([group_key_expr])
+
+            # Art. 501 carve-out: "excluding claims or contingent claims
+            # secured on residential property collateral". Implemented as
+            # per-row netting of residential_collateral_value (capped at
+            # drawn so the contribution never goes negative), mirroring
+            # the retail-threshold logic in engine/hierarchy.py:2444-2447
+            # (Art. 123(c)). Defaulted exposures stay in E* (Art. 501
+            # explicitly includes "any exposure in default").
+            if has_res_coll:
+                res_coll_expr = (
+                    pl.col("residential_collateral_value")
+                    .fill_nan(0.0)
+                    .fill_null(0.0)
+                    .clip(lower_bound=0.0)
                 )
-                ead_for_tier = pl.col("total_cp_drawn")
-            elif has_lending_group or has_counterparty:
-                if has_lending_group and has_counterparty:
-                    group_key_expr = (
-                        pl.when(pl.col("lending_group_reference").is_not_null())
-                        .then(pl.col("lending_group_reference"))
-                        .otherwise(pl.col("counterparty_reference"))
-                    ).alias("_sme_group_key")
-                elif has_lending_group:
-                    group_key_expr = pl.col("lending_group_reference").alias("_sme_group_key")
-                else:
-                    group_key_expr = pl.col("counterparty_reference").alias("_sme_group_key")
-
-                exposures = exposures.with_columns([group_key_expr])
-
-                # Art. 501 carve-out: "excluding claims or contingent claims
-                # secured on residential property collateral". Implemented as
-                # per-row netting of residential_collateral_value (capped at
-                # drawn so the contribution never goes negative), mirroring
-                # the retail-threshold logic in engine/hierarchy.py:2444-2447
-                # (Art. 123(c)). Defaulted exposures stay in E* (Art. 501
-                # explicitly includes "any exposure in default").
-                if has_res_coll:
-                    res_coll_expr = (
-                        pl.col("residential_collateral_value")
-                        .fill_nan(0.0)
-                        .fill_null(0.0)
-                        .clip(lower_bound=0.0)
-                    )
-                    drawn_in_e_star = drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
-                else:
-                    drawn_in_e_star = drawn_expr
-
-                total_cp_drawn_expr = (
-                    pl.when(pl.col("is_sme") & pl.col("_sme_group_key").is_not_null())
-                    .then(drawn_in_e_star.sum().over("_sme_group_key"))
-                    .otherwise(drawn_in_e_star)
-                )
-                exposures = exposures.with_columns([total_cp_drawn_expr.alias("total_cp_drawn")])
-                ead_for_tier = pl.col("total_cp_drawn")
+                drawn_in_e_star = drawn_expr - pl.min_horizontal(res_coll_expr, drawn_expr)
             else:
-                # Neither lending_group_reference nor counterparty_reference is
-                # present — per-exposure fallback. This can misclassify the tier
-                # when multiple exposures to the same group individually fall
-                # below the EUR 2.5m threshold but aggregate above it (Art. 501
-                # requires aggregation across the SME's group of connected
-                # clients).
-                if errors is not None:
-                    errors.append(
-                        CalculationError(
-                            code=ERROR_SME_MISSING_COUNTERPARTY_REF,
-                            message=(
-                                "SME supporting factor: neither counterparty_reference "
-                                "nor lending_group_reference is available. Tier threshold "
-                                "(EUR 2.5m) evaluated per-exposure instead of across the "
-                                "SME's group of connected clients as required by CRR "
-                                "Art. 501. This may produce an incorrectly low supporting "
-                                "factor when multiple exposures to the same group "
-                                "individually fall below the threshold but aggregate above it."
-                            ),
-                            severity=ErrorSeverity.WARNING,
-                            category=ErrorCategory.DATA_QUALITY,
-                            regulatory_reference="CRR Art. 501",
-                            field_name="counterparty_reference",
-                        )
-                    )
-                ead_for_tier = drawn_expr
+                drawn_in_e_star = drawn_expr
 
-            # Calculate tiered factor based on aggregated drawn exposure
-            tier1_expr = (
-                pl.when(ead_for_tier <= threshold_gbp)
-                .then(ead_for_tier)
-                .otherwise(pl.lit(threshold_gbp))
+            total_cp_drawn_expr = (
+                pl.when(pl.col("is_sme") & pl.col("_sme_group_key").is_not_null())
+                .then(drawn_in_e_star.sum().over("_sme_group_key"))
+                .otherwise(drawn_in_e_star)
             )
-
-            tier2_expr = (
-                pl.when(ead_for_tier > threshold_gbp)
-                .then(ead_for_tier - threshold_gbp)
-                .otherwise(pl.lit(0.0))
-            )
-
-            # BTL exposures are excluded from the SME factor itself (the
-            # eligibility gate is separate from the E* netting). For E* the
-            # residential carve-out is applied via residential_collateral_value
-            # netting on drawn_in_e_star above; a typical BTL row's RRE
-            # collateral covers its drawn balance so its E* contribution is 0.
-            is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
-            # Defaulted exposures are excluded from SME factor (CRR Art. 501)
-            is_defaulted = pl.col("is_defaulted") if has_defaulted else pl.lit(False)
-            # Art. 501(2)(c): the SME supporting factor is keyed on annual
-            # turnover only — the Commission Rec 2003/361/EC total-assets
-            # fallback (used by other SME-classification gates and by the
-            # IRB Art. 153(4) correlation adjustment) does NOT apply here.
-            # Counterparties identified as SME via assets receive the
-            # CORPORATE_SME class and IRB correlation benefit but
-            # supporting_factor=1.0. The check is conditional on the column
-            # being present so test harnesses that build minimal LazyFrames
-            # without cp_annual_revenue still hit the legacy is_sme-only
-            # predicate; production pipelines always project this column via
-            # the classifier so the gate fires there.
-            has_revenue = "cp_annual_revenue" in schema.names()
-            turnover_eligible = (
-                (pl.col("cp_annual_revenue").is_not_null() & (pl.col("cp_annual_revenue") > 0))
-                if has_revenue
-                else pl.lit(True)
-            )
-
-            sme_eligible = pl.col("is_sme") & turnover_eligible & ~is_btl & ~is_defaulted
-
-            sme_factor_expr = (
-                pl.when(sme_eligible & (ead_for_tier > 0))
-                .then((tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier)
-                .when(sme_eligible & (ead_for_tier <= 0))
-                .then(
-                    # Zero drawn = all within tier 1 → pure 0.7619
-                    pl.lit(factor_tier1)
-                )
-                .otherwise(pl.lit(1.0))
-            )
+            exposures = exposures.with_columns([total_cp_drawn_expr.alias("total_cp_drawn")])
+            ead_for_tier = pl.col("total_cp_drawn")
         else:
-            sme_factor_expr = pl.lit(1.0)
+            # counterparty_reference is not present — per-exposure fallback.
+            # This can misclassify the tier when multiple exposures to the
+            # same group individually fall below the EUR 2.5m threshold but
+            # aggregate above it (Art. 501 requires aggregation across the
+            # SME's group of connected clients).
+            if errors is not None:
+                errors.append(
+                    CalculationError(
+                        code=ERROR_SME_MISSING_COUNTERPARTY_REF,
+                        message=(
+                            "SME supporting factor: neither counterparty_reference "
+                            "nor lending_group_reference is available. Tier threshold "
+                            "(EUR 2.5m) evaluated per-exposure instead of across the "
+                            "SME's group of connected clients as required by CRR "
+                            "Art. 501. This may produce an incorrectly low supporting "
+                            "factor when multiple exposures to the same group "
+                            "individually fall below the threshold but aggregate above it."
+                        ),
+                        severity=ErrorSeverity.WARNING,
+                        category=ErrorCategory.DATA_QUALITY,
+                        regulatory_reference="CRR Art. 501",
+                        field_name="counterparty_reference",
+                    )
+                )
+            ead_for_tier = drawn_expr
+
+        # Calculate tiered factor based on aggregated drawn exposure
+        tier1_expr = (
+            pl.when(ead_for_tier <= threshold_gbp)
+            .then(ead_for_tier)
+            .otherwise(pl.lit(threshold_gbp))
+        )
+
+        tier2_expr = (
+            pl.when(ead_for_tier > threshold_gbp)
+            .then(ead_for_tier - threshold_gbp)
+            .otherwise(pl.lit(0.0))
+        )
+
+        # BTL exposures are excluded from the SME factor itself (the
+        # eligibility gate is separate from the E* netting). For E* the
+        # residential carve-out is applied via residential_collateral_value
+        # netting on drawn_in_e_star above; a typical BTL row's RRE
+        # collateral covers its drawn balance so its E* contribution is 0.
+        is_btl = pl.col("is_buy_to_let") if has_btl else pl.lit(False)
+        # Defaulted exposures are excluded from SME factor (CRR Art. 501)
+        is_defaulted = pl.col("is_defaulted") if has_defaulted else pl.lit(False)
+        # Art. 501(2)(c): the SME supporting factor is keyed on annual
+        # turnover only — the Commission Rec 2003/361/EC total-assets
+        # fallback (used by other SME-classification gates and by the
+        # IRB Art. 153(4) correlation adjustment) does NOT apply here.
+        # Counterparties identified as SME via assets receive the
+        # CORPORATE_SME class and IRB correlation benefit but
+        # supporting_factor=1.0. The check is conditional on the column
+        # being present so test harnesses that build minimal LazyFrames
+        # without cp_annual_revenue still hit the legacy is_sme-only
+        # predicate; production pipelines always project this column via
+        # the classifier so the gate fires there.
+        has_revenue = "cp_annual_revenue" in schema.names()
+        turnover_eligible = (
+            (pl.col("cp_annual_revenue").is_not_null() & (pl.col("cp_annual_revenue") > 0))
+            if has_revenue
+            else pl.lit(True)
+        )
+
+        sme_eligible = pl.col("is_sme") & turnover_eligible & ~is_btl & ~is_defaulted
+
+        sme_factor_expr = (
+            pl.when(sme_eligible & (ead_for_tier > 0))
+            .then((tier1_expr * factor_tier1 + tier2_expr * factor_tier2) / ead_for_tier)
+            .when(sme_eligible & (ead_for_tier <= 0))
+            .then(
+                # Zero drawn = all within tier 1 → pure 0.7619
+                pl.lit(factor_tier1)
+            )
+            .otherwise(pl.lit(1.0))
+        )
 
         # Build infrastructure factor expression inline
-        if has_infra:
-            infra_factor_expr = (
-                pl.when(pl.col("is_infrastructure"))
-                .then(pl.lit(infra_factor))
-                .otherwise(pl.lit(1.0))
-            )
-        else:
-            infra_factor_expr = pl.lit(1.0)
+        infra_factor_expr = (
+            pl.when(pl.col("is_infrastructure")).then(pl.lit(infra_factor)).otherwise(pl.lit(1.0))
+        )
 
         # Compute minimum (most beneficial) factor
         min_factor_expr = pl.min_horizontal(sme_factor_expr, infra_factor_expr)
@@ -481,8 +464,8 @@ def compute_e_star_group_drawn(
     No-ops:
     - if supporting factors are disabled (Basel 3.1), returns the frame
       unchanged — column is not added
-    - if neither ``lending_group_reference`` nor ``counterparty_reference``
-      is present, emits the existing ``SF001`` warning and returns unchanged
+    - if ``counterparty_reference`` is not present (missing group key),
+      emits the existing ``SF001`` warning and returns unchanged
 
     Args:
         exposures: Unified-frame LazyFrame post-CRM, pre-branch-split
@@ -498,10 +481,7 @@ def compute_e_star_group_drawn(
     schema = exposures.collect_schema()
     names = schema.names()
 
-    has_counterparty = "counterparty_reference" in names
-    has_lending_group = "lending_group_reference" in names
-
-    if not has_counterparty and not has_lending_group:
+    if "counterparty_reference" not in names:
         if errors is not None:
             errors.append(
                 CalculationError(
@@ -544,16 +524,11 @@ def compute_e_star_group_drawn(
     else:
         drawn_in_e_star = drawn_expr
 
-    if has_lending_group and has_counterparty:
-        group_key_expr = (
-            pl.when(pl.col("lending_group_reference").is_not_null())
-            .then(pl.col("lending_group_reference"))
-            .otherwise(pl.col("counterparty_reference"))
-        )
-    elif has_lending_group:
-        group_key_expr = pl.col("lending_group_reference")
-    else:
-        group_key_expr = pl.col("counterparty_reference")
+    group_key_expr = (
+        pl.when(pl.col("lending_group_reference").is_not_null())
+        .then(pl.col("lending_group_reference"))
+        .otherwise(pl.col("counterparty_reference"))
+    )
 
     exposures = exposures.with_columns(group_key_expr.alias("_sme_group_key"))
     exposures = exposures.with_columns(

@@ -28,6 +28,7 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.validation import validate_bundle_values
 from rwa_calc.engine.hierarchy import HierarchyResolver
 from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - registers namespace
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 ONE_DAY = 1.0 / 365.0
@@ -86,7 +87,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.25, abs=1e-9)
 
@@ -103,7 +104,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         # Override > flag: M = 0.5 wins over M = 1/365
         assert result["maturity"][0] == pytest.approx(0.5, abs=1e-9)
@@ -120,7 +121,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(5.0, abs=1e-9)
 
@@ -136,7 +137,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-9)
 
@@ -154,7 +155,7 @@ class TestEffectiveMaturityOverride:
             }
         ).cast({"effective_maturity": pl.Float64})
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -173,7 +174,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = lf.irb.prepare_columns(crr_config).collect()
+        result = _pad(lf).irb.prepare_columns(crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
 
@@ -193,7 +194,7 @@ class TestOneDayMaturityFloorFlag:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-9)
 
@@ -209,7 +210,7 @@ class TestOneDayMaturityFloorFlag:
             }
         )
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -225,7 +226,7 @@ class TestOneDayMaturityFloorFlag:
             }
         ).cast({"has_one_day_maturity_floor": pl.Boolean})
 
-        result = lf.irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).irb.prepare_columns(b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 

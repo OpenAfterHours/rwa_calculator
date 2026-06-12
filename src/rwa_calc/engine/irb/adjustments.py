@@ -63,16 +63,7 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
     schema = lf.collect_schema()
     cols = schema.names()
 
-    # No-op if is_defaulted column doesn't exist
-    if "is_defaulted" not in cols:
-        return lf
-
     is_defaulted = pl.col("is_defaulted").fill_null(False)
-
-    # Ensure beel column exists (default 0.0)
-    if "beel" not in cols:
-        lf = lf.with_columns([pl.lit(0.0).alias("beel")])
-
     beel = pl.col("beel").fill_null(0.0)
 
     # K for defaulted: A-IRB = max(0, lgd_floored - beel), F-IRB = 0
@@ -301,9 +292,9 @@ def compute_el_shortfall_excess(
     Components (c) and (d) are captured via ``ava_amount`` and
     ``other_own_funds_reductions`` respectively.
 
-    Requires ``expected_loss`` to be computed first. If
-    ``provision_allocated`` is absent (no provisions in the input),
-    shortfall equals the full EL and excess is zero.
+    Requires ``expected_loss`` to be computed first. Null
+    ``provision_allocated`` values (no provisions resolved) are treated
+    as zero, so shortfall equals the full EL and excess is zero.
 
     Produces:
         el_shortfall: max(0, expected_loss - pool_b)
@@ -343,20 +334,11 @@ def compute_el_shortfall_excess(
 
     el = pl.col("expected_loss").fill_null(0.0)
 
-    if "provision_allocated" in cols:
-        prov = pl.col("provision_allocated").fill_null(0.0)
-    else:
-        # No provisions resolved — full EL is shortfall
-        prov = pl.lit(0.0)
-
+    prov = pl.col("provision_allocated").fill_null(0.0)
     # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
-    ava = pl.col("ava_amount").fill_null(0.0) if "ava_amount" in cols else pl.lit(0.0)
+    ava = pl.col("ava_amount").fill_null(0.0)
     # Art. 159(1)(d): Other own funds reductions
-    other_ofr = (
-        pl.col("other_own_funds_reductions").fill_null(0.0)
-        if "other_own_funds_reductions" in cols
-        else pl.lit(0.0)
-    )
+    other_ofr = pl.col("other_own_funds_reductions").fill_null(0.0)
 
     # Pool B = provisions + AVA + other own funds reductions
     pool_b = prov + ava + other_ofr

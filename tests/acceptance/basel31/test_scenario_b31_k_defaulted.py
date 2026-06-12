@@ -37,6 +37,7 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.irb import IRBLazyFrame  # noqa: F401 - registers namespace
 from rwa_calc.engine.sa.calculator import SACalculator
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================
@@ -96,7 +97,7 @@ def _build_b31_defaulted_exposure(
             "is_airb": [is_airb],
             "is_defaulted": [True],
         }
-    )
+    ).pipe(_pad)
 
 
 # =============================================================================

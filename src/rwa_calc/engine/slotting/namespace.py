@@ -156,9 +156,6 @@ class SlottingLazyFrame:
 
         to_add: list[pl.Expr] = []
 
-        if "ead_final" not in schema:
-            to_add.append(_resolve_ead_source(schema).alias("ead_final"))
-
         to_add.extend(_maturity_columns(schema, config))
         to_add.extend(_default_columns(schema))
 
@@ -254,17 +251,11 @@ class SlottingLazyFrame:
             )
 
         el = col("expected_loss").fill_null(0.0)
-        prov = (
-            col("provision_allocated").fill_null(0.0) if "provision_allocated" in cols else lit(0.0)
-        )
+        prov = col("provision_allocated").fill_null(0.0)
         # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
-        ava = col("ava_amount").fill_null(0.0) if "ava_amount" in cols else lit(0.0)
+        ava = col("ava_amount").fill_null(0.0)
         # Art. 159(1)(d): Other own funds reductions
-        other_ofr = (
-            col("other_own_funds_reductions").fill_null(0.0)
-            if "other_own_funds_reductions" in cols
-            else lit(0.0)
-        )
+        other_ofr = col("other_own_funds_reductions").fill_null(0.0)
         pool_b = prov + ava + other_ofr
 
         return self._lf.with_columns(
@@ -440,21 +431,12 @@ class SlottingExpr:
 # =============================================================================
 
 
-def _resolve_ead_source(schema: pl.Schema) -> pl.Expr:
-    """Pick the EAD source column, falling back to ead_pre_crm or zero."""
-    if "ead" in schema:
-        return col("ead")
-    if "ead_pre_crm" in schema:
-        return col("ead_pre_crm")
-    return lit(0.0)
-
-
 def _maturity_columns(schema: pl.Schema, config: CalculationConfig | None) -> list[pl.Expr]:
     """Derive is_short_maturity and remaining_maturity_years column expressions."""
     needs_short = "is_short_maturity" not in schema
 
-    if config is None or "maturity_date" not in schema:
-        # No config or no maturity_date — conservative default when missing.
+    if config is None:
+        # No config — conservative default when missing.
         return [lit(False).alias("is_short_maturity")] if needs_short else []
 
     remaining = exact_fractional_years_expr(config.reporting_date, "maturity_date")
@@ -475,11 +457,13 @@ def _maturity_columns(schema: pl.Schema, config: CalculationConfig | None) -> li
 
 
 def _default_columns(schema: pl.Schema) -> list[pl.Expr]:
-    """Provide default values for missing slotting metadata columns."""
+    """Provide default values for missing slotting metadata columns.
+
+    ``is_pre_operational`` is the only non-contract input here; the
+    crm_exit edge guarantees ``slotting_category`` / ``is_hvcre`` /
+    ``sl_type`` are always present.
+    """
     defaults = {
-        "slotting_category": lit("satisfactory"),
-        "is_hvcre": lit(False),
-        "sl_type": lit("project_finance"),
         "is_pre_operational": lit(False),
     }
     return [expr.alias(name) for name, expr in defaults.items() if name not in schema]

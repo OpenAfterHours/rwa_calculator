@@ -26,6 +26,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.p1_98.p1_98 import (
     EFFECTIVE_MATURITY,
     EXPECTED_CORRELATION,
@@ -219,7 +220,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],  # 2.5
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["pd_floored"][0] == pytest.approx(EXPECTED_PD_FLOORED, rel=1e-9)
 
@@ -238,7 +239,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["lgd_floored"][0] == pytest.approx(EXPECTED_LGD_FLOORED, abs=1e-9)
 
@@ -257,7 +258,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["correlation"][0] == pytest.approx(EXPECTED_CORRELATION, rel=1e-6)
 
@@ -276,7 +277,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["k"][0] == pytest.approx(EXPECTED_K, rel=1e-3)
 
@@ -295,7 +296,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["maturity_adjustment"][0] == pytest.approx(EXPECTED_MA, rel=1e-4)
 
@@ -314,7 +315,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["risk_weight"][0] == pytest.approx(EXPECTED_RISK_WEIGHT, rel=1e-3)
 
@@ -333,7 +334,7 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["rwa"][0] == pytest.approx(EXPECTED_RWA, rel=1e-3)
 
@@ -352,6 +353,6 @@ class TestP198FullHandCalc:
                 "effective_maturity": [EFFECTIVE_MATURITY],
             }
         )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        result = apply_irb_formulas(_pad(lf), b31_config).collect()
 
         assert result["expected_loss"][0] == pytest.approx(EXPECTED_EL, abs=1.0)

@@ -23,6 +23,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
@@ -68,7 +69,7 @@ def _build_defaulted_exposure(
             "is_airb": [is_airb],
             "is_defaulted": [True],
         }
-    )
+    ).pipe(_pad)
 
 
 # =============================================================================

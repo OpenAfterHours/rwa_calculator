@@ -821,6 +821,13 @@ class TestSpecialisedLendingSMEClassification:
         # that classifier-emitted is_sme flag produces the right factor when piped
         # into the slotting calculator.
         sl_rows = classified.all_exposures.filter(pl.col("sl_type").is_not_null())
+        # The classifier exit precedes CRM, so the CRM-owned columns do not
+        # exist yet; mirror the CRM output for this pipeline-bypass test
+        # (EAD = drawn, no provisions resolved).
+        sl_rows = sl_rows.with_columns(
+            pl.col("drawn_amount").alias("ead_final"),
+            pl.lit(0.0).alias("provision_allocated"),
+        )
 
         slotting_result = SlottingCalculator().calculate_branch(sl_rows, crr_config).collect()
 

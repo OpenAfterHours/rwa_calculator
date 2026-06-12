@@ -14,6 +14,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
@@ -299,7 +300,7 @@ class TestELGuaranteeAdjustment:
 
         # Run full pipeline then guarantee substitution
         result_pre = (
-            lf.irb.apply_firb_lgd(crr_config)
+            _pad(lf).irb.apply_firb_lgd(crr_config)
             .irb.prepare_columns(crr_config)
             .irb.apply_all_formulas(crr_config)
         )

@@ -68,7 +68,7 @@ def _equity_exposure(
         "counterparty_reference": [f"CP_{i:03d}" for i in range(n)],
         "exposure_class": [exposure_class] * n,
         "approach": [approach] * n,
-        "ead": [ead] * n,
+        "ead_final": [ead] * n,
         "cqs": [cqs] * n,
         "cp_entity_type": ["equity"] * n,
         "currency": ["GBP"] * n,
@@ -87,7 +87,7 @@ def _mixed_exposures(
             "counterparty_reference": "CP_001",
             "exposure_class": "corporate",
             "approach": "standardised",
-            "ead": 500_000.0,
+            "ead_final": 500_000.0,
             "cqs": 3,
             "cp_entity_type": "corporate",
             "currency": "GBP",
@@ -100,7 +100,7 @@ def _mixed_exposures(
                 "counterparty_reference": "CP_002",
                 "exposure_class": "equity",
                 "approach": "equity",
-                "ead": 1_000_000.0,
+                "ead_final": 1_000_000.0,
                 "cqs": None,
                 "cp_entity_type": "equity",
                 "currency": "GBP",
@@ -266,7 +266,7 @@ class TestSA005EquityWarning:
         assert len(errors) == 0
 
     def test_no_warning_when_approach_column_absent(self, calculator: SACalculator) -> None:
-        exposures = pl.DataFrame({"exposure_reference": ["X"], "ead": [100.0]}).lazy()
+        exposures = pl.DataFrame({"exposure_reference": ["X"], "ead_final": [100.0]}).lazy()
         errors: list[CalculationError] = []
         calculator._warn_equity_in_main_table(exposures, errors)
         assert len(errors) == 0
@@ -405,5 +405,5 @@ class TestEquityEdgeCases:
         result = calculator.calculate_branch(exposures, b31_config)
         df = result.collect()
         assert "exposure_reference" in df.columns
-        assert "ead" in df.columns
+        assert "ead_final" in df.columns
         assert "approach" in df.columns

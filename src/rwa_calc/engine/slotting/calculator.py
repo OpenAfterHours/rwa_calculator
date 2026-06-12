@@ -44,7 +44,6 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.errors import CalculationError
-from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
 if TYPE_CHECKING:
@@ -118,9 +117,8 @@ class SlottingCalculator:
         # Standardize output for aggregator
         schema = exposures.collect_schema()
         rwa_col = "rwa_final" if "rwa_final" in schema.names() else "rwa"
-        approach_expr = pl.col("approach") if "approach" in schema.names() else pl.lit("slotting")
         return exposures.with_columns(
-            approach_expr.alias("approach_applied"),
+            pl.col("approach").alias("approach_applied"),
             pl.col(rwa_col).alias("rwa_final"),
         )
 
@@ -151,15 +149,6 @@ class SlottingCalculator:
 
         # Rename rwa to rwa_pre_factor for the SupportingFactorCalculator
         exposures = exposures.with_columns(pl.col("rwa").alias("rwa_pre_factor"))
-
-        # Ensure supporting-factor flags exist (classifier may not have set them).
-        exposures = ensure_columns(
-            exposures,
-            {
-                "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
-                "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
-            },
-        )
 
         sf_calc = SupportingFactorCalculator()
         exposures = sf_calc.apply_factors(exposures, config, errors=errors)

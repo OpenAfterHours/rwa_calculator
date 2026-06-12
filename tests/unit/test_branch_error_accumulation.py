@@ -53,7 +53,8 @@ def _equity_in_main_table_frame() -> pl.LazyFrame:
             "counterparty_reference": ["CP_001"],
             "exposure_class": ["equity"],
             "approach": ["equity"],
-            "ead": [1_000_000.0],
+            "ead_final": [1_000_000.0],
+            "ead_gross": [1_000_000.0],
             "cqs": [None],
             "cp_entity_type": ["equity"],
             "currency": ["GBP"],
@@ -70,6 +71,7 @@ def _sa_corporate_frame() -> pl.LazyFrame:
             "exposure_class": ["corporate"],
             "approach": ["standardised"],
             "ead_final": [500_000.0],
+            "ead_gross": [500_000.0],
             "cqs": [3],
             "currency": ["GBP"],
         }
@@ -77,33 +79,59 @@ def _sa_corporate_frame() -> pl.LazyFrame:
 
 
 def _irb_sme_frame_without_group_key() -> pl.LazyFrame:
-    """Minimal IRB SME row with neither counterparty nor lending-group key."""
+    """IRB SME row carrying the contract columns the branch reads directly,
+    but with neither counterparty nor lending-group key (SF001 trigger)."""
     return pl.DataFrame(
         {
             "exposure_reference": ["SINGLE"],
-            "ead": [1_000_000.0],
+            "ead_final": [1_000_000.0],
             "pd": [0.01],
             "maturity": [2.5],
             "exposure_class": ["CORPORATE"],
             "seniority": ["senior"],
             "is_sme": [True],
-        }
+            "lgd": [None],
+            "lgd_post_crm": [0.45],
+            "purchased_receivables_subtype": [None],
+            "sme_size_metric_gbp": [None],
+            "is_infrastructure": [False],
+            "requires_fi_scalar": [False],
+            "has_one_day_maturity_floor": [False],
+            "is_defaulted": [False],
+            "beel": [0.0],
+            "provision_allocated": [0.0],
+            "ava_amount": [0.0],
+            "other_own_funds_reductions": [0.0],
+        },
+        schema_overrides={
+            "lgd": pl.Float64,
+            "purchased_receivables_subtype": pl.String,
+            "sme_size_metric_gbp": pl.Float64,
+        },
     ).lazy()
 
 
 def _slotting_sme_frame_without_group_key() -> pl.LazyFrame:
-    """Minimal slotting SME row with neither counterparty nor lending-group key."""
+    """Slotting SME row carrying the contract columns the branch reads
+    directly, but with neither counterparty nor lending-group key."""
     return pl.DataFrame(
         {
             "exposure_reference": ["SINGLE"],
-            "ead": [1_000_000.0],
+            "ead_final": [1_000_000.0],
+            "approach": ["slotting"],
             "slotting_category": ["STRONG"],
             "is_hvcre": [False],
             "sl_type": ["project_finance"],
             "is_short_maturity": [False],
             "is_pre_operational": [False],
             "is_sme": [True],
-        }
+            "is_infrastructure": [False],
+            "maturity_date": [None],
+            "provision_allocated": [0.0],
+            "ava_amount": [0.0],
+            "other_own_funds_reductions": [0.0],
+        },
+        schema_overrides={"maturity_date": pl.Date},
     ).lazy()
 
 

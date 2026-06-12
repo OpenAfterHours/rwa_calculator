@@ -195,6 +195,12 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "is_payroll_loan": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_qrre_transactor": ColumnSpec(pl.Boolean, default=False, required=False),
     "sl_type": ColumnSpec(pl.String, required=False),
+    "life_ins_collateral_value": ColumnSpec(pl.Float64, required=False),
+    "life_ins_secured_rw": ColumnSpec(pl.Float64, required=False),
+    # Null default: the crm_exit edge always carries the real ead_gross in
+    # production; B31 defaulted-RW tests that exercise the provision
+    # threshold must supply it explicitly.
+    "ead_gross": ColumnSpec(pl.Float64, required=False),
 }
 
 
@@ -1601,7 +1607,6 @@ def _apply_sovereign_floor_for_institutions(
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
-    ead_col: str,
 ) -> pl.LazyFrame:
     """Apply Art. 127 defaulted risk weight to the full post-CRM exposure.
 
@@ -1630,7 +1635,7 @@ def _apply_defaulted_risk_weight(
     - CRR Art. 127(1)-(2): CRR predecessor (pre-provision denominator)
     """
     _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
-    ead = pl.col(ead_col)
+    ead = pl.col("ead_final")
 
     if config.is_basel_3_1:
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
@@ -1643,14 +1648,8 @@ def _apply_defaulted_risk_weight(
         # PS1/26 Art. 127(1): denominator is "the outstanding amount of the
         # item or facility" — gross outstanding (pre-CRM, pre-provision).
         # Reconstruct from ead_gross (post-CCF, post-provision, pre-CRM) plus
-        # provision_deducted; fall back to the pre-CRM ead column when
-        # ead_gross is absent (single-exposure unit-test path), which yields
-        # the same gross outstanding when no FCCM collateral has been applied.
-        _schema_names = exposures.collect_schema().names()
-        if "ead_gross" in _schema_names:
-            gross_outstanding = pl.col("ead_gross") + pl.col("provision_deducted")
-        else:
-            gross_outstanding = ead + pl.col("provision_deducted")
+        # provision_deducted.
+        gross_outstanding = pl.col("ead_gross") + pl.col("provision_deducted")
         provision_rw = (
             pl.when(
                 pl.col("provision_allocated")
@@ -1760,9 +1759,7 @@ class SALazyFrame:
         # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
         # the base RW when-chain so defaulted exposures have their non-defaulted
         # base RW available for blending with collateral coverage.
-        schema = exposures.collect_schema()
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-        exposures = _apply_defaulted_risk_weight(exposures, config, ead_col)
+        exposures = _apply_defaulted_risk_weight(exposures, config)
 
         # Drop temporary columns used only during risk-weight application.
         schema_names = exposures.collect_schema().names()
@@ -1802,9 +1799,7 @@ class SALazyFrame:
         if "fcsm_collateral_value" not in schema.names():  # arch-exempt: early-exit guard
             return self._lf
 
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-
-        ead = pl.col(ead_col).fill_null(0.0)
+        ead = pl.col("ead_final").fill_null(0.0)
         fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
         fcsm_rw = pl.col("fcsm_collateral_rw").fill_null(0.0)
 
@@ -1848,12 +1843,7 @@ class SALazyFrame:
 
         This method is a no-op when no life insurance collateral is present.
         """
-        schema = self._lf.collect_schema()
-        if "life_ins_collateral_value" not in schema.names():  # arch-exempt: early-exit guard
-            return self._lf
-
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-        ead = pl.col(ead_col).fill_null(0.0)
+        ead = pl.col("ead_final").fill_null(0.0)
         li_value = pl.col("life_ins_collateral_value").fill_null(0.0)
         li_rw = pl.col("life_ins_secured_rw").fill_null(0.0)
 
@@ -1955,8 +1945,6 @@ class SALazyFrame:
         # Calculate blended risk weight using substitution approach
         # Only apply if guarantee is beneficial
         # RWA = (unguaranteed_portion * borrower_rw + guaranteed_portion * guarantor_rw) / ead_final
-        ead_col = "ead_final" if "ead_final" in cols else "ead"
-
         exposures = exposures.with_columns(
             [
                 # Blended risk weight when guarantee exists AND is beneficial
@@ -1971,7 +1959,7 @@ class SALazyFrame:
                         pl.col("unguaranteed_portion") * pl.col("pre_crm_risk_weight")
                         + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
                     )
-                    / pl.col(ead_col)
+                    / pl.col("ead_final")
                 )
                 # No guarantee, no guarantor RW, or non-beneficial - use original risk weight
                 .otherwise(pl.col("pre_crm_risk_weight"))
@@ -2189,16 +2177,13 @@ class SALazyFrame:
     def calculate_rwa(self) -> pl.LazyFrame:
         """Compute pre-factor RWA = EAD x Risk Weight.
 
-        Uses ``ead_final`` when present, else falls back to ``ead``.
         Emits ``rwa_pre_factor`` for downstream supporting-factor scaling.
 
         References:
         - CRR Art. 113(1)-(5): general rule for SA risk-weighted exposure amounts.
         """
-        schema = self._lf.collect_schema()
-        ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
         return self._lf.with_columns(
-            (pl.col(ead_col) * pl.col("risk_weight")).alias("rwa_pre_factor"),
+            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_pre_factor"),
         )
 
     @cites("CRR Art. 501")
@@ -2218,12 +2203,6 @@ class SALazyFrame:
             errors: Optional accumulator for data-quality warnings.
         """
         lf = ensure_columns(self._lf, _SUPPORTING_FACTOR_COLUMNS)
-
-        # ead_final is a multi-source derivation (fallback to ead), not a
-        # simple default — cannot use ensure_columns.
-        if "ead_final" not in lf.collect_schema().names():  # arch-exempt: derivation
-            lf = lf.with_columns(pl.col("ead").alias("ead_final"))
-
         return SupportingFactorCalculator().apply_factors(lf, config, errors=errors)
 
     def build_audit(self) -> pl.LazyFrame:

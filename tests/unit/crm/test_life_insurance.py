@@ -312,7 +312,7 @@ class TestSALifeInsuranceRWBlending:
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
-                "ead": [1000.0],
+                "ead_final": [1000.0],
                 "life_ins_collateral_value": [500.0],
                 "life_ins_secured_rw": [0.35],
             }
@@ -327,7 +327,7 @@ class TestSALifeInsuranceRWBlending:
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
-                "ead": [1000.0],
+                "ead_final": [1000.0],
                 "life_ins_collateral_value": [0.0],
                 "life_ins_secured_rw": [0.0],
             }
@@ -341,7 +341,7 @@ class TestSALifeInsuranceRWBlending:
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
-                "ead": [1000.0],
+                "ead_final": [1000.0],
                 "life_ins_collateral_value": [1000.0],
                 "life_ins_secured_rw": [0.20],
             }
@@ -357,7 +357,7 @@ class TestSALifeInsuranceRWBlending:
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
-                "ead": [1000.0],
+                "ead_final": [1000.0],
                 "life_ins_collateral_value": [1000.0],
                 "life_ins_secured_rw": [0.20],  # Lowest possible mapped RW
             }
@@ -366,14 +366,21 @@ class TestSALifeInsuranceRWBlending:
         # Should be exactly 0.20, not floored higher
         assert result["risk_weight"][0] == pytest.approx(0.20)
 
-    def test_missing_columns_is_noop(self) -> None:
+    def test_null_life_ins_values_is_noop(self) -> None:
+        """Null life-insurance values (contract columns present) are a no-op."""
         import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
 
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
-                "ead": [1000.0],
-            }
+                "ead_final": [1000.0],
+                "life_ins_collateral_value": [None],
+                "life_ins_secured_rw": [None],
+            },
+            schema_overrides={
+                "life_ins_collateral_value": pl.Float64,
+                "life_ins_secured_rw": pl.Float64,
+            },
         ).lazy()
         result = exposures.sa.apply_life_insurance_rw_mapping().collect()
         assert result["risk_weight"][0] == pytest.approx(1.00)

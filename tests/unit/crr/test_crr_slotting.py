@@ -21,6 +21,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad_slotting
 from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -55,7 +56,7 @@ def _slotting_audit(
     config: CalculationConfig,
 ) -> pl.DataFrame:
     """Run calculate_branch and project the slotting audit trail."""
-    result = calculator.calculate_branch(pl.LazyFrame(exposures_data), config)
+    result = calculator.calculate_branch(_pad_slotting(pl.LazyFrame(exposures_data)), config)
     return result.slotting.build_audit().collect()
 
 
@@ -411,7 +412,7 @@ class TestSlottingBundleProcessing:
                 "ead": [10_000_000.0],
             }
         )
-        result = slotting_calculator.calculate_branch(exposures, crr_config)
+        result = slotting_calculator.calculate_branch(_pad_slotting(exposures), crr_config)
         assert isinstance(result, pl.LazyFrame)
         df = result.collect()
         assert len(df) == 1
@@ -430,7 +431,7 @@ class TestSlottingBundleProcessing:
                 "ead": [10_000_000.0, 5_000_000.0],
             }
         )
-        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
+        df = slotting_calculator.calculate_branch(_pad_slotting(exposures), crr_config).collect()
         assert len(df) == 2
 
         # Check first exposure (non-HVCRE Strong = 70%)
@@ -457,7 +458,7 @@ class TestSlottingBundleProcessing:
                 "ead": [10_000_000.0],
             }
         )
-        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
+        df = slotting_calculator.calculate_branch(_pad_slotting(exposures), crr_config).collect()
         assert "approach_applied" in df.columns
         assert "rwa_final" in df.columns
 
@@ -706,7 +707,7 @@ class TestSlottingEdgeCases:
                 "ead": [10_000_000.0],
             }
         )
-        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
+        df = slotting_calculator.calculate_branch(_pad_slotting(exposures), crr_config).collect()
         assert df["risk_weight"][0] == pytest.approx(0.70)
 
     def test_unknown_category_defaults_to_satisfactory(
@@ -723,7 +724,7 @@ class TestSlottingEdgeCases:
                 "ead": [10_000_000.0],
             }
         )
-        df = slotting_calculator.calculate_branch(exposures, crr_config).collect()
+        df = slotting_calculator.calculate_branch(_pad_slotting(exposures), crr_config).collect()
         assert df["risk_weight"][0] == pytest.approx(1.15)
 
     def test_zero_ead_produces_zero_rwa(

@@ -78,6 +78,7 @@ import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespac
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
+from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.p1_160.p1_160 import (
     AMOUNT_COVERED,
     BORROWER_REF,
@@ -236,7 +237,7 @@ def _build_p1160_crm_and_irb_result(
 
     # IRB pipeline: classify → F-IRB LGD → prepare → formulas → EL → guarantee sub
     result = (
-        exposures_with_guarantee.irb.classify_approach(config)
+        _pad(exposures_with_guarantee).irb.classify_approach(config)
         .irb.apply_firb_lgd(config)
         .irb.prepare_columns(config)
         .irb.apply_all_formulas(config)

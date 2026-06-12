@@ -26,7 +26,6 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
@@ -42,7 +41,7 @@ from rwa_calc.domain.enums import (
 from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.generator import COREPGenerator
-from tests.fixtures.resolved_bundle import make_resolved_bundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Helpers (same pattern as test_b31_approach_restrictions.py)
@@ -152,7 +151,7 @@ def _make_bundle(
         )
     return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={

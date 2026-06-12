@@ -19,13 +19,12 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
-from tests.fixtures.resolved_bundle import make_resolved_bundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 _TEST_MODEL_ID = "TEST_MODEL"
 
@@ -92,7 +91,7 @@ def create_test_bundle(
     ).lazy()
 
     # Create CounterpartyLookup with all required fields
-    counterparty_lookup = CounterpartyLookup(
+    counterparty_lookup = make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=pl.LazyFrame(
             schema={

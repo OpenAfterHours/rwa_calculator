@@ -54,7 +54,12 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
-from rwa_calc.contracts.edges import HIERARCHY_RESOLVED_EDGE, RAW_TABLE_EDGES, seal
+from rwa_calc.contracts.edges import (
+    CP_LOOKUP_EDGES,
+    HIERARCHY_RESOLVED_EDGE,
+    RAW_TABLE_EDGES,
+    seal,
+)
 from rwa_calc.contracts.errors import (
     ERROR_DUPLICATE_KEY,
     ERROR_HIERARCHY_DEPTH,
@@ -281,16 +286,24 @@ class HierarchyResolver:
             rating_info,
         )
 
+        # Producer seal (Phase 3): pure plan-level conform + brand per
+        # lookup frame — the classifier's cp_* enrichment and the CRM
+        # guarantor resolution consume these shapes as contract.
         return CounterpartyLookup(
-            counterparties=enriched_counterparties,
-            parent_mappings=org_mappings.select(
-                [
-                    "child_counterparty_reference",
-                    "parent_counterparty_reference",
-                ]
+            counterparties=seal(enriched_counterparties, CP_LOOKUP_EDGES["counterparties"]),
+            parent_mappings=seal(
+                org_mappings.select(
+                    [
+                        "child_counterparty_reference",
+                        "parent_counterparty_reference",
+                    ]
+                ),
+                CP_LOOKUP_EDGES["parent_mappings"],
             ),
-            ultimate_parent_mappings=ultimate_parents,
-            rating_inheritance=rating_info,
+            ultimate_parent_mappings=seal(
+                ultimate_parents, CP_LOOKUP_EDGES["ultimate_parent_mappings"]
+            ),
+            rating_inheritance=seal(rating_info, CP_LOOKUP_EDGES["rating_inheritance"]),
         ), errors
 
     def _build_ultimate_parent_lazy(

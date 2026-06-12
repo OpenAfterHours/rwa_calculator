@@ -12,6 +12,7 @@ construction is factored here while each test file keeps its own divergent
 from __future__ import annotations
 
 import polars as pl
+from tests.fixtures.resolved_bundle import make_counterparty_lookup
 
 from rwa_calc.contracts.bundles import CounterpartyLookup
 
@@ -41,7 +42,7 @@ def empty_counterparty_lookup() -> CounterpartyLookup:
     rating_inheritance = pl.LazyFrame(
         schema={"counterparty_reference": pl.String, "cqs": pl.Int8, "rating_type": pl.String}
     )
-    return CounterpartyLookup(
+    return make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=parent_mappings,
         ultimate_parent_mappings=ultimate_parent_mappings,

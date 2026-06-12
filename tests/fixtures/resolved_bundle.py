@@ -27,10 +27,12 @@ from typing import Any
 import polars as pl
 
 from rwa_calc.contracts.bundles import (
+    CounterpartyLookup,
     ResolvedHierarchyBundle,
     create_empty_counterparty_lookup,
 )
-from rwa_calc.contracts.edges import HIERARCHY_EXIT_EDGE, seal_lenient
+from rwa_calc.contracts.edges import CP_LOOKUP_EDGES, HIERARCHY_EXIT_EDGE, seal_lenient
+from tests.fixtures.raw_bundle import seal_raw_table
 
 
 def seal_hierarchy_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
@@ -55,4 +57,43 @@ def make_resolved_bundle(
     field passes through untouched.
     """
     kwargs.setdefault("counterparty_lookup", create_empty_counterparty_lookup())
+    # Registered pass-through fields must carry their loader-edge brands.
+    for raw_field in (
+        "collateral_links",
+        "ciu_holdings",
+        "specialised_lending",
+        "model_permissions",
+    ):
+        frame = kwargs.get(raw_field)
+        if frame is not None:
+            kwargs[raw_field] = seal_raw_table(frame, raw_field)
     return ResolvedHierarchyBundle(exposures=seal_hierarchy_exit(exposures), **kwargs)
+
+
+def make_counterparty_lookup(
+    counterparties: pl.LazyFrame | pl.DataFrame | None = None,
+    parent_mappings: pl.LazyFrame | pl.DataFrame | None = None,
+    ultimate_parent_mappings: pl.LazyFrame | pl.DataFrame | None = None,
+    rating_inheritance: pl.LazyFrame | pl.DataFrame | None = None,
+) -> CounterpartyLookup:
+    """Drop-in replacement for direct ``CounterpartyLookup(...)``.
+
+    Each frame is sealed (leniently) against its cp_lookup_* edge contract;
+    unspecified frames default to sealed empties.
+    """
+    frames: dict[str, pl.LazyFrame] = {}
+    supplied = {
+        "counterparties": counterparties,
+        "parent_mappings": parent_mappings,
+        "ultimate_parent_mappings": ultimate_parent_mappings,
+        "rating_inheritance": rating_inheritance,
+    }
+    for field_name, frame in supplied.items():
+        edge = CP_LOOKUP_EDGES[field_name]
+        if frame is None:
+            frames[field_name] = edge.empty_frame()
+        else:
+            lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+            sealed, _missing = seal_lenient(lf, edge)
+            frames[field_name] = sealed
+    return CounterpartyLookup(**frames)

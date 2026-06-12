@@ -27,6 +27,7 @@ from rwa_calc.contracts.errors import ERROR_DUPLICATE_KEY
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.hierarchy import HierarchyResolver
 from tests.fixtures.raw_bundle import make_raw_bundle, seal_raw_table
+from tests.fixtures.resolved_bundle import make_counterparty_lookup
 
 if TYPE_CHECKING:
     pass
@@ -3000,7 +3001,7 @@ class TestSameFacilityAndLoanReference:
             ]
         )
 
-        counterparty_lookup = CounterpartyLookup(
+        counterparty_lookup = make_counterparty_lookup(
             counterparties=enriched_counterparties,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -3079,7 +3080,7 @@ class TestSameFacilityAndLoanReference:
             ]
         )
 
-        counterparty_lookup = CounterpartyLookup(
+        counterparty_lookup = make_counterparty_lookup(
             counterparties=enriched_counterparties,
             parent_mappings=pl.LazyFrame(
                 schema={
@@ -3506,7 +3507,7 @@ class TestLendingGroupDuplicateMembership:
                 pl.lit(None).cast(pl.Float64).alias("pd"),
             ]
         )
-        return CounterpartyLookup(
+        return make_counterparty_lookup(
             counterparties=enriched,
             parent_mappings=pl.LazyFrame(
                 schema={

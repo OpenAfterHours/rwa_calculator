@@ -21,7 +21,6 @@ import pytest
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     CRMAdjustedBundle,
     RawDataBundle,
     ResolvedHierarchyBundle,
@@ -37,7 +36,7 @@ from rwa_calc.engine.pipeline import (
     create_test_pipeline,
 )
 from tests.fixtures.raw_bundle import make_raw_bundle
-from tests.fixtures.resolved_bundle import make_resolved_bundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 # =============================================================================
 # Test Fixtures
@@ -290,7 +289,7 @@ def mock_resolved_bundle() -> ResolvedHierarchyBundle:
         }
     )
 
-    counterparty_lookup = CounterpartyLookup(
+    counterparty_lookup = make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=pl.LazyFrame(
             schema={

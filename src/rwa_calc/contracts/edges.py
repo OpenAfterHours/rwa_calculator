@@ -549,3 +549,101 @@ CCR_EXIT_EDGE: EdgeContract = EdgeContract(
 )
 """The CCR stage exit: the hierarchy_exit shape plus the SA-CCR synthetic-row
 provenance columns. Only produced when the run has a derivatives book."""
+
+
+# ---------------------------------------------------------------------------
+# Edge definitions — counterparty lookup (hierarchy side-products)
+# ---------------------------------------------------------------------------
+# The four CounterpartyLookup frames are hierarchy-internal products consumed
+# by the classifier (cp_* enrichment join) and CRM (guarantor resolution).
+# Seeded from the observed schemas (2026-06-12), verified shape-stable with
+# and without optional input tables (org_mappings / ratings sealed at the
+# loader edge guarantee fixed shapes).
+
+CP_LOOKUP_COUNTERPARTIES_EDGE: EdgeContract = EdgeContract(
+    name="cp_lookup_counterparties",
+    columns={
+        "counterparty_reference": EdgeColumn(dtype=pl.String),
+        "counterparty_name": EdgeColumn(dtype=pl.String),
+        "entity_type": EdgeColumn(dtype=pl.String),
+        "country_code": EdgeColumn(dtype=pl.String),
+        "annual_revenue": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 501(2)(b)",
+            null_meaning="null = turnover unknown (assets fallback / no SME factor) — never 0.0",
+        ),
+        "total_assets": EdgeColumn(dtype=pl.Float64, citation="PS1/26 Art. 153(4)"),
+        "default_status": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 178"),
+        "sector_code": EdgeColumn(dtype=pl.String),
+        "apply_fi_scalar": EdgeColumn(dtype=pl.Boolean),
+        "is_managed_as_retail": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 123A"),
+        "is_natural_person": EdgeColumn(dtype=pl.Boolean),
+        "qualifying_property_count": EdgeColumn(dtype=pl.Int32),
+        "is_social_housing": EdgeColumn(dtype=pl.Boolean),
+        "is_financial_sector_entity": EdgeColumn(dtype=pl.Boolean),
+        "scra_grade": EdgeColumn(dtype=pl.String, citation="PS1/26 Art. 121"),
+        "is_investment_grade": EdgeColumn(dtype=pl.Boolean),
+        "is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 305-306"),
+        "borrower_income_currency": EdgeColumn(dtype=pl.String),
+        "sovereign_cqs": EdgeColumn(dtype=pl.Int32),
+        "local_currency": EdgeColumn(dtype=pl.String),
+        "institution_cqs": EdgeColumn(dtype=pl.Int8),
+        "eca_score": EdgeColumn(dtype=pl.Int8, citation="CRR Art. 137"),
+        "is_core_market_participant": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 227(3)"),
+        "is_qccp": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 107"),
+        "counterparty_type": EdgeColumn(dtype=pl.String),
+        "parent_counterparty_reference": EdgeColumn(dtype=pl.String),
+        "ultimate_parent_reference": EdgeColumn(dtype=pl.String),
+        "counterparty_hierarchy_depth": EdgeColumn(dtype=pl.Int32),
+        "cqs": EdgeColumn(dtype=pl.Int8),
+        "pd": EdgeColumn(dtype=pl.Float64),
+        "internal_pd": EdgeColumn(dtype=pl.Float64),
+        "external_cqs": EdgeColumn(dtype=pl.Int8),
+        "external_rating_is_issue_specific": EdgeColumn(dtype=pl.Boolean),
+        "internal_model_id": EdgeColumn(dtype=pl.String),
+        "counterparty_has_parent": EdgeColumn(dtype=pl.Boolean),
+    },
+)
+
+CP_LOOKUP_PARENTS_EDGE: EdgeContract = EdgeContract(
+    name="cp_lookup_parents",
+    columns={
+        "child_counterparty_reference": EdgeColumn(dtype=pl.String),
+        "parent_counterparty_reference": EdgeColumn(dtype=pl.String),
+    },
+)
+
+CP_LOOKUP_ULTIMATE_PARENTS_EDGE: EdgeContract = EdgeContract(
+    name="cp_lookup_ultimate_parents",
+    columns={
+        "counterparty_reference": EdgeColumn(dtype=pl.String),
+        "ultimate_parent_reference": EdgeColumn(dtype=pl.String),
+        "hierarchy_depth": EdgeColumn(dtype=pl.Int32),
+    },
+)
+
+CP_LOOKUP_RATING_INHERITANCE_EDGE: EdgeContract = EdgeContract(
+    name="cp_lookup_rating_inheritance",
+    columns={
+        "counterparty_reference": EdgeColumn(dtype=pl.String),
+        # Per-type inheritance: own internal -> parent internal, own
+        # external -> parent external, resolved independently. CQS is an
+        # external-only concept; internal ratings carry PD.
+        "internal_pd": EdgeColumn(dtype=pl.Float64),
+        "internal_model_id": EdgeColumn(dtype=pl.String),
+        "external_cqs": EdgeColumn(dtype=pl.Int8),
+        "external_rating_is_issue_specific": EdgeColumn(
+            dtype=pl.Boolean, citation="PS1/26 Art. 139(2B)"
+        ),
+        "cqs": EdgeColumn(dtype=pl.Int8),
+        "pd": EdgeColumn(dtype=pl.Float64),
+    },
+)
+
+CP_LOOKUP_EDGES: dict[str, EdgeContract] = {
+    "counterparties": CP_LOOKUP_COUNTERPARTIES_EDGE,
+    "parent_mappings": CP_LOOKUP_PARENTS_EDGE,
+    "ultimate_parent_mappings": CP_LOOKUP_ULTIMATE_PARENTS_EDGE,
+    "rating_inheritance": CP_LOOKUP_RATING_INHERITANCE_EDGE,
+}
+"""CounterpartyLookup field name -> edge contract."""

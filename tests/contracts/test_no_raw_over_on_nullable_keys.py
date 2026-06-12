@@ -50,8 +50,9 @@ LINE_ALLOWLIST: dict[str, frozenset[int]] = {
     # `counterparty_reference.is_not_null()` to the upstream filter, so these
     # `.over("counterparty_reference")` calls operate on a frame with no
     # null-keyed rows. See the comment block above the per_agency_latest
-    # filter in engine/hierarchy.py.
-    "src/rwa_calc/engine/hierarchy.py": frozenset({437, 438}),
+    # filter in engine/hierarchy.py. (Line numbers shifted +13 by the Phase 3
+    # CounterpartyLookup producer-seal block added above them.)
+    "src/rwa_calc/engine/hierarchy.py": frozenset({450, 451}),
 }
 
 

@@ -48,6 +48,19 @@ if TYPE_CHECKING:
 # re-applies); either brand is legitimate on the field.
 SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
     "ResolvedHierarchyBundle.exposures": ("hierarchy_resolved", "hierarchy_exit", "ccr_exit"),
+    "CounterpartyLookup.counterparties": "cp_lookup_counterparties",
+    "CounterpartyLookup.parent_mappings": "cp_lookup_parents",
+    "CounterpartyLookup.ultimate_parent_mappings": "cp_lookup_ultimate_parents",
+    "CounterpartyLookup.rating_inheritance": "cp_lookup_rating_inheritance",
+    # Untransformed pass-throughs: the resolver forwards the loader-sealed
+    # objects unchanged, so the raw_* brands are still attached. (The
+    # FX-converted side frames — collateral/guarantees/provisions/
+    # equity_exposures — are transformed and get their own contracts with
+    # the CRM edge work.)
+    "ResolvedHierarchyBundle.collateral_links": "raw_collateral_links",
+    "ResolvedHierarchyBundle.ciu_holdings": "raw_ciu_holdings",
+    "ResolvedHierarchyBundle.specialised_lending": "raw_specialised_lending",
+    "ResolvedHierarchyBundle.model_permissions": "raw_model_permissions",
 } | {
     f"RawDataBundle.{_field}": f"raw_{_field}"
     for _field in (
@@ -171,6 +184,9 @@ class CounterpartyLookup:
     parent_mappings: pl.LazyFrame
     ultimate_parent_mappings: pl.LazyFrame
     rating_inheritance: pl.LazyFrame
+
+    def __post_init__(self) -> None:
+        _validate_sealed_frames(self)
 
 
 @dataclass(frozen=True)
@@ -905,34 +921,18 @@ def create_empty_raw_data_bundle() -> RawDataBundle:
 
 
 def create_empty_counterparty_lookup() -> CounterpartyLookup:
-    """Create an empty CounterpartyLookup for testing."""
-    import polars as pl
+    """Create an empty CounterpartyLookup for testing.
+
+    Every frame is an empty, schema-complete, SEALED frame from its
+    cp_lookup_* edge contract.
+    """
+    from rwa_calc.contracts.edges import CP_LOOKUP_EDGES
 
     return CounterpartyLookup(
-        counterparties=pl.LazyFrame(schema={"counterparty_reference": pl.String}),
-        parent_mappings=pl.LazyFrame(
-            schema={
-                "child_counterparty_reference": pl.String,
-                "parent_counterparty_reference": pl.String,
-            }
-        ),
-        ultimate_parent_mappings=pl.LazyFrame(
-            schema={
-                "counterparty_reference": pl.String,
-                "ultimate_parent_reference": pl.String,
-                "hierarchy_depth": pl.Int32,
-            }
-        ),
-        rating_inheritance=pl.LazyFrame(
-            schema={
-                "counterparty_reference": pl.String,
-                "internal_pd": pl.Float64,
-                "internal_model_id": pl.String,
-                "external_cqs": pl.Int8,
-                "cqs": pl.Int8,
-                "pd": pl.Float64,
-            }
-        ),
+        counterparties=CP_LOOKUP_EDGES["counterparties"].empty_frame(),
+        parent_mappings=CP_LOOKUP_EDGES["parent_mappings"].empty_frame(),
+        ultimate_parent_mappings=CP_LOOKUP_EDGES["ultimate_parent_mappings"].empty_frame(),
+        rating_inheritance=CP_LOOKUP_EDGES["rating_inheritance"].empty_frame(),
     )
 
 

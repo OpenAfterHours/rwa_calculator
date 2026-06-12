@@ -20,13 +20,12 @@ import pytest
 
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
-    CounterpartyLookup,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, ExposureClass, PermissionMode
 from rwa_calc.engine.classifier import ExposureClassifier
-from tests.fixtures.resolved_bundle import make_resolved_bundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 if TYPE_CHECKING:
     pass
@@ -361,7 +360,7 @@ def create_resolved_bundle(
 
     return make_resolved_bundle(
         exposures=exposures,
-        counterparty_lookup=CounterpartyLookup(
+        counterparty_lookup=make_counterparty_lookup(
             counterparties=enriched_cp,
             parent_mappings=pl.LazyFrame(
                 schema={

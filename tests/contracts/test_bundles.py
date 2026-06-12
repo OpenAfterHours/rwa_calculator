@@ -7,7 +7,7 @@ empty bundles for testing.
 import polars as pl
 import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
-from tests.fixtures.resolved_bundle import make_resolved_bundle
+from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle
 
 from rwa_calc.contracts.bundles import (
     AggregatedResultBundle,
@@ -72,7 +72,7 @@ class TestCounterpartyLookup:
 
     def test_create_with_lookups(self):
         """Should create lookup with hierarchy mappings as LazyFrames."""
-        lookup = CounterpartyLookup(
+        lookup = make_counterparty_lookup(
             counterparties=pl.LazyFrame({"counterparty_reference": ["A", "B", "C"]}),
             parent_mappings=pl.LazyFrame(
                 {

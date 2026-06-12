@@ -20,6 +20,7 @@ from datetime import date
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_counterparty_lookup
 
 from rwa_calc.contracts.bundles import CounterpartyLookup
 from rwa_calc.contracts.config import CalculationConfig
@@ -53,7 +54,7 @@ def _counterparty_lookup(
                 "pd": pl.Float64,
             }
         )
-    return CounterpartyLookup(
+    return make_counterparty_lookup(
         counterparties=counterparties,
         parent_mappings=pl.LazyFrame(
             schema={

@@ -26,6 +26,10 @@ Checks machine-verifiable invariants from CLAUDE.md:
     `.collect_schema(` probes, max engine module LOC) may not INCREASE
     above the committed baseline in ``scripts/arch_metrics.json``, and the
     watchfire `@cites(` decorator count may not DECREASE below it.
+    ``max_engine_module_loc`` doubles as the Phase-4 module-size
+    mechanism: the documented target is a ~600-LOC engine-module ceiling,
+    and the banked value (monotone decreasing) must keep falling toward
+    it as Phase 5+ shrinks the remaining big modules.
     Regenerate after an improvement with
     ``python scripts/arch_check.py --update-baseline``.
 12. Import direction: contracts/ imports nothing above domain/data;
@@ -34,12 +38,29 @@ Checks machine-verifiable invariants from CLAUDE.md:
     Known legacy inversions are allowlisted in
     ``IMPORT_DIRECTION_ALLOWLIST`` and retired by the architecture
     migration phases (docs/plans/target-architecture-migration.md).
+13. No bare ``pl.LazyFrame()`` / ``pl.DataFrame().lazy()`` sentinels in
+    engine/** — optional frames are ``None`` (migration Phase 2).
+14. No Polars namespace registrations anywhere under src/ —
+    ``register_(lazyframe|dataframe|expr|series)_namespace`` is extinct
+    (migration Phase 4); calculator logic is plain typed functions
+    composed via ``.pipe(fn, config)``. No allowlist.
+15. The stage registry (``engine/registry.py``) is literal: its module
+    body is the docstring, imports, the module logger, and assignments
+    whose value is a literal tuple of ``StageSpec(...)`` calls with
+    literal/name/attribute arguments — no conditionals, loops,
+    comprehensions, or function defs.
+16. Stage anatomy: every ``StageSpec.fn`` in the registry is
+    ``<stage module>.run`` resolved from ``rwa_calc.engine.stages``, and
+    the stage module (single module or package ``__init__``) binds a
+    top-level ``run``. Stage packages without a registry slot are pinned
+    in ``STAGE_PACKAGES_WITHOUT_RUN`` (shrink-only).
 
 Checks 5, 6, 7 enforce the data/engine separation. Check 8 enforces the
 observability contract (see docs/specifications/observability.md). Check 9
 keeps the watchfire citation matrix honest. Check 10 prevents drift in the
 module-docstring citation contract (see docs/development/citation-tracking.md).
-Checks 11 and 12 are migration-plan Phase 0 guards (see
+Checks 11 and 12 are migration-plan Phase 0 guards, check 13 a Phase 2
+guard, and checks 14-16 the Phase 4 uniform-stage-model guards (see
 docs/plans/target-architecture-migration.md). Rare intentional exceptions
 are listed in the ALLOWLIST dicts below; adding a new entry there should be
 a deliberate, reviewed decision.
@@ -215,6 +236,11 @@ SCHEMA_DEFAULTS_ALLOWLIST: set[str] = {
 RATCHET_BASELINE_PATH = Path(__file__).resolve().parent / "arch_metrics.json"
 
 # Metrics where the measured value may not INCREASE above the baseline.
+# ``max_engine_module_loc`` is also the Phase-4 module-size mechanism: the
+# documented target is a ~600-LOC engine-module ceiling, and the banked value
+# (monotone decreasing) must keep falling toward it as Phase 5+ shrinks the
+# remaining big modules. Do not add a separate hard ceiling while modules
+# above 600 LOC remain — the ratchet IS the enforcement.
 RATCHET_MAX_METRICS = (
     "engine_fill_null_sites",
     "engine_presence_guard_sites",
@@ -268,6 +294,30 @@ IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
         "rwa_calc.analysis",
         "rwa_calc.rulebook",
     ),
+}
+
+# ---------------------------------------------------------------------------
+# Checks 14-16 — Phase 4 uniform-stage-model guards
+# ---------------------------------------------------------------------------
+
+# Check 14: the Polars namespace pattern is extinct (Phase 4, Slice 7).
+_NAMESPACE_REGISTRATION_PATTERN = re.compile(
+    r"register_(?:lazyframe|dataframe|expr|series)_namespace"
+)
+
+# Checks 15/16: the literal stage registry and the stages package root.
+_REGISTRY_REL_PATH = ("engine", "registry.py")
+_STAGES_IMPORT_PACKAGE = "rwa_calc.engine.stages"
+
+# Check 16: stage packages under engine/stages/ that deliberately expose no
+# top-level ``run`` because they are not (yet) registry stages. Shrink-only:
+# an entry is deleted when its package gains a registry slot, and a stale
+# entry (package gone, or now exposing ``run``) is itself a violation.
+STAGE_PACKAGES_WITHOUT_RUN: set[str] = {
+    # FX code seam landed in Phase 4 Slice 4; registry promotion deferred —
+    # convert_resolved_frames is invoked from stages/hierarchy/resolver.py at
+    # the unify -> enrich seam.
+    "fx",
 }
 
 # Known legacy inversions, allowlisted until the migration phase that retires
@@ -819,6 +869,11 @@ def check_ratchet_metrics(path: Path) -> list[str]:
     See docs/plans/target-architecture-migration.md (Phase 0). The baseline is
     a committed file; improvements are banked by rewriting it via
     ``--update-baseline`` in the same commit as the improvement.
+
+    ``max_engine_module_loc`` is also the Phase-4 module-size mechanism: the
+    documented target is a ~600-LOC engine-module ceiling, and the banked
+    value (monotone decreasing) must keep falling toward it as Phase 5+
+    shrinks the remaining big modules.
     """
     if not (path / "engine").is_dir():
         return []  # not the package root (e.g. a subpath run) — skip
@@ -967,6 +1022,253 @@ def check_no_empty_frame_sentinels(path: Path) -> list[str]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Checks 14-16 — Phase 4 uniform-stage-model guards
+# ---------------------------------------------------------------------------
+
+
+def check_no_polars_namespace_registrations(path: Path) -> list[str]:
+    """No Polars namespace registrations anywhere under the target path.
+
+    The namespace pattern (``@pl.api.register_lazyframe_namespace`` and
+    siblings) was retired in migration Phase 4 (Slice 7) — calculator logic
+    is plain typed functions composed via ``.pipe(fn, config)``. The scan
+    covers the whole package (not just engine/) so the pattern cannot
+    migrate to analysis/ui. No allowlist.
+    """
+    violations: list[str] = []
+    for py_file in sorted(path.rglob("*.py")):
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        code_lines = _code_line_numbers(text)
+        for i, line in enumerate(text.split("\n"), 1):
+            if code_lines is not None and i not in code_lines:
+                continue
+            if _NAMESPACE_REGISTRATION_PATTERN.search(line):
+                violations.append(
+                    f"  {py_file}:{i}: Polars namespace registration -- the pattern is "
+                    "extinct (Phase 4); write plain typed functions composed via .pipe()"
+                )
+    return violations
+
+
+def _registry_path(path: Path) -> Path:
+    """The literal stage registry under the target package root."""
+    return path.joinpath(*_REGISTRY_REL_PATH)
+
+
+def _is_module_logger_assign(stmt: ast.stmt) -> bool:
+    """True for the canonical ``logger = logging.getLogger(__name__)`` line."""
+    if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+        return False
+    target = stmt.targets[0]
+    return isinstance(target, ast.Name) and target.id == "logger"
+
+
+def _stage_spec_element_violation(node: ast.AST) -> str | None:
+    """Reason a registry tuple element is not a literal StageSpec call, or None."""
+    if not isinstance(node, ast.Call):
+        return "element is not a StageSpec(...) call"
+    func = node.func
+    func_name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+    if func_name != "StageSpec":
+        return f"call to {func_name!r} -- only StageSpec(...) elements are allowed"
+    for arg in [*node.args, *(kw.value for kw in node.keywords)]:
+        if not isinstance(arg, (ast.Constant, ast.Name, ast.Attribute)):
+            return "StageSpec argument must be a literal, name, or attribute reference"
+    return None
+
+
+def check_registry_is_literal(path: Path) -> list[str]:
+    """``engine/registry.py`` stays a literal, diff-reviewable stage list.
+
+    Migration Phase 4: the module body may contain only the module
+    docstring, imports, the module logger assignment, and assignments whose
+    value is a literal tuple/list of ``StageSpec(...)`` calls with
+    literal/name/attribute arguments. Conditionals, loops, comprehensions,
+    function/class defs and any other computation make the stage order
+    non-grep-able and are banned.
+    """
+    if not (path / "engine").is_dir():
+        return []  # not the package root (e.g. a subpath run) — skip
+    registry = _registry_path(path)
+    if not registry.exists():
+        return [f"  missing {registry} -- the literal stage registry is mandatory (Phase 4)"]
+    try:
+        tree = ast.parse(registry.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        return [f"  unreadable {registry}: {exc}"]
+
+    violations: list[str] = []
+    for idx, stmt in enumerate(tree.body):
+        if (
+            idx == 0
+            and isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            continue  # module docstring
+        if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            continue
+        if _is_module_logger_assign(stmt):
+            continue
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign)) and stmt.value is not None:
+            if isinstance(stmt.value, (ast.Tuple, ast.List)):
+                for elt in stmt.value.elts:
+                    reason = _stage_spec_element_violation(elt)
+                    if reason:
+                        violations.append(f"  {registry}:{elt.lineno}: {reason}")
+                continue
+            violations.append(
+                f"  {registry}:{stmt.lineno}: assignment value must be a literal "
+                "tuple of StageSpec(...) calls"
+            )
+            continue
+        violations.append(
+            f"  {registry}:{stmt.lineno}: {type(stmt).__name__} not allowed in the "
+            "literal stage registry (docstring/imports/logger/StageSpec tuple only)"
+        )
+    return violations
+
+
+def _registry_stage_aliases(tree: ast.Module) -> dict[str, str]:
+    """Map registry import aliases to stage module names under engine/stages/."""
+    aliases: dict[str, str] = {}
+    for stmt in tree.body:
+        if isinstance(stmt, ast.ImportFrom) and stmt.module == _STAGES_IMPORT_PACKAGE:
+            for alias in stmt.names:
+                aliases[alias.asname or alias.name] = alias.name
+    return aliases
+
+
+def _module_binds_run(py_file: Path) -> bool:
+    """True when the module defines a top-level ``run`` or binds one via import."""
+    try:
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return False
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == "run":
+            return True
+        if isinstance(stmt, ast.ImportFrom) and any(
+            (alias.asname or alias.name) == "run" for alias in stmt.names
+        ):
+            return True
+    return False
+
+
+def _stage_spec_fn_violations(
+    registry: Path, tree: ast.Module, aliases: dict[str, str], stages_root: Path
+) -> list[str]:
+    """Pin every StageSpec.fn in the registry to an engine/stages/ ``run``."""
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "StageSpec"
+        ):
+            continue
+        fn_arg = (
+            node.args[1]
+            if len(node.args) > 1
+            else next((kw.value for kw in node.keywords if kw.arg == "fn"), None)
+        )
+        if fn_arg is None:
+            violations.append(f"  {registry}:{node.lineno}: StageSpec has no fn argument")
+            continue
+        if not (
+            isinstance(fn_arg, ast.Attribute)
+            and fn_arg.attr == "run"
+            and isinstance(fn_arg.value, ast.Name)
+        ):
+            violations.append(
+                f"  {registry}:{node.lineno}: StageSpec.fn must be `<stage module>.run`"
+            )
+            continue
+        stage_name = aliases.get(fn_arg.value.id)
+        if stage_name is None:
+            violations.append(
+                f"  {registry}:{node.lineno}: {fn_arg.value.id!r} is not imported from "
+                f"{_STAGES_IMPORT_PACKAGE} -- stage fns live under engine/stages/"
+            )
+            continue
+        single = stages_root / f"{stage_name}.py"
+        stage_file = single if single.exists() else stages_root / stage_name / "__init__.py"
+        if not stage_file.exists():
+            violations.append(
+                f"  {registry}:{node.lineno}: stage module engine/stages/{stage_name} not found"
+            )
+        elif not _module_binds_run(stage_file):
+            violations.append(
+                f"  {stage_file}: stage module must define or re-export a top-level `run`"
+            )
+    return violations
+
+
+def _stage_package_run_violations(stages_root: Path) -> list[str]:
+    """Every stage package exposes ``run`` unless pinned (shrink-only allowlist)."""
+    violations: list[str] = []
+    for pkg_init in sorted(stages_root.glob("*/__init__.py")):
+        pkg_name = pkg_init.parent.name
+        exposes_run = _module_binds_run(pkg_init)
+        if pkg_name in STAGE_PACKAGES_WITHOUT_RUN:
+            if exposes_run:
+                violations.append(
+                    f"  {pkg_init}: stale STAGE_PACKAGES_WITHOUT_RUN entry {pkg_name!r} "
+                    "-- the package now exposes `run`; delete the entry"
+                )
+            continue
+        if not exposes_run:
+            violations.append(
+                f"  {pkg_init}: stage package must expose `run` from its __init__ "
+                "(or be pinned in STAGE_PACKAGES_WITHOUT_RUN)"
+            )
+    for entry in sorted(STAGE_PACKAGES_WITHOUT_RUN):
+        if not (stages_root / entry / "__init__.py").exists():
+            violations.append(
+                f"  stale STAGE_PACKAGES_WITHOUT_RUN entry {entry!r} -- no such "
+                "package under engine/stages/; delete the entry"
+            )
+    return violations
+
+
+def check_stage_anatomy(path: Path) -> list[str]:
+    """Registry stage fns are ``engine/stages/<stage>.run``; stages expose ``run``.
+
+    Migration Phase 4 mechanical pins:
+    - every ``StageSpec`` fn argument is ``<alias>.run`` where ``<alias>`` is
+      imported from ``rwa_calc.engine.stages`` in the registry;
+    - the referenced stage module (single module ``stages/<name>.py`` or
+      package ``stages/<name>/__init__.py``) binds a top-level ``run``;
+    - every package directly under ``engine/stages/`` exposes ``run`` from
+      its ``__init__`` unless pinned in ``STAGE_PACKAGES_WITHOUT_RUN``
+      (shrink-only; stale entries are violations).
+
+    A missing or unparseable registry is check 15's violation — this check
+    skips silently rather than double-reporting.
+    """
+    if not (path / "engine").is_dir():
+        return []  # not the package root (e.g. a subpath run) — skip
+    registry = _registry_path(path)
+    if not registry.exists():
+        return []
+    try:
+        tree = ast.parse(registry.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return []
+
+    stages_root = path / "engine" / "stages"
+    violations = _stage_spec_fn_violations(
+        registry, tree, _registry_stage_aliases(tree), stages_root
+    )
+    if stages_root.is_dir():
+        violations.extend(_stage_package_run_violations(stages_root))
+    return violations
+
+
 def check_watchfire_citations() -> tuple[list[str], list[str]]:
     """Run `watchfire check` via its Python API.
 
@@ -1079,6 +1381,18 @@ def main() -> int:
         (
             "No empty-LazyFrame sentinels in engine/ (optional frames are None)",
             check_no_empty_frame_sentinels,
+        ),
+        (
+            "No Polars namespace registrations (plain typed functions + .pipe)",
+            check_no_polars_namespace_registrations,
+        ),
+        (
+            "Stage registry is literal (engine/registry.py)",
+            check_registry_is_literal,
+        ),
+        (
+            "Stage anatomy: registry fns are engine/stages/<stage>.run",
+            check_stage_anatomy,
         ),
     ]
 

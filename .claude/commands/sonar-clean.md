@@ -59,8 +59,8 @@ candidate item with this shape:
 
 ```json
 {
-  "file": "src/rwa_calc/engine/hierarchy.py",
-  "slug": "engine-hierarchy",
+  "file": "src/rwa_calc/engine/stages/hierarchy/resolver.py",
+  "slug": "engine-stages-hierarchy-resolver",
   "issues": [
     {"key": "AZ...", "rule": "python:S3776", "severity": "CRITICAL",
      "line": 99, "message": "Refactor this function..."}
@@ -83,6 +83,8 @@ Force any file under these paths to single-stream / main-tree mode (no
 worktree, no parallelism — pick it alone even if N>1 was requested):
 
 - `src/rwa_calc/engine/pipeline.py`
+- `src/rwa_calc/engine/registry.py`
+- `src/rwa_calc/engine/orchestrator.py`
 - `src/rwa_calc/contracts/protocols.py`
 - `src/rwa_calc/contracts/bundles.py`
 - `src/rwa_calc/engine/aggregator/aggregator.py`
@@ -155,21 +157,21 @@ complete JSON document — do not patch line by line.
   "initial_open_count": <total open issues in src/rwa_calc/ at start>,
   "items": [
     {
-      "slug": "engine-hierarchy",
-      "file": "src/rwa_calc/engine/hierarchy.py",
+      "slug": "engine-stages-hierarchy-resolver",
+      "file": "src/rwa_calc/engine/stages/hierarchy/resolver.py",
       "issue_count": 6,
       "critical_count": 4,
       "issues": [ {"key":"...", "rule":"...", "severity":"...",
                    "line":N, "message":"..."} ],
       "stream": "worktree",
-      "branch": "sonar/<batch-id>/engine-hierarchy",
+      "branch": "sonar/<batch-id>/engine-stages-hierarchy-resolver",
       "worktree_path": "<absolute worktree path>",
       "current_wave": "engine_implementer",
       "agent_status": "in_flight",
       "revision_count": { "engine_implementer": 0 },
       "outputs": {},
       "drop_reason": null,
-      "current_agent_name": "sonar-fix-engine-hierarchy-r0"
+      "current_agent_name": "sonar-fix-engine-stages-hierarchy-resolver-r0"
     }
   ]
 }
@@ -536,7 +538,8 @@ first).
 - Operator interjections during the batch are first-class. Common
   requests: status, drop an item, inspect an output. Honor them
   before continuing supervision work in the same turn.
-- Hard-excluded files (`engine/pipeline.py`, `contracts/protocols.py`,
+- Hard-excluded files (`engine/pipeline.py`, `engine/registry.py`,
+  `engine/orchestrator.py`, `contracts/protocols.py`,
   `contracts/bundles.py`, `engine/aggregator/aggregator.py`) never
   appear in a multi-item batch — they always run alone, in the main
   tree, with no worktree machinery (Step 3 and Step 5's merge are both

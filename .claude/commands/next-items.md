@@ -55,8 +55,8 @@ disqualifier — the worktree merge surfaces conflicts cleanly):
 
 1. Distinct top-level under `src/rwa_calc/engine/` (e.g. `engine/sa/`,
    `engine/irb/`, `engine/crm/`, `engine/slotting/`, `engine/equity/`,
-   `engine/re_splitter.py`, `engine/hierarchy.py`,
-   `engine/classifier.py`).
+   `engine/stages/re_split/`, `engine/stages/hierarchy/`,
+   `engine/stages/classify/`).
 2. Distinct file in `src/rwa_calc/data/tables/`.
 3. Distinct new test path under `tests/`.
 
@@ -67,6 +67,8 @@ a known-bad merge before you start.
 **Hard exclusions** — any candidate that requires changes to:
 
 - `src/rwa_calc/engine/pipeline.py`
+- `src/rwa_calc/engine/registry.py`
+- `src/rwa_calc/engine/orchestrator.py`
 - `src/rwa_calc/contracts/protocols.py`
 - `src/rwa_calc/contracts/bundles.py`
 - `src/rwa_calc/engine/aggregator/aggregator.py`
@@ -349,6 +351,8 @@ C4.1 — Lists every `src/rwa_calc/` file modified, with absolute
 C4.2 — Every modified file is under `src/rwa_calc/`. No test edits,
        no fixture edits.
 C4.3 — None of `src/rwa_calc/engine/pipeline.py`,
+       `src/rwa_calc/engine/registry.py`,
+       `src/rwa_calc/engine/orchestrator.py`,
        `src/rwa_calc/contracts/protocols.py`,
        `src/rwa_calc/contracts/bundles.py`, or
        `src/rwa_calc/engine/aggregator/aggregator.py` are modified

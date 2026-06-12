@@ -29,10 +29,15 @@ do to stay inside it.
 
 ## Record schema
 
+Stage entry/exit records are emitted by the fold orchestrator
+(`rwa_calc.engine.orchestrator`, which wraps every registered stage in
+`stage_timer`); run-level records (pipeline start/finish, materialisation
+map, error count) stay on the facade logger `rwa_calc.engine.pipeline`.
+
 **Text format** (default):
 
 ```
-2026-04-19T18:42:01 INFO    [a3f0c1b24e1c] rwa_calc.engine.pipeline: classifier completed in 12.3 ms
+2026-04-19T18:42:01 INFO    [a3f0c1b24e1c] rwa_calc.engine.orchestrator: classifier completed in 12.3 ms
 ```
 
 The stage name and elapsed time are embedded in the message string so the
@@ -46,10 +51,10 @@ suppressed at default `INFO` level.
 {
   "timestamp": "2026-04-19T18:42:01.123456+00:00",
   "level": "INFO",
-  "logger": "rwa_calc.engine.pipeline",
+  "logger": "rwa_calc.engine.orchestrator",
   "run_id": "a3f0c1b24e1c",
   "message": "classifier completed in 12.3 ms",
-  "module": "pipeline",
+  "module": "orchestrator",
   "line": 399,
   "stage": "classifier",
   "elapsed_ms": 12.34
@@ -159,11 +164,14 @@ class MyStage:
         ...
 ```
 
-The orchestrator wraps the stage's main call with `stage_timer`:
+The fold orchestrator (`engine/orchestrator.py::run_stages`) wraps every
+registered stage in `stage_timer` — a stage added to `engine/registry.py`
+gets entry/exit timing for free:
 
 ```python
-with stage_timer(logger, "my_stage"):
-    result = self._my_stage.run(data, config)
+for spec in stages:
+    with stage_timer(logger, spec.name):
+        ctx = spec.fn(ctx, rulepack, run_config)
 ```
 
 ## Enforcement

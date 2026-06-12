@@ -378,6 +378,33 @@ annotations.
 
 ### Phase 4 — Uniform stage model
 
+**Status: DONE (2026-06-13, branch `feat/phase4`, 14 commits).** The pipeline
+is a pure fold over the literal stage registry: `contracts/context.py`
+(ArtifactKey/PipelineContext), `rwa_calc.rulebook.RulepackV0` (the frozen
+`Stage(ctx, rulepack, run_config)` signature), `engine/orchestrator.py`
+(fold + per-run components), `engine/registry.py` (nine literal StageSpecs),
+stage adapters/packages under `engine/stages/`. God modules split per the
+mandatory anatomy (`hierarchy.py` 3,363→7-module package; `classifier.py`
+2,227→9-module package; both verbatim, shims retained); FX and RE-split
+each have their package (FX registry promotion deferred — recorded);
+the SA-RW preview left hierarchy onto the shared guarantor/entity RW
+expression (`data/tables/guarantor_rw.py`), which also **closed the
+IRB-guarantor PSE/RGLA substitution gap** (recorded FIX, 8 acceptance +
+4 unit pins verified RED pre-fix) and the sibling IO/named-MDB/Table-2B
+gaps; `engine/kernels/allocation.py` replaced six allocator copies
+(FCSM level-blind copy recorded as residue); all four Polars namespaces
+retired (ccr→slotting→sa→irb, ~570 call sites) and the **6 disabled ty
+rules are back on** (1,366-diagnostic burn-down to zero, typing-only);
+the error channel is unified — stage data-quality errors keep their
+original codes/severity/context, PIPELINE_* survives only for crashes
+(P2.21 closed); arch_check gains checks 14-16 (namespace ban,
+registry-is-literal, stage anatomy) with contract mirrors, and CLAUDE.md +
+agent charters were updated in the same change. Every commit gated on the
+full suite + byte-identical parity vs `../rwa_phase4_parity/before`;
+ratchet banked down across the phase (max engine module LOC 3,364→1,499,
+target ~600; fill_null 446→431; presence guards 374→372). Next = Phase 5
+(rulebook), with CRM constructor-state first.
+
 - `PipelineContext` + `ArtifactKey[T]` + literal `engine/registry.py` + ~150-LOC fold
   orchestrator (no `self._*` scratch). **Define the final signature now**:
   `Stage(ctx, rulepack, run_config)` with a Rulepack-v0 facade over today's

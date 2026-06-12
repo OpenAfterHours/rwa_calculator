@@ -29,6 +29,7 @@ from rwa_calc.data.tables.b31_equity_rw import (
 )
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
+from tests.fixtures.resolved_bundle import make_crm_bundle
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 from tests.unit._equity_test_helpers import apply_b31_equity_weight_sa
 
@@ -264,7 +265,6 @@ class TestEquityTransitionalFloorInBundle:
 
     def test_bundle_path_applies_transitional_floor(self) -> None:
         """get_equity_result_bundle should apply transitional floor for 2027."""
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),
@@ -273,7 +273,7 @@ class TestEquityTransitionalFloorInBundle:
         calculator = EquityCalculator()
 
         # Create a minimal CRM-adjusted bundle with equity exposures
-        bundle = CRMAdjustedBundle(
+        bundle = make_crm_bundle(
             exposures=pl.LazyFrame(),
             equity_exposures=self._make_bundle("listed"),
         )
@@ -287,7 +287,6 @@ class TestEquityTransitionalFloorInBundle:
 
     def test_bundle_and_branch_produce_same_results(self) -> None:
         """Both entry points should produce identical risk weights."""
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         config = CalculationConfig.basel_3_1(
             reporting_date=date(2028, 6, 30),
@@ -302,7 +301,7 @@ class TestEquityTransitionalFloorInBundle:
         branch_rw = branch_result["risk_weight"][0]
 
         # Path 2: get_equity_result_bundle
-        bundle = CRMAdjustedBundle(
+        bundle = make_crm_bundle(
             exposures=pl.LazyFrame(),
             equity_exposures=self._make_bundle("listed"),
         )

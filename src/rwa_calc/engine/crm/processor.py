@@ -43,6 +43,12 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CRMAdjustedBundle,
 )
+from rwa_calc.contracts.edges import (
+    CRM_EXIT_CCR_EDGE,
+    CRM_EXIT_EDGE,
+    seal,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.errors import (
     ERROR_AIRB_MODEL_COLLATERAL_MISDIRECTED,
     ERROR_INELIGIBLE_COLLATERAL,
@@ -614,6 +620,18 @@ class CRMProcessor:
         if config.audit_cache_dir is not None:
             sink_audit(self._build_crm_audit(exposures), config, "crm_audit")
 
+        # Producer seal (Phase 3): contract validated, intra-stage scratch
+        # stripped — pure plan ops over the eager-backed frame, after the
+        # audit projections above have read it. CCR runs carry the SA-CCR
+        # provenance columns through, so the contract is selected by the
+        # input frame's brand.
+        exit_edge = (
+            CRM_EXIT_CCR_EDGE
+            if sealed_edge_of(data.all_exposures) == "classifier_exit_ccr"
+            else CRM_EXIT_EDGE
+        )
+        exposures = seal(exposures, exit_edge)
+
         return CRMAdjustedBundle(
             exposures=exposures,
             equity_exposures=data.equity_exposures,
@@ -744,6 +762,21 @@ class CRMProcessor:
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
+        if collateral is not None:
+            # A collateral table was supplied but is unusable (missing
+            # required columns / unreadable schema): CRM001 was recorded
+            # above, and the stage must still emit its full output
+            # contract (Phase 3 producer seal). Run the collateral step
+            # with an empty, schema-valid table so every collateral-derived
+            # column lands at its neutral no-collateral value — identical
+            # to the genuine no-collateral path, with no duplicated column
+            # inventory to drift.
+            from rwa_calc.contracts.edges import RAW_TABLE_EDGES
+
+            exposures = self.apply_collateral(
+                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config
+            )
+            return exposures, False
         # No collateral: still need to set F-IRB supervisory LGD based on
         # seniority. Under B31, AIRB Foundation/169B exposures also get
         # formula-based LGD.

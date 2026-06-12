@@ -62,6 +62,7 @@ from tests.fixtures.p1_139.p1_139 import (
     create_p1139_ciu_holdings,
     create_p1139_equity_exposure,
 )
+from tests.fixtures.resolved_bundle import make_crm_bundle
 
 # ---------------------------------------------------------------------------
 # Scenario config
@@ -107,7 +108,7 @@ def ciu_bundle() -> CRMAdjustedBundle:
     equity_exposures = create_p1139_equity_exposure().lazy()
     ciu_holdings = create_p1139_ciu_holdings().lazy()
 
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=empty,
         equity_exposures=equity_exposures,
         ciu_holdings=ciu_holdings,

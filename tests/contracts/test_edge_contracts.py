@@ -20,6 +20,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.edges import (
     RAW_TABLE_EDGES,
     EdgeColumn,
@@ -281,7 +282,6 @@ class TestBundleBrandValidation:
         )
 
     def test_correctly_branded_frame_constructs(self, registered_crm_exposures):
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         sealed = seal(_conformant_frame(), _contract())
 
@@ -290,7 +290,6 @@ class TestBundleBrandValidation:
         assert bundle.exposures is sealed
 
     def test_unbranded_frame_on_registered_field_raises(self, registered_crm_exposures):
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         with pytest.raises(EdgeContractViolation, match="CRMAdjustedBundle.exposures"):
             CRMAdjustedBundle(exposures=_conformant_frame())
@@ -301,15 +300,17 @@ class TestBundleBrandValidation:
             columns={"exposure_reference": EdgeColumn(dtype=pl.String)},
         )
         sealed_other = seal(pl.LazyFrame({"exposure_reference": ["E1"]}), other)
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         with pytest.raises(EdgeContractViolation, match="other_edge"):
             CRMAdjustedBundle(exposures=sealed_other)
 
-    def test_unregistered_fields_accept_unbranded_frames(self):
-        # The registry is empty by default during the strangler — bundles
-        # constructed with plain frames keep working until their edge seals.
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
+    def test_unregistered_fields_accept_unbranded_frames(self, monkeypatch: pytest.MonkeyPatch):
+        # While a field is unregistered, unbranded frames are accepted —
+        # the strangler ramp. CRMAdjustedBundle.exposures is registered in
+        # production now, so deregister it to pin the ramp semantics.
+        from rwa_calc.contracts import bundles as bundles_module
+
+        monkeypatch.delitem(bundles_module.SEALED_FRAME_FIELDS, "CRMAdjustedBundle.exposures")
 
         bundle = CRMAdjustedBundle(exposures=_conformant_frame())
 
@@ -317,7 +318,6 @@ class TestBundleBrandValidation:
 
     def test_none_optional_field_skipped(self, monkeypatch: pytest.MonkeyPatch):
         from rwa_calc.contracts import bundles as bundles_module
-        from rwa_calc.contracts.bundles import CRMAdjustedBundle
 
         monkeypatch.setitem(
             bundles_module.SEALED_FRAME_FIELDS,
@@ -451,3 +451,54 @@ class TestRawTableEdges:
                     assert col.dtype == pl.Boolean, (
                         f"{field_name}.{col_name}: non-Boolean fill is anti-conservative"
                     )
+
+
+class TestConditionalColumns:
+    """inject=False: declared-if-present (validated, never stripped, never injected)."""
+
+    @staticmethod
+    def _edge() -> EdgeContract:
+        return EdgeContract(
+            name="cond_edge",
+            columns={
+                "exposure_reference": EdgeColumn(dtype=pl.String),
+                "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+            },
+        )
+
+    def test_absent_conditional_not_injected(self):
+        out = self._edge().conform(pl.LazyFrame({"exposure_reference": ["E1"]})).collect()
+
+        assert "guarantor_pd" not in out.columns
+
+    def test_present_conditional_kept_and_validated(self):
+        lf = pl.LazyFrame(
+            {"exposure_reference": ["E1"], "guarantor_pd": [0.02]},
+            schema={"exposure_reference": pl.String, "guarantor_pd": pl.Float64},
+        )
+
+        out = self._edge().conform(lf).collect()
+
+        assert out["guarantor_pd"].to_list() == [0.02]
+
+    def test_present_conditional_wrong_dtype_raises(self):
+        lf = pl.LazyFrame(
+            {"exposure_reference": ["E1"], "guarantor_pd": [1]},
+            schema={"exposure_reference": pl.String, "guarantor_pd": pl.Int64},
+        )
+
+        with pytest.raises(EdgeContractViolation, match="guarantor_pd"):
+            self._edge().conform(lf)
+
+    def test_lenient_does_not_inject_conditional(self):
+        out, missing = self._edge().conform_lenient(pl.LazyFrame({"exposure_reference": ["E1"]}))
+
+        assert missing == []
+        assert "guarantor_pd" not in out.collect().columns
+
+    def test_inject_false_on_required_column_rejected(self):
+        with pytest.raises(ValueError, match="inject"):
+            EdgeContract(
+                name="bad",
+                columns={"x": EdgeColumn(dtype=pl.Float64, inject=False)},
+            )

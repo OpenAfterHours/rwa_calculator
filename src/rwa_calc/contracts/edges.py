@@ -79,6 +79,16 @@ class EdgeColumn:
             filled value).
         citation: Regulatory citation for derived columns (e.g.
             ``effectively_secured`` ← CRR Art. 230).
+        inject: Only meaningful with ``required=False``. When False the
+            column is CONDITIONAL — declared (validated, never stripped)
+            when the producing sub-step ran, but NOT injected when absent.
+            Preserves presence semantics for downstream consumers whose
+            branches are still presence-gated; flip to inject=True
+            consumer-group by consumer-group as those guards are deleted
+            (verified null-path-equivalent). Lesson recorded 2026-06-12:
+            blanket-injecting guarantee columns made the SA/IRB
+            substitution machinery execute on null data and moved IRB risk
+            weights — caught by the parity gate.
     """
 
     dtype: pl.DataType
@@ -87,6 +97,7 @@ class EdgeColumn:
     fill_null_default: bool = False
     null_meaning: str | None = None
     citation: str | None = None
+    inject: bool = True
 
 
 @dataclass(frozen=True)
@@ -115,6 +126,11 @@ class EdgeContract:
                 problems.append(
                     f"{col_name}: a default on a required column is dead config — "
                     "drop the default or mark the column optional"
+                )
+            if col.required and not col.inject:
+                problems.append(
+                    f"{col_name}: inject=False is meaningless on a required column — "
+                    "required asserts presence; mark the column optional"
                 )
         if problems:
             raise ValueError(f"invalid edge contract '{self.name}':\n  " + "\n  ".join(problems))
@@ -151,7 +167,7 @@ class EdgeContract:
         additions = [
             pl.lit(col.default).cast(col.dtype).alias(col_name)
             for col_name, col in self.columns.items()
-            if col_name not in present
+            if col_name not in present and col.inject
         ]
         if additions:
             lf = lf.with_columns(additions)
@@ -164,7 +180,10 @@ class EdgeContract:
         if fills:
             lf = lf.with_columns(fills)
 
-        return lf.select(list(self.columns))
+        emitted = [
+            col_name for col_name, col in self.columns.items() if col.inject or col_name in present
+        ]
+        return lf.select(emitted)
 
     def conform_lenient(self, lf: pl.LazyFrame) -> tuple[pl.LazyFrame, list[str]]:
         """Input-boundary variant of ``conform`` — external data never raises.
@@ -190,7 +209,7 @@ class EdgeContract:
         additions = [
             pl.lit(None if col.required else col.default).cast(col.dtype).alias(col_name)
             for col_name, col in self.columns.items()
-            if col_name not in present
+            if col_name not in present and (col.required or col.inject)
         ]
         if additions:
             lf = lf.with_columns(additions)
@@ -214,7 +233,12 @@ class EdgeContract:
         if fills:
             lf = lf.with_columns(fills)
 
-        return lf.select(list(self.columns)), missing_required
+        emitted = [
+            col_name
+            for col_name, col in self.columns.items()
+            if col.required or col.inject or col_name in present
+        ]
+        return lf.select(emitted), missing_required
 
     def empty_frame(self) -> pl.LazyFrame:
         """A zero-row, schema-complete, sealed frame for this edge."""
@@ -678,9 +702,7 @@ def _classifier_added_columns() -> dict[str, EdgeColumn]:
         "cp_is_natural_person": EdgeColumn(dtype=pl.Boolean),
         "cp_qualifying_property_count": EdgeColumn(dtype=pl.Int32),
         "cp_is_social_housing": EdgeColumn(dtype=pl.Boolean),
-        "cp_is_financial_sector_entity": EdgeColumn(
-            dtype=pl.Boolean, citation="PS1/26 Art. 147A"
-        ),
+        "cp_is_financial_sector_entity": EdgeColumn(dtype=pl.Boolean, citation="PS1/26 Art. 147A"),
         "cp_scra_grade": EdgeColumn(dtype=pl.String, citation="PS1/26 Art. 121"),
         "cp_is_investment_grade": EdgeColumn(dtype=pl.Boolean),
         "cp_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, citation="CRR Art. 305-306"),
@@ -774,4 +796,166 @@ CLASSIFIER_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
             if col_name not in HIERARCHY_EXIT_EDGE.columns
         },
     },
+)
+
+
+# ---------------------------------------------------------------------------
+# Edge definitions — CRM exit and RE-split exit
+# ---------------------------------------------------------------------------
+
+
+def _crm_added_columns() -> dict[str, EdgeColumn]:
+    """The 58 columns the CRM stage adds to the classified frame.
+
+    Seeded from the observed schema (2026-06-12), regime-stable across
+    CRR/B31. All required — the CRM chain (provisions -> CCF -> EAD ->
+    collateral -> guarantees -> finalise) emits every column
+    unconditionally; absent optional input tables surface as neutral
+    values / nulls, never as absent columns.
+    """
+    return {
+        # Provision resolution (CRR Art. 111(2)) and CCF (Art. 111 / 166)
+        "nominal_after_provision": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(2)"),
+        "ccf": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
+        "ccf_calculation": EdgeColumn(dtype=pl.String),
+        "ccf_original": EdgeColumn(dtype=pl.Float64),
+        "ccf_guaranteed": EdgeColumn(dtype=pl.Float64),
+        "ccf_unguaranteed": EdgeColumn(dtype=pl.Float64),
+        "effective_ccf": EdgeColumn(dtype=pl.Float64),
+        "on_bs_for_ead": EdgeColumn(dtype=pl.Float64),
+        "on_bs_netting_amount": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 219"),
+        "ead_from_ccf": EdgeColumn(dtype=pl.Float64),
+        "ead_gross": EdgeColumn(dtype=pl.Float64),
+        "ead_pre_crm": EdgeColumn(dtype=pl.Float64),
+        "ead_for_crm": EdgeColumn(dtype=pl.Float64),
+        "ead_after_collateral": EdgeColumn(dtype=pl.Float64),
+        "ead_after_guarantee": EdgeColumn(dtype=pl.Float64),
+        "ead_final": EdgeColumn(
+            dtype=pl.Float64,
+            citation="CRR Art. 111",
+            null_meaning="never null on the pipeline path — finalised post-CRM EAD",
+        ),
+        "exposure_volatility_haircut": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 223(5)"),
+        "pre_crm_counterparty_reference": EdgeColumn(dtype=pl.String),
+        "pre_crm_exposure_class": EdgeColumn(dtype=pl.String),
+        # Collateral allocation (CRR Art. 193-230)
+        "collateral_allocated": EdgeColumn(dtype=pl.Float64),
+        "collateral_adjusted_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_market_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_financial_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_cash_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_re_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_receivables_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_other_physical_value": EdgeColumn(dtype=pl.Float64),
+        "collateral_coverage_pct": EdgeColumn(dtype=pl.Float64),
+        "crm_alloc_financial": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 230"),
+        "crm_alloc_covered_bond": EdgeColumn(dtype=pl.Float64),
+        "crm_alloc_receivables": EdgeColumn(dtype=pl.Float64),
+        "crm_alloc_real_estate": EdgeColumn(dtype=pl.Float64),
+        "crm_alloc_other_physical": EdgeColumn(dtype=pl.Float64),
+        "crm_alloc_life_insurance": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 212"),
+        "total_collateral_for_lgd": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 230"),
+        "lgd_pre_crm": EdgeColumn(dtype=pl.Float64),
+        "lgd_post_crm": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 161/230"),
+        "lgd_secured": EdgeColumn(dtype=pl.Float64),
+        "life_ins_collateral_value": EdgeColumn(dtype=pl.Float64),
+        "life_ins_secured_rw": EdgeColumn(dtype=pl.Float64),
+        "crm_calculation": EdgeColumn(dtype=pl.String),
+        # Guarantees / substitution (CRR Art. 233-236)
+        "is_guaranteed": EdgeColumn(dtype=pl.Boolean),
+        "guarantee_amount": EdgeColumn(dtype=pl.Float64),
+        "guaranteed_portion": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 235"),
+        "unguaranteed_portion": EdgeColumn(dtype=pl.Float64),
+        "guarantee_ratio": EdgeColumn(dtype=pl.Float64),
+        "guarantee_fx_haircut": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 233(3)"),
+        "guarantee_restructuring_haircut": EdgeColumn(dtype=pl.Float64),
+        "guarantor_reference": EdgeColumn(dtype=pl.String),
+        "guarantor_exposure_class": EdgeColumn(dtype=pl.String),
+        "guarantor_approach": EdgeColumn(dtype=pl.String),
+        "guarantor_rating_type": EdgeColumn(dtype=pl.String),
+        "substitute_rw": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 235"),
+        "post_crm_counterparty_guaranteed": EdgeColumn(dtype=pl.String),
+        "post_crm_exposure_class_guaranteed": EdgeColumn(dtype=pl.String),
+        "protection_type": EdgeColumn(dtype=pl.String),
+        # Provisions
+        "provision_allocated": EdgeColumn(dtype=pl.Float64),
+        "provision_deducted": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(2)"),
+        # Path-dependent CONDITIONAL columns (inject=False): emitted only
+        # when the producing sub-step ran (guarantee / provision / MOF /
+        # FCSM). Declared so they are validated and never stripped, but NOT
+        # injected when absent — downstream consumers are still
+        # presence-gated, and blanket null-injection made the SA/IRB
+        # guarantee-substitution machinery execute on null data (moved IRB
+        # risk weights; caught by the parity gate 2026-06-12). Flip each
+        # group to inject=True alongside its consumer guard deletion.
+        "provision_on_drawn": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "provision_on_nominal": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "parent_exposure_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantee_count": EdgeColumn(dtype=pl.UInt32, required=False, inject=False),
+        "original_guarantee_amount": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        "guarantee_currency": EdgeColumn(dtype=pl.String, required=False, inject=False, citation="CRR Art. 233(3)"
+        ),
+        "includes_restructuring": EdgeColumn(dtype=pl.Boolean, required=False, inject=False, citation="CRR Art. 233(2)"
+        ),
+        "guarantee_reference": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantor": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False, citation="CRR Art. 235"
+        ),
+        "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
+        "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False, inject=False),
+        "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, inject=False, citation="CRR Art. 235"),
+        "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 161/236"),
+        "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        # Financial Collateral Simple Method (CRR Art. 222): emitted only
+        # under the SIMPLE election; the SA consumer fill_null(0.0)s both,
+        # so contract-injected nulls on Comprehensive runs are a no-op.
+        "fcsm_collateral_value": EdgeColumn(dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 222"
+        ),
+        "fcsm_collateral_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False, citation="CRR Art. 222"),
+    }
+
+
+CRM_EXIT_EDGE: EdgeContract = EdgeContract(
+    name="crm_exit",
+    columns={**_classifier_exit_columns(), **_crm_added_columns()},
+)
+
+
+CRM_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
+    name="crm_exit_ccr",
+    columns={
+        **_classifier_exit_columns(),
+        **{
+            col_name: col
+            for col_name, col in CCR_EXIT_EDGE.columns.items()
+            if col_name not in HIERARCHY_EXIT_EDGE.columns
+        },
+        **_crm_added_columns(),
+    },
+)
+
+
+def _re_split_added_columns() -> dict[str, EdgeColumn]:
+    """Columns the RealEstateSplitter adds (PS1/26 Art. 124C-124K split)."""
+    return {
+        "split_parent_id": EdgeColumn(
+            dtype=pl.String,
+            citation="PS1/26 Art. 124C",
+            null_meaning="null = row was not produced by an RE split",
+        ),
+        "re_split_role": EdgeColumn(dtype=pl.String),
+    }
+
+
+RE_SPLIT_EXIT_EDGE: EdgeContract = EdgeContract(
+    name="re_split_exit",
+    columns={**CRM_EXIT_EDGE.columns, **_re_split_added_columns()},
+)
+
+
+RE_SPLIT_EXIT_CCR_EDGE: EdgeContract = EdgeContract(
+    name="re_split_exit_ccr",
+    columns={**CRM_EXIT_CCR_EDGE.columns, **_re_split_added_columns()},
 )

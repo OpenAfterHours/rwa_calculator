@@ -39,6 +39,7 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 from tests.fixtures.resolved_bundle import (
     make_classified_bundle,
     make_counterparty_lookup,
+    make_crm_bundle,
     make_resolved_bundle,
 )
 
@@ -396,7 +397,7 @@ def mock_crm_bundle() -> CRMAdjustedBundle:
         (pl.col("approach") == "FIRB") | (pl.col("approach") == "AIRB")
     )
 
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=exposures,
         crm_errors=[],
     )

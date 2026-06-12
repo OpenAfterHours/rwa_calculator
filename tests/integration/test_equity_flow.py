@@ -28,6 +28,7 @@ from rwa_calc.engine.classifier import ExposureClassifier
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.hierarchy import HierarchyResolver
+from tests.fixtures.resolved_bundle import make_crm_bundle
 
 from .conftest import (
     make_counterparty,
@@ -68,7 +69,7 @@ def _build_crm_adjusted_with_equity(
     equity_lf = _rows_to_lazyframe(equity_rows, EQUITY_EXPOSURE_SCHEMA)
     # Minimal SA/IRB/exposures frames to satisfy the bundle
     empty = pl.LazyFrame({"exposure_reference": pl.Series([], dtype=pl.String)})
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=empty,
         equity_exposures=equity_lf,
     )

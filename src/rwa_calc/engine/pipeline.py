@@ -51,7 +51,13 @@ from rwa_calc.contracts.bundles import (
     RawDataBundle,
     ResolvedHierarchyBundle,
 )
-from rwa_calc.contracts.edges import CCR_EXIT_EDGE, HIERARCHY_EXIT_EDGE
+from rwa_calc.contracts.edges import (
+    CCR_EXIT_EDGE,
+    HIERARCHY_EXIT_EDGE,
+    RE_SPLIT_EXIT_CCR_EDGE,
+    RE_SPLIT_EXIT_EDGE,
+    sealed_edge_of,
+)
 from rwa_calc.contracts.protocols import (
     ClassifierProtocol,
     CRMProcessorProtocol,
@@ -72,7 +78,6 @@ from rwa_calc.engine.materialise import (
     current_edge_events,
     end_edge_capture,
     materialise_branches,
-    materialise_edge,
     materialise_sealed_edge,
 )
 from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
@@ -800,9 +805,19 @@ class PipelineOrchestrator:
             # Stage-exit edge: the calculators' branch split forks the plan
             # three ways, so their input must be eager-backed (this edge
             # replaces the old pipeline_pre_branch barrier one stage later).
+            # The splitter's pure-plan seal carries the contract; this
+            # materialises and re-brands the eager-backed wrap under the
+            # same contract (selected by the splitter's brand).
+            exit_edge = (
+                RE_SPLIT_EXIT_CCR_EDGE
+                if sealed_edge_of(result.exposures) == "re_split_exit_ccr"
+                else RE_SPLIT_EXIT_EDGE
+            )
             result = replace(
                 result,
-                exposures=materialise_edge(result.exposures, config, "re_split_exit"),
+                exposures=materialise_sealed_edge(
+                    result.exposures, config, exit_edge, label="re_split_exit"
+                ),
             )
             if result.crm_errors:
                 # Splitter accumulates errors into the CRM bucket so existing

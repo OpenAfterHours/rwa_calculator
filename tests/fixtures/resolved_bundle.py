@@ -29,12 +29,14 @@ import polars as pl
 from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
     CounterpartyLookup,
+    CRMAdjustedBundle,
     ResolvedHierarchyBundle,
     create_empty_counterparty_lookup,
 )
 from rwa_calc.contracts.edges import (
     CLASSIFIER_EXIT_EDGE,
     CP_LOOKUP_EDGES,
+    CRM_EXIT_EDGE,
     HIERARCHY_EXIT_EDGE,
     seal_lenient,
 )
@@ -135,3 +137,32 @@ def make_classified_bundle(
     return ClassifiedExposuresBundle(
         all_exposures=seal_classifier_exit(all_exposures), **kwargs
     )
+
+
+def seal_crm_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
+    """Seal a hand-rolled CRM-adjusted frame against the crm_exit edge.
+
+    Lenient by design: missing declared columns become typed nulls (the
+    calculators' branch split input is always the full contract shape).
+    """
+    lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    sealed, _missing = seal_lenient(lf, CRM_EXIT_EDGE)
+    return sealed
+
+
+def make_crm_bundle(
+    exposures: pl.LazyFrame | pl.DataFrame,
+    **kwargs: Any,
+) -> CRMAdjustedBundle:
+    """Drop-in replacement for direct ``CRMAdjustedBundle(...)``.
+
+    Same keyword surface; ``exposures`` is sealed against crm_exit,
+    registered pass-through fields sealed against their loader edges,
+    everything else passes through untouched.
+    """
+    from tests.fixtures.raw_bundle import seal_raw_table
+
+    frame = kwargs.get("ciu_holdings")
+    if frame is not None:
+        kwargs["ciu_holdings"] = seal_raw_table(frame, "ciu_holdings")
+    return CRMAdjustedBundle(exposures=seal_crm_exit(exposures), **kwargs)

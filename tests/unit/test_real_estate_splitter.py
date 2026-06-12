@@ -28,6 +28,7 @@ import pytest
 from rwa_calc.contracts.bundles import CRMAdjustedBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.re_splitter import RealEstateSplitter
+from tests.fixtures.resolved_bundle import make_crm_bundle
 
 _REPORTING_DATE = date(2026, 12, 31)
 
@@ -42,12 +43,17 @@ def _build_bundle(rows: list[dict[str, Any]]) -> CRMAdjustedBundle:
         "exposure_reference": "EXP1",
         "counterparty_reference": "CP1",
         "exposure_class": "CORPORATE",
+        # Every row exiting the classifier carries a concrete approach;
+        # the splitter's SA gate excludes null-approach rows. IRB
+        # pass-through tests override this per row.
+        "approach": "standardised",
         "ead_final": 100.0,
         "provision_allocated": 0.0,
-        # Classifier-emitted candidate columns. Per-component eligibility
-        # columns are intentionally absent — single-component tests trigger
-        # the splitter's backward-compat derivation from re_split_mode +
-        # re_split_property_type. Mixed-collateral tests set them explicitly.
+        # Classifier-emitted candidate columns. The crm_exit seal injects
+        # the per-component value/eligibility columns as typed nulls when
+        # omitted, so single-component tests derive them below from
+        # re_split_mode + re_split_property_type exactly as the classifier
+        # would. Mixed-collateral tests set them explicitly.
         "re_split_target_class": None,
         "re_split_mode": None,
         "re_split_property_type": None,
@@ -68,9 +74,26 @@ def _build_bundle(rows: list[dict[str, Any]]) -> CRMAdjustedBundle:
     for r in rows:
         full = dict(base)
         full.update(r)
+        if "re_split_residential_value" not in full:
+            # Mirror the classifier's per-component emission for the
+            # single-target legacy shape: the value lands on the matching
+            # component; eligibility requires split mode + a positive
+            # value (CRR rental coverage is already encoded upstream via
+            # re_split_mode=None when Art. 126(2)(d) fails).
+            prop_t = full.get("re_split_property_type")
+            prop_v = full.get("re_split_property_value") or 0.0
+            is_split = full.get("re_split_mode") == "split"
+            full["re_split_residential_value"] = prop_v if prop_t == "residential" else 0.0
+            full["re_split_commercial_value"] = prop_v if prop_t == "commercial" else 0.0
+            full["re_split_residential_eligible"] = (
+                is_split and prop_t == "residential" and prop_v > 0.0
+            )
+            full["re_split_commercial_eligible"] = (
+                is_split and prop_t == "commercial" and prop_v > 0.0
+            )
         expanded.append(full)
     lf = pl.DataFrame(expanded).lazy()
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=lf,
     )
 

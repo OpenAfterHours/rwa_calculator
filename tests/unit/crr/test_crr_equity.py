@@ -24,6 +24,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.resolved_bundle import make_crm_bundle
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
@@ -69,7 +70,7 @@ def create_equity_bundle(
 ) -> CRMAdjustedBundle:
     """Helper to create a CRMAdjustedBundle with equity exposures."""
     equity_frame = pl.LazyFrame(exposures_data)
-    return CRMAdjustedBundle(
+    return make_crm_bundle(
         exposures=pl.LazyFrame(),
         equity_exposures=equity_frame,
     )
@@ -537,7 +538,7 @@ class TestEquityBundleProcessing:
         sa_config: CalculationConfig,
     ):
         """Empty equity exposures returns empty result."""
-        bundle = CRMAdjustedBundle(
+        bundle = make_crm_bundle(
             exposures=pl.LazyFrame(),
             equity_exposures=None,
         )

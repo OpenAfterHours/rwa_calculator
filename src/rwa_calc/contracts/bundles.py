@@ -66,6 +66,16 @@ SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
     "ClassifiedExposuresBundle.all_exposures": ("classifier_exit", "classifier_exit_ccr"),
     "ClassifiedExposuresBundle.collateral_links": "raw_collateral_links",
     "ClassifiedExposuresBundle.ciu_holdings": "raw_ciu_holdings",
+    # CRM exit / RE-split exit: the unified frame the calculators' branch
+    # split consumes. Two producers (CRMProcessor, then the splitter's
+    # replace at the orchestrator edge), each with a CCR variant.
+    "CRMAdjustedBundle.exposures": (
+        "crm_exit",
+        "crm_exit_ccr",
+        "re_split_exit",
+        "re_split_exit_ccr",
+    ),
+    "CRMAdjustedBundle.ciu_holdings": "raw_ciu_holdings",
 } | {
     f"RawDataBundle.{_field}": f"raw_{_field}"
     for _field in (
@@ -973,10 +983,14 @@ def create_empty_classified_bundle() -> ClassifiedExposuresBundle:
 
 
 def create_empty_crm_adjusted_bundle() -> CRMAdjustedBundle:
-    """Create an empty CRMAdjustedBundle for testing."""
-    import polars as pl
+    """Create an empty CRMAdjustedBundle for testing.
 
-    return CRMAdjustedBundle(exposures=pl.LazyFrame())
+    The exposures frame is an empty, schema-complete, SEALED frame from
+    the crm_exit edge contract.
+    """
+    from rwa_calc.contracts.edges import CRM_EXIT_EDGE
+
+    return CRMAdjustedBundle(exposures=CRM_EXIT_EDGE.empty_frame())
 
 
 def create_empty_reconciliation_bundle() -> ReconciliationBundle:

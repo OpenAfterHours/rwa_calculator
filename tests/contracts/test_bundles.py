@@ -10,6 +10,7 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 from tests.fixtures.resolved_bundle import (
     make_classified_bundle,
     make_counterparty_lookup,
+    make_crm_bundle,
     make_resolved_bundle,
 )
 
@@ -183,7 +184,7 @@ class TestCRMAdjustedBundle:
 
     def test_create_with_crm_data(self):
         """Should create bundle with CRM-adjusted data."""
-        bundle = CRMAdjustedBundle(
+        bundle = make_crm_bundle(
             exposures=pl.LazyFrame({"ref": ["E1"], "final_ead": [1000.0]}),
         )
 

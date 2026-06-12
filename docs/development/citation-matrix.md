@@ -82,12 +82,22 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/eu_sovereign.py:138:167"
     ```
 
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:71"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    ```
+
 
 ### CRR Art. 115 — Exposures to regional governments or local authorities
 
 ??? quote "`_create_rgla_df` — src/rwa_calc/data/tables/crr_risk_weights.py:416"
     ```python
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:416:428"
+    ```
+
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:72"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
     ```
 
 
@@ -98,6 +108,11 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:361:372"
     ```
 
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:73"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    ```
+
 
 ### CRR Art. 117 — Exposures to multilateral development banks
 
@@ -106,12 +121,22 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:462:470"
     ```
 
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:74"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    ```
+
 
 ### CRR Art. 118 — Exposures to international organisations
 
 ??? quote "`_create_io_df` — src/rwa_calc/data/tables/crr_risk_weights.py:486"
     ```python
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:486:500"
+    ```
+
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:75"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
     ```
 
 
@@ -146,9 +171,9 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/data/tables/crr_risk_weights.py:523:579"
     ```
 
-??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:189"
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:187"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:189:302"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:187:284"
     ```
 
 
@@ -539,9 +564,9 @@ Last generated: 2026-06-12.
     --8<-- "src/rwa_calc/engine/irb/formulas.py:804:856"
     ```
 
-??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/irb/guarantee.py:49"
+??? quote "`apply_guarantee_substitution` — src/rwa_calc/engine/irb/guarantee.py:47"
     ```python
-    --8<-- "src/rwa_calc/engine/irb/guarantee.py:49:181"
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:47:179"
     ```
 
 
@@ -787,6 +812,19 @@ Last generated: 2026-06-12.
 ??? quote "`_build_remainder_sub_rows` — src/rwa_calc/engine/crm/guarantees.py:684"
     ```python
     --8<-- "src/rwa_calc/engine/crm/guarantees.py:684:745"
+    ```
+
+
+### CRR Art. 235 — Calculating risk-weighted exposure amounts under the Standardised Approach
+
+??? quote "`build_guarantor_rw_expr` — src/rwa_calc/data/tables/guarantor_rw.py:76"
+    ```python
+    --8<-- "src/rwa_calc/data/tables/guarantor_rw.py:71:242"
+    ```
+
+??? quote "`_compute_guarantor_rw_sa` — src/rwa_calc/engine/irb/guarantee.py:188"
+    ```python
+    --8<-- "src/rwa_calc/engine/irb/guarantee.py:187:284"
     ```
 
 

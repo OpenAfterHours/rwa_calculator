@@ -50,6 +50,14 @@
   "rwa_calc.data.tables.firb_lgd::get_firb_lgd_table_for_framework": [
     "CRR Art. 161"
   ],
+  "rwa_calc.data.tables.guarantor_rw::build_guarantor_rw_expr": [
+    "CRR Art. 114",
+    "CRR Art. 115",
+    "CRR Art. 116",
+    "CRR Art. 117",
+    "CRR Art. 118",
+    "CRR Art. 235"
+  ],
   "rwa_calc.data.tables.haircuts::get_haircut_table": [
     "CRR Art. 224"
   ],
@@ -266,7 +274,8 @@
     "CRR Art. 162"
   ],
   "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa": [
-    "CRR Art. 122"
+    "CRR Art. 122",
+    "CRR Art. 235"
   ],
   "rwa_calc.engine.irb.guarantee::apply_guarantee_substitution": [
     "CRR Art. 161(3)"

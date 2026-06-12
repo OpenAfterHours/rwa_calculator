@@ -15,6 +15,9 @@ References:
 - CRR Art. 153(3), 202-203: Double default treatment
 - CRR Art. 161(3): Guarantor PD substitution for expected loss
 - CRR Art. 213, 215-217: Guarantee eligibility and substitution
+- CRR Art. 235 / PRA PS1/26 Art. 235: SA risk-weight substitution method (RWSM)
+- CRR Art. 114-122: guarantor SA risk weights (shared builder —
+  data/tables/guarantor_rw.py)
 - Basel 3.1 CRE22.70-85: Parameter substitution approach
 - CRR Art. 306, CRE54.14-15: CCP risk weights
 """
@@ -26,16 +29,11 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    QCCP_CLIENT_CLEARED_RW,
-    QCCP_PROPRIETARY_RW,
-    build_corporate_guarantor_rw_expr,
-    build_institution_guarantor_rw_expr,
-)
 from rwa_calc.data.tables.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
 )
+from rwa_calc.data.tables.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.engine.irb.formulas import (
     _double_default_multiplier_expr,
     _parametric_irb_risk_weight_expr,
@@ -187,12 +185,20 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 
 
 @cites("CRR Art. 122")
+@cites("CRR Art. 235")
 def _compute_guarantor_rw_sa(
     lf: pl.LazyFrame,
     cols: list[str],
     config: CalculationConfig,
 ) -> pl.LazyFrame:
-    """Compute SA risk weight for guarantor based on entity type and CQS."""
+    """Compute the guarantor's SA risk weight via the shared builder.
+
+    Compiles ``build_guarantor_rw_expr`` (data/tables/guarantor_rw.py) with
+    the IRB chain's column names — the same branch chain and order as the
+    SA-side twin (engine/sa/namespace.py::_build_guarantor_rw_expr). This
+    closes the IRB-guarantor PSE / RGLA substitution gap (the recorded
+    Phase 4 fix) plus the IO 0%, named-MDB 0% and MDB Table 2B closures.
+    """
 
     # Ensure guarantor_exposure_class is available (set by CRM processor;
     # fallback for unit tests that construct LazyFrames directly)
@@ -250,55 +256,31 @@ def _compute_guarantor_rw_sa(
         else pl.lit(False)
     )
 
+    # The shared expression's unrated PSE/RGLA fallback reads the guarantor
+    # country column; ensure it is referenceable for direct (non-pipeline)
+    # invocation, mirroring the ccp / scra fallbacks above. The pipeline
+    # always carries it (joined by engine/crm/guarantees.py).
+    if not _has_country:
+        lf = lf.with_columns(
+            pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
+        )
+
     return lf.with_columns(
-        [
-            pl.when(pl.col("guaranteed_portion").fill_null(0) <= 0)
-            .then(pl.lit(None).cast(pl.Float64))
-            # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS
-            .when((_gec == "central_govt_central_bank") & _is_domestic_guarantor)
-            .then(pl.lit(0.0))
-            # CGCB guarantors (sovereign, central_bank)
-            .when(_gec == "central_govt_central_bank")
-            .then(
-                pl.when(pl.col("guarantor_cqs") == 1)
-                .then(pl.lit(0.0))
-                .when(pl.col("guarantor_cqs") == 2)
-                .then(pl.lit(0.20))
-                .when(pl.col("guarantor_cqs") == 3)
-                .then(pl.lit(0.50))
-                .when(pl.col("guarantor_cqs").is_in([4, 5]))
-                .then(pl.lit(1.0))
-                .when(pl.col("guarantor_cqs") == 6)
-                .then(pl.lit(1.50))
-                .otherwise(pl.lit(1.0))
-            )
-            # CCP guarantors: 2% proprietary / 4% client-cleared
-            # (CRR Art. 306, CRE54.14-15) -- overrides institution CQS weights
-            .when(pl.col("guarantor_entity_type") == "ccp")
-            .then(
-                pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
-                .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
-                .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
-            )
-            # Institution/MDB guarantors (institution, bank, mdb, etc.)
-            # RW driven from INSTITUTION_RISK_WEIGHTS_CRR / _B31_ECRA.
-            .when(_gec.is_in(["institution", "mdb"]))
-            .then(
-                build_institution_guarantor_rw_expr(
-                    "guarantor_cqs",
-                    config.is_basel_3_1,
-                    scra_grade_col="guarantor_scra_grade",
-                )
-            )
-            # Corporate guarantors (corporate, company). RW driven from
-            # CORPORATE_RISK_WEIGHTS (CRR Art. 122 Table 5) or
-            # B31_CORPORATE_RISK_WEIGHTS (PRA PS1/26 Art. 122(2) Table 6) —
-            # under B3.1, CQS 3 = 75% (not 100%).
-            .when(_gec.is_in(["corporate", "corporate_sme"]))
-            .then(build_corporate_guarantor_rw_expr("guarantor_cqs", config.is_basel_3_1))
-            .otherwise(pl.lit(None).cast(pl.Float64))
-            .alias("guarantor_rw_sa"),
-        ]
+        build_guarantor_rw_expr(
+            exposure_class_col="guarantor_exposure_class",
+            entity_type_col="guarantor_entity_type",
+            cqs_col="guarantor_cqs",
+            country_code_col="guarantor_country_code",
+            ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
+            scra_grade_col="guarantor_scra_grade",
+            is_basel_3_1=config.is_basel_3_1,
+            domestic_cgcb_expr=_is_domestic_guarantor,
+            # No borrower-maturity short-term flag is threaded on the IRB
+            # path today (the SA twin derives one from its own stage
+            # scratch); long-term Table 3 applies throughout.
+            short_term_flag_col=None,
+            no_guarantee_expr=pl.col("guaranteed_portion").fill_null(0) <= 0,
+        ).alias("guarantor_rw_sa"),
     )
 
 

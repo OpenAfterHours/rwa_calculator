@@ -29,12 +29,25 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity, PermissionMode
+from rwa_calc.engine.orchestrator import (
+    CLASSIFIED,
+    CRM_ADJUSTED,
+    RAW_DATA,
+    RESOLVED_HIERARCHY,
+    build_components,
+    convert_pipeline_error,
+)
 from rwa_calc.engine.pipeline import (
     PipelineError,
     PipelineOrchestrator,
     create_pipeline,
     create_test_pipeline,
 )
+from rwa_calc.engine.stages import classify as classify_stage
+from rwa_calc.engine.stages import crm as crm_stage
+from rwa_calc.engine.stages import hierarchy as hierarchy_stage
+from rwa_calc.rulebook import RulepackV0
+from tests.fixtures.context import make_context
 from tests.fixtures.raw_bundle import make_raw_bundle
 from tests.fixtures.resolved_bundle import (
     make_classified_bundle,
@@ -441,24 +454,41 @@ class TestPipelineOrchestratorInitialization:
         assert pipeline._hierarchy_resolver is mock_resolver
         assert pipeline._classifier is mock_classifier
 
-    def test_ensure_components_initialized(self):
-        """Test that components are auto-initialized when needed."""
-        pipeline = PipelineOrchestrator()
+    def test_build_components_constructs_defaults(self, crr_config):
+        """Per-run component construction fills every slot from the config."""
+        components = build_components(crr_config)
 
-        # Before initialization
-        assert pipeline._hierarchy_resolver is None
-        assert pipeline._classifier is None
+        assert components.hierarchy_resolver is not None
+        assert components.classifier is not None
+        assert components.crm_processor is not None
+        assert components.sa_calculator is not None
+        assert components.irb_calculator is not None
+        assert components.slotting_calculator is not None
+        assert components.equity_calculator is not None
+        assert components.output_aggregator is not None
 
-        # Trigger initialization
-        pipeline._ensure_components_initialized()
+    def test_build_components_honours_overrides(self, crr_config):
+        """Injected components are used as-is, never replaced by defaults."""
+        mock_classifier = MagicMock()
 
-        # After initialization
-        assert pipeline._hierarchy_resolver is not None
-        assert pipeline._classifier is not None
-        assert pipeline._crm_processor is not None
-        assert pipeline._sa_calculator is not None
-        assert pipeline._irb_calculator is not None
-        assert pipeline._slotting_calculator is not None
+        components = build_components(crr_config, classifier=mock_classifier)
+
+        assert components.classifier is mock_classifier
+        assert components.hierarchy_resolver is not None
+
+    def test_build_components_crm_follows_framework(self, crr_config, basel31_config):
+        """CRMProcessor regime state comes from the run's config, per run.
+
+        The pre-fold orchestrator cached the CRM processor across runs, so a
+        framework switch on a reused orchestrator silently kept the wrong
+        haircut table (the comparison.py two-orchestrator workaround).
+        Per-run construction makes that failure mode unrepresentable.
+        """
+        crr_components = build_components(crr_config)
+        b31_components = build_components(basel31_config)
+
+        assert crr_components.crm_processor._is_basel_3_1 is False
+        assert b31_components.crm_processor._is_basel_3_1 is True
 
 
 class TestPipelineRunWithData:
@@ -512,44 +542,41 @@ class TestPipelineRun:
 
 
 class TestPipelineStageExecution:
-    """Tests for individual stage execution."""
+    """Tests for individual stage adapters run against a built context."""
 
     def test_hierarchy_resolver_stage(self, mock_raw_data, crr_config):
-        """Test hierarchy resolver stage runs correctly."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
+        """The hierarchy stage writes a resolved bundle into the context."""
+        ctx = make_context((RAW_DATA, mock_raw_data), config=crr_config)
 
-        result = pipeline._run_hierarchy_resolver(mock_raw_data, crr_config)
+        ctx = hierarchy_stage.run(ctx, RulepackV0.from_config(crr_config), crr_config)
 
+        result = ctx.get(RESOLVED_HIERARCHY)
         assert isinstance(result, ResolvedHierarchyBundle)
         assert result.exposures is not None
 
     def test_classifier_stage(self, mock_resolved_bundle, crr_config):
-        """Test classifier stage runs correctly."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
+        """The classify stage writes a classified bundle into the context."""
+        ctx = make_context((RESOLVED_HIERARCHY, mock_resolved_bundle), config=crr_config)
 
-        result = pipeline._run_classifier(mock_resolved_bundle, crr_config)
+        ctx = classify_stage.run(ctx, RulepackV0.from_config(crr_config), crr_config)
 
-        assert isinstance(result, ClassifiedExposuresBundle)
+        assert isinstance(ctx.get(CLASSIFIED), ClassifiedExposuresBundle)
 
     def test_crm_processor_stage(self, mock_classified_bundle, crr_config):
-        """Test CRM processor stage runs correctly."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
+        """The CRM stage writes a CRM-adjusted bundle into the context."""
+        ctx = make_context((CLASSIFIED, mock_classified_bundle), config=crr_config)
 
-        result = pipeline._run_crm_processor(mock_classified_bundle, crr_config)
+        ctx = crm_stage.run(ctx, RulepackV0.from_config(crr_config), crr_config)
 
-        assert isinstance(result, CRMAdjustedBundle)
+        assert isinstance(ctx.get(CRM_ADJUSTED), CRMAdjustedBundle)
 
     def test_slotting_calculator_stage_empty(self, mock_crm_bundle, crr_config):
         """Test slotting calculator stage with no slotting exposures."""
-        pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
+        components = build_components(crr_config)
 
         # Filter to slotting rows only (none exist in mock data)
         empty_slotting = mock_crm_bundle.exposures.filter(pl.col("approach") == "slotting")
-        result = pipeline._slotting_calculator.calculate_branch(empty_slotting, crr_config)
+        result = components.slotting_calculator.calculate_branch(empty_slotting, crr_config)
 
         collected = result.collect()
         assert collected.height == 0
@@ -561,7 +588,6 @@ class TestPipelineErrorHandling:
     def test_hierarchy_resolver_error_accumulation(self, crr_config):
         """Test that hierarchy resolver errors are accumulated."""
         pipeline = PipelineOrchestrator()
-        pipeline._ensure_components_initialized()
 
         # Create data that might cause errors
         raw_data = create_empty_raw_data_bundle()
@@ -587,13 +613,13 @@ class TestPipelineErrorHandling:
         mock_resolver.resolve.side_effect = Exception("Resolution failed")
 
         pipeline = PipelineOrchestrator(hierarchy_resolver=mock_resolver)
-        pipeline._ensure_components_initialized()
 
         raw_data = create_empty_raw_data_bundle()
         result = pipeline.run_with_data(raw_data, crr_config)
 
         assert isinstance(result, AggregatedResultBundle)
         assert len(result.errors) > 0
+        assert any(e.code == "PIPELINE_HIERARCHY_RESOLVER" for e in result.errors)
 
 
 class TestPipelineBundleErrorPropagation:
@@ -683,8 +709,6 @@ class TestPipelineUtilities:
 
     def test_convert_pipeline_error(self):
         """Test pipeline error conversion."""
-        pipeline = PipelineOrchestrator()
-
         error = PipelineError(
             stage="test_stage",
             error_type="test_error",
@@ -692,7 +716,7 @@ class TestPipelineUtilities:
             context={"key": "value"},
         )
 
-        converted = pipeline._convert_pipeline_error(error)
+        converted = convert_pipeline_error(error)
         assert "test_stage" in str(converted.code).lower()
 
 

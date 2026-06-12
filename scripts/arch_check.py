@@ -239,8 +239,18 @@ IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
         "rwa_calc.reporting",
         "rwa_calc.engine",
         "rwa_calc.analysis",
+        "rwa_calc.rulebook",
     ),
     "engine": ("rwa_calc.api", "rwa_calc.ui", "rwa_calc.reporting", "rwa_calc.analysis"),
+    # The regime seam (migration Phase 4 v0 / Phase 5): sits between
+    # contracts and engine — wraps config + data tables, never engine code.
+    "rulebook": (
+        "rwa_calc.api",
+        "rwa_calc.ui",
+        "rwa_calc.reporting",
+        "rwa_calc.engine",
+        "rwa_calc.analysis",
+    ),
     "reporting": ("rwa_calc.api", "rwa_calc.ui"),
     "data": (
         "rwa_calc.api",
@@ -249,6 +259,7 @@ IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
         "rwa_calc.engine",
         "rwa_calc.contracts",
         "rwa_calc.analysis",
+        "rwa_calc.rulebook",
     ),
     "domain": (
         "rwa_calc.api",
@@ -258,6 +269,7 @@ IMPORT_DIRECTION_RULES: dict[str, tuple[str, ...]] = {
         "rwa_calc.contracts",
         "rwa_calc.data",
         "rwa_calc.analysis",
+        "rwa_calc.rulebook",
     ),
 }
 

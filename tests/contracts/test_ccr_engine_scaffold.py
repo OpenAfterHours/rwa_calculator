@@ -1,8 +1,9 @@
 """
 Contract tests for the CCR engine subpackage scaffold (P8.4).
 
-Pins the required module structure, logger declarations, Polars namespace
-registration, and public function signatures for ``rwa_calc.engine.ccr``.
+Pins the required module structure, logger declarations, the public
+free-function surface, and public function signatures for
+``rwa_calc.engine.ccr``.
 
 P8.4 scaffold is fully implemented; per-formula bodies (P8.12, P8.13, P8.14,
 P8.17) have landed in subsequent batches with dedicated test files alongside.
@@ -30,6 +31,8 @@ import pytest
 # ---------------------------------------------------------------------------
 
 # Non-init module names (imported as rwa_calc.engine.ccr.<name>).
+# The former ``namespace`` module (Polars ``lf.ccr`` shim) was deleted in
+# Phase 4 Slice 7 — callers use the free functions directly.
 _CCR_SUB_MODULES: tuple[str, ...] = (
     "sa_ccr",
     "rc",
@@ -37,7 +40,26 @@ _CCR_SUB_MODULES: tuple[str, ...] = (
     "adjusted_notional",
     "supervisory_delta",
     "maturity_factor",
-    "namespace",
+)
+
+# Public free-function surface of the package — the scaffold contract pins
+# this instead of the retired ``lf.ccr`` namespace registration.
+_CCR_PUBLIC_FUNCTIONS: tuple[str, ...] = (
+    "apply_legal_enforceability_gate",
+    "apply_wwr_gate",
+    "assign_hedging_set",
+    "assign_ir_maturity_bucket",
+    "ccr_rows_to_exposures",
+    "compute_addon_per_asset_class",
+    "compute_adjusted_notional_ir",
+    "compute_ead",
+    "compute_maturity_factor_margined",
+    "compute_maturity_factor_unmargined",
+    "compute_rc_margined",
+    "compute_rc_unmargined",
+    "compute_supervisory_delta_cdo_tranche",
+    "compute_supervisory_delta_linear",
+    "compute_supervisory_delta_option",
 )
 
 # Full list including __init__ (represented by the empty string sentinel).
@@ -70,7 +92,7 @@ def test_ccr_subpackage_imports() -> None:
 
 @pytest.mark.parametrize("modname", _ALL_MODULE_NAMES)
 def test_ccr_module_exists(modname: str) -> None:
-    """Each of the 8 CCR engine modules must be importable (P8.4 scaffold).
+    """Each of the 7 CCR engine modules must be importable (P8.4 scaffold).
 
     ``__init__`` is checked via the package import; all other modules are
     checked via ``importlib.import_module``.
@@ -134,32 +156,32 @@ def test_ccr_module_declares_logger(modname: str) -> None:
 
 
 # ===========================================================================
-# 4. Polars LazyFrame namespace registration
+# 4. Public free-function surface (replaces the retired ``lf.ccr`` namespace)
 # ===========================================================================
 
 
-def test_ccr_lazyframe_namespace_registered() -> None:
-    """Importing rwa_calc.engine.ccr must register the ``ccr`` Polars namespace.
+def test_ccr_free_function_surface_pinned() -> None:
+    """rwa_calc.engine.ccr must expose exactly the pinned free-function surface.
 
-    Mirrors the ``lf.sa`` registration pattern in
-    ``rwa_calc.engine.sa.namespace``.  After import the attribute
-    ``pl.LazyFrame.ccr`` must exist.
+    The ``ccr`` Polars LazyFrame namespace was retired in Phase 4 Slice 7
+    (it was a pure delegation shim with zero call sites); the scaffold
+    contract now pins the package's public free functions instead.
     """
-    # Arrange — trigger namespace registration
-    try:
-        import rwa_calc.engine.ccr  # noqa: F401
-    except ModuleNotFoundError as exc:
-        pytest.fail(
-            f"rwa_calc.engine.ccr is not importable: {exc}. "
-            "Cannot test namespace registration until P8.4 scaffold is in place."
-        )
+    # Arrange
+    import rwa_calc.engine.ccr as ccr_pkg
 
-    # Act + Assert
-    assert hasattr(pl.LazyFrame, "ccr"), (
-        "After `import rwa_calc.engine.ccr`, `pl.LazyFrame` must expose a `ccr` attribute. "
-        "Register the namespace with "
-        "`@pl.api.register_lazyframe_namespace('ccr')` in namespace.py (P8.4)."
+    # Assert — __all__ matches the pinned surface exactly
+    assert tuple(ccr_pkg.__all__) == _CCR_PUBLIC_FUNCTIONS, (
+        "rwa_calc.engine.ccr.__all__ must match the pinned free-function surface. "
+        f"Expected {_CCR_PUBLIC_FUNCTIONS}, got {tuple(ccr_pkg.__all__)}."
     )
+
+    # Assert — every pinned name is present on the package and callable
+    for name in _CCR_PUBLIC_FUNCTIONS:
+        fn = getattr(ccr_pkg, name, None)
+        assert callable(fn), (
+            f"rwa_calc.engine.ccr.{name} must be a callable free function; got {fn!r}."
+        )
 
 
 # ===========================================================================
@@ -308,10 +330,10 @@ def test_compute_pfe_ir_singleton_removed() -> None:
     1. ``from rwa_calc.engine.ccr import compute_pfe_ir_singleton`` raises ImportError.
     2. ``from rwa_calc.engine.ccr.pfe import compute_pfe_ir_singleton`` raises ImportError.
     3. ``"compute_pfe_ir_singleton"`` is absent from ``rwa_calc.engine.ccr.__all__``.
-    4. The ``ccr`` Polars namespace does NOT expose ``pfe_ir_singleton``.
-    5. Positive control: ``compute_pfe`` IS importable and ``lf.ccr.sa_ccr_ead`` exists.
+    4. The ``pfe`` module does NOT expose a ``compute_pfe_ir_singleton`` attribute.
+    5. Positive control: ``compute_pfe`` and ``compute_ead`` ARE importable.
     """
-    import rwa_calc.engine.ccr  # Arrange — trigger namespace registration
+    import rwa_calc.engine.ccr  # Arrange
 
     # -----------------------------------------------------------------------
     # Assert 1 — symbol not re-exported from the package __init__
@@ -338,20 +360,23 @@ def test_compute_pfe_ir_singleton_removed() -> None:
     )
 
     # -----------------------------------------------------------------------
-    # Assert 4 — namespace method pfe_ir_singleton is gone
+    # Assert 4 — pfe module attribute pfe_ir_singleton is gone
     # -----------------------------------------------------------------------
-    lf = pl.LazyFrame({"netting_set_id": pl.Series([], dtype=pl.Utf8)})
-    assert not hasattr(lf.ccr, "pfe_ir_singleton"), (
-        "``lf.ccr.pfe_ir_singleton`` must be removed from the CCRNamespace (P6.30)."
+    import rwa_calc.engine.ccr.pfe as pfe_module
+
+    assert not hasattr(pfe_module, "compute_pfe_ir_singleton"), (
+        "``rwa_calc.engine.ccr.pfe.compute_pfe_ir_singleton`` must be removed (P6.30)."
     )
 
     # -----------------------------------------------------------------------
     # Assert 5 — positive control: sibling symbols are still present
     # -----------------------------------------------------------------------
     from rwa_calc.engine.ccr.pfe import compute_pfe  # noqa: F401 — must not raise
+    from rwa_calc.engine.ccr.sa_ccr import compute_ead
 
-    assert hasattr(lf.ccr, "sa_ccr_ead"), (
-        "``lf.ccr.sa_ccr_ead`` must still exist after P6.30 — only the singleton stub is removed."
+    assert callable(compute_ead), (
+        "``rwa_calc.engine.ccr.sa_ccr.compute_ead`` must still exist after P6.30 — "
+        "only the singleton stub is removed."
     )
 
 

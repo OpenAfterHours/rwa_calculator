@@ -181,6 +181,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "153(5)", "Basel 3.1 slotting tables (HVCRE + PF pre-op)"),
     ),
+    # Basel 3.1 removed the IRB equity approaches — all equity uses SA
+    # (CRE20.58-62 / PRA PS1/26 Art. 133). Overrides the CRR Feature.
+    "equity_irb_approaches_available": Feature(
+        name="equity_irb_approaches_available",
+        enabled=False,
+        citation=Citation("PS1/26", "133", "Basel 3.1 removed IRB equity — all equity uses SA"),
+    ),
+    # Basel 3.1 equity SA risk weights (PRA PS1/26 Art. 133(3)-(5)): 250% / 400%
+    # speculative / 150% subordinated. Overrides the CRR Feature.
+    "equity_revised_sa_risk_weights": Feature(
+        name="equity_revised_sa_risk_weights",
+        enabled=True,
+        citation=Citation("PS1/26", "133", "Basel 3.1 equity SA RW 250%/400%/150%"),
+    ),
     "output_floor": Feature(
         name="output_floor",
         enabled=True,

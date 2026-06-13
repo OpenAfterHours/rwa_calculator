@@ -472,6 +472,8 @@ class EquityCalculatorProtocol(Protocol):
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> EquityResultBundle:
         """
         Calculate equity RWA and return as bundle.
@@ -479,6 +481,8 @@ class EquityCalculatorProtocol(Protocol):
         Args:
             data: CRM-adjusted exposures
             config: Calculation configuration
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             EquityResultBundle with results and audit trail

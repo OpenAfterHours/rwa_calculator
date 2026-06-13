@@ -58,11 +58,13 @@ from rwa_calc.engine.irb.formulas import (
     _correlation_expr_from_pd,
     _maturity_adjustment_expr_from_pd,
 )
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from polars.expr.whenthen import ChainedThen, Then
 
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +216,8 @@ class EquityCalculator:
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> EquityResultBundle:
         """
         Calculate equity RWA and return as a bundle.
@@ -246,10 +250,10 @@ class EquityCalculator:
                 errors=[],
             )
 
-        approach = self._determine_approach(config)
+        approach = self._determine_approach(config, pack=pack)
 
         exposures = self._prepare_columns(exposures, config)
-        exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
+        exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config, pack=pack)
 
         # Art. 155(3) PD/LGD computes RWEA inside the branch and bypasses both
         # the IRB Simple transitional floor and _calculate_rwa.
@@ -259,9 +263,9 @@ class EquityCalculator:
             if approach == EquityApproach.IRB_SIMPLE:
                 exposures = self._apply_equity_weights_irb_simple(exposures, config)
             else:
-                exposures = self._apply_equity_weights_sa(exposures, config)
+                exposures = self._apply_equity_weights_sa(exposures, config, pack=pack)
 
-            exposures = self._apply_transitional_floor(exposures, config)
+            exposures = self._apply_transitional_floor(exposures, config, pack=pack)
             exposures = self._calculate_rwa(exposures)
 
         audit = self._build_audit(exposures, approach)
@@ -274,7 +278,12 @@ class EquityCalculator:
         )
 
     @cites("CRR Art. 155(3)")
-    def _determine_approach(self, config: CalculationConfig) -> EquityApproach:
+    def _determine_approach(
+        self,
+        config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
+    ) -> EquityApproach:
         """
         Determine SA, IRB_SIMPLE, or PD_LGD based on config.
 
@@ -295,9 +304,10 @@ class EquityCalculator:
             EquityApproach.SA (Art. 133), EquityApproach.IRB_SIMPLE (Art. 155(2)),
             or EquityApproach.PD_LGD (Art. 155(3))
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62).
         # The equity_pd_lgd flag is ignored under Basel 3.1.
-        if config.is_basel_3_1:
+        if not resolved_pack.feature("equity_irb_approaches_available"):
             return EquityApproach.SA
 
         # CRR: Check if firm has any IRB permissions beyond SA
@@ -357,6 +367,8 @@ class EquityCalculator:
         exposures: pl.LazyFrame,
         ciu_holdings: pl.LazyFrame | None,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Resolve look-through risk weights for CIU exposures (Art. 132a).
@@ -380,7 +392,8 @@ class EquityCalculator:
         # Get CQS-based risk weight table for holding-level RW lookup
         from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
 
-        if config.is_basel_3_1:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if resolved_pack.feature("sa_revised_risk_weight_tables"):
             from rwa_calc.data.tables.b31_risk_weights import (
                 get_b31_combined_cqs_risk_weights,
             )
@@ -524,6 +537,8 @@ class EquityCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA equity risk weights, branching by framework.
@@ -532,7 +547,8 @@ class EquityCalculator:
             CIU via Art. 132 (1,250% fallback per Art. 132(2))
         Basel 3.1 Art. 133(3)-(5): 250% / 400% / 150% (sub debt)
         """
-        if config.is_basel_3_1:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if resolved_pack.feature("equity_revised_sa_risk_weights"):
             return self._apply_b31_equity_weights_sa(exposures, config)
         return self._apply_crr_equity_weights_sa(exposures, config)
 
@@ -906,6 +922,8 @@ class EquityCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply equity transitional risk weight floor (PRA Rules 4.1-4.10).
@@ -987,9 +1005,10 @@ class EquityCalculator:
         # Determine transitional approach type for COREP reporting (OF 07.00
         # rows 0371-0374).  CRR firms with prior IRB equity permission use
         # "irb_transitional"; all others use "sa_transitional".
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         approach_label = (
             "irb_transitional"
-            if not config.is_basel_3_1
+            if resolved_pack.feature("equity_irb_approaches_available")
             and any(
                 ApproachType.FIRB in a or ApproachType.AIRB in a
                 for a in config.irb_permissions.permissions.values()  # ty: ignore[unresolved-attribute]

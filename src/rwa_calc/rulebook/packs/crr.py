@@ -195,6 +195,24 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "153(5)", "UK CRR single slotting table (HVCRE Table 2 not onshored)"
         ),
     ),
+    # Equity: under Basel 3.1 the IRB equity approaches (Art. 155(2) IRB Simple /
+    # Art. 155(3) PD-LGD) are removed — all equity uses SA (CRE20.58-62). The
+    # Feature gates the approach selection + the COREP transitional-approach label
+    # in engine/equity/calculator.py.
+    "equity_irb_approaches_available": Feature(
+        name="equity_irb_approaches_available",
+        enabled=True,
+        citation=Citation("CRR", "155", "IRB equity approaches (Simple / PD-LGD) available"),
+    ),
+    # Equity SA risk weights: CRR Art. 133(2) 100% flat (250% Art. 48(4), CIU
+    # 1250% Art. 132) vs Basel 3.1 Art. 133(3)-(5) 250%/400%/150%. The Feature
+    # selects the CRR vs B31 SA-equity RW method; the VALUES stay in
+    # data/tables/{crr,b31}_equity_rw.py.
+    "equity_revised_sa_risk_weights": Feature(
+        name="equity_revised_sa_risk_weights",
+        enabled=False,
+        citation=Citation("CRR", "133", "CRR Art. 133(2) 100% flat equity SA RW"),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

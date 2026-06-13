@@ -50,14 +50,16 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the equity calculation stage."""
     crm_adjusted = ctx.get(CRM_ADJUSTED)
     components = ctx.get(COMPONENTS)
     try:
-        result = components.equity_calculator.get_equity_result_bundle(crm_adjusted, run_config)
+        result = components.equity_calculator.get_equity_result_bundle(
+            crm_adjusted, run_config, pack=rulepack.pack
+        )
 
         # Unified error channel: equity errors (CalculationErrors) reach
         # the result verbatim — original code/severity/category preserved.

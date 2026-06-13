@@ -798,8 +798,8 @@ class TestStageErrorChannel:
         )
 
         class SentinelEquityCalculator:
-            def get_equity_result_bundle(self, data, config):
-                result = EquityCalculator().get_equity_result_bundle(data, config)
+            def get_equity_result_bundle(self, data, config, *, pack=None):
+                result = EquityCalculator().get_equity_result_bundle(data, config, pack=pack)
                 return replace(result, errors=[*result.errors, sentinel])
 
         pipeline = PipelineOrchestrator(equity_calculator=SentinelEquityCalculator())

@@ -73,10 +73,13 @@ from rwa_calc.engine.irb.guarantee import (
 from rwa_calc.engine.utils import (
     exact_fractional_years_expr as _exact_fractional_years_expr,
 )
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -419,23 +422,28 @@ def calculate_maturity_adjustment(lf: pl.LazyFrame, config: CalculationConfig) -
     )
 
 
-def calculate_rwa(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def calculate_rwa(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Calculate RWA and related metrics.
 
     RWA = K × 12.5 × [1.06] × EAD × MA
     Risk weight = K × 12.5 × [1.06] × MA
 
-    The 1.06 scaling factor applies only under CRR.
+    The 1.06 scaling factor applies only under CRR (sourced from the rulepack's
+    ``irb_scaling_factor``: 1.06 CRR / 1.0 Basel 3.1).
 
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with rwa, risk_weight, scaling_factor columns
     """
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
 
     return lf.with_columns(
         [
@@ -525,12 +533,14 @@ def compute_el_shortfall_excess(
 # =============================================================================
 
 
-def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """Apply guarantee substitution for IRB exposures.
 
     Delegates to ``guarantee.apply_guarantee_substitution``.
     """
-    return _apply_guarantee_substitution(lf, config)
+    return _apply_guarantee_substitution(lf, config, pack=pack)
 
 
 # =============================================================================
@@ -538,7 +548,9 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 # =============================================================================
 
 
-def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_all_formulas(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply full IRB formula pipeline in 4 batched with_columns.
 
@@ -551,10 +563,12 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with all IRB calculations
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     schema = lf.collect_schema()
     schema_names = set(schema.names())
 
@@ -601,7 +615,7 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     lf = lf.with_columns(_polars_capital_k_expr().alias("k"))
 
     # --- Batch 4: RWA + risk weight + expected loss ---
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
     lf = lf.with_columns(
         [
             pl.lit(scaling_factor).alias("scaling_factor"),

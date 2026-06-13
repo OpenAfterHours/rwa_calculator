@@ -32,9 +32,12 @@ from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 # =============================================================================
@@ -360,6 +363,8 @@ def _lgd_floor_blended_expression(
 def apply_irb_formulas(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Apply IRB formulas to exposures using pure Polars expressions.
@@ -380,8 +385,8 @@ def apply_irb_formulas(
     Returns:
         LazyFrame with IRB calculations added
     """
-    apply_scaling = config.is_crr
-    scaling_factor = 1.06 if apply_scaling else 1.0
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
 
     # Ensure calculator-internal derived columns exist (maturity / turnover_m
     # are produced by ``prepare_columns`` on the namespace path and are not

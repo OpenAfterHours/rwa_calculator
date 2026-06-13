@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the split-once branch calculation with a shared collect."""
@@ -109,7 +109,7 @@ def run(
         )
 
     irb_result = components.irb_calculator.calculate_branch(
-        irb_branch, run_config, errors=branch_errors
+        irb_branch, run_config, errors=branch_errors, pack=rulepack.pack
     )
     slotting_result = components.slotting_calculator.calculate_branch(
         slotting_branch, run_config, errors=branch_errors

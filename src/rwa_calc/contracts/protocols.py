@@ -392,6 +392,7 @@ class IRBCalculatorProtocol(Protocol):
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.

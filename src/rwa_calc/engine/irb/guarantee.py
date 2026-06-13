@@ -39,13 +39,18 @@ from rwa_calc.engine.irb.formulas import (
     _parametric_irb_risk_weight_expr,
     _pd_floor_expression,
 )
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @cites("CRR Art. 161(3)")
-def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply guarantee substitution for IRB exposures with unfunded credit protection.
 
@@ -111,7 +116,10 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
     lf = _compute_guarantor_rw_sa(lf, cols, config)
 
     # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
-    lf = _apply_parameter_substitution(lf, cols, config, use_parameter_substitution)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    lf = _apply_parameter_substitution(
+        lf, cols, config, use_parameter_substitution, pack=resolved_pack
+    )
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
     lf = _apply_double_default(lf, cols, config, has_guarantor_pd)
@@ -289,6 +297,8 @@ def _apply_parameter_substitution(
     cols: list[str],
     config: CalculationConfig,
     use_parameter_substitution: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply parameter substitution for IRB guarantors (CRR Art. 161(3) /
     Basel 3.1 CRE22.70-85). The F-IRB supervisory LGD is selected per row
@@ -332,7 +342,7 @@ def _apply_parameter_substitution(
     )
     guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    scaling_factor = scalar_value(pack.scalar_param("irb_scaling_factor"))
     eur_gbp_rate = float(config.eur_gbp_rate)
 
     # Per-row F-IRB supervisory LGD selection (Art. 161(1)(a)/(aa)/(b)).

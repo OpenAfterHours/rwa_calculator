@@ -40,14 +40,16 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run CRM processing on the unified exposure frame."""
     classified = ctx.get(CLASSIFIED)
     components = ctx.get(COMPONENTS)
 
-    result = components.crm_processor.get_crm_unified_bundle(classified, run_config)
+    result = components.crm_processor.get_crm_unified_bundle(
+        classified, run_config, pack=rulepack.pack
+    )
 
     # Unified error channel: CRM errors reach the result verbatim —
     # original code/severity/category preserved, never PIPELINE_*.

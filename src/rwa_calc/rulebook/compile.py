@@ -46,6 +46,17 @@ def scalar_lit(p: ScalarParam) -> pl.Expr:
     return pl.lit(float(p.value))
 
 
+def scalar_value(p: ScalarParam) -> float:
+    """Read a ``ScalarParam`` as a Python ``float`` (no Polars boundary).
+
+    The float-valued sibling of :func:`scalar_lit`, for the rare scalars that
+    feed Python-level arithmetic before the expression is built (e.g. a
+    ``1 - discount`` multiplier) rather than a bare ``pl.lit``. Keeping the
+    ``float(...)`` here preserves "compile is the only Decimal->float boundary".
+    """
+    return float(p.value)
+
+
 def lookup_expr(t: LookupTable, key_col: str | None = None) -> pl.Expr:
     """Compile a ``LookupTable`` to an exact-match when/then chain.
 

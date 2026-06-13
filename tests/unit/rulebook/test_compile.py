@@ -13,6 +13,7 @@ from rwa_calc.rulebook.compile import (
     formula_param_lit,
     lookup_expr,
     scalar_lit,
+    scalar_value,
 )
 from rwa_calc.rulebook.model import (
     BandedTable,
@@ -41,6 +42,18 @@ def test_scalar_lit_evaluates_to_float() -> None:
 
     # Assert
     assert value == 0.08
+
+
+def test_scalar_value_returns_python_float() -> None:
+    # Arrange
+    param = ScalarParam("fcsm_rw_floor", Decimal("0.20"), _CIT)
+
+    # Act
+    value = scalar_value(param)
+
+    # Assert — the float sibling of scalar_lit (no Polars boundary)
+    assert isinstance(value, float)
+    assert value == 0.20
 
 
 def test_scalar_lit_is_float64() -> None:

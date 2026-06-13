@@ -7,6 +7,13 @@ from decimal import Decimal
 
 import pytest
 
+from rwa_calc.data.tables.crr_simple_method import (
+    ART_222_4_CMP_RW,
+    ART_222_4_NON_CMP_RW,
+    FCSM_EQUITY_COLLATERAL_RW,
+    FCSM_RW_FLOOR,
+    SOVEREIGN_BOND_DISCOUNT,
+)
 from rwa_calc.rulebook.model import LookupTable, ScalarParam
 from rwa_calc.rulebook.resolve import resolve
 
@@ -28,6 +35,34 @@ def test_b31_irb_scaling_factor_overrides_to_one() -> None:
 def test_common_pack_entry_visible_in_regime() -> None:
     # Act / Assert — regime-invariant scalar from the common pack
     assert resolve("crr", date(2026, 1, 1)).scalar("fx_haircut") == Decimal("0.08")
+
+
+def test_fcsm_floors_resolve_from_common_pack() -> None:
+    # Arrange
+    pack = resolve("crr", date(2026, 1, 1))
+    # Act / Assert — the five Art. 222 FCSM scalars reproduce the data/tables
+    # values exactly (byte-identical migration; same Decimals, both regimes).
+    assert pack.scalar("fcsm_rw_floor") == FCSM_RW_FLOOR
+    assert pack.scalar("fcsm_sovereign_bond_discount") == SOVEREIGN_BOND_DISCOUNT
+    assert pack.scalar("fcsm_sft_cmp_floor") == ART_222_4_CMP_RW
+    assert pack.scalar("fcsm_sft_non_cmp_floor") == ART_222_4_NON_CMP_RW
+    assert pack.scalar("fcsm_equity_collateral_rw") == FCSM_EQUITY_COLLATERAL_RW
+
+
+def test_fcsm_floors_regime_invariant() -> None:
+    # Act / Assert — Art. 222 is retained unchanged under Basel 3.1 (common pack)
+    crr = resolve("crr", date(2026, 1, 1))
+    b31 = resolve("b31", date(2027, 1, 1))
+    assert crr.scalar("fcsm_rw_floor") == b31.scalar("fcsm_rw_floor") == Decimal("0.20")
+
+
+def test_scalar_param_returns_typed_entry() -> None:
+    # Act — the entry-returning accessor (sibling of ``scalar``)
+    entry = resolve("crr", date(2026, 1, 1)).scalar_param("fcsm_rw_floor")
+    # Assert
+    assert isinstance(entry, ScalarParam)
+    assert entry.value == Decimal("0.20")
+    assert entry.name == "fcsm_rw_floor"
 
 
 # ---------------------------------------------------------------------------

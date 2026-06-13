@@ -327,10 +327,15 @@ IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
     # TYPE_CHECKING-only: CalculationResponse return type on ResultExporter /
     # report-generator protocols; CollateralLinkAllocation on the CRM
     # protocol. Retired by Phase 4 (protocol diet) / Phase 7 (reporting input
-    # = sealed aggregator exit contract).
+    # = sealed aggregator exit contract). ResolvedRulepack is the Phase 5
+    # ``pack`` argument on CRMProcessorProtocol.get_crm_unified_bundle — the
+    # rulepack type is genuinely part of the stage contract; revisited when the
+    # rulebook data subtree (model/resolve, which never import contracts) is
+    # re-layered below contracts (Phase 5 / S11 config split).
     "contracts/protocols.py": {
         "rwa_calc.api.models",
         "rwa_calc.engine.crm.link_allocation",
+        "rwa_calc.rulebook.resolve",
     },
     # TYPE_CHECKING-only CalculationResponse on the generator entry points.
     # Retired by Phase 7 (reporting consumes the sealed aggregator exit).

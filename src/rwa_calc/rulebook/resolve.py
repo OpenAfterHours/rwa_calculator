@@ -81,6 +81,16 @@ class ResolvedRulepack:
         """Return a ``ScalarParam`` value (raises ``TypeError`` if wrong shape)."""
         return self._typed(name, ScalarParam).value
 
+    def scalar_param(self, name: str) -> ScalarParam:
+        """Return the ``ScalarParam`` entry itself (raises ``TypeError`` if wrong shape).
+
+        The entry-returning sibling of :meth:`scalar` (which returns only the
+        ``Decimal`` value), for callers that hand the shape to
+        ``rulebook/compile.py`` — symmetric with ``lookup`` / ``banded`` /
+        ``decision`` / ``formula``.
+        """
+        return self._typed(name, ScalarParam)
+
     def feature(self, name: str) -> bool:
         """Return a ``Feature`` flag (raises ``TypeError`` if wrong shape)."""
         return self._typed(name, Feature).enabled

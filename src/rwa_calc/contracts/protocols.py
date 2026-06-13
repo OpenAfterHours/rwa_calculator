@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.contracts.results import ExportResult
     from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocation
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @runtime_checkable
@@ -243,6 +244,8 @@ class CRMProcessorProtocol(Protocol):
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """
         Apply CRM and return a unified bundle without approach splitting.
@@ -254,6 +257,9 @@ class CRMProcessorProtocol(Protocol):
         Args:
             data: Classified exposures
             config: Calculation configuration
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — the
+                source of regulatory values). Optional; sub-steps resolve one
+                from ``config`` when omitted.
 
         Returns:
             CRMAdjustedBundle with all exposures in the unified frame

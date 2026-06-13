@@ -771,9 +771,9 @@ class TestStageErrorChannel:
         )
 
         class SentinelCRMProcessor:
-            def get_crm_unified_bundle(self, classified, config):
+            def get_crm_unified_bundle(self, classified, config, *, pack=None):
                 processor = CRMProcessor()
-                result = processor.get_crm_unified_bundle(classified, config)
+                result = processor.get_crm_unified_bundle(classified, config, pack=pack)
                 return replace(result, crm_errors=[*result.crm_errors, sentinel])
 
         pipeline = PipelineOrchestrator(crm_processor=SentinelCRMProcessor())

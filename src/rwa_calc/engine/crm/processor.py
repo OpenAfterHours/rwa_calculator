@@ -79,6 +79,7 @@ from rwa_calc.observability.audit_cache import sink_audit
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +494,8 @@ class CRMProcessor:
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """
         Apply CRM on the unified exposure frame (single-pass pipeline).
@@ -508,6 +511,10 @@ class CRMProcessor:
         Args:
             data: Classified exposures from classifier
             config: Calculation configuration
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — the
+                source of regulatory values, e.g. the Art. 222 FCSM floors).
+                Production passes the orchestrator's pack; direct callers may
+                omit it, in which case sub-steps resolve one from ``config``.
 
         Returns:
             CRMAdjustedBundle with all exposures in the unified frame
@@ -544,7 +551,7 @@ class CRMProcessor:
         use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
         if use_simple_method:
             if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-                exposures = compute_fcsm_columns(exposures, collateral, config)
+                exposures = compute_fcsm_columns(exposures, collateral, config, pack=pack)
             else:
                 # Add default (zero) FCSM columns when no valid collateral
                 from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns

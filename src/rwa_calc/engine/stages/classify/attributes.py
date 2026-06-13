@@ -55,9 +55,11 @@ from rwa_calc.data.tables.entity_class_mapping import (
 )
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.utils import partition_by_nullable
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +214,8 @@ def derive_independent_flags(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
     schema_names: set[str],
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Compute all flags that depend only on raw input columns.
@@ -244,6 +248,7 @@ def derive_independent_flags(
       ``pl.coalesce`` so the derivation cannot override an explicit
       user-supplied flag.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     max_retail_exposure = float(config.thresholds.retail_max_exposure)
 
     # SL override: exposures with sl_type (from specialised_lending join) get
@@ -272,7 +277,7 @@ def derive_independent_flags(
     # residual OTHER class. The 150% high-risk treatment is re-introduced
     # under PRA PS1/26 Basel 3.1 (Art. 128), so the SA-class label is
     # preserved as HIGH_RISK in that regime.
-    if not config.is_basel_3_1:
+    if not resolved_pack.feature("b31_high_risk_class_applicable"):
         exposures = exposures.with_columns(
             pl.when(pl.col("_sa_class") == ExposureClass.HIGH_RISK.value)
             .then(pl.lit(ExposureClass.OTHER.value))
@@ -353,7 +358,7 @@ def derive_independent_flags(
     # residential exposures to the income-producing whole-loan track (Art. 124G)
     # when the borrower breaches the three-property limit. An explicit upstream
     # income flag still wins (coalesce precedence). CRR routing is untouched.
-    if config.is_basel_3_1:
+    if resolved_pack.feature("b31_art_124e_three_property_limit_applies"):
         exposures = exposures.with_columns(
             _build_has_income_cover_expr(),
         )

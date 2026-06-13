@@ -140,7 +140,7 @@ class ExposureClassifier:
 
         classification_errors = collect_input_warnings(data, config, pack=resolved_pack)
 
-        classified = derive_independent_flags(exposures, config, schema_names)
+        classified = derive_independent_flags(exposures, config, schema_names, pack=resolved_pack)
         classified = classify_exposure_subtypes(classified, config)
         classified = reclassify_corporate_to_retail(classified, config, schema_names)
         classified = flag_property_reclassification_candidates(classified, config, schema_names)
@@ -157,7 +157,7 @@ class ExposureClassifier:
             has_model_permissions=has_model_permissions,
             pack=resolved_pack,
         )
-        classified = derive_exposure_subclass(classified, config)
+        classified = derive_exposure_subclass(classified, config, pack=resolved_pack)
 
         # Stage-exit edge (producer-side): the diagnostic emits below run
         # against in-memory data instead of re-executing the upstream lazy

@@ -39,9 +39,11 @@ from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
 from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr
 from rwa_calc.engine.utils import partition_by_nullable
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +271,8 @@ def sync_irb_exposure_class(exposures: pl.LazyFrame) -> pl.LazyFrame:
 def derive_exposure_subclass(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Derive the Basel 3.1 corporate ``exposure_subclass`` (PRA PS1/26 Art. 147A(1)).
 
@@ -285,8 +289,9 @@ def derive_exposure_subclass(
     (``config.thresholds.large_corporate_revenue_threshold``) shared with
     ``_apply_b31_approach_restrictions``; non-corporate rows stay null.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     null_subclass = pl.lit(None, dtype=pl.String).alias("exposure_subclass")
-    if not config.is_basel_3_1:
+    if not resolved_pack.feature("b31_exposure_subclass_reporting_applies"):
         return exposures.with_columns(null_subclass)
 
     is_corporate = pl.col("exposure_class").is_in(

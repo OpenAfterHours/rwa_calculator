@@ -224,6 +224,29 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "147", "no Art. 147A IRB approach restrictions under CRR"),
     ),
+    # CRR Art. 128 (150% high-risk class) was omitted from UK onshored CRR by
+    # SI 2021/1078, so HIGH_RISK falls through to OTHER; Basel 3.1 re-introduces it.
+    "b31_high_risk_class_applicable": Feature(
+        name="b31_high_risk_class_applicable",
+        enabled=False,
+        citation=Citation(
+            "CRR", "128", "Art. 128 high-risk class omitted from UK CRR (SI 2021/1078)"
+        ),
+    ),
+    # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to income-
+    # producing whole-loan above the three-property limit; no CRR equivalent.
+    "b31_art_124e_three_property_limit_applies": Feature(
+        name="b31_art_124e_three_property_limit_applies",
+        enabled=False,
+        citation=Citation("CRR", "124", "no natural-person three-property re-route under CRR"),
+    ),
+    # Basel 3.1 Art. 147A(1) COREP corporate sub-class split (financial-large /
+    # SME / other); CRR has no exposure_subclass reporting column.
+    "b31_exposure_subclass_reporting_applies": Feature(
+        name="b31_exposure_subclass_reporting_applies",
+        enabled=False,
+        citation=Citation("CRR", "147", "no COREP corporate exposure-subclass split under CRR"),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

@@ -207,6 +207,28 @@ ENTRIES: dict[str, RuleEntry] = {
             "Art. 147A(1) IRB approach restrictions (FSE/large-corp/institution/sovereign/IPRE)",
         ),
     ),
+    # Basel 3.1 re-introduces the 150% high-risk class (PRA PS1/26 Art. 128).
+    "b31_high_risk_class_applicable": Feature(
+        name="b31_high_risk_class_applicable",
+        enabled=True,
+        citation=Citation("PS1/26", "128", "Basel 3.1 re-introduces the 150% high-risk class"),
+    ),
+    # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to income-
+    # producing whole-loan (Art. 124G) above the three-property limit.
+    "b31_art_124e_three_property_limit_applies": Feature(
+        name="b31_art_124e_three_property_limit_applies",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "124E", "natural-person three-property income-producing re-route"
+        ),
+    ),
+    # Basel 3.1 Art. 147A(1) COREP corporate sub-class split (financial-large /
+    # SME / other).
+    "b31_exposure_subclass_reporting_applies": Feature(
+        name="b31_exposure_subclass_reporting_applies",
+        enabled=True,
+        citation=Citation("PS1/26", "147A", "three-way corporate COREP exposure-subclass split"),
+    ),
     "output_floor": Feature(
         name="output_floor",
         enabled=True,

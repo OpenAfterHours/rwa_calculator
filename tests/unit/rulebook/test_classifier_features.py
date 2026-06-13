@@ -9,6 +9,12 @@ and overridable elections those branches read stay in ``config`` → S11):
   IRB-approach restriction family in ``engine/stages/classify/{approach,audit}.py``
   (FSE/large-corp/institution no A-IRB, sovereign-like + equity SA-only,
   IPRE/HVCRE slotting-only, plus the CLS008 large-corp conservatism warning).
+- ``b31_high_risk_class_applicable`` (S8b) gates the Art. 128 150% high-risk class
+  (CRR omitted it via SI 2021/1078, rewriting HIGH_RISK→OTHER; B31 retains it).
+- ``b31_art_124e_three_property_limit_applies`` (S8b) gates the Art. 124E(1)(b)/(2)
+  natural-person RRE three-property income-producing re-route.
+- ``b31_exposure_subclass_reporting_applies`` (S8b) gates the Art. 147A(1) COREP
+  corporate exposure-subclass split.
 
 Each Feature's value mirrors ``config.is_basel_3_1`` per regime (CRR False /
 Basel 3.1 True), so this pin is the byte-identical-parity contract.
@@ -31,6 +37,9 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 # (feature name, enabled under CRR, enabled under Basel 3.1)
 _FEATURE_MATRIX = [
     ("approach_restrictions_b31_applicable", False, True),
+    ("b31_high_risk_class_applicable", False, True),
+    ("b31_art_124e_three_property_limit_applies", False, True),
+    ("b31_exposure_subclass_reporting_applies", False, True),
 ]
 
 

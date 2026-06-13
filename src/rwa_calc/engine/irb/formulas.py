@@ -36,6 +36,8 @@ from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -46,6 +48,57 @@ if TYPE_CHECKING:
 
 # Pre-calculated G(0.999) ≈ 3.0902323061678132
 G_999 = 3.0902323061678132
+
+
+# =============================================================================
+# F-IRB SUPERVISORY LGD PROJECTION (canonical pack table -> FIRB-dict shape)
+# =============================================================================
+
+
+def firb_supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, Decimal]:
+    """Project the canonical ``firb_supervisory_lgd`` table to the FIRB-dict shape.
+
+    The IRB analog of ``engine/crm/expressions.py::supervisory_lgd_values``: it
+    reads the per-run ``firb_supervisory_lgd`` DecisionTable — keyed by
+    ``(collateral_type, seniority, is_fse)`` — into the flat key shape the IRB
+    transforms and guarantee substitution consume, reproducing
+    ``data/tables/firb_lgd.py``'s FIRB_SUPERVISORY_LGD /
+    BASEL31_FIRB_SUPERVISORY_LGD exactly (pinned). The FSE senior split appears
+    only where the regime distinguishes it (Basel 3.1 Art. 161(1)(a) vs (aa));
+    the Art. 230 Table 5 subordinated secured-portion LGDS appear only where the
+    regime carries them (CRR — dropped under Basel 3.1 Art. 230(2)). Values stay
+    ``Decimal``; the ``float()`` boundary stays at the call sites.
+    """
+    rows = dict(pack.decision("firb_supervisory_lgd").rows)
+    values: dict[str, Decimal] = {
+        "unsecured_senior": rows[("unsecured", "senior", False)],
+        "subordinated": rows[("unsecured", "subordinated", False)],
+        "covered_bond": rows[("covered_bond", "senior", False)],
+        "financial_collateral": rows[("financial_collateral", "senior", False)],
+        "receivables": rows[("receivables", "senior", False)],
+        "residential_re": rows[("residential_re", "senior", False)],
+        "commercial_re": rows[("commercial_re", "senior", False)],
+        "other_physical": rows[("other_physical", "senior", False)],
+        "purchased_receivables_senior": rows[("purchased_receivables", "senior", False)],
+        "purchased_receivables_subordinated": rows[
+            ("purchased_receivables", "subordinated", False)
+        ],
+        "dilution_risk": rows[("purchased_receivables", "dilution_risk", False)],
+    }
+    fse = rows.get(("unsecured", "senior", True))
+    if fse is not None and fse != values["unsecured_senior"]:
+        values["unsecured_senior_fse"] = fse
+    for key, collateral_type in (
+        ("financial_collateral_subordinated", "financial_collateral"),
+        ("receivables_subordinated", "receivables"),
+        ("residential_re_subordinated", "residential_re"),
+        ("commercial_re_subordinated", "commercial_re"),
+        ("other_physical_subordinated", "other_physical"),
+    ):
+        subordinated = rows.get((collateral_type, "subordinated", False))
+        if subordinated is not None:
+            values[key] = subordinated
+    return values
 
 
 # =============================================================================

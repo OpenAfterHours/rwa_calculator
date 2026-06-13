@@ -39,6 +39,7 @@ from rwa_calc.engine.crm.expressions import (
     collateral_lgd_expr,
     is_financial_collateral_type_expr,
     overcollateralisation_ratio_expr,
+    subordinated_unsecured_lgd,
     supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
@@ -465,8 +466,10 @@ def apply_firb_supervisory_lgd_no_collateral(
     Returns:
         Exposures with lgd_post_crm set for F-IRB (and qualifying A-IRB)
     """
-    lgd_values = supervisory_lgd_values(_resolve_pack_for_lgd(pack, config, is_basel_3_1))
+    resolved_pack = _resolve_pack_for_lgd(pack, config, is_basel_3_1)
+    lgd_values = supervisory_lgd_values(resolved_pack)
     lgd_senior = lgd_values["unsecured"]
+    lgd_subordinated = subordinated_unsecured_lgd(resolved_pack)
 
     # Add collateral-related columns with zero values for consistency
     exposures = exposures.with_columns(
@@ -522,11 +525,11 @@ def apply_firb_supervisory_lgd_no_collateral(
         exposures = exposures.with_columns(
             [
                 pl.when((pl.col("approach") == ApproachType.FIRB.value) & is_subordinated)
-                .then(pl.lit(0.75))
+                .then(pl.lit(lgd_subordinated))
                 .when(pl.col("approach") == ApproachType.FIRB.value)
                 .then(lgd_senior_expr)
                 .when(_is_169b & is_subordinated)
-                .then(pl.lit(0.75))
+                .then(pl.lit(lgd_subordinated))
                 .when(_is_169b)
                 .then(own_lgdu)
                 .otherwise(pl.col("lgd_pre_crm"))
@@ -541,7 +544,7 @@ def apply_firb_supervisory_lgd_no_collateral(
     exposures = exposures.with_columns(
         [
             pl.when(uses_formula & is_subordinated)
-            .then(pl.lit(0.75))  # Subordinated (same both frameworks)
+            .then(pl.lit(lgd_subordinated))  # Subordinated (same both frameworks)
             .when(uses_formula)
             .then(lgd_senior_expr)  # Senior unsecured (FSE-aware under B31)
             .otherwise(pl.col("lgd_pre_crm"))  # A-IRB or SA: keep existing
@@ -581,6 +584,7 @@ def _apply_collateral_unified(
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     lgd_values = supervisory_lgd_values(resolved_pack)
+    lgd_subordinated = subordinated_unsecured_lgd(resolved_pack)
     lgd_unsecured = lgd_values["unsecured"]
 
     # LGDS values per waterfall category (Art. 230/231)
@@ -1015,13 +1019,15 @@ def _apply_collateral_unified(
         own_lgdu = pl.coalesce(pl.col("lgd_unsecured"), pl.col("lgd_pre_crm"))
         lgdu_expr = (
             pl.when(is_subordinated)
-            .then(pl.lit(0.75))
+            .then(pl.lit(lgd_subordinated))
             .when(_airb_uses_formula)
             .then(own_lgdu)
             .otherwise(supervisory_lgdu_expr)
         )
     else:
-        lgdu_expr = pl.when(is_subordinated).then(pl.lit(0.75)).otherwise(supervisory_lgdu_expr)
+        lgdu_expr = (
+            pl.when(is_subordinated).then(pl.lit(lgd_subordinated)).otherwise(supervisory_lgdu_expr)
+        )
 
     # SA EAD reduction (CRR Art. 228(1) / PS1/26 Art. 228(1)) with the
     # CRR Art. 223(5) FCCM exposure-side gross-up:

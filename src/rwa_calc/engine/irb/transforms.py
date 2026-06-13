@@ -47,7 +47,6 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.adjustments import (
     apply_defaulted_treatment as _apply_defaulted_treatment,
@@ -66,6 +65,7 @@ from rwa_calc.engine.irb.formulas import (
     _polars_capital_k_expr,
     _polars_correlation_expr,
     _polars_maturity_adjustment_expr,
+    firb_supervisory_lgd_values,
 )
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as _apply_guarantee_substitution,  # noqa: E501
@@ -126,7 +126,9 @@ def classify_approach(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFra
     )
 
 
-def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_firb_lgd(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply F-IRB supervisory LGD for Foundation IRB exposures.
 
@@ -146,8 +148,9 @@ def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     Returns:
         LazyFrame with F-IRB LGD applied
     """
-    # Use framework-appropriate supervisory LGD values
-    lgd_table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
+    # Use framework-appropriate supervisory LGD values (rulepack-sourced).
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    lgd_table = firb_supervisory_lgd_values(resolved_pack)
     default_lgd = float(lgd_table["unsecured_senior"])
     sub_lgd = float(lgd_table["subordinated"])
 

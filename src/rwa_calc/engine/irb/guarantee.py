@@ -38,6 +38,7 @@ from rwa_calc.engine.irb.formulas import (
     _double_default_multiplier_expr,
     _parametric_irb_risk_weight_expr,
     _pd_floor_expression,
+    firb_supervisory_lgd_values,
 )
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
@@ -176,7 +177,9 @@ def apply_guarantee_substitution(
 
     # Adjust expected loss for guaranteed portion
     if has_expected_loss:
-        lf = _adjust_expected_loss(lf, config, ead_col, use_parameter_substitution)
+        lf = _adjust_expected_loss(
+            lf, config, ead_col, use_parameter_substitution, pack=resolved_pack
+        )
 
     # Track guarantee status and method for reporting
     lf = _add_guarantee_status_columns(lf)
@@ -324,7 +327,7 @@ def _apply_parameter_substitution(
             ]
         )
 
-    firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated = _firb_lgd_tuple(config)
+    firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated = _firb_lgd_tuple(pack)
 
     lf = _ensure_parameter_substitution_columns(lf, cols)
 
@@ -402,15 +405,13 @@ def _apply_parameter_substitution(
     )
 
 
-def _firb_lgd_tuple(config: CalculationConfig) -> tuple[float, float, float]:
+def _firb_lgd_tuple(pack: ResolvedRulepack) -> tuple[float, float, float]:
     """Return (senior, senior_fse, subordinated) F-IRB supervisory LGDs.
 
     The FSE-specific senior key only exists in the Basel 3.1 table; CRR has
     no FSE split (Art. 161(1)(a) covers all senior unsecured at 45%).
     """
-    from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
-
-    firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+    firb_lgd_table = firb_supervisory_lgd_values(pack)
     firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
     firb_lgd_senior_fse = float(
         firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])
@@ -691,6 +692,8 @@ def _adjust_expected_loss(
     config: CalculationConfig,
     ead_col: str,
     use_parameter_substitution: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Adjust expected loss for guaranteed portion.
 
@@ -711,9 +714,7 @@ def _adjust_expected_loss(
     ).fill_null(1.0)
 
     if use_parameter_substitution:
-        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
-
-        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+        firb_lgd_table = firb_supervisory_lgd_values(pack)
         firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
         firb_lgd_senior_fse = float(
             firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])

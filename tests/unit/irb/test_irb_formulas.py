@@ -32,7 +32,12 @@ import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.data.tables.firb_lgd import (
+    BASEL31_FIRB_SUPERVISORY_LGD,
+    FIRB_SUPERVISORY_LGD,
+)
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.crm.expressions import subordinated_unsecured_lgd
 from rwa_calc.engine.irb.formulas import (
     G_999,
     calculate_correlation,
@@ -41,6 +46,7 @@ from rwa_calc.engine.irb.formulas import (
     calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
+    firb_supervisory_lgd_values,
     get_correlation_params,
 )
 from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
@@ -48,12 +54,36 @@ from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.engine.irb.transforms import (
     apply_firb_lgd,
 )
+from rwa_calc.rulebook.resolve import resolve
 
 
 def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     """Test shim: pad hand frames with the crm_exit contract columns the
     sealed branch input guarantees, then invoke the real function."""
     return _apply_irb_formulas_raw(_pad(lf), config)
+
+
+# =============================================================================
+# F-IRB SUPERVISORY LGD PROJECTION PINS (canonical pack table -> FIRB dict)
+# =============================================================================
+
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
+
+def test_firb_supervisory_lgd_values_crr_projection_byte_identical() -> None:
+    # Act / Assert — the pack projection reproduces the CRR FIRB dict exactly
+    assert firb_supervisory_lgd_values(_CRR_PACK) == FIRB_SUPERVISORY_LGD
+
+
+def test_firb_supervisory_lgd_values_b31_projection_byte_identical() -> None:
+    # Act / Assert — and the Basel 3.1 FIRB dict exactly
+    assert firb_supervisory_lgd_values(_B31_PACK) == BASEL31_FIRB_SUPERVISORY_LGD
+
+
+def test_subordinated_unsecured_lgd_is_regime_invariant_075() -> None:
+    # Act / Assert — Art. 161(1)(b) subordinated unsecured, 75% under both regimes
+    assert subordinated_unsecured_lgd(_CRR_PACK) == subordinated_unsecured_lgd(_B31_PACK) == 0.75
 
 
 # =============================================================================

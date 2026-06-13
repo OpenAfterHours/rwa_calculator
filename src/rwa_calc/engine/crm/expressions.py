@@ -89,6 +89,18 @@ def supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, float]:
     return values
 
 
+def subordinated_unsecured_lgd(pack: ResolvedRulepack) -> float:
+    """The F-IRB subordinated unsecured supervisory LGD (Art. 161(1)(b), 75%).
+
+    Sourced from the canonical ``firb_supervisory_lgd`` table's
+    ``(unsecured, subordinated, …)`` row; regime-invariant (75% under both CRR
+    and Basel 3.1). Replaces the historical hardcoded ``pl.lit(0.75)``
+    subordinated literals in the collateral / no-collateral LGD waterfall.
+    """
+    rows = {keys: float(value) for keys, value in pack.decision("firb_supervisory_lgd").rows}
+    return rows[("unsecured", "subordinated", False)]
+
+
 def collateral_lgd_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to supervisory LGD.
 

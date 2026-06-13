@@ -112,7 +112,7 @@ class IRBCalculator:
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         exposures = (
             exposures.pipe(classify_approach, config)
-            .pipe(apply_firb_lgd, config)
+            .pipe(apply_firb_lgd, config, pack=resolved_pack)
             .pipe(prepare_columns, config)
             .pipe(apply_all_formulas, config, pack=resolved_pack)
             .pipe(apply_post_model_adjustments, config)

@@ -47,9 +47,11 @@ from rwa_calc.data.tables.eu_sovereign import (
 from rwa_calc.data.tables.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.sa.risk_weights import _SA_B31_RW
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +143,12 @@ def apply_life_insurance_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 
 @cites("CRR Art. 213")
-def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """Apply guarantee substitution for unfunded credit protection.
 
     For guaranteed portions, the risk weight is substituted with the
@@ -150,6 +157,7 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 
     CRR Art. 213-217: Unfunded credit protection.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     exposures = lf
     cols = exposures.collect_schema().names()
 
@@ -202,7 +210,7 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
     exposures = exposures.with_columns(
         _build_guarantor_rw_expr(
             is_domestic_guarantor,
-            config.is_basel_3_1,
+            resolved_pack.feature("sa_revised_risk_weight_tables"),
             institution_short_term_flag_col=short_term_flag_col,
         ).alias("guarantor_rw"),
     ).drop(short_term_flag_col)

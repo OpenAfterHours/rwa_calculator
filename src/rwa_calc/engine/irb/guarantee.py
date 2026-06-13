@@ -113,11 +113,12 @@ def apply_guarantee_substitution(
 
     lf = lf.with_columns(store_originals)
 
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
     # --- Compute SA risk weight for guarantor (used for SA guarantors) ---
-    lf = _compute_guarantor_rw_sa(lf, cols, config)
+    lf = _compute_guarantor_rw_sa(lf, cols, config, pack=resolved_pack)
 
     # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
-    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     lf = _apply_parameter_substitution(
         lf, cols, config, use_parameter_substitution, pack=resolved_pack
     )
@@ -201,6 +202,8 @@ def _compute_guarantor_rw_sa(
     lf: pl.LazyFrame,
     cols: list[str],
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Compute the guarantor's SA risk weight via the shared builder.
 
@@ -210,6 +213,8 @@ def _compute_guarantor_rw_sa(
     closes the IRB-guarantor PSE / RGLA substitution gap (the recorded
     Phase 4 fix) plus the IO 0%, named-MDB 0% and MDB Table 2B closures.
     """
+
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
     # Ensure guarantor_exposure_class is available (set by CRM processor;
     # fallback for unit tests that construct LazyFrames directly)
@@ -284,7 +289,7 @@ def _compute_guarantor_rw_sa(
             country_code_col="guarantor_country_code",
             ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
             scra_grade_col="guarantor_scra_grade",
-            is_basel_3_1=config.is_basel_3_1,
+            is_basel_3_1=resolved_pack.feature("sa_revised_risk_weight_tables"),
             domestic_cgcb_expr=_is_domestic_guarantor,
             # No borrower-maturity short-term flag is threaded on the IRB
             # path today (the SA twin derives one from its own stage

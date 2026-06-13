@@ -7,6 +7,10 @@ from decimal import Decimal
 
 import pytest
 
+from rwa_calc.data.tables.crm_supervisory import (
+    MIN_COLLATERALISATION_THRESHOLDS,
+    OVERCOLLATERALISATION_RATIOS,
+)
 from rwa_calc.data.tables.crr_simple_method import (
     ART_222_4_CMP_RW,
     ART_222_4_NON_CMP_RW,
@@ -63,6 +67,31 @@ def test_scalar_param_returns_typed_entry() -> None:
     assert isinstance(entry, ScalarParam)
     assert entry.value == Decimal("0.20")
     assert entry.name == "fcsm_rw_floor"
+
+
+def test_overcollateralisation_ratios_resolve_byte_identical() -> None:
+    # Act / Assert — the common-pack lookup reproduces the data/tables floats
+    entries = resolve("crr", date(2026, 1, 1)).lookup("overcollateralisation_ratios").entries
+    for category, ratio in OVERCOLLATERALISATION_RATIOS.items():
+        assert float(entries[category]) == ratio
+
+
+def test_min_collateralisation_thresholds_resolve_byte_identical() -> None:
+    # Act / Assert
+    entries = resolve("crr", date(2026, 1, 1)).lookup("min_collateralisation_thresholds").entries
+    for category, threshold in MIN_COLLATERALISATION_THRESHOLDS.items():
+        assert float(entries[category]) == threshold
+
+
+def test_firb_collateral_step_features_are_regime_specific() -> None:
+    # Act
+    crr = resolve("crr", date(2026, 1, 1))
+    b31 = resolve("b31", date(2027, 1, 1))
+    # Assert — CRR applies the Art. 230 divisor + 30% gate; Basel 3.1 removes both
+    assert crr.feature("firb_overcollateralisation_divisor_applies") is True
+    assert crr.feature("firb_min_collateralisation_threshold_applies") is True
+    assert b31.feature("firb_overcollateralisation_divisor_applies") is False
+    assert b31.feature("firb_min_collateralisation_threshold_applies") is False
 
 
 # ---------------------------------------------------------------------------

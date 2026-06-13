@@ -23,6 +23,8 @@ References:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
 from watchfire import cites
 
@@ -37,12 +39,14 @@ from rwa_calc.data.schemas import (
 from rwa_calc.data.tables.crm_supervisory import (
     BASEL31_SUPERVISORY_LGD,
     CRR_SUPERVISORY_LGD,
-    MIN_COLLATERALISATION_THRESHOLDS,
-    OVERCOLLATERALISATION_RATIOS,
 )
 from rwa_calc.engine.kernels.allocation import (
     beneficiary_level_expr as kernel_beneficiary_level_expr,
 )
+from rwa_calc.rulebook.compile import lookup_float_map
+
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 # ---------------------------------------------------------------------------
 # Polars expression builders
@@ -86,7 +90,7 @@ def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:
 
 
 @cites("PS1/26 Art. 230(1)")
-def overcollateralisation_ratio_expr(is_basel_3_1: bool = False) -> pl.Expr:
+def overcollateralisation_ratio_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to overcollateralisation ratio.
 
     CRR Art. 230 (Table 5) requires explicit overcollateralisation divisors for
@@ -95,45 +99,52 @@ def overcollateralisation_ratio_expr(is_basel_3_1: bool = False) -> pl.Expr:
     PS1/26 Art. 230(1) replaces the CRR step-function with a continuous LGD*
     formula in which the haircut HC is applied multiplicatively at the haircut
     stage; no overcollateralisation divisor is applied for non-financial
-    collateral under Basel 3.1 — the OC ratio is 1.0 for real_estate /
-    other_physical / receivables. Financial and life-insurance ratios are
-    unchanged at 1.0 under both frameworks.
+    collateral under Basel 3.1. Whether the divisor applies is the regime
+    Feature ``firb_overcollateralisation_divisor_applies``; the ratios
+    themselves are the regime-invariant ``overcollateralisation_ratios`` lookup.
     """
-    ct = _coll_type_lower()
-    if is_basel_3_1:
-        # Under PS1/26 Art. 230(1) the FCM HC is applied multiplicatively and
-        # no overcollateralisation divisor is applied to non-financial
-        # collateral. Financial and life-insurance ratios remain 1.0.
+    if not pack.feature("firb_overcollateralisation_divisor_applies"):
+        # PS1/26 Art. 230(1): FCM HC is applied multiplicatively, no
+        # overcollateralisation divisor — the ratio is 1.0 for every type.
         return pl.lit(1.0)
+    ratios = lookup_float_map(pack.lookup("overcollateralisation_ratios"))
+    ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["life_insurance"]))
+        .then(pl.lit(ratios["life_insurance"]))
         .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["financial"]))
+        .then(pl.lit(ratios["financial"]))
         .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["receivables"]))
+        .then(pl.lit(ratios["receivables"]))
         .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["real_estate"]))
+        .then(pl.lit(ratios["real_estate"]))
         .when(ct.is_in(OTHER_PHYSICAL_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["other_physical"]))
+        .then(pl.lit(ratios["other_physical"]))
         .otherwise(pl.lit(1.0))
     )
 
 
-def min_collateralisation_threshold_expr() -> pl.Expr:
-    """Build expression mapping collateral_type to minimum collateralisation threshold."""
+def min_collateralisation_threshold_expr(pack: ResolvedRulepack) -> pl.Expr:
+    """Build expression mapping collateral_type to minimum collateralisation threshold.
+
+    Values are the regime-invariant ``min_collateralisation_thresholds`` lookup
+    (CRR Art. 230). Whether the 30% C*/C** gate is *applied* is the regime
+    Feature ``firb_min_collateralisation_threshold_applies``, checked by the
+    caller in ``collateral.py`` (Basel 3.1 skips the gate per PS1/26 Art. 230(1)).
+    """
+    thresholds = lookup_float_map(pack.lookup("min_collateralisation_thresholds"))
     ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["life_insurance"]))
+        .then(pl.lit(thresholds["life_insurance"]))
         .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["financial"]))
+        .then(pl.lit(thresholds["financial"]))
         .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["receivables"]))
+        .then(pl.lit(thresholds["receivables"]))
         .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["real_estate"]))
+        .then(pl.lit(thresholds["real_estate"]))
         .when(ct.is_in(OTHER_PHYSICAL_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["other_physical"]))
+        .then(pl.lit(thresholds["other_physical"]))
         .otherwise(pl.lit(0.0))
     )
 

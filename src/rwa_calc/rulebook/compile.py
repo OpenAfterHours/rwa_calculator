@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
+    from collections.abc import Hashable
     from decimal import Decimal
 
     from rwa_calc.rulebook.model import (
@@ -77,6 +78,17 @@ def lookup_expr(t: LookupTable, key_col: str | None = None) -> pl.Expr:
     if t.default is not None:
         return chain.otherwise(pl.lit(float(t.default)))
     return chain.otherwise(pl.lit(None))
+
+
+def lookup_float_map(t: LookupTable) -> dict[Hashable, float]:
+    """Read a ``LookupTable``'s entries as a ``{key: float}`` map.
+
+    The dict-shaped sibling of :func:`lookup_expr`, for consumers that plug the
+    per-key values into a hand-built ``when/then`` chain (e.g. category ``is_in``
+    predicates) rather than an exact-match key column. The Decimal->float
+    boundary lives here; the table stays Decimal at rest.
+    """
+    return {key: float(value) for key, value in t.entries.items()}
 
 
 def banded_expr(t: BandedTable, input_col: str | None = None) -> pl.Expr:

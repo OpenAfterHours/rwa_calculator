@@ -53,4 +53,20 @@ ENTRIES: dict[str, RuleEntry] = {
         before_first=Decimal("0.0"),
         citation=Citation("PS1/26", "92(5)"),
     ),
+    # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
+    # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation
+    # divisor and no minimum collateralisation threshold. Overrides the CRR
+    # Features of the same name.
+    "firb_overcollateralisation_divisor_applies": Feature(
+        name="firb_overcollateralisation_divisor_applies",
+        enabled=False,
+        citation=Citation("PS1/26", "230(1)", "LGD* formula — no overcollateralisation divisor"),
+    ),
+    "firb_min_collateralisation_threshold_applies": Feature(
+        name="firb_min_collateralisation_threshold_applies",
+        enabled=False,
+        citation=Citation(
+            "PS1/26", "230(1)", "LGD* formula — no minimum collateralisation threshold"
+        ),
+    ),
 }

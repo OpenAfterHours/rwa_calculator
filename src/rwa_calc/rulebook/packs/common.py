@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.rulebook.model import Citation, RuleEntry, ScalarParam
+from rwa_calc.rulebook.model import Citation, LookupTable, RuleEntry, ScalarParam
 
 ENTRIES: dict[str, RuleEntry] = {
     "fx_haircut": ScalarParam(
@@ -62,5 +62,37 @@ ENTRIES: dict[str, RuleEntry] = {
         name="fcsm_equity_collateral_rw",
         value=Decimal("1.00"),
         citation=Citation("CRR", "222(1)", "equity held as FCSM collateral risk-weighted at 100%"),
+    ),
+    # F-IRB overcollateralisation divisors and minimum collateralisation
+    # thresholds (CRR Art. 230 Table 5 / CRE32.9-12). The values are
+    # regime-INVARIANT; whether CRR applies them is carried by the regime
+    # Features ``firb_overcollateralisation_divisor_applies`` /
+    # ``firb_min_collateralisation_threshold_applies`` (Basel 3.1 replaces the
+    # step-function with the continuous LGD* formula, PS1/26 Art. 230(1)).
+    "overcollateralisation_ratios": LookupTable(
+        name="overcollateralisation_ratios",
+        entries={
+            "financial": Decimal("1.0"),
+            "receivables": Decimal("1.25"),
+            "real_estate": Decimal("1.40"),
+            "other_physical": Decimal("1.40"),
+            "life_insurance": Decimal("1.0"),
+        },
+        key="collateral_category",
+        citation=Citation("CRR", "230", "Table 5 overcollateralisation divisors"),
+        default=Decimal("1.0"),
+    ),
+    "min_collateralisation_thresholds": LookupTable(
+        name="min_collateralisation_thresholds",
+        entries={
+            "financial": Decimal("0.0"),
+            "receivables": Decimal("0.0"),
+            "real_estate": Decimal("0.30"),
+            "other_physical": Decimal("0.30"),
+            "life_insurance": Decimal("0.0"),
+        },
+        key="collateral_category",
+        citation=Citation("CRR", "230", "minimum collateralisation thresholds"),
+        default=Decimal("0.0"),
     ),
 }

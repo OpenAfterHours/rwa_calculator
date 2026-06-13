@@ -29,7 +29,6 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES, NON_ELIGIBLE_RE_TYPES
-from rwa_calc.data.tables.crm_supervisory import MIN_COLLATERALISATION_THRESHOLDS
 from rwa_calc.domain.enums import AIRBCollateralMethod, ApproachType
 from rwa_calc.engine.crm.expressions import (
     CRM_ALLOC_COLUMNS,
@@ -43,9 +42,12 @@ from rwa_calc.engine.crm.expressions import (
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.observability.audit_cache import sink_audit
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import lookup_float_map
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 def airb_lgd_preserved_expr(
@@ -301,6 +303,8 @@ def apply_collateral(
     build_exposure_lookups_fn: Callable,
     join_collateral_to_lookups_fn: Callable,
     resolve_pledge_from_joined_fn: Callable,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Apply collateral to reduce EAD (SA) or LGD (IRB).
@@ -405,6 +409,7 @@ def apply_collateral(
         config,
         cp_ead_totals,
         is_basel_3_1,
+        pack=pack,
     )
 
 
@@ -534,6 +539,8 @@ def _apply_collateral_unified(
     config: CalculationConfig,
     cp_ead_totals: pl.LazyFrame,
     is_basel_3_1: bool,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Unified EAD + LGD collateral allocation in a single pass.
@@ -548,6 +555,7 @@ def _apply_collateral_unified(
     financial (0%) -> covered_bond (11.25%) -> receivables -> real_estate
     -> other_physical.  This replaces the former pro-rata allocation.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     lgd_values = supervisory_lgd_values(is_basel_3_1)
     lgd_unsecured = lgd_values["unsecured"]
 
@@ -622,7 +630,7 @@ def _apply_collateral_unified(
     annotated = adjusted_collateral.with_columns(
         [
             collateral_lgd_expr(is_basel_3_1).alias("collateral_lgd"),
-            overcollateralisation_ratio_expr(is_basel_3_1).alias("overcollateralisation_ratio"),
+            overcollateralisation_ratio_expr(resolved_pack).alias("overcollateralisation_ratio"),
             is_financial_collateral_type_expr().alias("is_financial_collateral_type"),
             collateral_category_expr().alias("_coll_category"),
             airb_flag_expr.alias("_is_airb_model_collateral"),
@@ -835,11 +843,12 @@ def _apply_collateral_unified(
     # PS1/26 Art. 230(1) replaces the CRR step-function with a continuous LGD*
     # formula and removes the C* / C** thresholds entirely — under Basel 3.1
     # any positive eligible non-financial collateral is recognised at LGDS.
-    if not is_basel_3_1:
+    if resolved_pack.feature("firb_min_collateralisation_threshold_applies"):
+        _min_thresholds = lookup_float_map(resolved_pack.lookup("min_collateralisation_thresholds"))
         _type_threshold: dict[str, tuple[float, str]] = {
-            "re": (MIN_COLLATERALISATION_THRESHOLDS["real_estate"], "collateral_re_value"),
+            "re": (_min_thresholds["real_estate"], "collateral_re_value"),
             "op": (
-                MIN_COLLATERALISATION_THRESHOLDS["other_physical"],
+                _min_thresholds["other_physical"],
                 "collateral_other_physical_value",
             ),
         }

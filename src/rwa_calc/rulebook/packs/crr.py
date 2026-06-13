@@ -41,4 +41,18 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "122"),
         default=Decimal("1.00"),
     ),
+    # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
+    # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
+    # 3.1 removes both (see packs/b31.py); the divisor/threshold values
+    # themselves live regime-invariantly in packs/common.py.
+    "firb_overcollateralisation_divisor_applies": Feature(
+        name="firb_overcollateralisation_divisor_applies",
+        enabled=True,
+        citation=Citation("CRR", "230", "Table 5 overcollateralisation divisor applies"),
+    ),
+    "firb_min_collateralisation_threshold_applies": Feature(
+        name="firb_min_collateralisation_threshold_applies",
+        enabled=True,
+        citation=Citation("CRR", "230", "30% C*/C** minimum collateralisation threshold applies"),
+    ),
 }

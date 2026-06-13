@@ -11,6 +11,7 @@ Tests verify:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
@@ -35,6 +36,11 @@ from rwa_calc.engine.crm.life_insurance import (
     compute_life_insurance_columns,
 )
 from rwa_calc.engine.sa.rw_adjustments import apply_life_insurance_rw_mapping
+from rwa_calc.rulebook.resolve import resolve
+
+# Resolved CRR pack for the per-expression unit tests (overcoll / min-threshold
+# builders now read their values + the regime Feature from the rulepack).
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
 
 # --- Art. 232: Risk Weight Mapping Table ---
 
@@ -212,12 +218,14 @@ class TestLifeInsuranceConstants:
 
     def test_overcollateralisation_ratio_is_1(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(overcollateralisation_ratio_expr().alias("oc")).collect()
+        result = df.with_columns(overcollateralisation_ratio_expr(_CRR_PACK).alias("oc")).collect()
         assert result["oc"][0] == pytest.approx(1.0)
 
     def test_min_collateralisation_threshold_is_0(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(min_collateralisation_threshold_expr().alias("thresh")).collect()
+        result = df.with_columns(
+            min_collateralisation_threshold_expr(_CRR_PACK).alias("thresh")
+        ).collect()
         assert result["thresh"][0] == pytest.approx(0.0)
 
     def test_collateral_category_is_life_insurance(self) -> None:

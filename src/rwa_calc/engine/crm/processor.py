@@ -560,7 +560,7 @@ class CRMProcessor:
 
         # Step 4: Apply collateral (if available and valid)
         exposures, collateral_applied = self._apply_collateral_unified_step(
-            exposures, collateral, config, errors
+            exposures, collateral, config, errors, pack=pack
         )
 
         # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
@@ -776,6 +776,8 @@ class CRMProcessor:
         collateral: pl.LazyFrame | None,
         config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> tuple[pl.LazyFrame, bool]:
         """Apply collateral with misdirected-AIRB diagnostics."""
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
@@ -783,7 +785,7 @@ class CRMProcessor:
             # Cheap no-op unless the collateral table actually carries the
             # is_airb_model_collateral flag (early-return inside the finder).
             self._record_misdirected_airb_errors(exposures, collateral, config, errors)
-            exposures = self.apply_collateral(exposures, collateral, config)
+            exposures = self.apply_collateral(exposures, collateral, config, pack=pack)
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
@@ -799,7 +801,7 @@ class CRMProcessor:
             from rwa_calc.contracts.edges import RAW_TABLE_EDGES
 
             exposures = self.apply_collateral(
-                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config
+                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config, pack=pack
             )
             return exposures, False
         # No collateral: still need to set F-IRB supervisory LGD based on
@@ -965,6 +967,8 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         collateral: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply collateral to reduce EAD (SA) or LGD (IRB)."""
         return collateral_mod.apply_collateral(
@@ -976,6 +980,7 @@ class CRMProcessor:
             build_exposure_lookups_fn=_build_exposure_lookups,
             join_collateral_to_lookups_fn=_join_collateral_to_lookups,
             resolve_pledge_from_joined_fn=_resolve_pledge_from_joined,
+            pack=pack,
         )
 
     def apply_guarantees(

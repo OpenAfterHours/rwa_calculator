@@ -168,6 +168,21 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "127", "CRR defaulted RW: pre-provision denominator, no RE carve-out"
         ),
     ),
+    # Basel-3.1-only SA post-RW adjustments — absent under CRR. The currency-
+    # mismatch 1.5x multiplier (PS1/26 Art. 123B) and the due-diligence RW
+    # override (PS1/26 Art. 110A) gate their whole functions in
+    # engine/sa/rw_adjustments.py; the multiplier/cap/hedge-floor scalars and the
+    # Art. 123B(3) commencement-date check stay engine-side.
+    "sa_currency_mismatch_multiplier": Feature(
+        name="sa_currency_mismatch_multiplier",
+        enabled=False,
+        citation=Citation("CRR", "123", "no currency-mismatch multiplier under CRR"),
+    ),
+    "sa_due_diligence_override": Feature(
+        name="sa_due_diligence_override",
+        enabled=False,
+        citation=Citation("CRR", "110", "no Art. 110A due-diligence RW override under CRR"),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

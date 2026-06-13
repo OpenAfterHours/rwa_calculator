@@ -158,6 +158,20 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "127", "gross-outstanding denominator + RESI-RE non-income 100%"
         ),
     ),
+    # Basel 3.1 SA post-RW adjustments. Currency-mismatch 1.5x multiplier (PRA
+    # PS1/26 Art. 123B / CRE20.93) for retail/RE with an income-currency mismatch;
+    # due-diligence RW override (PRA PS1/26 Art. 110A). Each Feature gates its
+    # whole function in engine/sa/rw_adjustments.py.
+    "sa_currency_mismatch_multiplier": Feature(
+        name="sa_currency_mismatch_multiplier",
+        enabled=True,
+        citation=Citation("PS1/26", "123B", "1.5x retail/RE currency-mismatch multiplier"),
+    ),
+    "sa_due_diligence_override": Feature(
+        name="sa_due_diligence_override",
+        enabled=True,
+        citation=Citation("PS1/26", "110A", "due-diligence RW override (RW may only increase)"),
+    ),
     "output_floor": Feature(
         name="output_floor",
         enabled=True,

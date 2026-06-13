@@ -284,7 +284,12 @@ def apply_guarantee_substitution(
 
 @cites("PS1/26, paragraph 123B")
 @cites("PS1/26, paragraph 123B.3")
-def apply_currency_mismatch_multiplier(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_currency_mismatch_multiplier(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
 
     When the exposure currency differs from the borrower's income currency,
@@ -298,7 +303,8 @@ def apply_currency_mismatch_multiplier(lf: pl.LazyFrame, config: CalculationConf
     before that fall under the pre-Basel-3.1 portfolio treatment and the frame is
     returned unchanged. The boundary date 1 January 2027 is in scope (strict ``<``).
     """
-    if not config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("sa_currency_mismatch_multiplier"):
         return lf
 
     # Art. 123B(3) transitional: pre-commencement reporting dates suppress the
@@ -411,6 +417,7 @@ def apply_due_diligence_override(
     config: CalculationConfig,
     *,
     errors: list[CalculationError] | None = None,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Apply due diligence risk weight override (Basel 3.1 Art. 110A).
 
@@ -423,7 +430,8 @@ def apply_due_diligence_override(
     calculation, after all standard RW determination, CRM, and currency
     mismatch adjustments.
     """
-    if not config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("sa_due_diligence_override"):
         return lf
 
     schema = lf.collect_schema()

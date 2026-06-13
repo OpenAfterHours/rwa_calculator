@@ -14,6 +14,10 @@ in ``data/tables/{crr,b31}_risk_weights.py``):
 - ``sa_revised_defaulted_treatment`` gates the Art. 127 defaulted-RW regime
   block (Basel 3.1 gross-outstanding denominator + the Art. 127(3) residential-RE
   non-income flat-100% carve-out, vs the CRR pre-provision denominator).
+- ``sa_currency_mismatch_multiplier`` gates the PS1/26 Art. 123B 1.5x retail/RE
+  currency-mismatch multiplier (Basel-3.1-only).
+- ``sa_due_diligence_override`` gates the PS1/26 Art. 110A due-diligence RW
+  override (Basel-3.1-only).
 
 Each Feature's value mirrors ``config.is_basel_3_1`` per regime (CRR False /
 Basel 3.1 True), so this pin is the byte-identical-parity contract: a pack typo
@@ -40,6 +44,8 @@ _FEATURE_MATRIX = [
     ("sa_revised_risk_weight_tables", False, True),
     ("sa_sl_inferred_rating_disapplied", False, True),
     ("sa_revised_defaulted_treatment", False, True),
+    ("sa_currency_mismatch_multiplier", False, True),
+    ("sa_due_diligence_override", False, True),
 ]
 
 

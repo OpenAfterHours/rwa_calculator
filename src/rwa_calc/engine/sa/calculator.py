@@ -111,8 +111,8 @@ class SACalculator:
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
-            .pipe(apply_currency_mismatch_multiplier, config)
-            .pipe(apply_due_diligence_override, config, errors=errors)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
         )
 
         # Store SA-equivalent RWA for ALL rows before the IRB calculator
@@ -176,8 +176,8 @@ class SACalculator:
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
-            .pipe(apply_currency_mismatch_multiplier, config)
-            .pipe(apply_due_diligence_override, config, errors=errors)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
             .pipe(calculate_rwa)
             .pipe(apply_supporting_factors, config, errors=errors)
         )

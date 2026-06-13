@@ -9,6 +9,7 @@ import polars as pl
 from rwa_calc.rulebook.compile import (
     banded_expr,
     decision_expr,
+    decision_table_df,
     feature_enabled,
     formula_param_lit,
     lookup_expr,
@@ -174,6 +175,53 @@ def test_decision_expr_multi_key_match() -> None:
 
     # Assert
     assert result == [0.20, 0.50, 1.00]
+
+
+# ---------------------------------------------------------------------------
+# decision_table_df — the DataFrame-shaped sibling for keyed-join consumers
+# ---------------------------------------------------------------------------
+
+
+def test_decision_table_df_renders_rows_to_frame() -> None:
+    # Arrange — (collateral_type, cqs) -> haircut, including a None key entry
+    table = DecisionTable(
+        "collateral_haircuts",
+        ("collateral_type", "cqs"),
+        ((("cash", None), Decimal("0.00")), (("govt_bond", 1), Decimal("0.005"))),
+        _CIT,
+    )
+
+    # Act
+    frame = decision_table_df(table, value_name="haircut")
+
+    # Assert — one row per table row; the None key entry renders as a null
+    assert frame.columns == ["collateral_type", "cqs", "haircut"]
+    assert frame.sort("collateral_type").to_dicts() == [
+        {"collateral_type": "cash", "cqs": None, "haircut": 0.0},
+        {"collateral_type": "govt_bond", "cqs": 1, "haircut": 0.005},
+    ]
+
+
+def test_decision_table_df_value_column_is_float64() -> None:
+    # Arrange
+    table = DecisionTable("d", ("k",), ((("a",), Decimal("0.40")),), _CIT)
+
+    # Act — the Decimal crosses into float at the compile boundary
+    frame = decision_table_df(table, value_name="haircut")
+
+    # Assert
+    assert frame.schema["haircut"] == pl.Float64
+
+
+def test_decision_table_df_key_dtypes_pins_dtype() -> None:
+    # Arrange
+    table = DecisionTable("d", ("cqs",), (((1,), Decimal("0.01")), ((2,), Decimal("0.02"))), _CIT)
+
+    # Act — pin the key column to the consumer's join dtype
+    frame = decision_table_df(table, value_name="haircut", key_dtypes={"cqs": pl.Int8})
+
+    # Assert
+    assert frame.schema["cqs"] == pl.Int8
 
 
 # ---------------------------------------------------------------------------

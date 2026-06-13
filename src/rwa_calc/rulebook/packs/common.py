@@ -31,6 +31,14 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.08"),
         citation=Citation("CRR", "224"),
     ),
+    # CDS restructuring-exclusion haircut (CRR Art. 233(2) / PRA PS1/26
+    # Art. 233(2)): unfunded protection without restructuring as a credit event
+    # is reduced by 40%. Regime-invariant (retained unchanged under Basel 3.1).
+    "restructuring_exclusion_haircut": ScalarParam(
+        name="restructuring_exclusion_haircut",
+        value=Decimal("0.40"),
+        citation=Citation("CRR", "233(2)", "credit-derivative restructuring-exclusion 40% haircut"),
+    ),
     "sa_ccr_alpha": ScalarParam(
         name="sa_ccr_alpha",
         value=Decimal("1.4"),

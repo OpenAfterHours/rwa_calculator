@@ -143,6 +143,33 @@ def decision_expr(t: DecisionTable[Decimal], key_cols: tuple[str, ...] | None = 
     return chain.otherwise(pl.lit(None))
 
 
+def decision_table_df(
+    t: DecisionTable[Decimal],
+    *,
+    value_name: str = "value",
+    key_dtypes: dict[str, pl.DataType] | None = None,
+) -> pl.DataFrame:
+    """Render a Decimal-valued ``DecisionTable`` to a keyed lookup ``pl.DataFrame``.
+
+    The DataFrame-shaped sibling of :func:`decision_expr`, for the one consumer
+    that *joins* a regime table rather than evaluating an inline when/then chain
+    (the collateral haircut lookup in ``engine/crm/haircuts.py``). Each row
+    becomes one DataFrame row: the key-tuple spreads across columns named by
+    ``t.key_names`` and the Decimal value lands in the ``value_name`` column
+    (Float64 — the Decimal->float boundary). ``key_dtypes`` pins specific
+    key-column dtypes (e.g. ``{"cqs": pl.Int8}``) so the rendered frame matches
+    the consumer's join schema exactly; unpinned key columns keep Polars'
+    inferred dtype. Key-tuple ``None`` entries render as nulls. Neither row nor
+    column order is significant to a keyed left join.
+    """
+    key_columns = {name: [keys[i] for keys, _ in t.rows] for i, name in enumerate(t.key_names)}
+    frame = pl.DataFrame({**key_columns, value_name: [float(value) for _, value in t.rows]})
+    casts = [pl.col(value_name).cast(pl.Float64)]
+    if key_dtypes is not None:
+        casts.extend(pl.col(name).cast(dtype) for name, dtype in key_dtypes.items())
+    return frame.with_columns(casts)
+
+
 def formula_param_lit(b: FormulaParams, key: str) -> pl.Expr:
     """Compile one named ``FormulaParams`` parameter to a Float64 literal."""
     return pl.lit(float(b.get(key)))

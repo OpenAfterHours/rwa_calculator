@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from rwa_calc.data.tables.crm_supervisory import (
     MIN_COLLATERALISATION_THRESHOLDS,
@@ -18,6 +20,8 @@ from rwa_calc.data.tables.crr_simple_method import (
     FCSM_RW_FLOOR,
     SOVEREIGN_BOND_DISCOUNT,
 )
+from rwa_calc.data.tables.haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT, get_haircut_table
+from rwa_calc.rulebook.compile import decision_table_df
 from rwa_calc.rulebook.model import LookupTable, ScalarParam
 from rwa_calc.rulebook.resolve import resolve
 
@@ -92,6 +96,41 @@ def test_firb_collateral_step_features_are_regime_specific() -> None:
     assert crr.feature("firb_min_collateralisation_threshold_applies") is True
     assert b31.feature("firb_overcollateralisation_divisor_applies") is False
     assert b31.feature("firb_min_collateralisation_threshold_applies") is False
+
+
+@pytest.mark.parametrize(
+    ("regime_id", "reporting_date", "is_basel_3_1"),
+    [("crr", date(2026, 1, 1), False), ("b31", date(2027, 1, 1), True)],
+)
+def test_collateral_haircuts_render_byte_identical(
+    regime_id: str, reporting_date: date, is_basel_3_1: bool
+) -> None:
+    # Arrange
+    pack = resolve(regime_id, reporting_date)
+
+    # Act — render the pack DecisionTable to the engine join schema
+    rendered = decision_table_df(
+        pack.decision("collateral_haircuts"),
+        value_name="haircut",
+        key_dtypes={"cqs": pl.Int8},
+    )
+
+    # Assert — frame-equal to the data/tables view the engine joins against.
+    # Row/column order is not load-bearing for the keyed left join in
+    # engine/crm/haircuts.py, so the comparison is order-insensitive.
+    assert_frame_equal(
+        rendered,
+        get_haircut_table(is_basel_3_1=is_basel_3_1),
+        check_column_order=False,
+        check_row_order=False,
+    )
+
+
+def test_restructuring_exclusion_haircut_resolves_byte_identical() -> None:
+    # Act / Assert — regime-invariant CDS restructuring-exclusion haircut
+    crr = resolve("crr", date(2026, 1, 1)).scalar("restructuring_exclusion_haircut")
+    b31 = resolve("b31", date(2027, 1, 1)).scalar("restructuring_exclusion_haircut")
+    assert crr == b31 == RESTRUCTURING_EXCLUSION_HAIRCUT
 
 
 # ---------------------------------------------------------------------------

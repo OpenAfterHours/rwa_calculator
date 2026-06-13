@@ -51,6 +51,7 @@ from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig, PDFloors
 from rwa_calc.domain.enums import ExposureClass, PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.rulebook import RulepackV0
 
 # =============================================================================
 # Fixture directory
@@ -109,6 +110,23 @@ def _build_p236_bundle() -> RawDataBundle:
 def _run_pipeline(bundle: RawDataBundle, config: CalculationConfig) -> object:
     """Run the pipeline and return the AggregatedResultBundle."""
     return PipelineOrchestrator().run_with_data(bundle, config)
+
+
+def _pd_floor_override_rulepack(
+    config: CalculationConfig, floor_field: str, value: Decimal
+) -> RulepackV0:
+    """Resolve the config's standard rulepack, override one ``pd_floors`` param, rewrap.
+
+    Phase 5 reads PD floors from the resolved rulepack, so a single-floor override
+    is expressed as a ``pd_floors`` pack override (hash recomputed) injected via
+    ``run_with_data(rulepack=...)`` — the successor to mutating ``config.pd_floors``.
+    """
+    base = RulepackV0.from_config(config).pack
+    pd_floors = base.formula("pd_floors")
+    overridden = base.with_overrides(
+        pd_floors=dataclasses.replace(pd_floors, params={**pd_floors.params, floor_field: value})
+    )
+    return RulepackV0.from_resolved(config, overridden)
 
 
 def _get_irb_row(results: object, loan_ref: str) -> dict | None:
@@ -362,21 +380,23 @@ class TestOverrideRegressionDispatch:
 
     def test_institution_floor_override_drives_dispatch_not_fallback(self) -> None:
         """
-        P2.36-4: Institution floor override changes IRB RWA, proving engine uses the new field.
+        P2.36-4: Institution floor override changes IRB RWA, proving the engine
+        reads the institution PD floor (not the corporate fallback).
+
+        Phase 5 S5c: the engine sources PD floors from the resolved rulepack, so
+        the floor override is expressed as a ``pd_floors`` pack override injected
+        via ``run_with_data(rulepack=...)`` — the successor to mutating
+        ``config.pd_floors``.
 
         Arrange:
-            Two Basel 3.1 configs:
-            - default: PDFloors.institution == 0.0005 (post-implementation field)
-            - override: PDFloors.institution == 0.001 (via dataclasses.replace)
+            One Basel 3.1 config; two rulepacks:
+            - default: pack institution PD floor == 0.0005
+            - override: pack institution PD floor == 0.001 (injected)
         Act:
-            Run the P2.36 institution exposure (INST_P236) through both configs.
+            Run the P2.36 institution exposure (INST_P236) through both rulepacks.
         Assert:
             default → RW ≈ 0.174504, RWA ≈ 174,504 (PD floored to 0.0005)
             override → RW ≈ 0.263930, RWA ≈ 263,930 (PD floored to 0.001)
-
-        FAILS ON MASTER with TypeError:
-            dataclasses.replace(cfg.pd_floors, institution=Decimal("0.001"))
-            raises TypeError because PDFloors has no 'institution' field.
         """
         # Arrange — default Basel 3.1 config
         cfg_default = CalculationConfig.basel_3_1(
@@ -384,15 +404,11 @@ class TestOverrideRegressionDispatch:
             permission_mode=PermissionMode.IRB,
         )
 
-        # Override: replace institution PD floor with 0.001 (2× the default 0.0005).
-        # This line MUST fail on master (TypeError: unexpected keyword argument 'institution')
-        # until engine-implementer adds the field to PDFloors.
-        cfg_override = dataclasses.replace(
-            cfg_default,
-            pd_floors=dataclasses.replace(
-                cfg_default.pd_floors,
-                institution=_INST_OVERRIDE_FLOOR,  # type: ignore[call-arg]
-            ),
+        # Override: lift the institution PD floor to 0.001 (2× the default 0.0005)
+        # on the resolved rulepack, injected via run_with_data. Phase 5 reads PD
+        # floors from the pack, so a floor override is a pack override.
+        override_rulepack = _pd_floor_override_rulepack(
+            cfg_default, "institution", _INST_OVERRIDE_FLOOR
         )
 
         bundle_default = _build_p236_bundle()
@@ -400,7 +416,9 @@ class TestOverrideRegressionDispatch:
 
         # Act
         results_default = _run_pipeline(bundle_default, cfg_default)
-        results_override = _run_pipeline(bundle_override, cfg_override)
+        results_override = PipelineOrchestrator().run_with_data(
+            bundle_override, cfg_default, rulepack=override_rulepack
+        )
 
         row_default = _get_irb_row(results_default, INSTITUTION_LOAN_REF)
         row_override = _get_irb_row(results_override, INSTITUTION_LOAN_REF)
@@ -453,24 +471,25 @@ class TestOverrideRegressionDispatch:
 
     def test_sovereign_floor_override_drives_dispatch_not_fallback(self) -> None:
         """
-        P2.36-5: Sovereign floor override changes CRR IRB RWA, proving engine uses the new field.
+        P2.36-5: Sovereign floor override changes CRR IRB RWA, proving the engine
+        reads the sovereign PD floor (not the corporate fallback).
 
         Note: Sovereign is SA-only under Basel 3.1 (Art. 147A(1)(a)), so CRR is used
         here to allow the exposure through the F-IRB path.
 
+        Phase 5 S5c: the engine sources PD floors from the resolved rulepack, so
+        the floor override is a ``pd_floors`` pack override injected via
+        ``run_with_data(rulepack=...)``.
+
         Arrange:
-            Two CRR configs with full_irb() permissions:
-            - default: PDFloors.crr() — sovereign field = 0.0003 (post-implementation)
-            - override: sovereign floor = 0.001 (via dataclasses.replace)
+            One CRR config with IRB permissions; two rulepacks:
+            - default: pack sovereign PD floor == 0.0003
+            - override: pack sovereign PD floor == 0.001 (injected)
         Act:
-            Run the P2.36 sovereign exposure (SOV_P236, input PD=0.0001) through both configs.
+            Run the P2.36 sovereign exposure (SOV_P236, input PD=0.0001) through both rulepacks.
         Assert:
             override → IRB RWA materially higher than default (floor lifted from 0.0003 to 0.001).
-            Anti-regression: rwa_override != rwa_default (proves engine reads sovereign field).
-
-        FAILS ON MASTER with TypeError:
-            dataclasses.replace(cfg.pd_floors, sovereign=Decimal("0.001"))
-            raises TypeError because PDFloors has no 'sovereign' field.
+            Anti-regression: rwa_override != rwa_default (proves engine reads sovereign floor).
         """
         # Arrange — default CRR config with full IRB permissions
         cfg_default = CalculationConfig.crr(
@@ -478,15 +497,11 @@ class TestOverrideRegressionDispatch:
             permission_mode=PermissionMode.IRB,
         )
 
-        # Override: replace sovereign PD floor with 0.001 (3.3× the CRR default 0.0003).
-        # This line MUST fail on master (TypeError: unexpected keyword argument 'sovereign')
-        # until engine-implementer adds the field to PDFloors.
-        cfg_override = dataclasses.replace(
-            cfg_default,
-            pd_floors=dataclasses.replace(
-                cfg_default.pd_floors,
-                sovereign=_SOV_OVERRIDE_FLOOR,  # type: ignore[call-arg]
-            ),
+        # Override: lift the sovereign PD floor to 0.001 (3.3× the CRR default 0.0003)
+        # on the resolved rulepack, injected via run_with_data. Phase 5 reads PD
+        # floors from the pack, so a floor override is a pack override.
+        override_rulepack = _pd_floor_override_rulepack(
+            cfg_default, "sovereign", _SOV_OVERRIDE_FLOOR
         )
 
         bundle_default = _build_p236_bundle()
@@ -494,7 +509,9 @@ class TestOverrideRegressionDispatch:
 
         # Act
         results_default = _run_pipeline(bundle_default, cfg_default)
-        results_override = _run_pipeline(bundle_override, cfg_override)
+        results_override = PipelineOrchestrator().run_with_data(
+            bundle_override, cfg_default, rulepack=override_rulepack
+        )
 
         row_default = _get_irb_row(results_default, SOVEREIGN_LOAN_REF)
         row_override = _get_irb_row(results_override, SOVEREIGN_LOAN_REF)

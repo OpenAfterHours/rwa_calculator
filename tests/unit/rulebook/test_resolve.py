@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date
 from decimal import Decimal
 
@@ -266,3 +267,41 @@ def test_scalarparam_round_trips_through_resolve() -> None:
     # Assert
     assert isinstance(entry, ScalarParam)
     assert entry.value == Decimal("0.08")
+
+
+# ---------------------------------------------------------------------------
+# with_overrides — entry substitution for overlays / tests
+# ---------------------------------------------------------------------------
+
+
+def test_with_overrides_replaces_entry_value() -> None:
+    # Arrange
+    base = resolve("crr", date(2026, 1, 1))
+    bumped = dataclasses.replace(base.scalar_param("fx_haircut"), value=Decimal("0.20"))
+
+    # Act
+    overridden = base.with_overrides(fx_haircut=bumped)
+
+    # Assert
+    assert overridden.scalar("fx_haircut") == Decimal("0.20")
+
+
+def test_with_overrides_recomputes_content_hash() -> None:
+    # Arrange
+    base = resolve("crr", date(2026, 1, 1))
+    bumped = dataclasses.replace(base.scalar_param("fx_haircut"), value=Decimal("0.20"))
+
+    # Act / Assert — overridden pack never carries the pre-override digest
+    assert base.with_overrides(fx_haircut=bumped).content_hash != base.content_hash
+
+
+def test_with_overrides_leaves_base_pack_untouched() -> None:
+    # Arrange
+    base = resolve("crr", date(2026, 1, 1))
+    bumped = dataclasses.replace(base.scalar_param("fx_haircut"), value=Decimal("0.20"))
+
+    # Act
+    base.with_overrides(fx_haircut=bumped)
+
+    # Assert — the source pack is immutable
+    assert base.scalar("fx_haircut") == Decimal("0.08")

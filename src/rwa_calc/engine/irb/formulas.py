@@ -33,7 +33,7 @@ from watchfire import cites
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.rulebook import RulepackV0
-from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.compile import formula_float_map, scalar_value
 
 if TYPE_CHECKING:
     from decimal import Decimal
@@ -114,6 +114,7 @@ def _pd_floor_expression(
     has_transactor_col: bool = True,
     exposure_class_col: str = "exposure_class",
     transactor_col: str = "is_qrre_transactor",
+    pack: ResolvedRulepack | None = None,
 ) -> pl.Expr:
     """
     Build Polars expression for per-exposure-class PD floor.
@@ -143,21 +144,13 @@ def _pd_floor_expression(
 
     Returns a Polars expression evaluating to the per-row PD floor value.
     """
-    floors = config.pd_floors
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    floors = formula_float_map(resolved_pack.formula("pd_floors"))
 
     # Optimisation: if all floors are the same (CRR case), return a scalar
-    all_values = {
-        floors.corporate,
-        floors.corporate_sme,
-        floors.sovereign,
-        floors.institution,
-        floors.retail_mortgage,
-        floors.retail_other,
-        floors.retail_qrre_transactor,
-        floors.retail_qrre_revolver,
-    }
+    all_values = set(floors.values())
     if len(all_values) == 1:
-        return pl.lit(float(all_values.pop()))
+        return pl.lit(all_values.pop())
 
     # Basel 3.1: differentiated floors by exposure class
     exp_class = pl.col(exposure_class_col).cast(pl.String).fill_null("CORPORATE").str.to_uppercase()
@@ -168,12 +161,12 @@ def _pd_floor_expression(
     if has_transactor_col:
         qrre_floor = (
             pl.when(pl.col(transactor_col).fill_null(False))
-            .then(pl.lit(float(floors.retail_qrre_transactor)))
-            .otherwise(pl.lit(float(floors.retail_qrre_revolver)))
+            .then(pl.lit(floors["retail_qrre_transactor"]))
+            .otherwise(pl.lit(floors["retail_qrre_revolver"]))
         )
     else:
         # Conservative default: revolver floor (0.10% under Basel 3.1)
-        qrre_floor = pl.lit(float(floors.retail_qrre_revolver))
+        qrre_floor = pl.lit(floors["retail_qrre_revolver"])
 
     sovereign_value = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value.upper()
     institution_value = ExposureClass.INSTITUTION.value.upper()
@@ -182,16 +175,16 @@ def _pd_floor_expression(
         pl.when(exp_class.str.contains("QRRE"))
         .then(qrre_floor)
         .when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
-        .then(pl.lit(float(floors.retail_mortgage)))
+        .then(pl.lit(floors["retail_mortgage"]))
         .when(exp_class.str.contains("RETAIL"))
-        .then(pl.lit(float(floors.retail_other)))
+        .then(pl.lit(floors["retail_other"]))
         .when(exp_class == "CORPORATE_SME")
-        .then(pl.lit(float(floors.corporate_sme)))
+        .then(pl.lit(floors["corporate_sme"]))
         .when(exp_class == sovereign_value)
-        .then(pl.lit(float(floors.sovereign)))
+        .then(pl.lit(floors["sovereign"]))
         .when(exp_class == institution_value)
-        .then(pl.lit(float(floors.institution)))
-        .otherwise(pl.lit(float(floors.corporate)))
+        .then(pl.lit(floors["institution"]))
+        .otherwise(pl.lit(floors["corporate"]))
     )
 
 
@@ -452,7 +445,7 @@ def apply_irb_formulas(
         exposures = exposures.with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
 
     # Step 1: Apply per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-    pd_floor_expr = _pd_floor_expression(config)
+    pd_floor_expr = _pd_floor_expression(config, pack=resolved_pack)
     exposures = exposures.with_columns(
         pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored")
     )

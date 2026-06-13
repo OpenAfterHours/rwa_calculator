@@ -257,7 +257,9 @@ def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
 
 @cites("CRR Art. 163")
 @cites("PS1/26, paragraph 163")
-def apply_pd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_pd_floor(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply PD floor based on configuration.
 
@@ -271,11 +273,12 @@ def apply_pd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with pd_floored column
     """
-    pd_floor_expr = _pd_floor_expression(config)
+    pd_floor_expr = _pd_floor_expression(config, pack=pack)
     return lf.with_columns(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
 
@@ -579,7 +582,7 @@ def apply_all_formulas(
     batch1: list[pl.Expr] = []
 
     # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-    pd_floor_expr = _pd_floor_expression(config)
+    pd_floor_expr = _pd_floor_expression(config, pack=resolved_pack)
     batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
     # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)

@@ -62,9 +62,20 @@ class RulepackV0:
     regime: RegulatoryFramework
     config: CalculationConfig
     pack: ResolvedRulepack = field(init=False, compare=False, repr=False)
+    _pack_override: ResolvedRulepack | None = field(
+        default=None, kw_only=True, compare=False, repr=False
+    )
 
     def __post_init__(self) -> None:
-        """Resolve and attach the content-hashed pack for this regime/date."""
+        """Resolve and attach the content-hashed pack for this regime/date.
+
+        An explicit ``_pack_override`` (see :meth:`from_resolved`) is attached
+        verbatim — for amendment overlays and tests that substitute a custom
+        resolved pack — instead of resolving from ``(regime, reporting_date)``.
+        """
+        if self._pack_override is not None:
+            object.__setattr__(self, "pack", self._pack_override)
+            return
         regime_id = FRAMEWORK_TO_REGIME_ID[self.config.framework]
         object.__setattr__(self, "pack", resolve(regime_id, self.config.reporting_date))
 
@@ -77,6 +88,18 @@ class RulepackV0:
         under CRR.
         """
         return cls(regime=config.framework, config=config)
+
+    @classmethod
+    def from_resolved(cls, config: CalculationConfig, pack: ResolvedRulepack) -> RulepackV0:
+        """Build a v0 rulepack around an explicitly resolved (possibly overridden) pack.
+
+        For callers that substitute a custom :class:`ResolvedRulepack` — an
+        amendment overlay, or a test overriding a single entry (e.g. a floor
+        bundle) — instead of the pack ``from_config`` would resolve from
+        ``(regime, reporting_date)``. The rest of the facade (regime, config
+        passthrough) is unchanged. Production uses :meth:`from_config`.
+        """
+        return cls(regime=config.framework, config=config, _pack_override=pack)
 
     @property
     def is_crr(self) -> bool:

@@ -115,6 +115,23 @@ class ResolvedRulepack:
         """Resolve the named ``Schedule`` at ``self.reporting_date``."""
         return self._typed(name, Schedule).resolve(self.reporting_date)
 
+    def with_overrides(self, **entries: RuleEntry) -> ResolvedRulepack:
+        """Return a copy with the named entries replaced, content hash recomputed.
+
+        For amendment overlays and tests that substitute individual entries (e.g.
+        an overridden floor bundle) onto an already-resolved pack. Keyword names
+        are entry names; each value replaces (or adds) that entry. The result is a
+        frozen pack whose content hash covers the merged entry set, so an
+        overridden pack never carries the pre-override digest.
+        """
+        merged = {**self.entries, **entries}
+        return ResolvedRulepack(
+            regime_id=self.regime_id,
+            reporting_date=self.reporting_date,
+            entries=merged,
+            content_hash=_content_hash(self.regime_id, self.reporting_date, merged),
+        )
+
     def as_manifest(self) -> dict[str, object]:
         """Return a stable, audit-friendly summary of the resolved pack.
 

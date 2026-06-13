@@ -123,7 +123,7 @@ def apply_guarantee_substitution(
     )
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
-    lf = _apply_double_default(lf, cols, config, has_guarantor_pd)
+    lf = _apply_double_default(lf, cols, config, has_guarantor_pd, pack=resolved_pack)
 
     # --- Blend RWA and adjust expected loss ---
     ead_col = "ead_final" if "ead_final" in cols else "ead"
@@ -342,6 +342,7 @@ def _apply_parameter_substitution(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        pack=pack,
     )
     guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
@@ -600,6 +601,8 @@ def _apply_double_default(
     cols: list[str],
     config: CalculationConfig,
     has_guarantor_pd: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply double default treatment (CRR Art. 153(3), 202-203)."""
     use_double_default = config.is_crr and config.enable_double_default and has_guarantor_pd
@@ -647,6 +650,7 @@ def _apply_double_default(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        pack=pack,
     )
     guarantor_pd_floored_dd = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr_dd)
 
@@ -727,6 +731,7 @@ def _adjust_expected_loss(
             config,
             has_transactor_col=False,
             exposure_class_col="guarantor_exposure_class",
+            pack=pack,
         )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 

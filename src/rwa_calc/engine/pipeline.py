@@ -211,6 +211,8 @@ class PipelineOrchestrator:
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        rulepack: RulepackV0 | None = None,
     ) -> AggregatedResultBundle:
         """
         Execute pipeline with pre-loaded data.
@@ -223,6 +225,11 @@ class PipelineOrchestrator:
         Args:
             data: Pre-loaded raw data bundle
             config: Calculation configuration
+            rulepack: Pre-resolved rulepack used verbatim instead of
+                ``RulepackV0.from_config(config)`` — for amendment overlays and
+                tests that substitute a custom resolved pack (e.g. an overridden
+                floor entry). The EUR/GBP FX-sync still runs on ``config``; an
+                injected pack is not re-derived from the synced config.
 
         Returns:
             AggregatedResultBundle with all results and audit trail
@@ -271,7 +278,7 @@ class PipelineOrchestrator:
                 equity_calculator=self._equity_calculator,
                 output_aggregator=self._output_aggregator,
             )
-            rulepack = RulepackV0.from_config(config)
+            rulepack = rulepack if rulepack is not None else RulepackV0.from_config(config)
 
             # IRB mode without model_permissions → all exposures fall back to
             # SA. The classifier forces all permission expressions to False

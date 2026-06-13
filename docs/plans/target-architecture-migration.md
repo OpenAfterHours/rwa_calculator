@@ -453,6 +453,96 @@ target ~600; fill_null 446→431; presence guards 374→372). Next = Phase 5
 - arch_check: regime-containment ban + whole-body regulatory-literal ban in
   `engine/**`; every regime-divergent PR shows a pack diff.
 
+#### Phase 5 execution slices *(derived from the 2026-06-13 regime-seam recon on `feat/phase5`; parity anchor `../rwa_phase5_parity/before`)*
+
+Starting state established by recon: `rulepack` (RulepackV0) is threaded to every
+stage but **ignored** (`# noqa: ARG001` on ~13 adapters) — all regime reads go
+through `config`. `CalculationConfig` is the de-facto rulepack (8 regulatory
+sub-config dataclasses + `scaling_factor`/`eur_gbp_rate`/`irb_permissions`, forked
+by `.crr()`/`.basel_3_1()`). `data/tables/` is ~80% regime-as-data already
+(CRR+B31 constants side by side, selected by `is_basel_3_1`). ~62 `config.is_*`
+branch reads across 21 files; ~80 bare `is_basel_3_1: bool` own-params; 2
+constructor-regime-state classes (`CRMProcessor`, `HaircutCalculator`); 3
+transitional schedules; 4 inline `1.06 if is_crr else 1.0`.
+
+Standing invariants for every slice: resolve the pack **after** the EUR/GBP
+FX-sync (`pipeline.py` hoist → `orchestrator` build); the StageFn signature
+`Stage(ctx, rulepack, run_config)` never changes (Phase 5 swaps what `rulepack`
+carries, not the signature); per-slice byte-identical parity vs the anchor
+(group-by sum frames at rtol 1e-9 per the Phase 2 decision); the oracle is the
+referee for any number that moves; **no silent golden regeneration**.
+
+- **S1 — rulebook foundation (additive, zero engine wiring).** `model.py` (7
+  frozen shapes: ScalarParam, LookupTable, BandedTable, Schedule, DecisionTable,
+  FormulaParams, Feature — Decimal-valued, citation REQUIRED), `compile.py`
+  (pack→Polars-expr, the only Decimal→float boundary), `registry.py` (regime ids
+  → pack composition, literal), `resolve.py` (`resolve(regime_id, reporting_date)`
+  → frozen content-hashed `ResolvedRulepack`); a small proof pack exercising every
+  shape; unit tests (construction, citation-required, compile correctness, schedule
+  date resolution, content-hash determinism+sensitivity). Parity trivial.
+- **S2 — pack-build seam + regime accessors (single-stream).** Orchestrator builds
+  the pack via `resolve(...)` (feeding/replacing `RulepackV0.from_config`);
+  `ResolvedRulepack` keeps the back-compat surface (`is_crr`/`is_basel_3_1`/
+  `scaling_factor`/`regime`/`config`) and grows pack accessors. Flip the 4 inline
+  `1.06 if is_crr else 1.0` → `rulepack.scaling_factor` and the orchestrator regime
+  read. Stage adapters start consuming `rulepack` (drop `noqa` where flipped).
+- **S3 — CRM constructor-state elimination (single-stream; the plan's "CRM first").**
+  Drop `is_basel_3_1` from `CRMProcessor`/`HaircutCalculator.__init__`; thread
+  `rulepack` at the call boundary; repoint `collateral.py`'s supplier (it already
+  takes the bool); delete the `orchestrator.py:305` injection; unify the
+  `haircuts.py:128` dual-source; correct the `comparison.py` two-orchestrator
+  docstring. **Verify (recorded decision, not silent fix)** the `sft_fccm.py:289`
+  and `risk_weights.py:1284` hardcoded `is_basel_3_1=False`.
+- **S4 — CRM/CCF/haircut tables → packs.** Resolve supervisory LGD (ONE canonical
+  entry feeding both the FIRB-shape and the CRM-shape — collapse the
+  `firb_lgd`/`crm_supervisory` duplication), haircut tables (regime-band-keyed),
+  overcollateralisation (Feature + LookupTable), SA-CCF, FCSM RW dicts,
+  min-collateralisation thresholds.
+- **S5 — IRB calc → pack.** Thread `rulepack` into `irb/formulas+transforms+
+  guarantee`; resolve PD/LGD floors (Feature `airb_lgd_floor` + banded floors),
+  FIRB supervisory LGD, maturity Features (`firb_sft_supervisory_maturity`,
+  one-day floor, revolving-termination), `double_default` Feature.
+- **S6 — SA calc → pack.** SA CQS RW tables (LookupTable), the two override ladders
+  (pack-owned expr builders / DecisionTables), defaulted-RW basis Feature,
+  due-diligence Feature, supporting factors, IG assessment. **Move the
+  `rw_adjustments.py:299` Art.123B date comparison** to a resolved Schedule/flag.
+- **S7 — Slotting + Equity → pack.** Slotting RW/EL (BandedTable/DecisionTable),
+  equity RW LookupTable pairs, equity PD/LGD bundle (CRR-only FormulaParams),
+  equity transitional Schedule, equity-IRB-removed Feature.
+- **S8 — Classify → pack.** Permission map (regime DecisionTable), B31 approach
+  restrictions (pack-owned expr + threshold entries), class-remap Features
+  (high-risk, income-reroute, corporate-subclass, retail-granularity), entity-type
+  sets; split `psm_lgd_source` out of the permission map.
+- **S9 — CCR + temporal schedules → pack.** SA-CCR factors (common); the
+  transitional add-on resolved at `reporting_date` (moved out of engine); all 3
+  schedules through the single Schedule primitive — engine never compares
+  `reporting_date` to a regulatory date again.
+- **S10 — strangler-move `data/tables/` → `packs/{common,crr,b31}`** behind shim
+  getters; **delete the `COVERED_BOND_UNRATED_DERIVATION` alias trap**;
+  single-source the dup values (1.06 ×4, Art.161 LGDs ×2, 0.8732 ×~12, 0.7619); no
+  cross-pack imports; symbol-set parity + oracle-vs-pack diff tests. (Table
+  *content* moves with each consumer in S4–S9; S10 is the cleanup/parity capstone.)
+- **S11 — `contracts/config.py` split → RunConfig (single-stream).** RunConfig with
+  ZERO regulatory values; keep `.crr()`/`.basel_3_1()` as named constructors
+  building `(RunConfig, regime_id)`; route the elections (`permission_mode`,
+  `use_investment_grade_assessment`, `equity_pd_lgd`, `enable_double_default`,
+  `enforce_retail_granularity`, `crm_collateral_method`, `airb_collateral_method`,
+  `psm_lgd_source`, output-floor OF-ADJ inputs) to RunConfig, resolved against the
+  pack; delete the six regime mechanisms' last remnants.
+- **S12 — manifest + `rulepack diff` + arch_check.** `rulebook/audit.py`
+  (id+hash+resolved-params-with-citations serializer, `rulepack diff` CLI); manifest
+  records the rulepack snapshot (pass `rulepack` into `_persist_audit_artifacts`);
+  watchfire extended to pack-data citations; new arch_check **regime-containment**
+  check + whole-body regulatory-literal ban; shrink the allowlists; **update
+  /next-items wave criteria + agent charters in the same change** (do-not-do
+  register requirement).
+
+Flagged number-changing items (each gets a recorded preserve-or-fix decision in
+§6 when its slice lands, validated against the oracle — never bulk-regenerated):
+`sft_fccm.py:289` regime-insensitive haircut (S3), `risk_weights.py:1284`
+institution-guarantor pin (S3), `firb_lgd`↔`crm_supervisory` dual-shape collapse
+(S4), `COVERED_BOND_UNRATED_DERIVATION` alias (S10).
+
 ### Phase 6 — `analysis/` layer
 
 - Move comparison + reconciliation out of `engine/` (and the reconciliation registry

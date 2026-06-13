@@ -11,6 +11,7 @@ from rwa_calc.rulebook.compile import (
     decision_expr,
     decision_table_df,
     feature_enabled,
+    formula_float_map,
     formula_param_lit,
     lookup_expr,
     scalar_lit,
@@ -238,6 +239,31 @@ def test_formula_param_lit_evaluates_named_param() -> None:
 
     # Assert
     assert value == 0.15
+
+
+def test_formula_float_map_reads_all_params_as_floats() -> None:
+    # Arrange
+    bundle = FormulaParams(
+        "pd_floors",
+        {"corporate": Decimal("0.0005"), "retail_mortgage": Decimal("0.0010")},
+        _CIT,
+    )
+
+    # Act
+    result = formula_float_map(bundle)
+
+    # Assert — every Decimal param materialises as the float at the compile boundary
+    assert result == {"corporate": 0.0005, "retail_mortgage": 0.001}
+
+
+def test_formula_float_map_preserves_param_order() -> None:
+    # Arrange — insertion order is the bundle's authored order
+    bundle = FormulaParams(
+        "f", {"a": Decimal("0.1"), "b": Decimal("0.2"), "c": Decimal("0.3")}, _CIT
+    )
+
+    # Act / Assert
+    assert list(formula_float_map(bundle)) == ["a", "b", "c"]
 
 
 def test_feature_enabled_returns_bool() -> None:

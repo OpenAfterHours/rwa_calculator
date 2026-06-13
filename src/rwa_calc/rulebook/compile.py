@@ -177,6 +177,18 @@ def formula_param_lit(b: FormulaParams, key: str) -> pl.Expr:
     return pl.lit(float(b.get(key)))
 
 
+def formula_float_map(b: FormulaParams) -> dict[str, float]:
+    """Read a ``FormulaParams`` bundle's parameters as a ``{name: float}`` map.
+
+    The dict-shaped sibling of :func:`formula_param_lit`, for consumers that plug
+    several named parameters into a hand-built ``when/then`` chain (or Python-level
+    arithmetic) rather than one ``pl.lit`` per call — e.g. the per-exposure-class
+    PD floor and per-collateral-type LGD floor builders in ``engine/irb``. The
+    Decimal->float boundary lives here; the bundle stays Decimal at rest.
+    """
+    return {key: float(value) for key, value in b.params.items()}
+
+
 def feature_enabled(f: Feature) -> bool:
     """Return a ``Feature`` flag as a Python bool (no Polars boundary)."""
     return f.enabled

@@ -25,6 +25,7 @@ from rwa_calc.rulebook.model import (
     Citation,
     DecisionTable,
     Feature,
+    FormulaParams,
     LookupTable,
     RuleEntry,
     ScalarParam,
@@ -40,6 +41,53 @@ ENTRIES: dict[str, RuleEntry] = {
         name="supporting_factors",
         enabled=True,
         citation=Citation("CRR", "501"),
+    ),
+    # CRR imposes no A-IRB own-estimate LGD floor (Art. 164 lets A-IRB firms model
+    # LGD freely). The Feature gates the LGD-floor branch in engine/irb; Basel 3.1
+    # overrides it to True (packs/b31.py). The lgd_floors bundle below is all-zero
+    # under CRR so the gate and the values agree.
+    "airb_lgd_floor": Feature(
+        name="airb_lgd_floor",
+        enabled=False,
+        citation=Citation("CRR", "164", "no A-IRB own-estimate LGD floor under CRR"),
+    ),
+    # IRB PD floors (CRR Art. 160(1)): a uniform 0.03% floor across every IRB
+    # exposure class. Basel 3.1 differentiates these (packs/b31.py). Consumed by
+    # engine/irb/formulas.py::_pd_floor_expression via compile.formula_float_map.
+    "pd_floors": FormulaParams(
+        name="pd_floors",
+        params={
+            "corporate": Decimal("0.0003"),
+            "corporate_sme": Decimal("0.0003"),
+            "sovereign": Decimal("0.0003"),
+            "institution": Decimal("0.0003"),
+            "retail_mortgage": Decimal("0.0003"),
+            "retail_other": Decimal("0.0003"),
+            "retail_qrre_transactor": Decimal("0.0003"),
+            "retail_qrre_revolver": Decimal("0.0003"),
+        },
+        citation=Citation("CRR", "160(1)", "uniform 0.03% IRB PD floor"),
+    ),
+    # A-IRB LGD floors: all zero under CRR (no A-IRB LGD floor — see airb_lgd_floor
+    # Feature). Basel 3.1 sets the Art. 161(5)/164(4) floors (packs/b31.py). Keyed
+    # the same as contracts/config.py::LGDFloors so the engine projection is a
+    # 1:1 byte-identical swap. Consumed by the LGD-floor builders in engine/irb.
+    "lgd_floors": FormulaParams(
+        name="lgd_floors",
+        params={
+            "unsecured": Decimal("0.0"),
+            "subordinated_unsecured": Decimal("0.0"),
+            "financial_collateral": Decimal("0.0"),
+            "receivables": Decimal("0.0"),
+            "commercial_real_estate": Decimal("0.0"),
+            "residential_real_estate": Decimal("0.0"),
+            "other_physical": Decimal("0.0"),
+            "retail_rre": Decimal("0.0"),
+            "retail_qrre_unsecured": Decimal("0.0"),
+            "retail_other_unsecured": Decimal("0.0"),
+            "retail_lgdu": Decimal("0.0"),
+        },
+        citation=Citation("CRR", "164", "no A-IRB own-estimate LGD floor under CRR (all zero)"),
     ),
     "corporate_cqs_rw": LookupTable(
         name="corporate_cqs_rw",

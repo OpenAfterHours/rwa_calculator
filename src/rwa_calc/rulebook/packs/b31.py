@@ -28,6 +28,7 @@ from rwa_calc.rulebook.model import (
     Citation,
     DecisionTable,
     Feature,
+    FormulaParams,
     RuleEntry,
     ScalarParam,
     Schedule,
@@ -43,6 +44,50 @@ ENTRIES: dict[str, RuleEntry] = {
         name="airb_lgd_floor",
         enabled=True,
         citation=Citation("PS1/26", "161(5)"),
+    ),
+    # IRB PD floors differentiated by exposure class (PRA PS1/26 Art. 160(1)
+    # wholesale / Art. 163(1) retail). Overrides the CRR uniform 0.03% bundle.
+    # Consumed by engine/irb/formulas.py::_pd_floor_expression.
+    "pd_floors": FormulaParams(
+        name="pd_floors",
+        params={
+            "corporate": Decimal("0.0005"),
+            "corporate_sme": Decimal("0.0005"),
+            "sovereign": Decimal("0.0005"),
+            "institution": Decimal("0.0005"),
+            "retail_mortgage": Decimal("0.0010"),
+            "retail_other": Decimal("0.0005"),
+            "retail_qrre_transactor": Decimal("0.0005"),
+            "retail_qrre_revolver": Decimal("0.0010"),
+        },
+        citation=Citation(
+            "PS1/26",
+            "160(1)",
+            "differentiated IRB PD floors (Art. 160(1) wholesale / 163(1) retail)",
+        ),
+    ),
+    # A-IRB LGD floors (PRA PS1/26 Art. 161(5) corporate / Art. 164(4) retail).
+    # Overrides the CRR all-zero bundle; gated on by the airb_lgd_floor Feature.
+    # Keyed the same as contracts/config.py::LGDFloors for a 1:1 byte-identical
+    # swap. Consumed by the LGD-floor builders in engine/irb.
+    "lgd_floors": FormulaParams(
+        name="lgd_floors",
+        params={
+            "unsecured": Decimal("0.25"),
+            "subordinated_unsecured": Decimal("0.50"),
+            "financial_collateral": Decimal("0.0"),
+            "receivables": Decimal("0.10"),
+            "commercial_real_estate": Decimal("0.10"),
+            "residential_real_estate": Decimal("0.10"),
+            "other_physical": Decimal("0.15"),
+            "retail_rre": Decimal("0.05"),
+            "retail_qrre_unsecured": Decimal("0.50"),
+            "retail_other_unsecured": Decimal("0.30"),
+            "retail_lgdu": Decimal("0.30"),
+        },
+        citation=Citation(
+            "PS1/26", "161(5)", "A-IRB LGD floors (Art. 161(5) corporate / 164(4) retail)"
+        ),
     ),
     "output_floor": Feature(
         name="output_floor",

@@ -328,7 +328,7 @@ def apply_risk_weights(
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
     # the base RW when-chain so defaulted exposures have their non-defaulted
     # base RW available for blending with collateral coverage.
-    exposures = _apply_defaulted_risk_weight(exposures, config)
+    exposures = _apply_defaulted_risk_weight(exposures, config, pack=pack)
 
     # Drop temporary columns used only during risk-weight application.
     schema_names = exposures.collect_schema().names()
@@ -1428,6 +1428,8 @@ def _apply_sovereign_floor_for_institutions(
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Apply Art. 127 defaulted risk weight to the full post-CRM exposure.
 
@@ -1455,10 +1457,11 @@ def _apply_defaulted_risk_weight(
     - PS1/26 Art. 127(3) / CRE20.88: RESI RE non-income flat 100%
     - CRR Art. 127(1)-(2): CRR predecessor (pre-provision denominator)
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
     ead = pl.col("ead_final")
 
-    if config.is_basel_3_1:
+    if resolved_pack.feature("sa_revised_defaulted_treatment"):
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
         is_resi_re_non_income = (
             _is_residential_re_class(_uc)

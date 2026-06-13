@@ -155,6 +155,19 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "139", "inferred/issuer-level ECAI assessments apply to SL"),
     ),
+    # SA defaulted-exposure treatment (Art. 127): Basel 3.1 revises the unsecured
+    # denominator basis (gross outstanding vs the CRR pre-provision ead_final) and
+    # adds the Art. 127(3) residential-RE non-income flat-100% carve-out — see
+    # packs/b31.py. The Feature gates the whole regime block in
+    # engine/sa/risk_weights.py::_apply_defaulted_risk_weight; the thresholds /
+    # RW values stay in data/tables/{crr,b31}_risk_weights.py.
+    "sa_revised_defaulted_treatment": Feature(
+        name="sa_revised_defaulted_treatment",
+        enabled=False,
+        citation=Citation(
+            "CRR", "127", "CRR defaulted RW: pre-provision denominator, no RE carve-out"
+        ),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

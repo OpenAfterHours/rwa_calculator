@@ -11,6 +11,9 @@ in ``data/tables/{crr,b31}_risk_weights.py``):
   builder.
 - ``sa_sl_inferred_rating_disapplied`` gates the PS1/26 Art. 139(2B)
   non-issue-specific-ECAI CQS-nulling for specialised lending.
+- ``sa_revised_defaulted_treatment`` gates the Art. 127 defaulted-RW regime
+  block (Basel 3.1 gross-outstanding denominator + the Art. 127(3) residential-RE
+  non-income flat-100% carve-out, vs the CRR pre-provision denominator).
 
 Each Feature's value mirrors ``config.is_basel_3_1`` per regime (CRR False /
 Basel 3.1 True), so this pin is the byte-identical-parity contract: a pack typo
@@ -36,6 +39,7 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 _FEATURE_MATRIX = [
     ("sa_revised_risk_weight_tables", False, True),
     ("sa_sl_inferred_rating_disapplied", False, True),
+    ("sa_revised_defaulted_treatment", False, True),
 ]
 
 

@@ -147,6 +147,17 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "139(2B)", "non-issue-specific ECAI disapplied for SL"),
     ),
+    # Basel 3.1 defaulted-exposure treatment (PRA PS1/26 Art. 127 / CRE20.88):
+    # gross-outstanding unsecured denominator + the Art. 127(3) residential-RE
+    # non-income flat-100% carve-out. Overrides the CRR Feature; gates the regime
+    # block in engine/sa/risk_weights.py::_apply_defaulted_risk_weight.
+    "sa_revised_defaulted_treatment": Feature(
+        name="sa_revised_defaulted_treatment",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "127", "gross-outstanding denominator + RESI-RE non-income 100%"
+        ),
+    ),
     "output_floor": Feature(
         name="output_floor",
         enabled=True,

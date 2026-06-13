@@ -49,9 +49,11 @@ from tests.fixtures.p1_156.p1_156 import (
     PD_GUARANTOR,
 )
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 
 # =============================================================================
 # CONSTANTS
@@ -220,7 +222,7 @@ class TestP1156PSMGuarantorLGDSeniority:
         )
 
         # Act
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Assert: guarantor_rw must reflect the seniority/FSE-aware F-IRB LGD.
         # Sub-cases (b) and (c) FAIL here because the engine uses LGD=0.40 for all.
@@ -257,7 +259,7 @@ class TestP1156PSMGuarantorLGDSeniority:
         )
 
         # Act
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Assert: all sub-cases use parameter substitution (IRB guarantor, has PD)
         assert result["guarantee_method_used"][0] == "PD_PARAMETER_SUBSTITUTION", (

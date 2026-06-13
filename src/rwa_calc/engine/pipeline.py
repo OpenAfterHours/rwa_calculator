@@ -1,18 +1,29 @@
 """
-Pipeline Orchestrator for RWA Calculator.
+Pipeline Orchestrator facade for the RWA Calculator.
 
-Orchestrates the complete RWA calculation pipeline, wiring together:
-    Loader -> HierarchyResolver -> Classifier -> CRMProcessor
-        -> SA/IRB/Slotting Calculators -> Aggregation
+Orchestrates the complete RWA calculation pipeline by folding a
+PipelineContext through the literal stage registry:
+    Loader -> securitisation -> hierarchy -> CCR -> classifier -> CRM
+        -> RE-split -> calculators -> equity -> aggregation
 
 Pipeline position:
-    Entry point for full pipeline execution
+    Entry point for full pipeline execution. The stage fold itself lives in
+    ``engine/orchestrator.py``; the ordered stage list in
+    ``engine/registry.py``; per-stage adapters in ``engine/stages/``.
 
 Key responsibilities:
-- Wire all pipeline components in correct order
-- Handle component dependencies and data flow
-- Accumulate errors from all stages
-- Support both full pipeline (with loader) and pre-loaded data execution
+- Run lifecycle: run_id binding, edge capture, stage timing surface,
+  audit-artifact persistence — wrapped around the pure stage fold.
+- EUR/GBP FX-rate sync: finalise the effective config (CRR-only) BEFORE
+  components and the rulepack are built, so the fold sees one immutable
+  config per run.
+- Per-run component construction (injected overrides honoured) and the
+  Rulepack-v0 build.
+- Error-channel merge (unified, P2.21): loader/securitisation bundle
+  errors, then stage data-quality errors (STAGE_ERRORS — original
+  codes/severity/category preserved verbatim), then converted stage-crash
+  PIPELINE_* errors; branch-calculator warnings are already on
+  ``result.errors`` from the aggregate stage.
 
 Usage:
     from rwa_calc.engine.pipeline import create_pipeline
@@ -35,79 +46,69 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import polars as pl
-
-from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
-    ClassifiedExposuresBundle,
-    CounterpartyLookup,
-    CRMAdjustedBundle,
-    EquityResultBundle,
-    RawDataBundle,
-    ResolvedHierarchyBundle,
-)
-from rwa_calc.contracts.edges import (
-    CALC_BRANCH_EDGES,
-    CCR_EXIT_EDGE,
-    HIERARCHY_EXIT_EDGE,
-    RE_SPLIT_EXIT_CCR_EDGE,
-    RE_SPLIT_EXIT_EDGE,
-    sealed_edge_of,
-)
-from rwa_calc.contracts.protocols import (
-    ClassifierProtocol,
-    CRMProcessorProtocol,
-    EquityCalculatorProtocol,
-    HierarchyResolverProtocol,
-    IRBCalculatorProtocol,
-    LoaderProtocol,
-    OutputAggregatorProtocol,
-    RealEstateSplitterProtocol,
-    SACalculatorProtocol,
-    SecuritisationAllocatorProtocol,
-    SlottingCalculatorProtocol,
-)
+from rwa_calc.contracts.context import PipelineContext
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.fx_rate_sync import extract_eur_gbp_rate
 from rwa_calc.engine.materialise import (
     begin_edge_capture,
     current_edge_events,
     end_edge_capture,
-    materialise_sealed_branches,
-    materialise_sealed_edge,
 )
-from rwa_calc.engine.supporting_factors import compute_e_star_group_drawn
+from rwa_calc.engine.orchestrator import (
+    BRANCH_ERRORS,
+    COMPONENTS,
+    HALTED,
+    PIPELINE_ERRORS,
+    RAW_DATA,
+    RESULT,
+    SECURITISATION_RESOLVED,
+    STAGE_ERRORS,
+    PipelineError,
+    build_components,
+    convert_pipeline_error,
+    create_error_result,
+    run_stages,
+)
+from rwa_calc.engine.registry import PIPELINE_STAGES
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    import polars as pl
+
+    from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
-    from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.contracts.protocols import (
+        ClassifierProtocol,
+        CRMProcessorProtocol,
+        EquityCalculatorProtocol,
+        HierarchyResolverProtocol,
+        IRBCalculatorProtocol,
+        LoaderProtocol,
+        OutputAggregatorProtocol,
+        RealEstateSplitterProtocol,
+        SACalculatorProtocol,
+        SecuritisationAllocatorProtocol,
+        SlottingCalculatorProtocol,
+    )
 
 logger = logging.getLogger(__name__)
 
-
-# =============================================================================
-# Error Types
-# =============================================================================
-
-
-@dataclass
-class PipelineError:
-    """Error encountered during pipeline execution."""
-
-    stage: str
-    error_type: str
-    message: str
-    context: dict = field(default_factory=dict)
+__all__ = [
+    "PipelineError",
+    "PipelineOrchestrator",
+    "create_pipeline",
+    "create_test_pipeline",
+]
 
 
 # =============================================================================
-# Pipeline Orchestrator Implementation
+# Pipeline Orchestrator Facade
 # =============================================================================
 
 
@@ -115,32 +116,19 @@ class PipelineOrchestrator:
     """
     Orchestrate the complete RWA calculation pipeline.
 
-    Implements PipelineProtocol for:
-    - Full pipeline execution from data loading to final aggregation
-    - Pre-loaded data execution (bypassing loader)
-    - Component dependency management
-    - Error accumulation across stages
+    Implements PipelineProtocol over the Phase 4 fold orchestrator: the
+    stage sequence is the literal ``engine/registry.PIPELINE_STAGES`` list,
+    folded by ``engine/orchestrator.run_stages``. This facade owns the run
+    lifecycle (run_id, edge capture, FX-rate sync, error merge, audit
+    persistence) and the per-run component wiring.
 
-    Pipeline stages:
-    1. Loader: Load raw data from files/databases
-    2. HierarchyResolver: Resolve counterparty and facility hierarchies
-    3. Classifier: Classify exposures and assign approaches
-    4. CRMProcessor: Apply credit risk mitigation
-    5. SACalculator: Calculate SA RWA
-    6. IRBCalculator: Calculate IRB RWA
-    7. SlottingCalculator: Calculate Slotting RWA
-    8. Aggregation: Combine results, apply floor, generate summaries
+    Components can be injected for testing or customisation; defaults are
+    built fresh every run from the effective config (never cached across
+    runs — a framework switch on a reused orchestrator gets framework-fresh
+    components).
 
     Usage:
-        orchestrator = PipelineOrchestrator(
-            loader=ParquetLoader(base_path),
-            hierarchy_resolver=HierarchyResolver(),
-            classifier=ExposureClassifier(),
-            crm_processor=CRMProcessor(),
-            sa_calculator=SACalculator(),
-            irb_calculator=IRBCalculator(),
-            slotting_calculator=SlottingCalculator(),
-        )
+        orchestrator = PipelineOrchestrator(loader=ParquetLoader(base_path))
         result = orchestrator.run(config)
     """
 
@@ -159,24 +147,21 @@ class PipelineOrchestrator:
         output_aggregator: OutputAggregatorProtocol | None = None,
     ) -> None:
         """
-        Initialize pipeline with components.
-
-        Components can be injected for testing or customization.
-        If not provided, defaults will be created on first use.
+        Initialize the pipeline facade.
 
         Args:
             loader: Data loader (optional - required for run())
+            securitisation_allocator: Securitisation pool allocator
             hierarchy_resolver: Hierarchy resolver
             classifier: Exposure classifier
             crm_processor: CRM processor
+            re_splitter: Real estate loan-splitter (CRR Art. 125/126,
+                B3.1 Art. 124F/H)
             sa_calculator: SA calculator
             irb_calculator: IRB calculator
             slotting_calculator: Slotting calculator
             equity_calculator: Equity calculator
             output_aggregator: Output aggregator
-            re_splitter: Real estate loan-splitter (CRR Art. 125/126,
-                B3.1 Art. 124F/H). When None, a default
-                ``RealEstateSplitter`` is created.
         """
         self._loader = loader
         self._securitisation_allocator = securitisation_allocator
@@ -189,14 +174,6 @@ class PipelineOrchestrator:
         self._slotting_calculator = slotting_calculator
         self._equity_calculator = equity_calculator
         self._output_aggregator = output_aggregator
-        # Per-run scratch — set by ``_run_securitisation_allocator`` and
-        # consumed when wiring the resolved lookup into ResolvedHierarchyBundle.
-        self._securitisation_resolved: pl.LazyFrame | None = None
-        self._errors: list[PipelineError] = []
-        # Per-run scratch — CCR-stage CalculationErrors (e.g. WWR gate CCR010/
-        # CCR011 diagnostics) that must reach the result bundle as raw
-        # CalculationErrors rather than being downgraded to PipelineError.
-        self._ccr_errors: list[CalculationError] = []
 
     # =========================================================================
     # Public API
@@ -220,22 +197,13 @@ class PipelineOrchestrator:
         if self._loader is None:
             raise ValueError("No loader configured. Use run_with_data() or provide a loader.")
 
-        # Reset errors for new run
-        self._errors = []
-
-        # Stage 1: Load data
         try:
             with stage_timer(logger, "loader"):
                 raw_data = self._loader.load()
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="loader",
-                    error_type="load_error",
-                    message=str(e),
-                )
+        except Exception as e:  # noqa: BLE001 — loader failure becomes the error result
+            return create_error_result(
+                [PipelineError(stage="loader", error_type="load_error", message=str(e))]
             )
-            return self._create_error_result()
 
         return self.run_with_data(raw_data, config)
 
@@ -247,9 +215,10 @@ class PipelineOrchestrator:
         """
         Execute pipeline with pre-loaded data.
 
-        Uses single-pass architecture: all approach-specific calculators
-        run sequentially on one unified LazyFrame, avoiding plan tree
-        duplication and mid-pipeline materialisation.
+        Folds a PipelineContext through the literal stage registry; all
+        approach-specific calculators run sequentially on one unified
+        LazyFrame, avoiding plan tree duplication and mid-pipeline
+        materialisation.
 
         Args:
             data: Pre-loaded raw data bundle
@@ -258,10 +227,6 @@ class PipelineOrchestrator:
         Returns:
             AggregatedResultBundle with all results and audit trail
         """
-        # Reset errors for new run
-        self._errors = []
-        self._ccr_errors = []
-
         run_id, run_id_token = new_run_id()
         edge_capture_token = begin_edge_capture()
         run_start = time.perf_counter()
@@ -281,6 +246,8 @@ class PipelineOrchestrator:
             # Keep eur_gbp_rate in step with the loaded fx_rates table so
             # IRB SME correlation and RegulatoryThresholds use the same rate
             # as FX amount conversion. CRR-only: B3.1 thresholds are GBP-native.
+            # Runs BEFORE components/rulepack are built — the fold sees one
+            # immutable effective config per run.
             if config.is_crr and config.sync_eur_gbp_rate_from_fx_table:
                 derived_rate = extract_eur_gbp_rate(data.fx_rates)
                 if derived_rate is not None and derived_rate != config.eur_gbp_rate:
@@ -291,20 +258,33 @@ class PipelineOrchestrator:
                     )
                     config = config.with_fx_rate(derived_rate)
 
-            # Ensure components are initialized (config needed for framework-specific CRM)
-            self._ensure_components_initialized(config)
+            components = build_components(
+                config,
+                securitisation_allocator=self._securitisation_allocator,
+                hierarchy_resolver=self._hierarchy_resolver,
+                classifier=self._classifier,
+                crm_processor=self._crm_processor,
+                re_splitter=self._re_splitter,
+                sa_calculator=self._sa_calculator,
+                irb_calculator=self._irb_calculator,
+                slotting_calculator=self._slotting_calculator,
+                equity_calculator=self._equity_calculator,
+                output_aggregator=self._output_aggregator,
+            )
+            rulepack = RulepackV0.from_config(config)
 
-            # IRB mode without model_permissions → all exposures fall back to SA.
-            # The classifier forces all permission expressions to False when
-            # has_model_permissions=False in IRB mode. We surface a pipeline-level
-            # error so the user can see that per-model gating is off.
+            # IRB mode without model_permissions → all exposures fall back to
+            # SA. The classifier forces all permission expressions to False
+            # when has_model_permissions=False in IRB mode. Surface a
+            # pipeline-level error so the user can see per-model gating is off.
+            initial_errors: tuple[PipelineError, ...] = ()
             if config.permission_mode == PermissionMode.IRB and data.model_permissions is None:
                 logger.warning(
                     "IRB permission mode selected but no model_permissions data provided. "
                     "All exposures will route to SA; supply a model_permissions table "
                     "to enable IRB."
                 )
-                self._errors.append(
+                initial_errors = (
                     PipelineError(
                         stage="pipeline",
                         error_type="missing_model_permissions",
@@ -314,59 +294,51 @@ class PipelineOrchestrator:
                             "Supply a model_permissions table to enable per-model "
                             "IRB approach routing."
                         ),
-                    )
+                    ),
                 )
 
-            # Stage 1b: Securitisation allocator. Resolves the user-supplied
-            # securitisation_allocations table into a per-exposure lookup
-            # carrying residual_pct + pool_allocations. Pure no-op when no
-            # allocations were supplied (lookup left as None).
-            data = self._run_securitisation_allocator(data, config)
+            ctx = (
+                PipelineContext.empty()
+                .put(RAW_DATA, data)
+                .put(COMPONENTS, components)
+                .put(SECURITISATION_RESOLVED, None)
+                .put(PIPELINE_ERRORS, initial_errors)
+                .put(STAGE_ERRORS, ())
+            )
 
-            # Stage 2: Resolve hierarchies
-            resolved = self._run_hierarchy_resolver(data, config)
-            if resolved is None:
-                return self._create_error_result()
+            ctx = run_stages(ctx, rulepack, config, PIPELINE_STAGES)
 
-            # Stage 2b: SA-CCR pipeline adapter (P8.20).
-            # Translates ``data.ccr`` (RawCCRBundle) into one synthetic
-            # exposure row per netting set with drawn_amount = EAD_CCR
-            # (alpha * (RC + PFE)), then appends to resolved.exposures so
-            # the Classifier routes the row via the existing
-            # counterparty-class lookup (e.g. CP_001 institution CQS 2 ->
-            # SA 50% RW). No-op when data.ccr is None.
-            resolved = self._run_ccr_stage(resolved, data, config)
-            if resolved is None:
-                return self._create_error_result()
+            pipeline_errors = list(ctx.get_or(PIPELINE_ERRORS, ()))
+            halted = ctx.get_or(HALTED, "")
+            if halted == "immediate":
+                # Pre-calculator stage crash: bare error result, no merge
+                # (verbatim pre-fold behaviour).
+                return create_error_result(pipeline_errors)
+            if halted == "merged":
+                # Calculator/aggregator crash: the error result still flows
+                # through the branch + channel merges below (verbatim
+                # pre-fold behaviour, including its double-conversion of
+                # pipeline errors).
+                result = create_error_result(pipeline_errors)
+                branch_errors = ctx.get_or(BRANCH_ERRORS, ())
+                if branch_errors:
+                    result = replace(result, errors=list(result.errors) + list(branch_errors))
+            else:
+                result = ctx.get(RESULT)
 
-            # Stage 3: Classify exposures
-            classified = self._run_classifier(resolved, config)
-            if classified is None:
-                return self._create_error_result()
-
-            # Stage 4: Apply CRM
-            crm_adjusted = self._run_crm_processor(classified, config)
-            if crm_adjusted is None:
-                return self._create_error_result()
-
-            # Stage 4b: Real estate loan-splitter (CRR Art. 125/126,
-            # B3.1 Art. 124F/H). Materialises the secured RE row and the
-            # uncollateralised residual row for property-collateralised SA
-            # exposures. No-op when no rows carry re_split_mode.
-            crm_adjusted = self._run_re_splitter(crm_adjusted, config)
-            if crm_adjusted is None:
-                return self._create_error_result()
-
-            # Stages 5-8: Calculation and aggregation
-            result = self._run_calculators(crm_adjusted, config)
-
-            # Add loader validation errors, CCR-stage diagnostics, and
-            # pipeline errors to result. CCR errors (e.g. WWR gate CCR010/
-            # CCR011) are raw CalculationErrors and join the same channel as
-            # loader CalculationErrors so they reach the result unchanged.
-            loader_errors = list(data.errors) if data.errors else []
-            pipeline_errors = [self._convert_pipeline_error(e) for e in self._errors]
-            extra_errors = loader_errors + self._ccr_errors + pipeline_errors
+            # Unified error channel (P2.21): ``result.errors`` already
+            # carries the branch-calculator warnings (merged by the
+            # aggregate stage, original codes). Append, in order:
+            # loader/securitisation bundle errors (DQ*, SEC*), stage
+            # data-quality errors from STAGE_ERRORS (HIE*, CLS*, CCR*,
+            # CRM*, RE*, equity — CalculationErrors verbatim, original
+            # code/severity/category/context preserved), then converted
+            # stage-CRASH PipelineErrors (PIPELINE_<STAGE> — a crash has
+            # no original code).
+            final_data = ctx.get(RAW_DATA)
+            loader_errors = list(final_data.errors) if final_data.errors else []
+            converted_errors = [convert_pipeline_error(e) for e in pipeline_errors]
+            extra_errors = loader_errors + list(ctx.get(STAGE_ERRORS)) + converted_errors
             if extra_errors:
                 all_errors = list(result.errors) + extra_errors
                 result = replace(result, errors=all_errors)
@@ -409,634 +381,6 @@ class PipelineOrchestrator:
                     extra={"stage": "pipeline", "edge_count": len(edge_events)},
                 )
             clear_run_id(run_id_token)
-
-    # =========================================================================
-    # Private Methods - Component Initialization
-    # =========================================================================
-
-    def _ensure_components_initialized(self, config: CalculationConfig | None = None) -> None:
-        """Ensure all required components are initialized.
-
-        Args:
-            config: Calculation config, used to create framework-specific CRM processor
-        """
-        from rwa_calc.engine.classifier import ExposureClassifier
-        from rwa_calc.engine.crm.processor import CRMProcessor
-        from rwa_calc.engine.equity.calculator import EquityCalculator
-        from rwa_calc.engine.hierarchy import HierarchyResolver
-        from rwa_calc.engine.irb.calculator import IRBCalculator
-        from rwa_calc.engine.re_splitter import RealEstateSplitter
-        from rwa_calc.engine.sa.calculator import SACalculator
-        from rwa_calc.engine.securitisation.allocator import SecuritisationAllocator
-        from rwa_calc.engine.slotting.calculator import SlottingCalculator
-
-        if self._securitisation_allocator is None:
-            self._securitisation_allocator = SecuritisationAllocator()
-        if self._hierarchy_resolver is None:
-            self._hierarchy_resolver = HierarchyResolver()
-        if self._classifier is None:
-            self._classifier = ExposureClassifier()
-        if self._crm_processor is None:
-            is_b31 = config.is_basel_3_1 if config else False
-            self._crm_processor = CRMProcessor(is_basel_3_1=is_b31)
-        if self._re_splitter is None:
-            self._re_splitter = RealEstateSplitter()
-        if self._sa_calculator is None:
-            self._sa_calculator = SACalculator()
-        if self._irb_calculator is None:
-            self._irb_calculator = IRBCalculator()
-        if self._slotting_calculator is None:
-            self._slotting_calculator = SlottingCalculator()
-        if self._equity_calculator is None:
-            self._equity_calculator = EquityCalculator()
-        if self._output_aggregator is None:
-            from rwa_calc.engine.aggregator import OutputAggregator
-
-            self._output_aggregator = OutputAggregator()
-
-    # =========================================================================
-    # Private Methods - Stage Execution
-    # =========================================================================
-
-    def _run_securitisation_allocator(
-        self,
-        data: RawDataBundle,
-        config: CalculationConfig,
-    ) -> RawDataBundle:
-        """Run the securitisation pool allocator stage.
-
-        Resolves ``data.securitisation_allocations`` into a per-exposure
-        lookup keyed by (exposure_reference, exposure_type). The lookup is
-        stashed on ``self._securitisation_resolved`` for the hierarchy
-        resolver wiring step; the raw bundle is returned unchanged.
-
-        Stage is a no-op when no allocations were supplied -- the lookup
-        stays at None and downstream stages receive the canonical default
-        (residual_pct = 1.0, empty pool_allocations).
-
-        Validation errors (SEC001-SEC005) are appended to ``data.errors``
-        verbatim -- the loader-validation channel -- so the original error
-        codes survive into the final ``AggregatedResultBundle``.
-        """
-        if self._securitisation_allocator is None:
-            self._securitisation_resolved = None
-            return data
-        try:
-            with stage_timer(logger, "securitisation_allocator"):
-                new_data, resolved, errors = self._securitisation_allocator.allocate(data, config)
-            self._securitisation_resolved = resolved
-            if errors:
-                # Attach to the bundle's errors list so the SEC### codes
-                # survive verbatim into AggregatedResultBundle.errors. The
-                # pipeline-level ``_errors`` channel rewrites codes to
-                # ``PIPELINE_*`` which would mask the original validation
-                # signal.
-                combined = list(new_data.errors) + errors
-                return replace(new_data, errors=combined)
-            return new_data
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="securitisation_allocator",
-                    error_type="allocation_error",
-                    message=str(e),
-                )
-            )
-            self._securitisation_resolved = None
-            return data
-
-    def _run_hierarchy_resolver(
-        self,
-        data: RawDataBundle,
-        config: CalculationConfig,
-    ) -> ResolvedHierarchyBundle | None:
-        """Run hierarchy resolution stage and attach the securitisation lookup."""
-        from rwa_calc.engine.securitisation.allocator import attach_securitisation_lookup
-        from rwa_calc.observability.audit_cache import sink_audit
-
-        try:
-            with stage_timer(logger, "hierarchy_resolver"):
-                result = self._hierarchy_resolver.resolve(data, config)
-
-            # Join the resolved securitisation lookup onto the unified
-            # exposures frame so residual_pct + pool_allocations ride
-            # through CRM and the calculators. When no allocations were
-            # supplied, the helper still adds the columns at their
-            # canonical defaults (1.0, []), keeping the downstream
-            # contract uniform.
-            new_exposures = attach_securitisation_lookup(
-                result.exposures, self._securitisation_resolved
-            )
-            result = replace(
-                result,
-                # Stage-exit edge: hierarchy output crosses to the CCR stage /
-                # Classifier as an eager-backed frame (migration Phase 1),
-                # sealed against the full hierarchy_exit contract — the
-                # resolver's hierarchy_resolved seal plus the securitisation
-                # lookup columns attached above (migration Phase 3).
-                exposures=materialise_sealed_edge(new_exposures, config, HIERARCHY_EXIT_EDGE),
-                securitisation_audit=self._securitisation_resolved,
-            )
-            # Accumulate hierarchy errors
-            if result.hierarchy_errors:
-                for error in result.hierarchy_errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="hierarchy_resolver",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                            context=getattr(error, "context", {}),
-                        )
-                    )
-
-            # Opt-in audit cache: dual-track best-rating resolution per CP.
-            sink_audit(
-                result.counterparty_lookup.rating_inheritance,
-                config,
-                "rating_inheritance",
-            )
-
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="hierarchy_resolver",
-                    error_type="resolution_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    def _run_ccr_stage(
-        self,
-        resolved: ResolvedHierarchyBundle,
-        data: RawDataBundle,
-        config: CalculationConfig,
-    ) -> ResolvedHierarchyBundle | None:
-        """Run the SA-CCR pipeline adapter (P8.20).
-
-        Translates the optional ``data.ccr`` bundle into one synthetic
-        exposure row per netting set with ``drawn_amount = EAD_CCR``
-        (CRR Art. 274(2): EAD = alpha * (RC + PFE)) and appends those
-        rows to ``resolved.exposures`` via ``diagonal_relaxed`` concat
-        so the unified pipeline (Classifier -> CRM -> SA Calculator)
-        consumes them without any CCR-aware special-casing downstream.
-
-        No-op when ``data.ccr is None`` (firm has no derivatives book).
-
-        References:
-            CRR Art. 271 (CCR scope); CRR Art. 272(4) (netting set);
-            CRR Art. 274(2) (alpha * (RC + PFE)).
-        """
-        if data.ccr is None:
-            logger.debug("no CCR inputs - skipping SA-CCR stage")
-            return resolved
-
-        from rwa_calc.engine.ccr import (
-            apply_legal_enforceability_gate,
-            apply_wwr_gate,
-            ccr_rows_to_exposures,
-        )
-
-        try:
-            with stage_timer(logger, "ccr_sa_ccr"):
-                # Apply the Art. 272(4) legal-enforceability gate first so
-                # non-enforceable netting sets are split into single-trade
-                # synthetic NSes before the EAD chain runs, then the
-                # Art. 291(4)-(5) WWR gate so specific-WWR trades break out
-                # into their own synthetic netting sets (LGD = 100%).
-                raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(data.ccr))
-                # Propagate the gates' CCR010/CCR011 diagnostics to the result
-                # bundle as raw CalculationErrors (not downgraded PipelineErrors).
-                self._ccr_errors = list(raw_ccr_gated.errors)
-                ccr_exposure_rows = ccr_rows_to_exposures(
-                    raw_ccr_gated,
-                    config.ccr,
-                    config.reporting_date,
-                    base_currency=config.base_currency,
-                    fx_rates=data.fx_rates,
-                    # CRR Art. 274(2): the counterparty frame carries the
-                    # ``counterparty_type`` discriminator that selects the
-                    # per-NS supervisory alpha (1.0 carve-out vs 1.4 default).
-                    counterparties=data.counterparties,
-                    # PRA PS1/26 Art. 274(2A): the transitional alpha add-on is
-                    # Basel 3.1 only — gate it on the framework so it never
-                    # fires under CRR.
-                    is_basel_3_1=config.is_basel_3_1,
-                )
-                # Inherit the resolved counterparty rating columns onto each
-                # CCR synthetic row so the downstream SA Institution lookup
-                # (CRR Art. 120(1) Table 3, keyed off ``cqs``) and any IRB
-                # routing (keyed off ``internal_pd``) see the same rating
-                # that ``hierarchy._attach_counterparty_rating`` joined onto
-                # traditional lending rows. Without this enrichment, CCR rows
-                # arrive at the SA calculator with ``cqs=None`` and fall
-                # through to the 100% unrated-institution fallback.
-                ccr_exposure_rows = self._enrich_ccr_rows_with_ratings(
-                    ccr_exposure_rows, resolved.counterparty_lookup
-                )
-                new_exposures = pl.concat(
-                    [resolved.exposures, ccr_exposure_rows],
-                    how="diagonal_relaxed",
-                )
-                # Stage-exit edge (only when CCR rows were appended): the
-                # hierarchy_exit shape plus the SA-CCR provenance columns —
-                # synthetic rows may not otherwise reshape the frame.
-                return replace(
-                    resolved,
-                    exposures=materialise_sealed_edge(new_exposures, config, CCR_EXIT_EDGE),
-                )
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="ccr_sa_ccr",
-                    error_type="ccr_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    @staticmethod
-    def _enrich_ccr_rows_with_ratings(
-        ccr_exposure_rows: pl.LazyFrame,
-        counterparty_lookup: CounterpartyLookup,
-    ) -> pl.LazyFrame:
-        """Join the resolved counterparty rating columns onto CCR rows.
-
-        Mirrors the per-exposure rating attach performed by
-        ``hierarchy._attach_counterparty_rating`` for traditional lending
-        rows. The CCR pipeline adapter runs AFTER hierarchy resolution and
-        appends synthetic rows via ``diagonal_relaxed`` concat, so without
-        this enrichment those rows reach the SA calculator with
-        ``cqs=None`` / ``external_cqs=None`` / ``internal_pd=None`` and the
-        institution risk-weight lookup falls through to its unrated 100%
-        fallback (CRR Art. 121(1)) instead of the rated CQS table
-        (CRR Art. 120(1) Table 3).
-        """
-        cp_schema = set(counterparty_lookup.counterparties.collect_schema().names())
-        rating_cols = [c for c in ("cqs", "pd", "internal_pd", "external_cqs") if c in cp_schema]
-        if not rating_cols:
-            return ccr_exposure_rows
-        cp_select = [pl.col("counterparty_reference"), *(pl.col(c) for c in rating_cols)]
-        return ccr_exposure_rows.join(
-            counterparty_lookup.counterparties.select(cp_select),
-            on="counterparty_reference",
-            how="left",
-        )
-
-    def _run_classifier(
-        self,
-        data: ResolvedHierarchyBundle,
-        config: CalculationConfig,
-    ) -> ClassifiedExposuresBundle | None:
-        """Run classification stage."""
-        from rwa_calc.observability.audit_cache import sink_audit
-
-        try:
-            with stage_timer(logger, "classifier"):
-                result = self._classifier.classify(data, config)
-            # Accumulate classification errors
-            if result.classification_errors:
-                for error in result.classification_errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="classifier",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                            context=getattr(error, "context", {}),
-                        )
-                    )
-
-            # Opt-in audit cache: per-exposure classification reason trail.
-            if result.classification_audit is not None:
-                sink_audit(result.classification_audit, config, "classification_audit")
-
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="classifier",
-                    error_type="classification_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    def _run_equity_calculator(
-        self,
-        data: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> EquityResultBundle | None:
-        """Run Equity calculation stage."""
-        from rwa_calc.observability.audit_cache import sink_audit
-
-        try:
-            with stage_timer(logger, "equity_calculator"):
-                result = self._equity_calculator.get_equity_result_bundle(data, config)
-            # Accumulate Equity errors
-            if result.errors:
-                for error in result.errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="equity_calculator",
-                            error_type=getattr(error, "error_type", "unknown"),
-                            message=getattr(error, "message", str(error)),
-                        )
-                    )
-
-            # Opt-in audit cache: CIU look-through vs fallback rationale per row.
-            if result.calculation_audit is not None:
-                sink_audit(result.calculation_audit, config, "equity_calculation_audit")
-
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="equity_calculator",
-                    error_type="equity_calculation_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    # =========================================================================
-    # Private Methods - Calculation
-    # =========================================================================
-
-    def _run_crm_processor(
-        self,
-        data: ClassifiedExposuresBundle,
-        config: CalculationConfig,
-    ) -> CRMAdjustedBundle | None:
-        """Run CRM processing on the unified exposure frame."""
-        try:
-            with stage_timer(logger, "crm_processor"):
-                result = self._crm_processor.get_crm_unified_bundle(data, config)
-            if result.crm_errors:
-                for error in result.crm_errors:
-                    self._errors.append(
-                        PipelineError(
-                            stage="crm_processor",
-                            error_type=error.code,
-                            message=error.message,
-                        )
-                    )
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="crm_processor",
-                    error_type="crm_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    def _run_re_splitter(
-        self,
-        crm_adjusted: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> CRMAdjustedBundle | None:
-        """Run the real estate loan-splitter stage."""
-        from rwa_calc.observability.audit_cache import sink_audit
-
-        try:
-            with stage_timer(logger, "re_splitter"):
-                result = self._re_splitter.split(crm_adjusted, config)
-            # Stage-exit edge: the calculators' branch split forks the plan
-            # three ways, so their input must be eager-backed (this edge
-            # replaces the old pipeline_pre_branch barrier one stage later).
-            # The splitter's pure-plan seal carries the contract; this
-            # materialises and re-brands the eager-backed wrap under the
-            # same contract (selected by the splitter's brand).
-            exit_edge = (
-                RE_SPLIT_EXIT_CCR_EDGE
-                if sealed_edge_of(result.exposures) == "re_split_exit_ccr"
-                else RE_SPLIT_EXIT_EDGE
-            )
-            result = replace(
-                result,
-                exposures=materialise_sealed_edge(
-                    result.exposures, config, exit_edge, label="re_split_exit"
-                ),
-            )
-            if result.crm_errors:
-                # Splitter accumulates errors into the CRM bucket so existing
-                # error reporting continues to capture them.
-                for error in result.crm_errors:
-                    if error in crm_adjusted.crm_errors:
-                        # Already accounted for upstream — skip duplicates.
-                        continue
-                    self._errors.append(
-                        PipelineError(
-                            stage="re_splitter",
-                            error_type=error.code,
-                            message=error.message,
-                        )
-                    )
-
-            # Opt-in audit cache: per-parent secured/residual split reconciliation.
-            # Only present when at least one exposure triggered RE splitting.
-            if result.re_split_audit is not None:
-                sink_audit(result.re_split_audit, config, "re_split_audit")
-
-            return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="re_splitter",
-                    error_type="re_split_error",
-                    message=str(e),
-                )
-            )
-            return None
-
-    def _run_calculators(
-        self,
-        crm_adjusted: CRMAdjustedBundle,
-        config: CalculationConfig,
-    ) -> AggregatedResultBundle:
-        """
-        Split-once calculation with parallel collect.
-
-        Splits the CRM-adjusted frame by approach, runs each calculator
-        on its subset, then collects all three branches in parallel via
-        pl.collect_all(). CSE (Common Subplan Elimination) ensures the
-        shared CRM upstream computes only once.
-        """
-        from rwa_calc.domain.enums import ApproachType
-
-        try:
-            with stage_timer(logger, "calculators"):
-                # Eager-backed via the re_split_exit stage edge; the only lazy
-                # work below this point is e_star + (floor-enabled) unified SA
-                # + the per-branch calculator chains, collected at
-                # materialise_branches.
-                exposures = crm_adjusted.exposures
-
-                # Branch-path error channel: calculator data-quality warnings
-                # (SA004/SA005/SF001, EL diagnostics) accumulate here and merge
-                # into the result bundle with their ORIGINAL codes — the
-                # PipelineError channel would rewrite them to PIPELINE_*.
-                branch_errors: list[CalculationError] = []
-
-                # Compute Art. 501 E* (SME tier threshold input) across the full
-                # unified frame so SA / IRB / slotting siblings in the same
-                # lending group all contribute. Without this, each branch's
-                # apply_factors would compute the window sum on its own subset
-                # and under-count E* whenever a group spans multiple approaches.
-                # No-op when supporting factors are disabled (Basel 3.1).
-                exposures = compute_e_star_group_drawn(exposures, config, errors=branch_errors)
-
-                # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
-                if config.output_floor.enabled:
-                    exposures = self._sa_calculator.calculate_unified(
-                        exposures, config, errors=branch_errors
-                    )
-
-                # Split once by approach
-                is_irb = (pl.col("approach") == ApproachType.FIRB.value) | (
-                    pl.col("approach") == ApproachType.AIRB.value
-                )
-                is_slotting = pl.col("approach") == ApproachType.SLOTTING.value
-
-                sa_branch = exposures.filter(~is_irb & ~is_slotting)
-                irb_branch = exposures.filter(is_irb)
-                slotting_branch = exposures.filter(is_slotting)
-
-                # Process each branch (all still lazy)
-                if config.output_floor.enabled:
-                    # SA already calculated by calculate_unified above —
-                    # add aggregator columns that calculate_branch normally provides
-                    sa_result = sa_branch.with_columns(
-                        pl.col("approach").alias("approach_applied"),
-                        pl.col("rwa_post_factor").alias("rwa_final"),
-                    )
-                else:
-                    sa_result = self._sa_calculator.calculate_branch(
-                        sa_branch, config, errors=branch_errors
-                    )
-
-                irb_result = self._irb_calculator.calculate_branch(
-                    irb_branch, config, errors=branch_errors
-                )
-                slotting_result = self._slotting_calculator.calculate_branch(
-                    slotting_branch, config, errors=branch_errors
-                )
-
-                # Collect all branches. In cpu mode, uses collect_all with CSE so
-                # shared upstream computes once. In streaming mode, sinks each
-                # branch to disk sequentially (peak memory = 1 branch at a time).
-                # Each branch is conformed to its edge contract before the
-                # shared collect and branded after (Phase 3 branch-exit seal).
-                sa_df, irb_df, slotting_df = materialise_sealed_branches(
-                    [sa_result, irb_result, slotting_result],
-                    config,
-                    [
-                        CALC_BRANCH_EDGES["sa_branch"],
-                        CALC_BRANCH_EDGES["irb_branch"],
-                        CALC_BRANCH_EDGES["slotting_branch"],
-                    ],
-                )
-                sa_rows = sa_df.height
-                irb_rows = irb_df.height
-                slotting_rows = slotting_df.height
-                logger.info(
-                    "calculators materialised %d rows (sa=%d, irb=%d, slotting=%d)",
-                    sa_rows + irb_rows + slotting_rows,
-                    sa_rows,
-                    irb_rows,
-                    slotting_rows,
-                    extra={
-                        "stage": "calculators",
-                        "row_count": sa_rows + irb_rows + slotting_rows,
-                    },
-                )
-
-                # Equity — separate path (not in unified frame)
-                equity_bundle = self._run_equity_calculator(crm_adjusted, config)
-
-                # Aggregate from already-collected DataFrames
-                result = self._aggregate_results(
-                    sa_df,
-                    irb_df,
-                    slotting_df,
-                    equity_bundle,
-                    config,
-                    crm_adjusted.securitisation_audit,
-                )
-                # Merge branch-path calculator warnings, codes preserved.
-                if branch_errors:
-                    result = replace(result, errors=list(result.errors) + branch_errors)
-                return result
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="calculators",
-                    error_type="calculation_error",
-                    message=str(e),
-                )
-            )
-            return self._create_error_result()
-
-    def _aggregate_results(
-        self,
-        sa_df: pl.DataFrame,
-        irb_df: pl.DataFrame,
-        slotting_df: pl.DataFrame,
-        equity_bundle: EquityResultBundle | None,
-        config: CalculationConfig,
-        securitisation_audit: pl.LazyFrame | None = None,
-    ) -> AggregatedResultBundle:
-        """Aggregate results from collect_all DataFrames."""
-        try:
-            with stage_timer(logger, "aggregator"):
-                return self._output_aggregator.aggregate(
-                    sa_results=sa_df.lazy(),
-                    irb_results=irb_df.lazy(),
-                    slotting_results=slotting_df.lazy(),
-                    equity_bundle=equity_bundle,
-                    config=config,
-                    securitisation_audit=securitisation_audit,
-                )
-        except Exception as e:
-            self._errors.append(
-                PipelineError(
-                    stage="aggregator",
-                    error_type="aggregation_error",
-                    message=str(e),
-                )
-            )
-            return self._create_error_result()
-
-    # =========================================================================
-    # Private Methods - Utilities
-    # =========================================================================
-
-    def _create_error_result(self) -> AggregatedResultBundle:
-        """Create error result when pipeline fails.
-
-        The empty results frame comes from the aggregator-exit contract so
-        the error bundle satisfies the same sealed-field registration as a
-        successful run (schema-complete, zero rows).
-        """
-        from rwa_calc.contracts.edges import AGGREGATOR_EXIT_EDGE
-
-        return AggregatedResultBundle(
-            results=AGGREGATOR_EXIT_EDGE.empty_frame(),
-            errors=[self._convert_pipeline_error(e) for e in self._errors],
-        )
-
-    def _convert_pipeline_error(self, error: PipelineError) -> object:
-        """Convert PipelineError to standard error format."""
-        from rwa_calc.contracts.errors import CalculationError, ErrorCategory, ErrorSeverity
-
-        return CalculationError(
-            code=f"PIPELINE_{error.stage.upper()}",
-            message=f"[{error.stage}] {error.error_type}: {error.message}",
-            severity=ErrorSeverity.ERROR,
-            category=ErrorCategory.CALCULATION,
-        )
 
 
 # =============================================================================
@@ -1186,7 +530,7 @@ def _persist_audit_artifacts(
         tmp_path.write_text(_json.dumps(manifest, indent=2), encoding="utf-8")
         tmp_path.replace(manifest_path)
         logger.info("wrote audit manifest %s", manifest_path)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — audit caching must never break a run
         logger.warning("audit manifest write failed: %s", exc)
 
     # Trim oldest runs AFTER this one's artifacts are committed so the cap

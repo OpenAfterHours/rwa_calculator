@@ -25,7 +25,7 @@ References:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, SupportsFloat, cast
 
 import polars as pl
 
@@ -225,4 +225,4 @@ def _component_names(columns: list[str]) -> list[str]:
 
 def _f(value: object) -> float:
     """Coerce a possibly-null numeric cell to a float (null -> 0.0)."""
-    return float(value) if value is not None else 0.0  # type: ignore[arg-type]
+    return float(cast("SupportsFloat", value)) if value is not None else 0.0

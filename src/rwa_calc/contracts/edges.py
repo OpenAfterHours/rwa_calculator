@@ -42,6 +42,8 @@ import polars as pl
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from polars._typing import PolarsDataType
+
     from rwa_calc.data.column_spec import ColumnSpec
 
 _BRAND_ATTR = "_rwa_sealed_edge"
@@ -91,7 +93,7 @@ class EdgeColumn:
             weights — caught by the parity gate.
     """
 
-    dtype: pl.DataType
+    dtype: PolarsDataType
     required: bool = True
     default: object = None
     fill_null_default: bool = False
@@ -267,8 +269,12 @@ def seal_lenient(lf: pl.LazyFrame, edge: EdgeContract) -> tuple[pl.LazyFrame, li
     return brand(conformed, edge.name), missing
 
 
-def brand(lf: pl.LazyFrame, edge_name: str) -> pl.LazyFrame:
+def brand[FrameT: (pl.LazyFrame, pl.DataFrame)](lf: FrameT, edge_name: str) -> FrameT:
     """Mark ``lf`` as sealed for ``edge_name``.
+
+    Branch exits brand collected DataFrames; everything else brands
+    LazyFrames — ``setattr`` works identically on both, and the type
+    parameter keeps the identity typing.
 
     The brand is a plain instance attribute: any transformation returns a
     NEW LazyFrame without it, so only the exact object that went through

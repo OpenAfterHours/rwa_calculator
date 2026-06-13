@@ -8,6 +8,7 @@ loader, pipeline, hierarchy, CRM, IRB, and slotting modules.
 from __future__ import annotations
 
 from datetime import date
+from typing import TypeGuard
 
 import polars as pl
 
@@ -125,7 +126,7 @@ def has_rows(lf: pl.LazyFrame) -> bool:
 def has_required_columns(
     data: pl.LazyFrame | None,
     required_columns: set[str] | None = None,
-) -> bool:
+) -> TypeGuard[pl.LazyFrame]:
     """
     Check if a LazyFrame is not None and has the required columns.
 

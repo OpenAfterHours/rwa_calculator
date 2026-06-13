@@ -33,12 +33,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
+from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.crr_equity_pd_lgd import (
@@ -59,6 +60,8 @@ from rwa_calc.engine.irb.formulas import (
 )
 
 if TYPE_CHECKING:
+    from polars.expr.whenthen import ChainedThen, Then
+
     from rwa_calc.contracts.config import CalculationConfig
 
 logger = logging.getLogger(__name__)
@@ -115,15 +118,17 @@ _AUDIT_RWA_ROUND = 0
 
 
 @cites("PS1/26, paragraph 132")
-def _append_ciu_branches(chain: pl.Expr) -> pl.Expr:
+def _append_ciu_branches(chain: pl.Expr) -> ChainedThen:
     """Append CIU approach-aware risk weight branches to a when/then chain (Art. 132-132C).
 
     Covers: fallback (1,250%), mandate_based (ciu_mandate_rw x1.2 if third-party),
     look_through (ciu_look_through_rw), and unclassified CIU (1,250% default).
     """
     _is_ciu = pl.col("equity_type").str.to_lowercase() == "ciu"
+    # The piped-in chain is an in-progress when/then; narrow for the checker.
+    then_chain = cast("Then | ChainedThen", chain)
     return (
-        chain.when(_is_ciu & (pl.col("ciu_approach") == "fallback"))
+        then_chain.when(_is_ciu & (pl.col("ciu_approach") == "fallback"))
         .then(pl.lit(CIU_FALLBACK_RW))
         .when(_is_ciu & (pl.col("ciu_approach") == "mandate_based"))
         .then(
@@ -220,7 +225,7 @@ class EquityCalculator:
         Returns:
             EquityResultBundle with results and audit trail
         """
-        errors: list[EquityCalculationError] = []
+        errors: list[CalculationError] = []
 
         exposures = data.equity_exposures
 
@@ -297,11 +302,12 @@ class EquityCalculator:
 
         # CRR: Check if firm has any IRB permissions beyond SA
         # If permissions dict is empty, it's SA-only
-        if not config.irb_permissions.permissions:
+        # irb_permissions is derived non-None in CalculationConfig.__post_init__.
+        if not config.irb_permissions.permissions:  # ty: ignore[unresolved-attribute]
             return EquityApproach.SA
 
         # Check if any exposure class has FIRB or AIRB permission
-        for _exposure_class, approaches in config.irb_permissions.permissions.items():
+        for _exposure_class, approaches in config.irb_permissions.permissions.items():  # ty: ignore[unresolved-attribute]
             if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches:
                 # Art. 155(3): PD/LGD approach when the firm has elected it
                 if config.equity_pd_lgd:
@@ -986,7 +992,7 @@ class EquityCalculator:
             if not config.is_basel_3_1
             and any(
                 ApproachType.FIRB in a or ApproachType.AIRB in a
-                for a in config.irb_permissions.permissions.values()
+                for a in config.irb_permissions.permissions.values()  # ty: ignore[unresolved-attribute]
             )
             else "sa_transitional"
         )

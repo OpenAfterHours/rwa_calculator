@@ -16,10 +16,12 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — register namespace
 from rwa_calc.contracts.config import (
     CalculationConfig,
     PostModelAdjustmentConfig,
+)
+from rwa_calc.engine.irb.transforms import (
+    apply_post_model_adjustments,
 )
 
 
@@ -68,13 +70,13 @@ class TestPostModelAdjustmentsCRR:
         """CRR: RWA is not modified by PMAs."""
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         lf = _make_irb_frame(rwa=1000.0)
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["rwa"][0] == pytest.approx(1000.0)
 
     def test_crr_pma_columns_zero(self) -> None:
         """CRR: PMA adjustment columns are zero."""
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
-        result = _make_irb_frame().irb.apply_post_model_adjustments(config).collect()
+        result = _make_irb_frame().pipe(apply_post_model_adjustments, config).collect()
         assert result["post_model_adjustment_rwa"][0] == pytest.approx(0.0)
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
         assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(0.0)
@@ -83,7 +85,7 @@ class TestPostModelAdjustmentsCRR:
         """CRR: Expected loss not modified."""
         config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         result = (
-            _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+            _make_irb_frame(expected_loss=10.0).pipe(apply_post_model_adjustments, config).collect()
         )
         assert result["el_after_adjustment"][0] == pytest.approx(10.0)
 
@@ -94,7 +96,7 @@ class TestPostModelAdjustmentsBasel31:
     def test_general_pma_rwa(self) -> None:
         """General PMA adds scalar × base_rwa to RWEA."""
         config = _b31_config(pma_rwa_scalar=Decimal("0.05"))
-        result = _make_irb_frame(rwa=1000.0).irb.apply_post_model_adjustments(config).collect()
+        result = _make_irb_frame(rwa=1000.0).pipe(apply_post_model_adjustments, config).collect()
         assert result["rwa_pre_adjustments"][0] == pytest.approx(1000.0)
         assert result["post_model_adjustment_rwa"][0] == pytest.approx(50.0)
         # Final RWA = 1000 + 50 = 1050
@@ -110,7 +112,7 @@ class TestPostModelAdjustmentsBasel31:
             risk_weight=0.10,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         # Floor adjustment = (0.15 - 0.10) * 2000 = 100.0
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
         # Final RWA = 200 + 100 = 300
@@ -125,7 +127,7 @@ class TestPostModelAdjustmentsBasel31:
             risk_weight=0.20,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
         assert result["rwa"][0] == pytest.approx(400.0)
 
@@ -138,13 +140,13 @@ class TestPostModelAdjustmentsBasel31:
             risk_weight=0.10,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
 
     def test_unrecognised_exposure_adjustment(self) -> None:
         """Unrecognised exposure adjustment adds scalar × base_rwa."""
         config = _b31_config(unrecognised_exposure_scalar=Decimal("0.02"))
-        result = _make_irb_frame(rwa=1000.0).irb.apply_post_model_adjustments(config).collect()
+        result = _make_irb_frame(rwa=1000.0).pipe(apply_post_model_adjustments, config).collect()
         assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(20.0)
         assert result["rwa"][0] == pytest.approx(1020.0)
 
@@ -166,7 +168,7 @@ class TestPostModelAdjustmentsBasel31:
             risk_weight=0.10,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         # Step 1: Mortgage floor: (0.20 - 0.10) * 2000 = 200
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(200.0)
         # Post-floor RWA = 200 + 200 = 400
@@ -181,7 +183,7 @@ class TestPostModelAdjustmentsBasel31:
         """EL adjustment adds scalar × base_el to expected loss."""
         config = _b31_config(pma_el_scalar=Decimal("0.10"))
         result = (
-            _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+            _make_irb_frame(expected_loss=10.0).pipe(apply_post_model_adjustments, config).collect()
         )
         assert result["el_pre_adjustment"][0] == pytest.approx(10.0)
         assert result["post_model_adjustment_el"][0] == pytest.approx(1.0)
@@ -194,7 +196,7 @@ class TestPostModelAdjustmentsBasel31:
             mortgage_rw_floor=Decimal("0.0"),
             unrecognised_exposure_scalar=Decimal("0.0"),
         )
-        result = _make_irb_frame(rwa=1000.0).irb.apply_post_model_adjustments(config).collect()
+        result = _make_irb_frame(rwa=1000.0).pipe(apply_post_model_adjustments, config).collect()
         assert result["rwa"][0] == pytest.approx(1000.0)
 
     def test_residential_exposure_class_triggers_mortgage_floor(self) -> None:
@@ -206,7 +208,7 @@ class TestPostModelAdjustmentsBasel31:
             risk_weight=0.10,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
 
 
@@ -273,7 +275,7 @@ class TestPMASequencing:
             risk_weight=0.05,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         # Mortgage floor: (0.10 - 0.05) * 2000 = 100
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
         # Post-floor RWA = 100 + 100 = 200
@@ -294,7 +296,7 @@ class TestPMASequencing:
             risk_weight=0.05,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         # Post-floor RWA = 100 + 100 = 200
         # Unrecognised: 200 * 0.05 = 10 (NOT 100 * 0.05 = 5)
         assert result["unrecognised_exposure_adjustment"][0] == pytest.approx(10.0)
@@ -313,7 +315,7 @@ class TestPMASequencing:
             risk_weight=0.25,  # Above floor
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
         # PMA: 500 * 0.10 = 50 (no floor increase, so base is still 500)
         assert result["post_model_adjustment_rwa"][0] == pytest.approx(50.0)
@@ -331,7 +333,7 @@ class TestPMASequencing:
             risk_weight=0.50,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(0.0)
         assert result["post_model_adjustment_rwa"][0] == pytest.approx(100.0)
         assert result["rwa"][0] == pytest.approx(1100.0)
@@ -356,7 +358,7 @@ class TestPMASequencing:
                 "expected_loss": [5.0, 50.0],
             }
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         # Mortgage row: floor adjustment=100, post-floor RWA=200, PMA=20
         assert result["mortgage_rw_floor_adjustment"][0] == pytest.approx(100.0)
         assert result["post_model_adjustment_rwa"][0] == pytest.approx(20.0)
@@ -378,7 +380,7 @@ class TestPMASequencing:
             risk_weight=0.10,
             ead_final=2000.0,
         )
-        result = lf.irb.apply_post_model_adjustments(config).collect()
+        result = lf.pipe(apply_post_model_adjustments, config).collect()
         assert result["rwa_pre_adjustments"][0] == pytest.approx(200.0)
 
 
@@ -423,7 +425,7 @@ class TestPMAELMonotonicity:
         """
         config = _b31_config(pma_el_scalar=Decimal("0.0"))
         result = (
-            _make_irb_frame(expected_loss=10.0).irb.apply_post_model_adjustments(config).collect()
+            _make_irb_frame(expected_loss=10.0).pipe(apply_post_model_adjustments, config).collect()
         )
         assert result["post_model_adjustment_el"][0] >= 0.0
         assert result["el_after_adjustment"][0] >= result["el_pre_adjustment"][0]
@@ -432,7 +434,9 @@ class TestPMAELMonotonicity:
         """Positive EL scalar correctly increases expected loss."""
         config = _b31_config(pma_el_scalar=Decimal("0.20"))
         result = (
-            _make_irb_frame(expected_loss=100.0).irb.apply_post_model_adjustments(config).collect()
+            _make_irb_frame(expected_loss=100.0)
+            .pipe(apply_post_model_adjustments, config)
+            .collect()
         )
         assert result["el_pre_adjustment"][0] == pytest.approx(100.0)
         assert result["post_model_adjustment_el"][0] == pytest.approx(20.0)

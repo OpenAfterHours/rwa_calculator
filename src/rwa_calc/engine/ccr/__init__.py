@@ -13,10 +13,8 @@ Key responsibilities:
 
 The SA-CCR formula bodies (replacement cost, adjusted notional, supervisory
 delta, maturity factor, per-asset-class add-on, and final EAD) are implemented
-across the ``rwa_calc.engine.ccr`` submodules.
-
-Importing this package triggers registration of the ``ccr`` Polars LazyFrame
-namespace via the sibling ``namespace`` module.
+across the ``rwa_calc.engine.ccr`` submodules and exposed as free functions;
+callers invoke them directly (no Polars namespace registration).
 
 References:
 - CRR Art. 274: SA-CCR EAD = alpha * (RC + PFE)
@@ -33,9 +31,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Importing the namespace module triggers @pl.api.register_lazyframe_namespace
-# so that ``lf.ccr.*`` is available to callers as soon as the package loads.
-from rwa_calc.engine.ccr import namespace as _namespace  # noqa: E402, F401
 from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_ir  # noqa: E402
 from rwa_calc.engine.ccr.hedging_sets import (  # noqa: E402
     assign_hedging_set,

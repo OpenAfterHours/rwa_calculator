@@ -1,11 +1,12 @@
 """
 Standardised Approach (SA) Calculator for RWA.
 
-Thin orchestrator over the ``lf.sa`` Polars namespace. All pipeline stages
+Thin orchestrator over the plain typed SA transforms. All pipeline stages
 (risk-weight lookup, CRM substitution, guarantee substitution, currency
 mismatch, due diligence, defaulted treatment, supporting factors, audit)
-live in ``engine/sa/namespace.py``; ``SACalculator`` chains them in
-regulatory order and layers caller-specific gating on top (e.g. the
+live in ``engine/sa/risk_weights.py`` / ``rw_adjustments.py`` /
+``factors_output.py``; ``SACalculator`` composes them via ``LazyFrame.pipe``
+in regulatory order and layers caller-specific gating on top (e.g. the
 ``is_sa`` guard on the unified frame and the ``sa_rwa`` snapshot used by
 the IRB output floor).
 
@@ -13,7 +14,7 @@ Pipeline position:
     CRMProcessor -> SACalculator -> Aggregation
 
 Key responsibilities:
-- Chain SA stages exposed via ``lf.sa.*`` in the correct regulatory order
+- Compose the SA transform functions via ``.pipe`` in the correct regulatory order
 - Emit SA-equivalent RWA (``sa_rwa``) on unified frames for the output floor
 - Warn on equity-class rows routed through the main SA table (SA005)
 - Translate bundle errors into ``CalculationError`` instances
@@ -33,8 +34,6 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-# Importing the namespace module registers the ``lf.sa`` fluent API with Polars.
-import rwa_calc.engine.sa.namespace  # noqa: F401
 from rwa_calc.contracts.errors import (
     ERROR_EQUITY_IN_MAIN_TABLE,
     CalculationError,
@@ -42,6 +41,15 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
 )
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.sa.factors_output import apply_supporting_factors, calculate_rwa
+from rwa_calc.engine.sa.risk_weights import apply_risk_weights
+from rwa_calc.engine.sa.rw_adjustments import (
+    apply_currency_mismatch_multiplier,
+    apply_due_diligence_override,
+    apply_fcsm_rw_substitution,
+    apply_guarantee_substitution,
+    apply_life_insurance_rw_mapping,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -55,9 +63,9 @@ class SACalculator:
     Calculate RWA using Standardised Approach.
 
     Implements SACalculatorProtocol. The class is a thin orchestrator — the
-    per-stage logic lives on the ``lf.sa`` namespace (see
-    ``engine/sa/namespace.py``). Both ``calculate_unified`` and
-    ``calculate_branch`` read as a fluent chain of ``lf.sa.*`` calls.
+    per-stage logic lives in the SA transform modules (``risk_weights`` /
+    ``rw_adjustments`` / ``factors_output``). Both ``calculate_unified`` and
+    ``calculate_branch`` read as a ``.pipe`` chain of transform calls.
 
     Usage:
         calculator = SACalculator()
@@ -97,12 +105,12 @@ class SACalculator:
         # Runs unconditionally — also provides SA-equivalent RW for the
         # IRB output floor.
         exposures = (
-            exposures.sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config, errors=errors)
+            exposures.pipe(apply_risk_weights, config)
+            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_guarantee_substitution, config)
+            .pipe(apply_currency_mismatch_multiplier, config)
+            .pipe(apply_due_diligence_override, config, errors=errors)
         )
 
         # Store SA-equivalent RWA for ALL rows before the IRB calculator
@@ -130,7 +138,7 @@ class SACalculator:
         )
 
         # Supporting factors (SA rows only).
-        exposures = exposures.sa.apply_supporting_factors(config, errors=errors)
+        exposures = exposures.pipe(apply_supporting_factors, config, errors=errors)
 
         return exposures
 
@@ -161,14 +169,14 @@ class SACalculator:
             self._warn_equity_in_main_table(exposures, errors)
 
         exposures = (
-            exposures.sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config, errors=errors)
-            .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config, errors=errors)
+            exposures.pipe(apply_risk_weights, config)
+            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_guarantee_substitution, config)
+            .pipe(apply_currency_mismatch_multiplier, config)
+            .pipe(apply_due_diligence_override, config, errors=errors)
+            .pipe(calculate_rwa)
+            .pipe(apply_supporting_factors, config, errors=errors)
         )
 
         # Standardise output for aggregator.

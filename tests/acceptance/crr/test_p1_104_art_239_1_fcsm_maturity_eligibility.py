@@ -70,10 +70,10 @@ from tests.fixtures.p1_104_art_239_1_fcsm_maturity.p1_104 import (
     LOAN_REF_MISMATCH,
 )
 
-import rwa_calc.engine.sa.namespace  # noqa: F401 — register sa namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns
+from rwa_calc.engine.sa.rw_adjustments import apply_fcsm_rw_substitution
 
 # =============================================================================
 # Fixture paths and shared constants
@@ -222,7 +222,7 @@ class TestP1104FCSMCompliantMaturity:
 
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
-        result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = with_fcsm.pipe(apply_fcsm_rw_substitution, crr_simple_config).collect()
         compliant_row = result.filter(pl.col("exposure_reference") == LOAN_REF_COMPLIANT)
 
         # Assert
@@ -247,7 +247,7 @@ class TestP1104FCSMCompliantMaturity:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
         result = (
-            with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config)
+            with_fcsm.pipe(apply_fcsm_rw_substitution, crr_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
@@ -337,7 +337,7 @@ class TestP1104FCSMMaturityMismatch:
 
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
-        result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = with_fcsm.pipe(apply_fcsm_rw_substitution, crr_simple_config).collect()
         mismatch_row = result.filter(pl.col("exposure_reference") == LOAN_REF_MISMATCH)
 
         # Assert — risk_weight must equal the unsecured borrower RW
@@ -374,7 +374,7 @@ class TestP1104FCSMMaturityMismatch:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
         result = (
-            with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config)
+            with_fcsm.pipe(apply_fcsm_rw_substitution, crr_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
@@ -426,7 +426,7 @@ class TestP1104MismatchVsCompliantDivergence:
         # Act — single pass, two rows
         result = (
             compute_fcsm_columns(exposures, collateral, crr_simple_config)
-            .sa.apply_fcsm_rw_substitution(crr_simple_config)
+            .pipe(apply_fcsm_rw_substitution, crr_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )

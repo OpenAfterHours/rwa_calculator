@@ -49,7 +49,7 @@ import time
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -190,7 +190,7 @@ def materialise_edge(
         df = lf.collect()
         rows = df.height
         columns = df.width
-        estimated_bytes = df.estimated_size()
+        estimated_bytes = cast("int", df.estimated_size())
         spilled = False
         result = df.lazy()
     wall_ms = round((time.perf_counter() - started) * 1000.0, 2)
@@ -259,7 +259,7 @@ def materialise_sealed_branches(
     conformed = [edge.conform(lf) for lf, edge in zip(branches, edges, strict=True)]
     results = materialise_branches(conformed, config, [edge.name for edge in edges])
     for df, edge in zip(results, edges, strict=True):
-        brand(df, edge.name)  # type: ignore[arg-type]
+        brand(df, edge.name)
     return results
 
 
@@ -300,7 +300,7 @@ def materialise_branches(
                     label=label,
                     rows=df.height,
                     columns=df.width,
-                    estimated_bytes=df.estimated_size(),
+                    estimated_bytes=cast("int", df.estimated_size()),
                     # collect_all computes branches together; attribute the
                     # shared wall time to each branch rather than inventing
                     # a split.

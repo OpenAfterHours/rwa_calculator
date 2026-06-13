@@ -35,6 +35,10 @@ _CONSTRUCTOR_TOKENS = (
     "CRMAdjustedBundle(",
     "AggregatedResultBundle(",
     "CounterpartyLookup(",
+    # Phase 4: stage-fold contexts are built via tests/fixtures/context.py
+    # so the orchestration artifact channels (errors, components,
+    # securitisation lookup) always carry their canonical defaults.
+    "PipelineContext(",
 )
 
 # The builders themselves, and files whose PURPOSE is pinning bundle /
@@ -43,6 +47,8 @@ _EXEMPT_PREFIXES = ("tests/fixtures/",)
 _EXEMPT_FILES = {
     "tests/contracts/test_edge_contracts.py",
     "tests/contracts/test_aggregated_bundle_validation.py",
+    # Pins PipelineContext construction mechanics themselves.
+    "tests/unit/contracts/test_pipeline_context.py",
     # This file: the token tuple below would count itself.
     "tests/contracts/test_builder_conformance.py",
 }

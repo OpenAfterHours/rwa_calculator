@@ -37,6 +37,8 @@ from rwa_calc.contracts.errors import (
 from rwa_calc.data.column_spec import ColumnSpec
 
 if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
     from rwa_calc.contracts.bundles import (
         AggregatedResultBundle,
         RawDataBundle,
@@ -47,19 +49,19 @@ if TYPE_CHECKING:
 COLLATERAL_LINK_CRM_REFERENCE = "CRR Art. 193/194"
 
 
-def _as_dtype(entry: pl.DataType | ColumnSpec) -> pl.DataType:
+def _as_dtype(entry: PolarsDataType | ColumnSpec) -> PolarsDataType:
     """Unwrap a schema entry to its dtype — accepts either a raw Polars dtype or a ColumnSpec."""
     return entry.dtype if isinstance(entry, ColumnSpec) else entry
 
 
-def _is_required(entry: pl.DataType | ColumnSpec) -> bool:
+def _is_required(entry: PolarsDataType | ColumnSpec) -> bool:
     """True if a schema entry represents a required column (raw dtypes are treated as required)."""
     return entry.required if isinstance(entry, ColumnSpec) else True
 
 
 def validate_schema(
     lf: pl.LazyFrame,
-    expected_schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
+    expected_schema: dict[str, PolarsDataType] | dict[str, ColumnSpec],
     context: str = "",
     strict: bool = False,
 ) -> list[str]:
@@ -119,7 +121,7 @@ def validate_schema(
     return errors
 
 
-def _types_compatible(actual: pl.DataType, expected: pl.DataType) -> bool:
+def _types_compatible(actual: pl.DataType, expected: PolarsDataType) -> bool:
     """
     Check if actual type is compatible with expected type.
 
@@ -171,7 +173,7 @@ def validate_required_columns(
 
 def validate_schema_to_errors(
     lf: pl.LazyFrame,
-    expected_schema: dict[str, pl.DataType] | dict[str, ColumnSpec],
+    expected_schema: dict[str, PolarsDataType] | dict[str, ColumnSpec],
     context: str = "",
     optional_columns: set[str] | None = None,
 ) -> list[CalculationError]:
@@ -231,7 +233,7 @@ def validate_schema_to_errors(
 
 def validate_raw_data_bundle(
     bundle: RawDataBundle,
-    schemas: dict[str, dict[str, pl.DataType] | dict[str, ColumnSpec]],
+    schemas: dict[str, dict[str, PolarsDataType] | dict[str, ColumnSpec]],
 ) -> list[CalculationError]:
     """
     Validate all LazyFrames in a RawDataBundle against expected schemas.

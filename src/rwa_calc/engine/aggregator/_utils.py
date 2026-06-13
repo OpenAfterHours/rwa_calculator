@@ -6,7 +6,13 @@ Internal module — not part of the public API.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import TYPE_CHECKING
+
 import polars as pl
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 
 def resolve_rwa_col(col_names: frozenset[str] | list[str] | set[str]) -> str | None:
@@ -32,7 +38,7 @@ def col_or_default(
     name: str,
     cols: frozenset[str] | set[str],
     default: pl.Expr | None = None,
-    dtype: pl.DataType = pl.String,
+    dtype: PolarsDataType = pl.String,
 ) -> pl.Expr:
     """
     Return ``pl.col(name)`` if the column exists, otherwise a default expression.
@@ -50,6 +56,6 @@ def col_or_default(
     return pl.lit(None).cast(dtype).alias(name)
 
 
-def empty_frame(schema: dict[str, pl.DataType]) -> pl.LazyFrame:
+def empty_frame(schema: Mapping[str, PolarsDataType]) -> pl.LazyFrame:
     """Create an empty LazyFrame from a schema dict."""
     return pl.LazyFrame({name: pl.Series([], dtype=dtype) for name, dtype in schema.items()})

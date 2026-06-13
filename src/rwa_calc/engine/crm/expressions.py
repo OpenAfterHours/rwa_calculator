@@ -28,7 +28,6 @@ from watchfire import cites
 
 from rwa_calc.data.schemas import (
     COVERED_BOND_COLLATERAL_TYPES,
-    DIRECT_BENEFICIARY_TYPES,
     FINANCIAL_COLLATERAL_TYPES,
     LIFE_INSURANCE_COLLATERAL_TYPES,
     OTHER_PHYSICAL_COLLATERAL_TYPES,
@@ -40,6 +39,9 @@ from rwa_calc.data.tables.crm_supervisory import (
     CRR_SUPERVISORY_LGD,
     MIN_COLLATERALISATION_THRESHOLDS,
     OVERCOLLATERALISATION_RATIOS,
+)
+from rwa_calc.engine.kernels.allocation import (
+    beneficiary_level_expr as kernel_beneficiary_level_expr,
 )
 
 # ---------------------------------------------------------------------------
@@ -192,14 +194,9 @@ CRM_ALLOC_COLUMNS: dict[str, str] = {
 
 
 def beneficiary_level_expr(bt_col: str = "beneficiary_type") -> pl.Expr:
-    """Build expression classifying beneficiary_type into direct/facility/counterparty."""
-    bt_lower = pl.col(bt_col).str.to_lowercase()
-    return (
-        pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-        .then(pl.lit("direct"))
-        .when(bt_lower == "facility")
-        .then(pl.lit("facility"))
-        .when(bt_lower == "counterparty")
-        .then(pl.lit("counterparty"))
-        .otherwise(pl.lit("direct"))
-    )
+    """Build expression classifying beneficiary_type into direct/facility/counterparty.
+
+    Thin alias of the allocation kernel's classifier with the collateral-copy
+    fallback (null / unknown beneficiary types -> direct).
+    """
+    return kernel_beneficiary_level_expr(bt_col, unknown="direct")

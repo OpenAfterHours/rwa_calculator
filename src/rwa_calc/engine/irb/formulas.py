@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 from watchfire import cites
@@ -937,9 +937,9 @@ def _run_scalar_via_vectorized(
     if output_col == "correlation":
         eur_gbp_rate = inputs.get("eur_gbp_rate", 0.8732)
         is_b31 = bool(inputs.get("is_b31", False))
-        sme_threshold_m = float(inputs.get("sme_turnover_threshold_m", 44.0))
+        sme_threshold_m = float(cast("float", inputs.get("sme_turnover_threshold_m", 44.0)))
         expr = _polars_correlation_expr(
-            eur_gbp_rate=float(eur_gbp_rate),
+            eur_gbp_rate=float(cast("float", eur_gbp_rate)),
             is_b31=is_b31,
             sme_turnover_threshold_m=sme_threshold_m,
         )

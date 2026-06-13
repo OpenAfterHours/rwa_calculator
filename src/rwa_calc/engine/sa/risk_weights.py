@@ -1,54 +1,28 @@
 """
-Polars LazyFrame namespace for Standardised Approach (SA) calculations.
+Standardised Approach base risk-weight assignment.
 
-Provides the fluent API that drives the full SA pipeline:
-
-- `lf.sa.prepare_columns()`                    - Ensure SA input contract columns
-- `lf.sa.apply_risk_weights(config)`           - CQS lookup + framework overrides + defaulted
-- `lf.sa.apply_fcsm_rw_substitution(config)`   - Art. 222 Simple Method RW substitution
-- `lf.sa.apply_life_insurance_rw_mapping()`    - Art. 232 life-insurance RW mapping
-- `lf.sa.apply_guarantee_substitution(config)` - Art. 213-217 unfunded credit protection
-- `lf.sa.apply_currency_mismatch_multiplier(config)` - Basel 3.1 Art. 123B
-- `lf.sa.apply_due_diligence_override(config)` - Basel 3.1 Art. 110A
-- `lf.sa.calculate_rwa()`                      - Compute pre-factor RWA (EAD x RW)
-- `lf.sa.apply_supporting_factors(config)`     - Apply SME / infrastructure factors
-- `lf.sa.build_audit()`                        - Build SA calculation audit trail
+Plain typed functions implementing the SA risk-weight lookup chain — CQS
+table join, framework-specific class overrides (CRR Art. 112-134 vs PRA
+PS1/26 / CRE20), the sovereign floor for FX unrated institutions, and the
+Art. 127 defaulted treatment. ``SACalculator`` composes ``apply_risk_weights``
+via ``LazyFrame.pipe``; the CRM processor reuses it for the link-ranking
+SA-RW preview.
 
 Pipeline position:
     CRMProcessor -> SACalculator -> Aggregation
 
-SACalculator is a thin orchestrator over this namespace; it chains these
-methods in regulatory order and layers caller-specific gating (e.g. the
-`is_sa` guard in the unified frame) on top.
-
-Importing this module registers the `sa` namespace with Polars.
-
-Usage:
-    import polars as pl
-    import rwa_calc.engine.sa.namespace  # Register namespace
-
-    result = (
-        sa_exposures
-        .sa.apply_risk_weights(config)
-        .sa.apply_fcsm_rw_substitution(config)
-        .sa.apply_life_insurance_rw_mapping()
-        .sa.apply_guarantee_substitution(config)
-        .sa.apply_currency_mismatch_multiplier(config)
-        .sa.apply_due_diligence_override(config)
-        .sa.calculate_rwa()
-        .sa.apply_supporting_factors(config)
-        .sa.build_audit()
-    )
+Key responsibilities:
+- SA input contract defaults (``SA_INPUT_CONTRACT``)
+- CQS-table risk-weight join + framework override chains (CRR / Basel 3.1)
+- Sovereign-derived lookups (PSE / RGLA / MDB), ECA/MEIP scores, covered-bond
+  unrated derivation
+- Art. 121(6) / CRE20.22 sovereign floor for FX unrated institutions
+- Art. 127 defaulted risk weights
 
 References:
 - CRR Art. 112-134: SA risk weights
 - CRR Art. 127: Defaulted exposure risk weights
-- CRR Art. 213-217: Unfunded credit protection (guarantee substitution)
-- CRR Art. 222: Financial Collateral Simple Method
-- CRR Art. 232: Life insurance collateral
-- CRR Art. 501 / 501a: SME / infrastructure supporting factors
-- PRA PS1/26 Art. 110A: Basel 3.1 due diligence override
-- PRA PS1/26 Art. 123B: Basel 3.1 currency mismatch multiplier
+- CRR Art. 137: ECA / MEIP sovereign risk weights
 - CRE20.16-21: Basel 3.1 institution ECRA/SCRA risk weights
 - CRE20.22-26: Basel 3.1 revised corporate CQS risk weights
 - CRE20.47-49: Basel 3.1 subordinated debt, investment-grade, SME corporate
@@ -62,18 +36,13 @@ References:
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.errors import (
-    ERROR_DUE_DILIGENCE_NOT_PERFORMED,
-    CalculationError,
-    ErrorCategory,
-    ErrorSeverity,
-)
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     CLASSIFIER_OUTPUT_SCHEMA,
@@ -84,7 +53,6 @@ from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
-    B31_CORPORATE_RISK_WEIGHTS,
     B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_CORPORATE_SME_RW,
     B31_COVERED_BOND_UNRATED_FROM_SCRA,
@@ -97,7 +65,6 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
-    B31_EFFECTIVE_DATE,
     B31_HIGH_RISK_RW,
     B31_RETAIL_NON_REGULATORY_RW,
     B31_RETAIL_PAYROLL_LOAN_RW,
@@ -133,12 +100,10 @@ from rwa_calc.data.tables.crr_risk_weights import (
     INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
-    MDB_RISK_WEIGHTS_TABLE_2B,
     MDB_UNRATED_RW,
     OTHER_ITEMS_CASH_RW,
     OTHER_ITEMS_COLLECTION_RW,
     OTHER_ITEMS_DEFAULT_RW,
-    PSE_RISK_WEIGHTS_OWN_RATING,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
@@ -147,7 +112,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     RESIDENTIAL_MORTGAGE_PARAMS,
     RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
-    RGLA_RISK_WEIGHTS_OWN_RATING,
     RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
@@ -155,15 +119,20 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.data.tables.eu_sovereign import (
-    build_domestic_cgcb_guarantor_expr,
     build_eu_domestic_currency_expr,
     denomination_currency_expr,
 )
-from rwa_calc.domain.enums import CQS, CRMCollateralMethod, EquityType
-from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
+from rwa_calc.domain.enums import CQS, EquityType
 
 if TYPE_CHECKING:
+    from polars.expr.whenthen import ChainedThen, Then
+
     from rwa_calc.contracts.config import CalculationConfig
+
+logger = logging.getLogger(__name__)
+
+# In-progress when/then chain accepted/extended by the branch appenders.
+type _RWChain = Then | ChainedThen
 
 
 # =============================================================================
@@ -201,15 +170,6 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # production; B31 defaulted-RW tests that exercise the provision
     # threshold must supply it explicitly.
     "ead_gross": ColumnSpec(pl.Float64, required=False),
-}
-
-
-# Columns required by SupportingFactorCalculator that are not part of the
-# main SA input contract.
-_SUPPORTING_FACTOR_COLUMNS: dict[str, ColumnSpec] = {
-    "is_sme": ColumnSpec(pl.Boolean, default=False, required=False),
-    "is_infrastructure": ColumnSpec(pl.Boolean, default=False, required=False),
-    "lending_group_reference": ColumnSpec(pl.String, default=None, required=False),
 }
 
 
@@ -326,6 +286,54 @@ _SA_B31_RW: dict[str, float] = {
     # B31 Art. 129(5) covered-bond unrated SCRA fallback (Grade C equivalent)
     "unrated_cb_default": float(B31_COVERED_BOND_UNRATED_FROM_SCRA["C"]),
 }
+
+
+# =============================================================================
+# PUBLIC ENTRY POINT
+# =============================================================================
+
+
+@cites("CRR Art. 112")
+def apply_risk_weights(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Look up and apply risk weights based on exposure class.
+
+    Orchestrates the three-phase SA risk weight assignment:
+        1. Setup — ensure columns, derive maturity, classify, join CQS table
+        2. Framework-specific when/then overrides (CRR vs Basel 3.1)
+        3. Cleanup — sovereign floor, defaulted RW blending, drop temp cols
+
+    Branches in the override chain are order-sensitive (first match wins);
+    the framework override helpers apply them in the sequence prescribed
+    by the regulation.
+    """
+    exposures, uc, is_domestic_currency = _prepare_risk_weight_lookup(lf, config)
+
+    if config.is_basel_3_1:
+        exposures = _apply_b31_risk_weight_overrides(exposures, uc, is_domestic_currency, config)
+    else:
+        exposures = _apply_crr_risk_weight_overrides(exposures, uc, is_domestic_currency)
+
+    # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
+    # FX-denominated unrated institution exposures. Exception:
+    # self-liquidating trade items with original maturity <= 1yr.
+    exposures = _apply_sovereign_floor_for_institutions(exposures, is_domestic_currency)
+
+    # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
+    # the base RW when-chain so defaulted exposures have their non-defaulted
+    # base RW available for blending with collateral coverage.
+    exposures = _apply_defaulted_risk_weight(exposures, config)
+
+    # Drop temporary columns used only during risk-weight application.
+    schema_names = exposures.collect_schema().names()
+    temp_cols = [
+        "_lookup_class",
+        "_lookup_cqs",
+        "_upper_class",
+        "_cqs_risk_weight",
+        "_sovereign_rw",
+        "risk_weight_rw",
+    ]
+    return exposures.drop([c for c in temp_cols if c in schema_names])
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +528,7 @@ def _is_residential_re_class(uc: pl.Expr) -> pl.Expr:
 
 
 @cites("PS1/26, paragraph 128")
-def _b31_append_high_risk_branch(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _b31_append_high_risk_branch(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 Art. 128 high-risk items branch (150% flat).
 
     Items associated with particularly high risk — venture capital, private
@@ -535,7 +543,7 @@ def _b31_append_high_risk_branch(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
 
 
 @cites("PS1/26, paragraph 123")
-def _b31_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 retail-class risk-weight branches (Art. 123).
 
     Covers the regulatory retail class only (uc contains "RETAIL"):
@@ -569,7 +577,7 @@ def _b31_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
 
 
 @cites("PS1/26, paragraph 124")
-def _b31_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _b31_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 real-estate branches (ADC / other-RE / CRE / resi)."""
     is_re_class = (
         _is_commercial_re_class(uc)
@@ -592,7 +600,7 @@ def _b31_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
     )
 
 
-def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _b31_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 ECRA / SCRA institution maturity branches."""
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
@@ -663,7 +671,7 @@ def _b31_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
     )
 
 
-def _b31_append_corporate_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _b31_append_corporate_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 Art. 122(3) Table 6A short-term corporate ECAI branch.
 
     Fires for rated CORPORATE exposures that carry a dedicated short-term ECAI
@@ -694,7 +702,7 @@ def _b31_append_corporate_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.E
 
 
 @cites("CRR Art. 123")
-def _crr_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _crr_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append CRR retail-class risk-weight branches (Art. 123).
 
     Covers the regulatory retail class only (uc contains "RETAIL"):
@@ -728,7 +736,7 @@ def _crr_append_retail_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
 
 
 @cites("CRR Art. 124")
-def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append CRR commercial-then-residential RE branches (Art. 125-126)."""
     ltv_safe = pl.col("ltv").fill_null(1.0)
     # CRR Art. 126(2)(d) proportion split for CRE with income cover and LTV > 50%:
@@ -776,7 +784,7 @@ def _crr_append_real_estate_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
     )
 
 
-def _crr_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl.Expr:
+def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append CRR Art. 120/121 short-term institution branches."""
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
@@ -807,210 +815,12 @@ def _crr_append_institution_maturity_branches(chain: pl.Expr, uc: pl.Expr) -> pl
 
 
 # ---------------------------------------------------------------------------
-# Guarantee-substitution helpers (CRR Art. 213-217)
-#
-# The guarantee-substitution stage relies on a few columns that may be missing
-# when the calculator is invoked directly from tests (i.e. bypassing the CRM
-# processor). These helpers own the defensive preparation and the
-# guarantor-RW when/then chain in one place.
-# ---------------------------------------------------------------------------
-
-
-def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFrame:
-    """Ensure optional guarantor columns exist before guarantee substitution.
-
-    In production ``guarantor_exposure_class`` is set by the CRM processor
-    (``engine/crm/guarantees.py``) from ``ENTITY_TYPE_TO_SA_CLASS``. This
-    fallback covers unit tests that construct LazyFrames directly and skip
-    the CRM stage.
-
-    Adds (if absent):
-        guarantor_exposure_class        — derived from guarantor_entity_type
-        guarantor_country_code          — null String
-        guarantor_is_ccp_client_cleared — null Boolean
-        guarantor_scra_grade            — null String (B31 SCRA dispatch fallback)
-    """
-    schema_names = exposures.collect_schema().names()
-    to_add: list[pl.Expr] = []
-
-    if "guarantor_exposure_class" not in schema_names:
-        from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
-
-        to_add.append(
-            pl.col("guarantor_entity_type")
-            .fill_null("")
-            .replace_strict(ENTITY_TYPE_TO_SA_CLASS, default="")
-            .alias("guarantor_exposure_class")
-        )
-    if "guarantor_country_code" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.String).alias("guarantor_country_code"))
-    if "guarantor_is_ccp_client_cleared" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"))
-    if "guarantor_scra_grade" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.Utf8).alias("guarantor_scra_grade"))
-
-    return exposures.with_columns(to_add) if to_add else exposures
-
-
-def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
-    """Build the Art. 114(4)/(7) domestic CGCB-guarantor currency check.
-
-    Evaluates the domestic-currency test against the guarantee currency (the
-    currency of the substituted exposure to the sovereign); the Art. 233(3)
-    8% FX haircut separately handles any mismatch between the guarantee and
-    the underlying exposure. Falls back to the exposure's pre-FX denomination
-    when ``guarantee_currency`` is missing (legacy / no-guarantee rows).
-    """
-    has_country = "guarantor_country_code" in schema_names
-    has_exposure_ccy = "currency" in schema_names or "original_currency" in schema_names
-    has_guarantee_ccy = "guarantee_currency" in schema_names
-
-    if has_guarantee_ccy and has_exposure_ccy:
-        ccy_expr = pl.col("guarantee_currency").fill_null(denomination_currency_expr(schema_names))
-    elif has_guarantee_ccy:
-        ccy_expr = pl.col("guarantee_currency")
-    elif has_exposure_ccy:
-        ccy_expr = denomination_currency_expr(schema_names)
-    else:
-        ccy_expr = None
-
-    if not has_country or ccy_expr is None:
-        return pl.lit(False)
-    return build_domestic_cgcb_guarantor_expr("guarantor_country_code", ccy_expr)
-
-
-def _build_guarantor_rw_expr(
-    is_domestic_guarantor: pl.Expr,
-    is_basel_3_1: bool,
-    institution_short_term_flag_col: str | None = None,
-) -> pl.Expr:
-    """Build the full when/then chain that maps a guarantor to its RW.
-
-    Uses ``guarantor_exposure_class`` (derived from ENTITY_TYPE_TO_SA_CLASS by
-    the CRM processor) rather than regex on entity_type, ensuring all valid
-    entity types are covered.
-
-    Branch order (first match wins):
-        no guarantee -> null
-        domestic CGCB sovereign (Art. 114(4)/(7)) -> 0%
-        CGCB CQS table
-        CCP (CRR Art. 306, CRE54.14-15)
-        Named MDB (Art. 117(2)) / International Organisation (Art. 118)
-        MDB Table 2B (Art. 117(1))
-        Institution (ECRA / SCRA via build_institution_guarantor_rw_expr —
-            short-term Art. 120(2) Table 4 when the borrower exposure's
-            residual maturity ≤ 3 months, otherwise long-term Table 3)
-        PSE (Art. 116(2) Table 2A, sovereign-derived for unrated)
-        RGLA (Art. 115(1)(b) Table 1B, sovereign-derived for unrated)
-        Corporate (Art. 122 corporate CQS table)
-        else -> null (no substitution)
-    """
-    gec = pl.col("guarantor_exposure_class").fill_null("")
-    guarantor_country_is_gb = pl.col("guarantor_country_code").fill_null("") == "GB"
-    # PSE/RGLA Art. 116(2)/115(1)(b) unrated fallback: domestic-GB guarantors
-    # get the RGLA/PSE 20% domestic-currency treatment; otherwise the
-    # conservative 100% PSE/RGLA unrated default applies.
-    sovereign_derived_unrated = (
-        pl.when(guarantor_country_is_gb)
-        .then(pl.lit(_SA_SHARED_RW["rgla_domestic"]))
-        .otherwise(pl.lit(_SA_SHARED_RW["pse_unrated"]))
-    )
-
-    cgcb_unrated = float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED])
-    corporate_unrated = float(CORPORATE_RISK_WEIGHTS[CQS.UNRATED])
-
-    return (
-        pl.when(pl.col("guaranteed_portion") <= 0)
-        .then(pl.lit(None).cast(pl.Float64))
-        # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS.
-        .when((gec == "central_govt_central_bank") & is_domestic_guarantor)
-        .then(pl.lit(0.0))
-        # CGCB guarantors via CQS (Table 1 — sovereign weights).
-        .when(gec == "central_govt_central_bank")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-                cgcb_unrated,
-            )
-        )
-        # CCP guarantors: 2% proprietary / 4% client-cleared
-        # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights.
-        .when(pl.col("guarantor_entity_type") == "ccp")
-        .then(
-            pl.when(pl.col("guarantor_is_ccp_client_cleared").fill_null(False))
-            .then(pl.lit(_SA_SHARED_RW["qccp_client_cleared"]))
-            .otherwise(pl.lit(_SA_SHARED_RW["qccp_proprietary"]))
-        )
-        # International Organisation (Art. 118): 0% unconditional.
-        .when(gec == "international_organisation")
-        .then(pl.lit(_SA_SHARED_RW["io"]))
-        # Named MDB (Art. 117(2)): 0% unconditional.
-        .when((gec == "mdb") & (pl.col("guarantor_entity_type").fill_null("") == "mdb_named"))
-        .then(pl.lit(_SA_SHARED_RW["mdb_named"]))
-        # Rated / unrated non-named MDB — Table 2B (Art. 117(1)).
-        .when(gec == "mdb")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                MDB_RISK_WEIGHTS_TABLE_2B,
-                _SA_SHARED_RW["mdb_unrated"],
-            )
-        )
-        # Institution guarantors — RW driven from INSTITUTION_RISK_WEIGHTS_CRR /
-        # INSTITUTION_RISK_WEIGHTS_B31_ECRA so the dicts remain the single source
-        # of truth. When the borrower exposure's residual maturity ≤ 3 months
-        # (CRR/PS1/26 Art. 120(2)), the short-term Table 4 dicts apply instead.
-        .when(gec == "institution")
-        .then(
-            build_institution_guarantor_rw_expr(
-                "guarantor_cqs",
-                is_basel_3_1,
-                short_term_flag_col=institution_short_term_flag_col,
-                scra_grade_col="guarantor_scra_grade",
-            )
-        )
-        # PSE guarantors — Art. 116(2) Table 2A for rated, sovereign-derived for unrated.
-        .when(gec == "pse")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                PSE_RISK_WEIGHTS_OWN_RATING,
-                sovereign_derived_unrated,
-            )
-        )
-        # RGLA guarantors — Art. 115(1)(b) Table 1B for rated, sovereign-derived for unrated.
-        .when(gec == "rgla")
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                RGLA_RISK_WEIGHTS_OWN_RATING,
-                sovereign_derived_unrated,
-            )
-        )
-        # Corporate guarantors — Art. 122 corporate CQS table.
-        # Basel 3.1 (PRA PS1/26 Art. 122(2) Table 6): CQS3 = 75% (CRR: 100%);
-        # PRA retains CQS5 = 150%. Gated on framework so CRR runs are
-        # unchanged.
-        .when(gec.is_in(["corporate", "corporate_sme"]))
-        .then(
-            _cqs_table_lookup_expr(
-                "guarantor_cqs",
-                B31_CORPORATE_RISK_WEIGHTS if is_basel_3_1 else CORPORATE_RISK_WEIGHTS,
-                corporate_unrated,
-            )
-        )
-        .otherwise(pl.lit(None).cast(pl.Float64))
-    )
-
-
-# ---------------------------------------------------------------------------
 # Risk-weight pipeline stages (module-private free functions).
 #
-# The public fluent API on ``SALazyFrame`` composes these into a single
-# ``apply_risk_weights`` method. They are factored out here for readability
-# — the full chain is long, and the dispatcher + framework override pattern
-# matches the regulatory structure (CRR vs Basel 3.1).
+# The public ``apply_risk_weights`` entry point composes these into a single
+# chain. They are factored out here for readability — the full chain is long,
+# and the dispatcher + framework override pattern matches the regulatory
+# structure (CRR vs Basel 3.1).
 # ---------------------------------------------------------------------------
 
 
@@ -1686,566 +1496,3 @@ def _apply_defaulted_risk_weight(
         .otherwise(pl.col("risk_weight"))
         .alias("risk_weight")
     )
-
-
-# =============================================================================
-# LAZYFRAME NAMESPACE
-# =============================================================================
-
-
-@pl.api.register_lazyframe_namespace("sa")
-class SALazyFrame:
-    """
-    SA calculation namespace for Polars LazyFrames.
-
-    Provides the fluent API that drives the full SA pipeline — risk-weight
-    lookup, CRM risk-weight substitution, guarantee substitution, currency
-    mismatch, due diligence override, pre-factor RWA, and supporting
-    factors. ``SACalculator`` is a thin orchestrator over these methods.
-
-    Example:
-        result = (
-            exposures
-            .sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config)
-            .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config)
-            .sa.build_audit()
-        )
-    """
-
-    def __init__(self, lf: pl.LazyFrame) -> None:
-        self._lf = lf
-
-    def prepare_columns(self) -> pl.LazyFrame:
-        """Apply SA input contract defaults to absent columns.
-
-        Ensures downstream SA stages can rely on the SA column contract
-        without per-stage existence checks.
-        """
-        return ensure_columns(self._lf, SA_INPUT_CONTRACT)
-
-    @cites("CRR Art. 112")
-    def apply_risk_weights(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Look up and apply risk weights based on exposure class.
-
-        Orchestrates the three-phase SA risk weight assignment:
-            1. Setup — ensure columns, derive maturity, classify, join CQS table
-            2. Framework-specific when/then overrides (CRR vs Basel 3.1)
-            3. Cleanup — sovereign floor, defaulted RW blending, drop temp cols
-
-        Branches in the override chain are order-sensitive (first match wins);
-        the framework override helpers apply them in the sequence prescribed
-        by the regulation.
-        """
-        exposures, uc, is_domestic_currency = _prepare_risk_weight_lookup(self._lf, config)
-
-        if config.is_basel_3_1:
-            exposures = _apply_b31_risk_weight_overrides(
-                exposures, uc, is_domestic_currency, config
-            )
-        else:
-            exposures = _apply_crr_risk_weight_overrides(exposures, uc, is_domestic_currency)
-
-        # Art. 121(6) (CRR) / CRE20.22 (Basel 3.1): Sovereign RW floor for
-        # FX-denominated unrated institution exposures. Exception:
-        # self-liquidating trade items with original maturity <= 1yr.
-        exposures = _apply_sovereign_floor_for_institutions(exposures, is_domestic_currency)
-
-        # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
-        # the base RW when-chain so defaulted exposures have their non-defaulted
-        # base RW available for blending with collateral coverage.
-        exposures = _apply_defaulted_risk_weight(exposures, config)
-
-        # Drop temporary columns used only during risk-weight application.
-        schema_names = exposures.collect_schema().names()
-        temp_cols = [
-            "_lookup_class",
-            "_lookup_cqs",
-            "_upper_class",
-            "_cqs_risk_weight",
-            "_sovereign_rw",
-            "risk_weight_rw",
-        ]
-        return exposures.drop([c for c in temp_cols if c in schema_names])
-
-    @cites("CRR Art. 222")
-    def apply_fcsm_rw_substitution(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply Art. 222 Financial Collateral Simple Method risk weight substitution.
-
-        When the Simple Method is elected, the secured portion of each SA exposure
-        gets the collateral's SA risk weight instead of the exposure's own risk
-        weight. The unsecured portion retains the original RW.
-
-        Blended RW = secured_pct × collateral_rw + unsecured_pct × exposure_rw
-
-        The 20% floor (Art. 222(1)/(3)) and same-currency 0% carve-outs (CRR
-        Art. 222(4) / PRA PS1/26 Art. 222(6)) are applied per item in
-        ``compute_fcsm_columns``. Applying the floor again on the aggregate would
-        re-impose it on carve-out items — contrary to "except as specified in
-        paragraphs 4 to 6".
-
-        This method is a no-op when the Comprehensive Method is elected (default)
-        or when fcsm_collateral_value is zero/null — the crm_exit contract
-        injects both fcsm_* columns as typed nulls when the FCSM sub-step did
-        not run, and ``fill_null(0.0)`` makes an all-null column equivalent to
-        the historical absent-column early return.
-        """
-        if config.crm_collateral_method != CRMCollateralMethod.SIMPLE:
-            return self._lf
-
-        ead = pl.col("ead_final").fill_null(0.0)
-        fcsm_value = pl.col("fcsm_collateral_value").fill_null(0.0)
-        fcsm_rw = pl.col("fcsm_collateral_rw").fill_null(0.0)
-
-        # Secured percentage (capped at 100%)
-        secured_pct = pl.when(ead > 0).then((fcsm_value / ead).clip(0.0, 1.0)).otherwise(0.0)
-        unsecured_pct = pl.lit(1.0) - secured_pct
-
-        # Blended risk weight; secured RW already reflects per-item floor + carve-outs.
-        blended_rw = secured_pct * fcsm_rw + unsecured_pct * pl.col("risk_weight")
-
-        # Only apply when there is actual collateral value
-        has_fcsm = fcsm_value > 0
-
-        return self._lf.with_columns(
-            # Save pre-FCSM risk weight for audit
-            pl.col("risk_weight").alias("pre_fcsm_risk_weight"),
-            # Apply blended RW
-            pl.when(has_fcsm)
-            .then(blended_rw)
-            .otherwise(pl.col("risk_weight"))
-            .alias("risk_weight"),
-            # Track method for audit/COREP
-            pl.when(has_fcsm)
-            .then(pl.lit("simple"))
-            .otherwise(pl.lit("comprehensive"))
-            .alias("ead_calculation_method"),
-        )
-
-    @cites("CRR Art. 232")
-    def apply_life_insurance_rw_mapping(self) -> pl.LazyFrame:
-        """Apply Art. 232 life insurance risk weight mapping for SA exposures.
-
-        When life insurance collateral secures an exposure, the secured portion
-        receives a mapped risk weight (not direct substitution):
-            Insurer RW 20%           -> 20%
-            Insurer RW 30% or 50%    -> 35%
-            Insurer RW 65%-135%      -> 70%
-            Insurer RW 150%          -> 150%
-
-        Blended RW = secured_pct x mapped_rw + unsecured_pct x exposure_rw
-
-        This method is a no-op when no life insurance collateral is present.
-        """
-        ead = pl.col("ead_final").fill_null(0.0)
-        li_value = pl.col("life_ins_collateral_value").fill_null(0.0)
-        li_rw = pl.col("life_ins_secured_rw").fill_null(0.0)
-
-        # Secured percentage (capped at 100%)
-        secured_pct = pl.when(ead > 0).then((li_value / ead).clip(0.0, 1.0)).otherwise(0.0)
-        unsecured_pct = pl.lit(1.0) - secured_pct
-
-        # Blended risk weight: no floor — Art. 232 has no 20% floor like FCSM
-        blended_rw = secured_pct * li_rw + unsecured_pct * pl.col("risk_weight")
-
-        # Only apply when there is actual life insurance collateral
-        has_li = li_value > 0
-
-        return self._lf.with_columns(
-            pl.when(has_li).then(blended_rw).otherwise(pl.col("risk_weight")).alias("risk_weight"),
-        )
-
-    @cites("CRR Art. 213")
-    def apply_guarantee_substitution(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply guarantee substitution for unfunded credit protection.
-
-        For guaranteed portions, the risk weight is substituted with the
-        guarantor's risk weight. The final RWA is calculated using blended
-        risk weight based on guaranteed vs unguaranteed portions.
-
-        CRR Art. 213-217: Unfunded credit protection.
-        """
-        exposures = self._lf
-        cols = exposures.collect_schema().names()
-
-        # Run-level sentinel gate: guarantor_entity_type is the one crm_exit
-        # column still CONDITIONAL (inject=False) — present iff the CRM
-        # guarantee sub-step ran. Keying on it keeps this machinery (and its
-        # derived audit columns: pre_crm_risk_weight, guarantor_rw,
-        # is_guarantee_beneficial, guarantee_status, guarantee_benefit_rw)
-        # off unguaranteed runs; see contracts/edges.py. The
-        # guaranteed_portion check covers direct (non-pipeline) invocation.
-        if "guaranteed_portion" not in cols or "guarantor_entity_type" not in cols:
-            return exposures
-
-        # Ensure defensive column fallbacks (guarantor_exposure_class,
-        # guarantor_country_code, guarantor_is_ccp_client_cleared). In
-        # production these are set by the CRM processor; this fallback covers
-        # tests that construct LazyFrames directly and skip the CRM stage.
-        exposures = _ensure_guarantee_substitution_columns(exposures)
-
-        # Preserve pre-CRM risk weight for regulatory reporting (pre-CRM vs
-        # post-CRM views).
-        exposures = exposures.with_columns(
-            pl.col("risk_weight").alias("pre_crm_risk_weight"),
-        )
-
-        # Art. 114(4)/(7) domestic CGCB-guarantor currency check.
-        is_domestic_guarantor = _build_domestic_guarantor_expr(exposures.collect_schema().names())
-
-        # CRR/PS1/26 Art. 120(2) Table 4 short-term institution guarantor flag.
-        # The substituted exposure's original maturity (≤ 3 months / 0.25y)
-        # drives the short-term carve-out — same convention as the direct
-        # institution short-term branches elsewhere in this module (Art. 120(2),
-        # Art. 121(3)). ``original_maturity_years`` is derived earlier in
-        # ``apply_risk_weights`` from (maturity_date - value_date) when absent,
-        # so it is always populated here.
-        short_term_flag_col = "_inst_guarantor_short_term"
-        if "original_maturity_years" in exposures.collect_schema().names():
-            short_term_expr = pl.col("original_maturity_years").is_not_null() & (
-                pl.col("original_maturity_years") <= 0.25
-            )
-        else:
-            short_term_expr = pl.lit(False)
-        exposures = exposures.with_columns(
-            short_term_expr.fill_null(False).alias(short_term_flag_col),
-        )
-
-        # Look up guarantor's RW based on exposure class + CQS. The short-term
-        # flag is calculator scratch consumed only by this expression — drop it
-        # immediately so it never leaks into the branch/aggregator frames.
-        exposures = exposures.with_columns(
-            _build_guarantor_rw_expr(
-                is_domestic_guarantor,
-                config.is_basel_3_1,
-                institution_short_term_flag_col=short_term_flag_col,
-            ).alias("guarantor_rw"),
-        ).drop(short_term_flag_col)
-
-        # Check if guarantee is beneficial (guarantor RW < borrower RW)
-        # Non-beneficial guarantees should NOT be applied per CRR Art. 213
-        exposures = exposures.with_columns(
-            [
-                pl.when(
-                    (pl.col("guaranteed_portion") > 0)
-                    & (pl.col("guarantor_rw").is_not_null())
-                    & (pl.col("guarantor_rw") < pl.col("pre_crm_risk_weight"))
-                )
-                .then(pl.lit(True))
-                .otherwise(pl.lit(False))
-                .alias("is_guarantee_beneficial"),
-            ]
-        )
-
-        # Redistribute non-beneficial guarantee portions to beneficial guarantors.
-        # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
-        # to the most beneficial (lowest RW) guarantors using greedy fill.
-        from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
-
-        exposures = redistribute_non_beneficial(exposures)
-
-        # Calculate blended risk weight using substitution approach
-        # Only apply if guarantee is beneficial
-        # RWA = (unguaranteed_portion * borrower_rw + guaranteed_portion * guarantor_rw) / ead_final
-        exposures = exposures.with_columns(
-            [
-                # Blended risk weight when guarantee exists AND is beneficial
-                pl.when(
-                    (pl.col("guaranteed_portion") > 0)
-                    & (pl.col("guarantor_rw").is_not_null())
-                    & (pl.col("is_guarantee_beneficial"))
-                )
-                .then(
-                    # weighted average of borrower and guarantor risk weights
-                    (
-                        pl.col("unguaranteed_portion") * pl.col("pre_crm_risk_weight")
-                        + pl.col("guaranteed_portion") * pl.col("guarantor_rw")
-                    )
-                    / pl.col("ead_final")
-                )
-                # No guarantee, no guarantor RW, or non-beneficial - use original risk weight
-                .otherwise(pl.col("pre_crm_risk_weight"))
-                .alias("risk_weight"),
-            ]
-        )
-
-        # Track guarantee status for reporting
-        exposures = exposures.with_columns(
-            [
-                pl.when(pl.col("guaranteed_portion") <= 0)
-                .then(pl.lit("NO_GUARANTEE"))
-                .when(~pl.col("is_guarantee_beneficial"))
-                .then(pl.lit("GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"))
-                .otherwise(pl.lit("SA_RW_SUBSTITUTION"))
-                .alias("guarantee_status"),
-                # Calculate RW benefit from guarantee (positive = RW reduced)
-                pl.when(pl.col("is_guarantee_beneficial"))
-                .then(pl.col("pre_crm_risk_weight") - pl.col("risk_weight"))
-                .otherwise(pl.lit(0.0))
-                .alias("guarantee_benefit_rw"),
-            ]
-        )
-
-        return exposures
-
-    @cites("PS1/26, paragraph 123B")
-    @cites("PS1/26, paragraph 123B.3")
-    def apply_currency_mismatch_multiplier(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply 1.5x RW multiplier for retail/RE currency mismatch (Basel 3.1 only).
-
-        When the exposure currency differs from the borrower's income currency,
-        a 1.5x multiplier is applied to the risk weight for retail and real estate
-        exposure classes.
-
-        Basel 3.1 Art. 123B / CRE20.93.
-
-        Art. 123B(3) transitional: the multiplier is a Basel-3.1-only measure that
-        commences on ``B31_EFFECTIVE_DATE`` (1 January 2027). Reporting dates strictly
-        before that fall under the pre-Basel-3.1 portfolio treatment and the frame is
-        returned unchanged. The boundary date 1 January 2027 is in scope (strict ``<``).
-        """
-        if not config.is_basel_3_1:
-            return self._lf
-
-        # Art. 123B(3) transitional: pre-commencement reporting dates suppress the
-        # multiplier entirely. Emit the reporting column as ``False`` (consistent with
-        # the no-mismatch branch below) so downstream reporting always sees the flag.
-        if config.reporting_date < B31_EFFECTIVE_DATE:
-            return self._lf.with_columns(
-                pl.lit(False).alias("currency_mismatch_multiplier_applied")
-            )
-
-        schema = self._lf.collect_schema()
-        cols = schema.names()
-
-        # Need both exposure currency and borrower income currency
-        income_col = (
-            "cp_borrower_income_currency"
-            if "cp_borrower_income_currency" in cols
-            else "borrower_income_currency"
-            if "borrower_income_currency" in cols
-            else None
-        )
-        if income_col is None or "currency" not in cols:
-            return self._lf
-
-        # PRA PS1/26 Art. 123B: the 1.5x currency-mismatch multiplier is in scope
-        # ONLY for retail (Art. 112(h)) and residential RE (Art. 112(i)) exposures.
-        # Commercial RE (Art. 112(j) per Art. 124H/124I) and corporate are OUT of
-        # scope. Use exact-match against ExposureClass enum string values rather
-        # than substring matching to avoid COMMERCIAL_MORTGAGE matching "COMMERCIAL".
-        is_retail_or_re = (
-            pl.col("exposure_class")
-            .fill_null("")
-            .is_in(
-                [
-                    "retail_other",
-                    "retail_qrre",
-                    "retail_mortgage",
-                    "residential_mortgage",
-                ]
-            )
-        )
-
-        has_mismatch = pl.col(income_col).is_not_null() & (pl.col(income_col) != pl.col("currency"))
-
-        # Art. 123B(2) / CRE20.93: the 1.5x mismatch multiplier is suppressed when
-        # the exposure is hedged against currency risk. A full hedge can be signalled
-        # either by ``is_hedged=True`` OR by ``hedge_coverage_ratio >= 0.90`` (the
-        # Art. 123B(2) partial-hedge coverage floor). Both columns default to their
-        # "no hedge" sentinel when missing or null (False / 0.0).
-        is_hedged_flag = (
-            pl.col("is_hedged").fill_null(False) if "is_hedged" in cols else pl.lit(False)
-        )
-        # Art. 123B(2A): for revolving facilities the 90%-coverage test denominator is
-        # the fully-drawn committed amount (the "instalment amount" = greater of the
-        # contractual minimum and the fully-drawn contractual amount; leg (b) here,
-        # there being no contractual-minimum field). The firm-supplied
-        # ``hedge_coverage_ratio`` measures coverage of the CURRENT drawn balance, so
-        # for revolving rows it is rescaled onto the full-draw base:
-        #     full_draw_base     = max(drawn_amount, facility_limit)
-        #     effective_coverage = (hedge_coverage_ratio * drawn_amount) / full_draw_base
-        # Non-revolving rows are unchanged (effective_coverage = hedge_coverage_ratio).
-        # is_revolving / facility_limit / drawn_amount may be absent on production SA
-        # frames — default safely so the rescale is a no-op and legacy behaviour holds.
-        if "hedge_coverage_ratio" in cols:
-            raw_coverage = pl.col("hedge_coverage_ratio").fill_null(0.0)
-            is_revolving_flag = (
-                pl.col("is_revolving").fill_null(False) if "is_revolving" in cols else pl.lit(False)
-            )
-            drawn_amount = (
-                pl.col("drawn_amount").fill_null(0.0) if "drawn_amount" in cols else pl.lit(0.0)
-            )
-            # Absent facility_limit -> use drawn_amount so full_draw_base == drawn_amount
-            # and the rescale collapses to the legacy coverage ratio.
-            facility_limit = (
-                pl.col("facility_limit").fill_null(drawn_amount)
-                if "facility_limit" in cols
-                else drawn_amount
-            )
-            full_draw_base = pl.max_horizontal(drawn_amount, facility_limit)
-            effective_coverage = (
-                pl.when(is_revolving_flag & (full_draw_base > 0.0))
-                .then((raw_coverage * drawn_amount) / full_draw_base)
-                .otherwise(raw_coverage)
-            )
-            hedge_coverage_ok = effective_coverage >= _SA_B31_RW["currency_mismatch_hedge_floor"]
-        else:
-            hedge_coverage_ok = pl.lit(False)
-        waive_expr = is_hedged_flag | hedge_coverage_ok
-
-        mismatch_applies = is_retail_or_re & has_mismatch & ~waive_expr
-
-        return self._lf.with_columns(
-            [
-                # Snapshot pre-multiplier RW for audit/reporting (mirrors the
-                # pre_fcsm_risk_weight pattern). For non-mismatch rows this equals
-                # the unchanged risk_weight; CR5 buckets EAD on this column.
-                pl.col("risk_weight").alias("risk_weight_pre_currency_mismatch"),
-                pl.when(mismatch_applies)
-                .then(
-                    (pl.col("risk_weight") * _SA_B31_RW["currency_mismatch_multiplier"]).clip(
-                        upper_bound=pl.lit(_SA_B31_RW["currency_mismatch_cap"])
-                    )
-                )
-                .otherwise(pl.col("risk_weight"))
-                .alias("risk_weight"),
-                mismatch_applies.alias("currency_mismatch_multiplier_applied"),
-            ]
-        )
-
-    @cites("PS1/26, paragraph 110A")
-    def apply_due_diligence_override(
-        self,
-        config: CalculationConfig,
-        *,
-        errors: list[CalculationError] | None = None,
-    ) -> pl.LazyFrame:
-        """Apply due diligence risk weight override (Basel 3.1 Art. 110A).
-
-        Under Basel 3.1, firms must perform due diligence on all SA exposures.
-        Where due diligence reveals that the risk weight does not adequately
-        reflect the risk, the firm must apply a higher risk weight.
-
-        The override only increases the risk weight — it can never reduce it.
-        This is applied as the final risk weight modification before RWA
-        calculation, after all standard RW determination, CRM, and currency
-        mismatch adjustments.
-        """
-        if not config.is_basel_3_1:
-            return self._lf
-
-        schema = self._lf.collect_schema()
-        cols = schema.names()
-
-        # Warn if due_diligence_performed column is absent under Basel 3.1
-        if "due_diligence_performed" not in cols and errors is not None:
-            errors.append(
-                CalculationError(
-                    code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
-                    message=(
-                        "Due diligence assessment status not provided "
-                        "(due_diligence_performed column absent). "
-                        "Art. 110A requires firms to perform due diligence "
-                        "on all SA exposures to ensure risk weights "
-                        "appropriately reflect exposure risk."
-                    ),
-                    severity=ErrorSeverity.WARNING,
-                    category=ErrorCategory.DATA_QUALITY,
-                    regulatory_reference="PRA PS1/26 Art. 110A",
-                    field_name="due_diligence_performed",
-                )
-            )
-
-        # Apply override RW where provided and higher than calculated RW
-        if "due_diligence_override_rw" not in cols:
-            return self._lf
-
-        override_applies = pl.col("due_diligence_override_rw").is_not_null() & (
-            pl.col("due_diligence_override_rw") > pl.col("risk_weight")
-        )
-
-        return self._lf.with_columns(
-            [
-                pl.when(override_applies)
-                .then(pl.col("due_diligence_override_rw"))
-                .otherwise(pl.col("risk_weight"))
-                .alias("risk_weight"),
-                override_applies.alias("due_diligence_override_applied"),
-            ]
-        )
-
-    @cites("CRR Art. 113")
-    def calculate_rwa(self) -> pl.LazyFrame:
-        """Compute pre-factor RWA = EAD x Risk Weight.
-
-        Emits ``rwa_pre_factor`` for downstream supporting-factor scaling.
-
-        References:
-        - CRR Art. 113(1)-(5): general rule for SA risk-weighted exposure amounts.
-        """
-        return self._lf.with_columns(
-            (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa_pre_factor"),
-        )
-
-    @cites("CRR Art. 501")
-    def apply_supporting_factors(
-        self,
-        config: CalculationConfig,
-        *,
-        errors: list[CalculationError] | None = None,
-    ) -> pl.LazyFrame:
-        """Apply SME / infrastructure supporting factors (CRR Art. 501 / 501a).
-
-        Under Basel 3.1 the supporting-factor calculator returns a factor of
-        1.0 for every row, preserving RWA unchanged.
-
-        Args:
-            config: Calculation configuration (selects framework).
-            errors: Optional accumulator for data-quality warnings.
-        """
-        lf = ensure_columns(self._lf, _SUPPORTING_FACTOR_COLUMNS)
-        return SupportingFactorCalculator().apply_factors(lf, config, errors=errors)
-
-    def build_audit(self) -> pl.LazyFrame:
-        """Build SA calculation audit trail.
-
-        Selects ``exposure_reference`` plus any audit columns present on the
-        frame and emits ``sa_calculation`` — a human-readable formula string.
-        """
-        schema = self._lf.collect_schema()
-        available = schema.names()
-
-        optional_cols = [
-            "counterparty_reference",
-            "exposure_class",
-            "cqs",
-            "ltv",
-            "ead_final",
-            "risk_weight",
-            "rwa_pre_factor",
-            "supporting_factor",
-            "rwa_post_factor",
-            "supporting_factor_applied",
-        ]
-        select_cols = ["exposure_reference"] + [c for c in optional_cols if c in available]
-
-        return self._lf.select(select_cols).with_columns(
-            pl.concat_str(
-                [
-                    pl.lit("SA: EAD="),
-                    pl.col("ead_final").round(0).cast(pl.String),
-                    pl.lit(" \u00d7 RW="),
-                    (pl.col("risk_weight") * 100).round(1).cast(pl.String),
-                    pl.lit("% \u00d7 SF="),
-                    (pl.col("supporting_factor") * 100).round(2).cast(pl.String),
-                    pl.lit("% \u2192 RWA="),
-                    pl.col("rwa_post_factor").round(0).cast(pl.String),
-                ]
-            ).alias("sa_calculation"),
-        )

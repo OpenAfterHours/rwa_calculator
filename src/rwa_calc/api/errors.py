@@ -11,7 +11,7 @@ Provides user-friendly error messages and categorization for UI display.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 from rwa_calc.api.models import APIError
 
@@ -70,6 +70,10 @@ CATEGORY_DISPLAY_NAMES: dict[str, str] = {
 # =============================================================================
 
 
+# Module-level alias (keeps Literal quoting stable under the ruff fix hook).
+_Severity = Literal["warning", "error", "critical"]
+
+
 def convert_to_api_error(error: CalculationError) -> APIError:
     """
     Convert internal CalculationError to user-friendly APIError.
@@ -92,7 +96,7 @@ def convert_to_api_error(error: CalculationError) -> APIError:
     return APIError(
         code=error.code,
         message=message,
-        severity=severity,
+        severity=cast(_Severity, severity),
         category=CATEGORY_DISPLAY_NAMES.get(category, category),
         details=details,
     )
@@ -114,7 +118,7 @@ def convert_errors(errors: list[CalculationError]) -> list[APIError]:
 def create_api_error(
     code: str,
     message: str,
-    severity: str = "error",
+    severity: _Severity = "error",
     category: str = "Calculation",
     **details: str | Path | None,
 ) -> APIError:

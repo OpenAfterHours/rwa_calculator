@@ -26,7 +26,11 @@ from rwa_calc.data.schemas import (
     FACILITY_SCHEMA,
     LOAN_SCHEMA,
 )
-from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - registers namespace
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    classify_approach,
+    prepare_columns,
+)
 
 
 @pytest.fixture
@@ -69,7 +73,7 @@ class TestIRBPrepareColumnsPropagation:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert "has_one_day_maturity_floor" in result.columns
         assert result["has_one_day_maturity_floor"][0] is True
@@ -88,7 +92,7 @@ class TestIRBPrepareColumnsPropagation:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert "has_one_day_maturity_floor" in result.columns
         assert result["has_one_day_maturity_floor"][0] is False
@@ -113,7 +117,10 @@ class TestMaturityAdjustmentEndToEnd:
         )
 
         result = (
-            _pad(lf).irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+            _pad(lf)
+            .pipe(prepare_columns, b31_config)
+            .pipe(apply_all_formulas, b31_config)
+            .collect()
         )
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
@@ -133,7 +140,10 @@ class TestMaturityAdjustmentEndToEnd:
         )
 
         result = (
-            _pad(lf).irb.prepare_columns(b31_config).irb.apply_all_formulas(b31_config).collect()
+            _pad(lf)
+            .pipe(prepare_columns, b31_config)
+            .pipe(apply_all_formulas, b31_config)
+            .collect()
         )
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
@@ -155,9 +165,9 @@ class TestMaturityAdjustmentEndToEnd:
 
         result = (
             _pad(lf)
-            .irb.classify_approach(crr_config)
-            .irb.prepare_columns(crr_config)
-            .irb.apply_all_formulas(crr_config)
+            .pipe(classify_approach, crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_all_formulas, crr_config)
             .collect()
         )
 
@@ -194,14 +204,14 @@ class TestMaturityAdjustmentEndToEnd:
 
         base_result = (
             _pad(base_lf)
-            .irb.prepare_columns(b31_config)
-            .irb.apply_all_formulas(b31_config)
+            .pipe(prepare_columns, b31_config)
+            .pipe(apply_all_formulas, b31_config)
             .collect()
         )
         carve_out_result = (
             _pad(carve_out_lf)
-            .irb.prepare_columns(b31_config)
-            .irb.apply_all_formulas(b31_config)
+            .pipe(prepare_columns, b31_config)
+            .pipe(apply_all_formulas, b31_config)
             .collect()
         )
 

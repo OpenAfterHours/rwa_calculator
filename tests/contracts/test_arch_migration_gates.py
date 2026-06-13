@@ -1,6 +1,6 @@
 """Contract tests for the architecture-migration gates.
 
-Mirrors arch_check checks 11, 12 and 13 (see
+Mirrors arch_check checks 11, 12, 13 and the Phase-4 checks 14-16 (see
 docs/plans/target-architecture-migration.md):
 
 - **Check 11 — architecture-debt ratchet**: the measured defensive surface of
@@ -18,6 +18,21 @@ docs/plans/target-architecture-migration.md):
   are ``None`` (migration Phase 2); constructing a bare ``pl.LazyFrame()``
   to stand in for an absent input conflates "absent" with "zero rows" and
   regrows the presence-guard debt the ratchet is burning down.
+- **Check 14 — no Polars namespace registrations**: the
+  ``register_(lazyframe|dataframe|expr|series)_namespace`` pattern is
+  extinct (migration Phase 4, Slice 7) anywhere under ``src/rwa_calc`` —
+  calculator logic is plain typed functions composed via
+  ``.pipe(fn, config)``. No allowlist.
+- **Check 15 — the stage registry is literal**: ``engine/registry.py``'s
+  module body is the docstring, imports, the module logger, and assignments
+  whose value is a literal tuple of ``StageSpec(...)`` calls with
+  literal/name/attribute arguments — no conditionals, loops,
+  comprehensions, or function defs.
+- **Check 16 — stage anatomy**: every ``StageSpec.fn`` in the registry is
+  ``<stage module>.run`` resolved from ``rwa_calc.engine.stages``, the
+  stage module binds a top-level ``run``, and every package directly under
+  ``engine/stages/`` exposes ``run`` from its ``__init__`` unless pinned in
+  the shrink-only ``STAGE_PACKAGES_WITHOUT_RUN`` set.
 
 These tests re-use the check functions from ``scripts/arch_check.py`` so the
 rules, metrics, and allowlists live in exactly one place (the same pattern as
@@ -82,4 +97,37 @@ def test_no_empty_frame_sentinels_in_engine() -> None:
     assert not violations, (
         "Empty-LazyFrame sentinel in engine/ — optional frames are None "
         "(migration Phase 2):\n" + "\n".join(violations)
+    )
+
+
+def test_no_polars_namespace_registrations() -> None:
+    """src/rwa_calc never registers a Polars namespace — the pattern is extinct."""
+    arch_check = _load_arch_check()
+    violations = arch_check.check_no_polars_namespace_registrations(SRC_ROOT)
+    assert not violations, (
+        "Polars namespace registration found — the pattern is extinct "
+        "(migration Phase 4); write plain typed functions composed via "
+        ".pipe(fn, config):\n" + "\n".join(violations)
+    )
+
+
+def test_stage_registry_is_literal() -> None:
+    """engine/registry.py is a literal, diff-reviewable StageSpec tuple."""
+    arch_check = _load_arch_check()
+    violations = arch_check.check_registry_is_literal(SRC_ROOT)
+    assert not violations, (
+        "engine/registry.py must stay a literal stage list — docstring, "
+        "imports, the module logger, and a literal tuple of StageSpec(...) "
+        "calls only (migration Phase 4):\n" + "\n".join(violations)
+    )
+
+
+def test_stage_anatomy_is_uniform() -> None:
+    """Every registry StageSpec.fn is engine/stages/<stage>.run, and stages expose run."""
+    arch_check = _load_arch_check()
+    violations = arch_check.check_stage_anatomy(SRC_ROOT)
+    assert not violations, (
+        "Stage-anatomy violation — registry fns must be "
+        "`<engine/stages/ module>.run` and stage packages must expose `run` "
+        "from their __init__ (migration Phase 4):\n" + "\n".join(violations)
     )

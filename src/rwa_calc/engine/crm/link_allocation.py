@@ -45,6 +45,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.engine.crm.expressions import beneficiary_level_expr
+from rwa_calc.engine.kernels.allocation import direct_level_lookup, grouped_level_lookup
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -164,20 +165,33 @@ class CollateralLinkAllocator:
             _opt_ref("counterparty_reference"),
         )
 
-        direct = base.select(pl.col("exposure_reference").alias("_ref"), "_demand", "_metric")
+        direct = direct_level_lookup(
+            base,
+            key="exposure_reference",
+            out_key="_ref",
+            values=[pl.col("_demand"), pl.col("_metric")],
+        )
         facility = self._pool_lookup(base, "parent_facility_reference")
         counterparty = self._pool_lookup(base, "counterparty_reference")
         return {"direct": direct, "facility": facility, "counterparty": counterparty}
 
     @staticmethod
     def _pool_lookup(base: pl.LazyFrame, key: str) -> pl.LazyFrame:
-        """Pooled demand + EAD-weighted metric for facility / counterparty keys."""
+        """Pooled demand + EAD-weighted metric for facility / counterparty keys.
+
+        Kernel-backed grouped level lookup over the non-null-keyed rows; the
+        EAD-weighted average metric ratio is link-allocation-specific and
+        stays here.
+        """
         return (
-            base.filter(pl.col(key).is_not_null())
-            .group_by(key)
-            .agg(
-                pl.col("_demand").sum().alias("_demand"),
-                (pl.col("_metric") * pl.col("_demand")).sum().alias("_wm"),
+            grouped_level_lookup(
+                base.filter(pl.col(key).is_not_null()),
+                key=key,
+                out_key="_ref",
+                values=[
+                    pl.col("_demand").sum().alias("_demand"),
+                    (pl.col("_metric") * pl.col("_demand")).sum().alias("_wm"),
+                ],
             )
             .with_columns(
                 pl.when(pl.col("_demand") > 0)
@@ -185,7 +199,7 @@ class CollateralLinkAllocator:
                 .otherwise(pl.lit(0.0))
                 .alias("_metric")
             )
-            .select(pl.col(key).alias("_ref"), "_demand", "_metric")
+            .select("_ref", "_demand", "_metric")
         )
 
     def _resolve_links(

@@ -34,6 +34,7 @@ from rwa_calc.engine.crm.life_insurance import (
     _map_insurer_rw_to_secured_rw_expr,
     compute_life_insurance_columns,
 )
+from rwa_calc.engine.sa.rw_adjustments import apply_life_insurance_rw_mapping
 
 # --- Art. 232: Risk Weight Mapping Table ---
 
@@ -307,8 +308,6 @@ class TestSALifeInsuranceRWBlending:
 
     def test_life_ins_blends_risk_weight(self) -> None:
         """Secured portion gets mapped RW, unsecured keeps original RW."""
-        import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
-
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
@@ -317,13 +316,11 @@ class TestSALifeInsuranceRWBlending:
                 "life_ins_secured_rw": [0.35],
             }
         ).lazy()
-        result = exposures.sa.apply_life_insurance_rw_mapping().collect()
+        result = apply_life_insurance_rw_mapping(exposures).collect()
         # Blended: 50% * 0.35 + 50% * 1.00 = 0.175 + 0.50 = 0.675
         assert result["risk_weight"][0] == pytest.approx(0.675)
 
     def test_no_life_ins_keeps_original_rw(self) -> None:
-        import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
-
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
@@ -332,12 +329,10 @@ class TestSALifeInsuranceRWBlending:
                 "life_ins_secured_rw": [0.0],
             }
         ).lazy()
-        result = exposures.sa.apply_life_insurance_rw_mapping().collect()
+        result = apply_life_insurance_rw_mapping(exposures).collect()
         assert result["risk_weight"][0] == pytest.approx(1.00)
 
     def test_full_coverage_uses_mapped_rw_only(self) -> None:
-        import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
-
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
@@ -346,14 +341,12 @@ class TestSALifeInsuranceRWBlending:
                 "life_ins_secured_rw": [0.20],
             }
         ).lazy()
-        result = exposures.sa.apply_life_insurance_rw_mapping().collect()
+        result = apply_life_insurance_rw_mapping(exposures).collect()
         # 100% secured -> mapped RW = 0.20
         assert result["risk_weight"][0] == pytest.approx(0.20)
 
     def test_no_20pct_floor_unlike_fcsm(self) -> None:
         """Art. 232 has no 20% floor — unlike FCSM Art. 222(1)."""
-        import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
-
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
@@ -362,14 +355,12 @@ class TestSALifeInsuranceRWBlending:
                 "life_ins_secured_rw": [0.20],  # Lowest possible mapped RW
             }
         ).lazy()
-        result = exposures.sa.apply_life_insurance_rw_mapping().collect()
+        result = apply_life_insurance_rw_mapping(exposures).collect()
         # Should be exactly 0.20, not floored higher
         assert result["risk_weight"][0] == pytest.approx(0.20)
 
     def test_null_life_ins_values_is_noop(self) -> None:
         """Null life-insurance values (contract columns present) are a no-op."""
-        import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
-
         exposures = pl.DataFrame(
             {
                 "risk_weight": [1.00],
@@ -382,7 +373,7 @@ class TestSALifeInsuranceRWBlending:
                 "life_ins_secured_rw": pl.Float64,
             },
         ).lazy()
-        result = exposures.sa.apply_life_insurance_rw_mapping().collect()
+        result = apply_life_insurance_rw_mapping(exposures).collect()
         assert result["risk_weight"][0] == pytest.approx(1.00)
 
 

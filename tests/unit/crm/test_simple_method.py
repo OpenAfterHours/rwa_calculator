@@ -32,7 +32,6 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-import rwa_calc.engine.sa.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.crr_simple_method import (
     FCSM_RW_FLOOR,
@@ -47,6 +46,7 @@ from rwa_calc.engine.crm.simple_method import (
     compute_fcsm_columns,
     undo_sa_ead_reduction,
 )
+from rwa_calc.engine.sa.rw_adjustments import apply_fcsm_rw_substitution
 
 # =============================================================================
 # Fixtures
@@ -500,7 +500,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.50, rel=0.001)
         assert result["pre_fcsm_risk_weight"][0] == pytest.approx(1.0)
 
@@ -520,7 +520,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-10)
 
     def test_fully_secured_by_cross_currency_cash_floored_20pct(self, crr_simple_config):
@@ -540,7 +540,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.20, rel=0.001)
 
     def test_sovereign_bond_cqs2_secured(self, crr_simple_config):
@@ -558,7 +558,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.20, rel=0.001)
 
     def test_corporate_bond_cqs3_secured(self, crr_simple_config):
@@ -577,7 +577,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0, rel=0.001)
 
     def test_no_fcsm_columns_no_change(self, comprehensive_config):
@@ -591,7 +591,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(comprehensive_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, comprehensive_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0)
 
     def test_zero_fcsm_value_no_change(self, crr_simple_config):
@@ -607,7 +607,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(1.0)
 
     def test_rwa_correctness(self, crr_simple_config):
@@ -625,7 +625,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config)
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config)
         result = result.with_columns(
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa")
         ).collect()
@@ -644,7 +644,7 @@ class TestFCSMRWSubstitution:
                 "exposure_class": ["corporate"],
             }
         )
-        result = exposures.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(exposures, crr_simple_config).collect()
         assert result["ead_calculation_method"][0] == "simple"
 
 
@@ -766,5 +766,5 @@ class TestFCSMMixedBatch:
             currency="GBP",
         )
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
-        result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config).collect()
+        result = apply_fcsm_rw_substitution(with_fcsm, crr_simple_config).collect()
         assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-10)

@@ -36,6 +36,9 @@ from rwa_calc.engine.irb import (
     calculate_maturity_adjustment,
     create_irb_calculator,
 )
+from rwa_calc.engine.irb.transforms import (
+    build_audit,
+)
 
 # =============================================================================
 # Fixtures
@@ -726,7 +729,7 @@ class TestIRBAuditTrail:
         ).lazy()
 
         result = irb_calculator.calculate_branch(_pad(exposures), crr_config)
-        audit_df = result.irb.build_audit().collect()
+        audit_df = result.pipe(build_audit).collect()
 
         assert "irb_calculation" in audit_df.columns
         calc_str = audit_df["irb_calculation"][0]

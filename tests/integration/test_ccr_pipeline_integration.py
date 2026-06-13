@@ -66,6 +66,9 @@ _REPORTING_DATE = date(2026, 1, 15)
 _CCR_EXPOSURE_REF = f"ccr__{CCR_A1_NETTING_SET_ID}"  # "ccr__NS_001"
 _CCR_STAGE_NAME = "ccr_sa_ccr"
 _PIPELINE_LOGGER = "rwa_calc.engine.pipeline"
+# stage_timer records are emitted by the fold orchestrator (migration
+# Phase 4); run-level records stay on the pipeline facade logger.
+_ORCHESTRATOR_LOGGER = "rwa_calc.engine.orchestrator"
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +339,8 @@ def test_stage_timer_emits_ccr_sa_ccr_record(
     Arrange:
         build_raw_data_bundle_with_ccr_a1() + CalculationConfig.crr().
     Act:
-        Run PipelineOrchestrator with caplog capturing INFO on rwa_calc.engine.pipeline.
+        Run PipelineOrchestrator with caplog capturing INFO on
+        rwa_calc.engine.orchestrator (the fold emits stage_timer records).
     Assert:
         Exactly one record with stage='ccr_sa_ccr' and 'completed' in message.
         That record's elapsed_ms >= 0.0.
@@ -365,9 +369,9 @@ def test_stage_timer_emits_ccr_sa_ccr_record(
     saved_propagate = namespace_logger.propagate
     namespace_logger.propagate = True
     try:
-        caplog.set_level(logging.INFO, logger=_PIPELINE_LOGGER)
+        caplog.set_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER)
         caplog.handler.addFilter(RunIdFilter())
-        with caplog.at_level(logging.INFO, logger=_PIPELINE_LOGGER):
+        with caplog.at_level(logging.INFO, logger=_ORCHESTRATOR_LOGGER):
             orchestrator.run_with_data(data, config)
     finally:
         namespace_logger.propagate = saved_propagate

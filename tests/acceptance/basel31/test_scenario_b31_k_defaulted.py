@@ -35,7 +35,10 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.irb import IRBLazyFrame  # noqa: F401 - registers namespace
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    prepare_columns,
+)
 from rwa_calc.engine.sa.calculator import SACalculator
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
@@ -540,7 +543,9 @@ class TestB31K9_FIRBCorporateDefaulted:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
 
@@ -556,7 +561,9 @@ class TestB31K9_FIRBCorporateDefaulted:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["rwa"][0] == pytest.approx(0.0, abs=1e-6)
         assert result["risk_weight"][0] == pytest.approx(0.0, abs=1e-6)
@@ -573,7 +580,9 @@ class TestB31K9_FIRBCorporateDefaulted:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["expected_loss"][0] == pytest.approx(225_000.0, rel=1e-6)
 
@@ -607,7 +616,9 @@ class TestB31K10_AIRBRetailDefaulted:
             ead_final=25_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
@@ -623,7 +634,9 @@ class TestB31K10_AIRBRetailDefaulted:
             ead_final=25_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         expected_rwa = 0.15 * 12.5 * 1.0 * 25_000.0  # 46,875
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -640,7 +653,9 @@ class TestB31K10_AIRBRetailDefaulted:
             ead_final=25_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["expected_loss"][0] == pytest.approx(12_500.0, rel=1e-6)
 
@@ -676,7 +691,9 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["k"][0] == pytest.approx(0.15, abs=1e-10)
 
@@ -692,7 +709,9 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         expected_rwa = 0.15 * 12.5 * 1.0 * 500_000.0  # 937,500
         assert result["rwa"][0] == pytest.approx(expected_rwa, rel=1e-6)
@@ -709,7 +728,9 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         # Art. 153(1)(ii) defaulted formula has no 1.06 under either framework
         crr_rwa = 0.15 * 12.5 * 500_000.0  # 937,500
@@ -728,7 +749,9 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
             ead_final=500_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["expected_loss"][0] == pytest.approx(225_000.0, rel=1e-6)
 
@@ -761,7 +784,9 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
             ead_final=300_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["k"][0] == pytest.approx(0.0, abs=1e-10)
 
@@ -777,7 +802,9 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
             ead_final=300_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["rwa"][0] == pytest.approx(0.0, abs=1e-6)
 
@@ -793,6 +820,8 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
             ead_final=300_000.0,
         )
         result = (
-            lf.irb.prepare_columns(b31_irb_config).irb.apply_all_formulas(b31_irb_config).collect()
+            lf.pipe(prepare_columns, b31_irb_config)
+            .pipe(apply_all_formulas, b31_irb_config)
+            .collect()
         )
         assert result["expected_loss"][0] == pytest.approx(150_000.0, rel=1e-6)

@@ -352,6 +352,11 @@ def generate_all_fixtures(fixtures_dir: Path) -> list[FixtureGroupResult]:
             _generate_p1122b,
         ),
         (
+            "PSE/RGLA guarantor (Phase 4 Slice 5 — IRB borrower + PSE/RGLA SA guarantors)",
+            "pse_rgla_guarantor",
+            _generate_pse_rgla_guarantor,
+        ),
+        (
             "P2.36 (sovereign/institution PD floor first-class config fields)",
             "p2_36",
             _generate_p236,
@@ -1809,6 +1814,22 @@ def _generate_p1122b(output_dir: Path) -> list[tuple[str, int]]:
     finally:
         sys.path.remove(str(output_dir))
         sys.modules.pop("p1_122b", None)
+
+
+def _generate_pse_rgla_guarantor(output_dir: Path) -> list[tuple[str, int]]:
+    """Generate PSE/RGLA-guarantor fixtures (IRB borrower + PSE/RGLA SA guarantors)."""
+    sys.path.insert(0, str(output_dir))
+    try:
+        from pse_rgla_guarantor import save_pse_rgla_guarantor_fixtures
+
+        data_dir = output_dir / "data"
+        saved = save_pse_rgla_guarantor_fixtures(data_dir)
+        return [
+            (f"data/{name}.parquet", pl.read_parquet(path).height) for name, path in saved.items()
+        ]
+    finally:
+        sys.path.remove(str(output_dir))
+        sys.modules.pop("pse_rgla_guarantor", None)
 
 
 def _generate_p236(output_dir: Path) -> list[tuple[str, int]]:

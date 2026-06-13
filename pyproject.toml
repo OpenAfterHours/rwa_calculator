@@ -149,16 +149,6 @@ exclude = [
     "tests/fixtures/*/generate_all.py",
 ]
 
-[tool.ty.rules]
-# Polars custom namespaces (register_lazyframe_namespace) produce false positives
-# ty cannot resolve.
-unresolved-attribute = "ignore"   # Polars namespaces (.rwa_sa, .irb, etc.) + union narrowing
-invalid-argument-type = "ignore"  # Polars type[DataType] vs DataType
-invalid-assignment = "ignore"     # Polars ChainedThen vs Then in when/then chains
-invalid-parameter-default = "ignore"  # Polars pl.String as DataType default
-no-matching-overload = "ignore"   # dict.fromkeys with Polars DataType values
-not-subscriptable = "ignore"      # LazyFrame.collect() returns DataFrame|InProcessQuery
-
 [tool.watchfire]
 # Static-analysis citation validator (watchfire check / watchfire matrix).
 # Pin matches the bundled rulebook snapshot the pilot annotations were

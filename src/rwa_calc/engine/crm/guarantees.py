@@ -37,9 +37,15 @@ from rwa_calc.engine.ccf import (
     on_balance_ead,
     sa_ccf_expression,
 )
+from rwa_calc.engine.kernels.allocation import (
+    expand_items_pro_rata,
+    explode_facility_membership,
+)
 from rwa_calc.engine.utils import exact_fractional_years_expr
 
 if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
     from rwa_calc.contracts.config import CalculationConfig
 
 
@@ -231,7 +237,7 @@ def _join_guarantor_counterparty(
 
     # Ensure optional guarantor columns exist (fill null if not in counterparty data)
     post_join_names = exposures.collect_schema().names()
-    fillers: dict[str, pl.DataType] = {
+    fillers: dict[str, PolarsDataType] = {
         "guarantor_country_code": pl.String,
         "guarantor_is_ccp_client_cleared": pl.Boolean,
         "guarantor_scra_grade": pl.String,
@@ -300,9 +306,10 @@ def _assign_guarantor_approach(exposures: pl.LazyFrame, config: CalculationConfi
        actively rates this counterparty under its IRB model.
     Counterparties with only external ratings (CQS) are treated under SA.
     """
+    # irb_permissions is derived non-None in CalculationConfig.__post_init__.
     irb_exposure_class_values = {
         ec.value
-        for ec, approaches in config.irb_permissions.permissions.items()
+        for ec, approaches in config.irb_permissions.permissions.items()  # ty: ignore[unresolved-attribute]
         if ApproachType.FIRB in approaches or ApproachType.AIRB in approaches
     }
 
@@ -416,24 +423,16 @@ def _resolve_guarantees_multi_level(
     # --- 2. Facility-level guarantees — cascade pro-rata over the ancestor set ---
     # A guarantee pledged at any ancestor facility (parent, grandparent, ...
     # root) is allocated pro-rata across that facility's whole descendant subtree
-    # — mirroring the collateral / provision cascade. ``ancestor_facilities``
-    # (parent + ancestors incl. self, from the HierarchyResolver) drives the
-    # membership; when absent it falls back to the 1-element [parent] list,
-    # identical to the legacy single-level behaviour.
+    # — mirroring the collateral / provision cascade. The kernel's membership
+    # helper explodes ``ancestor_facilities`` (parent + ancestors incl. self,
+    # from the HierarchyResolver), falling back to the 1-element [parent] list
+    # when absent — identical to the legacy single-level behaviour.
     exp_schema = exposures.collect_schema()
     has_parent_fac = "parent_facility_reference" in exp_schema.names()
 
     if has_parent_fac:
         facility_guarantees = guarantees.filter(bt_lower == "facility")
-        if "ancestor_facilities" in exp_schema.names():
-            anc_col = pl.col("ancestor_facilities")
-        else:
-            anc_col = pl.concat_list("parent_facility_reference")
-        fac_exposures = (
-            exposures.with_columns(anc_col.alias("_anc_fac"))
-            .explode("_anc_fac")
-            .filter(pl.col("_anc_fac").is_not_null())
-        )
+        fac_exposures = explode_facility_membership(exposures, exp_schema.names(), alias="_anc_fac")
         expanded_parts.append(
             _allocate_guarantees_pro_rata(facility_guarantees, fac_exposures, "_anc_fac")
         )
@@ -916,41 +915,24 @@ def _allocate_guarantees_pro_rata(
     exposures: pl.LazyFrame,
     group_col: str,
 ) -> pl.LazyFrame:
-    """Allocate amount-based guarantees pro-rata by ead_after_collateral within a group."""
-    level_exposures = exposures.select(
-        "exposure_reference",
-        group_col,
-        "ead_after_collateral",
-    )
+    """Allocate amount-based guarantees pro-rata by ead_after_collateral within a group.
 
-    totals = level_exposures.group_by(group_col).agg(
-        pl.col("ead_after_collateral").sum().alias("_total_ead"),
-    )
-
-    weighted = (
-        level_exposures.join(totals, on=group_col, how="left")
-        .with_columns(
-            pl.when(pl.col("_total_ead") > 0)
-            .then(pl.col("ead_after_collateral") / pl.col("_total_ead"))
-            .otherwise(pl.lit(0.0))
-            .alias("_weight"),
-        )
-        .select("exposure_reference", group_col, "_weight")
-    )
-
-    return (
-        guarantees.join(
-            weighted,
-            left_on="beneficiary_reference",
-            right_on=group_col,
-            how="inner",
-        )
-        .with_columns(
-            (pl.col("amount_covered") * pl.col("_weight")).alias("amount_covered"),
-            pl.col("exposure_reference").alias("beneficiary_reference"),
-            pl.lit("loan").alias("beneficiary_type"),
-        )
-        .drop("exposure_reference", "_weight")
+    Thin parameterisation of the allocation kernel's expand direction
+    (:func:`rwa_calc.engine.kernels.allocation.expand_items_pro_rata`),
+    preserving the guarantee-copy drift axes: the basis is
+    ``ead_after_collateral`` (post-collateral EAD — deliberately different
+    from the collateral copy's ``ead_for_crm``); the items -> weights join is
+    INNER (facility / counterparty guarantees whose group has no exposures
+    vanish silently); expanded rows are re-anchored as direct loan-level
+    beneficiaries (``beneficiary_type = "loan"``).
+    """
+    return expand_items_pro_rata(
+        guarantees,
+        exposures,
+        group_key=group_col,
+        basis=pl.col("ead_after_collateral"),
+        scale_columns=("amount_covered",),
+        rewrite_type="loan",
     )
 
 

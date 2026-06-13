@@ -24,9 +24,11 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb.formulas import _parametric_irb_risk_weight_expr
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 
 
 @pytest.fixture
@@ -108,7 +110,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Verify parameter substitution was used
         assert result["guarantee_method_used"][0] == "PD_PARAMETER_SUBSTITUTION"
@@ -148,7 +150,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Should use SA RW substitution
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
@@ -186,7 +188,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["guarantee_method_used"][0] == "PD_PARAMETER_SUBSTITUTION"
         assert result["guarantee_status"][0] == "PD_PARAMETER_SUBSTITUTION"
@@ -222,7 +224,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
         assert result["guarantee_status"][0] == "SA_RW_SUBSTITUTION"
@@ -267,7 +269,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Blended RWA = unguaranteed_fraction × original_rwa + guaranteed × guarantor_rw
         expected_rwa = (unguaranteed / ead) * borrower_rwa + guaranteed * expected_guarantor_rw
@@ -308,7 +310,7 @@ class TestParameterSubstitutionMethod:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Non-beneficial: guarantee not applied, original RWA preserved
         assert result["guarantee_status"][0] == "GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"
@@ -349,7 +351,7 @@ class TestParameterSubstitutionExpectedLoss:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # EL = unguaranteed_fraction × original_EL + guarantor_pd_floored × firb_lgd × guaranteed
         # PD floor for corporate under B3.1 = 0.0005 (0.05%), guarantor PD 0.005 > floor
@@ -385,7 +387,7 @@ class TestParameterSubstitutionExpectedLoss:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # EL = unguaranteed_fraction × original_EL (SA portion has zero EL)
         expected_el = (unguaranteed / ead) * original_el
@@ -466,7 +468,7 @@ class TestMixedGuarantorApproaches:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(b31_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, b31_config).collect()
 
         # Falls back to SA RW substitution because guarantor_pd is null
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"

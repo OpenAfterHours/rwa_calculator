@@ -23,6 +23,12 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
 )
 from rwa_calc.engine.irb.adjustments import compute_el_shortfall_excess
+from rwa_calc.engine.irb.transforms import (
+    compute_el_shortfall_excess as irb_compute_el_shortfall_excess,
+)
+from rwa_calc.engine.slotting.transforms import (
+    compute_el_shortfall_excess as slotting_compute_el_shortfall_excess,
+)
 
 # =============================================================================
 # HELPERS
@@ -116,7 +122,7 @@ class TestIRBELShortfallErrorReporting:
 
 
 # =============================================================================
-# SLOTTING namespace compute_el_shortfall_excess
+# SLOTTING transforms compute_el_shortfall_excess
 # =============================================================================
 
 
@@ -124,9 +130,7 @@ class TestSlottingELShortfallErrorReporting:
     """Slotting EL shortfall emits warning when expected_loss absent."""
 
     def test_emits_warning_when_expected_loss_absent(self) -> None:
-        """Warning emitted via slotting namespace path."""
-        import rwa_calc.engine.slotting.namespace  # noqa: F401 — register namespace
-
+        """Warning emitted via slotting transforms path."""
         errors: list[CalculationError] = []
         lf = pl.LazyFrame(
             {
@@ -134,7 +138,7 @@ class TestSlottingELShortfallErrorReporting:
                 "provision_allocated": [1_000.0],
             }
         )
-        lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
+        slotting_compute_el_shortfall_excess(lf, errors=errors).collect()
 
         assert len(errors) == 1
         err = errors[0]
@@ -145,8 +149,6 @@ class TestSlottingELShortfallErrorReporting:
 
     def test_no_warning_when_expected_loss_present(self) -> None:
         """No warning when expected_loss column exists in slotting frame."""
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
-
         errors: list[CalculationError] = []
         lf = pl.LazyFrame(
             {
@@ -157,42 +159,37 @@ class TestSlottingELShortfallErrorReporting:
                 "other_own_funds_reductions": [0.0],
             }
         )
-        lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
+        slotting_compute_el_shortfall_excess(lf, errors=errors).collect()
 
         assert len(errors) == 0
 
     def test_still_returns_zero_columns_when_absent(self) -> None:
         """Backward compat: still adds zero columns in slotting path."""
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
-
         errors: list[CalculationError] = []
         lf = pl.LazyFrame({"exposure_reference": ["SL_001"]})
-        result = lf.slotting.compute_el_shortfall_excess(errors=errors).collect()
+        result = slotting_compute_el_shortfall_excess(lf, errors=errors).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
 
     def test_no_crash_without_errors_param(self) -> None:
         """Backward compat: calling without errors= still works."""
-        import rwa_calc.engine.slotting.namespace  # noqa: F401
-
         lf = pl.LazyFrame({"exposure_reference": ["SL_001"]})
-        result = lf.slotting.compute_el_shortfall_excess().collect()
+        result = slotting_compute_el_shortfall_excess(lf).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
 
 
 # =============================================================================
-# IRB NAMESPACE wrapper
+# IRB transforms wrapper
 # =============================================================================
 
 
-class TestIRBNamespaceELShortfallErrorReporting:
-    """IRB namespace wrapper passes errors through correctly."""
+class TestIRBTransformsELShortfallErrorReporting:
+    """IRB transforms wrapper passes errors through correctly."""
 
-    def test_namespace_passes_errors_through(self) -> None:
-        """Errors list is populated when calling through .irb namespace."""
-        import rwa_calc.engine.irb.namespace  # noqa: F401
+    def test_transforms_passes_errors_through(self) -> None:
+        """Errors list is populated when calling the transforms wrapper."""
 
         errors: list[CalculationError] = []
         lf = pl.LazyFrame(
@@ -201,14 +198,13 @@ class TestIRBNamespaceELShortfallErrorReporting:
                 "provision_allocated": [1_000.0],
             }
         )
-        lf.irb.compute_el_shortfall_excess(errors=errors).collect()
+        lf.pipe(irb_compute_el_shortfall_excess, errors=errors).collect()
 
         assert len(errors) == 1
         assert errors[0].code == ERROR_MISSING_EXPECTED_LOSS
 
-    def test_namespace_no_errors_when_el_present(self) -> None:
-        """No errors when expected_loss exists via namespace."""
-        import rwa_calc.engine.irb.namespace  # noqa: F401
+    def test_transforms_no_errors_when_el_present(self) -> None:
+        """No errors when expected_loss exists via the transforms wrapper."""
 
         errors: list[CalculationError] = []
         lf = pl.LazyFrame(
@@ -220,6 +216,6 @@ class TestIRBNamespaceELShortfallErrorReporting:
                 "other_own_funds_reductions": [0.0],
             }
         )
-        lf.irb.compute_el_shortfall_excess(errors=errors).collect()
+        lf.pipe(irb_compute_el_shortfall_excess, errors=errors).collect()
 
         assert len(errors) == 0

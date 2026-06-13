@@ -35,6 +35,7 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 
@@ -330,7 +331,7 @@ B31_DEFAULTED_RESI_RE_NON_INCOME_RW = Decimal("1.00")
 # reductions for CQS 2/4/5/6).
 # =============================================================================
 
-B31_COVERED_BOND_RISK_WEIGHTS: dict[int, Decimal] = {
+B31_COVERED_BOND_RISK_WEIGHTS: dict[int | None, Decimal] = {
     1: Decimal("0.10"),  # AAA to AA-
     2: Decimal("0.20"),  # A+ to A- (same as CRR)
     3: Decimal("0.20"),  # BBB+ to BBB-
@@ -358,7 +359,7 @@ B31_COVERED_BOND_UNRATED_FROM_SCRA: dict[str, Decimal] = {
 
 
 def _build_int_cqs_rw_df(
-    weights: dict[int | None, Decimal],
+    weights: Mapping[int | None, Decimal],
     exposure_class: str,
     order: tuple[int | None, ...],
 ) -> pl.DataFrame:

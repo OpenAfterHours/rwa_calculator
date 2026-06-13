@@ -97,8 +97,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 from tests.acceptance.basel31.conftest import PSM_GUARANTEE_INPUT_SCHEMA
 from tests.fixtures.p1_159.p1_159 import (
     AMOUNT_COVERED,
@@ -276,11 +278,11 @@ class TestP1159PSMCorrelationGuarantorClass:
         Arrange: Corporate FSE borrower (requires_fi_scalar=True) with 60% covered
                  by an institution IRB guarantor (guarantor_is_financial_sector_entity=True,
                  apply_fi_scalar=False for the guarantor's own class).
-        Act:     lf.irb.apply_guarantee_substitution(config).
+        Act:     lf.pipe(apply_guarantee_substitution, config).
         Return:  Collected DataFrame for all assertions.
         """
         lf = _build_p1159_lf()
-        return lf.irb.apply_guarantee_substitution(config).collect()
+        return lf.pipe(apply_guarantee_substitution, config).collect()
 
     # -------------------------------------------------------------------------
     # BORROWER PRE-CRM VALUES — regression guard (must be stable)

@@ -22,9 +22,16 @@ import rwa_calc
 _ROOT = Path(rwa_calc.__file__).resolve().parent
 
 # Files that carry the "114(3)/(4)" compound and must switch to "114(4)/(7)".
+# The former engine/sa/namespace.py entry split with the module: the override
+# chains live in risk_weights.py, the guarantee-substitution helpers in
+# rw_adjustments.py — both carry Art. 114(4)/(7) citations.
 _STANDARD_SCOPE: list[tuple[str, Path]] = [
-    ("engine/sa/namespace.py", _ROOT / "engine" / "sa" / "namespace.py"),
-    ("engine/classifier.py", _ROOT / "engine" / "classifier.py"),
+    ("engine/sa/risk_weights.py", _ROOT / "engine" / "sa" / "risk_weights.py"),
+    ("engine/sa/rw_adjustments.py", _ROOT / "engine" / "sa" / "rw_adjustments.py"),
+    (
+        "engine/stages/classify/approach.py",
+        _ROOT / "engine" / "stages" / "classify" / "approach.py",
+    ),
     ("engine/irb/guarantee.py", _ROOT / "engine" / "irb" / "guarantee.py"),
 ]
 

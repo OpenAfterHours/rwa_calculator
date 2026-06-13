@@ -26,6 +26,7 @@ from tests.fixtures.single_exposure import calculate_single_slotting_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.slotting import SlottingCalculator, create_slotting_calculator
+from rwa_calc.engine.slotting.transforms import build_audit
 
 # =============================================================================
 # FIXTURES
@@ -57,7 +58,7 @@ def _slotting_audit(
 ) -> pl.DataFrame:
     """Run calculate_branch and project the slotting audit trail."""
     result = calculator.calculate_branch(_pad_slotting(pl.LazyFrame(exposures_data)), config)
-    return result.slotting.build_audit().collect()
+    return build_audit(result).collect()
 
 
 # =============================================================================

@@ -1,6 +1,6 @@
 """Unit tests for the effective_maturity override and has_one_day_maturity_floor.
 
-Covers the priority chain in `lf.irb.prepare_columns(config)`:
+Covers the priority chain in `lf.pipe(prepare_columns, config)`:
     1. `effective_maturity` input populated → firm override (clipped to [1/365, 5])
     2. `has_one_day_maturity_floor = True` → M = 1/365
     3. Basel 3.1 revolving + `facility_termination_date` → termination-date derivation
@@ -26,8 +26,9 @@ if TYPE_CHECKING:
 from rwa_calc.contracts.bundles import RawDataBundle
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.validation import validate_bundle_values
-from rwa_calc.engine.hierarchy import HierarchyResolver
-from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - registers namespace
+from rwa_calc.engine.irb.transforms import (
+    prepare_columns,
+)
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.raw_bundle import make_raw_bundle
 
@@ -87,7 +88,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.25, abs=1e-9)
 
@@ -104,7 +105,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         # Override > flag: M = 0.5 wins over M = 1/365
         assert result["maturity"][0] == pytest.approx(0.5, abs=1e-9)
@@ -121,7 +122,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(5.0, abs=1e-9)
 
@@ -137,7 +138,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-9)
 
@@ -155,7 +156,7 @@ class TestEffectiveMaturityOverride:
             }
         ).cast({"effective_maturity": pl.Float64})
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -174,7 +175,7 @@ class TestEffectiveMaturityOverride:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(crr_config).collect()
+        result = _pad(lf).pipe(prepare_columns, crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.1, abs=1e-9)
 
@@ -194,7 +195,7 @@ class TestOneDayMaturityFloorFlag:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(ONE_DAY, abs=1e-9)
 
@@ -210,7 +211,7 @@ class TestOneDayMaturityFloorFlag:
             }
         )
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -226,7 +227,7 @@ class TestOneDayMaturityFloorFlag:
             }
         ).cast({"has_one_day_maturity_floor": pl.Boolean})
 
-        result = _pad(lf).irb.prepare_columns(b31_config).collect()
+        result = _pad(lf).pipe(prepare_columns, b31_config).collect()
 
         assert result["maturity"][0] == pytest.approx(3.0, abs=0.05)
 
@@ -249,8 +250,9 @@ class TestSchemaAndPropagation:
 
     def test_effective_maturity_on_exposures_frame_schema(self) -> None:
         """The column is declared in the internal exposures frame schema."""
+        from rwa_calc.engine.stages.hierarchy.unify import unify_exposures
 
-        source = HierarchyResolver._unify_exposures.__code__.co_consts
+        source = unify_exposures.__code__.co_consts
         # Flatten nested code constants looking for the string literal
         found = any(
             isinstance(c, str) and c == "effective_maturity"

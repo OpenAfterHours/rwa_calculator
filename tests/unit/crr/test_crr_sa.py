@@ -28,6 +28,7 @@ from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.sa import SACalculator, create_sa_calculator
+from rwa_calc.engine.sa.factors_output import build_audit
 from rwa_calc.engine.supporting_factors import (
     SupportingFactorCalculator,
     create_supporting_factor_calculator,
@@ -1157,7 +1158,7 @@ class TestSAAuditTrail:
         ).lazy()
 
         result = sa_calculator.calculate_branch(exposures, crr_config)
-        audit_df = result.sa.build_audit().collect()
+        audit_df = build_audit(result).collect()
 
         assert "sa_calculation" in audit_df.columns
         calc_str = audit_df["sa_calculation"][0]

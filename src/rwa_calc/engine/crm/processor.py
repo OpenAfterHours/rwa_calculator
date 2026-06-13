@@ -65,6 +65,13 @@ from rwa_calc.engine.crm.life_insurance import compute_life_insurance_columns
 from rwa_calc.engine.crm.link_allocation import RANK_METRIC_COLUMN, CollateralLinkAllocator
 from rwa_calc.engine.crm.look_through import apply_funded_only_look_through
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns, undo_sa_ead_reduction
+from rwa_calc.engine.kernels.allocation import (
+    ancestor_membership_expr,
+    direct_level_lookup,
+    grouped_level_lookup,
+    join_items_to_level_lookups,
+    switch_by_beneficiary_level,
+)
 from rwa_calc.engine.materialise import materialise_edge
 from rwa_calc.engine.utils import has_required_columns
 from rwa_calc.observability.audit_cache import sink_audit
@@ -108,16 +115,19 @@ def _build_direct_lookup(
     has_floor_col: bool,
     has_sft_col: bool,
 ) -> pl.LazyFrame:
-    """Build the direct (per-exposure) lookup frame."""
-    direct_cols = [
-        pl.col("exposure_reference").alias("_ben_ref_direct"),
-        pl.col("ead_for_crm").alias("_ead_direct"),
-        pl.col(exposure_ccy_col).alias("_currency_direct"),
-        pl.col("maturity_date").alias("_maturity_direct"),
-        _optional_bool_col("has_one_day_maturity_floor", "_floor_direct", has_floor_col),
-        _optional_bool_col("is_sft", "_sft_direct", has_sft_col),
-    ]
-    return exposures.select(direct_cols)
+    """Build the direct (per-exposure) lookup frame via the allocation kernel."""
+    return direct_level_lookup(
+        exposures,
+        key="exposure_reference",
+        out_key="_ben_ref_direct",
+        values=[
+            pl.col("ead_for_crm").alias("_ead_direct"),
+            pl.col(exposure_ccy_col).alias("_currency_direct"),
+            pl.col("maturity_date").alias("_maturity_direct"),
+            _optional_bool_col("has_one_day_maturity_floor", "_floor_direct", has_floor_col),
+            _optional_bool_col("is_sft", "_sft_direct", has_sft_col),
+        ],
+    )
 
 
 def _build_facility_lookup(
@@ -154,10 +164,6 @@ def _build_facility_lookup(
                 "_sft_facility": pl.Boolean,
             }
         )
-    if "ancestor_facilities" in exposures.collect_schema().names():
-        anc_col = pl.col("ancestor_facilities")
-    else:
-        anc_col = pl.concat_list("parent_facility_reference")
     facility_agg = [
         pl.col("ead_for_crm").sum().alias("_ead_facility"),
         pl.col("ead_for_crm").filter(pool_expr).sum().alias("_ead_facility_airb"),
@@ -170,14 +176,13 @@ def _build_facility_lookup(
         ),
         _optional_bool_col("is_sft", "_sft_facility", has_sft_col, aggregate="max"),
     ]
-    return (
-        exposures.with_columns(anc_col.alias("_ben_ref_facility"))
-        .explode("_ben_ref_facility")
-        .filter(pl.col("_ben_ref_facility").is_not_null())
-        .group_by("_ben_ref_facility")
-        .agg(facility_agg)
-        .with_columns(pl.col("_ben_ref_facility").cast(pl.String))
-    )
+    return grouped_level_lookup(
+        exposures,
+        key="parent_facility_reference",
+        out_key="_ben_ref_facility",
+        values=facility_agg,
+        membership=ancestor_membership_expr(exposures.collect_schema().names()),
+    ).with_columns(pl.col("_ben_ref_facility").cast(pl.String))
 
 
 def _build_cp_lookup(
@@ -201,10 +206,11 @@ def _build_cp_lookup(
         ),
         _optional_bool_col("is_sft", "_sft_cp", has_sft_col, aggregate="max"),
     ]
-    return (
-        exposures.group_by("counterparty_reference")
-        .agg(cp_agg)
-        .rename({"counterparty_reference": "_ben_ref_cp"})
+    return grouped_level_lookup(
+        exposures,
+        key="counterparty_reference",
+        out_key="_ben_ref_cp",
+        values=cp_agg,
     )
 
 
@@ -296,8 +302,6 @@ def _join_collateral_to_lookups(
 
     When beneficiary_type is absent, falls back to a single direct join.
     """
-    from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
-
     coll_schema = collateral.collect_schema()
 
     if "beneficiary_type" not in coll_schema.names():  # arch-exempt: early-exit guard
@@ -316,76 +320,54 @@ def _join_collateral_to_lookups(
             how="left",
         )
 
-    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
-
     # 3 left joins — each adds level-specific EAD, currency, maturity columns
-    collateral = (
-        collateral.join(
-            direct_lookup,
-            left_on="beneficiary_reference",
-            right_on="_ben_ref_direct",
-            how="left",
-        )
-        .join(
-            facility_lookup,
-            left_on="beneficiary_reference",
-            right_on="_ben_ref_facility",
-            how="left",
-        )
-        .join(
-            cp_lookup,
-            left_on="beneficiary_reference",
-            right_on="_ben_ref_cp",
-            how="left",
-        )
+    collateral = join_items_to_level_lookups(
+        collateral,
+        [
+            (direct_lookup, "_ben_ref_direct"),
+            (facility_lookup, "_ben_ref_facility"),
+            (cp_lookup, "_ben_ref_cp"),
+        ],
     )
 
-    # Select correct EAD, currency, maturity based on beneficiary_type
+    # Select correct EAD, currency, maturity based on beneficiary_type.
+    # Null / unknown beneficiary types fall through to each column's neutral
+    # default (collateral-copy behaviour, see switch_by_beneficiary_level).
     collateral = collateral.with_columns(
         [
-            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-            .then(pl.col("_ead_direct"))
-            .when(bt_lower == "facility")
-            .then(pl.col("_ead_facility"))
-            .when(bt_lower == "counterparty")
-            .then(pl.col("_ead_cp"))
-            .otherwise(pl.lit(0.0))
-            .alias("_beneficiary_ead"),
-            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-            .then(pl.col("_currency_direct"))
-            .when(bt_lower == "facility")
-            .then(pl.col("_currency_facility"))
-            .when(bt_lower == "counterparty")
-            .then(pl.col("_currency_cp"))
-            .otherwise(pl.lit(None).cast(pl.String))
-            .alias("exposure_currency"),
-            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-            .then(pl.col("_maturity_direct"))
-            .when(bt_lower == "facility")
-            .then(pl.col("_maturity_facility"))
-            .when(bt_lower == "counterparty")
-            .then(pl.col("_maturity_cp"))
-            .otherwise(pl.lit(None).cast(pl.Date))
-            .alias("exposure_maturity"),
+            switch_by_beneficiary_level(
+                pl.col("_ead_direct"),
+                pl.col("_ead_facility"),
+                pl.col("_ead_cp"),
+                pl.lit(0.0),
+            ).alias("_beneficiary_ead"),
+            switch_by_beneficiary_level(
+                pl.col("_currency_direct"),
+                pl.col("_currency_facility"),
+                pl.col("_currency_cp"),
+                pl.lit(None).cast(pl.String),
+            ).alias("exposure_currency"),
+            switch_by_beneficiary_level(
+                pl.col("_maturity_direct"),
+                pl.col("_maturity_facility"),
+                pl.col("_maturity_cp"),
+                pl.lit(None).cast(pl.Date),
+            ).alias("exposure_maturity"),
             # Art. 162(3) 1-day maturity floor flag — for Art. 237(2) ineligibility
-            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-            .then(pl.col("_floor_direct"))
-            .when(bt_lower == "facility")
-            .then(pl.col("_floor_facility"))
-            .when(bt_lower == "counterparty")
-            .then(pl.col("_floor_cp"))
-            .otherwise(pl.lit(False))
-            .alias("exposure_has_one_day_maturity_floor"),
+            switch_by_beneficiary_level(
+                pl.col("_floor_direct"),
+                pl.col("_floor_facility"),
+                pl.col("_floor_cp"),
+                pl.lit(False),
+            ).alias("exposure_has_one_day_maturity_floor"),
             # Art. 224(2)(c) SFT flag — drives 5-day FX/collateral haircut default
             # (P1.186). Resolved direct -> facility -> cp; defaults False.
-            pl.when(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-            .then(pl.col("_sft_direct"))
-            .when(bt_lower == "facility")
-            .then(pl.col("_sft_facility"))
-            .when(bt_lower == "counterparty")
-            .then(pl.col("_sft_cp"))
-            .otherwise(pl.lit(False))
-            .alias("exposure_is_sft"),
+            switch_by_beneficiary_level(
+                pl.col("_sft_direct"),
+                pl.col("_sft_facility"),
+                pl.col("_sft_cp"),
+                pl.lit(False),
+            ).alias("exposure_is_sft"),
         ]
     ).drop(
         [
@@ -769,10 +751,12 @@ class CRMProcessor:
         schema_names = set(exposures.collect_schema().names())
         if "exposure_class" not in schema_names or "exposure_reference" not in schema_names:
             return exposures
-        # Register the `.sa` namespace (lazy import avoids a module-level cycle).
-        import rwa_calc.engine.sa.namespace  # noqa: F401
+        # Deferred import keeps the crm <-> sa coupling lazy in both directions
+        # (sa/rw_adjustments lazily imports crm/guarantees for the guarantee
+        # redistribution) so neither package pulls the other in at module load.
+        from rwa_calc.engine.sa.risk_weights import apply_risk_weights
 
-        ranked = exposures.sa.apply_risk_weights(config).select(
+        ranked = apply_risk_weights(exposures, config).select(
             pl.col("exposure_reference"),
             pl.col("risk_weight").alias(RANK_METRIC_COLUMN),
         )

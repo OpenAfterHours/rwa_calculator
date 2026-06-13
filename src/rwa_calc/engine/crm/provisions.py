@@ -20,9 +20,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.ccf import interest_for_ead, sa_ccf_expression
+from rwa_calc.engine.kernels.allocation import (
+    LevelSpec,
+    allocate_multi_level,
+    beneficiary_level_expr,
+)
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -141,6 +145,18 @@ def _resolve_provisions_multi_level(
     """
     Resolve provisions from direct, facility, and counterparty levels.
 
+    Thin parameterisation of the allocation kernel
+    (:func:`rwa_calc.engine.kernels.allocation.allocate_multi_level`):
+
+    - Facility-level provisions cascade over the ancestor facility set —
+      a provision pledged at any ancestor facility (parent, grandparent, ...
+      root) is allocated pro-rata across that facility's whole descendant
+      subtree, contributions stacking across ancestor levels (the
+      ``cascade=True`` level).
+    - Null / unknown ``beneficiary_type`` rows are DROPPED (the
+      ``unknown=None`` classifier — provisions-copy behaviour, unlike the
+      collateral copy's unknown->direct fallback).
+
     For facility and counterparty levels, provisions are allocated pro-rata
     by the post-CCF EAD-equivalent weight
     ``max(0, drawn) + max(0, interest) + nominal * ccf``. The CCF is derived
@@ -160,28 +176,12 @@ def _resolve_provisions_multi_level(
     Returns:
         Exposures with provision_allocated column added
     """
-    bt_lower = pl.col("beneficiary_type").str.to_lowercase()
-
-    # --- 1. Direct-level provisions ---
-    direct_provs = (
-        provisions.filter(bt_lower.is_in(DIRECT_BENEFICIARY_TYPES))
-        .group_by("beneficiary_reference")
-        .agg(pl.col("amount").sum().alias("_prov_direct"))
-    )
-
-    exposures = exposures.join(
-        direct_provs,
-        left_on="exposure_reference",
-        right_on="beneficiary_reference",
-        how="left",
-    ).with_columns(pl.col("_prov_direct").fill_null(0.0))
-
-    # --- Compute exposure weight for pro-rata allocation ---
-    # Post-CCF EAD-equivalent: nominal is weighted by its SA CCF (derived inline
-    # from risk_type, since the CCF stage has not yet run). On-balance rows have
-    # nominal=0 so the CCF term vanishes; unknown/null risk_type falls through to
-    # sa_ccf_expression's conservative full-risk default rather than crashing.
-    # Frames without a risk_type column fall back to a CCF of 1.0 (bare nominal).
+    # Post-CCF EAD-equivalent pro-rata basis: nominal is weighted by its SA
+    # CCF (derived inline from risk_type, since the CCF stage has not yet
+    # run). On-balance rows have nominal=0 so the CCF term vanishes;
+    # unknown/null risk_type falls through to sa_ccf_expression's
+    # conservative full-risk default rather than crashing. Frames without a
+    # risk_type column fall back to a CCF of 1.0 (bare nominal).
     ccf_expr = (
         sa_ccf_expression("risk_type", is_basel_3_1=is_basel_3_1) if has_risk_type else pl.lit(1.0)
     )
@@ -190,111 +190,17 @@ def _resolve_provisions_multi_level(
         + interest_for_ead()
         + pl.col("nominal_amount") * ccf_expr
     )
-    exposures = exposures.with_columns(weight_expr.alias("_exp_weight"))
 
-    # --- 2. Facility-level provisions (cascade over the ancestor facility set) ---
-    # A provision pledged at any ancestor facility (parent, grandparent, ...
-    # root) is allocated pro-rata across that facility's whole descendant
-    # subtree — mirroring the collateral cascade. ``ancestor_facilities`` (parent
-    # + ancestors incl. self, from the HierarchyResolver) drives the membership;
-    # when absent it falls back to the 1-element [parent] list, identical to the
-    # legacy single-level behaviour. Contributions sum across ancestor levels.
+    levels: list[LevelSpec] = [LevelSpec("direct", "exposure_reference", pro_rata=False)]
     if has_parent_facility:
-        fac_provs = (
-            provisions.filter(bt_lower == "facility")
-            .group_by("beneficiary_reference")
-            .agg(pl.col("amount").sum().alias("_prov_facility"))
-        )
+        levels.append(LevelSpec("facility", "parent_facility_reference", cascade=True))
+    levels.append(LevelSpec("counterparty", "counterparty_reference"))
 
-        if "ancestor_facilities" in exposures.collect_schema().names():
-            anc_col = pl.col("ancestor_facilities")
-        else:
-            anc_col = pl.concat_list("parent_facility_reference")
-
-        edges = (
-            exposures.select(
-                "exposure_reference",
-                "_exp_weight",
-                anc_col.alias("_anc_fac"),
-            )
-            .explode("_anc_fac")
-            .filter(pl.col("_anc_fac").is_not_null())
-        )
-        subtree_totals = edges.group_by("_anc_fac").agg(
-            pl.col("_exp_weight").sum().alias("_fac_total_weight")
-        )
-        fac_alloc = (
-            edges.join(fac_provs, left_on="_anc_fac", right_on="beneficiary_reference", how="inner")
-            .join(subtree_totals, on="_anc_fac", how="left")
-            .with_columns(
-                pl.when(pl.col("_fac_total_weight") > 0)
-                .then(
-                    pl.col("_prov_facility") * pl.col("_exp_weight") / pl.col("_fac_total_weight")
-                )
-                .otherwise(pl.lit(0.0))
-                .alias("_prov_facility_part")
-            )
-            .group_by("exposure_reference")
-            .agg(pl.col("_prov_facility_part").sum().alias("_prov_facility_alloc"))
-        )
-
-        exposures = exposures.join(fac_alloc, on="exposure_reference", how="left").with_columns(
-            pl.col("_prov_facility_alloc").fill_null(0.0)
-        )
-    else:
-        exposures = exposures.with_columns(pl.lit(0.0).alias("_prov_facility_alloc"))
-
-    # --- 3. Counterparty-level provisions ---
-    cp_provs = (
-        provisions.filter(bt_lower == "counterparty")
-        .group_by("beneficiary_reference")
-        .agg(pl.col("amount").sum().alias("_prov_cp"))
+    return allocate_multi_level(
+        exposures,
+        provisions,
+        values={"provision_allocated": pl.col("amount").sum()},
+        basis=weight_expr,
+        level_of=beneficiary_level_expr(unknown=None),
+        levels=levels,
     )
-
-    cp_totals = exposures.group_by("counterparty_reference").agg(
-        pl.col("_exp_weight").sum().alias("_cp_total_weight")
-    )
-
-    exposures = (
-        exposures.join(
-            cp_provs,
-            left_on="counterparty_reference",
-            right_on="beneficiary_reference",
-            how="left",
-        )
-        .join(cp_totals, on="counterparty_reference", how="left")
-        .with_columns(
-            [
-                pl.col("_prov_cp").fill_null(0.0),
-                pl.col("_cp_total_weight").fill_null(0.0),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("_cp_total_weight") > 0)
-            .then(pl.col("_prov_cp") * pl.col("_exp_weight") / pl.col("_cp_total_weight"))
-            .otherwise(pl.lit(0.0))
-            .alias("_prov_cp_alloc"),
-        )
-    )
-
-    # --- Combine all levels ---
-    exposures = exposures.with_columns(
-        (pl.col("_prov_direct") + pl.col("_prov_facility_alloc") + pl.col("_prov_cp_alloc")).alias(
-            "provision_allocated"
-        ),
-    )
-
-    # --- Drop temporary columns ---
-    # (Facility intermediates ``_prov_facility`` / ``_fac_total_weight`` live in
-    # the per-ancestor edge frames above and never land on ``exposures``.)
-    drop_cols = [
-        "_prov_direct",
-        "_exp_weight",
-        "_prov_facility_alloc",
-        "_prov_cp_alloc",
-        "_prov_cp",
-        "_cp_total_weight",
-    ]
-    exposures = exposures.drop(drop_cols)
-
-    return exposures

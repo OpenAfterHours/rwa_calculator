@@ -36,7 +36,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 from watchfire import cites
@@ -99,7 +99,11 @@ from rwa_calc.reporting.pillar3.templates import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from decimal import Decimal
+
+    from polars._typing import PolarsDataType
+    from xlsxwriter import Workbook
 
     from rwa_calc.api.service import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
@@ -473,7 +477,7 @@ class Pillar3Generator:
         rows_out.append(_make_row(P3Row("18", "Total", is_total=True), total_values, column_refs))
 
         # Build with mixed types: col "a" is String, rest Float64
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.String if ref == "a" else pl.Float64
         return pl.DataFrame(rows_out, schema=schema)
@@ -1126,7 +1130,7 @@ def _null_row(row_def: P3Row, column_refs: list[str]) -> dict[str, object]:
 
 def _make_row(
     row_def: P3Row,
-    values: dict[str, object],
+    values: Mapping[str, object],
     column_refs: list[str],
 ) -> dict[str, object]:
     """Build a row dict from computed values, filling missing refs with None."""
@@ -1138,7 +1142,7 @@ def _make_row(
 
 def _build_df(rows: list[dict[str, object]], column_refs: list[str]) -> pl.DataFrame:
     """Materialise a list of row dicts into a typed Polars DataFrame."""
-    schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+    schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
     schema.update(dict.fromkeys(column_refs, pl.Float64))
     return pl.DataFrame(rows, schema=schema)
 
@@ -1227,7 +1231,7 @@ def _ov1_row_values(
     # 26/27 where column a is a multiplier/adjustment, not an RWA amount.
     no_shim = ref in _OV1_RATIO_REFS or ref in _OV1_FLOOR_NO_SHIM_REFS
     if not no_shim and values.get("a") is not None and values.get("c") is None:
-        values["c"] = float(values["a"] or 0.0) * 0.08
+        values["c"] = float(cast("float", values["a"] or 0.0)) * 0.08
 
     return _make_row(row_def, values, column_refs)
 
@@ -1670,9 +1674,9 @@ def _compute_cr6_values(
 
     # Convert PD/LGD to percentage for display
     if values.get("f") is not None:
-        values["f"] = float(values["f"]) * 100.0
+        values["f"] = float(cast("float", values["f"])) * 100.0
     if values.get("h") is not None:
-        values["h"] = float(values["h"]) * 100.0
+        values["h"] = float(cast("float", values["h"])) * 100.0
 
     return values
 
@@ -1715,9 +1719,9 @@ def _cr9_class_predicate(spec: CR9ClassSpec, ec_col: str, cols: set[str]) -> pl.
     return predicate
 
 
-def _cr9_schema(column_refs: list[str]) -> dict[str, pl.DataType]:
+def _cr9_schema(column_refs: list[str]) -> dict[str, PolarsDataType]:
     """Schema for CR9 frames: a/b are String, remaining cols Float64."""
-    schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+    schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
     for ref in column_refs:
         schema[ref] = pl.String if ref in ("a", "b") else pl.Float64
     return schema
@@ -1728,7 +1732,7 @@ def _cr9_empty_schema(column_refs: list[str]) -> pl.DataFrame:
     return pl.DataFrame([], schema=_cr9_schema(column_refs))
 
 
-def _cr9_1_schema(column_refs: list[str], grade_col: str) -> dict[str, pl.DataType]:
+def _cr9_1_schema(column_refs: list[str], grade_col: str) -> dict[str, PolarsDataType]:
     """Schema for CR9.1 frames: a/b/grade are String, remaining cols Float64."""
     schema = _cr9_schema(column_refs)
     schema[grade_col] = pl.String
@@ -1919,9 +1923,9 @@ def _compute_cr7a_values(
     }
 
     # c = sum of d + e + f
-    d_val = float(values.get("d") or 0.0)
-    e_val = float(values.get("e") or 0.0)
-    f_val = float(values.get("f") or 0.0)
+    d_val = float(cast("float", values.get("d") or 0.0))
+    e_val = float(cast("float", values.get("e") or 0.0))
+    f_val = float(cast("float", values.get("f") or 0.0))
     values["c"] = d_val + e_val + f_val if (d_val or e_val or f_val) else None
 
     # g = sum of h + i + j
@@ -2190,15 +2194,15 @@ def _sanitise_sheet_name(name: str) -> str:
     return re.sub(r"[\[\]:*?/\\]", "", name)[:31]
 
 
-def _write_single_sheet(workbook: object, df: pl.DataFrame, name: str) -> int:
+def _write_single_sheet(workbook: Workbook, df: pl.DataFrame, name: str) -> int:
     """Write a single DataFrame to a workbook sheet. Returns row count."""
     sheet = _sanitise_sheet_name(name)
-    df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)  # type: ignore[arg-type]
+    df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
     return df.height
 
 
 def _write_dict_sheets(
-    workbook: object,
+    workbook: Workbook,
     templates: dict[str, pl.DataFrame],
     prefix: str,
     display_names: dict[str, str],
@@ -2211,6 +2215,6 @@ def _write_dict_sheets(
             continue
         display = display_names.get(key, key)
         sheet = _sanitise_sheet_name(f"{prefix} - {display}")
-        df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)  # type: ignore[arg-type]
+        df.write_excel(workbook=workbook, worksheet=sheet, autofit=True)
         total += df.height
     return total

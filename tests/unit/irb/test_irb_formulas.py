@@ -45,6 +45,9 @@ from rwa_calc.engine.irb.formulas import (
 )
 from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
+from rwa_calc.engine.irb.transforms import (
+    apply_firb_lgd,
+)
 
 
 def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
@@ -1187,7 +1190,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.45, abs=1e-6)
 
     def test_crr_firb_subordinated_75pct(self) -> None:
@@ -1203,7 +1206,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["subordinated"],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.75, abs=1e-6)
 
     def test_b31_firb_non_fse_senior_40pct(self) -> None:
@@ -1220,7 +1223,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [False],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.40, abs=1e-6)
 
     def test_b31_firb_fse_senior_45pct(self) -> None:
@@ -1237,7 +1240,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.45, abs=1e-6)
 
     def test_b31_firb_subordinated_75pct(self) -> None:
@@ -1254,7 +1257,7 @@ class TestFIRBLGDPipeline:
                 "cp_is_financial_sector_entity": [True],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.75, abs=1e-6)
 
     def test_airb_keeps_own_lgd(self) -> None:
@@ -1270,7 +1273,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.30, abs=1e-6)
 
     def test_firb_uses_lgd_post_crm_when_available(self) -> None:
@@ -1286,7 +1289,7 @@ class TestFIRBLGDPipeline:
                 "approach": [ApproachType.FIRB.value],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd_input"][0] == pytest.approx(0.20, abs=1e-6)
 
     def test_b31_missing_fse_column_defaults_to_non_fse(self) -> None:
@@ -1302,7 +1305,7 @@ class TestFIRBLGDPipeline:
                 "seniority": ["senior"],
             }
         )
-        result = _pad(lf).irb.apply_firb_lgd(config).collect()
+        result = _pad(lf).pipe(apply_firb_lgd, config).collect()
         assert result["lgd"][0] == pytest.approx(0.40, abs=1e-6)
 
 

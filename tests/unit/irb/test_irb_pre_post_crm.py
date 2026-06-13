@@ -13,8 +13,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 
 
 @pytest.fixture
@@ -45,7 +47,7 @@ class TestIRBPreCRMTracking:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Original IRB values should be preserved
         assert result["rwa_irb_original"][0] == pytest.approx(500_000.0)
@@ -73,7 +75,7 @@ class TestIRBPreCRMTracking:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Guarantee is beneficial (0% < 50%)
         assert result["is_guarantee_beneficial"][0] is True
@@ -104,7 +106,7 @@ class TestIRBGuaranteeBeneficialCheck:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Guarantee is NOT beneficial (30% > 10%)
         assert result["is_guarantee_beneficial"][0] is False
@@ -132,7 +134,7 @@ class TestIRBGuaranteeBeneficialCheck:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["guarantee_status"][0] == "GUARANTEE_NOT_APPLIED_NON_BENEFICIAL"
         assert result["is_guarantee_beneficial"][0] is False
@@ -158,7 +160,7 @@ class TestIRBGuaranteeBeneficialCheck:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Guarantee IS beneficial (20% < 80%)
         assert result["is_guarantee_beneficial"][0] is True
@@ -189,7 +191,7 @@ class TestIRBGuaranteeMethodTracking:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert "guarantee_method_used" in result.columns
         assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"
@@ -215,7 +217,7 @@ class TestIRBGuaranteeMethodTracking:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["guarantee_method_used"][0] == "NO_SUBSTITUTION"
         assert result["guarantee_status"][0] == "NO_GUARANTEE"
@@ -243,7 +245,7 @@ class TestIRBPartialGuarantee:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Guarantee is beneficial
         assert result["is_guarantee_beneficial"][0] is True
@@ -273,7 +275,7 @@ class TestIRBPartialGuarantee:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # RW benefit = original RW (50%) - new RW (0%) = 50%
         assert result["guarantee_benefit_rw"][0] == pytest.approx(0.50)

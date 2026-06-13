@@ -23,10 +23,11 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -59,6 +60,9 @@ from rwa_calc.data.schemas import (
     TRADE_SCHEMA,
 )
 from rwa_calc.engine.utils import has_rows
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 logger = logging.getLogger(__name__)
 
@@ -114,12 +118,12 @@ def enforce_schema(
         LazyFrame with columns cast to expected types
     """
 
-    def _dtype(entry: pl.DataType | ColumnSpec) -> pl.DataType:
+    def _dtype(entry: PolarsDataType | ColumnSpec) -> PolarsDataType:
         return entry.dtype if isinstance(entry, ColumnSpec) else entry
 
     is_column_spec_schema = any(isinstance(entry, ColumnSpec) for entry in schema.values())
     if is_column_spec_schema:
-        lf = ensure_columns(lf, schema)  # type: ignore[arg-type]
+        lf = ensure_columns(lf, cast("Mapping[str, ColumnSpec]", schema))
 
     current_schema = lf.collect_schema()
     current_cols = set(current_schema.names())
@@ -139,7 +143,7 @@ def enforce_schema(
     # Float/String defaults are intentionally excluded; see
     # ``apply_boolean_column_defaults`` for rationale.
     if is_column_spec_schema:
-        lf = apply_boolean_column_defaults(lf, schema)  # type: ignore[arg-type]
+        lf = apply_boolean_column_defaults(lf, cast("Mapping[str, ColumnSpec]", schema))
 
     return lf
 

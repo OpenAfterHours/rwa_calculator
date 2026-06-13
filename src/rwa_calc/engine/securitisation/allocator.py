@@ -64,6 +64,8 @@ from rwa_calc.contracts.errors import (
 from rwa_calc.domain.enums import ErrorSeverity
 
 if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+
     from rwa_calc.contracts.bundles import RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
 
@@ -75,7 +77,7 @@ CRR_ART_244 = "CRR Art. 244"
 # Schema of the resolved lookup frame returned by ``allocate``. Centralised
 # here so the hierarchy resolver and aggregator can build empty placeholder
 # frames with matching dtypes when no allocations are supplied.
-RESOLVED_SECURITISATION_SCHEMA: dict[str, pl.DataType] = {
+RESOLVED_SECURITISATION_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "exposure_type": pl.String,
     "securitisation_residual_pct": pl.Float64,

@@ -27,6 +27,8 @@ import polars as pl
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from polars._typing import PolarsDataType
+
 
 @dataclass(frozen=True, slots=True)
 class ColumnSpec:
@@ -41,7 +43,7 @@ class ColumnSpec:
             missing column is filled via ``ensure_columns`` using ``default``.
     """
 
-    dtype: pl.DataType
+    dtype: PolarsDataType
     default: object = None
     required: bool = True
 
@@ -65,7 +67,7 @@ def ensure_columns(lf: pl.LazyFrame, schema: Mapping[str, ColumnSpec]) -> pl.Laz
     return lf.with_columns(missing)
 
 
-def dtypes_of(schema: Mapping[str, ColumnSpec]) -> dict[str, pl.DataType]:
+def dtypes_of(schema: Mapping[str, ColumnSpec]) -> dict[str, PolarsDataType]:
     """Project a ColumnSpec schema down to ``{column_name: dtype}``.
 
     Polars constructors (``pl.DataFrame(..., schema=...)``, ``pl.LazyFrame``)

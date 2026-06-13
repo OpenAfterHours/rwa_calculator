@@ -19,10 +19,12 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.irb.formulas import calculate_double_default_k
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 
 # =============================================================================
 # HELPERS
@@ -149,31 +151,31 @@ class TestDoubleDefaultEligibility:
     def test_corporate_with_institution_guarantor_eligible(self):
         """Corporate exposure + institution guarantor + A-IRB → eligible."""
         lf = _make_guaranteed_frame()
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is True
 
     def test_institution_exposure_not_eligible(self):
         """Institution exposure class is not eligible for DD (corporate only)."""
         lf = _make_guaranteed_frame(exposure_class="institution")
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_retail_exposure_not_eligible(self):
         """Retail exposure not eligible for DD."""
         lf = _make_guaranteed_frame(exposure_class="retail_mortgage")
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_firb_not_eligible(self):
         """F-IRB (not A-IRB) → not eligible for DD."""
         lf = _make_guaranteed_frame(is_airb=False)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_no_guarantor_pd_not_eligible(self):
         """Guarantor without internal PD → not eligible."""
         lf = _make_guaranteed_frame(guarantor_pd=None)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_corporate_guarantor_cqs3_not_eligible(self):
@@ -183,7 +185,7 @@ class TestDoubleDefaultEligibility:
             guarantor_exposure_class="corporate",
             guarantor_cqs=3,
         )
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_corporate_guarantor_cqs2_eligible(self):
@@ -193,7 +195,7 @@ class TestDoubleDefaultEligibility:
             guarantor_exposure_class="corporate",
             guarantor_cqs=2,
         )
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is True
 
     def test_sovereign_guarantor_eligible(self):
@@ -203,25 +205,25 @@ class TestDoubleDefaultEligibility:
             guarantor_exposure_class="central_govt_central_bank",
             guarantor_cqs=1,
         )
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is True
 
     def test_dd_disabled_in_config(self):
         """DD disabled in config → not eligible even if criteria met."""
         lf = _make_guaranteed_frame()
-        result = lf.irb.apply_guarantee_substitution(_crr_no_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_no_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_b31_never_eligible(self):
         """Basel 3.1 removes DD → never eligible."""
         lf = _make_guaranteed_frame()
-        result = lf.irb.apply_guarantee_substitution(_b31_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _b31_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
     def test_no_guarantee_not_eligible(self):
         """Unguaranteed exposure → not eligible."""
         lf = _make_guaranteed_frame(guaranteed_portion=0.0, unguaranteed_portion=1_000_000.0)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
 
 
@@ -242,9 +244,9 @@ class TestDoubleDefaultRWA:
             guarantor_cqs=1,
         )
         # With DD
-        result_dd = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result_dd = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         # Without DD (SA substitution only)
-        result_no_dd = lf.irb.apply_guarantee_substitution(_crr_no_dd_config()).collect()
+        result_no_dd = lf.pipe(apply_guarantee_substitution, _crr_no_dd_config()).collect()
 
         # DD should produce lower or equal RWA
         assert result_dd["rwa"][0] <= result_no_dd["rwa"][0]
@@ -252,7 +254,7 @@ class TestDoubleDefaultRWA:
     def test_dd_method_tracked(self):
         """DD-applied exposures have correct guarantee_method_used."""
         lf = _make_guaranteed_frame(guarantor_pd=0.0003, guarantor_cqs=1)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
 
         # DD eligibility allows DD treatment OR plain substitution (SA RW for SA
         # guarantors, PD-parameter substitution for IRB guarantors per Art. 161(3))
@@ -266,19 +268,19 @@ class TestDoubleDefaultRWA:
     def test_dd_unfunded_protection_tracked(self):
         """DD-eligible exposure tracks guaranteed portion."""
         lf = _make_guaranteed_frame(guaranteed_portion=600_000.0)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["double_default_unfunded_protection"][0] == pytest.approx(600_000.0)
 
     def test_dd_lgd_tracked(self):
         """DD-eligible exposure tracks obligor LGD."""
         lf = _make_guaranteed_frame(lgd=0.45)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["irb_lgd_double_default"][0] == pytest.approx(0.45)
 
     def test_dd_not_eligible_zero_unfunded(self):
         """Non-eligible exposure has zero DD unfunded protection."""
         lf = _make_guaranteed_frame(is_airb=False)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["double_default_unfunded_protection"][0] == pytest.approx(0.0)
 
     def test_dd_floor_at_guarantor_rw(self):
@@ -289,7 +291,7 @@ class TestDoubleDefaultRWA:
             guarantor_pd=0.01,  # 1% PD → multiplier = 1.75
             risk_weight=0.50,
         )
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         # With high guarantor PD, DD multiplier is 1.75, so DD RW > obligor RW.
         # DD is not beneficial; the engine reports the substitution path that was
         # evaluated. After P1.160, an IRB guarantor on the PSM path emits
@@ -315,19 +317,19 @@ class TestDoubleDefaultStatusTracking:
             risk_weight=0.50,
             rwa=500_000.0,
         )
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         if result["guarantee_status"][0] == "DOUBLE_DEFAULT":
             assert result["guarantee_method_used"][0] == "DOUBLE_DEFAULT"
 
     def test_status_no_guarantee(self):
         """Unguaranteed exposure → NO_GUARANTEE status even with DD enabled."""
         lf = _make_guaranteed_frame(guaranteed_portion=0.0, unguaranteed_portion=1_000_000.0)
-        result = lf.irb.apply_guarantee_substitution(_crr_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["guarantee_status"][0] == "NO_GUARANTEE"
 
     def test_crr_without_dd_uses_sa_substitution(self):
         """CRR without DD enabled → SA_RW_SUBSTITUTION."""
         lf = _make_guaranteed_frame()
-        result = lf.irb.apply_guarantee_substitution(_crr_no_dd_config()).collect()
+        result = lf.pipe(apply_guarantee_substitution, _crr_no_dd_config()).collect()
         if result["is_guarantee_beneficial"][0]:
             assert result["guarantee_method_used"][0] == "SA_RW_SUBSTITUTION"

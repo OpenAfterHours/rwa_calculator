@@ -84,10 +84,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.sa.namespace  # noqa: F401 — register sa namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm.simple_method import compute_fcsm_columns
+from rwa_calc.engine.sa.rw_adjustments import apply_fcsm_rw_substitution
 
 # =============================================================================
 # Scenario constants  (mirrors tests/fixtures/p1_93/p1_93.py)
@@ -314,7 +314,7 @@ class TestRunA_SFT_CMP_ZeroFloor:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, b31_simple_config)
         result = (
-            with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config)
+            with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
@@ -436,7 +436,7 @@ class TestRunB_SFT_NonCMP_TenPercentFloor:
         )
 
         # Act
-        result = exposures_with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config).collect()
+        result = exposures_with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config).collect()
 
         # Assert
         assert result["risk_weight"][0] == pytest.approx(0.10, abs=1e-6), (
@@ -468,7 +468,7 @@ class TestRunB_SFT_NonCMP_TenPercentFloor:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, b31_simple_config)
         result = (
-            with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config)
+            with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
@@ -583,7 +583,7 @@ class TestRunC_NonSFT_CMP_ArtSix_RegressionGuard:
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, b31_simple_config)
         result = (
-            with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config)
+            with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config)
             .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
             .collect()
         )
@@ -634,7 +634,7 @@ class TestSFTCarveOutFrameworkInvariant:
         def _compute_rwa(exposures: pl.LazyFrame, collateral: pl.LazyFrame) -> float:
             with_fcsm = compute_fcsm_columns(exposures, collateral, b31_simple_config)
             result = (
-                with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config)
+                with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config)
                 .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
                 .collect()
             )

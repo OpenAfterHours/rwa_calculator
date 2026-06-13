@@ -19,8 +19,9 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import polars as pl
 from watchfire import cites
@@ -74,7 +75,7 @@ def _build_cqs_rw_df(
     Returns:
         DataFrame with columns [cqs (Int8), risk_weight (Float64), exposure_class, ...]
     """
-    data: dict[str, list[object]] = {
+    data: dict[str, Sequence[object]] = {
         "cqs": [_cqs_to_int(c) for c in order],
         "risk_weight": [float(weights[c]) for c in order],
         "exposure_class": [exposure_class] * len(order),
@@ -282,7 +283,7 @@ def build_institution_guarantor_rw_expr(
     use_scra = is_basel_3_1 and scra_grade_col is not None
 
     def _scra_branch(table: dict[str, Decimal]) -> pl.Expr:
-        scra = pl.col(scra_grade_col)  # type: ignore[arg-type]
+        scra = pl.col(cast("str", scra_grade_col))
         # CRE20.21 conservative fallback: null/missing SCRA grade -> Grade C.
         return (
             pl.when(scra == "A_ENHANCED")

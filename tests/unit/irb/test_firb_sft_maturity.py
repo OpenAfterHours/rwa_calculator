@@ -22,8 +22,11 @@ import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.transforms import (
+    classify_approach,
+    prepare_columns,
+)
 
 
 @pytest.fixture
@@ -67,7 +70,7 @@ class TestFIRBRepoSFTMaturity:
     def test_firb_sft_overrides_to_half_year_under_crr(self, crr_config: CalculationConfig) -> None:
         lf = _firb_frame(is_sft=True, maturity_date=date(2034, 12, 31))
 
-        result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.5)
 
@@ -76,7 +79,7 @@ class TestFIRBRepoSFTMaturity:
     ) -> None:
         lf = _firb_frame(is_sft=False, maturity_date=None)
 
-        result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(2.5)
 
@@ -84,7 +87,7 @@ class TestFIRBRepoSFTMaturity:
         """is_sft False/null (contract default) keeps the 2.5y supervisory M."""
         lf = _firb_frame(is_sft=None, maturity_date=None)
 
-        result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(2.5)
 
@@ -92,7 +95,7 @@ class TestFIRBRepoSFTMaturity:
         """B31 deleted Art. 162(1); is_sft must NOT force 0.5y."""
         lf = _firb_frame(is_sft=True, maturity_date=date(2037, 6, 30))
 
-        result = lf.irb.classify_approach(b31_config).irb.prepare_columns(b31_config).collect()
+        result = lf.pipe(classify_approach, b31_config).pipe(prepare_columns, b31_config).collect()
 
         # Under B31, maturity is derived from maturity_date (clamped to [1, 5]).
         assert result["maturity"][0] != pytest.approx(0.5)
@@ -114,7 +117,7 @@ class TestFIRBRepoSFTMaturity:
         )
 
         result = (
-            _pad(lf).irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+            _pad(lf).pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
         )
 
         # A-IRB uses maturity_date (clamped to [1, 5]) — not forced to 0.5y.
@@ -128,6 +131,6 @@ class TestFIRBRepoSFTMaturity:
         an explicit maturity_date must not raise M above 0.5y for repo-style SFTs."""
         lf = _firb_frame(is_sft=True, maturity_date=date(2029, 12, 31))
 
-        result = lf.irb.classify_approach(crr_config).irb.prepare_columns(crr_config).collect()
+        result = lf.pipe(classify_approach, crr_config).pipe(prepare_columns, crr_config).collect()
 
         assert result["maturity"][0] == pytest.approx(0.5)

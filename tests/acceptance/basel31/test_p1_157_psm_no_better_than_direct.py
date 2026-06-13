@@ -65,8 +65,10 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.transforms import (
+    apply_guarantee_substitution,
+)
 from tests.acceptance.basel31.conftest import PSM_GUARANTEE_INPUT_SCHEMA
 from tests.fixtures.p1_157.p1_157 import (
     AMOUNT_COVERED,
@@ -214,11 +216,11 @@ class TestP1157PSMNoBetterThanDirect:
         Arrange: QRRE revolver with 60% corporate IRB guarantee.
                  Guarantor PD_raw=0.0004 below B31 corporate floor 0.0005.
                  PSM in guarantor corporate context: rw_irb == rw_direct ≈ 0.17489.
-        Act:     lf.irb.apply_guarantee_substitution(config).
+        Act:     lf.pipe(apply_guarantee_substitution, config).
         Return:  Collected DataFrame for all assertions.
         """
         lf = _build_p1157_lf()
-        return lf.irb.apply_guarantee_substitution(config).collect()
+        return lf.pipe(apply_guarantee_substitution, config).collect()
 
     # -------------------------------------------------------------------------
     # BORROWER PRE-CRM VALUES — regression guard (must be stable)

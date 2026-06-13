@@ -6,6 +6,8 @@ Internal module — not part of the public API.
 
 from __future__ import annotations
 
+from typing import cast
+
 import polars as pl
 
 
@@ -139,7 +141,7 @@ def _build_class_agg_exprs(
 
     if has_reporting and rw_col:
         agg_exprs.append(
-            (pl.col(ead_col) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
+            (pl.col(cast("str", ead_col)) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
             .sum()
             .alias("total_rwa")
         )
@@ -173,7 +175,7 @@ def _build_approach_agg_exprs(
 
     if has_reporting and rw_col:
         agg_exprs.append(
-            (pl.col(ead_col) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
+            (pl.col(cast("str", ead_col)) * pl.col(rw_col) + _floor_addon_expr(cols, ead_col))
             .sum()
             .alias("total_rwa")
         )

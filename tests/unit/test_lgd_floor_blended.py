@@ -22,10 +22,12 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # register .irb namespace  # noqa: F401
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb.formulas import (
     _lgd_floor_blended_expression,
+)
+from rwa_calc.engine.irb.transforms import (
+    apply_lgd_floor,
 )
 
 # ---------------------------------------------------------------------------
@@ -276,7 +278,7 @@ class TestBlendedFloorIntegration:
             lgd=0.10,
             crm_alloc_other_physical=60_000.0,
         )
-        result = lf.irb.apply_lgd_floor(B31).collect()
+        result = lf.pipe(apply_lgd_floor, B31).collect()
         # Without blended: single-type floor would be 15% (other_physical)
         # With blended: floor is 21%
         assert result["lgd_floored"][0] == pytest.approx(0.21)
@@ -287,7 +289,7 @@ class TestBlendedFloorIntegration:
             lgd=0.35,
             crm_alloc_other_physical=60_000.0,
         )
-        result = lf.irb.apply_lgd_floor(B31).collect()
+        result = lf.pipe(apply_lgd_floor, B31).collect()
         # Blended floor = 21%, LGD = 35% > 21%, so lgd_floored = 35%
         assert result["lgd_floored"][0] == pytest.approx(0.35)
 
@@ -298,7 +300,7 @@ class TestBlendedFloorIntegration:
             is_airb=False,
             crm_alloc_other_physical=60_000.0,
         )
-        result = lf.irb.apply_lgd_floor(B31).collect()
+        result = lf.pipe(apply_lgd_floor, B31).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
     def test_crr_no_floor(self):
@@ -307,7 +309,7 @@ class TestBlendedFloorIntegration:
             lgd=0.10,
             crm_alloc_other_physical=60_000.0,
         )
-        result = lf.irb.apply_lgd_floor(CRR).collect()
+        result = lf.pipe(apply_lgd_floor, CRR).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.10)
 
     def test_corporate_uses_single_type_floor(self):
@@ -317,7 +319,7 @@ class TestBlendedFloorIntegration:
             exposure_class="CORPORATE",
             crm_alloc_other_physical=60_000.0,
         )
-        result = lf.irb.apply_lgd_floor(B31).collect()
+        result = lf.pipe(apply_lgd_floor, B31).collect()
         # Corporate single-type floor for other_physical = 15%
         assert result["lgd_floored"][0] == pytest.approx(0.15)
 
@@ -340,7 +342,7 @@ class TestBlendedFloorIntegration:
                 "collateral_type": ["residential_re"],
             }
         )
-        result = lf.irb.apply_lgd_floor(B31).collect()
+        result = lf.pipe(apply_lgd_floor, B31).collect()
         # retail_mortgage → flat 5% floor for RRE collateral
         assert result["lgd_floored"][0] == pytest.approx(0.05)
 

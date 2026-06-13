@@ -32,10 +32,17 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-# Import namespace to ensure it's registered
-import rwa_calc.engine.irb.namespace  # noqa: F401
 from rwa_calc.contracts.errors import (
     CalculationError,
+)
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    apply_firb_lgd,
+    apply_guarantee_substitution,
+    apply_post_model_adjustments,
+    classify_approach,
+    compute_el_shortfall_excess,
+    prepare_columns,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 
@@ -57,8 +64,8 @@ class IRBCalculator:
     - CRR: Single PD floor (0.03%), no LGD floors, 1.06 scaling
     - Basel 3.1: Differentiated PD floors, LGD floors for A-IRB, no scaling
 
-    Delegates to the IRB namespace for formula calculations, then applies
-    supporting factors and standardises the output for the aggregator.
+    Delegates to the IRB transform functions for formula calculations, then
+    applies supporting factors and standardises the output for the aggregator.
 
     Usage:
         calculator = IRBCalculator()
@@ -93,15 +100,15 @@ class IRBCalculator:
         *,
         sf_errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
-        """Run the full IRB namespace chain plus supporting factors."""
+        """Run the full IRB transform chain plus supporting factors."""
         exposures = (
-            exposures.irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
-            .irb.apply_all_formulas(config)
-            .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess(errors=sf_errors)
-            .irb.apply_guarantee_substitution(config)
+            exposures.pipe(classify_approach, config)
+            .pipe(apply_firb_lgd, config)
+            .pipe(prepare_columns, config)
+            .pipe(apply_all_formulas, config)
+            .pipe(apply_post_model_adjustments, config)
+            .pipe(compute_el_shortfall_excess, errors=sf_errors)
+            .pipe(apply_guarantee_substitution, config)
         )
         exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
 

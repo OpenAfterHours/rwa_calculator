@@ -23,10 +23,12 @@ import rwa_calc
 # Resolve to .../src/rwa_calc regardless of which worktree is active.
 _ROOT = Path(rwa_calc.__file__).resolve().parent
 
+# engine/sa/risk_weights.py hosts the retail branch chains that carry the
+# Art. 123(4) payroll citation (formerly engine/sa/namespace.py).
 _IN_SCOPE: list[tuple[str, Path]] = [
     ("data/schemas.py", _ROOT / "data" / "schemas.py"),
     ("data/tables/b31_risk_weights.py", _ROOT / "data" / "tables" / "b31_risk_weights.py"),
-    ("engine/sa/namespace.py", _ROOT / "engine" / "sa" / "namespace.py"),
+    ("engine/sa/risk_weights.py", _ROOT / "engine" / "sa" / "risk_weights.py"),
 ]
 
 _IDS = [label for label, _ in _IN_SCOPE]

@@ -1,15 +1,15 @@
-"""Unit tests for the IRB Polars namespace.
+"""Unit tests for the IRB transforms (plain typed functions).
 
 Tests cover:
-- Namespace registration and availability
+- Public function surface of rwa_calc.engine.irb.transforms
 - PD floor application (CRR and Basel 3.1)
 - LGD floor application
 - Correlation calculation (corporate, retail, SME adjustment)
 - Capital requirement (K) calculation
 - Maturity adjustment
 - Full pipeline (apply_all_formulas)
-- Method chaining
-- Expression namespace methods
+- Pipe composition
+- Expression-level transform functions
 
 References:
 - CRR Art. 153-154: IRB risk weight functions
@@ -26,7 +26,26 @@ import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.irb import IRBExpr, IRBLazyFrame  # noqa: F401 - imports register namespace
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    apply_firb_lgd,
+    apply_guarantee_substitution,
+    apply_lgd_floor,
+    apply_pd_floor,
+    build_audit,
+    calculate_correlation,
+    calculate_expected_loss,
+    calculate_k,
+    calculate_maturity_adjustment,
+    calculate_rwa,
+    classify_approach,
+    clip_maturity,
+    compute_el_shortfall_excess,
+    floor_lgd,
+    floor_pd,
+    prepare_columns,
+    select_expected_loss,
+)
 
 # =============================================================================
 # Fixtures
@@ -108,44 +127,36 @@ def sme_lazyframe() -> pl.LazyFrame:
 
 
 # =============================================================================
-# Namespace Registration Tests
+# Function Surface Tests
 # =============================================================================
 
 
-class TestIRBNamespaceRegistration:
-    """Tests for namespace registration and availability."""
+class TestIRBTransformsSurface:
+    """Tests for the transforms module's public function surface."""
 
-    def test_lazyframe_namespace_registered(self, basic_lazyframe: pl.LazyFrame) -> None:
-        """LazyFrame should have .irb namespace available."""
-        assert hasattr(basic_lazyframe, "irb")
+    def test_lazyframe_functions_callable(self) -> None:
+        """All LazyFrame-level transforms must be callable free functions."""
+        for fn in (
+            classify_approach,
+            apply_firb_lgd,
+            prepare_columns,
+            apply_pd_floor,
+            apply_lgd_floor,
+            calculate_correlation,
+            calculate_k,
+            calculate_maturity_adjustment,
+            calculate_rwa,
+            calculate_expected_loss,
+            apply_all_formulas,
+            select_expected_loss,
+            build_audit,
+        ):
+            assert callable(fn), f"Not callable: {fn!r}"
 
-    def test_expr_namespace_registered(self) -> None:
-        """Expression should have .irb namespace available."""
-        expr = pl.col("pd")
-        assert hasattr(expr, "irb")
-
-    def test_namespace_methods_available(
-        self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
-    ) -> None:
-        """Namespace should have expected methods."""
-        irb = basic_lazyframe.irb
-        expected_methods = [
-            "classify_approach",
-            "apply_firb_lgd",
-            "prepare_columns",
-            "apply_pd_floor",
-            "apply_lgd_floor",
-            "calculate_correlation",
-            "calculate_k",
-            "calculate_maturity_adjustment",
-            "calculate_rwa",
-            "calculate_expected_loss",
-            "apply_all_formulas",
-            "select_expected_loss",
-            "build_audit",
-        ]
-        for method in expected_methods:
-            assert hasattr(irb, method), f"Missing method: {method}"
+    def test_expression_functions_callable(self) -> None:
+        """All expression-level transforms must be callable free functions."""
+        for fn in (floor_pd, floor_lgd, clip_maturity):
+            assert callable(fn), f"Not callable: {fn!r}"
 
 
 # =============================================================================
@@ -160,7 +171,7 @@ class TestApplyPdFloor:
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """CRR PD floor (0.03%) should be applied to PD below floor."""
-        result = basic_lazyframe.irb.apply_pd_floor(crr_config).collect()
+        result = basic_lazyframe.pipe(apply_pd_floor, crr_config).collect()
 
         # Third exposure has PD = 0.0001 (0.01%), should be floored to 0.0003 (0.03%)
         assert result["pd_floored"][2] == pytest.approx(0.0003)
@@ -169,7 +180,7 @@ class TestApplyPdFloor:
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """PD above floor should remain unchanged."""
-        result = basic_lazyframe.irb.apply_pd_floor(crr_config).collect()
+        result = basic_lazyframe.pipe(apply_pd_floor, crr_config).collect()
 
         # First two exposures are above floor
         assert result["pd_floored"][0] == pytest.approx(0.01)
@@ -179,7 +190,7 @@ class TestApplyPdFloor:
         self, basic_lazyframe: pl.LazyFrame, basel31_config: CalculationConfig
     ) -> None:
         """Basel 3.1 PD floor (0.05%) should be higher than CRR."""
-        result = basic_lazyframe.irb.apply_pd_floor(basel31_config).collect()
+        result = basic_lazyframe.pipe(apply_pd_floor, basel31_config).collect()
 
         # Third exposure should be floored to 0.0005 (0.05%)
         assert result["pd_floored"][2] == pytest.approx(0.0005)
@@ -200,7 +211,7 @@ class TestApplyLgdFloor:
                 "lgd": [0.10, 0.20, 0.45],  # All below Basel 3.1 unsecured floor
             }
         )
-        result = _pad(lf).irb.apply_lgd_floor(crr_config).collect()
+        result = _pad(lf).pipe(apply_lgd_floor, crr_config).collect()
 
         # All LGDs should be unchanged
         assert result["lgd_floored"][0] == pytest.approx(0.10)
@@ -215,7 +226,7 @@ class TestApplyLgdFloor:
                 "is_airb": [True, True, True],
             }
         )
-        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).pipe(apply_lgd_floor, basel31_config).collect()
 
         # First two should be floored to 0.25
         assert result["lgd_floored"][0] == pytest.approx(0.25)
@@ -231,7 +242,7 @@ class TestApplyLgdFloor:
                 "is_airb": [False, False, False],
             }
         )
-        result = _pad(lf).irb.apply_lgd_floor(basel31_config).collect()
+        result = _pad(lf).pipe(apply_lgd_floor, basel31_config).collect()
 
         # F-IRB: all LGDs unchanged (no floor)
         assert result["lgd_floored"][0] == pytest.approx(0.10)
@@ -252,10 +263,10 @@ class TestCalculateCorrelation:
     ) -> None:
         """Corporate correlation should be between 0.12 and 0.24."""
         result = (
-            basic_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
+            basic_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
             .with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-            .irb.calculate_correlation(crr_config)
+            .pipe(calculate_correlation, crr_config)
             .collect()
         )
 
@@ -267,10 +278,10 @@ class TestCalculateCorrelation:
     ) -> None:
         """Retail mortgage should have fixed 0.15 correlation."""
         result = (
-            retail_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
+            retail_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
             .with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-            .irb.calculate_correlation(crr_config)
+            .pipe(calculate_correlation, crr_config)
             .collect()
         )
 
@@ -282,10 +293,10 @@ class TestCalculateCorrelation:
     ) -> None:
         """QRRE should have fixed 0.04 correlation."""
         result = (
-            retail_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
+            retail_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
             .with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-            .irb.calculate_correlation(crr_config)
+            .pipe(calculate_correlation, crr_config)
             .collect()
         )
 
@@ -297,9 +308,9 @@ class TestCalculateCorrelation:
     ) -> None:
         """SME turnover should reduce corporate correlation."""
         result = (
-            sme_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
-            .irb.calculate_correlation(crr_config)
+            sme_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
+            .pipe(calculate_correlation, crr_config)
             .collect()
         )
 
@@ -325,11 +336,11 @@ class TestCalculateK:
     def test_k_positive(self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig) -> None:
         """K should be positive for normal exposures."""
         result = (
-            basic_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
+            basic_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
             .with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-            .irb.calculate_correlation(crr_config)
-            .irb.calculate_k(crr_config)
+            .pipe(calculate_correlation, crr_config)
+            .pipe(calculate_k, crr_config)
             .collect()
         )
 
@@ -341,11 +352,11 @@ class TestCalculateK:
     ) -> None:
         """K should be less than LGD for non-defaulted exposures."""
         result = (
-            basic_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
+            basic_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
             .with_columns(pl.lit(None).cast(pl.Float64).alias("turnover_m"))
-            .irb.calculate_correlation(crr_config)
-            .irb.calculate_k(crr_config)
+            .pipe(calculate_correlation, crr_config)
+            .pipe(calculate_k, crr_config)
             .collect()
         )
 
@@ -366,10 +377,10 @@ class TestCalculateK:
 
         result = (
             _pad(lf)
-            .irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
-            .irb.calculate_correlation(crr_config)
-            .irb.calculate_k(crr_config)
+            .pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
+            .pipe(calculate_correlation, crr_config)
+            .pipe(calculate_k, crr_config)
             .collect()
         )
 
@@ -394,7 +405,7 @@ class TestCalculateMaturityAdjustment:
             }
         )
 
-        result = _pad(lf).irb.calculate_maturity_adjustment(crr_config).collect()
+        result = _pad(lf).pipe(calculate_maturity_adjustment, crr_config).collect()
         assert result["maturity_adjustment"][0] > 1.0
         assert result["maturity_adjustment"][0] < 1.5  # Reasonable bound
 
@@ -408,7 +419,7 @@ class TestCalculateMaturityAdjustment:
             }
         )
 
-        result = _pad(lf).irb.calculate_maturity_adjustment(crr_config).collect()
+        result = _pad(lf).pipe(calculate_maturity_adjustment, crr_config).collect()
         assert result["maturity_adjustment"][0] < result["maturity_adjustment"][1]
         assert result["maturity_adjustment"][1] < result["maturity_adjustment"][2]
 
@@ -417,8 +428,8 @@ class TestCalculateMaturityAdjustment:
     ) -> None:
         """Retail exposures should have MA = 1.0."""
         result = (
-            retail_lazyframe.irb.apply_pd_floor(crr_config)
-            .irb.calculate_maturity_adjustment(crr_config)
+            retail_lazyframe.pipe(apply_pd_floor, crr_config)
+            .pipe(calculate_maturity_adjustment, crr_config)
             .collect()
         )
 
@@ -460,9 +471,9 @@ class TestExactFractionalYears:
 
         result = (
             _pad(lf)
-            .irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
+            .pipe(classify_approach, config)
+            .pipe(apply_firb_lgd, config)
+            .pipe(prepare_columns, config)
             .collect()
         )
 
@@ -490,9 +501,9 @@ class TestExactFractionalYears:
 
         result = (
             _pad(lf)
-            .irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
+            .pipe(classify_approach, config)
+            .pipe(apply_firb_lgd, config)
+            .pipe(prepare_columns, config)
             .collect()
         )
 
@@ -521,9 +532,9 @@ class TestExactFractionalYears:
 
         result = (
             _pad(lf)
-            .irb.classify_approach(config)
-            .irb.apply_firb_lgd(config)
-            .irb.prepare_columns(config)
+            .pipe(classify_approach, config)
+            .pipe(apply_firb_lgd, config)
+            .pipe(prepare_columns, config)
             .collect()
         )
 
@@ -549,10 +560,10 @@ class TestExactFractionalYears:
 
         result = (
             _pad(lf)
-            .irb.classify_approach(crr_config)
-            .irb.apply_firb_lgd(crr_config)
-            .irb.prepare_columns(crr_config)
-            .irb.apply_all_formulas(crr_config)
+            .pipe(classify_approach, crr_config)
+            .pipe(apply_firb_lgd, crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_all_formulas, crr_config)
             .collect()
         )
 
@@ -580,7 +591,7 @@ class TestCalculateRwa:
             }
         )
 
-        result = lf.irb.calculate_rwa(crr_config).collect()
+        result = lf.pipe(calculate_rwa, crr_config).collect()
 
         expected_rwa = 0.05 * 12.5 * 1.06 * 1_000_000.0 * 1.2
         assert result["rwa"][0] == pytest.approx(expected_rwa)
@@ -596,7 +607,7 @@ class TestCalculateRwa:
             }
         )
 
-        result = lf.irb.calculate_rwa(basel31_config).collect()
+        result = lf.pipe(calculate_rwa, basel31_config).collect()
 
         expected_rwa = 0.05 * 12.5 * 1_000_000.0 * 1.2  # No 1.06
         assert result["rwa"][0] == pytest.approx(expected_rwa)
@@ -615,8 +626,8 @@ class TestCalculateRwa:
         crr = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
         basel = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
 
-        crr_result = lf.irb.calculate_rwa(crr).collect()
-        basel_result = lf.irb.calculate_rwa(basel).collect()
+        crr_result = lf.pipe(calculate_rwa, crr).collect()
+        basel_result = lf.pipe(calculate_rwa, basel).collect()
 
         ratio = crr_result["rwa"][0] / basel_result["rwa"][0]
         assert ratio == pytest.approx(1.06)
@@ -640,7 +651,7 @@ class TestCalculateExpectedLoss:
             }
         )
 
-        result = lf.irb.calculate_expected_loss(crr_config).collect()
+        result = lf.pipe(calculate_expected_loss, crr_config).collect()
         expected = 0.01 * 0.45 * 1_000_000.0  # 4500
         assert result["expected_loss"][0] == pytest.approx(expected)
 
@@ -657,7 +668,7 @@ class TestApplyAllFormulas:
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """apply_all_formulas should add all expected columns."""
-        result = basic_lazyframe.irb.apply_all_formulas(crr_config).collect()
+        result = basic_lazyframe.pipe(apply_all_formulas, crr_config).collect()
 
         expected_columns = [
             "pd_floored",
@@ -677,7 +688,7 @@ class TestApplyAllFormulas:
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """All RWAs should be positive."""
-        result = basic_lazyframe.irb.apply_all_formulas(crr_config).collect()
+        result = basic_lazyframe.pipe(apply_all_formulas, crr_config).collect()
 
         for rwa in result["rwa"]:
             assert rwa > 0
@@ -687,7 +698,7 @@ class TestApplyAllFormulas:
     ) -> None:
         """Number of rows should be preserved."""
         original_count = basic_lazyframe.collect().shape[0]
-        result = basic_lazyframe.irb.apply_all_formulas(crr_config).collect()
+        result = basic_lazyframe.pipe(apply_all_formulas, crr_config).collect()
         assert result.shape[0] == original_count
 
 
@@ -704,10 +715,10 @@ class TestMethodChaining:
     ) -> None:
         """Full pipeline should work with method chaining."""
         result = (
-            basic_lazyframe.irb.classify_approach(crr_config)
-            .irb.apply_firb_lgd(crr_config)
-            .irb.prepare_columns(crr_config)
-            .irb.apply_all_formulas(crr_config)
+            basic_lazyframe.pipe(classify_approach, crr_config)
+            .pipe(apply_firb_lgd, crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_all_formulas, crr_config)
             .collect()
         )
 
@@ -730,13 +741,13 @@ class TestMethodChaining:
 
         result = (
             _pad(lf)
-            .irb.apply_pd_floor(crr_config)
-            .irb.apply_lgd_floor(crr_config)
-            .irb.calculate_correlation(crr_config)
-            .irb.calculate_k(crr_config)
-            .irb.calculate_maturity_adjustment(crr_config)
-            .irb.calculate_rwa(crr_config)
-            .irb.calculate_expected_loss(crr_config)
+            .pipe(apply_pd_floor, crr_config)
+            .pipe(apply_lgd_floor, crr_config)
+            .pipe(calculate_correlation, crr_config)
+            .pipe(calculate_k, crr_config)
+            .pipe(calculate_maturity_adjustment, crr_config)
+            .pipe(calculate_rwa, crr_config)
+            .pipe(calculate_expected_loss, crr_config)
             .collect()
         )
 
@@ -745,17 +756,17 @@ class TestMethodChaining:
 
 
 # =============================================================================
-# Expression Namespace Tests
+# Expression Function Tests
 # =============================================================================
 
 
-class TestExprNamespace:
-    """Tests for expression namespace methods."""
+class TestExprFunctions:
+    """Tests for expression-level transform functions."""
 
     def test_floor_pd(self) -> None:
         """floor_pd should apply PD floor."""
         df = pl.DataFrame({"pd": [0.0001, 0.01, 0.05]})
-        result = df.with_columns(pl.col("pd").irb.floor_pd(0.0003).alias("pd_floored"))
+        result = df.with_columns(pl.col("pd").pipe(floor_pd, 0.0003).alias("pd_floored"))
 
         assert result["pd_floored"][0] == pytest.approx(0.0003)
         assert result["pd_floored"][1] == pytest.approx(0.01)
@@ -764,7 +775,7 @@ class TestExprNamespace:
     def test_floor_lgd(self) -> None:
         """floor_lgd should apply LGD floor."""
         df = pl.DataFrame({"lgd": [0.10, 0.25, 0.45]})
-        result = df.with_columns(pl.col("lgd").irb.floor_lgd(0.25).alias("lgd_floored"))
+        result = df.with_columns(pl.col("lgd").pipe(floor_lgd, 0.25).alias("lgd_floored"))
 
         assert result["lgd_floored"][0] == pytest.approx(0.25)
         assert result["lgd_floored"][1] == pytest.approx(0.25)
@@ -774,7 +785,7 @@ class TestExprNamespace:
         """clip_maturity should apply floor and cap."""
         df = pl.DataFrame({"maturity": [0.5, 2.5, 10.0]})
         result = df.with_columns(
-            pl.col("maturity").irb.clip_maturity(floor=1.0, cap=5.0).alias("maturity_clipped")
+            pl.col("maturity").pipe(clip_maturity, floor=1.0, cap=5.0).alias("maturity_clipped")
         )
 
         assert result["maturity_clipped"][0] == pytest.approx(1.0)  # Floored
@@ -795,7 +806,9 @@ class TestOutputMethods:
     ) -> None:
         """select_expected_loss should return EL columns only."""
         result = (
-            basic_lazyframe.irb.apply_all_formulas(crr_config).irb.select_expected_loss().collect()
+            basic_lazyframe.pipe(apply_all_formulas, crr_config)
+            .pipe(select_expected_loss)
+            .collect()
         )
 
         expected_cols = ["exposure_reference", "pd", "lgd", "ead", "expected_loss"]
@@ -805,7 +818,7 @@ class TestOutputMethods:
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """build_audit should include calculation string."""
-        result = basic_lazyframe.irb.apply_all_formulas(crr_config).irb.build_audit().collect()
+        result = basic_lazyframe.pipe(apply_all_formulas, crr_config).pipe(build_audit).collect()
 
         assert "irb_calculation" in result.columns
         calc_str = result["irb_calculation"][0]
@@ -822,12 +835,12 @@ class TestOutputMethods:
 
 
 class TestBackwardCompatibility:
-    """Tests to ensure namespace produces same results as existing functions."""
+    """Tests to ensure the transforms produce same results as existing functions."""
 
     def test_matches_apply_irb_formulas_function(
         self, basic_lazyframe: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
-        """Namespace results should match apply_irb_formulas function."""
+        """Transform results should match apply_irb_formulas function."""
         from rwa_calc.engine.irb.formulas import apply_irb_formulas
 
         # Add turnover_m for correlation calculation
@@ -836,8 +849,8 @@ class TestBackwardCompatibility:
         # Using existing function
         result_function = apply_irb_formulas(lf, crr_config).collect()
 
-        # Using namespace
-        result_namespace = lf.irb.apply_all_formulas(crr_config).collect()
+        # Using the transforms
+        result_namespace = lf.pipe(apply_all_formulas, crr_config).collect()
 
         # Compare key columns
         for col in ["pd_floored", "lgd_floored", "correlation", "k", "rwa", "expected_loss"]:
@@ -874,7 +887,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # With 100% sovereign CQS 1 guarantee, RWA should be 0
         assert result["rwa"][0] == pytest.approx(0.0)
@@ -901,7 +914,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Blended RWA = (unguaranteed_portion / ead) * irb_rwa + guaranteed_portion * guarantor_rw
         # = (500k / 1m) * 100k + 500k * 0.0 = 50k
@@ -927,7 +940,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # RWA should remain unchanged
         assert result["rwa"][0] == pytest.approx(100_000.0)
@@ -956,7 +969,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # With 100% sovereign CQS 2 guarantee: RWA = 1m * 0.20 = 200k
         # Guarantee is beneficial (20% < 50%), so it IS applied
@@ -988,7 +1001,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Guarantee is beneficial (20% < 50%), so it IS applied
         assert result["rwa"][0] == pytest.approx(200_000.0)
@@ -1018,7 +1031,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # CRR: 50% for institution CQS 2; guarantee is beneficial (50% < 80%)
         assert result["rwa"][0] == pytest.approx(500_000.0)
@@ -1041,7 +1054,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Should return unchanged
         assert result["rwa"][0] == pytest.approx(100_000.0)
@@ -1066,7 +1079,7 @@ class TestApplyGuaranteeSubstitution:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Should have original values stored
         assert "rwa_irb_original" in result.columns
@@ -1100,7 +1113,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1114,7 +1127,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(38_750.0)
@@ -1128,7 +1141,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [25_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1142,7 +1155,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [0.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1156,7 +1169,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [5_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(5_000.0)
@@ -1170,7 +1183,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0, 50_000.0, 20_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         # EXP001: shortfall = 15k, excess = 0
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
@@ -1190,7 +1203,7 @@ class TestELShortfallExcess:
                 "expected_loss": [10_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1203,7 +1216,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [10_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1222,7 +1235,7 @@ class TestELShortfallExcess:
                 "provision_allocated": pl.Float64,
             },
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(5_000.0)
@@ -1241,7 +1254,7 @@ class TestELShortfallExcess:
                 "provision_allocated": pl.Float64,
             },
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1255,7 +1268,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(15_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1269,7 +1282,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(38_750.0)
@@ -1283,7 +1296,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [30_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(10_000.0)
         assert result["el_excess"][0] == pytest.approx(0.0)
@@ -1297,7 +1310,7 @@ class TestELShortfallExcess:
                 "provision_allocated": [50_000.0],
             }
         )
-        result = _pad(lf).irb.compute_el_shortfall_excess().collect()
+        result = _pad(lf).pipe(compute_el_shortfall_excess).collect()
 
         assert result["el_shortfall"][0] == pytest.approx(0.0)
         assert result["el_excess"][0] == pytest.approx(40_000.0)

@@ -74,10 +74,17 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 — registers lf.irb namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    apply_firb_lgd,
+    apply_guarantee_substitution,
+    classify_approach,
+    compute_el_shortfall_excess,
+    prepare_columns,
+)
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.p1_160.p1_160 import (
     AMOUNT_COVERED,
@@ -157,9 +164,9 @@ def _build_p1160_crm_and_irb_result(
           original_maturity_years=5.0, 100% coverage
 
     Act:
-        processor.apply_guarantees → .irb.classify_approach → .irb.apply_firb_lgd
-        → .irb.prepare_columns → .irb.apply_all_formulas → .irb.compute_el_shortfall_excess
-        → .irb.apply_guarantee_substitution
+        processor.apply_guarantees → classify_approach → apply_firb_lgd
+        → prepare_columns → apply_all_formulas → compute_el_shortfall_excess
+        → apply_guarantee_substitution (IRB transforms)
 
     Returns:
         Collected DataFrame with IRB guarantee substitution results.
@@ -238,12 +245,12 @@ def _build_p1160_crm_and_irb_result(
     # IRB pipeline: classify → F-IRB LGD → prepare → formulas → EL → guarantee sub
     result = (
         _pad(exposures_with_guarantee)
-        .irb.classify_approach(config)
-        .irb.apply_firb_lgd(config)
-        .irb.prepare_columns(config)
-        .irb.apply_all_formulas(config)
-        .irb.compute_el_shortfall_excess()
-        .irb.apply_guarantee_substitution(config)
+        .pipe(classify_approach, config)
+        .pipe(apply_firb_lgd, config)
+        .pipe(prepare_columns, config)
+        .pipe(apply_all_formulas, config)
+        .pipe(compute_el_shortfall_excess)
+        .pipe(apply_guarantee_substitution, config)
     )
 
     return result.collect()

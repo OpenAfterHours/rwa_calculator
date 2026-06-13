@@ -16,8 +16,14 @@ import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
-import rwa_calc.engine.irb.namespace  # noqa: F401 - Register namespace
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.engine.irb.transforms import (
+    apply_all_formulas,
+    apply_firb_lgd,
+    apply_guarantee_substitution,
+    prepare_columns,
+    select_expected_loss,
+)
 
 
 @pytest.fixture
@@ -50,7 +56,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(0.0)
@@ -78,7 +84,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         # EL should be 40% of original: 4500 * 0.4 = 1800
@@ -105,7 +111,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["expected_loss_irb_original"][0] == pytest.approx(4_500.0)
         assert result["expected_loss"][0] == pytest.approx(4_500.0)
@@ -131,7 +137,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         assert result["is_guarantee_beneficial"][0] is False
         assert result["expected_loss"][0] == pytest.approx(450.0)
@@ -162,7 +168,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # EL = guarantor_PD(0.005) × LGD_senior(0.45 CRR) × guaranteed(1M) + 0
         # = 2,250.0
@@ -191,7 +197,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Without guarantor_pd, IRB guarantor EL remains unchanged
         assert result["expected_loss"][0] == pytest.approx(4_500.0)
@@ -218,7 +224,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Unguaranteed EL = 4500 × (400K / 1M) = 1,800
         # Guaranteed EL = 0.002 × 0.45 × 600K = 540
@@ -248,7 +254,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # PD floored to 0.0003 (CRR 0.03%)
         # EL = 0.0003 × 0.45 × 1M = 135.0
@@ -274,7 +280,7 @@ class TestELGuaranteeAdjustment:
             }
         )
 
-        result = lf.irb.apply_guarantee_substitution(crr_config).collect()
+        result = lf.pipe(apply_guarantee_substitution, crr_config).collect()
 
         # Should not fail; no expected_loss columns created
         assert "expected_loss" not in result.columns
@@ -301,9 +307,9 @@ class TestELGuaranteeAdjustment:
         # Run full pipeline then guarantee substitution
         result_pre = (
             _pad(lf)
-            .irb.apply_firb_lgd(crr_config)
-            .irb.prepare_columns(crr_config)
-            .irb.apply_all_formulas(crr_config)
+            .pipe(apply_firb_lgd, crr_config)
+            .pipe(prepare_columns, crr_config)
+            .pipe(apply_all_formulas, crr_config)
         )
 
         # Get original EL
@@ -319,7 +325,7 @@ class TestELGuaranteeAdjustment:
                 pl.lit(1).cast(pl.Int64).alias("guarantor_cqs"),
                 pl.lit("sa").alias("guarantor_approach"),
             ]
-        ).irb.apply_guarantee_substitution(crr_config)
+        ).pipe(apply_guarantee_substitution, crr_config)
 
-        el_result = result_with_guarantee.irb.select_expected_loss().collect()
+        el_result = result_with_guarantee.pipe(select_expected_loss).collect()
         assert el_result["expected_loss"][0] == pytest.approx(0.0)

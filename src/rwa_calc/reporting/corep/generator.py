@@ -35,7 +35,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
 from watchfire import cites
@@ -104,6 +104,9 @@ from rwa_calc.reporting.kernel import (
 )
 
 if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
+    from xlsxwriter import Workbook
+
     from rwa_calc.api.models import CalculationResponse
     from rwa_calc.contracts.bundles import OutputFloorSummary
     from rwa_calc.contracts.config import OutputFloorConfig
@@ -370,7 +373,7 @@ class COREPGenerator:
             row_count=total_rows,
         )
 
-    def _export_all_template_sheets(self, workbook: object, bundle: COREPTemplateBundle) -> int:
+    def _export_all_template_sheets(self, workbook: Workbook, bundle: COREPTemplateBundle) -> int:
         """Dispatch all per-template writers for ``bundle`` to ``workbook``.
 
         Returns the total row count written. Encapsulates the 8 per-class
@@ -429,7 +432,7 @@ class COREPGenerator:
 
     @staticmethod
     def _write_template_sheets(
-        workbook: object,
+        workbook: Workbook,
         templates: dict[str, pl.DataFrame],
         prefix: str,
         class_names: dict[str, tuple[str, str]],
@@ -447,7 +450,7 @@ class COREPGenerator:
 
     @staticmethod
     def _write_single_template_sheet(
-        workbook: object,
+        workbook: Workbook,
         df: pl.DataFrame,
         sheet_name: str,
     ) -> int:
@@ -460,7 +463,7 @@ class COREPGenerator:
 
     @staticmethod
     def _write_geo_template_sheets(
-        workbook: object,
+        workbook: Workbook,
         templates: dict[str, pl.DataFrame],
         prefix: str,
     ) -> int:
@@ -584,7 +587,7 @@ class COREPGenerator:
 
             rows.append({"row_ref": row_ref, "row_name": row_name, **values})
 
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -731,7 +734,7 @@ class COREPGenerator:
                     # CCR, CVA, securitisation, market, op risk, other — out of scope
                     rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.Float64
 
@@ -890,7 +893,7 @@ class COREPGenerator:
         rows = _c02_00_build_rows(row_values, row_sections, column_refs)
 
         # Schema: String for refs/names, Float64 for data columns
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.Float64
 
@@ -1147,7 +1150,7 @@ class COREPGenerator:
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.Float64
 
@@ -1254,7 +1257,7 @@ class COREPGenerator:
             else:
                 rows.append(_null_row(row_def.ref, row_def.name, column_refs))
 
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.Float64
 
@@ -1388,7 +1391,7 @@ class COREPGenerator:
         for row_def in row_sections[4].rows:
             _emit_subset_row(row_def, _c07_section5_subset(row_def.ref, class_data, cols))
 
-        schema: dict[str, pl.DataType] = {
+        schema: dict[str, PolarsDataType] = {
             "row_ref": pl.String,
             "row_name": pl.String,
         }
@@ -1495,7 +1498,7 @@ class COREPGenerator:
                 _filter_section3_row(class_data, cols, row_def.ref, approach_col, framework),
             )
 
-        schema: dict[str, pl.DataType] = {
+        schema: dict[str, PolarsDataType] = {
             "row_ref": pl.String,
             "row_name": pl.String,
         }
@@ -1661,7 +1664,7 @@ class COREPGenerator:
         Float64. Returns an empty, correctly-typed frame when ``rows`` is empty.
         """
         if not rows:
-            empty_schema: dict[str, pl.DataType] = {
+            empty_schema: dict[str, PolarsDataType] = {
                 "row_ref": pl.String,
                 "row_name": pl.String,
             }
@@ -1669,7 +1672,7 @@ class COREPGenerator:
             return pl.DataFrame(schema=empty_schema)
 
         # Infer schema from column defs — 0005 is String, rest are Float64
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         for ref in column_refs:
             schema[ref] = pl.String if ref == "0005" else pl.Float64
 
@@ -1812,11 +1815,11 @@ class COREPGenerator:
             rows.append({"row_ref": "9999", "row_name": "Unassigned", **values})
 
         if not rows:
-            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
             schema.update(dict.fromkeys(column_refs, pl.Float64))
             return pl.DataFrame(schema=schema)
 
-        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -1920,7 +1923,7 @@ class COREPGenerator:
                 values = {"0010": None}
             rows.append({"row_ref": row_def.ref, "row_name": row_def.name, **values})
 
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -2050,11 +2053,11 @@ class COREPGenerator:
             rows.append({"row_ref": "9999", "row_name": "Unassigned", **values})
 
         if not rows:
-            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
             schema.update(dict.fromkeys(column_refs, pl.Float64))
             return pl.DataFrame(schema=schema)
 
-        schema = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -2206,11 +2209,11 @@ class COREPGenerator:
             rows.append({"row_ref": row_ref, "row_name": category_label, **values})
 
         if not rows:
-            schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+            schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
             schema.update(dict.fromkeys(column_refs, pl.Float64))
             return pl.DataFrame(schema=schema)
 
-        schema: dict[str, pl.DataType] = {"row_ref": pl.String, "row_name": pl.String}
+        schema: dict[str, PolarsDataType] = {"row_ref": pl.String, "row_name": pl.String}
         schema.update(dict.fromkeys(column_refs, pl.Float64))
         return pl.DataFrame(rows, schema=schema)
 
@@ -2253,7 +2256,7 @@ _C07_MEMO_RE_SECURED: dict[str, str] = {"0290": "commercial", "0310": "residenti
 
 # Maps row refs to _filter_re() kwargs. Each entry defines the filter criteria
 # for a real estate "of which" row in B3.1 Section 1.
-_RE_ROW_FILTERS: dict[str, dict[str, object]] = {
+_RE_ROW_FILTERS: dict[str, dict[str, Any]] = {
     # Regulatory residential RE (CRE20.71-82)
     "0330": {"property_type": "residential"},
     "0331": {"property_type": "residential", "materially_dependent": False},
@@ -2278,7 +2281,7 @@ _RE_ROW_FILTERS: dict[str, dict[str, object]] = {
 # EQUITY TRANSITIONAL ROW CONFIGURATION (Basel 3.1 OF 07.00 rows 0371-0374)
 # =============================================================================
 
-_EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, object]] = {
+_EQUITY_TRANSITIONAL_FILTERS: dict[str, dict[str, Any]] = {
     "0371": {"approach": "sa_transitional", "higher_risk": True},
     "0372": {"approach": "sa_transitional", "higher_risk": False},
     "0373": {"approach": "irb_transitional", "higher_risk": True},
@@ -3398,7 +3401,7 @@ def _compute_c08_values(
     column_refs: list[str],
     *,
     substitution_inflow: float = 0.0,
-) -> dict[str, float | None]:
+) -> dict[str, float | str | None]:
     """Compute C 08.01/08.02 column values from a data subset.
 
     Maps pipeline columns to 4-digit COREP column refs. Weighted averages
@@ -3700,7 +3703,7 @@ def _compute_c08_05_values(
     # Best-effort: use current observed default rate when multi-year data absent
     hist_rate_col = _pick(cols, "historical_annual_default_rate")
     if hist_rate_col is not None and n_rows > 0:
-        values["0050"] = float(data[hist_rate_col].fill_null(0.0).mean())
+        values["0050"] = float(cast("float", data[hist_rate_col].fill_null(0.0).mean()))
     else:
         # Fall back to current observed rate as single-period approximation
         values["0050"] = values["0040"]
@@ -4376,7 +4379,7 @@ def _weighted_avg_or_mean(
         weighted = float((data[value_col].fill_null(0.0) * data[weight_col].fill_null(0.0)).sum())
         return weighted / weight_sum
     vals = data[value_col].drop_nulls()
-    return float(vals.mean()) if len(vals) > 0 else None
+    return float(cast("float", vals.mean())) if len(vals) > 0 else None
 
 
 def _c09_02_pd_lgd_weighted(
@@ -4596,7 +4599,7 @@ def _c02_00_sa_rows(
         if ec_value in sa_class_rwa:
             if row_ref not in row_values:
                 row_values[row_ref] = {"0010": 0.0}
-            existing = float(row_values[row_ref].get("0010", 0.0) or 0.0)
+            existing = float(cast("float", row_values[row_ref].get("0010", 0.0) or 0.0))
             row_values[row_ref]["0010"] = existing + sa_class_rwa[ec_value]
 
     if is_b31 and "specialised_lending" in sa_class_rwa:

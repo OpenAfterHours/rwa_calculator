@@ -28,7 +28,7 @@ import pytest
 
 import rwa_calc.data.tables.crr_risk_weights as _crr_mod
 from rwa_calc.data.tables.crr_risk_weights import INSTITUTION_RISK_WEIGHTS_CRR
-from rwa_calc.engine.sa.namespace import _crr_unrated_cb_rw_expr
+from rwa_calc.engine.sa.risk_weights import _crr_unrated_cb_rw_expr
 
 
 def _get_crr_table() -> dict:

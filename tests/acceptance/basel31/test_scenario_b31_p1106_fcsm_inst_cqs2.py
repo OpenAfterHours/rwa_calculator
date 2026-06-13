@@ -32,13 +32,13 @@ from datetime import date
 import polars as pl
 import pytest
 
-import rwa_calc.engine.sa.namespace  # noqa: F401 — register sa namespace
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import CRMCollateralMethod
 from rwa_calc.engine.crm.simple_method import (
     _derive_collateral_rw_expr,
     compute_fcsm_columns,
 )
+from rwa_calc.engine.sa.rw_adjustments import apply_fcsm_rw_substitution
 
 # =============================================================================
 # Shared test data builders
@@ -208,7 +208,7 @@ class TestB31FCSMInstCQS2:
         )
 
         # Act
-        result = exposures_with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config).collect()
+        result = exposures_with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config).collect()
 
         # Assert
         assert result["risk_weight"][0] == pytest.approx(0.65, abs=1e-6), (
@@ -229,7 +229,7 @@ class TestB31FCSMInstCQS2:
 
         # Act — derive FCSM columns then apply SA substitution
         with_fcsm = compute_fcsm_columns(exposures, collateral, b31_simple_config)
-        result = with_fcsm.sa.apply_fcsm_rw_substitution(b31_simple_config)
+        result = with_fcsm.pipe(apply_fcsm_rw_substitution, b31_simple_config)
         result = result.with_columns(
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa")
         ).collect()
@@ -320,7 +320,7 @@ class TestCRRFCSMInstCQS2Regression:
 
         # Act
         with_fcsm = compute_fcsm_columns(exposures, collateral, crr_simple_config)
-        result = with_fcsm.sa.apply_fcsm_rw_substitution(crr_simple_config)
+        result = with_fcsm.pipe(apply_fcsm_rw_substitution, crr_simple_config)
         result = result.with_columns(
             (pl.col("ead_final") * pl.col("risk_weight")).alias("rwa")
         ).collect()
@@ -367,7 +367,7 @@ class TestB31CRRFrameworkDivergence:
         def _compute_rwa(cfg: CalculationConfig) -> float:
             with_fcsm = compute_fcsm_columns(exposures, collateral, cfg)
             result = (
-                with_fcsm.sa.apply_fcsm_rw_substitution(cfg)
+                with_fcsm.pipe(apply_fcsm_rw_substitution, cfg)
                 .with_columns((pl.col("ead_final") * pl.col("risk_weight")).alias("rwa"))
                 .collect()
             )

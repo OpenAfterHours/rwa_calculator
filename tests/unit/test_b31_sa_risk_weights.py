@@ -3247,20 +3247,20 @@ class TestCurrencyMismatchMultiplier:
 
         Arrange: Minimal retail_other row with EUR exposure, GBP income currency,
                  base risk_weight=0.75, B31 framework.
-        Act:     Call apply_currency_mismatch_multiplier via the .sa namespace.
+        Act:     Call the apply_currency_mismatch_multiplier transform.
         Assert:
             - risk_weight_pre_currency_mismatch == 0.75 (pre-multiplier base RW)
             - risk_weight == 1.125 (0.75 × 1.5 = post-multiplier RW)
 
         Pre-fix failure: ColumnNotFoundError — the column does not exist yet in
-        the SA namespace output. This is an acceptable RED failure mode (genuine
+        the SA transform output. This is an acceptable RED failure mode (genuine
         missing-column failure, not an ImportError or collection error).
 
         References:
         - PRA PS1/26 Art. 123B: 1.5× currency mismatch multiplier for retail/RE
-        - src/rwa_calc/engine/sa/namespace.py pre_fcsm_risk_weight pattern (line ~1793)
+        - src/rwa_calc/engine/sa/rw_adjustments.py pre_fcsm_risk_weight pattern
         """
-        import rwa_calc.engine.sa.namespace  # noqa: F401 — register .sa namespace
+        from rwa_calc.engine.sa.rw_adjustments import apply_currency_mismatch_multiplier
 
         # Arrange: minimal retail_other frame with currency mismatch
         lf = pl.LazyFrame(
@@ -3275,7 +3275,7 @@ class TestCurrencyMismatchMultiplier:
         )
 
         # Act
-        result_lf = lf.sa.apply_currency_mismatch_multiplier(b31_config)
+        result_lf = apply_currency_mismatch_multiplier(lf, b31_config)
         result = result_lf.collect()
 
         # Assert: post-multiplier risk_weight is correct (prerequisite)

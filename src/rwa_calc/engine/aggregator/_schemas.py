@@ -9,7 +9,12 @@ References:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import polars as pl
+
+if TYPE_CHECKING:
+    from polars._typing import PolarsDataType
 
 # Canonical IRB approach identifiers — union of ApproachType enum values and
 # aggregator fallback labels. Used for EL summary and other IRB-specific logic.
@@ -58,7 +63,7 @@ T2_CREDIT_CAP_RATE = 0.006
 # Empty-frame schemas
 # =============================================================================
 
-RESULT_SCHEMA: dict[str, pl.DataType] = {
+RESULT_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "approach_applied": pl.String,
     "exposure_class": pl.String,
@@ -67,7 +72,7 @@ RESULT_SCHEMA: dict[str, pl.DataType] = {
     "rwa_final": pl.Float64,
 }
 
-FLOOR_IMPACT_SCHEMA: dict[str, pl.DataType] = {
+FLOOR_IMPACT_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "approach_applied": pl.String,
     "exposure_class": pl.String,
@@ -79,7 +84,7 @@ FLOOR_IMPACT_SCHEMA: dict[str, pl.DataType] = {
     "output_floor_pct": pl.Float64,
 }
 
-POST_CRM_DETAILED_SCHEMA: dict[str, pl.DataType] = {
+POST_CRM_DETAILED_SCHEMA: dict[str, PolarsDataType] = {
     "reporting_counterparty": pl.String,
     "reporting_exposure_class": pl.String,
     "reporting_ead": pl.Float64,
@@ -88,21 +93,21 @@ POST_CRM_DETAILED_SCHEMA: dict[str, pl.DataType] = {
     "crm_portion_type": pl.String,
 }
 
-POST_CRM_SUMMARY_SCHEMA: dict[str, pl.DataType] = {
+POST_CRM_SUMMARY_SCHEMA: dict[str, PolarsDataType] = {
     "reporting_exposure_class": pl.String,
     "total_ead": pl.Float64,
     "total_rwa": pl.Float64,
     "exposure_count": pl.UInt32,
 }
 
-PRE_CRM_SUMMARY_SCHEMA: dict[str, pl.DataType] = {
+PRE_CRM_SUMMARY_SCHEMA: dict[str, PolarsDataType] = {
     "pre_crm_exposure_class": pl.String,
     "total_ead": pl.Float64,
     "total_rwa_blended": pl.Float64,
     "exposure_count": pl.UInt32,
 }
 
-SUPPORTING_FACTOR_SCHEMA: dict[str, pl.DataType] = {
+SUPPORTING_FACTOR_SCHEMA: dict[str, PolarsDataType] = {
     "exposure_reference": pl.String,
     "supporting_factor": pl.Float64,
     "rwa_pre_factor": pl.Float64,

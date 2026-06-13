@@ -21,6 +21,7 @@ and efficient memory usage with Polars.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 # (hierarchy_resolved, pure-plan) and re-sealed by the orchestrator after
 # the securitisation attach (hierarchy_exit — also the brand the CCR stage
 # re-applies); either brand is legitimate on the field.
-SEALED_FRAME_FIELDS: dict[str, str | tuple[str, ...]] = {
+SEALED_FRAME_FIELDS: Mapping[str, str | tuple[str, ...]] = {
     "ResolvedHierarchyBundle.exposures": ("hierarchy_resolved", "hierarchy_exit", "ccr_exit"),
     "CounterpartyLookup.counterparties": "cp_lookup_counterparties",
     "CounterpartyLookup.parent_mappings": "cp_lookup_parents",

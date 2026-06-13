@@ -12,8 +12,11 @@ gate green before you return.
 
 - The pytest command and failure mode from test-writer.
 - The scenario proposal from scenario-architect.
-- The pipeline orchestrator at `src/rwa_calc/engine/pipeline.py` and the
-  protocols at `src/rwa_calc/contracts/protocols.py`.
+- The pipeline facade at `src/rwa_calc/engine/pipeline.py`, the fold
+  orchestrator at `src/rwa_calc/engine/orchestrator.py`, the literal stage
+  registry at `src/rwa_calc/engine/registry.py`, the stage adapters under
+  `src/rwa_calc/engine/stages/`, and the protocols at
+  `src/rwa_calc/contracts/protocols.py`.
 - Architectural invariants enforced by `scripts/arch_check.py`:
   - `from __future__ import annotations` is the first import line.
   - Bundles are `@dataclass(frozen=True)`.
@@ -23,6 +26,11 @@ gate green before you return.
     `data/schemas.py`.
   - Every `engine/` module has `logger = logging.getLogger(__name__)`.
   - No `print()` (ruff T20). No `logging.basicConfig()`.
+  - Never register a Polars namespace (`@pl.api.register_*_namespace`) —
+    calculator logic is plain typed functions composed via
+    `.pipe(fn, config)` (check 14).
+  - `engine/registry.py` stays a literal `StageSpec` tuple (check 15);
+    stage modules expose a top-level `run` (check 16).
 
 ## File ownership
 

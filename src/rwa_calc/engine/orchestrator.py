@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         RawDataBundle,
         ResolvedHierarchyBundle,
     )
-    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.config import CalculationConfig, RunConfig
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.contracts.protocols import (
         ClassifierProtocol,
@@ -167,7 +167,7 @@ HALTED: ArtifactKey[str] = ArtifactKey("halted")
 # =============================================================================
 
 if TYPE_CHECKING:
-    StageFn = Callable[[PipelineContext, "RulepackV0", "CalculationConfig"], PipelineContext]
+    StageFn = Callable[[PipelineContext, "RulepackV0", "RunConfig"], PipelineContext]
 
 
 @dataclass(frozen=True)
@@ -194,7 +194,7 @@ class StageSpec:
 def run_stages(
     ctx: PipelineContext,
     rulepack: RulepackV0,
-    run_config: CalculationConfig,
+    run_config: RunConfig,
     stages: Sequence[StageSpec],
 ) -> PipelineContext:
     """Fold the context through the registered stages.

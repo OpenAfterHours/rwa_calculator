@@ -1237,6 +1237,16 @@ class CalculationConfig:
 
 
 # =============================================================================
+# RunConfig (Phase 5 S11) — the canonical name for the per-run configuration.
+# Currently a transparent alias of CalculationConfig (zero behaviour change); in
+# S11e the dataclass is carved into a regime-agnostic RunConfig (zero regulatory
+# values) and the alias direction flips (CalculationConfig = RunConfig back-compat).
+# See .claude/state/phase5-s11-plan.md.
+# =============================================================================
+RunConfig = CalculationConfig
+
+
+# =============================================================================
 # Parallel-run reconciliation configuration
 # =============================================================================
 # Maps an external (legacy) calculator's output columns onto our canonical

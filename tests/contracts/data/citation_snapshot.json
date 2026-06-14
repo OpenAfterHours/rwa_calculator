@@ -44,12 +44,6 @@
     "CRR Art. 114",
     "CRR Art. 141"
   ],
-  "rwa_calc.data.tables.firb_lgd::get_firb_lgd_table": [
-    "CRR Art. 161"
-  ],
-  "rwa_calc.data.tables.firb_lgd::get_firb_lgd_table_for_framework": [
-    "CRR Art. 161"
-  ],
   "rwa_calc.data.tables.guarantor_rw::build_entity_rw_expr": [
     "CRR Art. 114",
     "CRR Art. 115",

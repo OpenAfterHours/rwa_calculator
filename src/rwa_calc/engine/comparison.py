@@ -55,9 +55,9 @@ from rwa_calc.contracts.bundles import (
     ComparisonBundle,
     TransitionalScheduleBundle,
 )
-from rwa_calc.data.tables.firb_lgd import CRR_K_SCALING_FACTOR as _CRR_K_SCALING_FACTOR_DECIMAL
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
@@ -159,9 +159,9 @@ class DualFrameworkRunner:
 _IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB"]
 
 # CRR scaling factor for IRB RWA (CRR Art. 153(1)). The Decimal value is the
-# canonical regulatory constant in data/tables/; comparison math runs in float
-# space, so it's converted once at import time.
-_CRR_SCALING_FACTOR: float = float(_CRR_K_SCALING_FACTOR_DECIMAL)
+# canonical regulatory constant in the rulepack; comparison math runs in float
+# space, so it's resolved and converted once at import time.
+_CRR_SCALING_FACTOR: float = float(resolve("crr", date(2026, 1, 1)).scalar("irb_scaling_factor"))
 
 # Attribution driver labels for the portfolio waterfall
 _DRIVER_SCALING = "Scaling factor removal (1.06x)"

@@ -16,16 +16,19 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework, lookup_firb_lgd
 from rwa_calc.engine.equity.calculator import EquityCalculator
 from rwa_calc.engine.irb.calculator import IRBCalculator
+from rwa_calc.engine.irb.formulas import firb_supervisory_lgd_values
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
+from rwa_calc.rulebook.resolve import resolve
+from rwa_calc.rulebook.v0 import RulepackV0
 
 
 def calculate_single_sa_exposure(
@@ -184,11 +187,11 @@ def calculate_single_irb_exposure(
     # LGD for the collateral type when secured, the own/supervisory
     # unsecured LGD otherwise (F-IRB reads lgd_post_crm as lgd_input).
     if collateral_type is not None:
-        data["lgd_post_crm"] = [float(lookup_firb_lgd(collateral_type, is_subordinated))]
+        data["lgd_post_crm"] = [_firb_secured_lgd(collateral_type, is_subordinated)]
     elif lgd is not None:
         data["lgd_post_crm"] = [float(lgd)]
     else:
-        table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
+        table = firb_supervisory_lgd_values(RulepackV0.from_config(config).pack)
         data["lgd_post_crm"] = [
             float(table["subordinated" if is_subordinated else "unsecured_senior"])
         ]
@@ -279,3 +282,53 @@ def calculate_single_slotting_exposure(
     df = pl.DataFrame(data, schema_overrides={"maturity_date": pl.Date}).lazy()
 
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]
+
+
+# F-IRB secured-collateral LGD key routing — ported verbatim from the former
+# data/tables/firb_lgd.py::lookup_firb_lgd (CRR branch, is_basel_3_1=False,
+# non-FSE). The CRR supervisory-LGD values now live in the rulepack; this helper
+# routes a collateral_type/seniority to the projected CRR FIRB-dict key and
+# returns the LGD as a float, reproducing lookup_firb_lgd's behaviour exactly so
+# lgd_post_crm stays byte-identical.
+def _firb_secured_lgd(collateral_type: str, is_subordinated: bool) -> float:
+    # The secured branch always used the CRR table (lookup_firb_lgd default
+    # is_basel_3_1=False), so resolve the CRR pack explicitly.
+    table = firb_supervisory_lgd_values(resolve("crr", date(2026, 1, 1)))
+
+    coll_lower = collateral_type.lower()
+
+    # CRR Art. 230 Table 5 subordinated LGDS for the secured portion.
+    sub_suffix = "_subordinated" if is_subordinated else ""
+
+    # Covered bonds — Art. 161(1)(d), no subordinated distinction
+    if coll_lower in ("covered_bond", "covered_bonds"):
+        return float(table["covered_bond"])
+
+    if coll_lower in ("financial_collateral", "cash", "deposit", "gold"):
+        key = f"financial_collateral{sub_suffix}"
+        return float(table.get(key, table["financial_collateral"]))
+
+    if coll_lower in ("receivables", "trade_receivables"):
+        key = f"receivables{sub_suffix}"
+        return float(table.get(key, table["receivables"]))
+
+    if coll_lower in ("residential_re", "rre", "residential"):
+        key = f"residential_re{sub_suffix}"
+        return float(table.get(key, table["residential_re"]))
+
+    if coll_lower in ("commercial_re", "cre", "commercial"):
+        key = f"commercial_re{sub_suffix}"
+        return float(table.get(key, table["commercial_re"]))
+
+    if coll_lower in ("real_estate", "property"):
+        key = f"residential_re{sub_suffix}"
+        return float(table.get(key, table["residential_re"]))
+
+    if coll_lower in ("other_physical", "equipment", "inventory"):
+        key = f"other_physical{sub_suffix}"
+        return float(table.get(key, table["other_physical"]))
+
+    # Unknown — treat as unsecured
+    if is_subordinated:
+        return float(table["subordinated"])
+    return float(table["unsecured_senior"])

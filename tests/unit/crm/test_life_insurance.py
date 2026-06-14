@@ -17,10 +17,6 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.crm_supervisory import (
-    BASEL31_SUPERVISORY_LGD,
-    CRR_SUPERVISORY_LGD,
-)
 from rwa_calc.engine.crm.expressions import (
     WATERFALL_ORDER,
     collateral_category_expr,
@@ -46,13 +42,35 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 
 
 def test_supervisory_lgd_values_crr_projection_byte_identical() -> None:
-    # Assert — the canonical DecisionTable projects to the exact CRR CRM-shape dict
-    assert supervisory_lgd_values(_CRR_PACK) == CRR_SUPERVISORY_LGD
+    # Assert — the canonical DecisionTable projects to the exact CRR CRM-shape
+    # dict (literal pin of the former data/tables CRR_SUPERVISORY_LGD).
+    assert supervisory_lgd_values(_CRR_PACK) == {
+        "financial": 0.0,
+        "receivables": 0.35,
+        "real_estate": 0.35,
+        "other_physical": 0.40,
+        "unsecured": 0.45,
+        "covered_bond": 0.1125,
+        "life_insurance": 0.40,
+        "receivables_subordinated": 0.65,
+        "real_estate_subordinated": 0.65,
+        "other_physical_subordinated": 0.70,
+    }
 
 
 def test_supervisory_lgd_values_b31_projection_byte_identical() -> None:
-    # Assert — and to the exact Basel 3.1 CRM-shape dict (the flagged collapse)
-    assert supervisory_lgd_values(_B31_PACK) == BASEL31_SUPERVISORY_LGD
+    # Assert — and to the exact Basel 3.1 CRM-shape dict (the flagged collapse;
+    # literal pin of the former data/tables BASEL31_SUPERVISORY_LGD).
+    assert supervisory_lgd_values(_B31_PACK) == {
+        "financial": 0.0,
+        "receivables": 0.20,
+        "real_estate": 0.20,
+        "other_physical": 0.25,
+        "unsecured": 0.40,
+        "unsecured_fse": 0.45,
+        "covered_bond": 0.1125,
+        "life_insurance": 0.40,
+    }
 
 
 # --- Art. 232: Risk Weight Mapping Table ---
@@ -219,10 +237,10 @@ class TestLifeInsuranceConstants:
         assert "li" in suffixes, "Life insurance missing from WATERFALL_ORDER"
 
     def test_life_insurance_lgds_crr_is_40pct(self) -> None:
-        assert CRR_SUPERVISORY_LGD["life_insurance"] == pytest.approx(0.40)
+        assert supervisory_lgd_values(_CRR_PACK)["life_insurance"] == pytest.approx(0.40)
 
     def test_life_insurance_lgds_b31_is_40pct(self) -> None:
-        assert BASEL31_SUPERVISORY_LGD["life_insurance"] == pytest.approx(0.40)
+        assert supervisory_lgd_values(_B31_PACK)["life_insurance"] == pytest.approx(0.40)
 
     def test_collateral_lgd_expr_maps_life_insurance(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()

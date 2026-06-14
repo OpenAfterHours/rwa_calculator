@@ -101,7 +101,7 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     "engine/aggregator/_floor.py": {"GCRA_CAP_RATE"},
     # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
     _PATH_AGGREGATOR_SCHEMAS: {"T2_CREDIT_CAP_RATE"},
-    # float alias of imported CRR_K_SCALING_FACTOR Decimal (PR #248)
+    # float alias of resolve(...).scalar("irb_scaling_factor") Decimal (PR #248)
     _PATH_COMPARISON: {"_CRR_SCALING_FACTOR"},
     "engine/equity/calculator.py": {
         "_CIU_THIRD_PARTY_MULTIPLIER",  # Art. 132b(2) 20% uplift multiplier

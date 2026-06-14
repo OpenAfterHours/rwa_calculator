@@ -26,16 +26,13 @@ from __future__ import annotations
 
 import math
 from datetime import date
+from decimal import Decimal
 
 import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.firb_lgd import (
-    BASEL31_FIRB_SUPERVISORY_LGD,
-    FIRB_SUPERVISORY_LGD,
-)
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.crm.expressions import subordinated_unsecured_lgd
 from rwa_calc.engine.irb.formulas import (
@@ -72,13 +69,45 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 
 
 def test_firb_supervisory_lgd_values_crr_projection_byte_identical() -> None:
-    # Act / Assert — the pack projection reproduces the CRR FIRB dict exactly
-    assert firb_supervisory_lgd_values(_CRR_PACK) == FIRB_SUPERVISORY_LGD
+    # Act / Assert — the pack projection reproduces the canonical CRR FIRB dict
+    # exactly (literal pin of the former data/tables FIRB_SUPERVISORY_LGD).
+    assert firb_supervisory_lgd_values(_CRR_PACK) == {
+        "unsecured_senior": Decimal("0.45"),
+        "subordinated": Decimal("0.75"),
+        "covered_bond": Decimal("0.1125"),
+        "financial_collateral": Decimal("0.00"),
+        "receivables": Decimal("0.35"),
+        "residential_re": Decimal("0.35"),
+        "commercial_re": Decimal("0.35"),
+        "other_physical": Decimal("0.40"),
+        "financial_collateral_subordinated": Decimal("0.00"),
+        "receivables_subordinated": Decimal("0.65"),
+        "residential_re_subordinated": Decimal("0.65"),
+        "commercial_re_subordinated": Decimal("0.65"),
+        "other_physical_subordinated": Decimal("0.70"),
+        "purchased_receivables_senior": Decimal("0.45"),
+        "purchased_receivables_subordinated": Decimal("1.00"),
+        "dilution_risk": Decimal("0.75"),
+    }
 
 
 def test_firb_supervisory_lgd_values_b31_projection_byte_identical() -> None:
-    # Act / Assert — and the Basel 3.1 FIRB dict exactly
-    assert firb_supervisory_lgd_values(_B31_PACK) == BASEL31_FIRB_SUPERVISORY_LGD
+    # Act / Assert — and the canonical Basel 3.1 FIRB dict exactly (literal pin
+    # of the former data/tables BASEL31_FIRB_SUPERVISORY_LGD).
+    assert firb_supervisory_lgd_values(_B31_PACK) == {
+        "unsecured_senior": Decimal("0.40"),
+        "unsecured_senior_fse": Decimal("0.45"),
+        "subordinated": Decimal("0.75"),
+        "covered_bond": Decimal("0.1125"),
+        "financial_collateral": Decimal("0.00"),
+        "receivables": Decimal("0.20"),
+        "residential_re": Decimal("0.20"),
+        "commercial_re": Decimal("0.20"),
+        "other_physical": Decimal("0.25"),
+        "purchased_receivables_senior": Decimal("0.40"),
+        "purchased_receivables_subordinated": Decimal("1.00"),
+        "dilution_risk": Decimal("1.00"),
+    }
 
 
 def test_subordinated_unsecured_lgd_is_regime_invariant_075() -> None:

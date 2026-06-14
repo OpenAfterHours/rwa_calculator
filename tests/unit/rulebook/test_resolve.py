@@ -10,10 +10,6 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from rwa_calc.data.tables.crm_supervisory import (
-    MIN_COLLATERALISATION_THRESHOLDS,
-    OVERCOLLATERALISATION_RATIOS,
-)
 from rwa_calc.data.tables.haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT, get_haircut_table
 from rwa_calc.rulebook.compile import decision_table_df
 from rwa_calc.rulebook.model import LookupTable, ScalarParam
@@ -68,16 +64,32 @@ def test_scalar_param_returns_typed_entry() -> None:
 
 
 def test_overcollateralisation_ratios_resolve_byte_identical() -> None:
-    # Act / Assert — the common-pack lookup reproduces the data/tables floats
+    # Act / Assert — the common-pack lookup reproduces the canonical floats
+    # (literal pin of the former data/tables OVERCOLLATERALISATION_RATIOS).
+    expected = {
+        "financial": 1.0,
+        "receivables": 1.25,
+        "real_estate": 1.40,
+        "other_physical": 1.40,
+        "life_insurance": 1.0,
+    }
     entries = resolve("crr", date(2026, 1, 1)).lookup("overcollateralisation_ratios").entries
-    for category, ratio in OVERCOLLATERALISATION_RATIOS.items():
+    for category, ratio in expected.items():
         assert float(entries[category]) == ratio
 
 
 def test_min_collateralisation_thresholds_resolve_byte_identical() -> None:
-    # Act / Assert
+    # Act / Assert — literal pin of the former data/tables
+    # MIN_COLLATERALISATION_THRESHOLDS.
+    expected = {
+        "financial": 0.0,
+        "receivables": 0.0,
+        "real_estate": 0.30,
+        "other_physical": 0.30,
+        "life_insurance": 0.0,
+    }
     entries = resolve("crr", date(2026, 1, 1)).lookup("min_collateralisation_thresholds").entries
-    for category, threshold in MIN_COLLATERALISATION_THRESHOLDS.items():
+    for category, threshold in expected.items():
         assert float(entries[category]) == threshold
 
 

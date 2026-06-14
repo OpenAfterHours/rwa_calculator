@@ -62,9 +62,8 @@ def firb_supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, Decimal]:
     The IRB analog of ``engine/crm/expressions.py::supervisory_lgd_values``: it
     reads the per-run ``firb_supervisory_lgd`` DecisionTable — keyed by
     ``(collateral_type, seniority, is_fse)`` — into the flat key shape the IRB
-    transforms and guarantee substitution consume, reproducing
-    ``data/tables/firb_lgd.py``'s FIRB_SUPERVISORY_LGD /
-    BASEL31_FIRB_SUPERVISORY_LGD exactly (pinned). The FSE senior split appears
+    transforms and guarantee substitution consume, reproducing the canonical
+    ``firb_supervisory_lgd`` pack table exactly (pinned). The FSE senior split appears
     only where the regime distinguishes it (Basel 3.1 Art. 161(1)(a) vs (aa));
     the Art. 230 Table 5 subordinated secured-portion LGDS appear only where the
     regime carries them (CRR — dropped under Basel 3.1 Art. 230(2)). Values stay

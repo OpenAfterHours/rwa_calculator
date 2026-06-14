@@ -249,6 +249,13 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "166D(5)", "A-IRB EAD floor tests (on-BS + 50% off-BS)"),
     ),
+    # SA CCF table selection: Basel 3.1 Table A1 (OC 40%, LR 10%) vs the CRR Annex I
+    # table. Overrides the CRR Feature; gates the provisions pro-rata weighting basis.
+    "sa_revised_ccf_table": Feature(
+        name="sa_revised_ccf_table",
+        enabled=True,
+        citation=Citation("PS1/26", "111(1)", "Basel 3.1 revised SA CCF table (Table A1)"),
+    ),
     # SA-CCR transitional alpha add-on (PRA PS1/26 Art. 274(2A)): Basel-3.1-only
     # phase-in (2027-2029) of the α=1.4 uplift for legacy CVA-exempt non-financial
     # counterparties carved out to α=1.0. Overrides the CRR Feature; gates the

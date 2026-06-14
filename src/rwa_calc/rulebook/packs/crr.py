@@ -274,6 +274,15 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "166", "no A-IRB EAD floor tests under CRR"),
     ),
+    # SA CCF table selection (CRR Annex I vs PS1/26 Table A1: OC 50→40%, LR 0→10%).
+    # Distinct from firb_uses_sa_ccf (which decides WHETHER F-IRB uses SA CCFs); this
+    # selects WHICH SA CCF table. Gates the pro-rata weighting basis in
+    # engine/crm/provisions.py; sa_ccf_expression keeps its is_basel_3_1 bool param.
+    "sa_revised_ccf_table": Feature(
+        name="sa_revised_ccf_table",
+        enabled=False,
+        citation=Citation("CRR", "111", "CRR Annex I SA CCF table"),
+    ),
     # SA-CCR transitional alpha add-on (PRA PS1/26 Art. 274(2A)): a Basel-3.1-only
     # phase-in (2027-2029) of the α=1.4 uplift for legacy CVA-exempt non-financial
     # counterparties carved out to α=1.0. CRR has no such add-on. The Feature gates

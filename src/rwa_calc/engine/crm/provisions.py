@@ -27,9 +27,11 @@ from rwa_calc.engine.kernels.allocation import (
     allocate_multi_level,
     beneficiary_level_expr,
 )
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @cites("CRR Art. 111")
@@ -37,6 +39,8 @@ def resolve_provisions(
     exposures: pl.LazyFrame,
     provisions: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Resolve provisions with multi-level beneficiary and drawn-first deduction.
@@ -75,8 +79,17 @@ def resolve_provisions(
     has_risk_type = "risk_type" in exp_schema.names()
 
     if has_beneficiary_type:
+        # S9e: the SA-CCF table used as the pro-rata provision-weighting basis is
+        # regime-selected via the cited pack Feature; _resolve_provisions_multi_level
+        # (and the sa_ccf_expression it calls) keep their is_basel_3_1 bool param
+        # (Option B). The CCF table VALUES stay static data-layer constants.
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         exposures = _resolve_provisions_multi_level(
-            exposures, provisions, has_parent_facility, has_risk_type, config.is_basel_3_1
+            exposures,
+            provisions,
+            has_parent_facility,
+            has_risk_type,
+            resolved_pack.feature("sa_revised_ccf_table"),
         )
     else:
         # Fallback: direct-only join (backward compat)

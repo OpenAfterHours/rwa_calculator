@@ -659,7 +659,7 @@ class CRMProcessor:
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
         if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
-            exposures = self.resolve_provisions(exposures, data.provisions, config)
+            exposures = self.resolve_provisions(exposures, data.provisions, config, pack=pack)
         # Step 2: Apply CCF to calculate EAD for contingents
         # Uses nominal_after_provision when available
         exposures = self._apply_ccf(exposures, config, pack=pack)
@@ -948,9 +948,11 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         provisions: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Resolve provisions with multi-level beneficiary and drawn-first deduction."""
-        return provisions_mod.resolve_provisions(exposures, provisions, config)
+        return provisions_mod.resolve_provisions(exposures, provisions, config, pack=pack)
 
     def _apply_firb_supervisory_lgd_no_collateral(
         self,

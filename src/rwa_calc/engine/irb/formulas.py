@@ -32,6 +32,7 @@ from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import formula_float_map, scalar_value
 
@@ -491,7 +492,10 @@ def apply_irb_formulas(
     # Step 3: Calculate correlation using pure Polars expressions
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
+        / 1_000_000
+    )
     exposures = exposures.with_columns(
         _polars_correlation_expr(
             eur_gbp_rate=eur_gbp_rate,

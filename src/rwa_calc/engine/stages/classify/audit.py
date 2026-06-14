@@ -36,6 +36,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     beel_on_non_defaulted_exposure_warning,
 )
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -89,7 +90,9 @@ def collect_input_warnings(
     # SME balance-sheet threshold (CRR Art. 4(1)(128D) / Commission Rec
     # 2003/361/EC Art. 2 fallback) — in that case the counterparty is
     # definitively SME-sized and the restriction is not applied.
-    balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+    balance_sheet_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
+    )
     unresolved_filter = (
         (pl.col("entity_type").fill_null("") == "corporate")
         & pl.col("annual_revenue").is_null()

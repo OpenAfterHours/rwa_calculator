@@ -294,6 +294,30 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "123A", "two-path retail qualification (SME + granularity)"),
     ),
+    # Basel 3.1 regulatory monetary thresholds — PRA-native GBP values (Art. 147(5A) /
+    # 147A(1)(d) / 153(4)), EXCEPT sme_balance_sheet which PS1/26 does not restate, so it
+    # stays the Commission Rec 2003/361/EC EUR 43m converted at the default 0.8732. B31
+    # never FX-syncs (config.py builds B31 thresholds at the fixed 0.8732), so
+    # 43m × 0.8732 = 37547600 is frozen byte-identically. The Feature is False (values are
+    # final GBP, no × rate). Mirrors RegulatoryThresholds.basel_3_1(0.8732) field-for-field.
+    "regulatory_thresholds": FormulaParams(
+        name="regulatory_thresholds",
+        params={
+            "sme_turnover_threshold": Decimal("44000000"),  # GBP 44m (Art. 153(4))
+            "sme_balance_sheet_threshold": Decimal("37547600"),  # EUR 43m × 0.8732 (frozen)
+            "sme_exposure_threshold": Decimal("0"),  # n/a under Basel 3.1
+            "large_corporate_revenue_threshold": Decimal("440000000"),  # GBP 440m (Art. 147A(1)(d))
+            "retail_max_exposure": Decimal("880000"),  # GBP 880k (Art. 147(5A))
+            "qrre_max_limit": Decimal("90000"),  # GBP 90k (Art. 147(5A)(c))
+            "lfse_total_assets_threshold": Decimal("0"),  # n/a under Basel 3.1
+        },
+        citation=Citation("PS1/26", "147", "PRA-native GBP thresholds (sme_balance_sheet frozen)"),
+    ),
+    "regulatory_thresholds_fx_derived": Feature(
+        name="regulatory_thresholds_fx_derived",
+        enabled=False,
+        citation=Citation("PS1/26", "147", "Basel 3.1 thresholds are native GBP, no FX conversion"),
+    ),
     # Basel 3.1 Art. 147A(1) COREP corporate sub-class split (financial-large /
     # SME / other).
     "b31_exposure_subclass_reporting_applies": Feature(

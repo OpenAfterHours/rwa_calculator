@@ -38,6 +38,7 @@ from watchfire import cites
 from rwa_calc.data.schemas import RGLA_PSE_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass, ExposureSubclass
 from rwa_calc.engine.stages.classify.attributes import is_sme_by_size_expr
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook import RulepackV0
 
@@ -56,6 +57,8 @@ logger = logging.getLogger(__name__)
 def classify_exposure_subtypes(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Merge SME, retail, and QRRE classification into a single .with_columns().
@@ -69,8 +72,11 @@ def classify_exposure_subtypes(
 
     Sets: exposure_class (updated), is_sme, requires_fi_scalar, is_hvcre
     """
-    qrre_max_limit = float(config.thresholds.qrre_max_limit)
-    is_sme_by_size = is_sme_by_size_expr(config)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    qrre_max_limit = float(
+        regulatory_threshold(resolved_pack, "qrre_max_limit", config.eur_gbp_rate)
+    )
+    is_sme_by_size = is_sme_by_size_expr(config, pack=resolved_pack)
 
     # PRA PS1/26 Art. 124(3) / Art. 124K: ADC exposures retain the CORPORATE
     # class and route to the 150% Art. 124K(1) ADC RW — they must not be
@@ -191,6 +197,8 @@ def reclassify_corporate_to_retail(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
     schema_names: set[str],
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Reclassify qualifying corporates to retail.
@@ -208,7 +216,8 @@ def reclassify_corporate_to_retail(
     approach permissions. The approach (AIRB/FIRB/SA) is determined
     later by _assign_approach using model_permissions.
     """
-    is_sme_by_size = is_sme_by_size_expr(config)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    is_sme_by_size = is_sme_by_size_expr(config, pack=resolved_pack)
 
     # Reclassification eligibility expression (inlined — not a column ref)
     reclassification_expr = (
@@ -285,9 +294,9 @@ def derive_exposure_subclass(
       - ``corporate_sme`` — ``is_sme`` (turnover <= GBP 44m). Art. 147A(1)(f).
       - ``corporate_other`` — otherwise. Art. 147A(1)(f).
 
-    Reuses the FSE predicate and the large-corporate revenue threshold accessor
-    (``config.thresholds.large_corporate_revenue_threshold``) shared with
-    ``_apply_b31_approach_restrictions``; non-corporate rows stay null.
+    Reuses the FSE predicate and the large-corporate revenue threshold
+    (``regulatory_threshold(pack, "large_corporate_revenue_threshold", …)``) shared
+    with ``_apply_b31_approach_restrictions``; non-corporate rows stay null.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     null_subclass = pl.lit(None, dtype=pl.String).alias("exposure_subclass")
@@ -301,7 +310,12 @@ def derive_exposure_subclass(
     is_fse = (pl.col("cp_is_financial_sector_entity") == True).fill_null(False)  # noqa: E712
 
     is_large_by_revenue = (
-        pl.col("cp_annual_revenue") > float(config.thresholds.large_corporate_revenue_threshold)
+        pl.col("cp_annual_revenue")
+        > float(
+            regulatory_threshold(
+                resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate
+            )
+        )
     ).fill_null(False)
 
     is_sme = pl.col("is_sme").fill_null(False)

@@ -46,6 +46,7 @@ from rwa_calc.domain.enums import (
     SpecialisedLendingType,
 )
 from rwa_calc.engine.stages.classify.permissions import build_permission_exprs
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -182,12 +183,19 @@ def _apply_b31_approach_restrictions(
     #   - Otherwise (both fields null, or null revenue with assets that
     #     don't resolve the question) treat conservatively as large;
     #     CLS008 is emitted to flag the missing data.
-    balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+    balance_sheet_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
+    )
     is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
     is_large_corp = is_corporate_cp & (
         pl.when(pl.col("cp_annual_revenue").is_not_null())
         .then(
-            pl.col("cp_annual_revenue") > float(config.thresholds.large_corporate_revenue_threshold)
+            pl.col("cp_annual_revenue")
+            > float(
+                regulatory_threshold(
+                    resolved_pack, "large_corporate_revenue_threshold", config.eur_gbp_rate
+                )
+            )
         )
         .when(pl.col("cp_total_assets").is_not_null())
         .then(pl.col("cp_total_assets") >= balance_sheet_threshold)

@@ -58,6 +58,7 @@ from rwa_calc.contracts.errors import (
     CalculationError,
 )
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import formula_float_map
 
@@ -113,7 +114,9 @@ class SupportingFactorCalculator:
 
         # FX-derived SME exposure threshold stays config (RegulatoryThresholds → S11c);
         # the factor multipliers are pack-sourced (Decimal, exact).
-        threshold_gbp = config.thresholds.sme_exposure_threshold
+        threshold_gbp = regulatory_threshold(
+            resolved_pack, "sme_exposure_threshold", config.eur_gbp_rate
+        )
 
         sf_values = resolved_pack.formula("supporting_factors_values").params
         factor_tier1 = sf_values["sme_factor_under_threshold"]
@@ -268,7 +271,9 @@ class SupportingFactorCalculator:
 
         # FX-derived threshold stays config (RegulatoryThresholds → S11c); the factor
         # multipliers are pack-sourced (float boundary via formula_float_map).
-        threshold_gbp = float(config.thresholds.sme_exposure_threshold)
+        threshold_gbp = float(
+            regulatory_threshold(resolved_pack, "sme_exposure_threshold", config.eur_gbp_rate)
+        )
         sf_values = formula_float_map(resolved_pack.formula("supporting_factors_values"))
         factor_tier1 = sf_values["sme_factor_under_threshold"]
         factor_tier2 = sf_values["sme_factor_above_threshold"]

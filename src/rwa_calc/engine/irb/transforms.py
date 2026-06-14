@@ -70,6 +70,7 @@ from rwa_calc.engine.irb.formulas import (
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as _apply_guarantee_substitution,  # noqa: E501
 )
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import (
     exact_fractional_years_expr as _exact_fractional_years_expr,
 )
@@ -382,7 +383,10 @@ def calculate_correlation(
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
+        / 1_000_000
+    )
     return lf.with_columns(
         _polars_correlation_expr(
             eur_gbp_rate=eur_gbp_rate,
@@ -612,7 +616,10 @@ def apply_all_formulas(
     # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
+        / 1_000_000
+    )
     is_retail = (
         pl.col("exposure_class")
         .cast(pl.String)

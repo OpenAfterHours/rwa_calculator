@@ -40,6 +40,7 @@ from rwa_calc.engine.irb.formulas import (
     _pd_floor_expression,
     firb_supervisory_lgd_values,
 )
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
 
@@ -377,7 +378,9 @@ def _apply_parameter_substitution(
     # inside a single swap-restore window where those columns hold the
     # guarantor's values. The NBD floor always uses the option_ii
     # supervisory LGD so the comparison stays meaningful for option_i rows.
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(pack, "sme_turnover_threshold", config.eur_gbp_rate)) / 1_000_000
+    )
     lf = _apply_no_better_than_direct_floor(
         lf,
         guarantor_pd_floored=guarantor_pd_floored,

@@ -308,6 +308,31 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "123", "single aggregate-exposure retail threshold check"),
     ),
+    # CRR regulatory monetary thresholds: the EUR source amounts (CRR Art. 123/123A/
+    # 501/4(1)(146)) converted to GBP at the run's EUR/GBP rate. The pack holds the
+    # FX-INVARIANT EUR bases; the engine applies × eur_gbp_rate (a market input that
+    # stays on config/RunConfig, NOT a regulatory value) at the read site via
+    # engine/thresholds.py::regulatory_threshold. The `regulatory_thresholds_fx_derived`
+    # Feature (True under CRR) gates the ×rate. Mirrors
+    # contracts/config.py::RegulatoryThresholds.crr field-for-field.
+    "regulatory_thresholds": FormulaParams(
+        name="regulatory_thresholds",
+        params={
+            "sme_turnover_threshold": Decimal("50000000"),  # EUR 50m (Art. 501 / 4(1)(128D))
+            "sme_balance_sheet_threshold": Decimal("43000000"),  # EUR 43m (Rec 2003/361/EC)
+            "sme_exposure_threshold": Decimal("2500000"),  # EUR 2.5m (Art. 501)
+            "large_corporate_revenue_threshold": Decimal("0"),  # n/a under CRR
+            "retail_max_exposure": Decimal("1000000"),  # EUR 1m (Art. 123(c))
+            "qrre_max_limit": Decimal("100000"),  # EUR 100k (Art. 123)
+            "lfse_total_assets_threshold": Decimal("70000000000"),  # EUR 70bn (Art. 4(1)(146))
+        },
+        citation=Citation("CRR", "123", "EUR monetary thresholds (× EUR/GBP rate → GBP)"),
+    ),
+    "regulatory_thresholds_fx_derived": Feature(
+        name="regulatory_thresholds_fx_derived",
+        enabled=True,
+        citation=Citation("CRR", "123", "CRR thresholds are EUR amounts converted at the FX rate"),
+    ),
     # Basel 3.1 Art. 147A(1) COREP corporate sub-class split (financial-large /
     # SME / other); CRR has no exposure_subclass reporting column.
     "b31_exposure_subclass_reporting_applies": Feature(

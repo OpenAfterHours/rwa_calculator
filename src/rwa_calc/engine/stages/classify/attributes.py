@@ -54,6 +54,7 @@ from rwa_calc.data.tables.entity_class_mapping import (
     ENTITY_TYPE_TO_SA_CLASS,
 )
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook import RulepackV0
 
@@ -249,7 +250,9 @@ def derive_independent_flags(
       user-supplied flag.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
-    max_retail_exposure = float(config.thresholds.retail_max_exposure)
+    max_retail_exposure = float(
+        regulatory_threshold(resolved_pack, "retail_max_exposure", config.eur_gbp_rate)
+    )
 
     # SL override: exposures with sl_type (from specialised_lending join) get
     # SPECIALISED_LENDING class regardless of counterparty entity_type.
@@ -371,7 +374,9 @@ def derive_independent_flags(
 # =========================================================================
 
 
-def is_sme_by_size_expr(config: CalculationConfig) -> pl.Expr:
+def is_sme_by_size_expr(
+    config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.Expr:
     """
     Return an expression that flags a counterparty as SME-sized.
 
@@ -385,8 +390,13 @@ def is_sme_by_size_expr(config: CalculationConfig) -> pl.Expr:
     CRR Art. 501 supporting factor (Art. 501(2)(c)) is keyed on annual
     turnover only and is gated separately in sa/supporting_factors.py.
     """
-    turnover_threshold = float(config.thresholds.sme_turnover_threshold)
-    balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    turnover_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate)
+    )
+    balance_sheet_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
+    )
     metric = pl.col("sme_size_metric_gbp")
     source = pl.col("sme_size_source")
     turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
@@ -564,7 +574,7 @@ def _build_qualifies_as_retail_expr(
     # Art. 123A(1)(a): SME auto-qualification — counterparty meets the
     # Art. 4(1)(128D) SME size test (turnover < EUR 50m OR balance-sheet
     # total < EUR 43m when turnover null).
-    is_sme_for_art_123a = is_sme_by_size_expr(config)
+    is_sme_for_art_123a = is_sme_by_size_expr(config, pack=resolved_pack)
 
     # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
     # aggregate exposure may exceed 0.2% of the total regulatory-retail

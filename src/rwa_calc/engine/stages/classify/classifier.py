@@ -141,8 +141,10 @@ class ExposureClassifier:
         classification_errors = collect_input_warnings(data, config, pack=resolved_pack)
 
         classified = derive_independent_flags(exposures, config, schema_names, pack=resolved_pack)
-        classified = classify_exposure_subtypes(classified, config)
-        classified = reclassify_corporate_to_retail(classified, config, schema_names)
+        classified = classify_exposure_subtypes(classified, config, pack=resolved_pack)
+        classified = reclassify_corporate_to_retail(
+            classified, config, schema_names, pack=resolved_pack
+        )
         classified = flag_property_reclassification_candidates(
             classified, config, schema_names, pack=resolved_pack
         )

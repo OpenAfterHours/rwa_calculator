@@ -296,6 +296,8 @@ class RealEstateSplitterProtocol(Protocol):
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """Apply RE loan-splitting to candidate rows.
 
@@ -304,8 +306,10 @@ class RealEstateSplitterProtocol(Protocol):
                 must already carry the classifier-emitted columns
                 ``re_split_target_class``, ``re_split_mode``,
                 ``re_split_property_value``.
-            config: Calculation configuration. The regime (CRR vs B3.1)
-                is selected via ``config.is_basel_3_1``.
+            config: Calculation configuration.
+            pack: Resolved rulepack supplying the RE-split regime Feature.
+                Production threads the run's pack; direct callers default to
+                ``None``, which resolves a pack from ``config``.
 
         Returns:
             New ``CRMAdjustedBundle`` with the unified frame (and any

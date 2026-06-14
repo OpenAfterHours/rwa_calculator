@@ -19,10 +19,18 @@ fallback resolve; only the regime reads move to the pack:
   pure-CRE non-NP/SME corporates to a single whole-loan row; CRR splits all
   eligible exposures.
 
-The split LTV/RW parameter VALUES stay in data/tables/re_split_parameters.py
-(the splitter call-site migration is S9g). Each Feature's value mirrors
-``config.is_basel_3_1`` per regime, so this pin is the byte-identical-parity
-contract.
+S9g additionally moved the splitter's RE-split parameter-set selection
+(engine/stages/re_split/splitter.py) onto the pack, threading it through the
+``RealEstateSplitterProtocol.split`` signature and the re_split stage adapter:
+
+- ``sa_re_split_revised_parameters`` — selects the Basel 3.1 Art. 124F/124H
+  LTV caps / risk weights (RRE 55%/20%, CRE 55%/60%) vs the CRR Art. 125/126
+  values (RRE 80%/35%, CRE 50%/50%). The parameter VALUES live in
+  data/tables/re_split_parameters.py; re_split_parameters and
+  _split_unified_frame keep their is_basel_3_1 bool plumbing params.
+
+Each Feature's value mirrors ``config.is_basel_3_1`` per regime, so this pin
+is the byte-identical-parity contract.
 
 References:
 - CRR Art. 125/126 / PRA PS1/26 Art. 124F/124H/124(4).
@@ -44,6 +52,7 @@ _FEATURE_MATRIX = [
     ("sa_re_split_cre_rental_coverage_required", True, False),
     ("sa_re_split_art_124_4_all_or_nothing", False, True),
     ("sa_re_split_whole_loan_path_applies", False, True),
+    ("sa_re_split_revised_parameters", False, True),
 ]
 
 

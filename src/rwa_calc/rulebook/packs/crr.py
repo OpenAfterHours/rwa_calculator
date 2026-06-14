@@ -202,6 +202,16 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "126", "no Art. 124H(3) whole-loan CRE path; all eligible split"),
     ),
+    # RE loan-split parameter set selection (splitter, engine/stages/re_split/
+    # splitter.py): CRR Art. 125/126 LTV caps / RW (RRE 80%/35%, CRE 50%/50%,
+    # rental-coverage flag) vs PS1/26 Art. 124F/124H (RRE 55%/20%, CRE 55%/60%,
+    # prior-charge reduction). The VALUES live in data/tables/re_split_parameters.py;
+    # re_split_parameters / _split_unified_frame keep their is_basel_3_1 bool param.
+    "sa_re_split_revised_parameters": Feature(
+        name="sa_re_split_revised_parameters",
+        enabled=False,
+        citation=Citation("CRR", "125", "CRR Art. 125/126 RE-split LTV caps and risk weights"),
+    ),
     # Slotting (supervisory specialised-lending) risk-weight + EL-rate tables:
     # Basel 3.1 (PRA PS1/26 Art. 153(5) Table A / CRE33) revises them with HVCRE
     # and PF pre-operational splits — see packs/b31.py. The Feature selects the

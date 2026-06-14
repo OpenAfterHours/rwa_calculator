@@ -197,6 +197,16 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "124H(3)", "pure-CRE non-NP/SME corporates route to a whole-loan row"
         ),
     ),
+    # RE loan-split parameter set selection: Basel 3.1 Art. 124F/124H LTV caps / RW
+    # (RRE 55%/20%, CRE 55%/60%, prior-charge reduction) override the CRR Art. 125/126
+    # values. The VALUES live in data/tables/re_split_parameters.py.
+    "sa_re_split_revised_parameters": Feature(
+        name="sa_re_split_revised_parameters",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "124F", "Basel 3.1 Art. 124F/124H RE-split LTV caps and risk weights"
+        ),
+    ),
     # Basel 3.1 revised slotting tables (PRA PS1/26 Art. 153(5) Table A / CRE33):
     # HVCRE risk-weight + EL splits and the PF pre-operational distinction.
     # Overrides the CRR Feature; selects the B31 table family in

@@ -426,6 +426,17 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "154(4A)", "IRB post-model adjustments (Art. 153(5A)/154(4A)/158(6A))"
         ),
     ),
+    # PRA PS1/26 Art. 154(4A)(b) mortgage RW floor — the 10% minimum risk weight for
+    # residential-mortgage IRB exposures, gated by post_model_adjustments above. 0.10
+    # is the regulatory DEFAULT; a firm may apply a higher PMA floor by overriding this
+    # scalar via ResolvedRulepack.with_overrides. Consumed in
+    # engine/irb/adjustments.py::apply_post_model_adjustments (read only when the gate is
+    # on, so CRR — Feature off — never resolves it and packs/crr.py omits it).
+    "mortgage_rw_floor": ScalarParam(
+        name="mortgage_rw_floor",
+        value=Decimal("0.10"),
+        citation=Citation("PS1/26", "154(4A)", "10% mortgage RW floor (residential IRB)"),
+    ),
     # Basel 3.1 replaces the CRR Art. 230 F-IRB collateral step-functions with
     # the continuous LGD* formula (PS1/26 Art. 230(1)): no overcollateralisation
     # divisor and no minimum collateralisation threshold. Overrides the CRR

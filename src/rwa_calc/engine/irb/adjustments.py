@@ -190,7 +190,9 @@ def apply_post_model_adjustments(
 
     pma_rwa_scalar = float(pma_config.pma_rwa_scalar)
     pma_el_scalar = float(pma_config.pma_el_scalar)
-    mortgage_rw_floor = float(pma_config.mortgage_rw_floor)
+    # Regulatory mortgage RW floor (Art. 154(4A)(b)) — pack scalar (Phase 5 S11e-v3),
+    # overridable via with_overrides. The PMA scalars above stay config ELECTIONS.
+    mortgage_rw_floor = float(resolved_pack.scalar("mortgage_rw_floor"))
     unrecognised_scalar = float(pma_config.unrecognised_exposure_scalar)
 
     # Mortgage RW floor: applies to residential mortgage IRB exposures

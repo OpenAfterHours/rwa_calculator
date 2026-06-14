@@ -142,11 +142,6 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
 # 5-day: 5.657%, 10-day: 8%, 20-day: 11.314%
 FX_HAIRCUT: Decimal = Decimal("0.08")
 
-# CDS restructuring exclusion haircut (CRR Art. 233(2) / PRA PS1/26 Art. 233(2))
-# If a credit derivative does not include restructuring as a credit event,
-# protection value is reduced by 40% (capped at 60% of exposure value).
-RESTRUCTURING_EXCLUSION_HAIRCUT: Decimal = Decimal("0.40")
-
 
 # Standard liquidation periods per Art. 224(2)
 LIQUIDATION_PERIOD_REPO: int = 5  # (a) Repo-style transactions

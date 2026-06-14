@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from rwa_calc.data.tables.haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT, get_haircut_table
+from rwa_calc.data.tables.haircuts import get_haircut_table
 from rwa_calc.rulebook.compile import decision_table_df
 from rwa_calc.rulebook.model import LookupTable, ScalarParam
 from rwa_calc.rulebook.resolve import resolve
@@ -136,7 +136,7 @@ def test_restructuring_exclusion_haircut_resolves_byte_identical() -> None:
     # Act / Assert — regime-invariant CDS restructuring-exclusion haircut
     crr = resolve("crr", date(2026, 1, 1)).scalar("restructuring_exclusion_haircut")
     b31 = resolve("b31", date(2027, 1, 1)).scalar("restructuring_exclusion_haircut")
-    assert crr == b31 == RESTRUCTURING_EXCLUSION_HAIRCUT
+    assert crr == b31 == Decimal("0.40")
 
 
 # ---------------------------------------------------------------------------

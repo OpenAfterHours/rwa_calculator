@@ -764,9 +764,8 @@ COVERED_BOND_RISK_WEIGHTS: dict[CQS, Decimal] = {
 # (SCRA Grade B), and changes (b) to 0.50 -> 0.25.
 #
 # The two regimes are stored as separate dicts so callers cannot accidentally
-# pick up a B31-only key (or the wrong (b) value) under CRR.
-# COVERED_BOND_UNRATED_DERIVATION remains as a backward-compatible alias of
-# the B31 super-set dict.
+# pick up a B31-only key (or the wrong (b) value) under CRR — each consumer
+# selects the regime-specific dict explicitly (no unsuffixed alias).
 COVERED_BOND_UNRATED_DERIVATION_CRR: dict[Decimal, Decimal] = {
     Decimal("0.20"): Decimal("0.10"),  # CRR Art. 129(5)(a)
     Decimal("0.50"): Decimal("0.20"),  # CRR Art. 129(5)(b) — note: NOT 0.25 (B31 value)
@@ -783,10 +782,6 @@ COVERED_BOND_UNRATED_DERIVATION_B31: dict[Decimal, Decimal] = {
     Decimal("1.00"): Decimal("0.50"),  # PS1/26 Art. 129(5)(c)
     Decimal("1.50"): Decimal("1.00"),  # PS1/26 Art. 129(5)(d)
 }
-
-# Backward-compatible alias — points at the B31 super-set dict so existing
-# callers (e.g. the B31 ECRA path in _b31_unrated_cb_rw_expr) keep working.
-COVERED_BOND_UNRATED_DERIVATION: dict[Decimal, Decimal] = COVERED_BOND_UNRATED_DERIVATION_B31
 
 
 @cites("CRR Art. 129")

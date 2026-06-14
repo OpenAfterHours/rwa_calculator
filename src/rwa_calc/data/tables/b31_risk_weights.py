@@ -344,7 +344,7 @@ B31_COVERED_BOND_RISK_WEIGHTS: dict[int | None, Decimal] = {
 # Art. 129(5): unrated CB RW is derived from the issuing institution's own RW.
 # Under B31, unrated institutions use SCRA grades which map to institution RWs.
 # The derivation chain is: SCRA grade → institution RW → CB RW
-# using the COVERED_BOND_UNRATED_DERIVATION table in crr_risk_weights.py.
+# using the COVERED_BOND_UNRATED_DERIVATION_B31 table in crr_risk_weights.py.
 #
 # SCRA A_ENHANCED → institution 30% → CB 15% (derivation table: 0.30 → 0.15)
 # SCRA A          → institution 40% → CB 20% (derivation table: 0.40 → 0.20)

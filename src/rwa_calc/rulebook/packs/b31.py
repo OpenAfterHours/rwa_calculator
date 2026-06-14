@@ -139,6 +139,16 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "122(2)", "Basel 3.1 revised SA risk-weight tables"),
     ),
+    # Basel 3.1 revised SA risk-weight override ladder (PRA PS1/26): the PS1/26
+    # institution ECRA/SCRA branches, revised covered-bond/real-estate handling,
+    # the currency-mismatch multiplier hook and the Art. 128 high-risk
+    # reintroduction. Overrides the CRR Feature; gates the top-level override-ladder
+    # dispatch in engine/sa/risk_weights.py::apply_risk_weights.
+    "sa_revised_risk_weight_overrides": Feature(
+        name="sa_revised_risk_weight_overrides",
+        enabled=True,
+        citation=Citation("PS1/26", "122", "Basel 3.1 revised SA risk-weight override ladder"),
+    ),
     # PRA PS1/26 Art. 139(2B): non-issue-specific ECAI assessments are disapplied
     # for the SA specialised-lending routing — such SL exposures are treated as
     # unrated (routed through the unrated-SL RW branch).

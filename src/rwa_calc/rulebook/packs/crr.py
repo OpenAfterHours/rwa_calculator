@@ -146,6 +146,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "122", "original SA risk-weight tables (Art. 112-134)"),
     ),
+    # SA risk-weight override LADDER dispatch (distinct from the base-table
+    # Feature above): selects the whole when/then override sequence applied on
+    # top of the base CQS join — institution ECRA/SCRA branches, covered-bond
+    # derivation, real-estate handling, currency-mismatch hook and the Art. 128
+    # high-risk reintroduction. CRR runs the original Art. 112-134 ladder
+    # (_apply_crr_risk_weight_overrides); Basel 3.1 runs the PS1/26 revised ladder
+    # (_apply_b31_risk_weight_overrides). Gates the top-level dispatch in
+    # engine/sa/risk_weights.py::apply_risk_weights; the branch VALUES stay in the
+    # helper functions / data/tables.
+    "sa_revised_risk_weight_overrides": Feature(
+        name="sa_revised_risk_weight_overrides",
+        enabled=False,
+        citation=Citation("CRR", "112", "original SA risk-weight override ladder (Art. 112-134)"),
+    ),
     # PRA PS1/26 Art. 139(2B) disapplies inferred / issuer-level (non-issue-
     # specific) ECAI assessments for the SA specialised-lending routing — CRR has
     # no such disapplication. Gates the SL CQS-nulling in

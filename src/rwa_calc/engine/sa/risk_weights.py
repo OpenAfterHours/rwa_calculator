@@ -84,7 +84,7 @@ from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
     CORPORATE_RISK_WEIGHTS,
-    COVERED_BOND_UNRATED_DERIVATION,
+    COVERED_BOND_UNRATED_DERIVATION_B31,
     COVERED_BOND_UNRATED_DERIVATION_CRR,
     CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
@@ -315,7 +315,8 @@ def apply_risk_weights(
     """
     exposures, uc, is_domestic_currency = _prepare_risk_weight_lookup(lf, config, pack=pack)
 
-    if config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if resolved_pack.feature("sa_revised_risk_weight_overrides"):
         exposures = _apply_b31_risk_weight_overrides(exposures, uc, is_domestic_currency, config)
     else:
         exposures = _apply_crr_risk_weight_overrides(exposures, uc, is_domestic_currency)
@@ -328,7 +329,7 @@ def apply_risk_weights(
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
     # the base RW when-chain so defaulted exposures have their non-defaulted
     # base RW available for blending with collateral coverage.
-    exposures = _apply_defaulted_risk_weight(exposures, config, pack=pack)
+    exposures = _apply_defaulted_risk_weight(exposures, config, pack=resolved_pack)
 
     # Drop temporary columns used only during risk-weight application.
     schema_names = exposures.collect_schema().names()
@@ -487,7 +488,7 @@ def _b31_unrated_cb_rw_expr() -> pl.Expr:
     cqs_to_cb_rw: dict[int, float] = {}
     for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
         inst_rw = inst_table[cqs_val]
-        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION_B31[inst_rw]
         cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
 
     # Build when/then: ECRA first (cp_institution_cqs)
@@ -1309,8 +1310,7 @@ def _apply_crr_risk_weight_overrides(
     # Covered bond / high risk / other items / equity tail.
     exposures = exposures.with_columns(
         chain
-        # Unrated covered bonds: derive from issuer institution RW
-        # (CRR Art. 129(5)) via COVERED_BOND_UNRATED_DERIVATION table.
+        # Unrated covered bonds: derive from issuer institution RW (CRR Art. 129(5)).
         .when(
             uc.str.contains("COVERED_BOND", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))

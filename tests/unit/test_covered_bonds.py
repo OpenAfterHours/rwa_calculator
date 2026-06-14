@@ -34,7 +34,7 @@ from rwa_calc.data.tables.b31_risk_weights import (
 )
 from rwa_calc.data.tables.crr_risk_weights import (
     COVERED_BOND_RISK_WEIGHTS,
-    COVERED_BOND_UNRATED_DERIVATION,
+    COVERED_BOND_UNRATED_DERIVATION_B31,
     get_all_risk_weight_tables,
     get_combined_cqs_risk_weights,
 )
@@ -121,7 +121,7 @@ class TestCoveredBondUnratedDerivation:
     )
     def test_derivation_mapping(self, issuer_rw: Decimal, expected_cb_rw: Decimal):
         """Issuer institution RW maps to correct covered bond RW."""
-        assert COVERED_BOND_UNRATED_DERIVATION[issuer_rw] == expected_cb_rw
+        assert COVERED_BOND_UNRATED_DERIVATION_B31[issuer_rw] == expected_cb_rw
 
 
 # =============================================================================
@@ -364,14 +364,14 @@ class TestCRRCoveredBondDerivationConsistency:
     def test_b31_ecra_derivation_matches_tables(self):
         """B31 ECRA CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_B31_ECRA × DERIVATION."""
         from rwa_calc.data.tables.crr_risk_weights import (
-            COVERED_BOND_UNRATED_DERIVATION,
+            COVERED_BOND_UNRATED_DERIVATION_B31,
             INSTITUTION_RISK_WEIGHTS_B31_ECRA,
         )
 
         for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
             inst_rw = INSTITUTION_RISK_WEIGHTS_B31_ECRA[cqs_val]
-            expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
-            assert inst_rw in COVERED_BOND_UNRATED_DERIVATION, (
+            expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION_B31[inst_rw]
+            assert inst_rw in COVERED_BOND_UNRATED_DERIVATION_B31, (
                 f"B31-ECRA institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
             )
             assert expected_cb_rw is not None
@@ -379,14 +379,14 @@ class TestCRRCoveredBondDerivationConsistency:
     def test_crr_derivation_matches_tables(self):
         """CRR CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_CRR × DERIVATION."""
         from rwa_calc.data.tables.crr_risk_weights import (
-            COVERED_BOND_UNRATED_DERIVATION,
+            COVERED_BOND_UNRATED_DERIVATION_CRR,
             INSTITUTION_RISK_WEIGHTS_CRR,
         )
 
         for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
             inst_rw = INSTITUTION_RISK_WEIGHTS_CRR[cqs_val]
-            expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
-            assert inst_rw in COVERED_BOND_UNRATED_DERIVATION, (
+            expected_cb_rw = COVERED_BOND_UNRATED_DERIVATION_CRR[inst_rw]
+            assert inst_rw in COVERED_BOND_UNRATED_DERIVATION_CRR, (
                 f"CRR institution RW {inst_rw} for CQS {cqs_val} not in derivation table"
             )
             assert expected_cb_rw is not None
@@ -394,15 +394,15 @@ class TestCRRCoveredBondDerivationConsistency:
     def test_unrated_institution_rw_in_derivation_table(self):
         """Unrated institution RW (both CRR and B31 ECRA) must be in derivation table."""
         from rwa_calc.data.tables.crr_risk_weights import (
-            COVERED_BOND_UNRATED_DERIVATION,
+            COVERED_BOND_UNRATED_DERIVATION_B31,
             INSTITUTION_RISK_WEIGHTS_B31_ECRA,
             INSTITUTION_RISK_WEIGHTS_CRR,
         )
 
         b31_unrated = INSTITUTION_RISK_WEIGHTS_B31_ECRA[CQS.UNRATED]
         crr_unrated = INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]
-        assert b31_unrated in COVERED_BOND_UNRATED_DERIVATION
-        assert crr_unrated in COVERED_BOND_UNRATED_DERIVATION
+        assert b31_unrated in COVERED_BOND_UNRATED_DERIVATION_B31
+        assert crr_unrated in COVERED_BOND_UNRATED_DERIVATION_B31
 
 
 # =============================================================================
@@ -625,11 +625,11 @@ class TestB31CoveredBondDataFrame:
 
 
 class TestCoveredBondDerivationTraceability:
-    """Verify B31 SCRA→CB RW values are traceable to COVERED_BOND_UNRATED_DERIVATION.
+    """Verify B31 SCRA→CB RW values are traceable to COVERED_BOND_UNRATED_DERIVATION_B31.
 
     The derivation chain is:
         SCRA grade → institution RW (B31_SCRA_RISK_WEIGHTS) →
-        covered bond RW (COVERED_BOND_UNRATED_DERIVATION)
+        covered bond RW (COVERED_BOND_UNRATED_DERIVATION_B31)
 
     This test class verifies that B31_COVERED_BOND_UNRATED_FROM_SCRA values
     match the derivation table exactly.
@@ -652,7 +652,7 @@ class TestCoveredBondDerivationTraceability:
     ):
         """B31 SCRA CB RW matches derivation table lookup via institution RW."""
         # Verify the derivation table maps correctly
-        assert COVERED_BOND_UNRATED_DERIVATION[inst_rw] == expected_cb_rw
+        assert COVERED_BOND_UNRATED_DERIVATION_B31[inst_rw] == expected_cb_rw
         # Verify the B31 shortcut dict matches
         assert B31_COVERED_BOND_UNRATED_FROM_SCRA[scra_grade] == expected_cb_rw
 

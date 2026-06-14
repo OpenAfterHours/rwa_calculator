@@ -9,6 +9,11 @@ in ``data/tables/{crr,b31}_risk_weights.py``):
   ``engine/sa/risk_weights.py::_prepare_risk_weight_lookup`` (CRR Art. 112-134
   tables vs the PS1/26 revised set) — and, from S6c, the shared guarantor-RW
   builder.
+- ``sa_revised_risk_weight_overrides`` (S10a) gates the top-level override-LADDER
+  dispatch in ``engine/sa/risk_weights.py::apply_risk_weights`` — the whole CRR
+  ``_apply_crr_risk_weight_overrides`` vs Basel 3.1 ``_apply_b31_risk_weight_overrides``
+  when/then sequence applied on top of the base CQS join (distinct from the
+  base-table Feature above).
 - ``sa_sl_inferred_rating_disapplied`` gates the PS1/26 Art. 139(2B)
   non-issue-specific-ECAI CQS-nulling for specialised lending.
 - ``sa_revised_defaulted_treatment`` gates the Art. 127 defaulted-RW regime
@@ -42,6 +47,7 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 # (feature name, enabled under CRR, enabled under Basel 3.1)
 _FEATURE_MATRIX = [
     ("sa_revised_risk_weight_tables", False, True),
+    ("sa_revised_risk_weight_overrides", False, True),
     ("sa_sl_inferred_rating_disapplied", False, True),
     ("sa_revised_defaulted_treatment", False, True),
     ("sa_currency_mismatch_multiplier", False, True),

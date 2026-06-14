@@ -77,6 +77,7 @@ from rwa_calc.engine.orchestrator import (
 from rwa_calc.engine.registry import PIPELINE_STAGES
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.audit import serialize_pack
 
 if TYPE_CHECKING:
     import polars as pl
@@ -368,6 +369,7 @@ class PipelineOrchestrator:
             _persist_audit_artifacts(
                 result,
                 config,
+                rulepack,
                 run_id=run_id,
                 started_at=started_at,
                 elapsed_ms=total_ms,
@@ -448,6 +450,7 @@ def create_test_pipeline() -> PipelineOrchestrator:
 def _persist_audit_artifacts(
     result: AggregatedResultBundle,
     config: CalculationConfig,
+    rulepack: RulepackV0,
     *,
     run_id: str,
     started_at: datetime,
@@ -459,6 +462,10 @@ def _persist_audit_artifacts(
     Mirrors the per-stage ``sink_audit`` calls in ``CRMProcessor`` so the
     final on-disk layout under ``<audit_cache_dir>/<run_id>/`` contains both
     CRM intermediates and the aggregator's pre/post-CRM summary views.
+
+    The manifest records the run's resolved rulepack snapshot (id, content
+    hash, and every cited entry) under its ``rulepack`` key — the audit trail
+    of exactly which regime data produced the result.
 
     Failures are logged at WARNING and swallowed — audit caching must never
     break a real run.
@@ -529,6 +536,11 @@ def _persist_audit_artifacts(
             },
             "artifacts": artifacts,
             "error_count": len(result.errors),
+            # The run's resolved regime data: id, content hash, and every
+            # cited entry (Phase 5 S12 — audit the rulepack that produced this
+            # result). Serialised via ``rulebook/audit.py`` (Decimal-as-string;
+            # no float boundary crossed here).
+            "rulepack": serialize_pack(rulepack.pack),
             # Every stage-edge collect of this run: label, rows, columns,
             # estimated bytes, wall ms, spill mode (migration Phase 1).
             "materialisation_map": [e.as_dict() for e in current_edge_events()],

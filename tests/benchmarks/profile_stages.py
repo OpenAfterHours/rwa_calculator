@@ -250,7 +250,7 @@ def profile_pipeline_stages(
     else:
         exposures = _time(
             lambda: collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, config.is_basel_3_1
+                exposures, config=config
             ),
             "CRM: firb_lgd_no_collateral",
             results,

@@ -334,6 +334,17 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "230(1)", "LGD* formula — no minimum collateralisation threshold"
         ),
     ),
+    # AIRB LGD collateral method (PS1/26 Art. 169A/169B): Basel 3.1 Foundation
+    # Collateral Method election + Art. 169B LGD-modelling/insufficient-data fallback
+    # route AIRB exposures to the supervisory LGD formula. Overrides the CRR Feature;
+    # gates the AIRB-method branches in engine/crm/collateral.py.
+    "airb_lgd_collateral_method_applicable": Feature(
+        name="airb_lgd_collateral_method_applicable",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "169A", "AIRB LGD Modelling / Foundation Collateral Method (Art. 169A/169B)"
+        ),
+    ),
     # Canonical F-IRB supervisory LGD under Basel 3.1 (PRA PS1/26 Art. 161 /
     # CRE32.9-12). Overrides the CRR table of the same name. Key changes:
     # non-FSE senior 45%->40% with a distinct FSE row at 45%; receivables/RE

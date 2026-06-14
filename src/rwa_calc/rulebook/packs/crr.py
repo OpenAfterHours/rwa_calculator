@@ -337,6 +337,16 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("CRR", "230", "30% C*/C** minimum collateralisation threshold applies"),
     ),
+    # AIRB LGD collateral method (PS1/26 Art. 169A/169B): Basel 3.1 introduces the
+    # Foundation Collateral Method election and the Art. 169B LGD-modelling /
+    # insufficient-data fallback that route AIRB exposures to the supervisory LGD
+    # formula. CRR AIRB is free-form (own LGD always kept), so this is disabled.
+    # Gates the AIRB-method branches in engine/crm/collateral.py.
+    "airb_lgd_collateral_method_applicable": Feature(
+        name="airb_lgd_collateral_method_applicable",
+        enabled=False,
+        citation=Citation("CRR", "181", "CRR AIRB own-LGD is free-form (no collateral method)"),
+    ),
     # Canonical F-IRB supervisory LGD (CRR Art. 161 / Art. 230 Table 5). One
     # table at FIRB granularity (collateral_type, seniority, is_fse) — the
     # single source for both the IRB-direct lookups (S5) and the CRM-shape

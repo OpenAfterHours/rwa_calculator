@@ -439,10 +439,10 @@ def _resolve_pack_for_lgd(
 @cites("CRR Art. 161")
 def apply_firb_supervisory_lgd_no_collateral(
     exposures: pl.LazyFrame,
-    is_basel_3_1: bool,
     config: CalculationConfig | None = None,
     *,
     pack: ResolvedRulepack | None = None,
+    is_basel_3_1: bool = False,
 ) -> pl.LazyFrame:
     """
     Apply F-IRB supervisory LGD when no collateral is available.
@@ -460,13 +460,22 @@ def apply_firb_supervisory_lgd_no_collateral(
 
     Args:
         exposures: Exposures with lgd_pre_crm
-        is_basel_3_1: Whether Basel 3.1 framework applies
         config: CalculationConfig (optional, for AIRB collateral method)
+        pack: Resolved rulepack; production threads the run's pack.
+        is_basel_3_1: No-config bootstrap regime hint for _resolve_pack_for_lgd
+            (direct unit-test path only). The regime BRANCHES read cited Features
+            off the resolved pack, not this flag (S9h).
 
     Returns:
         Exposures with lgd_post_crm set for F-IRB (and qualifying A-IRB)
     """
     resolved_pack = _resolve_pack_for_lgd(pack, config, is_basel_3_1)
+    # S9h: read the regime branches as honest cited Features off the same resolved
+    # pack that supplies the LGD values. firb_fse_senior_lgd_split gates the FSE
+    # 45/40 split; airb_lgd_collateral_method_applicable gates the B31 Art. 169A/169B
+    # AIRB collateral-method branches (CRR AIRB is free-form).
+    fse_senior_lgd_split = resolved_pack.feature("firb_fse_senior_lgd_split")
+    airb_collateral_method_applies = resolved_pack.feature("airb_lgd_collateral_method_applicable")
     lgd_values = supervisory_lgd_values(resolved_pack)
     lgd_senior = lgd_values["unsecured"]
     lgd_subordinated = subordinated_unsecured_lgd(resolved_pack)
@@ -490,7 +499,7 @@ def apply_firb_supervisory_lgd_no_collateral(
     # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
     # non-FSE senior unsecured = 40% (Art. 161(1)(aa)).
     # Under CRR, all senior unsecured = 45% (no FSE distinction).
-    if is_basel_3_1 and "cp_is_financial_sector_entity" in schema_names:
+    if fse_senior_lgd_split and "cp_is_financial_sector_entity" in schema_names:
         lgd_senior_fse = lgd_values["unsecured_fse"]
         lgd_senior_expr = (
             pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
@@ -504,11 +513,11 @@ def apply_firb_supervisory_lgd_no_collateral(
     airb_method = config.airb_collateral_method if config else None
     is_airb = pl.col("approach") == ApproachType.AIRB.value
 
-    if is_basel_3_1 and airb_method == AIRBCollateralMethod.FOUNDATION:
+    if airb_collateral_method_applies and airb_method == AIRBCollateralMethod.FOUNDATION:
         # AIRB Foundation election: use supervisory LGDU (same as FIRB)
         uses_formula = (pl.col("approach") == ApproachType.FIRB.value) | is_airb
     elif (
-        is_basel_3_1
+        airb_collateral_method_applies
         and airb_method == AIRBCollateralMethod.LGD_MODELLING
         and "has_sufficient_collateral_data" in schema_names
     ):

@@ -132,8 +132,13 @@ class HaircutCalculator:
         Returns:
             LazyFrame with haircut-adjusted collateral values
         """
-        is_b31 = config.is_basel_3_1
-        resolved_pack = _resolve_pack_for_haircut(pack, config, is_b31)
+        # Bootstrap: _resolve_pack_for_haircut needs a regime hint only for its
+        # no-config fallback; in apply_haircuts config is always present, so the
+        # resolved pack's regime matches config. The maturity-band GATE then reads
+        # the cited Feature (S9d) — _maturity_band_expression keeps its bool param
+        # (Option B). The haircut VALUES already come from the pack DecisionTable.
+        resolved_pack = _resolve_pack_for_haircut(pack, config, config.is_basel_3_1)
+        is_b31 = resolved_pack.feature("collateral_haircut_maturity_bands_revised")
         haircut_table = decision_table_df(
             resolved_pack.decision("collateral_haircuts"),
             value_name="haircut",

@@ -305,6 +305,17 @@ ENTRIES: dict[str, RuleEntry] = {
         ),
         citation=Citation("PS1/26", "161", "Basel 3.1 F-IRB supervisory LGD (CRE32.9-12)"),
     ),
+    # FCCM collateral-haircut maturity-band structure: Basel 3.1 uses 5 bands
+    # (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus) vs the CRR 3 bands. Overrides the CRR
+    # Feature; gates _maturity_band_expression in engine/crm/haircuts.py. The
+    # haircut VALUES live in the collateral_haircuts DecisionTable below.
+    "collateral_haircut_maturity_bands_revised": Feature(
+        name="collateral_haircut_maturity_bands_revised",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "224", "FCCM 5 maturity bands (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus)"
+        ),
+    ),
     # Basel 3.1 FCCM supervisory haircuts (PRA PS1/26 Art. 224 Tables 1/3 /
     # CRE22.52-53). Overrides the CRR table of the same name. 5 maturity bands
     # (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus); long-dated corporate steps up to

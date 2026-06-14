@@ -325,9 +325,15 @@ def compute_fcsm_columns(
     )
 
     # 1. Filter to eligible financial collateral + ensure zero-haircut flag
-    # 2. Derive per-item RW
+    # 2. Derive per-item RW. The institution (Art. 120 ECRA/SCRA) and corporate
+    #    (Art. 122 Table 6) SA RW tables selected here are the SAME regime concept
+    #    the SA calculator gates — reuse the cited `sa_revised_risk_weight_tables`
+    #    Feature (S9b dedupe) rather than reading config.is_basel_3_1. The helper
+    #    keeps its `is_b31` bool plumbing param (Option B).
     eligible = _prepare_eligible_collateral(
-        collateral, config.is_basel_3_1, floors.equity_collateral_rw
+        collateral,
+        resolved_pack.feature("sa_revised_risk_weight_tables"),
+        floors.equity_collateral_rw,
     )
 
     # 3. Multi-level join (direct + facility + counterparty) to bring exposure

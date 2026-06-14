@@ -31,8 +31,11 @@ import json
 import sys
 from typing import TYPE_CHECKING, cast
 
+from rwa_calc.rulebook.resolve import resolve
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import date
 
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -99,6 +102,30 @@ def diff_packs(before: dict[str, object], after: dict[str, object]) -> dict[str,
 def diff_is_empty(diff: dict[str, list]) -> bool:
     """True when a :func:`diff_packs` result reports no changes."""
     return not any(diff.values())
+
+
+# =============================================================================
+# PACK CITATION INDEX — citation -> entries (the watchfire-matrix analogue)
+# =============================================================================
+
+
+def pack_citation_index(
+    reporting_date: date, regimes: Sequence[str] = ("crr", "b31")
+) -> dict[str, list[str]]:
+    """Map each distinct pack citation string to the sorted entry names citing it.
+
+    The pack-data analogue of watchfire's article->function matrix: resolves
+    each regime's pack and groups entry names by ``str(entry.citation)``. The
+    entry set is date-invariant — resolution merges all pack entries regardless
+    of date; only ``Schedule`` *values* depend on the date — so any valid
+    ``reporting_date`` yields the same index. Consumed by the arch_check pack-
+    citation gate and the citation-coverage contract test.
+    """
+    index: dict[str, set[str]] = {}
+    for regime in regimes:
+        for name, entry in resolve(regime, reporting_date).entries.items():
+            index.setdefault(str(entry.citation), set()).add(name)
+    return {citation: sorted(names) for citation, names in sorted(index.items())}
 
 
 # =============================================================================

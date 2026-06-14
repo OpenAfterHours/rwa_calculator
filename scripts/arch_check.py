@@ -154,6 +154,18 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     "engine/aggregator/_securitisation.py": {"MONEY_COLS"},
 }
 
+# Pack Citations whose article is legitimately outside watchfire's bundled
+# credit-risk index — a documented soft-warn (not a fatal gap), keyed by
+# (instrument, article). Mirrors the PS / PRA pending-index soft policy of
+# check 9. New entries require explicit regulatory justification.
+PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
+    ("CRR", "128"): (
+        "high-risk exposure class omitted from UK CRR by SI 2021/1078; "
+        "Basel 3.1 re-introduces it via PS1/26 (the b31 pack carries the PS citation)"
+    ),
+    ("CRR", "274"): "SA-CCR alpha — outside watchfire's bundled credit-risk index",
+}
+
 # Engine modules exempt from the check-8 "must declare a module logger" rule.
 # These are utility / helper modules (not stage implementations) — they do not
 # need their own logger. New stage implementations (loader, classifier,
@@ -1308,6 +1320,61 @@ def check_watchfire_citations() -> tuple[list[str], list[str]]:
     return fatal, warnings
 
 
+def check_pack_citations() -> tuple[list[str], list[str]]:
+    """Validate every resolved-rulepack Citation via watchfire (parse + index).
+
+    The pack-data analogue of :func:`check_watchfire_citations` (which sees only
+    ``@cites`` decorators). Every rulepack entry carries a ``Citation``; after
+    the Phase 5 table-move the pack is the regulatory value-home, so its
+    citations must be as well-formed and index-covered as the engine's
+    decorators. Returns ``(fatal, warnings)``: parse failures, unknown
+    instruments and uncovered articles are fatal — except the documented
+    ``PACK_CITATION_SOFT_ALLOWLIST`` (articles legitimately outside watchfire's
+    bundled credit-risk index), which degrade to soft warnings.
+    """
+    from datetime import date
+
+    try:
+        from watchfire import parse_citation
+        from watchfire.config import load_config
+        from watchfire.index import covers, load_index
+    except ImportError as exc:
+        return ([f"  watchfire not importable: {exc}"], [])
+
+    try:
+        from rwa_calc.rulebook.audit import pack_citation_index
+    except ImportError as exc:
+        return ([f"  rwa_calc.rulebook.audit not importable: {exc}"], [])
+
+    index = load_index()
+    instruments = set(load_config(Path.cwd()).instruments)
+    # Citations are date-invariant; any valid date resolves the same entry set.
+    citations = pack_citation_index(date(2026, 1, 1))
+
+    fatal: list[str] = []
+    warnings: list[str] = []
+    for citation_str, entries in citations.items():
+        location = f"  rulepack {citation_str!r} (entries: {', '.join(entries)})"
+        try:
+            citation = parse_citation(citation_str)
+        except Exception as exc:  # noqa: BLE001 — watchfire raises CitationParseError
+            fatal.append(f"{location}: parse_failure: {exc}")
+            continue
+        if citation.instrument not in instruments:
+            fatal.append(f"{location}: unknown_instrument: {citation.instrument!r}")
+            continue
+        if not covers(index, citation):
+            reason = PACK_CITATION_SOFT_ALLOWLIST.get((citation.instrument, citation.article or ""))
+            if reason is None:
+                fatal.append(
+                    f"{location}: unknown_article: {citation.instrument} "
+                    f"{citation.article} not in the bundled index"
+                )
+            else:
+                warnings.append(f"{location}: unknown_article (soft): {reason}")
+    return fatal, warnings
+
+
 def _run_checks(
     target: Path,
     checks: list[tuple[str, Callable[[Path], list[str]]]],
@@ -1412,9 +1479,19 @@ def main() -> int:
             )
         )
 
+    pack_fatal, pack_warnings = check_pack_citations()
+    if pack_fatal:
+        all_violations.append(
+            (
+                "rulepack: malformed or unknown pack citations",
+                pack_fatal,
+            )
+        )
+    soft_warnings = watchfire_warnings + pack_warnings
+
     if not all_violations:
         print("arch_check: all checks passed")
-        _print_watchfire_warnings(watchfire_warnings, leading_blank=True)
+        _print_watchfire_warnings(soft_warnings, leading_blank=True)
         return 0
 
     print("arch_check: VIOLATIONS FOUND\n")
@@ -1424,8 +1501,8 @@ def main() -> int:
             print(v)
         print()
 
-    _print_watchfire_warnings(watchfire_warnings, leading_blank=False)
-    if watchfire_warnings:
+    _print_watchfire_warnings(soft_warnings, leading_blank=False)
+    if soft_warnings:
         print()
 
     total = sum(len(v) for _, v in all_violations)

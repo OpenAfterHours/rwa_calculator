@@ -17,7 +17,13 @@ import json
 from datetime import date
 from typing import TYPE_CHECKING
 
-from rwa_calc.rulebook.audit import diff_is_empty, diff_packs, main, serialize_pack
+from rwa_calc.rulebook.audit import (
+    diff_is_empty,
+    diff_packs,
+    main,
+    pack_citation_index,
+    serialize_pack,
+)
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
@@ -148,3 +154,28 @@ def test_main_unwraps_pipeline_manifest_rulepack_key(tmp_path: Path) -> None:
 
     # Bare pack manifest vs the same pack wrapped in a pipeline manifest → identical.
     assert main([str(bare), str(wrapped)]) == 0
+
+
+# --- pack_citation_index ----------------------------------------------------
+
+
+def test_pack_citation_index_groups_entries_by_citation() -> None:
+    """Each citation string maps to the sorted entry names citing it, across regimes."""
+    index = pack_citation_index(_REPORTING_DATE)
+
+    assert index
+    assert all(isinstance(citation, str) for citation in index)
+    assert all(names == sorted(names) for names in index.values())
+
+
+def test_pack_citation_index_separates_regime_specific_citations() -> None:
+    """An entry cited differently per regime appears under both citation strings.
+
+    ``irb_scaling_factor`` is CRR Art. 153(1) under CRR and PS1/26 paragraph 153
+    under Basel 3.1 — two distinct citation strings, both naming the entry.
+    """
+    index = pack_citation_index(_REPORTING_DATE)
+
+    citing = {citation for citation, names in index.items() if "irb_scaling_factor" in names}
+    assert len(citing) == 2
+    assert "PS1/26, paragraph 153" in citing

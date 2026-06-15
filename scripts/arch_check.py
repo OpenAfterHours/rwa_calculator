@@ -181,6 +181,9 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/crm/life_insurance.py",
     "engine/crm/provisions.py",
     "engine/crm/simple_method.py",
+    # Pure parameter module: derives the RE-split secured-LTV cap records from
+    # the rulepack. No pipeline-stage telemetry (the stage is stage.py).
+    "engine/stages/re_split/params.py",
     "engine/supporting_factors.py",
     "engine/irb/adjustments.py",
     "engine/irb/formulas.py",

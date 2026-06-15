@@ -238,6 +238,19 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "124F", "Basel 3.1 Art. 124F/124H RE-split LTV caps and risk weights"
         ),
     ),
+    # SA RE loan-split secured-LTV caps. Basel 3.1 (PS1/26 Art. 124F RRE /
+    # Art. 124H CRE) revises both caps to 55% of property value (less prior
+    # charges per Art. 124F(2)/124H(2)). Override the CRR Art. 125/126 caps.
+    "re_split_rre_secured_ltv_cap": ScalarParam(
+        name="re_split_rre_secured_ltv_cap",
+        value=Decimal("0.55"),
+        citation=Citation("PS1/26", "124F", "RRE preferential RW up to 55% of value"),
+    ),
+    "re_split_cre_secured_ltv_cap": ScalarParam(
+        name="re_split_cre_secured_ltv_cap",
+        value=Decimal("0.55"),
+        citation=Citation("PS1/26", "124H", "CRE preferential RW up to 55% of value"),
+    ),
     # Basel 3.1 revised slotting tables (PRA PS1/26 Art. 153(5) Table A / CRE33):
     # HVCRE risk-weight + EL splits and the PF pre-operational distinction.
     # Overrides the CRR Feature; selects the B31 table family in

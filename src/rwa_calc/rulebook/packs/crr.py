@@ -242,6 +242,20 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "125", "CRR Art. 125/126 RE-split LTV caps and risk weights"),
     ),
+    # SA RE loan-split secured-LTV caps — the preferential-RW LTV ceiling per
+    # property type. CRR Art. 125 RRE 80% / Art. 126 CRE 50%. Consumed by
+    # engine/stages/re_split/params.py via compile.scalar_value; b31.py overrides
+    # both with the PS1/26 Art. 124F/124H 55% values.
+    "re_split_rre_secured_ltv_cap": ScalarParam(
+        name="re_split_rre_secured_ltv_cap",
+        value=Decimal("0.80"),
+        citation=Citation("CRR", "125", "RRE preferential RW up to 80% LTV"),
+    ),
+    "re_split_cre_secured_ltv_cap": ScalarParam(
+        name="re_split_cre_secured_ltv_cap",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "126", "CRE preferential RW up to 50% LTV"),
+    ),
     # Slotting (supervisory specialised-lending) risk-weight + EL-rate tables:
     # Basel 3.1 (PRA PS1/26 Art. 153(5) Table A / CRE33) revises them with HVCRE
     # and PF pre-operational splits — see packs/b31.py. The Feature selects the

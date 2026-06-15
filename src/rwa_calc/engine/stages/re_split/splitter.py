@@ -112,11 +112,11 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     re_split_warning,
 )
-from rwa_calc.data.tables.re_split_parameters import (
+from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.stages.re_split.params import (
     SplitParameters,
     re_split_parameters,
 )
-from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.rulebook import RulepackV0
 
 _SA_BOUND_APPROACHES: tuple[str, ...] = (ApproachType.SA.value, ApproachType.EQUITY.value)

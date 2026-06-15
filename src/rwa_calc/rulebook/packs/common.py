@@ -532,4 +532,31 @@ ENTRIES: dict[str, RuleEntry] = {
         value=250,
         citation=Citation("CRR", "279c", "(2) business days per year in the MF sqrt divisor"),
     ),
+    # Failed-trade settlement-risk band lower bounds in working days past due
+    # (CRR Art. 378 DvP Table 1 / Art. 379 non-DvP Column 4). Integer day counts.
+    "failed_trade_dvp_band_5_15_lower_days": IntParam(
+        name="failed_trade_dvp_band_5_15_lower_days",
+        value=5,
+        citation=Citation("CRR", "378", "Table 1 DvP 5-15 working-days band lower bound"),
+    ),
+    "failed_trade_dvp_band_16_30_lower_days": IntParam(
+        name="failed_trade_dvp_band_16_30_lower_days",
+        value=16,
+        citation=Citation("CRR", "378", "Table 1 DvP 16-30 working-days band lower bound"),
+    ),
+    "failed_trade_dvp_band_31_45_lower_days": IntParam(
+        name="failed_trade_dvp_band_31_45_lower_days",
+        value=31,
+        citation=Citation("CRR", "378", "Table 1 DvP 31-45 working-days band lower bound"),
+    ),
+    "failed_trade_dvp_band_46_plus_lower_days": IntParam(
+        name="failed_trade_dvp_band_46_plus_lower_days",
+        value=46,
+        citation=Citation("CRR", "378", "Table 1 DvP 46+ working-days band lower bound"),
+    ),
+    "failed_trade_non_dvp_col4_lower_days": IntParam(
+        name="failed_trade_non_dvp_col4_lower_days",
+        value=5,
+        citation=Citation("CRR", "379", "(1) non-DvP free-delivery Column 4 t+5 lower bound"),
+    ),
 }

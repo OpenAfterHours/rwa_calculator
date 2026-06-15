@@ -90,9 +90,10 @@ SA_CCR_IR_BUCKET_CORRELATION_13: Decimal = Decimal("0.3")
 # MATURITY FACTOR CONSTANTS (CRR Art. 279c, Art. 285(2)-(3))
 # =============================================================================
 
-MF_UNMARGINED_CAP_YEARS: Decimal = Decimal("1.0")
-MF_UNMARGINED_DENOM_YEARS: Decimal = Decimal("1.0")
-MF_MARGINED_SCALAR: Decimal = Decimal("1.5")
+# MF_UNMARGINED_CAP_YEARS (1.0) / MF_UNMARGINED_DENOM_YEARS (1.0) /
+# MF_MARGINED_SCALAR (1.5) — CRR Art. 279c — moved to packs/common.py
+# (mf_unmargined_cap_years / mf_unmargined_denom_years / mf_margined_scalar).
+# The MPOR floor day counts below stay as int constants.
 
 MF_MARGINED_FLOOR_DAYS_REPO_SFT: int = 5
 MF_MARGINED_FLOOR_DAYS_OTC: int = 10
@@ -194,17 +195,13 @@ CCR_WWR_SPECIFIC_LGD_OVERRIDE: Decimal = Decimal("1.0")
 # year convention (BCBS CRE52.40 footnote).
 # =============================================================================
 
-# CRR Art. 279b(1)(a) supervisory duration rate: SD(S,E) = (exp(-0.05*S) - exp(-0.05*E))/0.05
-SA_CCR_SUPERVISORY_DURATION_RATE: Decimal = Decimal("0.05")
+# CRR Art. 279b(1)(a) supervisory duration rate (0.05) — moved to packs/common.py
+# (sa_ccr_supervisory_duration_rate). The 10-BD start-date floor expressed as a
+# 0.04 year fraction (10/250) is sa_ccr_start_floor_years in the pack.
 
-# CRR Art. 279b(1)(a): start-date S floored at 10 business days
-SA_CCR_START_FLOOR_BD: int = 10
-
-# BCBS CRE52.40 footnote: 250-business-day year convention
+# BCBS CRE52.40 footnote: 250-business-day year convention (still consumed by
+# engine/ccr/maturity_factor.py for the margined MPOR sqrt term).
 SA_CCR_BUSINESS_DAYS_PER_YEAR: int = 250
-
-# Derived: 10/250 = 0.04 year fraction floor for S
-SA_CCR_START_FLOOR_YEARS: Decimal = Decimal("10") / Decimal("250")
 
 
 # =============================================================================

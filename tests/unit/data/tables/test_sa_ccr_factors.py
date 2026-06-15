@@ -23,9 +23,14 @@ assertion failure rather than a collection-time ``ImportError``.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import rwa_calc.data.tables.sa_ccr_factors as _mod
+from rwa_calc.rulebook.resolve import resolve
+
+# Scalars moved to the rulepack (S12-09b) are pinned via the resolved pack.
+_PACK = resolve("crr", date(2026, 1, 1))
 
 # =============================================================================
 # TestSupervisoryFactors — Art. 280 Table 1
@@ -309,7 +314,7 @@ class TestMaturityFactorConstants:
         Assert:  equals 1.0.
         """
         # Arrange
-        val = _mod.MF_UNMARGINED_CAP_YEARS
+        val = _PACK.scalar_param("mf_unmargined_cap_years").value
 
         # Assert
         assert val == Decimal("1.0"), (
@@ -319,7 +324,7 @@ class TestMaturityFactorConstants:
     def test_mf_unmargined_denom_years_is_1(self) -> None:
         """Art. 279c(1)(a): unmargined MF denominator = 1 year."""
         # Arrange
-        val = _mod.MF_UNMARGINED_DENOM_YEARS
+        val = _PACK.scalar_param("mf_unmargined_denom_years").value
 
         # Assert
         assert val == Decimal("1.0"), (
@@ -329,7 +334,7 @@ class TestMaturityFactorConstants:
     def test_mf_margined_scalar_is_1_5(self) -> None:
         """Art. 279c(1)(b): margined MF scalar = 1.5 (the 3/2 factor)."""
         # Arrange
-        val = _mod.MF_MARGINED_SCALAR
+        val = _PACK.scalar_param("mf_margined_scalar").value
 
         # Assert
         assert val == Decimal("1.5"), (

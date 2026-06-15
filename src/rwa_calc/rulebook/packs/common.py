@@ -224,4 +224,34 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("14"),
         citation=Citation("CRR", "279a", "(3) CDO tranche delta attachment/detachment coefficient"),
     ),
+    # SA-CCR adjusted-notional supervisory duration (CRR Art. 279b(1)(a)):
+    # SD(S,E) = (exp(-0.05*S) - exp(-0.05*E))/0.05 with S floored at 10 BD =
+    # 10/250 = 0.04 year fraction. Regime-invariant.
+    "sa_ccr_supervisory_duration_rate": ScalarParam(
+        name="sa_ccr_supervisory_duration_rate",
+        value=Decimal("0.05"),
+        citation=Citation("CRR", "279b", "(1)(a) supervisory duration rate"),
+    ),
+    "sa_ccr_start_floor_years": ScalarParam(
+        name="sa_ccr_start_floor_years",
+        value=Decimal("0.04"),
+        citation=Citation("CRR", "279b", "(1)(a) start-date floor 10/250 = 0.04 year fraction"),
+    ),
+    # SA-CCR maturity-factor scalars (CRR Art. 279c): unmargined 1-year cap /
+    # denominator and the margined 3/2 (=1.5) scalar. Regime-invariant.
+    "mf_unmargined_cap_years": ScalarParam(
+        name="mf_unmargined_cap_years",
+        value=Decimal("1.0"),
+        citation=Citation("CRR", "279c", "(1)(a) unmargined MF cap = 1 year"),
+    ),
+    "mf_unmargined_denom_years": ScalarParam(
+        name="mf_unmargined_denom_years",
+        value=Decimal("1.0"),
+        citation=Citation("CRR", "279c", "(1)(a) unmargined MF denominator = 1 year"),
+    ),
+    "mf_margined_scalar": ScalarParam(
+        name="mf_margined_scalar",
+        value=Decimal("1.5"),
+        citation=Citation("CRR", "279c", "(1)(b) margined MF 3/2 scalar"),
+    ),
 }

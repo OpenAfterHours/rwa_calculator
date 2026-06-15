@@ -20,6 +20,7 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
@@ -31,13 +32,20 @@ from rwa_calc.data.tables.sa_ccr_factors import (
     MF_MARGINED_FLOOR_DAYS_OTC,
     MF_MARGINED_FLOOR_DAYS_REPO_SFT,
     MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT,
-    MF_MARGINED_SCALAR,
-    MF_UNMARGINED_CAP_YEARS,
-    MF_UNMARGINED_DENOM_YEARS,
     SA_CCR_BUSINESS_DAYS_PER_YEAR,
 )
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR maturity-factor scalars (CRR Art. 279c) resolved from the rulepack once
+# at module load. The MPOR floor day counts and the 250-BD-year basis stay as
+# int constants in data/tables.
+_PACK = resolve("crr", date(2026, 1, 1))
+_MF_MARGINED_SCALAR = scalar_value(_PACK.scalar_param("mf_margined_scalar"))
+_MF_UNMARGINED_CAP_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_cap_years"))
+_MF_UNMARGINED_DENOM_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_denom_years"))
 
 
 # Watchfire's bundled CRR index does not yet contain Art. 279c; collapse the
@@ -63,9 +71,9 @@ def compute_maturity_factor_unmargined(trades: pl.LazyFrame) -> pl.LazyFrame:
         (
             pl.min_horizontal(
                 pl.col("years_to_maturity"),
-                pl.lit(float(MF_UNMARGINED_CAP_YEARS)),
+                pl.lit(_MF_UNMARGINED_CAP_YEARS),
             )
-            / float(MF_UNMARGINED_DENOM_YEARS)
+            / _MF_UNMARGINED_DENOM_YEARS
         )
         .sqrt()
         .alias("maturity_factor")
@@ -160,7 +168,7 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     # MF = 1.5 * sqrt(MPOR_eff / 250) per Art. 279c(2).
     maturity_factor = (
-        pl.lit(float(MF_MARGINED_SCALAR))
+        pl.lit(_MF_MARGINED_SCALAR)
         * (mpor_eff.cast(pl.Float64) / pl.lit(float(SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
     ).cast(pl.Float64)
 

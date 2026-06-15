@@ -172,6 +172,14 @@ PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
         "Art. 158 (IRB expected-loss amounts) omitted from UK CRR by SI 2021/1078; "
         "the slotting EL rates follow EU CRR / PRA PS1/26 Art. 158(6) Table B"
     ),
+    ("CRR", "279b"): (
+        "SA-CCR supervisory duration (Art. 279b) — not in watchfire's bundled "
+        "credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "279c"): (
+        "SA-CCR maturity-factor formulae (Art. 279c) — not in watchfire's bundled "
+        "credit-risk index (UK CRR retains it unchanged)"
+    ),
 }
 
 # Engine modules exempt from the check-8 "must declare a module logger" rule.

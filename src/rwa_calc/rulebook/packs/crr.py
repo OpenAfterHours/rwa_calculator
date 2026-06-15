@@ -947,4 +947,35 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "129", "(5)(a)-(d) unrated CB derivation from issuer RW"),
         default=Decimal("1.00"),
     ),
+    # SA INSTITUTION/CORPORATE/RETAIL/DEFAULTED TAIL SCALARS (CRR Art. 121-127)
+    "institution_short_term_unrated_rw_crr": ScalarParam(
+        name="institution_short_term_unrated_rw_crr",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "121", "(3) unrated short-term institution 20%"),
+    ),
+    "crr_corporate_sme_rw": ScalarParam(
+        name="crr_corporate_sme_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "122", "corporate SME flat 100% (Basel 3.1 reduces to 85%)"),
+    ),
+    "crr_non_regulatory_retail_rw": ScalarParam(
+        name="crr_non_regulatory_retail_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "123", "non-regulatory retail 100%"),
+    ),
+    "crr_defaulted_rw_high_provision": ScalarParam(
+        name="crr_defaulted_rw_high_provision",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "127", "defaulted, provisions >= 20% of unsecured EAD"),
+    ),
+    "crr_defaulted_rw_low_provision": ScalarParam(
+        name="crr_defaulted_rw_low_provision",
+        value=Decimal("1.50"),
+        citation=Citation("CRR", "127", "defaulted, provisions < 20%"),
+    ),
+    "crr_defaulted_provision_threshold": ScalarParam(
+        name="crr_defaulted_provision_threshold",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "127", "20% provision threshold"),
+    ),
 }

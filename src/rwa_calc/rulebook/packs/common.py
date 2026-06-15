@@ -448,4 +448,50 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "137", "(1)-(2) Table 9 ECA/MEIP score -> sovereign RW"),
         default=Decimal("1.00"),
     ),
+    # SA SOVEREIGN/PSE/RGLA/MDB/IO INVARIANT SCALARS (CRR Art. 114-118)
+    "pse_short_term_rw": ScalarParam(
+        name="pse_short_term_rw",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "116", "(3) short-term PSE 20%"),
+    ),
+    "pse_unrated_default_rw": ScalarParam(
+        name="pse_unrated_default_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "116", "unrated PSE conservative fallback 100%"),
+    ),
+    "rgla_uk_devolved_rw": ScalarParam(
+        name="rgla_uk_devolved_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "115", "PRA UK devolved administrations 0%"),
+    ),
+    "rgla_uk_local_auth_rw": ScalarParam(
+        name="rgla_uk_local_auth_rw",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "115", "PRA UK local authorities 20%"),
+    ),
+    "rgla_domestic_currency_rw": ScalarParam(
+        name="rgla_domestic_currency_rw",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "115", "(5) domestic-currency RGLA 20%"),
+    ),
+    "rgla_unrated_default_rw": ScalarParam(
+        name="rgla_unrated_default_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "115", "unrated RGLA conservative fallback 100%"),
+    ),
+    "mdb_named_zero_rw": ScalarParam(
+        name="mdb_named_zero_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "117", "(2) named MDB 0%"),
+    ),
+    "mdb_unrated_rw": ScalarParam(
+        name="mdb_unrated_rw",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "117", "(1) Table 2B unrated MDB 50%"),
+    ),
+    "io_zero_rw": ScalarParam(
+        name="io_zero_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "118", "named international organisation 0%"),
+    ),
 }

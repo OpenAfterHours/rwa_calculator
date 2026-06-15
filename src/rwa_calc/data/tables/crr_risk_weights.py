@@ -66,6 +66,11 @@ def _decimal_rw_from_pack(
     return cast("dict[Decimal, Decimal]", dict(pack.lookup(name).entries))
 
 
+def _scalar_dec(name: str, pack: ResolvedRulepack = _SA_RW_PACK) -> Decimal:
+    """Read a cited SA risk-weight scalar's Decimal value back from the rulepack."""
+    return pack.scalar_param(name).value
+
+
 # =============================================================================
 # INTERNAL DATAFRAME-BUILD HELPERS
 #
@@ -173,7 +178,7 @@ INSTITUTION_SHORT_TERM_RISK_WEIGHTS_B31_ECRA: dict[CQS, Decimal] = _cqs_rw_from_
 
 # CRR Art. 121(3): unrated institution, original effective maturity <= 3 months.
 # Overrides the Table 5 sovereign-derived fallback.
-INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = Decimal("0.20")
+INSTITUTION_SHORT_TERM_UNRATED_RW_CRR = _scalar_dec("institution_short_term_unrated_rw_crr")
 
 # CRR Art. 121 Table 5: sovereign-derived risk weights for unrated institutions.
 # Maps the institution's home-jurisdiction sovereign CQS to the institution RW.
@@ -312,10 +317,10 @@ PSE_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = _cqs_rw_from_pack("pse_risk_we
 
 # Art. 116(3): Short-term PSE exposures (original effective maturity <= 3 months)
 # receive 20% risk weight. No domestic currency condition required.
-PSE_SHORT_TERM_RW = Decimal("0.20")
+PSE_SHORT_TERM_RW = _scalar_dec("pse_short_term_rw")
 
 # Default for unrated PSE when sovereign CQS is unknown (conservative fallback)
-PSE_UNRATED_DEFAULT_RW = Decimal("1.00")
+PSE_UNRATED_DEFAULT_RW = _scalar_dec("pse_unrated_default_rw")
 
 
 @cites("CRR Art. 116")
@@ -349,16 +354,16 @@ RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = _cqs_rw_from_pack(
 RGLA_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = _cqs_rw_from_pack("rgla_risk_weights_own_rating")
 
 # PRA designation: UK devolved administrations (Scotland, Wales, NI) → 0%
-RGLA_UK_DEVOLVED_RW = Decimal("0.00")
+RGLA_UK_DEVOLVED_RW = _scalar_dec("rgla_uk_devolved_rw")
 
 # PRA designation: UK local authorities → 20%
-RGLA_UK_LOCAL_AUTH_RW = Decimal("0.20")
+RGLA_UK_LOCAL_AUTH_RW = _scalar_dec("rgla_uk_local_auth_rw")
 
 # Art. 115(5): Domestic-currency RGLA exposures → 20% regardless of CQS
-RGLA_DOMESTIC_CURRENCY_RW = Decimal("0.20")
+RGLA_DOMESTIC_CURRENCY_RW = _scalar_dec("rgla_domestic_currency_rw")
 
 # Default for unrated RGLA when sovereign CQS is unknown (conservative fallback)
-RGLA_UNRATED_DEFAULT_RW = Decimal("1.00")
+RGLA_UNRATED_DEFAULT_RW = _scalar_dec("rgla_unrated_default_rw")
 
 
 @cites("CRR Art. 115")
@@ -393,10 +398,10 @@ MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = _cqs_rw_from_pack("mdb_risk_weig
 
 # Art. 117(2): Named MDBs receiving 0% risk weight unconditionally.
 # These 16 MDBs get 0% regardless of CQS rating.
-MDB_NAMED_ZERO_RW = Decimal("0.00")
+MDB_NAMED_ZERO_RW = _scalar_dec("mdb_named_zero_rw")
 
 # Default for unrated non-named MDBs (Art. 117(1), Table 2B unrated row)
-MDB_UNRATED_RW = Decimal("0.50")
+MDB_UNRATED_RW = _scalar_dec("mdb_unrated_rw")
 
 
 @cites("CRR Art. 117")
@@ -416,7 +421,7 @@ def _create_mdb_df() -> pl.DataFrame:
 
 # Art. 118: Named international organisations receiving 0% risk weight.
 # EU, IMF, BIS, EFSF, ESM — no rated table exists (all IOs in Art. 118 are 0%).
-IO_ZERO_RW = Decimal("0.00")
+IO_ZERO_RW = _scalar_dec("io_zero_rw")
 
 INTERNATIONAL_ORG_RISK_WEIGHTS: dict[CQS, Decimal] = {
     CQS.UNRATED: IO_ZERO_RW,
@@ -520,12 +525,12 @@ def build_corporate_guarantor_rw_expr(
 
 # Art. 122: Corporate SME flat under CRR (Basel 3.1 reduces this to 85% via
 # B31_CORPORATE_SME_RW). Named for the SA override chain — explicit beats magic.
-CRR_CORPORATE_SME_RW: Decimal = Decimal("1.00")
+CRR_CORPORATE_SME_RW: Decimal = _scalar_dec("crr_corporate_sme_rw")
 
 # Art. 123: Non-regulatory retail (fails qualifying criteria) -> 100% under CRR.
 # Mirrors B31_RETAIL_NON_REGULATORY_RW; named to remove the magic-1.0 from the
 # SA override chain.
-CRR_NON_REGULATORY_RETAIL_RW: Decimal = Decimal("1.00")
+CRR_NON_REGULATORY_RETAIL_RW: Decimal = _scalar_dec("crr_non_regulatory_retail_rw")
 
 
 # Qualifying-CCP trade-exposure RWs (CRR Art. 306 / CRE54.14-15), Other-items RWs
@@ -538,9 +543,15 @@ CRR_NON_REGULATORY_RETAIL_RW: Decimal = Decimal("1.00")
 # DEFAULTED EXPOSURE RISK WEIGHTS (CRR Art. 127)
 # =============================================================================
 
-CRR_DEFAULTED_RW_HIGH_PROVISION = Decimal("1.00")  # Provisions >= 20% of unsecured EAD
-CRR_DEFAULTED_RW_LOW_PROVISION = Decimal("1.50")  # Provisions < 20% of unsecured EAD
-CRR_DEFAULTED_PROVISION_THRESHOLD = Decimal("0.20")  # 20% threshold
+CRR_DEFAULTED_RW_HIGH_PROVISION = _scalar_dec(
+    "crr_defaulted_rw_high_provision"
+)  # Provisions >= 20% of unsecured EAD
+CRR_DEFAULTED_RW_LOW_PROVISION = _scalar_dec(
+    "crr_defaulted_rw_low_provision"
+)  # Provisions < 20% of unsecured EAD
+CRR_DEFAULTED_PROVISION_THRESHOLD = _scalar_dec(
+    "crr_defaulted_provision_threshold"
+)  # 20% threshold
 
 
 def _create_retail_df() -> pl.DataFrame:

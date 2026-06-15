@@ -160,6 +160,14 @@ PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
         "Basel 3.1 re-introduces it via PS1/26 (the b31 pack carries the PS citation)"
     ),
     ("CRR", "274"): "SA-CCR alpha — outside watchfire's bundled credit-risk index",
+    ("CRR", "378"): (
+        "CRR Title V (Settlement Risk) Art. 378 DvP multiplier ladder — not in "
+        "watchfire's bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "379"): (
+        "CRR Title V (Settlement Risk) Art. 379 non-DvP free-delivery RW — not in "
+        "watchfire's bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
     ("CRR", "158"): (
         "Art. 158 (IRB expected-loss amounts) omitted from UK CRR by SI 2021/1078; "
         "the slotting EL rates follow EU CRR / PRA PS1/26 Art. 158(6) Table B"

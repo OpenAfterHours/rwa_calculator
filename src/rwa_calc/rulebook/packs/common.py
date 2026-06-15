@@ -126,4 +126,39 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.20"),
         citation=Citation("CRR", "111", "OC mapped to MLR (20%) when remaining maturity <= 1yr"),
     ),
+    # Failed-trade settlement-risk multipliers (CRR Art. 378 / 379 / 92(3)(ca);
+    # PRA PS1/26 Art. 92 — numerics unchanged). The DvP working-days-past-due
+    # band BOUNDS stay as int counts in data/tables/failed_trades_multipliers.py
+    # (they feed both the multiplier ladder and the regulatory_band strings in
+    # engine/ccr/failed_trades.py); only the multipliers / conversion move here.
+    "failed_trade_dvp_mult_5_15": ScalarParam(
+        name="failed_trade_dvp_mult_5_15",
+        value=Decimal("0.08"),
+        citation=Citation("CRR", "378", "Table 1 DvP 5-15 working days past due"),
+    ),
+    "failed_trade_dvp_mult_16_30": ScalarParam(
+        name="failed_trade_dvp_mult_16_30",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "378", "Table 1 DvP 16-30 working days past due"),
+    ),
+    "failed_trade_dvp_mult_31_45": ScalarParam(
+        name="failed_trade_dvp_mult_31_45",
+        value=Decimal("0.75"),
+        citation=Citation("CRR", "378", "Table 1 DvP 31-45 working days past due"),
+    ),
+    "failed_trade_dvp_mult_46_plus": ScalarParam(
+        name="failed_trade_dvp_mult_46_plus",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "378", "Table 1 DvP 46+ working days past due"),
+    ),
+    "failed_trade_non_dvp_col4_rw_multiplier": ScalarParam(
+        name="failed_trade_non_dvp_col4_rw_multiplier",
+        value=Decimal("12.50"),
+        citation=Citation("CRR", "379", "(1) Table 2 Col 4 non-DvP 1250% RW => 12.5"),
+    ),
+    "own_funds_to_rwa_factor": ScalarParam(
+        name="own_funds_to_rwa_factor",
+        value=Decimal("12.5"),
+        citation=Citation("CRR", "92", "(3)(ca) own-funds -> RWA conversion 1/0.08"),
+    ),
 }

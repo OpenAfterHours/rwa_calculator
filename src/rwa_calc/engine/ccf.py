@@ -65,10 +65,6 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.airb_floors import (
-    AIRB_OBS_FLOOR_B_MULTIPLIER,
-    AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER,
-)
 from rwa_calc.data.tables.ccf import (
     OC_SHORT_MATURITY_CCF,
     OC_SHORT_MATURITY_THRESHOLD_DAYS,
@@ -79,6 +75,7 @@ from rwa_calc.data.tables.ccf import (
 )
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
@@ -431,7 +428,8 @@ class CCFCalculator:
             # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
             airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
-                pl.col("_sa_ccf_from_risk_type") * float(AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER),
+                pl.col("_sa_ccf_from_risk_type")
+                * scalar_value(resolved_pack.scalar_param("airb_revolving_ccf_floor_multiplier")),
             )
             is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
                 pl.col("_sa_ccf_from_risk_type") < 1.0
@@ -555,7 +553,7 @@ class CCFCalculator:
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
             floor_b = pl.col("on_bs_for_ead") + pl.col("nominal_after_provision") * pl.col(
                 "_sa_ccf_from_risk_type"
-            ) * float(AIRB_OBS_FLOOR_B_MULTIPLIER)
+            ) * scalar_value(resolved_pack.scalar_param("airb_obs_floor_b_multiplier"))
 
             # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
             # EAD >= on-balance-sheet EAD (ignoring Art. 166D)

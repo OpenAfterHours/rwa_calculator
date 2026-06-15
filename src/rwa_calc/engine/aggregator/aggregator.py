@@ -238,7 +238,9 @@ class OutputAggregator:
             else:
                 s_trea_pre = 0.0
 
-            of_adj_val, gcra_capped = compute_of_adj(irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre)
+            of_adj_val, gcra_capped = compute_of_adj(
+                irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre, pack=resolved_pack
+            )
 
             combined, floor_impact, output_floor_summary = apply_floor_with_impact(
                 combined,

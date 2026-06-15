@@ -97,8 +97,6 @@ _PATH_COLLAPSE = "engine/aggregator/_collapse.py"
 # explicit regulatory justification — regulatory values otherwise belong in
 # src/rwa_calc/data/tables/.
 REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
-    # float alias of imported Decimal (PR #248)
-    "engine/aggregator/_floor.py": {"GCRA_CAP_RATE"},
     # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
     _PATH_AGGREGATOR_SCHEMAS: {"T2_CREDIT_CAP_RATE"},
     # float alias of resolve(...).scalar("irb_scaling_factor") Decimal (PR #248)

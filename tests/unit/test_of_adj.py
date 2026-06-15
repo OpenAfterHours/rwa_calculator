@@ -34,7 +34,8 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
 from rwa_calc.engine.aggregator import OutputAggregator
-from rwa_calc.engine.aggregator._floor import GCRA_CAP_RATE, compute_of_adj
+from rwa_calc.engine.aggregator._floor import compute_of_adj
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.contract_columns import pad_irb_branch, pad_sa_branch, pad_slotting_branch
 
 # Padded zero-row branch frames mirroring the orchestrator's sealed branch
@@ -192,8 +193,9 @@ class TestComputeOfAdj:
         assert of_adj == pytest.approx(0.0)
 
     def test_gcra_cap_rate_constant(self) -> None:
-        """GCRA_CAP_RATE must be 1.25% = 0.0125."""
-        assert pytest.approx(0.0125) == GCRA_CAP_RATE
+        """The pack ``gcra_cap_rate`` must be 1.25% = 0.0125 (b31 / Art. 92 para 2A)."""
+        gcra_cap_rate = float(resolve("b31", date(2027, 1, 1)).scalar("gcra_cap_rate"))
+        assert pytest.approx(0.0125) == gcra_cap_rate
 
     def test_12_5_multiplier(self) -> None:
         """The 12.5 multiplier converts capital to RWA (1/8% capital requirement)."""

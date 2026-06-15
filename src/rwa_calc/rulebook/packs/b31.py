@@ -345,6 +345,25 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "166D", "(5) A-IRB EAD floor tests (on-BS + 50% off-BS)"),
     ),
+    # A-IRB own-estimate CCF floor (PRA PS1/26 Art. 166D(1) / BCBS CRE32.27):
+    # own-estimate CCFs for eligible revolving facilities are floored at 50% of
+    # the SA CCF for the same item type. Read in engine/ccf.py::_compute_ccf
+    # (Basel-3.1-only; the CRR path uses the raw modelled CCF). Gated by the
+    # firb_uses_sa_ccf Feature above.
+    "airb_revolving_ccf_floor_multiplier": ScalarParam(
+        name="airb_revolving_ccf_floor_multiplier",
+        value=Decimal("0.5"),
+        citation=Citation("PS1/26", "166D", "(1) own-estimate CCF floor 50% of SA CCF (CRE32.27)"),
+    ),
+    # A-IRB facility-level EAD floor multiplier (PRA PS1/26 Art. 166D(5)(b)): the
+    # Art. 166D(3) single-EAD approach floors EAD at on-BS EAD + 50% of the
+    # off-BS EAD measured at the F-IRB CCF. Read in engine/ccf.py::_compute_ead,
+    # gated by the airb_ead_floor_applies Feature above.
+    "airb_obs_floor_b_multiplier": ScalarParam(
+        name="airb_obs_floor_b_multiplier",
+        value=Decimal("0.5"),
+        citation=Citation("PS1/26", "166D", "(5)(b) facility-level EAD floor — on-BS + 50% off-BS"),
+    ),
     # SA CCF table selection: Basel 3.1 Table A1 (OC 40%, LR 10%) vs the CRR Annex I
     # table. Overrides the CRR Feature; gates the provisions pro-rata weighting basis.
     "sa_revised_ccf_table": Feature(
@@ -388,6 +407,15 @@ ENTRIES: dict[str, RuleEntry] = {
         name="output_floor_pct_full",
         value=Decimal("0.725"),
         citation=Citation("PS1/26", "92", "fully phased-in output floor (72.5%)"),
+    ),
+    # GCRA cap for OF-ADJ (PRA PS1/26 Art. 92 para 2A): general credit risk
+    # adjustments are capped at 1.25% of S-TREA before entering
+    # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2). Read in
+    # engine/aggregator/_floor.py::compute_of_adj (output floor is Basel-3.1-only).
+    "gcra_cap_rate": ScalarParam(
+        name="gcra_cap_rate",
+        value=Decimal("0.0125"),
+        citation=Citation("PS1/26", "92", "GCRA cap at 1.25% of S-TREA (Art. 92 para 2A)"),
     ),
     # Basel-3.1 capital-stack regime GATES (S11d). Mirror the regime-derived
     # `enabled` flags on EquityTransitionalConfig / PostModelAdjustmentConfig

@@ -30,13 +30,24 @@ from watchfire import cites
 from rwa_calc.domain.enums import CQS
 from rwa_calc.rulebook.resolve import resolve
 
-# Invariant SA risk-weight scalars now live in the common rulepack pack. Their
-# Decimal values are read back here for the test-only convenience helpers
-# (``lookup_risk_weight`` / ``_create_retail_df``) so there is one source of
-# truth; the engine resolves these directly from the pack.
+# SA risk-weight values now live in the common/CRR rulepack packs. They are read
+# back here as the canonical module-level dicts/scalars so this module stays a
+# thin pack-binding shim with one source of truth (the pack); every builder /
+# engine / guarantee consumer keeps indexing the same names unchanged.
 _SA_RW_PACK = resolve("crr", date(2026, 1, 1))
 _RETAIL_RISK_WEIGHT_DEC: Decimal = _SA_RW_PACK.scalar_param("retail_risk_weight").value
 _OTHER_ITEMS_DEFAULT_RW_DEC: Decimal = _SA_RW_PACK.scalar_param("other_items_default_rw").value
+
+
+def _cqs_rw_from_pack(name: str) -> dict[CQS, Decimal]:
+    """Read a CQS-enum-keyed SA risk-weight LookupTable back from the rulepack.
+
+    Returns the exact ``dict[CQS, Decimal]`` the former module-level literal
+    held (the pack stores the same Decimals under the same CQS keys), so all
+    downstream consumers are byte-identical.
+    """
+    return cast("dict[CQS, Decimal]", dict(_SA_RW_PACK.lookup(name).entries))
+
 
 # =============================================================================
 # INTERNAL DATAFRAME-BUILD HELPERS
@@ -104,15 +115,7 @@ def _build_cqs_rw_df(
 # CENTRAL GOVT / CENTRAL BANK RISK WEIGHTS (CRR Art. 114)
 # =============================================================================
 
-CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.00"),  # AAA to AA-
-    CQS.CQS2: Decimal("0.20"),  # A+ to A-
-    CQS.CQS3: Decimal("0.50"),  # BBB+ to BBB-
-    CQS.CQS4: Decimal("1.00"),  # BB+ to BB-
-    CQS.CQS5: Decimal("1.00"),  # B+ to B-
-    CQS.CQS6: Decimal("1.50"),  # CCC+ and below
-    CQS.UNRATED: Decimal("1.00"),  # Unrated
-}
+CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS: dict[CQS, Decimal] = _cqs_rw_from_pack("cgcb_risk_weights")
 
 
 def _create_cgcb_df() -> pl.DataFrame:
@@ -312,26 +315,14 @@ def build_institution_guarantor_rw_expr(
 
 # Sovereign-derived treatment (Art. 116(1), Table 2):
 # Applied to PSEs without their own ECAI rating — uses sovereign CQS.
-PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),
-    CQS.CQS3: Decimal("1.00"),
-    CQS.CQS4: Decimal("1.00"),
-    CQS.CQS5: Decimal("1.00"),
-    CQS.CQS6: Decimal("1.50"),
-}
+PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = _cqs_rw_from_pack(
+    "pse_risk_weights_sovereign_derived"
+)
 
 # Own-rating treatment (Art. 116(2), Table 2A):
 # Applied to PSEs with their own ECAI rating — uses the PSE's own CQS.
 # Note: CQS 3 = 50% here vs 100% in sovereign-derived (Table 2).
-PSE_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),
-    CQS.CQS3: Decimal("0.50"),
-    CQS.CQS4: Decimal("1.00"),
-    CQS.CQS5: Decimal("1.00"),
-    CQS.CQS6: Decimal("1.50"),
-}
+PSE_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = _cqs_rw_from_pack("pse_risk_weights_own_rating")
 
 # Art. 116(3): Short-term PSE exposures (original effective maturity <= 3 months)
 # receive 20% risk weight. No domestic currency condition required.
@@ -362,26 +353,14 @@ def _create_pse_df() -> pl.DataFrame:
 # Sovereign-derived treatment (Art. 115(1)(a), Table 1A):
 # Applied to RGLAs without their own ECAI rating — uses sovereign CQS.
 # Values identical to PSE sovereign-derived (Table 2).
-RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),
-    CQS.CQS3: Decimal("1.00"),
-    CQS.CQS4: Decimal("1.00"),
-    CQS.CQS5: Decimal("1.00"),
-    CQS.CQS6: Decimal("1.50"),
-}
+RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED: dict[CQS, Decimal] = _cqs_rw_from_pack(
+    "rgla_risk_weights_sovereign_derived"
+)
 
 # Own-rating treatment (Art. 115(1)(b), Table 1B):
 # Applied to RGLAs with their own ECAI rating — uses the RGLA's own CQS.
 # Note: CQS 3 = 50% here vs 100% in sovereign-derived (Table 1A).
-RGLA_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.50"),
-    CQS.CQS3: Decimal("0.50"),
-    CQS.CQS4: Decimal("1.00"),
-    CQS.CQS5: Decimal("1.00"),
-    CQS.CQS6: Decimal("1.50"),
-}
+RGLA_RISK_WEIGHTS_OWN_RATING: dict[CQS, Decimal] = _cqs_rw_from_pack("rgla_risk_weights_own_rating")
 
 # PRA designation: UK devolved administrations (Scotland, Wales, NI) → 0%
 RGLA_UK_DEVOLVED_RW = Decimal("0.00")
@@ -424,15 +403,7 @@ def _create_rgla_df() -> pl.DataFrame:
 # table is unreachable under CRR after the Art. 117(1) institution-routing fix.
 #
 # Differs from institution table: CQS 2 = 30% (vs CRR 50%), unrated = 50% (not 40%).
-MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = {
-    CQS.CQS1: Decimal("0.20"),
-    CQS.CQS2: Decimal("0.30"),
-    CQS.CQS3: Decimal("0.50"),
-    CQS.CQS4: Decimal("1.00"),
-    CQS.CQS5: Decimal("1.00"),
-    CQS.CQS6: Decimal("1.50"),
-    CQS.UNRATED: Decimal("0.50"),
-}
+MDB_RISK_WEIGHTS_TABLE_2B: dict[CQS, Decimal] = _cqs_rw_from_pack("mdb_risk_weights_table_2b")
 
 # Art. 117(2): Named MDBs receiving 0% risk weight unconditionally.
 # These 16 MDBs get 0% regardless of CQS rating.

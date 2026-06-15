@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.domain.enums import EquityType
+from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook.model import (
     Citation,
     DecisionTable,
@@ -764,5 +764,97 @@ ENTRIES: dict[str, RuleEntry] = {
             (("other_physical", None, None, None), Decimal("0.40")),
         ),
         citation=Citation("CRR", "224", "FCCM supervisory haircuts Table 1 (3 maturity bands)"),
+    ),
+    # =========================================================================
+    # SA EXPOSURE-CLASS CQS RISK-WEIGHT TABLES (CRR Art. 114-117)
+    # CQS-enum-keyed so data/tables builders read them back as dict[CQS, Decimal]
+    # (byte-identical to the former module-level literals). Sovereign-derived vs
+    # own-rating variants are kept separate per the regulation's table split.
+    # =========================================================================
+    "cgcb_risk_weights": LookupTable(
+        name="cgcb_risk_weights",
+        entries={
+            CQS.CQS1: Decimal("0.00"),
+            CQS.CQS2: Decimal("0.20"),
+            CQS.CQS3: Decimal("0.50"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+            CQS.UNRATED: Decimal("1.00"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "114", "central govt / central bank RW by CQS"),
+        default=Decimal("1.00"),
+    ),
+    "pse_risk_weights_sovereign_derived": LookupTable(
+        name="pse_risk_weights_sovereign_derived",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.50"),
+            CQS.CQS3: Decimal("1.00"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "116", "(1) Table 2 PSE sovereign-derived RW"),
+        default=Decimal("1.00"),
+    ),
+    "pse_risk_weights_own_rating": LookupTable(
+        name="pse_risk_weights_own_rating",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.50"),
+            CQS.CQS3: Decimal("0.50"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "116", "(2) Table 2A PSE own-rating RW"),
+        default=Decimal("1.00"),
+    ),
+    "rgla_risk_weights_sovereign_derived": LookupTable(
+        name="rgla_risk_weights_sovereign_derived",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.50"),
+            CQS.CQS3: Decimal("1.00"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "115", "(1)(a) Table 1A RGLA sovereign-derived RW"),
+        default=Decimal("1.00"),
+    ),
+    "rgla_risk_weights_own_rating": LookupTable(
+        name="rgla_risk_weights_own_rating",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.50"),
+            CQS.CQS3: Decimal("0.50"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "115", "(1)(b) Table 1B RGLA own-rating RW"),
+        default=Decimal("1.00"),
+    ),
+    "mdb_risk_weights_table_2b": LookupTable(
+        name="mdb_risk_weights_table_2b",
+        entries={
+            CQS.CQS1: Decimal("0.20"),
+            CQS.CQS2: Decimal("0.30"),
+            CQS.CQS3: Decimal("0.50"),
+            CQS.CQS4: Decimal("1.00"),
+            CQS.CQS5: Decimal("1.00"),
+            CQS.CQS6: Decimal("1.50"),
+            CQS.UNRATED: Decimal("0.50"),
+        },
+        key="cqs",
+        citation=Citation("CRR", "117", "(1) Table 2B non-named MDB RW by CQS"),
+        default=Decimal("0.50"),
     ),
 }

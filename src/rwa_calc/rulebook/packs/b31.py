@@ -26,6 +26,7 @@ from decimal import Decimal
 
 from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook.model import (
+    BandedTable,
     Citation,
     DecisionTable,
     Feature,
@@ -1113,5 +1114,32 @@ ENTRIES: dict[str, RuleEntry] = {
         name="b31_commercial_general_max_secured_ratio",
         value=Decimal("0.55"),
         citation=Citation("PS1/26", "124H", "(2) CRE loan-split cap 55% of value"),
+    ),
+    # Income-producing RE LTV-band tables (whole-loan RW by LTV). The final
+    # None-bound band is the catch-all; the data layer renders these to the
+    # historical list[dict] (ltv_lower / ltv_upper=999.0 sentinel / risk_weight)
+    # and the SA RE expr builders compile them to the cumulative LTV when/then.
+    "b31_residential_income_ltv_bands": BandedTable(
+        name="b31_residential_income_ltv_bands",
+        bands=(
+            (Decimal("0.50"), Decimal("0.30")),
+            (Decimal("0.60"), Decimal("0.35")),
+            (Decimal("0.70"), Decimal("0.40")),
+            (Decimal("0.80"), Decimal("0.50")),
+            (Decimal("0.90"), Decimal("0.60")),
+            (Decimal("1.00"), Decimal("0.75")),
+            (None, Decimal("1.05")),
+        ),
+        input="ltv",
+        citation=Citation("PS1/26", "124G", "Table 6B income-producing RRE LTV bands"),
+    ),
+    "b31_commercial_income_ltv_bands": BandedTable(
+        name="b31_commercial_income_ltv_bands",
+        bands=(
+            (Decimal("0.80"), Decimal("1.00")),
+            (None, Decimal("1.10")),
+        ),
+        input="ltv",
+        citation=Citation("PS1/26", "124I", "(1)/(2) income-producing CRE LTV bands"),
     ),
 }

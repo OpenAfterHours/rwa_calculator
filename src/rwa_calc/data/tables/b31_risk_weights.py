@@ -366,13 +366,7 @@ B31_EFFECTIVE_DATE: date = date(2027, 1, 1)
 # Rated SL exposures use the corporate CQS table (Art. 122A(3)).
 # =============================================================================
 
-B31_SA_SL_RISK_WEIGHTS: dict[str, Decimal] = {
-    "object_finance": Decimal("1.00"),  # 100%
-    "commodities_finance": Decimal("1.00"),  # 100%
-    "project_finance_pre_operational": Decimal("1.30"),  # 130%
-    "project_finance_operational": Decimal("1.00"),  # 100%
-    "project_finance_high_quality": Decimal("0.80"),  # 80%
-}
+B31_SA_SL_RISK_WEIGHTS: dict[str, Decimal] = _str_rw_from_pack("b31_sa_sl_risk_weights")
 
 # =============================================================================
 # SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.49)
@@ -756,16 +750,18 @@ def b31_sa_sl_rw_expr() -> pl.Expr:
 
     return (
         pl.when(sl.str.contains("object"))
-        .then(pl.lit(1.00))
+        .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["object_finance"])))
         .when(sl.str.contains("commodit"))
-        .then(pl.lit(1.00))
+        .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["commodities_finance"])))
         .when(sl.str.contains("project"))
         .then(
             pl.when(phase.str.contains("pre"))
-            .then(pl.lit(1.30))
+            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_pre_operational"])))
             .when(phase.str.contains("high"))
-            .then(pl.lit(0.80))
-            .otherwise(pl.lit(1.00))  # operational default
+            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_high_quality"])))
+            .otherwise(
+                pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_operational"]))
+            )  # operational default
         )
         .otherwise(pl.lit(1.00))  # fallback for unknown SL types
     )

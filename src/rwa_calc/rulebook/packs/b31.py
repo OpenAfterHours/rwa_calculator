@@ -1142,4 +1142,17 @@ ENTRIES: dict[str, RuleEntry] = {
         input="ltv",
         citation=Citation("PS1/26", "124I", "(1)/(2) income-producing CRE LTV bands"),
     ),
+    # SA specialised-lending risk weights by SL type (PRA PS1/26 Art. 122A-122B).
+    "b31_sa_sl_risk_weights": LookupTable(
+        name="b31_sa_sl_risk_weights",
+        entries={
+            "object_finance": Decimal("1.00"),
+            "commodities_finance": Decimal("1.00"),
+            "project_finance_pre_operational": Decimal("1.30"),
+            "project_finance_operational": Decimal("1.00"),
+            "project_finance_high_quality": Decimal("0.80"),
+        },
+        key="sl_type",
+        citation=Citation("PS1/26", "122A", "SA specialised-lending risk weights"),
+    ),
 }

@@ -254,4 +254,118 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("1.5"),
         citation=Citation("CRR", "279c", "(1)(b) margined MF 3/2 scalar"),
     ),
+    # SA-CCR PFE multiplier (CRR Art. 278(3)): floor F = 0.05 and the 2 in the
+    # 2*(1-F)*AddOn denominator of the multiplier exponent.
+    "pfe_multiplier_floor_f": ScalarParam(
+        name="pfe_multiplier_floor_f",
+        value=Decimal("0.05"),
+        citation=Citation("CRR", "278", "(3) PFE multiplier floor F = 5%"),
+    ),
+    "pfe_aggregate_denom_coeff": ScalarParam(
+        name="pfe_aggregate_denom_coeff",
+        value=Decimal("2"),
+        citation=Citation("CRR", "278", "(3) PFE multiplier exponent denominator coefficient"),
+    ),
+    # SA-CCR single-value supervisory factors (CRR Art. 280 Table 1).
+    "sa_ccr_supervisory_factor_ir": ScalarParam(
+        name="sa_ccr_supervisory_factor_ir",
+        value=Decimal("0.005"),
+        citation=Citation("CRR", "280", "Table 1 interest-rate supervisory factor"),
+    ),
+    "sa_ccr_supervisory_factor_fx": ScalarParam(
+        name="sa_ccr_supervisory_factor_fx",
+        value=Decimal("0.04"),
+        citation=Citation("CRR", "280", "Table 1 FX supervisory factor"),
+    ),
+    "sa_ccr_supervisory_factor_equity_sn": ScalarParam(
+        name="sa_ccr_supervisory_factor_equity_sn",
+        value=Decimal("0.32"),
+        citation=Citation("CRR", "280", "Table 1 single-name equity supervisory factor"),
+    ),
+    "sa_ccr_supervisory_factor_equity_idx": ScalarParam(
+        name="sa_ccr_supervisory_factor_equity_idx",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "280", "Table 1 index equity supervisory factor"),
+    ),
+    # SA-CCR asset-class correlations (CRR Art. 280a credit / 280b equity /
+    # 280c commodity — cited to parent Art. 280, which is in the index).
+    "sa_ccr_correlation_credit_sn": ScalarParam(
+        name="sa_ccr_correlation_credit_sn",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "280", "280a single-name credit correlation"),
+    ),
+    "sa_ccr_correlation_credit_idx": ScalarParam(
+        name="sa_ccr_correlation_credit_idx",
+        value=Decimal("0.80"),
+        citation=Citation("CRR", "280", "280a index credit correlation"),
+    ),
+    "sa_ccr_correlation_equity_sn": ScalarParam(
+        name="sa_ccr_correlation_equity_sn",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "280", "280b single-name equity correlation"),
+    ),
+    "sa_ccr_correlation_equity_idx": ScalarParam(
+        name="sa_ccr_correlation_equity_idx",
+        value=Decimal("0.80"),
+        citation=Citation("CRR", "280", "280b index equity correlation"),
+    ),
+    "sa_ccr_correlation_commodity": ScalarParam(
+        name="sa_ccr_correlation_commodity",
+        value=Decimal("0.40"),
+        citation=Citation("CRR", "280", "280c commodity correlation (0.40, NOT 0.80)"),
+    ),
+    # SA-CCR IR cross-bucket correlations (CRR Art. 277a(1)(a)): adjacent buckets
+    # 0.70, non-adjacent (B1,B3) 0.30.
+    "sa_ccr_ir_bucket_correlation_12": ScalarParam(
+        name="sa_ccr_ir_bucket_correlation_12",
+        value=Decimal("0.7"),
+        citation=Citation("CRR", "277a", "(1)(a) IR adjacent-bucket correlation B1-B2"),
+    ),
+    "sa_ccr_ir_bucket_correlation_23": ScalarParam(
+        name="sa_ccr_ir_bucket_correlation_23",
+        value=Decimal("0.7"),
+        citation=Citation("CRR", "277a", "(1)(a) IR adjacent-bucket correlation B2-B3"),
+    ),
+    "sa_ccr_ir_bucket_correlation_13": ScalarParam(
+        name="sa_ccr_ir_bucket_correlation_13",
+        value=Decimal("0.3"),
+        citation=Citation("CRR", "277a", "(1)(a) IR non-adjacent-bucket correlation B1-B3"),
+    ),
+    # SA-CCR sub-class supervisory factors (CRR Art. 280 Table 1). String-keyed
+    # by the credit-quality / commodity-bucket label; consumed in engine/ccr/pfe.py
+    # via lookup_float_map.
+    "sa_ccr_supervisory_factors_credit_sn": LookupTable(
+        name="sa_ccr_supervisory_factors_credit_sn",
+        entries={
+            "IG": Decimal("0.0046"),
+            "HY": Decimal("0.013"),
+            "NON_RATED": Decimal("0.06"),
+        },
+        key="credit_quality",
+        citation=Citation("CRR", "280", "Table 1 single-name credit SF by quality"),
+        default=Decimal("0.06"),
+    ),
+    "sa_ccr_supervisory_factors_credit_idx": LookupTable(
+        name="sa_ccr_supervisory_factors_credit_idx",
+        entries={
+            "IG": Decimal("0.0038"),
+            "HY": Decimal("0.0106"),
+        },
+        key="credit_quality",
+        citation=Citation("CRR", "280", "Table 1 index credit SF by quality"),
+        default=Decimal("0.0106"),
+    ),
+    "sa_ccr_supervisory_factors_commodity": LookupTable(
+        name="sa_ccr_supervisory_factors_commodity",
+        entries={
+            "ELECTRICITY": Decimal("0.40"),
+            "OIL_GAS": Decimal("0.18"),
+            "METALS": Decimal("0.18"),
+            "AGRICULTURAL": Decimal("0.18"),
+            "OTHER": Decimal("0.18"),
+        },
+        key="commodity_type",
+        citation=Citation("CRR", "280", "Table 1 commodity SF by bucket"),
+        default=Decimal("0.18"),
+    ),
 }

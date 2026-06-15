@@ -61,12 +61,6 @@
   "rwa_calc.data.tables.haircuts::get_maturity_band": [
     "CRR Art. 224"
   ],
-  "rwa_calc.data.tables.sa_ccr_factors::_build_sa_ccr_correlations_df": [
-    "CRR Art. 280"
-  ],
-  "rwa_calc.data.tables.sa_ccr_factors::_build_sa_ccr_supervisory_factors_df": [
-    "CRR Art. 280"
-  ],
   "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
     "PS1/26, paragraph 92"
   ],

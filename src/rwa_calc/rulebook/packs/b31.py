@@ -269,6 +269,20 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
         default=Decimal("0.50"),
     ),
+    # PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions keyed by
+    # reporting year (Basel 3.1 only). Years absent from the table (2030+) resolve
+    # to 0 via .get(year, 0.0) in engine/ccr/pipeline_adapter.py.
+    "sa_ccr_transitional_addon_phase": LookupTable(
+        name="sa_ccr_transitional_addon_phase",
+        entries={
+            2027: Decimal("0.60"),
+            2028: Decimal("0.40"),
+            2029: Decimal("0.20"),
+        },
+        key="reporting_year",
+        citation=Citation("PS1/26", "274", "(2A) transitional alpha add-on phase-out 2027-2029"),
+        default=Decimal("0"),
+    ),
     # Basel 3.1 revised slotting tables (PRA PS1/26 Art. 153(5) Table A / CRE33):
     # HVCRE risk-weight + EL splits and the PF pre-operational distinction.
     # Overrides the CRR Feature; selects the B31 table family in

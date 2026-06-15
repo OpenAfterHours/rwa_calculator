@@ -180,6 +180,10 @@ PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
         "SA-CCR maturity-factor formulae (Art. 279c) — not in watchfire's bundled "
         "credit-risk index (UK CRR retains it unchanged)"
     ),
+    ("CRR", "277a"): (
+        "SA-CCR IR cross-bucket correlations (Art. 277a) — not in watchfire's "
+        "bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
 }
 
 # Engine modules exempt from the check-8 "must declare a module logger" rule.

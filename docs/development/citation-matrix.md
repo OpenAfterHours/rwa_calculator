@@ -879,86 +879,73 @@ Last generated: 2026-06-15.
     --8<-- "src/rwa_calc/engine/ccr/hedging_sets.py:96:191"
     ```
 
-??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:142"
+??? quote "`compute_addon_per_asset_class` — src/rwa_calc/engine/ccr/pfe.py:147"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:142:211"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:147:216"
     ```
 
 
 ### CRR Art. 278 — Transactions with a non-linear risk profile
 
-??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:58"
+??? quote "`compute_pfe` — src/rwa_calc/engine/ccr/pfe.py:63"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/pfe.py:58:136"
+    --8<-- "src/rwa_calc/engine/ccr/pfe.py:63:141"
     ```
 
 
 ### CRR Art. 279 — Treatment of collateral
 
-??? quote "`compute_adjusted_notional_ir` — src/rwa_calc/engine/ccr/adjusted_notional.py:51"
+??? quote "`compute_adjusted_notional_ir` — src/rwa_calc/engine/ccr/adjusted_notional.py:56"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:51:105"
+    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:56:107"
     ```
 
-??? quote "`compute_adjusted_notional_fx` — src/rwa_calc/engine/ccr/adjusted_notional.py:108"
+??? quote "`compute_adjusted_notional_fx` — src/rwa_calc/engine/ccr/adjusted_notional.py:110"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:108:219"
+    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:110:221"
     ```
 
-??? quote "`compute_adjusted_notional_credit` — src/rwa_calc/engine/ccr/adjusted_notional.py:222"
+??? quote "`compute_adjusted_notional_credit` — src/rwa_calc/engine/ccr/adjusted_notional.py:224"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:222:284"
+    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:224:283"
     ```
 
-??? quote "`compute_adjusted_notional_equity` — src/rwa_calc/engine/ccr/adjusted_notional.py:287"
+??? quote "`compute_adjusted_notional_equity` — src/rwa_calc/engine/ccr/adjusted_notional.py:286"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:287:336"
+    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:286:335"
     ```
 
-??? quote "`compute_adjusted_notional_commodity` — src/rwa_calc/engine/ccr/adjusted_notional.py:339"
+??? quote "`compute_adjusted_notional_commodity` — src/rwa_calc/engine/ccr/adjusted_notional.py:338"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:339:387"
+    --8<-- "src/rwa_calc/engine/ccr/adjusted_notional.py:338:386"
     ```
 
-??? quote "`compute_maturity_factor_unmargined` — src/rwa_calc/engine/ccr/maturity_factor.py:46"
+??? quote "`compute_maturity_factor_unmargined` — src/rwa_calc/engine/ccr/maturity_factor.py:54"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:46:72"
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:54:80"
     ```
 
-??? quote "`compute_maturity_factor_margined` — src/rwa_calc/engine/ccr/maturity_factor.py:78"
+??? quote "`compute_maturity_factor_margined` — src/rwa_calc/engine/ccr/maturity_factor.py:86"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:78:167"
+    --8<-- "src/rwa_calc/engine/ccr/maturity_factor.py:86:175"
     ```
 
 
 ### CRR Art. 279a — Supervisory delta
 
-??? quote "`compute_supervisory_delta_linear` — src/rwa_calc/engine/ccr/supervisory_delta.py:58"
+??? quote "`compute_supervisory_delta_linear` — src/rwa_calc/engine/ccr/supervisory_delta.py:64"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:58:81"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:64:87"
     ```
 
-??? quote "`compute_supervisory_delta_option` — src/rwa_calc/engine/ccr/supervisory_delta.py:84"
+??? quote "`compute_supervisory_delta_option` — src/rwa_calc/engine/ccr/supervisory_delta.py:90"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:84:179"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:90:185"
     ```
 
-??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:182"
+??? quote "`compute_supervisory_delta_cdo_tranche` — src/rwa_calc/engine/ccr/supervisory_delta.py:188"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:182:225"
-    ```
-
-
-### CRR Art. 280 — Calculation of risk positions
-
-??? quote "`_build_sa_ccr_supervisory_factors_df` — src/rwa_calc/data/tables/sa_ccr_factors.py:245"
-    ```python
-    --8<-- "src/rwa_calc/data/tables/sa_ccr_factors.py:245:320"
-    ```
-
-??? quote "`_build_sa_ccr_correlations_df` — src/rwa_calc/data/tables/sa_ccr_factors.py:323"
-    ```python
-    --8<-- "src/rwa_calc/data/tables/sa_ccr_factors.py:323:368"
+    --8<-- "src/rwa_calc/engine/ccr/supervisory_delta.py:188:231"
     ```
 
 

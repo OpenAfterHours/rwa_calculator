@@ -45,7 +45,6 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.data.column_spec import ensure_columns
 from rwa_calc.data.schemas import CCR_ALPHA_CARVE_OUT_COUNTERPARTY_TYPES, NETTING_SET_SCHEMA
-from rwa_calc.data.tables.sa_ccr_factors import SA_CCR_TRANSITIONAL_ADDON_PHASE
 from rwa_calc.engine.ccr.adjusted_notional import (
     compute_adjusted_notional_commodity,
     compute_adjusted_notional_credit,
@@ -59,7 +58,7 @@ from rwa_calc.engine.ccr.pfe import compute_addon_per_asset_class, compute_pfe
 from rwa_calc.engine.ccr.rc import compute_rc_margined, compute_rc_unmargined
 from rwa_calc.engine.ccr.sft_fccm import SFT_TRANSACTION_TYPE, sft_rows_to_exposures
 from rwa_calc.engine.ccr.supervisory_delta import compute_supervisory_delta_option
-from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
@@ -70,6 +69,11 @@ logger = logging.getLogger(__name__)
 _PACK = resolve("crr", date(2026, 1, 1))
 _SA_CCR_ALPHA = scalar_value(_PACK.scalar_param("sa_ccr_alpha"))
 _SA_CCR_ALPHA_CARVE_OUT = scalar_value(_PACK.scalar_param("sa_ccr_alpha_carve_out"))
+
+# PRA PS1/26 Art. 274(2A) transitional alpha add-on phase fractions by reporting
+# year (Basel 3.1 only → resolved from the b31 pack). Years absent resolve to 0.
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+_TRANSITIONAL_ADDON_PHASE = lookup_float_map(_B31_PACK.lookup("sa_ccr_transitional_addon_phase"))
 
 
 # =============================================================================
@@ -610,9 +614,7 @@ def _attach_transitional_add_on(
     """
     # Phase factor is resolved at build time: 0 under CRR or for years not in
     # the Art. 274(2A) schedule (e.g. 2030+).
-    phase_factor = (
-        float(SA_CCR_TRANSITIONAL_ADDON_PHASE.get(reporting_date.year, 0)) if is_basel_3_1 else 0.0
-    )
+    phase_factor = _TRANSITIONAL_ADDON_PHASE.get(reporting_date.year, 0.0) if is_basel_3_1 else 0.0
     alpha_uplift = _SA_CCR_ALPHA - _SA_CCR_ALPHA_CARVE_OUT
     carve_out = _SA_CCR_ALPHA_CARVE_OUT
 

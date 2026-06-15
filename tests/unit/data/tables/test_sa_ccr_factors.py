@@ -55,7 +55,7 @@ class TestSupervisoryFactors:
         Assert:  equals 0.005.
         """
         # Arrange
-        sf = _mod.SA_CCR_SUPERVISORY_FACTOR_IR
+        sf = _PACK.scalar_param("sa_ccr_supervisory_factor_ir").value
 
         # Assert
         assert sf == Decimal("0.005"), (
@@ -70,7 +70,7 @@ class TestSupervisoryFactors:
         Assert:  equals 0.04.
         """
         # Arrange
-        sf = _mod.SA_CCR_SUPERVISORY_FACTOR_FX
+        sf = _PACK.scalar_param("sa_ccr_supervisory_factor_fx").value
 
         # Assert
         assert sf == Decimal("0.04"), (
@@ -84,7 +84,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_credit_sn_ig_is_0_46pct(self) -> None:
         """Art. 280 Table 1: credit SN IG supervisory factor = 0.46%."""
         # Arrange
-        sn = _mod.SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN
+        sn = _PACK.lookup("sa_ccr_supervisory_factors_credit_sn").entries
 
         # Assert
         assert sn["IG"] == Decimal("0.0046"), (
@@ -94,7 +94,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_credit_sn_hy_is_1_3pct(self) -> None:
         """Art. 280 Table 1: credit SN HY supervisory factor = 1.3%."""
         # Arrange
-        sn = _mod.SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN
+        sn = _PACK.lookup("sa_ccr_supervisory_factors_credit_sn").entries
 
         # Assert
         assert sn["HY"] == Decimal("0.013"), (
@@ -104,7 +104,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_credit_sn_non_rated_is_6pct(self) -> None:
         """Art. 280 Table 1: credit SN non-rated supervisory factor = 6%."""
         # Arrange
-        sn = _mod.SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN
+        sn = _PACK.lookup("sa_ccr_supervisory_factors_credit_sn").entries
 
         # Assert
         assert sn["NON_RATED"] == Decimal("0.06"), (
@@ -119,7 +119,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_credit_idx_ig_is_0_38pct(self) -> None:
         """Art. 280 Table 1: credit index IG supervisory factor = 0.38%."""
         # Arrange
-        idx = _mod.SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX
+        idx = _PACK.lookup("sa_ccr_supervisory_factors_credit_idx").entries
 
         # Assert
         assert idx["IG"] == Decimal("0.0038"), (
@@ -129,7 +129,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_credit_idx_hy_is_1_06pct(self) -> None:
         """Art. 280 Table 1: credit index HY supervisory factor = 1.06%."""
         # Arrange
-        idx = _mod.SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX
+        idx = _PACK.lookup("sa_ccr_supervisory_factors_credit_idx").entries
 
         # Assert
         assert idx["HY"] == Decimal("0.0106"), (
@@ -143,7 +143,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_equity_sn_is_32pct(self) -> None:
         """Art. 280 Table 1: equity single-name supervisory factor = 32%."""
         # Arrange
-        sf = _mod.SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN
+        sf = _PACK.scalar_param("sa_ccr_supervisory_factor_equity_sn").value
 
         # Assert
         assert sf == Decimal("0.32"), (
@@ -153,7 +153,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_equity_idx_is_20pct(self) -> None:
         """Art. 280 Table 1: equity index supervisory factor = 20%."""
         # Arrange
-        sf = _mod.SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX
+        sf = _PACK.scalar_param("sa_ccr_supervisory_factor_equity_idx").value
 
         # Assert
         assert sf == Decimal("0.20"), (
@@ -167,7 +167,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_commodity_electricity_is_40pct(self) -> None:
         """Art. 280 Table 1: electricity commodity supervisory factor = 40%."""
         # Arrange
-        commodity = _mod.SA_CCR_SUPERVISORY_FACTORS_COMMODITY
+        commodity = _PACK.lookup("sa_ccr_supervisory_factors_commodity").entries
 
         # Assert
         assert commodity["ELECTRICITY"] == Decimal("0.40"), (
@@ -178,7 +178,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_commodity_oil_gas_is_18pct(self) -> None:
         """Art. 280 Table 1: oil/gas commodity supervisory factor = 18%."""
         # Arrange
-        commodity = _mod.SA_CCR_SUPERVISORY_FACTORS_COMMODITY
+        commodity = _PACK.lookup("sa_ccr_supervisory_factors_commodity").entries
 
         # Assert
         assert commodity["OIL_GAS"] == Decimal("0.18"), (
@@ -189,7 +189,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_commodity_metals_is_18pct(self) -> None:
         """Art. 280 Table 1: metals commodity supervisory factor = 18%."""
         # Arrange
-        commodity = _mod.SA_CCR_SUPERVISORY_FACTORS_COMMODITY
+        commodity = _PACK.lookup("sa_ccr_supervisory_factors_commodity").entries
 
         # Assert
         assert commodity["METALS"] == Decimal("0.18"), (
@@ -200,7 +200,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_commodity_agricultural_is_18pct(self) -> None:
         """Art. 280 Table 1: agricultural commodity supervisory factor = 18%."""
         # Arrange
-        commodity = _mod.SA_CCR_SUPERVISORY_FACTORS_COMMODITY
+        commodity = _PACK.lookup("sa_ccr_supervisory_factors_commodity").entries
 
         # Assert
         assert commodity["AGRICULTURAL"] == Decimal("0.18"), (
@@ -211,7 +211,7 @@ class TestSupervisoryFactors:
     def test_supervisory_factor_commodity_other_is_18pct(self) -> None:
         """Art. 280 Table 1: other commodity supervisory factor = 18%."""
         # Arrange
-        commodity = _mod.SA_CCR_SUPERVISORY_FACTORS_COMMODITY
+        commodity = _PACK.lookup("sa_ccr_supervisory_factors_commodity").entries
 
         # Assert
         assert commodity["OTHER"] == Decimal("0.18"), (
@@ -241,7 +241,7 @@ class TestCorrelations:
         Assert:  equals 0.50.
         """
         # Arrange
-        corr = _mod.SA_CCR_CORRELATION_CREDIT_SN
+        corr = _PACK.scalar_param("sa_ccr_correlation_credit_sn").value
 
         # Assert
         assert corr == Decimal("0.50"), (
@@ -251,7 +251,7 @@ class TestCorrelations:
     def test_correlation_credit_idx_is_80pct(self) -> None:
         """Art. 280a: credit index correlation = 80%."""
         # Arrange
-        corr = _mod.SA_CCR_CORRELATION_CREDIT_IDX
+        corr = _PACK.scalar_param("sa_ccr_correlation_credit_idx").value
 
         # Assert
         assert corr == Decimal("0.80"), (
@@ -261,7 +261,7 @@ class TestCorrelations:
     def test_correlation_equity_sn_is_50pct(self) -> None:
         """Art. 280b: equity single-name correlation = 50%."""
         # Arrange
-        corr = _mod.SA_CCR_CORRELATION_EQUITY_SN
+        corr = _PACK.scalar_param("sa_ccr_correlation_equity_sn").value
 
         # Assert
         assert corr == Decimal("0.50"), (
@@ -271,7 +271,7 @@ class TestCorrelations:
     def test_correlation_equity_idx_is_80pct(self) -> None:
         """Art. 280b: equity index correlation = 80%."""
         # Arrange
-        corr = _mod.SA_CCR_CORRELATION_EQUITY_IDX
+        corr = _PACK.scalar_param("sa_ccr_correlation_equity_idx").value
 
         # Assert
         assert corr == Decimal("0.80"), (
@@ -286,7 +286,7 @@ class TestCorrelations:
         commodity sub-classes. This test guards against the 0.80 mistake.
         """
         # Arrange
-        corr = _mod.SA_CCR_CORRELATION_COMMODITY
+        corr = _PACK.scalar_param("sa_ccr_correlation_commodity").value
 
         # Assert — must be 0.40, NOT 0.80
         assert corr == Decimal("0.40"), (
@@ -370,150 +370,10 @@ class TestMaturityFactorConstants:
     def test_pfe_multiplier_floor_f_is_0_05(self) -> None:
         """Art. 278(3): PFE multiplier floor F = 5%."""
         # Arrange
-        val = _mod.PFE_MULTIPLIER_FLOOR_F
+        val = _PACK.scalar_param("pfe_multiplier_floor_f").value
 
         # Assert
         assert val == Decimal("0.05"), (
             f"PFE_MULTIPLIER_FLOOR_F must be Decimal('0.05') per Art. 278(3), got {val!r}"
         )
 
-
-# =============================================================================
-# TestBuilderDataFrames — _build_sa_ccr_supervisory_factors_df and
-#                          _build_sa_ccr_correlations_df
-# =============================================================================
-
-
-class TestBuilderDataFrames:
-    """DataFrame builder helpers must return well-formed Polars DataFrames.
-
-    ``_build_sa_ccr_supervisory_factors_df()`` — 14 rows covering all
-    asset-class / sub-class combinations in Art. 280 Table 1.
-
-    ``_build_sa_ccr_correlations_df()`` — 5 rows covering
-    CREDIT_SN, CREDIT_IDX, EQUITY_SN, EQUITY_IDX, COMMODITY.
-    """
-
-    # -------------------------------------------------------------------------
-    # _build_sa_ccr_supervisory_factors_df
-    # -------------------------------------------------------------------------
-
-    def test_supervisory_factors_df_has_14_rows(self) -> None:
-        """Builder must produce exactly 14 rows (one per Art. 280 Table 1 entry).
-
-        14 = IR(1) + FX(1) + CREDIT_SN(3) + CREDIT_IDX(2) + EQUITY(2) + COMMODITY(5).
-
-        Arrange: call _build_sa_ccr_supervisory_factors_df().
-        Act:     inspect .height.
-        Assert:  equals 14.
-        """
-        # Arrange
-        builder = _mod._build_sa_ccr_supervisory_factors_df
-        df = builder()
-
-        # Assert
-        assert df.height == 14, f"Supervisory factors DataFrame must have 14 rows, got {df.height}"
-
-    def test_supervisory_factors_df_column_set(self) -> None:
-        """Builder DataFrame must have exactly columns ['asset_class', 'sub_class', 'supervisory_factor']."""
-        # Arrange
-        builder = _mod._build_sa_ccr_supervisory_factors_df
-        df = builder()
-
-        # Assert
-        assert set(df.columns) == {"asset_class", "sub_class", "supervisory_factor"}, (
-            f"Unexpected columns: {df.columns!r}"
-        )
-
-    def test_supervisory_factors_df_ir_row_value(self) -> None:
-        """IR row in supervisory factors DataFrame must have supervisory_factor ≈ 0.005."""
-        # Arrange
-        builder = _mod._build_sa_ccr_supervisory_factors_df
-        df = builder()
-
-        # Act
-        ir_rows = df.filter(df["asset_class"] == "IR")
-
-        # Assert
-        assert ir_rows.height == 1, f"Expected 1 IR row, got {ir_rows.height}"
-        actual = ir_rows["supervisory_factor"][0]
-        assert abs(actual - 0.005) < 1e-9, (
-            f"IR supervisory_factor in DataFrame must be ~0.005, got {actual}"
-        )
-
-    def test_supervisory_factors_df_electricity_row_value(self) -> None:
-        """COMMODITY/ELECTRICITY row must have supervisory_factor ≈ 0.40."""
-        # Arrange
-        builder = _mod._build_sa_ccr_supervisory_factors_df
-        df = builder()
-
-        # Act
-        rows = df.filter((df["asset_class"] == "COMMODITY") & (df["sub_class"] == "ELECTRICITY"))
-
-        # Assert
-        assert rows.height == 1, f"Expected 1 ELECTRICITY row, got {rows.height}"
-        actual = rows["supervisory_factor"][0]
-        assert abs(actual - 0.40) < 1e-9, (
-            f"COMMODITY/ELECTRICITY supervisory_factor must be ~0.40, got {actual}"
-        )
-
-    def test_supervisory_factors_df_credit_sn_non_rated_row_value(self) -> None:
-        """CREDIT_SN/NON_RATED row must have supervisory_factor ≈ 0.06."""
-        # Arrange
-        builder = _mod._build_sa_ccr_supervisory_factors_df
-        df = builder()
-
-        # Act
-        rows = df.filter((df["asset_class"] == "CREDIT_SN") & (df["sub_class"] == "NON_RATED"))
-
-        # Assert
-        assert rows.height == 1, f"Expected 1 CREDIT_SN/NON_RATED row, got {rows.height}"
-        actual = rows["supervisory_factor"][0]
-        assert abs(actual - 0.06) < 1e-9, (
-            f"CREDIT_SN/NON_RATED supervisory_factor must be ~0.06, got {actual}"
-        )
-
-    # -------------------------------------------------------------------------
-    # _build_sa_ccr_correlations_df
-    # -------------------------------------------------------------------------
-
-    def test_correlations_df_has_5_rows(self) -> None:
-        """Builder must produce exactly 5 rows (CREDIT_SN, CREDIT_IDX, EQUITY_SN, EQUITY_IDX, COMMODITY).
-
-        Arrange: call _build_sa_ccr_correlations_df().
-        Act:     inspect .height.
-        Assert:  equals 5.
-        """
-        # Arrange
-        builder = _mod._build_sa_ccr_correlations_df
-        df = builder()
-
-        # Assert
-        assert df.height == 5, f"Correlations DataFrame must have 5 rows, got {df.height}"
-
-    def test_correlations_df_has_required_columns(self) -> None:
-        """Builder DataFrame must include columns 'asset_class' and 'correlation'."""
-        # Arrange
-        builder = _mod._build_sa_ccr_correlations_df
-        df = builder()
-
-        # Assert
-        assert "asset_class" in df.columns, f"'asset_class' column missing. Columns: {df.columns!r}"
-        assert "correlation" in df.columns, f"'correlation' column missing. Columns: {df.columns!r}"
-
-    def test_correlations_df_commodity_row_is_40pct(self) -> None:
-        """COMMODITY row in correlations DataFrame must have correlation ≈ 0.40 (Art. 280c)."""
-        # Arrange
-        builder = _mod._build_sa_ccr_correlations_df
-        df = builder()
-
-        # Act
-        rows = df.filter(df["asset_class"] == "COMMODITY")
-
-        # Assert
-        assert rows.height == 1, f"Expected 1 COMMODITY correlation row, got {rows.height}"
-        actual = rows["correlation"][0]
-        assert abs(actual - 0.40) < 1e-9, (
-            f"COMMODITY correlation in DataFrame must be ~0.40 per Art. 280c, got {actual}. "
-            "NOT 0.80 — the plan-bullet contained an error."
-        )

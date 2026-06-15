@@ -247,6 +247,115 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "153", "(5) Basel 3.1 slotting tables (HVCRE + PF pre-op)"),
     ),
+    # Basel 3.1 specialised-lending slotting risk weights (PS1/26 Art. 153(5)
+    # Table A) + EL rates (Art. 158(6) Table B). String-keyed by SlottingCategory
+    # value; OVERRIDE the crr slotting_* entries via overlay. slotting_rw_preop is
+    # b31-only (PRA keeps pre-op PF at the standard Table A weights — no CRR twin).
+    # Consumed by engine/slotting/transforms.py via compile.lookup_float_map.
+    "slotting_rw_base": LookupTable(
+        name="slotting_rw_base",
+        entries={
+            "strong": Decimal("0.70"),
+            "good": Decimal("0.90"),
+            "satisfactory": Decimal("1.15"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "153", "(5) Table A slotting RW (>= 2.5y)"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_short": LookupTable(
+        name="slotting_rw_short",
+        entries={
+            "strong": Decimal("0.50"),
+            "good": Decimal("0.70"),
+            "satisfactory": Decimal("1.15"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "153", "(5)(d) Table A slotting RW (< 2.5y)"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_preop": LookupTable(
+        name="slotting_rw_preop",
+        entries={
+            "strong": Decimal("0.70"),
+            "good": Decimal("0.90"),
+            "satisfactory": Decimal("1.15"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "153", "(5) Table A pre-operational PF (= operational)"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_hvcre": LookupTable(
+        name="slotting_rw_hvcre",
+        entries={
+            "strong": Decimal("0.95"),
+            "good": Decimal("1.20"),
+            "satisfactory": Decimal("1.40"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "153", "(5) Table A HVCRE slotting RW (>= 2.5y)"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_hvcre_short": LookupTable(
+        name="slotting_rw_hvcre_short",
+        entries={
+            "strong": Decimal("0.70"),
+            "good": Decimal("0.95"),
+            "satisfactory": Decimal("1.40"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "153", "(5)(d) Table A HVCRE slotting RW (< 2.5y)"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_el_base": LookupTable(
+        name="slotting_el_base",
+        entries={
+            "strong": Decimal("0.004"),
+            "good": Decimal("0.008"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "158", "(6) Table B slotting EL rate (>= 2.5y)"),
+        default=Decimal("0.028"),
+    ),
+    "slotting_el_short": LookupTable(
+        name="slotting_el_short",
+        entries={
+            "strong": Decimal("0.0"),
+            "good": Decimal("0.004"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "158", "(6) Table B slotting EL rate (< 2.5y)"),
+        default=Decimal("0.028"),
+    ),
+    "slotting_el_hvcre": LookupTable(
+        name="slotting_el_hvcre",
+        entries={
+            "strong": Decimal("0.004"),
+            "good": Decimal("0.004"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("PS1/26", "158", "(6) Table B HVCRE slotting EL rate (flat)"),
+        default=Decimal("0.028"),
+    ),
     # Basel 3.1 removed the IRB equity approaches — all equity uses SA
     # (CRE20.58-62 / PRA PS1/26 Art. 133). Overrides the CRR Feature.
     "equity_irb_approaches_available": Feature(

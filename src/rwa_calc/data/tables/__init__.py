@@ -9,8 +9,6 @@ Modules:
     crr_risk_weights: SA risk weights by exposure class and CQS
     b31_risk_weights: Basel 3.1 LTV-band SA risk weights for real estate
     haircuts: CRM supervisory haircuts (CRR Art. 224 and PRA PS1/26 Art. 224)
-    crr_slotting: CRR specialised lending slotting risk weights
-    b31_slotting: Basel 3.1 specialised lending slotting risk weights
     firb_lgd: F-IRB PD/maturity floors and caps (CRR Art. 162/163)
     entity_class_mapping: entity_type → SA/IRB exposure class lookup
 """
@@ -30,12 +28,6 @@ from .b31_risk_weights import (
     lookup_b31_commercial_rw,
     lookup_b31_residential_rw,
 )
-from .b31_slotting import (
-    B31_SLOTTING_RISK_WEIGHTS,
-    B31_SLOTTING_RISK_WEIGHTS_HVCRE,
-    B31_SLOTTING_RISK_WEIGHTS_PREOP,
-    lookup_b31_slotting_rw,
-)
 from .crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -46,14 +38,6 @@ from .crr_risk_weights import (
     RETAIL_RISK_WEIGHT,
     build_institution_guarantor_rw_expr,
     get_all_risk_weight_tables,
-)
-from .crr_slotting import (
-    SLOTTING_RISK_WEIGHTS,
-    SLOTTING_RISK_WEIGHTS_HVCRE,
-    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
-    SLOTTING_RISK_WEIGHTS_SHORT,
-    calculate_slotting_rwa,
-    lookup_slotting_rw,
 )
 from .entity_class_mapping import (
     ENTITY_TYPE_TO_IRB_CLASS,
@@ -110,18 +94,6 @@ __all__ = [
     "BASEL31_COLLATERAL_HAIRCUTS",
     "FX_HAIRCUT",
     "get_haircut_table",
-    # Slotting — CRR
-    "SLOTTING_RISK_WEIGHTS",
-    "SLOTTING_RISK_WEIGHTS_SHORT",
-    "SLOTTING_RISK_WEIGHTS_HVCRE",
-    "SLOTTING_RISK_WEIGHTS_HVCRE_SHORT",
-    "lookup_slotting_rw",
-    "calculate_slotting_rwa",
-    # Slotting — Basel 3.1
-    "B31_SLOTTING_RISK_WEIGHTS",
-    "B31_SLOTTING_RISK_WEIGHTS_PREOP",
-    "B31_SLOTTING_RISK_WEIGHTS_HVCRE",
-    "lookup_b31_slotting_rw",
     # EU sovereign treatment
     "EU_MEMBER_STATES",
     "EU_COUNTRY_DOMESTIC_CURRENCY",

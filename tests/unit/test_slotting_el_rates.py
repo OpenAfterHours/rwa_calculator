@@ -26,18 +26,6 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_slotting import (
-    B31_SLOTTING_EL_RATES,
-    B31_SLOTTING_EL_RATES_HVCRE,
-    B31_SLOTTING_EL_RATES_SHORT,
-    lookup_b31_slotting_el_rate,
-)
-from rwa_calc.data.tables.crr_slotting import (
-    SLOTTING_EL_RATES,
-    SLOTTING_EL_RATES_HVCRE,
-    SLOTTING_EL_RATES_SHORT,
-    lookup_slotting_el_rate,
-)
 from rwa_calc.domain.enums import SlottingCategory
 from rwa_calc.engine.slotting.transforms import (
     apply_all,
@@ -47,8 +35,18 @@ from rwa_calc.engine.slotting.transforms import (
     compute_el_shortfall_excess,
     prepare_columns,
 )
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad_slotting
+
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+SLOTTING_EL_RATES = _CRR_PACK.lookup("slotting_el_base").entries
+SLOTTING_EL_RATES_SHORT = _CRR_PACK.lookup("slotting_el_short").entries
+SLOTTING_EL_RATES_HVCRE = _CRR_PACK.lookup("slotting_el_hvcre").entries
+B31_SLOTTING_EL_RATES = _B31_PACK.lookup("slotting_el_base").entries
+B31_SLOTTING_EL_RATES_SHORT = _B31_PACK.lookup("slotting_el_short").entries
+B31_SLOTTING_EL_RATES_HVCRE = _B31_PACK.lookup("slotting_el_hvcre").entries
 
 # =============================================================================
 # CRR Table B EL Rate Constants
@@ -139,42 +137,6 @@ class TestCRRSlottingELRatesHVCRE:
         assert SLOTTING_EL_RATES[SlottingCategory.GOOD] == Decimal("0.008")
 
 
-class TestCRRSlottingELRateLookup:
-    """Scalar lookup function for CRR slotting EL rates."""
-
-    def test_base_strong_by_string(self) -> None:
-        assert lookup_slotting_el_rate("strong") == Decimal("0.004")
-
-    def test_base_strong_by_enum(self) -> None:
-        assert lookup_slotting_el_rate(SlottingCategory.STRONG) == Decimal("0.004")
-
-    def test_short_maturity_strong(self) -> None:
-        assert lookup_slotting_el_rate("strong", is_short_maturity=True) == Decimal("0.0")
-
-    def test_hvcre_strong(self) -> None:
-        assert lookup_slotting_el_rate("strong", is_hvcre=True) == Decimal("0.004")
-
-    def test_hvcre_follows_non_hvcre_maturity_split(self) -> None:
-        """Under UK CRR, HVCRE EL rates follow the non-HVCRE maturity split.
-
-        P1.177 / CRR Art. 158(6): UK CRR onshoring did not retain the EU HVCRE
-        EL-rate row. lookup_slotting_el_rate ignores is_hvcre and applies the
-        same maturity-split as non-HVCRE:
-          Good >=2.5yr = 0.008; Good <2.5yr = 0.004.
-        """
-        long_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=False)
-        short_maturity = lookup_slotting_el_rate("good", is_hvcre=True, is_short_maturity=True)
-        assert long_maturity == Decimal("0.008")  # same as non-HVCRE long Good
-        assert short_maturity == Decimal("0.004")  # same as non-HVCRE short Good
-        assert long_maturity != short_maturity  # maturity split still applies
-
-    def test_unknown_category_defaults_to_satisfactory(self) -> None:
-        assert lookup_slotting_el_rate("unknown") == Decimal("0.028")
-
-    def test_case_insensitive(self) -> None:
-        assert lookup_slotting_el_rate("STRONG") == Decimal("0.004")
-
-
 # =============================================================================
 # Basel 3.1 Table B EL Rate Constants
 # =============================================================================
@@ -228,23 +190,6 @@ class TestB31SlottingELRatesHVCRE:
     def test_hvcre_good_zero_point_four(self) -> None:
         """HVCRE Good = 0.4% (not 0.8% like non-HVCRE long-maturity Good)."""
         assert B31_SLOTTING_EL_RATES_HVCRE[SlottingCategory.GOOD] == Decimal("0.004")
-
-
-class TestB31SlottingELRateLookup:
-    """Scalar lookup function for B31 slotting EL rates."""
-
-    def test_base_strong(self) -> None:
-        assert lookup_b31_slotting_el_rate("strong") == Decimal("0.004")
-
-    def test_short_maturity_strong(self) -> None:
-        """B31 EL rates are maturity-dependent even though RW is not."""
-        assert lookup_b31_slotting_el_rate("strong", is_short_maturity=True) == Decimal("0.0")
-
-    def test_hvcre_strong(self) -> None:
-        assert lookup_b31_slotting_el_rate("strong", is_hvcre=True) == Decimal("0.004")
-
-    def test_unknown_defaults_to_satisfactory(self) -> None:
-        assert lookup_b31_slotting_el_rate("unknown") == Decimal("0.028")
 
 
 # =============================================================================

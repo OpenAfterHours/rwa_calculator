@@ -107,8 +107,6 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     },
     # Inverse standard-normal at 0.999 used by IRB formulas (mathematical, not reg)
     "engine/irb/formulas.py": {"G_999"},
-    # CRR Art. 153(5) short-maturity threshold — candidate for relocation
-    "engine/slotting/transforms.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
@@ -162,6 +160,10 @@ PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
         "Basel 3.1 re-introduces it via PS1/26 (the b31 pack carries the PS citation)"
     ),
     ("CRR", "274"): "SA-CCR alpha — outside watchfire's bundled credit-risk index",
+    ("CRR", "158"): (
+        "Art. 158 (IRB expected-loss amounts) omitted from UK CRR by SI 2021/1078; "
+        "the slotting EL rates follow EU CRR / PRA PS1/26 Art. 158(6) Table B"
+    ),
 }
 
 # Engine modules exempt from the check-8 "must declare a module logger" rule.

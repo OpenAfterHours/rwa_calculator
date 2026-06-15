@@ -8,6 +8,7 @@ Tests verify:
 - Edge cases are handled correctly
 """
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
@@ -25,14 +26,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
     lookup_risk_weight,
 )
-from rwa_calc.data.tables.crr_slotting import (
-    SLOTTING_RISK_WEIGHTS,
-    SLOTTING_RISK_WEIGHTS_HVCRE,
-    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
-    SLOTTING_RISK_WEIGHTS_SHORT,
-    calculate_slotting_rwa,
-    lookup_slotting_rw,
-)
 from rwa_calc.data.tables.firb_lgd import (
     CRR_MATURITY_CAP,
     CRR_MATURITY_FLOOR,
@@ -49,6 +42,13 @@ from rwa_calc.data.tables.haircuts import (
     lookup_fx_haircut,
 )
 from rwa_calc.domain.enums import CQS, SlottingCategory
+from rwa_calc.rulebook.resolve import resolve
+
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+SLOTTING_RISK_WEIGHTS = _CRR_PACK.lookup("slotting_rw_base").entries
+SLOTTING_RISK_WEIGHTS_HVCRE = _CRR_PACK.lookup("slotting_rw_hvcre").entries
+SLOTTING_RISK_WEIGHTS_HVCRE_SHORT = _CRR_PACK.lookup("slotting_rw_hvcre_short").entries
+SLOTTING_RISK_WEIGHTS_SHORT = _CRR_PACK.lookup("slotting_rw_short").entries
 
 # =============================================================================
 # RISK WEIGHT TABLE TESTS
@@ -418,37 +418,6 @@ class TestSlottingShortMaturityWeights:
     def test_hvcre_short_satisfactory_one_forty(self) -> None:
         """Satisfactory <2.5yr HVCRE gets 140% RW."""
         assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.SATISFACTORY] == Decimal("1.40")
-
-    def test_short_maturity_lookup(self) -> None:
-        """Test lookup function with short maturity flag.
-
-        P1.177 / CRR Art. 153(5): UK CRR ignores is_hvcre — all SL uses Table 1.
-        HVCRE Strong <2.5yr = Table 1 Short Strong = 50% (not EU Table 2's 70%).
-        """
-        assert lookup_slotting_rw("strong", is_short_maturity=True) == Decimal("0.50")
-        # UK CRR: is_hvcre=True still routes through Table 1 short-maturity
-        assert lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal(
-            "0.50"
-        )
-
-
-class TestSlottingLookup:
-    """Tests for slotting lookup functions."""
-
-    def test_lookup_by_string(self) -> None:
-        """Test lookup with string category."""
-        assert lookup_slotting_rw("strong") == Decimal("0.70")
-        assert lookup_slotting_rw("weak") == Decimal("2.50")
-
-    def test_lookup_by_enum(self) -> None:
-        """Test lookup with enum category."""
-        assert lookup_slotting_rw(SlottingCategory.STRONG) == Decimal("0.70")
-
-    def test_rwa_calculation(self) -> None:
-        """Test slotting RWA calculation."""
-        rwa, rw, _ = calculate_slotting_rwa(Decimal("10000000"), "strong")
-        assert rw == Decimal("0.70")
-        assert rwa == Decimal("7000000")
 
 
 # =============================================================================

@@ -254,6 +254,104 @@ ENTRIES: dict[str, RuleEntry] = {
             "CRR", "153(5)", "UK CRR single slotting table (HVCRE Table 2 not onshored)"
         ),
     ),
+    # CRR specialised-lending slotting risk weights (Art. 153(5)) + EL rates
+    # (Art. 158(6) Table B). String-keyed by SlottingCategory value; consumed by
+    # engine/slotting/transforms.py via compile.lookup_float_map for Polars
+    # replace_strict. UK CRR onshored a single weight table (HVCRE Table 2 not
+    # onshored); the engine keeps HVCRE keys for audit symmetry. b31.py overrides
+    # these with the PS1/26 Table A / Table B values. (Art. 158 was omitted from
+    # UK CRR by SI 2021/1078 — the EL citation is soft-allowlisted in arch_check.)
+    "slotting_rw_base": LookupTable(
+        name="slotting_rw_base",
+        entries={
+            "strong": Decimal("0.70"),
+            "good": Decimal("0.90"),
+            "satisfactory": Decimal("1.15"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "153(5)", "slotting RW, remaining maturity >= 2.5y"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_short": LookupTable(
+        name="slotting_rw_short",
+        entries={
+            "strong": Decimal("0.50"),
+            "good": Decimal("0.70"),
+            "satisfactory": Decimal("1.15"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "153(5)", "slotting RW, remaining maturity < 2.5y"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_hvcre": LookupTable(
+        name="slotting_rw_hvcre",
+        entries={
+            "strong": Decimal("0.95"),
+            "good": Decimal("1.20"),
+            "satisfactory": Decimal("1.40"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "153(5)", "HVCRE slotting RW, remaining maturity >= 2.5y"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_rw_hvcre_short": LookupTable(
+        name="slotting_rw_hvcre_short",
+        entries={
+            "strong": Decimal("0.70"),
+            "good": Decimal("0.95"),
+            "satisfactory": Decimal("1.40"),
+            "weak": Decimal("2.50"),
+            "default": Decimal("0.00"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "153(5)", "HVCRE slotting RW, remaining maturity < 2.5y"),
+        default=Decimal("1.15"),
+    ),
+    "slotting_el_base": LookupTable(
+        name="slotting_el_base",
+        entries={
+            "strong": Decimal("0.004"),
+            "good": Decimal("0.008"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "158(6)", "slotting EL rate, remaining maturity >= 2.5y"),
+        default=Decimal("0.028"),
+    ),
+    "slotting_el_short": LookupTable(
+        name="slotting_el_short",
+        entries={
+            "strong": Decimal("0.0"),
+            "good": Decimal("0.004"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "158(6)", "slotting EL rate, remaining maturity < 2.5y"),
+        default=Decimal("0.028"),
+    ),
+    "slotting_el_hvcre": LookupTable(
+        name="slotting_el_hvcre",
+        entries={
+            "strong": Decimal("0.004"),
+            "good": Decimal("0.004"),
+            "satisfactory": Decimal("0.028"),
+            "weak": Decimal("0.08"),
+            "default": Decimal("0.50"),
+        },
+        key="slotting_category",
+        citation=Citation("CRR", "158(6)", "HVCRE slotting EL rate (flat, no maturity split)"),
+        default=Decimal("0.028"),
+    ),
     # Equity: under Basel 3.1 the IRB equity approaches (Art. 155(2) IRB Simple /
     # Art. 155(3) PD-LGD) are removed — all equity uses SA (CRE20.58-62). The
     # Feature gates the approach selection + the COREP transitional-approach label

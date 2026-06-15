@@ -13,7 +13,6 @@ Regulatory Reference:
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 import polars as pl
@@ -195,27 +194,4 @@ class TestCRRE9_UKCRRNoHVCRE:
         assert expected["rwa_after_sf"] == pytest.approx(EXPECTED_RWA), (
             f"{SCENARIO_ID}: expected_outputs rwa_after_sf should be {EXPECTED_RWA:,.0f}, "
             f"got {expected['rwa_after_sf']:,.0f}"
-        )
-
-    def test_crr_e9_lookup_rw_scalar_function(self) -> None:
-        """
-        CRR-E9: Verify lookup_slotting_rw scalar function also returns correct value.
-
-        The scalar helper in data/tables/crr_slotting.py also routes is_hvcre=True
-        through SLOTTING_RISK_WEIGHTS_HVCRE. Post-fix it should return 0.70.
-
-        Arrange: category='strong', is_hvcre=True, is_short_maturity=False.
-        Act: lookup_slotting_rw('strong', is_hvcre=True, is_short_maturity=False).
-        Assert: result == Decimal('0.70').
-        """
-        # Arrange / Act
-        from rwa_calc.data.tables.crr_slotting import lookup_slotting_rw
-
-        rw = lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=False)
-
-        # Assert
-        assert rw == Decimal("0.70"), (
-            f"{SCENARIO_ID}: lookup_slotting_rw('strong', is_hvcre=True) "
-            f"should return 0.70 (Table 1) under UK CRR. Got {rw} "
-            f"(pre-fix returns 0.95 from EU HVCRE Table 2)."
         )

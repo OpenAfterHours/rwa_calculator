@@ -43,7 +43,8 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from datetime import date
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 from polars import col, lit
@@ -55,81 +56,69 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
-from rwa_calc.data.tables.b31_slotting import (
-    B31_SLOTTING_EL_RATES,
-    B31_SLOTTING_EL_RATES_HVCRE,
-    B31_SLOTTING_EL_RATES_SHORT,
-    B31_SLOTTING_RISK_WEIGHTS,
-    B31_SLOTTING_RISK_WEIGHTS_HVCRE,
-    B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
-    B31_SLOTTING_RISK_WEIGHTS_PREOP,
-    B31_SLOTTING_RISK_WEIGHTS_SHORT,
-)
-from rwa_calc.data.tables.crr_slotting import (
-    SLOTTING_EL_RATES,
-    SLOTTING_EL_RATES_HVCRE,
-    SLOTTING_EL_RATES_SHORT,
-    SLOTTING_RISK_WEIGHTS,
-    SLOTTING_RISK_WEIGHTS_HVCRE,
-    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
-    SLOTTING_RISK_WEIGHTS_SHORT,
-)
 from rwa_calc.engine.utils import exact_fractional_years_expr
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
-    from decimal import Decimal
-
     from rwa_calc.contracts.config import CalculationConfig
-    from rwa_calc.domain.enums import SlottingCategory
+    from rwa_calc.rulebook.model import LookupTable
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
-# Threshold for short maturity classification under CRR Art. 153(5)
-_SHORT_MATURITY_THRESHOLD_YEARS = 2.5
+# Slotting packs resolved once at module load. The slotting RW (Art. 153(5)) and
+# EL (Art. 158(6)) tables + the 2.5y short-maturity threshold are pack-sourced; the
+# b31 pack overrides the crr slotting_* entries via overlay.
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
+_SHORT_MATURITY_THRESHOLD_YEARS = scalar_value(
+    _CRR_PACK.scalar_param("slotting_short_maturity_threshold_years")
+)
 
 
-def _to_float_map(weights: dict[SlottingCategory, Decimal]) -> dict[str, float]:
-    """Convert Decimal enum-keyed weights to str/float dict for Polars replace_strict."""
-    return {cat.value: float(w) for cat, w in weights.items()}
+def _to_float_map(table: LookupTable) -> dict[str, float]:
+    """String-keyed slotting LookupTable -> {category: float} for Polars replace_strict."""
+    return cast("dict[str, float]", lookup_float_map(table))
 
 
 # =============================================================================
-# RISK WEIGHT CONSTANTS — sourced from data/tables/
+# RISK WEIGHT CONSTANTS — sourced from the rulepack (Art. 153(5) Table A)
 # =============================================================================
 
 _SLOTTING_WEIGHTS: dict[str, dict[str, dict[str, float]]] = {
     "crr": {
-        "base": _to_float_map(SLOTTING_RISK_WEIGHTS),
-        "short": _to_float_map(SLOTTING_RISK_WEIGHTS_SHORT),
-        "hvcre": _to_float_map(SLOTTING_RISK_WEIGHTS_HVCRE),
-        "hvcre_short": _to_float_map(SLOTTING_RISK_WEIGHTS_HVCRE_SHORT),
+        "base": _to_float_map(_CRR_PACK.lookup("slotting_rw_base")),
+        "short": _to_float_map(_CRR_PACK.lookup("slotting_rw_short")),
+        "hvcre": _to_float_map(_CRR_PACK.lookup("slotting_rw_hvcre")),
+        "hvcre_short": _to_float_map(_CRR_PACK.lookup("slotting_rw_hvcre_short")),
     },
     "basel_3_1": {
-        "base": _to_float_map(B31_SLOTTING_RISK_WEIGHTS),
-        "short": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_SHORT),
-        "preop": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_PREOP),
-        "hvcre": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_HVCRE),
-        "hvcre_short": _to_float_map(B31_SLOTTING_RISK_WEIGHTS_HVCRE_SHORT),
+        "base": _to_float_map(_B31_PACK.lookup("slotting_rw_base")),
+        "short": _to_float_map(_B31_PACK.lookup("slotting_rw_short")),
+        "preop": _to_float_map(_B31_PACK.lookup("slotting_rw_preop")),
+        "hvcre": _to_float_map(_B31_PACK.lookup("slotting_rw_hvcre")),
+        "hvcre_short": _to_float_map(_B31_PACK.lookup("slotting_rw_hvcre_short")),
     },
 }
 
-# EL rate constants — sourced from data/tables/ (Art. 158(6) Table B)
+# EL rate constants — sourced from the rulepack (Art. 158(6) Table B).
 # EL rates are maturity-dependent for non-HVCRE under both CRR and B31.
 # HVCRE EL rates are flat (same for both maturities).
 _SLOTTING_EL_RATES: dict[str, dict[str, dict[str, float]]] = {
     "crr": {
-        "base": _to_float_map(SLOTTING_EL_RATES),
-        "short": _to_float_map(SLOTTING_EL_RATES_SHORT),
-        "hvcre": _to_float_map(SLOTTING_EL_RATES_HVCRE),
-        "hvcre_short": _to_float_map(SLOTTING_EL_RATES_HVCRE),  # same as hvcre (flat)
+        "base": _to_float_map(_CRR_PACK.lookup("slotting_el_base")),
+        "short": _to_float_map(_CRR_PACK.lookup("slotting_el_short")),
+        "hvcre": _to_float_map(_CRR_PACK.lookup("slotting_el_hvcre")),
+        "hvcre_short": _to_float_map(_CRR_PACK.lookup("slotting_el_hvcre")),  # flat
     },
     "basel_3_1": {
-        "base": _to_float_map(B31_SLOTTING_EL_RATES),
-        "short": _to_float_map(B31_SLOTTING_EL_RATES_SHORT),
-        "hvcre": _to_float_map(B31_SLOTTING_EL_RATES_HVCRE),
-        "hvcre_short": _to_float_map(B31_SLOTTING_EL_RATES_HVCRE),  # same as hvcre (flat)
+        "base": _to_float_map(_B31_PACK.lookup("slotting_el_base")),
+        "short": _to_float_map(_B31_PACK.lookup("slotting_el_short")),
+        "hvcre": _to_float_map(_B31_PACK.lookup("slotting_el_hvcre")),
+        "hvcre_short": _to_float_map(_B31_PACK.lookup("slotting_el_hvcre")),  # flat
     },
 }
 

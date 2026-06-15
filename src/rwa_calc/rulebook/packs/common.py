@@ -103,4 +103,12 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "230", "minimum collateralisation thresholds"),
         default=Decimal("0.0"),
     ),
+    # Specialised-lending slotting short-maturity split (2.5y). Regime-invariant:
+    # CRR Art. 153(5) and PRA PS1/26 Art. 153(5) both split slotting RW / EL at a
+    # 2.5-year remaining maturity. Consumed in engine/slotting/transforms.py.
+    "slotting_short_maturity_threshold_years": ScalarParam(
+        name="slotting_short_maturity_threshold_years",
+        value=Decimal("2.5"),
+        citation=Citation("CRR", "153(5)", "specialised-lending <2.5y short-maturity split"),
+    ),
 }

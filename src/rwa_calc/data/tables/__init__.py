@@ -35,7 +35,6 @@ from .crr_risk_weights import (
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     RESIDENTIAL_MORTGAGE_PARAMS,
-    RETAIL_RISK_WEIGHT,
     build_institution_guarantor_rw_expr,
     get_all_risk_weight_tables,
 )
@@ -78,7 +77,6 @@ __all__ = [
     "CORPORATE_RISK_WEIGHTS",
     "RESIDENTIAL_MORTGAGE_PARAMS",
     "COMMERCIAL_RE_PARAMS",
-    "RETAIL_RISK_WEIGHT",
     "build_institution_guarantor_rw_expr",
     "get_all_risk_weight_tables",
     # Haircuts

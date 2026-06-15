@@ -19,7 +19,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     RESIDENTIAL_MORTGAGE_PARAMS,
-    RETAIL_RISK_WEIGHT,
     calculate_commercial_re_rw,
     calculate_residential_mortgage_rw,
     get_all_risk_weight_tables,
@@ -143,7 +142,7 @@ class TestRetailRiskWeight:
 
     def test_retail_seventy_five_percent(self) -> None:
         """Retail exposures get 75% RW."""
-        assert Decimal("0.75") == RETAIL_RISK_WEIGHT
+        assert Decimal("0.75") == _CRR_PACK.scalar_param("retail_risk_weight").value
 
     def test_lookup_function(self) -> None:
         """Test lookup_risk_weight for retail."""

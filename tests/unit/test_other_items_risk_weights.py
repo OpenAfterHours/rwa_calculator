@@ -34,16 +34,19 @@ from decimal import Decimal
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_risk_weights import (
-    OTHER_ITEMS_CASH_RW,
-    OTHER_ITEMS_COLLECTION_RW,
-    OTHER_ITEMS_DEFAULT_RW,
-    OTHER_ITEMS_GOLD_RW,
-    OTHER_ITEMS_TANGIBLE_RW,
-    lookup_risk_weight,
-)
+from rwa_calc.data.tables.crr_risk_weights import lookup_risk_weight
 from rwa_calc.engine.sa import SACalculator
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
+
+# Other-items SA risk weights (CRR Art. 134) now live in the common rulepack
+# pack; the value pins below read them back so there is one source of truth.
+_PACK = resolve("crr", date(2026, 1, 1))
+OTHER_ITEMS_CASH_RW = _PACK.scalar_param("other_items_cash_rw").value
+OTHER_ITEMS_COLLECTION_RW = _PACK.scalar_param("other_items_collection_rw").value
+OTHER_ITEMS_DEFAULT_RW = _PACK.scalar_param("other_items_default_rw").value
+OTHER_ITEMS_GOLD_RW = _PACK.scalar_param("other_items_gold_rw").value
+OTHER_ITEMS_TANGIBLE_RW = _PACK.scalar_param("other_items_tangible_rw").value
 
 # =============================================================================
 # FIXTURES

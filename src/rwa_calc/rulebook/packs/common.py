@@ -374,4 +374,78 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("1.0"),
         citation=Citation("CRR", "291", "(5)(c) specific WWR LGD = 100% override"),
     ),
+    # =========================================================================
+    # SA RISK-WEIGHT INVARIANT SCALARS
+    # Regime-invariant SA risk weights — identical under CRR and PRA PS1/26.
+    # =========================================================================
+    # Qualifying CCP trade exposures (CRR Art. 306 / BCBS CRE54.14-15).
+    "qccp_proprietary_rw": ScalarParam(
+        name="qccp_proprietary_rw",
+        value=Decimal("0.02"),
+        citation=Citation("CRR", "306", "CRE54.14 clearing-member proprietary trades 2%"),
+    ),
+    "qccp_client_cleared_rw": ScalarParam(
+        name="qccp_client_cleared_rw",
+        value=Decimal("0.04"),
+        citation=Citation("CRR", "306", "CRE54.15 client-cleared trades 4%"),
+    ),
+    # Other items (CRR Art. 134 / PRA PS1/26 Art. 134) — retained unchanged.
+    "other_items_cash_rw": ScalarParam(
+        name="other_items_cash_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "134", "(1) cash and cash-equivalent items 0%"),
+    ),
+    "other_items_gold_rw": ScalarParam(
+        name="other_items_gold_rw",
+        value=Decimal("0.00"),
+        citation=Citation("CRR", "134", "(4) gold bullion held in own vaults 0%"),
+    ),
+    "other_items_collection_rw": ScalarParam(
+        name="other_items_collection_rw",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "134", "(3) items in the course of collection 20%"),
+    ),
+    "other_items_tangible_rw": ScalarParam(
+        name="other_items_tangible_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "134", "(2) tangible assets / prepayments 100%"),
+    ),
+    "other_items_default_rw": ScalarParam(
+        name="other_items_default_rw",
+        value=Decimal("1.00"),
+        citation=Citation("CRR", "134", "(2) all other items 100%"),
+    ),
+    # High-risk items (CRR Art. 128 / PRA PS1/26 Art. 128) — 150% flat, single
+    # source for both regimes (was HIGH_RISK_RW + B31_HIGH_RISK_RW).
+    "high_risk_rw": ScalarParam(
+        name="high_risk_rw",
+        value=Decimal("1.50"),
+        citation=Citation("CRR", "128", "particularly-high-risk items 150% flat"),
+    ),
+    # Regulatory retail (CRR Art. 123 / PRA PS1/26 Art. 123) — 75% flat.
+    "retail_risk_weight": ScalarParam(
+        name="retail_risk_weight",
+        value=Decimal("0.75"),
+        citation=Citation("CRR", "123", "regulatory retail 75% flat"),
+    ),
+    # ECA / MEIP direct sovereign risk weights (CRR Art. 137 Table 9). Maps the
+    # minimum export-insurance-premium score (0-7) straight to a sovereign RW;
+    # the engine indexes scores 0-7 explicitly, so ``default`` is inert (out-of-
+    # range / null scores defer to the Art. 114 unrated 100% fallback in-engine).
+    "eca_meip_risk_weights": LookupTable(
+        name="eca_meip_risk_weights",
+        entries={
+            0: Decimal("0.00"),
+            1: Decimal("0.00"),
+            2: Decimal("0.20"),
+            3: Decimal("0.50"),
+            4: Decimal("1.00"),
+            5: Decimal("1.00"),
+            6: Decimal("1.00"),
+            7: Decimal("1.50"),
+        },
+        key="eca_meip_score",
+        citation=Citation("CRR", "137", "(1)-(2) Table 9 ECA/MEIP score -> sovereign RW"),
+        default=Decimal("1.00"),
+    ),
 }

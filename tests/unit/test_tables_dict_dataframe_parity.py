@@ -17,7 +17,7 @@ The authoritative dict for each DataFrame:
 | crr._create_rgla_df                       | RGLA_RISK_WEIGHTS_OWN_RATING                          |
 | crr._create_mdb_df                        | MDB_RISK_WEIGHTS_TABLE_2B                             |
 | crr._create_corporate_df                  | CORPORATE_RISK_WEIGHTS                                |
-| crr._create_retail_df                     | RETAIL_RISK_WEIGHT                                    |
+| crr._create_retail_df                     | common pack retail_risk_weight                       |
 | crr._create_residential_mortgage_df       | RESIDENTIAL_MORTGAGE_PARAMS                           |
 | crr._create_commercial_re_df              | COMMERCIAL_RE_PARAMS                                  |
 | crr._create_covered_bond_df               | COVERED_BOND_RISK_WEIGHTS                             |
@@ -29,6 +29,7 @@ The authoritative dict for each DataFrame:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -37,6 +38,11 @@ from rwa_calc.data.tables import b31_risk_weights as b31
 from rwa_calc.data.tables import crr_risk_weights as crr
 from rwa_calc.data.tables import haircuts
 from rwa_calc.domain.enums import CQS
+from rwa_calc.rulebook.resolve import resolve
+
+# Retail RW (CRR Art. 123) now lives in the common rulepack pack; the retail-df
+# parity check reads it back to confirm _create_retail_df tracks the pack value.
+_RETAIL_RW = resolve("crr", date(2026, 1, 1)).scalar_param("retail_risk_weight").value
 
 # =============================================================================
 # CQS-based risk-weight DataFrames (crr_risk_weights.py)
@@ -89,7 +95,7 @@ def test_cqs_dataframe_matches_source_dict(name, df, source_dict, exposure_class
 def test_retail_df_matches_constant():
     df = crr._create_retail_df()
     assert df.shape == (1, 3)
-    assert df["risk_weight"][0] == pytest.approx(float(crr.RETAIL_RISK_WEIGHT))
+    assert df["risk_weight"][0] == pytest.approx(float(_RETAIL_RW))
 
 
 def test_residential_mortgage_df_matches_params():

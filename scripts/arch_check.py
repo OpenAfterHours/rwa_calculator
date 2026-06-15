@@ -376,6 +376,15 @@ IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
     # Retired by Phase 7 (reporting consumes the sealed aggregator exit).
     "reporting/corep/generator.py": {"rwa_calc.api.models"},
     "reporting/pillar3/generator.py": {"rwa_calc.api.service"},
+    # Phase 5 / S12 maximalist migration (data/tables -> rulepack packs): these
+    # data/ modules read regulatory scalars back from the rulepack during the
+    # table-move so the pack is the single source of truth. guarantor_rw's
+    # expr builders relocate into engine/ in S12-12 (resolving its inversion);
+    # crr_risk_weights reads the moved SA invariant scalars for the test-only
+    # convenience helpers (lookup_risk_weight / _create_retail_df), pending the
+    # module's emptying in S12-11.
+    "data/tables/crr_risk_weights.py": {"rwa_calc.rulebook.resolve"},
+    "data/tables/guarantor_rw.py": {"rwa_calc.rulebook"},
 }
 
 

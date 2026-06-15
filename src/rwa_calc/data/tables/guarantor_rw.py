@@ -48,6 +48,7 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -56,16 +57,12 @@ from watchfire import cites
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
-    HIGH_RISK_RW,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_RISK_WEIGHTS_TABLE_2B,
     MDB_UNRATED_RW,
     PSE_RISK_WEIGHTS_OWN_RATING,
     PSE_UNRATED_DEFAULT_RW,
-    QCCP_CLIENT_CLEARED_RW,
-    QCCP_PROPRIETARY_RW,
-    RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_OWN_RATING,
     build_corporate_guarantor_rw_expr,
@@ -73,9 +70,19 @@ from rwa_calc.data.tables.crr_risk_weights import (
 )
 from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from decimal import Decimal
+
+# Invariant SA risk weights resolved from the rulepack once at module load
+# (QCCP Art. 306, regulatory retail Art. 123, high-risk items Art. 128).
+_GRW_PACK = resolve("crr", date(2026, 1, 1))
+_QCCP_CLIENT_CLEARED_RW = scalar_value(_GRW_PACK.scalar_param("qccp_client_cleared_rw"))
+_QCCP_PROPRIETARY_RW = scalar_value(_GRW_PACK.scalar_param("qccp_proprietary_rw"))
+_RETAIL_RISK_WEIGHT = scalar_value(_GRW_PACK.scalar_param("retail_risk_weight"))
+_HIGH_RISK_RW = scalar_value(_GRW_PACK.scalar_param("high_risk_rw"))
 
 
 @cites("CRR Art. 114")
@@ -188,8 +195,8 @@ def build_guarantor_rw_expr(
         .when(pl.col(entity_type_col) == "ccp")
         .then(
             pl.when(pl.col(ccp_client_cleared_col).fill_null(False))
-            .then(pl.lit(float(QCCP_CLIENT_CLEARED_RW)))
-            .otherwise(pl.lit(float(QCCP_PROPRIETARY_RW)))
+            .then(pl.lit(_QCCP_CLIENT_CLEARED_RW))
+            .otherwise(pl.lit(_QCCP_PROPRIETARY_RW))
         )
         # International Organisation (Art. 118): 0% unconditional.
         .when(gec == "international_organisation")
@@ -375,10 +382,10 @@ def build_entity_rw_expr(
         )
         # Retail (Art. 123): flat 75%.
         .when(et.is_in(retail_types))
-        .then(pl.lit(float(RETAIL_RISK_WEIGHT)))
+        .then(pl.lit(_RETAIL_RISK_WEIGHT))
         # High-risk items (Art. 128): flat 150%.
         .when(et.is_in(high_risk_types))
-        .then(pl.lit(float(HIGH_RISK_RW)))
+        .then(pl.lit(_HIGH_RISK_RW))
         # Conservative preview default for unmatched entity types.
         .otherwise(pl.lit(1.0))
     )

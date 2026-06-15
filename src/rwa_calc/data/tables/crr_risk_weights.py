@@ -20,6 +20,7 @@ References:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from decimal import Decimal
 from typing import TypedDict, cast
 
@@ -27,6 +28,15 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.domain.enums import CQS
+from rwa_calc.rulebook.resolve import resolve
+
+# Invariant SA risk-weight scalars now live in the common rulepack pack. Their
+# Decimal values are read back here for the test-only convenience helpers
+# (``lookup_risk_weight`` / ``_create_retail_df``) so there is one source of
+# truth; the engine resolves these directly from the pack.
+_SA_RW_PACK = resolve("crr", date(2026, 1, 1))
+_RETAIL_RISK_WEIGHT_DEC: Decimal = _SA_RW_PACK.scalar_param("retail_risk_weight").value
+_OTHER_ITEMS_DEFAULT_RW_DEC: Decimal = _SA_RW_PACK.scalar_param("other_items_default_rw").value
 
 # =============================================================================
 # INTERNAL DATAFRAME-BUILD HELPERS
@@ -113,36 +123,8 @@ def _create_cgcb_df() -> pl.DataFrame:
     )
 
 
-# =============================================================================
-# ECA / MEIP DIRECT SOVEREIGN RISK WEIGHTS (CRR Art. 137(1)-(2) Table 9)
-# =============================================================================
-#
-# When a firm nominates an Export Credit Agency (ECA) under Art. 137(1) the
-# ECA's minimum export insurance premium (MEIP) score is mapped directly to a
-# sovereign risk weight via Table 9 — there is no intermediate CQS step. The
-# table is consulted only when the sovereign has no ECAI rating; the ECA path
-# overrides the Art. 114 unrated 100% fallback.
-#
-# Table 9 — MEIP score → risk weight:
-#     0 →   0%
-#     1 →   0%
-#     2 →  20%
-#     3 →  50%
-#     4 → 100%
-#     5 → 100%
-#     6 → 100%
-#     7 → 150%
-
-ECA_MEIP_RISK_WEIGHTS: dict[int, Decimal] = {
-    0: Decimal("0.00"),
-    1: Decimal("0.00"),
-    2: Decimal("0.20"),
-    3: Decimal("0.50"),
-    4: Decimal("1.00"),
-    5: Decimal("1.00"),
-    6: Decimal("1.00"),
-    7: Decimal("1.50"),
-}
+# ECA / MEIP direct sovereign risk weights (CRR Art. 137(1)-(2) Table 9) moved
+# to the common rulepack pack (eca_meip_risk_weights).
 
 
 # =============================================================================
@@ -584,7 +566,8 @@ def build_corporate_guarantor_rw_expr(
 # RETAIL RISK WEIGHT (CRR Art. 123)
 # =============================================================================
 
-RETAIL_RISK_WEIGHT: Decimal = Decimal("0.75")
+# RETAIL_RISK_WEIGHT (75% flat) moved to the common rulepack pack
+# (retail_risk_weight).
 
 # Art. 122: Corporate SME flat under CRR (Basel 3.1 reduces this to 85% via
 # B31_CORPORATE_SME_RW). Named for the SA override chain — explicit beats magic.
@@ -596,31 +579,10 @@ CRR_CORPORATE_SME_RW: Decimal = Decimal("1.00")
 CRR_NON_REGULATORY_RETAIL_RW: Decimal = Decimal("1.00")
 
 
-# =============================================================================
-# QUALIFYING CCP RISK WEIGHTS (CRR Art. 306, CRE54.14-15)
-# =============================================================================
-
-QCCP_PROPRIETARY_RW: Decimal = Decimal("0.02")  # CRE54.14: clearing member's own trades
-QCCP_CLIENT_CLEARED_RW: Decimal = Decimal("0.04")  # CRE54.15: client-cleared trades
-
-
-# =============================================================================
-# OTHER ITEMS RISK WEIGHTS (CRR Art. 134 / PRA PS1/26 Art. 134)
-# =============================================================================
-
-OTHER_ITEMS_CASH_RW: Decimal = Decimal("0.00")  # Art. 134(1): cash and equivalent
-OTHER_ITEMS_GOLD_RW: Decimal = Decimal("0.00")  # Art. 134(4): gold bullion in own vaults
-OTHER_ITEMS_COLLECTION_RW: Decimal = Decimal("0.20")  # Art. 134(3): items in course of collection
-OTHER_ITEMS_TANGIBLE_RW: Decimal = Decimal("1.00")  # Art. 134(2): tangible assets, prepaid
-OTHER_ITEMS_DEFAULT_RW: Decimal = Decimal("1.00")  # Art. 134(2): all other items
-
-# =============================================================================
-# HIGH-RISK EXPOSURE RISK WEIGHT (CRR Art. 128)
-# Items associated with particularly high risk: venture capital, private equity,
-# speculative immovable property financing, and other PRA-designated high-risk items.
-# =============================================================================
-
-HIGH_RISK_RW: Decimal = Decimal("1.50")  # Art. 128: 150% flat
+# Qualifying-CCP trade-exposure RWs (CRR Art. 306 / CRE54.14-15), Other-items RWs
+# (CRR Art. 134) and the high-risk-item RW (CRR Art. 128, 150% flat) moved to the
+# common rulepack pack (qccp_proprietary_rw / qccp_client_cleared_rw /
+# other_items_*_rw / high_risk_rw).
 
 
 # =============================================================================
@@ -637,7 +599,7 @@ def _create_retail_df() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "cqs": [None],
-            "risk_weight": [float(RETAIL_RISK_WEIGHT)],
+            "risk_weight": [float(_RETAIL_RISK_WEIGHT_DEC)],
             "exposure_class": ["RETAIL"],
         }
     ).with_columns(
@@ -912,10 +874,10 @@ def lookup_risk_weight(
         return CORPORATE_RISK_WEIGHTS.get(cqs_enum, CORPORATE_RISK_WEIGHTS[CQS.UNRATED])
 
     if exposure_upper == "RETAIL":
-        return RETAIL_RISK_WEIGHT
+        return _RETAIL_RISK_WEIGHT_DEC
 
     if exposure_upper == "OTHER":
-        return OTHER_ITEMS_DEFAULT_RW
+        return _OTHER_ITEMS_DEFAULT_RW_DEC
 
     # Default to 100% for unrecognized classes
     return Decimal("1.00")

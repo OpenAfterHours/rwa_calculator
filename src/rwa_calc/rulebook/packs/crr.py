@@ -271,6 +271,39 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "133", "CRR Art. 133(2) 100% flat equity SA RW"),
     ),
+    # CRR Art. 165 supervisory parameters for the Art. 155(3) PD/LGD equity
+    # approach, consumed by engine/equity/calculator.py. CRR-only: Basel 3.1
+    # removes the IRB equity approaches (equity_irb_approaches_available is False
+    # under b31), so these have no b31 counterpart and are read only on the CRR
+    # path. Decimals expressed as fractions (Decimal("0.0040") = 0.40%).
+    "equity_pd_floors": FormulaParams(
+        name="equity_pd_floors",
+        params={
+            "exchange_traded_long_term": Decimal("0.0009"),  # 0.09% Art. 165(1)(a)
+            "non_exchange_regular_cashflow": Decimal("0.0009"),  # 0.09% Art. 165(1)(b)
+            "exchange_traded": Decimal("0.0040"),  # 0.40% Art. 165(1)(c)
+            "other": Decimal("0.0125"),  # 1.25% Art. 165(1)(d)
+        },
+        citation=Citation("CRR", "165", "(1) minimum PDs by equity sub-type"),
+    ),
+    "equity_pd_lgd_lgd": FormulaParams(
+        name="equity_pd_lgd_lgd",
+        params={
+            "private_equity_diversified": Decimal("0.65"),  # 65% Art. 165(2)
+            "other": Decimal("0.90"),  # 90% Art. 165(2)
+        },
+        citation=Citation("CRR", "165", "(2) supervisory LGD 65% diversified PE / 90% other"),
+    ),
+    "equity_pd_lgd_maturity": ScalarParam(
+        name="equity_pd_lgd_maturity",
+        value=Decimal("5.0"),
+        citation=Citation("CRR", "165", "(3) fixed maturity M = 5 years"),
+    ),
+    "equity_pd_lgd_no_default_info_scaling": ScalarParam(
+        name="equity_pd_lgd_no_default_info_scaling",
+        value=Decimal("1.5"),
+        citation=Citation("CRR", "155(3)", "1.5x RW scaling absent Art. 178 default data"),
+    ),
     # Basel-3.1 capital-stack regime GATES, all absent under CRR (S11d). These
     # mirror the regime-derived `enabled` flags on contracts/config.py's
     # OutputFloorConfig / EquityTransitionalConfig / PostModelAdjustmentConfig —

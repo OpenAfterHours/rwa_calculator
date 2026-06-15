@@ -42,12 +42,6 @@ from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
-from rwa_calc.data.tables.crr_equity_pd_lgd import (
-    EQUITY_PD_FLOORS,
-    EQUITY_PD_LGD_LGD,
-    EQUITY_PD_LGD_MATURITY,
-    EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING,
-)
 from rwa_calc.data.tables.crr_equity_rw import (
     IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
     SA_EQUITY_RISK_WEIGHTS,
@@ -59,7 +53,7 @@ from rwa_calc.engine.irb.formulas import (
     _maturity_adjustment_expr_from_pd,
 )
 from rwa_calc.rulebook import RulepackV0
-from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.compile import formula_float_map, scalar_value
 
 if TYPE_CHECKING:
     from datetime import date
@@ -844,12 +838,16 @@ class EquityCalculator:
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
-        maturity = float(EQUITY_PD_LGD_MATURITY)
-        lgd_diversified = float(EQUITY_PD_LGD_LGD["private_equity_diversified"])
-        lgd_other = float(EQUITY_PD_LGD_LGD["other"])
-        no_default_info_scaling = float(EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING)
-        pd_floor_exchange_traded = float(EQUITY_PD_FLOORS["exchange_traded"])
-        pd_floor_other = float(EQUITY_PD_FLOORS["other"])
+        maturity = scalar_value(resolved_pack.scalar_param("equity_pd_lgd_maturity"))
+        equity_lgd = formula_float_map(resolved_pack.formula("equity_pd_lgd_lgd"))
+        lgd_diversified = equity_lgd["private_equity_diversified"]
+        lgd_other = equity_lgd["other"]
+        no_default_info_scaling = scalar_value(
+            resolved_pack.scalar_param("equity_pd_lgd_no_default_info_scaling")
+        )
+        equity_pd_floors = formula_float_map(resolved_pack.formula("equity_pd_floors"))
+        pd_floor_exchange_traded = equity_pd_floors["exchange_traded"]
+        pd_floor_other = equity_pd_floors["other"]
 
         eq_type = pl.col("equity_type").str.to_lowercase()
         is_exchange_traded = pl.col("is_exchange_traded").fill_null(False)

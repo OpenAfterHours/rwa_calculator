@@ -948,4 +948,82 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("PS1/26", "122", "(3) Table 6A dedicated short-term ECAI corporate RW"),
         default=Decimal("1.50"),
     ),
+    # =========================================================================
+    # SA B31 CORPORATE / RETAIL / DEFAULTED / CURRENCY-MISMATCH TAIL SCALARS
+    # =========================================================================
+    "b31_corporate_investment_grade_rw": ScalarParam(
+        name="b31_corporate_investment_grade_rw",
+        value=Decimal("0.65"),
+        citation=Citation("PS1/26", "122", "(6)(a) investment-grade corporate 65%"),
+    ),
+    "b31_corporate_non_investment_grade_rw": ScalarParam(
+        name="b31_corporate_non_investment_grade_rw",
+        value=Decimal("1.35"),
+        citation=Citation("PS1/26", "122", "(6)(b) non-investment-grade corporate 135%"),
+    ),
+    "b31_corporate_sme_rw": ScalarParam(
+        name="b31_corporate_sme_rw",
+        value=Decimal("0.85"),
+        citation=Citation("PS1/26", "122", "SME corporate 85% (CRE20.47)"),
+    ),
+    "b31_subordinated_debt_rw": ScalarParam(
+        name="b31_subordinated_debt_rw",
+        value=Decimal("1.50"),
+        citation=Citation("PS1/26", "133", "subordinated debt 150% flat (CRE20.49)"),
+    ),
+    "b31_defaulted_rw_high_provision": ScalarParam(
+        name="b31_defaulted_rw_high_provision",
+        value=Decimal("1.00"),
+        citation=Citation("PS1/26", "127", "defaulted, provisions >= 20%"),
+    ),
+    "b31_defaulted_rw_low_provision": ScalarParam(
+        name="b31_defaulted_rw_low_provision",
+        value=Decimal("1.50"),
+        citation=Citation("PS1/26", "127", "defaulted, provisions < 20%"),
+    ),
+    "b31_defaulted_provision_threshold": ScalarParam(
+        name="b31_defaulted_provision_threshold",
+        value=Decimal("0.20"),
+        citation=Citation("PS1/26", "127", "20% provision threshold"),
+    ),
+    "b31_defaulted_resi_re_non_income_rw": ScalarParam(
+        name="b31_defaulted_resi_re_non_income_rw",
+        value=Decimal("1.00"),
+        citation=Citation("PS1/26", "127", "defaulted general RESI RE (non-income) 100% flat"),
+    ),
+    "b31_retail_transactor_rw": ScalarParam(
+        name="b31_retail_transactor_rw",
+        value=Decimal("0.45"),
+        citation=Citation("PS1/26", "123", "QRRE transactor 45%"),
+    ),
+    "b31_retail_payroll_loan_rw": ScalarParam(
+        name="b31_retail_payroll_loan_rw",
+        value=Decimal("0.35"),
+        citation=Citation("PS1/26", "123", "(4) payroll/pension loan 35%"),
+    ),
+    "b31_retail_non_regulatory_rw": ScalarParam(
+        name="b31_retail_non_regulatory_rw",
+        value=Decimal("1.00"),
+        citation=Citation("PS1/26", "123", "(3)(c) non-regulatory retail 100%"),
+    ),
+    "b31_retail_granularity_limit": ScalarParam(
+        name="b31_retail_granularity_limit",
+        value=Decimal("0.002"),
+        citation=Citation("PS1/26", "123", "123A(1)(b)(ii) single-obligor 0.2% granularity cap"),
+    ),
+    "b31_currency_mismatch_multiplier": ScalarParam(
+        name="b31_currency_mismatch_multiplier",
+        value=Decimal("1.5"),
+        citation=Citation("PS1/26", "123B", "currency-mismatch 1.5x RW multiplier"),
+    ),
+    "b31_currency_mismatch_rw_cap": ScalarParam(
+        name="b31_currency_mismatch_rw_cap",
+        value=Decimal("1.50"),
+        citation=Citation("PS1/26", "123B", "currency-mismatch absolute RW cap 150%"),
+    ),
+    "b31_currency_mismatch_hedge_coverage_floor": ScalarParam(
+        name="b31_currency_mismatch_hedge_coverage_floor",
+        value=Decimal("0.90"),
+        citation=Citation("PS1/26", "123B", "(2) multiplier waived when hedge coverage >= 90%"),
+    ),
 }

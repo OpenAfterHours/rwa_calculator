@@ -256,6 +256,54 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.50"),
         citation=Citation("CRR", "126", "CRE preferential RW up to 50% LTV"),
     ),
+    # SA CCF schedule (CRR Art. 111 / Annex I categories). String-keyed by the
+    # uppercase risk_type bucket; consumed in engine/ccf.py via lookup_float_map.
+    # b31.py overrides this with the PS1/26 Table A1 values (OC 40% / LR 10%).
+    "sa_ccf": LookupTable(
+        name="sa_ccf",
+        entries={
+            "FR": Decimal("1.00"),
+            "FRC": Decimal("1.00"),
+            "MR": Decimal("0.50"),
+            "MR_ISSUED": Decimal("0.50"),
+            "OC": Decimal("0.50"),
+            "MLR": Decimal("0.20"),
+            "LR": Decimal("0.00"),
+        },
+        key="risk_type",
+        citation=Citation(
+            "CRR", "111", "SA CCFs (Annex I): FR/FRC 100%, MR/OC 50%, MLR 20%, LR 0%"
+        ),
+        default=Decimal("0.50"),
+    ),
+    # CRR Art. 166(10) F-IRB residual fallback for issued OBS items not in scope
+    # of Art. 166(8). Selected by the engine when is_obs_commitment=False.
+    "firb_obs_fallback_ccf": LookupTable(
+        name="firb_obs_fallback_ccf",
+        entries={
+            "FR": Decimal("1.00"),
+            "FRC": Decimal("1.00"),
+            "MR": Decimal("0.50"),
+            "MR_ISSUED": Decimal("0.50"),
+            "OC": Decimal("0.50"),
+            "MLR": Decimal("0.20"),
+            "LR": Decimal("0.00"),
+        },
+        key="risk_type",
+        citation=Citation("CRR", "166", "(10) F-IRB fallback: FR 100%, MR/OC 50%, MLR 20%, LR 0%"),
+        default=Decimal("0.50"),
+    ),
+    # CRR Art. 166(8) bespoke F-IRB CCFs.
+    "firb_trade_lc_ccf": ScalarParam(
+        name="firb_trade_lc_ccf",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "166", "(8)(b) short-term trade LC from movement of goods"),
+    ),
+    "firb_credit_line_ccf": ScalarParam(
+        name="firb_credit_line_ccf",
+        value=Decimal("0.75"),
+        citation=Citation("CRR", "166", "(8)(d) credit lines / NIFs / RUFs"),
+    ),
     # Slotting (supervisory specialised-lending) risk-weight + EL-rate tables:
     # Basel 3.1 (PRA PS1/26 Art. 153(5) Table A / CRE33) revises them with HVCRE
     # and PF pre-operational splits — see packs/b31.py. The Feature selects the

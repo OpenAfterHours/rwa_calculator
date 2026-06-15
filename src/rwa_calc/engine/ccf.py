@@ -60,26 +60,52 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.schemas import RISK_TYPE_SYNONYMS
 from rwa_calc.data.tables.ccf import (
-    OC_SHORT_MATURITY_CCF,
     OC_SHORT_MATURITY_THRESHOLD_DAYS,
-    SA_CCF_B31,
-    build_firb_ccf_expr,
     build_product_to_risk_type_expr,
-    build_sa_ccf_expr,
 )
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.rulebook import RulepackV0
-from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+# SA / F-IRB CCF schedules resolved from the rulepack once at module load
+# (mirrors the comparison.py / slotting module-level pattern). The Decimal ->
+# float boundary is lookup_float_map / scalar_value, matching the historical
+# float(Decimal(...)) conversion in the retired data/tables/ccf.py builders.
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+_SA_CCF_CRR_MAP = lookup_float_map(_CRR_PACK.lookup("sa_ccf"))
+_SA_CCF_B31_MAP = lookup_float_map(_B31_PACK.lookup("sa_ccf"))
+_FIRB_OBS_FALLBACK_MAP = lookup_float_map(_CRR_PACK.lookup("firb_obs_fallback_ccf"))
+_SA_CCF_DEFAULT = scalar_value(_CRR_PACK.scalar_param("sa_ccf_default"))
+_FIRB_TRADE_LC_CCF = scalar_value(_CRR_PACK.scalar_param("firb_trade_lc_ccf"))
+_FIRB_CREDIT_LINE_CCF = scalar_value(_CRR_PACK.scalar_param("firb_credit_line_ccf"))
+_OC_SHORT_MATURITY_CCF = scalar_value(_CRR_PACK.scalar_param("oc_short_maturity_ccf"))
+
+
+def _normalize_risk_type(risk_type_col: str) -> pl.Expr:
+    """Lowercase and canonicalise a risk_type column to the uppercase keys.
+
+    Maps every spelling accepted on input (short code or full name) to its
+    canonical uppercase form via RISK_TYPE_SYNONYMS. Unrecognised values pass
+    through uppercased so the consumers' ``otherwise()`` branch picks them up.
+    The cast to ``pl.Utf8`` accommodates frames where the column is null-typed.
+    """
+    casted = pl.col(risk_type_col).cast(pl.Utf8, strict=False).fill_null("")
+    lowered = casted.str.to_lowercase()
+    return lowered.replace_strict(RISK_TYPE_SYNONYMS, default=casted.str.to_uppercase())
 
 
 def drawn_for_ead() -> pl.Expr:
@@ -115,21 +141,82 @@ def sa_ccf_expression(
 ) -> pl.Expr:
     """Polars expression mapping risk_type to SA CCFs.
 
-    Thin wrapper over ``data.tables.ccf.build_sa_ccf_expr``. The values
-    themselves (CRR Art. 111 and PRA PS1/26 Table A1) live in the data
-    layer; this wrapper preserves the historical engine-side import path
-    and citation attribution.
+    CRR Art. 111 (Annex I categories) when ``is_basel_3_1`` is False, PRA
+    PS1/26 Table A1 when True. The CCF values come from the rulepack
+    (``sa_ccf`` lookup); unrecognised risk_type falls back to the
+    MR-equivalent ``sa_ccf_default`` (50%).
     """
-    return build_sa_ccf_expr(risk_type_col, is_basel_3_1)
+    table = _SA_CCF_B31_MAP if is_basel_3_1 else _SA_CCF_CRR_MAP
+    canonical = _normalize_risk_type(risk_type_col)
+    return (
+        pl.when(canonical == "FR")
+        .then(pl.lit(table["FR"]))
+        .when(canonical == "FRC")
+        .then(pl.lit(table["FRC"]))
+        .when(canonical == "MR")
+        .then(pl.lit(table["MR"]))
+        # CRR Annex I Row 3 issued medium-risk OBS items — explicit 50%
+        # (mirrors MR / Row 4) so EAD is provably equal, not a default fallback.
+        .when(canonical == "MR_ISSUED")
+        .then(pl.lit(table["MR_ISSUED"]))
+        .when(canonical == "OC")
+        .then(pl.lit(table["OC"]))
+        .when(canonical == "MLR")
+        .then(pl.lit(table["MLR"]))
+        .when(canonical == "LR")
+        .then(pl.lit(table["LR"]))
+        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+    )
 
 
 @cites("CRR Art. 166")
 def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
     """Polars expression for CRR F-IRB CCFs (Art. 166(8) + (10)).
 
-    Thin wrapper over ``data.tables.ccf.build_firb_ccf_expr``.
+    Implements both F-IRB CCF clauses of CRR Article 166:
+
+    Art. 166(8) bespoke CCFs (is_obs_commitment=True, matching commitment):
+        (a) UCC credit lines (LR) -> 0%; (b) short-term trade LCs
+        (MLR + is_short_term_trade_lc) -> 20%; (d) other credit lines /
+        NIFs / RUFs (MR/MLR/OC commitments) -> 75%.
+    Art. 166(10) residual fallback (is_obs_commitment=False):
+        (a) full risk -> 100%; (b) medium -> 50%; (c) medium/low -> 20%;
+        (d) low -> 0%.
+
+    FR/FRC and LR converge under either path; the Art. 166(8)(b) trade-LC
+    carve-out wins over the issued/commitment split. Values come from the
+    rulepack (``firb_obs_fallback_ccf`` lookup + the bespoke scalars).
     """
-    return build_firb_ccf_expr(risk_type_col)
+    canonical = _normalize_risk_type(risk_type_col)
+    is_commitment = pl.col("is_obs_commitment").fill_null(True)
+    is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
+    is_mlr = canonical == "MLR"
+    # MR_ISSUED (CRR Annex I Row 3 issued OBS items) mirrors MR exactly: it
+    # rides the same Art. 166(8)(d) commitment / Art. 166(10)(b) issued split,
+    # so it never diverges to the otherwise default (P2.30).
+    is_mr_or_oc = canonical.is_in(["MR", "MR_ISSUED", "OC"])
+    return (
+        # FR/FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
+        pl.when(canonical.is_in(["FR", "FRC"]))
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["FR"]))
+        # LR -> 0% under both Art. 166(8)(a) and Art. 166(10)(d)
+        .when(canonical == "LR")
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["LR"]))
+        # Art. 166(8)(b): short-term trade LC carve-out wins over both buckets
+        .when(is_mlr & is_trade_lc)
+        .then(pl.lit(_FIRB_TRADE_LC_CCF))
+        # Art. 166(8)(d): credit lines / NIFs / RUFs -> 75%
+        .when(is_commitment & (is_mr_or_oc | is_mlr))
+        .then(pl.lit(_FIRB_CREDIT_LINE_CCF))
+        # Art. 166(10)(b): MR / OC issued items -> 50%
+        .when(is_mr_or_oc)
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["MR"]))
+        # Art. 166(10)(c): MLR issued items -> 20%
+        .when(is_mlr)
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["MLR"]))
+        # Conservative MR-equivalent fallback for unrecognised risk_type values
+        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+    )
 
 
 class CCFCalculator:
@@ -369,7 +456,7 @@ class CCFCalculator:
                 )
                 exposures = exposures.with_columns(
                     pl.when(is_oc & is_short_maturity)
-                    .then(pl.lit(float(OC_SHORT_MATURITY_CCF)))
+                    .then(pl.lit(_OC_SHORT_MATURITY_CCF))
                     .otherwise(pl.col("_sa_ccf_from_risk_type"))
                     .alias("_sa_ccf_from_risk_type"),
                 )
@@ -382,8 +469,8 @@ class CCFCalculator:
         # UCC) or 100% (Row 2), in which case the carve-out leaves it untouched.
         # No effect under CRR (Table A1 is Basel 3.1 only) — see the gate below.
         if is_b31:
-            row_4b_ccf = float(SA_CCF_B31["MR"])
-            carve_out_ccfs = (float(SA_CCF_B31["LR"]), float(SA_CCF_B31["FR"]))
+            row_4b_ccf = _SA_CCF_B31_MAP["MR"]
+            carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
             is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
             sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
             exposures = exposures.with_columns(
@@ -483,8 +570,8 @@ class CCFCalculator:
         (S9c); there is no equivalent CRR purchased-receivables undrawn-commitment
         CCF, so the flag is a no-op under CRR.
         """
-        oc_ccf = float(SA_CCF_B31["OC"])
-        ucc_ccf = float(SA_CCF_B31["LR"])
+        oc_ccf = _SA_CCF_B31_MAP["OC"]
+        ucc_ccf = _SA_CCF_B31_MAP["LR"]
 
         is_pr_commitment = pl.col("is_purchased_receivable_commitment").fill_null(False) & pl.col(
             "is_revolving"

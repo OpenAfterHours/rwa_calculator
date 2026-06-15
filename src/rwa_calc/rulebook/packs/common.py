@@ -111,4 +111,19 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("2.5"),
         citation=Citation("CRR", "153(5)", "specialised-lending <2.5y short-maturity split"),
     ),
+    # SA / F-IRB CCF fallbacks that do not vary by regime. The conservative
+    # MR-equivalent default (50%) catches unrecognised risk_type values under
+    # both CRR Art. 111 and PRA PS1/26 Table A1; the OC short-maturity override
+    # (20%) maps "other commitments" to MLR when remaining maturity <= 1 year
+    # (CRR Art. 111, retained under Basel 3.1). Consumed in engine/ccf.py.
+    "sa_ccf_default": ScalarParam(
+        name="sa_ccf_default",
+        value=Decimal("0.50"),
+        citation=Citation("CRR", "111", "MR-equivalent fallback for unrecognised risk_type"),
+    ),
+    "oc_short_maturity_ccf": ScalarParam(
+        name="oc_short_maturity_ccf",
+        value=Decimal("0.20"),
+        citation=Citation("CRR", "111", "OC mapped to MLR (20%) when remaining maturity <= 1yr"),
+    ),
 }

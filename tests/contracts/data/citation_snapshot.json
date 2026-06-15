@@ -5,13 +5,7 @@
   "rwa_calc.data.tables.b31_risk_weights::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
   ],
-  "rwa_calc.data.tables.ccf::build_firb_ccf_expr": [
-    "CRR Art. 166"
-  ],
   "rwa_calc.data.tables.ccf::build_product_to_risk_type_expr": [
-    "CRR Art. 111"
-  ],
-  "rwa_calc.data.tables.ccf::build_sa_ccf_expr": [
     "CRR Art. 111"
   ],
   "rwa_calc.data.tables.crr_risk_weights::_create_covered_bond_df": [

@@ -251,6 +251,24 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.55"),
         citation=Citation("PS1/26", "124H", "CRE preferential RW up to 55% of value"),
     ),
+    # PRA PS1/26 Art. 111 Table A1 SA CCFs: OC 40% (Row 5) + LR/UCC 10% (Row 6)
+    # override the CRR values; FR/FRC/MR/MLR unchanged. Full table (b31 = common
+    # + b31 overlay, so it cannot partially inherit the crr entry).
+    "sa_ccf": LookupTable(
+        name="sa_ccf",
+        entries={
+            "FR": Decimal("1.00"),
+            "FRC": Decimal("1.00"),
+            "MR": Decimal("0.50"),
+            "MR_ISSUED": Decimal("0.50"),
+            "OC": Decimal("0.40"),
+            "MLR": Decimal("0.20"),
+            "LR": Decimal("0.10"),
+        },
+        key="risk_type",
+        citation=Citation("PS1/26", "111", "Table A1 SA CCFs (OC 40% Row 5, LR/UCC 10% Row 6)"),
+        default=Decimal("0.50"),
+    ),
     # Basel 3.1 revised slotting tables (PRA PS1/26 Art. 153(5) Table A / CRE33):
     # HVCRE risk-weight + EL splits and the PF pre-operational distinction.
     # Overrides the CRR Feature; selects the B31 table family in

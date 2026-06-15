@@ -1,42 +1,47 @@
-"""Contract tests for CCF regulatory scalars living in the data layer.
+"""Contract tests for the CCF regulatory scalars (now in the rulepack).
 
 These tests close the convention gap that ``scripts/arch_check.py`` check 5
 cannot see: the AST checker only flags module-level UPPER_SNAKE_CASE
-assignments, but inline ``pl.lit(<float>)`` calls inside function bodies
-are equally a violation of the "regulatory values live in
-``src/rwa_calc/data/tables/``" rule documented in ``CLAUDE.md``.
+assignments, but inline ``pl.lit(<float>)`` calls inside function bodies are
+equally a violation of the "regulatory values live in the rulepack, not in
+engine code" rule documented in ``CLAUDE.md``.
 
 Two layers of assertion:
 
-1. The values in ``data/tables/ccf.py`` match the regulatory tables
-   (CRR Art. 111, PRA PS1/26 Table A1, CRR Art. 166(8)/(10)). One
-   assertion per row — documentation-as-test.
+1. The CCF values resolved from the rulepack (``sa_ccf`` /
+   ``firb_obs_fallback_ccf`` lookups + the bespoke scalars) match the
+   regulatory schedules (CRR Art. 111, PRA PS1/26 Table A1, CRR Art.
+   166(8)/(10)). One assertion per row — documentation-as-test.
 2. ``engine/ccf.py`` does not declare any new CCF percentages inline:
-   every ``pl.lit(<float>)`` whose value appears in any CCF table must
-   come via an import from ``data/tables/ccf.py``. The two A-IRB floor
-   multipliers (CRE32.27 and Art. 166D(5)(b), both 0.5) are documented
-   exceptions pending relocation to a future ``airb_floors.py``.
+   every ``pl.lit(<float>)`` whose value appears in any CCF schedule must
+   come from the rulepack (via ``lookup_float_map`` / ``scalar_value``),
+   not a hard-coded literal.
 """
 
 from __future__ import annotations
 
 import ast
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from rwa_calc.data.tables.ccf import (
-    FIRB_CREDIT_LINE_CCF,
-    FIRB_OBS_FALLBACK,
-    FIRB_TRADE_LC_CCF,
-    OC_SHORT_MATURITY_CCF,
-    OC_SHORT_MATURITY_THRESHOLD_DAYS,
-    SA_CCF_B31,
-    SA_CCF_CRR,
-    SA_CCF_DEFAULT,
-)
+from rwa_calc.data.tables.ccf import OC_SHORT_MATURITY_THRESHOLD_DAYS
+from rwa_calc.rulebook.resolve import resolve
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENGINE_CCF = REPO_ROOT / "src" / "rwa_calc" / "engine" / "ccf.py"
+
+# CCF values now live in the rulepack (packs/{common,crr,b31}.py); these aliases
+# resolve them for the documentation-as-test assertions below.
+_CRR = resolve("crr", date(2026, 1, 1))
+_B31 = resolve("b31", date(2027, 1, 1))
+SA_CCF_CRR = _CRR.lookup("sa_ccf").entries
+SA_CCF_B31 = _B31.lookup("sa_ccf").entries
+FIRB_OBS_FALLBACK = _CRR.lookup("firb_obs_fallback_ccf").entries
+FIRB_TRADE_LC_CCF = _CRR.scalar_param("firb_trade_lc_ccf").value
+FIRB_CREDIT_LINE_CCF = _CRR.scalar_param("firb_credit_line_ccf").value
+SA_CCF_DEFAULT = _CRR.scalar_param("sa_ccf_default").value
+OC_SHORT_MATURITY_CCF = _CRR.scalar_param("oc_short_maturity_ccf").value
 
 
 # =============================================================================
@@ -110,15 +115,14 @@ def test_oc_short_maturity_override_matches_art_111() -> None:
 # Layer 2 — no inline pl.lit(<ccf>) literals in engine/ccf.py
 # =============================================================================
 
-# Values that show up as CCFs in the data layer but are also universally
-# common as column defaults (``interest=0.0``, ``provision=0.0``),
-# nominal-is-zero guards (``then(pl.lit(0.0))``), or A-IRB floor multipliers
-# (``* 0.5`` for CRE32.27 / Art. 166D(5)(b), tracked by TODOs in
-# ``engine/ccf.py`` pending relocation to ``data/tables/airb_floors.py``).
+# Values that show up as CCFs in the rulepack but are also universally common
+# as column defaults (``interest=0.0``, ``provision=0.0``), nominal-is-zero
+# guards (``then(pl.lit(0.0))``), or A-IRB floor multipliers (``* 0.5`` for
+# CRE32.27 / Art. 166D(5)(b), themselves now sourced from the rulepack).
 # Excluded from the inline-literal scan because a hit on these values is
-# overwhelmingly likely to be structural, not a regulatory CCF. The
-# distinctive CCF values (0.10, 0.20, 0.40, 0.75) have no such structural
-# overlap and are checked strictly.
+# overwhelmingly likely to be structural, not a regulatory CCF. The distinctive
+# CCF values (0.10, 0.20, 0.40, 0.75) have no such structural overlap and are
+# checked strictly.
 _STRUCTURAL_OR_DEFERRED_VALUES: set[float] = {0.0, 0.5, 1.0}
 
 
@@ -170,24 +174,22 @@ def _iter_pl_lit_numeric_args(tree: ast.AST):
 def test_engine_ccf_module_has_no_inline_ccf_literals() -> None:
     """No ``pl.lit(<float>)`` in engine/ccf.py should match a distinctive CCF.
 
-    Any new CCF percentage introduced into the engine must come via an
-    import from ``data/tables/ccf.py`` (e.g.
-    ``pl.lit(float(SA_CCF_DEFAULT))``). The scan is limited to values
-    without a plausible structural alternative — 0.0, 0.5, and 1.0 are
-    excluded because they routinely appear as column defaults, mathematical
-    zero guards, and A-IRB floor multipliers (the latter tracked by
-    ``TODO: move ... to data/tables/airb_floors.py`` comments in
-    ``engine/ccf.py``).
+    Any CCF percentage used by the engine must come from the rulepack (e.g.
+    ``pl.lit(_SA_CCF_DEFAULT)`` where ``_SA_CCF_DEFAULT = scalar_value(...)``),
+    never a hard-coded literal. The scan is limited to values without a
+    plausible structural alternative — 0.0, 0.5, and 1.0 are excluded because
+    they routinely appear as column defaults, mathematical zero guards, and
+    A-IRB floor multipliers.
     """
     tree = ast.parse(ENGINE_CCF.read_text(encoding="utf-8"))
     bad: set[float] = _distinctive_ccf_values()
     violations = [
         f"  engine/ccf.py:{lineno}: pl.lit({value!r}) matches a regulatory "
-        f"CCF table value — import from data/tables/ccf.py instead"
+        f"CCF value — source it from the rulepack instead"
         for lineno, value in _iter_pl_lit_numeric_args(tree)
         if value in bad
     ]
     assert not violations, (
         "Inline pl.lit(<ccf>) literal in engine/ccf.py — every regulatory "
-        "CCF percentage must be sourced from data/tables/ccf.py:\n" + "\n".join(violations)
+        "CCF percentage must be sourced from the rulepack:\n" + "\n".join(violations)
     )

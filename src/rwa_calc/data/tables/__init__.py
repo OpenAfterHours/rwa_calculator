@@ -12,17 +12,9 @@ Modules:
     crr_slotting: CRR specialised lending slotting risk weights
     b31_slotting: Basel 3.1 specialised lending slotting risk weights
     firb_lgd: F-IRB PD/maturity floors and caps (CRR Art. 162/163)
-    crr_equity_rw: CRR equity risk weights (Art. 133 SA, Art. 155 IRB Simple)
-    b31_equity_rw: Basel 3.1 equity risk weights (PRA PS1/26 Art. 133)
     entity_class_mapping: entity_type → SA/IRB exposure class lookup
 """
 
-from .b31_equity_rw import (
-    B31_SA_EQUITY_RISK_WEIGHTS,
-    get_b31_equity_risk_weights,
-    get_b31_equity_rw_table,
-    lookup_b31_equity_rw,
-)
 from .b31_risk_weights import (
     B31_ADC_PRESOLD_RISK_WEIGHT,
     B31_ADC_RISK_WEIGHT,
@@ -43,14 +35,6 @@ from .b31_slotting import (
     B31_SLOTTING_RISK_WEIGHTS_HVCRE,
     B31_SLOTTING_RISK_WEIGHTS_PREOP,
     lookup_b31_slotting_rw,
-)
-from .crr_equity_rw import (
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    SA_EQUITY_RISK_WEIGHTS,
-    get_combined_equity_rw_table,
-    get_equity_risk_weights,
-    get_equity_rw_table,
-    lookup_equity_rw,
 )
 from .crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
@@ -146,18 +130,6 @@ __all__ = [
     "ENTITY_TYPE_TO_SA_CLASS",
     "ENTITY_TYPE_TO_IRB_CLASS",
     "ENTITY_TYPES_BY_SA_CLASS",
-    # Equity risk weights — CRR
-    "SA_EQUITY_RISK_WEIGHTS",
-    "IRB_SIMPLE_EQUITY_RISK_WEIGHTS",
-    "get_equity_risk_weights",
-    "lookup_equity_rw",
-    "get_equity_rw_table",
-    "get_combined_equity_rw_table",
-    # Equity risk weights — Basel 3.1
-    "B31_SA_EQUITY_RISK_WEIGHTS",
-    "get_b31_equity_risk_weights",
-    "lookup_b31_equity_rw",
-    "get_b31_equity_rw_table",
     # Real estate loan-splitting (CRR Art. 125/126, B3.1 Art. 124F/H)
     "SplitParameters",
     "re_split_parameters",

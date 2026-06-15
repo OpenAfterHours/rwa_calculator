@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from rwa_calc.domain.enums import EquityType
 from rwa_calc.rulebook.model import (
     Citation,
     DecisionTable,
@@ -303,6 +304,59 @@ ENTRIES: dict[str, RuleEntry] = {
         name="equity_pd_lgd_no_default_info_scaling",
         value=Decimal("1.5"),
         citation=Citation("CRR", "155(3)", "1.5x RW scaling absent Art. 178 default data"),
+    ),
+    # Equity SA risk weights (CRR Art. 133(2) 100% flat / Art. 132(2) CIU 1250% /
+    # central bank 0%). The equity_revised_sa_risk_weights Feature selects CRR vs
+    # B31; packs/b31.py OVERRIDES this entry with the Art. 133(3)-(5) table. Enum
+    # (EquityType)-keyed; consumed by engine/equity/calculator.py and
+    # engine/sa/risk_weights.py via compile.lookup_float_map.
+    "equity_sa_risk_weights": LookupTable(
+        name="equity_sa_risk_weights",
+        entries={
+            EquityType.CENTRAL_BANK: Decimal("0.00"),
+            EquityType.SUBORDINATED_DEBT: Decimal("1.00"),
+            EquityType.LISTED: Decimal("1.00"),
+            EquityType.EXCHANGE_TRADED: Decimal("1.00"),
+            EquityType.GOVERNMENT_SUPPORTED: Decimal("1.00"),
+            EquityType.UNLISTED: Decimal("1.00"),
+            EquityType.SPECULATIVE: Decimal("1.00"),
+            EquityType.PRIVATE_EQUITY: Decimal("1.00"),
+            EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("1.00"),
+            EquityType.CIU: Decimal("12.50"),
+            EquityType.OTHER: Decimal("1.00"),
+        },
+        key="equity_type",
+        citation=Citation("CRR", "133", "Art. 133(2) 100% flat / Art. 132(2) CIU 1250%"),
+        default=Decimal("1.00"),
+    ),
+    # IRB Simple equity risk weights (CRR Art. 155(2)): PE-diversified 190%,
+    # exchange-traded 290%, all other 370%. CRR-only (Basel 3.1 removes IRB equity).
+    "equity_irb_simple_risk_weights": LookupTable(
+        name="equity_irb_simple_risk_weights",
+        entries={
+            EquityType.CENTRAL_BANK: Decimal("0.00"),
+            EquityType.SUBORDINATED_DEBT: Decimal("3.70"),
+            EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("1.90"),
+            EquityType.PRIVATE_EQUITY: Decimal("3.70"),
+            EquityType.EXCHANGE_TRADED: Decimal("2.90"),
+            EquityType.LISTED: Decimal("2.90"),
+            EquityType.GOVERNMENT_SUPPORTED: Decimal("3.70"),
+            EquityType.UNLISTED: Decimal("3.70"),
+            EquityType.SPECULATIVE: Decimal("3.70"),
+            EquityType.CIU: Decimal("3.70"),
+            EquityType.OTHER: Decimal("3.70"),
+        },
+        key="equity_type",
+        citation=Citation("CRR", "155", "(2) IRB simple PE-div 190%/exch 290%/other 370%"),
+        default=Decimal("3.70"),
+    ),
+    # CRR Art. 155(2): non-trading-book short positions may net long positions in
+    # the same stock only if the explicit hedge covers >= 1 year. Documentary
+    # value-home (the netting logic lives in engine/equity/calculator.py).
+    "equity_netting_min_hedge_years": ScalarParam(
+        name="equity_netting_min_hedge_years",
+        value=Decimal("1.0"),
+        citation=Citation("CRR", "155(2)", "min 1y hedge tenor for short-position netting"),
     ),
     # Basel-3.1 capital-stack regime GATES, all absent under CRR (S11d). These
     # mirror the regime-derived `enabled` flags on contracts/config.py's

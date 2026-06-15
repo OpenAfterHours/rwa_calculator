@@ -24,11 +24,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from rwa_calc.domain.enums import EquityType
 from rwa_calc.rulebook.model import (
     Citation,
     DecisionTable,
     Feature,
     FormulaParams,
+    LookupTable,
     RuleEntry,
     ScalarParam,
     Schedule,
@@ -258,6 +260,29 @@ ENTRIES: dict[str, RuleEntry] = {
         name="equity_revised_sa_risk_weights",
         enabled=True,
         citation=Citation("PS1/26", "133", "Basel 3.1 equity SA RW 250%/400%/150%"),
+    ),
+    # Basel 3.1 SA equity risk weights (PRA PS1/26 Art. 133(3)-(5)): standard 250%,
+    # higher-risk PE/VC/speculative 400%, subordinated 150%, central bank 0%, CIU
+    # 1250% (Art. 132(2)). OVERRIDES the crr equity_sa_risk_weights via overlay.
+    # Enum (EquityType)-keyed; consumed via compile.lookup_float_map.
+    "equity_sa_risk_weights": LookupTable(
+        name="equity_sa_risk_weights",
+        entries={
+            EquityType.CENTRAL_BANK: Decimal("0.00"),
+            EquityType.SUBORDINATED_DEBT: Decimal("1.50"),
+            EquityType.LISTED: Decimal("2.50"),
+            EquityType.EXCHANGE_TRADED: Decimal("2.50"),
+            EquityType.GOVERNMENT_SUPPORTED: Decimal("2.50"),
+            EquityType.UNLISTED: Decimal("2.50"),
+            EquityType.SPECULATIVE: Decimal("4.00"),
+            EquityType.PRIVATE_EQUITY: Decimal("4.00"),
+            EquityType.PRIVATE_EQUITY_DIVERSIFIED: Decimal("4.00"),
+            EquityType.CIU: Decimal("12.50"),
+            EquityType.OTHER: Decimal("2.50"),
+        },
+        key="equity_type",
+        citation=Citation("PS1/26", "133", "Art. 133(3)-(5) equity SA RW 250%/400%/150%"),
+        default=Decimal("2.50"),
     ),
     # Basel 3.1 Art. 147A(1) IRB-approach restrictions: FSE/large-corp/institution
     # no A-IRB, sovereign-like + equity SA-only, IPRE/HVCRE slotting-only.

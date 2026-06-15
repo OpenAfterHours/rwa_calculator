@@ -37,6 +37,7 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -49,7 +50,6 @@ from rwa_calc.data.schemas import (
     CRM_OUTPUT_SCHEMA,
     HIERARCHY_OUTPUT_SCHEMA,
 )
-from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
 from rwa_calc.data.tables.b31_risk_weights import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
@@ -79,7 +79,6 @@ from rwa_calc.data.tables.b31_risk_weights import (
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.crr_equity_rw import SA_EQUITY_RISK_WEIGHTS as CRR_SA_EQUITY_RW
 from rwa_calc.data.tables.crr_risk_weights import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
@@ -124,6 +123,8 @@ from rwa_calc.data.tables.eu_sovereign import (
 )
 from rwa_calc.domain.enums import CQS, EquityType
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import lookup_float_map
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from polars.expr.whenthen import ChainedThen, Then
@@ -210,6 +211,10 @@ _SA_SHARED_RW: dict[str, float] = {
     "retail": float(RETAIL_RISK_WEIGHT),
 }
 
+# Representative equity SA RW (LISTED) from the rulepack for the SA-equivalent maps.
+_CRR_EQ_RW = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equity_sa_risk_weights"))
+_B31_EQ_RW = lookup_float_map(resolve("b31", date(2027, 1, 1)).lookup("equity_sa_risk_weights"))
+
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
     "high_risk": float(HIGH_RISK_RW),
@@ -233,7 +238,7 @@ _SA_CRR_RW: dict[str, float] = {
     # Corporate / retail / equity tail (Art. 122 / 123 / 133(2))
     "corporate_sme": float(CRR_CORPORATE_SME_RW),
     "non_reg_retail": float(CRR_NON_REGULATORY_RETAIL_RW),
-    "equity": float(CRR_SA_EQUITY_RW[EquityType.LISTED]),
+    "equity": _CRR_EQ_RW[EquityType.LISTED],
 }
 
 # Basel 3.1 specific scalars (PRA PS1/26, CRE20).
@@ -279,7 +284,7 @@ _SA_B31_RW: dict[str, float] = {
     "qrre_transactor": float(B31_RETAIL_TRANSACTOR_RW),
     "payroll": float(B31_RETAIL_PAYROLL_LOAN_RW),
     "non_reg_retail": float(B31_RETAIL_NON_REGULATORY_RW),
-    "equity": float(B31_SA_EQUITY_RISK_WEIGHTS[EquityType.LISTED]),
+    "equity": _B31_EQ_RW[EquityType.LISTED],
     # Currency mismatch (PRA PS1/26 Art. 123B / CRE20.93)
     "currency_mismatch_multiplier": float(B31_CURRENCY_MISMATCH_MULTIPLIER),
     "currency_mismatch_cap": float(B31_CURRENCY_MISMATCH_RW_CAP),

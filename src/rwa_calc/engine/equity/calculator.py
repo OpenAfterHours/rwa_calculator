@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, cast
 
 import polars as pl
@@ -41,11 +42,6 @@ from watchfire import cites
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
-from rwa_calc.data.tables.crr_equity_rw import (
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    SA_EQUITY_RISK_WEIGHTS,
-)
 from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType, ExposureClass
 from rwa_calc.engine.irb.formulas import (
     _capital_k_expr_from_params,
@@ -53,10 +49,10 @@ from rwa_calc.engine.irb.formulas import (
     _maturity_adjustment_expr_from_pd,
 )
 from rwa_calc.rulebook import RulepackV0
-from rwa_calc.rulebook.compile import formula_float_map, scalar_value
+from rwa_calc.rulebook.compile import formula_float_map, lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
-    from datetime import date
     from decimal import Decimal
 
     from polars.expr.whenthen import ChainedThen, Then
@@ -66,12 +62,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Float-converted risk weight tables for Polars expressions.
-# Authoritative Decimal values live in data/tables/*_equity_rw.py;
-# these are derived once at module load for use with pl.lit().
-_CRR_SA_RW = {k: float(v) for k, v in SA_EQUITY_RISK_WEIGHTS.items()}
-_B31_SA_RW = {k: float(v) for k, v in B31_SA_EQUITY_RISK_WEIGHTS.items()}
-_IRB_RW = {k: float(v) for k, v in IRB_SIMPLE_EQUITY_RISK_WEIGHTS.items()}
+# Float-converted risk weight tables for Polars expressions. Authoritative
+# Decimal values live in the rulepack (packs/crr.py + packs/b31.py); resolved and
+# float-converted once at module load via compile.lookup_float_map for use with
+# pl.lit(). Enum (EquityType)-keyed.
+_CRR_SA_RW = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equity_sa_risk_weights"))
+_B31_SA_RW = lookup_float_map(resolve("b31", date(2027, 1, 1)).lookup("equity_sa_risk_weights"))
+_IRB_RW = lookup_float_map(
+    resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_risk_weights")
+)
 
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.

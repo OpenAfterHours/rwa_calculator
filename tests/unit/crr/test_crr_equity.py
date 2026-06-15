@@ -29,10 +29,6 @@ from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_equity_rw import (
-    get_equity_rw_table,
-    lookup_equity_rw,
-)
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.equity import EquityCalculator, create_equity_calculator
 
@@ -659,53 +655,6 @@ class TestEquityFactoryFunctions:
         """create_equity_calculator returns EquityCalculator instance."""
         calculator = create_equity_calculator()
         assert isinstance(calculator, EquityCalculator)
-
-
-# =============================================================================
-# RISK WEIGHT TABLE TESTS
-# =============================================================================
-
-
-class TestEquityRiskWeightTables:
-    """Test equity risk weight lookup tables."""
-
-    def test_lookup_equity_rw_sa(self):
-        """lookup_equity_rw returns correct SA risk weights."""
-        assert lookup_equity_rw("central_bank", "sa") == Decimal("0.00")
-        assert lookup_equity_rw("listed", "sa") == Decimal("1.00")
-        assert lookup_equity_rw("unlisted", "sa") == Decimal("1.00")
-        assert lookup_equity_rw("speculative", "sa") == Decimal("1.00")
-
-    def test_lookup_equity_rw_irb_simple(self):
-        """lookup_equity_rw returns correct IRB Simple risk weights."""
-        assert lookup_equity_rw("central_bank", "irb_simple") == Decimal("0.00")
-        assert lookup_equity_rw("exchange_traded", "irb_simple") == Decimal("2.90")
-        assert lookup_equity_rw("other", "irb_simple") == Decimal("3.70")
-
-    def test_lookup_equity_rw_diversified(self):
-        """lookup_equity_rw handles is_diversified flag."""
-        # Diversified private equity gets 190% under IRB Simple
-        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=True) == Decimal(
-            "1.90"
-        )
-        # Non-diversified private equity gets 370%
-        assert lookup_equity_rw("private_equity", "irb_simple", is_diversified=False) == Decimal(
-            "3.70"
-        )
-
-    def test_get_equity_rw_table_sa(self):
-        """get_equity_rw_table returns correct SA DataFrame."""
-        df = get_equity_rw_table("sa")
-        assert df.height == 11  # All EquityType values (incl. subordinated_debt)
-        listed_row = df.filter(pl.col("equity_type") == "listed").to_dicts()[0]
-        assert listed_row["risk_weight"] == pytest.approx(1.00)
-
-    def test_get_equity_rw_table_irb_simple(self):
-        """get_equity_rw_table returns correct IRB Simple DataFrame."""
-        df = get_equity_rw_table("irb_simple")
-        assert df.height == 11  # All EquityType values (incl. subordinated_debt)
-        other_row = df.filter(pl.col("equity_type") == "other").to_dicts()[0]
-        assert other_row["risk_weight"] == pytest.approx(3.70)
 
 
 # =============================================================================

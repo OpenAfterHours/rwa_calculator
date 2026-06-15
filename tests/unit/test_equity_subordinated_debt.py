@@ -23,21 +23,21 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_equity_rw import (
-    B31_SA_EQUITY_RISK_WEIGHTS,
-    get_b31_equity_rw_table,
-    lookup_b31_equity_rw,
-)
-from rwa_calc.data.tables.crr_equity_rw import (
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    SA_EQUITY_RISK_WEIGHTS,
-    get_equity_rw_table,
-    lookup_equity_rw,
-)
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 from tests.unit._equity_test_helpers import apply_b31_equity_weight_sa
+
+# Equity risk weights sourced from the rulepack (the data/tables equity modules
+# were retired in Phase 5 S12-06b). Enum (EquityType)-keyed Decimal maps.
+B31_SA_EQUITY_RISK_WEIGHTS = (
+    resolve("b31", date(2027, 1, 1)).lookup("equity_sa_risk_weights").entries
+)
+SA_EQUITY_RISK_WEIGHTS = resolve("crr", date(2026, 1, 1)).lookup("equity_sa_risk_weights").entries
+IRB_SIMPLE_EQUITY_RISK_WEIGHTS = (
+    resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_risk_weights").entries
+)
 
 # =============================================================================
 # Data Table Constants
@@ -58,39 +58,6 @@ class TestSubordinatedDebtDataTables:
     def test_irb_simple_subordinated_debt_370_percent(self) -> None:
         """CRR Art. 155: subordinated debt = 370% (OTHER category)."""
         assert IRB_SIMPLE_EQUITY_RISK_WEIGHTS[EquityType.SUBORDINATED_DEBT] == Decimal("3.70")
-
-    def test_b31_lookup_subordinated_debt(self) -> None:
-        """B31 lookup function returns 150% for subordinated_debt."""
-        assert lookup_b31_equity_rw("subordinated_debt") == Decimal("1.50")
-
-    def test_crr_sa_lookup_subordinated_debt(self) -> None:
-        """CRR SA lookup returns 100% for subordinated_debt."""
-        assert lookup_equity_rw("subordinated_debt", approach="sa") == Decimal("1.00")
-
-    def test_crr_irb_lookup_subordinated_debt(self) -> None:
-        """CRR IRB Simple lookup returns 370% for subordinated_debt."""
-        assert lookup_equity_rw("subordinated_debt", approach="irb_simple") == Decimal("3.70")
-
-    def test_b31_dataframe_includes_subordinated_debt(self) -> None:
-        """B31 DataFrame table should include subordinated_debt row."""
-        df = get_b31_equity_rw_table()
-        sub_debt_rows = df.filter(pl.col("equity_type") == "subordinated_debt")
-        assert len(sub_debt_rows) == 1
-        assert sub_debt_rows["risk_weight"][0] == pytest.approx(1.50)
-
-    def test_crr_sa_dataframe_includes_subordinated_debt(self) -> None:
-        """CRR SA DataFrame table should include subordinated_debt row."""
-        df = get_equity_rw_table("sa")
-        sub_debt_rows = df.filter(pl.col("equity_type") == "subordinated_debt")
-        assert len(sub_debt_rows) == 1
-        assert sub_debt_rows["risk_weight"][0] == pytest.approx(1.00)
-
-    def test_crr_irb_dataframe_includes_subordinated_debt(self) -> None:
-        """CRR IRB Simple DataFrame table should include subordinated_debt row."""
-        df = get_equity_rw_table("irb_simple")
-        sub_debt_rows = df.filter(pl.col("equity_type") == "subordinated_debt")
-        assert len(sub_debt_rows) == 1
-        assert sub_debt_rows["risk_weight"][0] == pytest.approx(3.70)
 
     def test_all_equity_types_still_covered_in_b31_table(self) -> None:
         """All EquityType members should have a B31 weight (including new member)."""

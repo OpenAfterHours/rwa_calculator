@@ -932,4 +932,19 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("CRR", "129", "Table 6A covered-bond RW by CQS (rated)"),
         default=Decimal("1.00"),
     ),
+    # Unrated covered-bond RW derived from the issuing institution's own RW
+    # (CRR Art. 129(5)(a)-(d)). Decimal-keyed: issuer-institution RW -> CB RW.
+    # NB Art. 129(5)(b) maps 0.50 -> 0.20 (NOT 0.25, the PS1/26 value).
+    "covered_bond_unrated_derivation_crr": LookupTable(
+        name="covered_bond_unrated_derivation_crr",
+        entries={
+            Decimal("0.20"): Decimal("0.10"),
+            Decimal("0.50"): Decimal("0.20"),
+            Decimal("1.00"): Decimal("0.50"),
+            Decimal("1.50"): Decimal("1.00"),
+        },
+        key="issuer_institution_rw",
+        citation=Citation("CRR", "129", "(5)(a)-(d) unrated CB derivation from issuer RW"),
+        default=Decimal("1.00"),
+    ),
 }

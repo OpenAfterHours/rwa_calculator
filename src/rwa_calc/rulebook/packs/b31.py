@@ -844,4 +844,36 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("PS1/26", "129", "(4) Table 7 covered-bond RW (= CRR Table 6A)"),
         default=Decimal("1.00"),
     ),
+    # Unrated covered-bond RW derived from the issuing institution's own RW
+    # (PRA PS1/26 Art. 129(5)): 7-input chain incl. ECRA CQS2 (0.30->0.15),
+    # SCRA Grade A (0.40->0.20) / B (0.75->0.35), and (5)(b) 0.50->0.25.
+    "covered_bond_unrated_derivation_b31": LookupTable(
+        name="covered_bond_unrated_derivation_b31",
+        entries={
+            Decimal("0.20"): Decimal("0.10"),
+            Decimal("0.30"): Decimal("0.15"),
+            Decimal("0.40"): Decimal("0.20"),
+            Decimal("0.50"): Decimal("0.25"),
+            Decimal("0.75"): Decimal("0.35"),
+            Decimal("1.00"): Decimal("0.50"),
+            Decimal("1.50"): Decimal("1.00"),
+        },
+        key="issuer_institution_rw",
+        citation=Citation("PS1/26", "129", "(5) unrated CB derivation from issuer RW (7-input)"),
+        default=Decimal("1.00"),
+    ),
+    # Unrated covered-bond RW direct from issuer SCRA grade (PRA PS1/26
+    # Art. 129(5)): SCRA grade -> institution RW -> CB RW, pre-resolved.
+    "b31_covered_bond_unrated_from_scra": LookupTable(
+        name="b31_covered_bond_unrated_from_scra",
+        entries={
+            "A_ENHANCED": Decimal("0.15"),
+            "A": Decimal("0.20"),
+            "B": Decimal("0.35"),
+            "C": Decimal("1.00"),
+        },
+        key="scra_grade",
+        citation=Citation("PS1/26", "129", "(5) unrated CB RW direct from issuer SCRA grade"),
+        default=Decimal("1.00"),
+    ),
 }

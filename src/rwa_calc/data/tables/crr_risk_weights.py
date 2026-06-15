@@ -53,6 +53,19 @@ def _cqs_rw_from_pack(name: str, pack: ResolvedRulepack = _SA_RW_PACK) -> dict[C
     return cast("dict[CQS, Decimal]", dict(pack.lookup(name).entries))
 
 
+def _decimal_rw_from_pack(
+    name: str, pack: ResolvedRulepack = _SA_RW_PACK
+) -> dict[Decimal, Decimal]:
+    """Read a Decimal-keyed RW-derivation LookupTable back from the rulepack.
+
+    Used for the covered-bond unrated derivations (issuer-institution RW ->
+    covered-bond RW). Returns the exact ``dict[Decimal, Decimal]`` the former
+    literal held, so the derivation expressions stay byte-identical. ``pack``
+    selects the regime overlay (CRR by default; pass ``_SA_RW_PACK_B31``).
+    """
+    return cast("dict[Decimal, Decimal]", dict(pack.lookup(name).entries))
+
+
 # =============================================================================
 # INTERNAL DATAFRAME-BUILD HELPERS
 #
@@ -657,22 +670,13 @@ COVERED_BOND_RISK_WEIGHTS: dict[CQS, Decimal] = _cqs_rw_from_pack("covered_bond_
 # The two regimes are stored as separate dicts so callers cannot accidentally
 # pick up a B31-only key (or the wrong (b) value) under CRR — each consumer
 # selects the regime-specific dict explicitly (no unsuffixed alias).
-COVERED_BOND_UNRATED_DERIVATION_CRR: dict[Decimal, Decimal] = {
-    Decimal("0.20"): Decimal("0.10"),  # CRR Art. 129(5)(a)
-    Decimal("0.50"): Decimal("0.20"),  # CRR Art. 129(5)(b) — note: NOT 0.25 (B31 value)
-    Decimal("1.00"): Decimal("0.50"),  # CRR Art. 129(5)(c)
-    Decimal("1.50"): Decimal("1.00"),  # CRR Art. 129(5)(d)
-}
+COVERED_BOND_UNRATED_DERIVATION_CRR: dict[Decimal, Decimal] = _decimal_rw_from_pack(
+    "covered_bond_unrated_derivation_crr"
+)
 
-COVERED_BOND_UNRATED_DERIVATION_B31: dict[Decimal, Decimal] = {
-    Decimal("0.20"): Decimal("0.10"),  # PS1/26 Art. 129(5)(a)
-    Decimal("0.30"): Decimal("0.15"),  # PS1/26 Art. 129(5)(aa) — ECRA CQS2
-    Decimal("0.40"): Decimal("0.20"),  # PS1/26 Art. 129(5)(ab) — SCRA Grade A
-    Decimal("0.50"): Decimal("0.25"),  # PS1/26 Art. 129(5)(b)
-    Decimal("0.75"): Decimal("0.35"),  # PS1/26 Art. 129(5)(ba) — SCRA Grade B
-    Decimal("1.00"): Decimal("0.50"),  # PS1/26 Art. 129(5)(c)
-    Decimal("1.50"): Decimal("1.00"),  # PS1/26 Art. 129(5)(d)
-}
+COVERED_BOND_UNRATED_DERIVATION_B31: dict[Decimal, Decimal] = _decimal_rw_from_pack(
+    "covered_bond_unrated_derivation_b31", _SA_RW_PACK_B31
+)
 
 
 @cites("CRR Art. 129")

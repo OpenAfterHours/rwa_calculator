@@ -27,7 +27,7 @@ import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     lookup_collateral_haircut,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
@@ -120,7 +120,7 @@ def _build_equity_collateral(
 
 def _get_haircut(collateral_lf: pl.LazyFrame, is_basel_3_1: bool = False) -> float:
     """Run the HaircutCalculator and return the collateral_haircut value."""
-    calc = HaircutCalculator(is_basel_3_1=is_basel_3_1)
+    calc = HaircutCalculator()
     config = (
         CalculationConfig.basel_3_1(reporting_date=date(2025, 12, 31))
         if is_basel_3_1
@@ -387,7 +387,7 @@ class TestMultipleEquityCollateral:
     def test_mixed_main_and_other_crr(self) -> None:
         """Two equities: one main-index (15%), one other-listed (25%)."""
         lf = self._build_mixed_frame()
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         config = CalculationConfig.crr(reporting_date=date(2025, 12, 31))
         result = calc.apply_haircuts(lf, config).collect()
         haircuts = result.sort("collateral_reference")["collateral_haircut"].to_list()
@@ -397,7 +397,7 @@ class TestMultipleEquityCollateral:
     def test_mixed_main_and_other_b31(self) -> None:
         """Two equities: one main-index (20%), one other-listed (30%)."""
         lf = self._build_mixed_frame()
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         config = CalculationConfig.basel_3_1(reporting_date=date(2025, 12, 31))
         result = calc.apply_haircuts(lf, config).collect()
         haircuts = result.sort("collateral_reference")["collateral_haircut"].to_list()

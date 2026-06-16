@@ -21,13 +21,13 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_risk_weights import (
+from rwa_calc.engine.sa import SACalculator
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_OTHER_RE_CRE_FLOOR_RW,
     B31_OTHER_RE_INCOME_DEPENDENT_RW,
     b31_other_re_rw_expr,
     lookup_b31_other_re_rw,
 )
-from rwa_calc.engine.sa import SACalculator
 
 
 @pytest.fixture

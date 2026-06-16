@@ -8,15 +8,16 @@ Tests verify:
 - HVCRE weights match CRR HVCRE equivalents
 """
 
+from datetime import date
 from decimal import Decimal
 
-from rwa_calc.data.tables.b31_slotting import (
-    B31_SLOTTING_RISK_WEIGHTS,
-    B31_SLOTTING_RISK_WEIGHTS_HVCRE,
-    B31_SLOTTING_RISK_WEIGHTS_PREOP,
-    lookup_b31_slotting_rw,
-)
 from rwa_calc.domain.enums import SlottingCategory
+from rwa_calc.rulebook.resolve import resolve
+
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+B31_SLOTTING_RISK_WEIGHTS = _B31_PACK.lookup("slotting_rw_base").entries
+B31_SLOTTING_RISK_WEIGHTS_HVCRE = _B31_PACK.lookup("slotting_rw_hvcre").entries
+B31_SLOTTING_RISK_WEIGHTS_PREOP = _B31_PACK.lookup("slotting_rw_preop").entries
 
 
 class TestB31SlottingRiskWeights:
@@ -99,37 +100,3 @@ class TestB31SlottingHVCRE:
             B31_SLOTTING_RISK_WEIGHTS_HVCRE[SlottingCategory.WEAK]
             == B31_SLOTTING_RISK_WEIGHTS[SlottingCategory.WEAK]
         )
-
-
-class TestB31SlottingLookup:
-    """Tests for Basel 3.1 slotting lookup function."""
-
-    def test_lookup_base_by_string(self) -> None:
-        """Lookup base weight by string category."""
-        assert lookup_b31_slotting_rw("strong") == Decimal("0.70")
-
-    def test_lookup_base_by_enum(self) -> None:
-        """Lookup base weight by enum."""
-        assert lookup_b31_slotting_rw(SlottingCategory.GOOD) == Decimal("0.90")
-
-    def test_lookup_hvcre(self) -> None:
-        """Lookup HVCRE weight."""
-        assert lookup_b31_slotting_rw("strong", is_hvcre=True) == Decimal("0.95")
-
-    def test_lookup_preop(self) -> None:
-        """Lookup pre-operational weight (same as standard under PRA PS1/26)."""
-        assert lookup_b31_slotting_rw("strong", is_pre_operational=True) == Decimal("0.70")
-
-    def test_lookup_hvcre_takes_precedence_over_preop(self) -> None:
-        """HVCRE flag takes precedence when both flags are set."""
-        assert lookup_b31_slotting_rw("strong", is_hvcre=True, is_pre_operational=True) == Decimal(
-            "0.95"
-        )
-
-    def test_lookup_unknown_category_defaults_to_satisfactory(self) -> None:
-        """Unknown category defaults to satisfactory (115%)."""
-        assert lookup_b31_slotting_rw("unknown") == Decimal("1.15")
-
-    def test_lookup_case_insensitive(self) -> None:
-        """Lookup handles uppercase input."""
-        assert lookup_b31_slotting_rw("STRONG") == Decimal("0.70")

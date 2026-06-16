@@ -24,7 +24,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.haircuts import calculate_maturity_mismatch_adjustment
+from rwa_calc.engine.crm.haircut_tables import calculate_maturity_mismatch_adjustment
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 
 # ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ class TestOriginalMaturityIneligibility:
             exposure_maturity_date=exposure_date,
             original_maturity_years=0.5,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -101,7 +101,7 @@ class TestOriginalMaturityIneligibility:
             exposure_maturity_date=exposure_date,
             original_maturity_years=1.0,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # Should get CVAM adjustment, not zero
@@ -116,7 +116,7 @@ class TestOriginalMaturityIneligibility:
             exposure_maturity_date=exposure_date,
             original_maturity_years=0.99,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -130,7 +130,7 @@ class TestOriginalMaturityIneligibility:
             exposure_maturity_date=exposure_date,
             original_maturity_years=0.5,  # would fail if checked
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # No mismatch → factor 1.0, original maturity irrelevant
@@ -148,7 +148,7 @@ class TestOriginalMaturityIneligibility:
         )
         # Add the column but with null
         lf = lf.with_columns(pl.lit(None).cast(pl.Float64).alias("original_maturity_years"))
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # Should get CVAM adjustment, not zero (null treated as >= 1yr)
@@ -162,7 +162,7 @@ class TestOriginalMaturityIneligibility:
             coll_maturity_years=1.0,
             exposure_maturity_date=exposure_date,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # Should work normally — backward compatible
@@ -176,7 +176,7 @@ class TestOriginalMaturityIneligibility:
             exposure_maturity_date=exposure_date,
             original_maturity_years=0.5,
         )
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, b31_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -198,7 +198,7 @@ class TestOneDayMaturityFloorIneligibility:
             exposure_maturity_date=exposure_date,
             exposure_has_one_day_maturity_floor=True,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -212,7 +212,7 @@ class TestOneDayMaturityFloorIneligibility:
             exposure_maturity_date=exposure_date,
             exposure_has_one_day_maturity_floor=True,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # No mismatch → factor 1.0
@@ -226,7 +226,7 @@ class TestOneDayMaturityFloorIneligibility:
             exposure_maturity_date=exposure_date,
             exposure_has_one_day_maturity_floor=False,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # Should get positive CVAM factor
@@ -243,7 +243,7 @@ class TestOneDayMaturityFloorIneligibility:
         lf = lf.with_columns(
             pl.lit(None).cast(pl.Boolean).alias("exposure_has_one_day_maturity_floor")
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # Should get positive CVAM factor (null treated as False)
@@ -256,7 +256,7 @@ class TestOneDayMaturityFloorIneligibility:
             coll_maturity_years=2.0,
             exposure_maturity_date=exposure_date,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] > 0.0
@@ -269,7 +269,7 @@ class TestOneDayMaturityFloorIneligibility:
             exposure_maturity_date=exposure_date,
             exposure_has_one_day_maturity_floor=True,
         )
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, b31_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -292,7 +292,7 @@ class TestCombinedIneligibilityConditions:
             original_maturity_years=0.5,
             exposure_has_one_day_maturity_floor=True,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -306,7 +306,7 @@ class TestCombinedIneligibilityConditions:
             original_maturity_years=5.0,  # would pass orig maturity check
             exposure_has_one_day_maturity_floor=False,  # would pass floor check
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -335,7 +335,7 @@ class TestCombinedIneligibilityConditions:
                 "exposure_has_one_day_maturity_floor": pl.Boolean,
             },
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         factors = result["maturity_adjustment_factor"].to_list()
@@ -359,7 +359,7 @@ class TestCombinedIneligibilityConditions:
             original_maturity_years=5.0,
             exposure_has_one_day_maturity_floor=False,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(lf, crr_config).collect()
 
         # CVAM = (2.0 - 0.25) / (3.0 - 0.25) = 1.75 / 2.75 ≈ 0.6364

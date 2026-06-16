@@ -126,7 +126,7 @@ def profile_pipeline_stages(
     )
 
     # --- Stage 3: CRM sub-stages ---
-    crm = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+    crm = CRMProcessor()
     data = classified
     exposures = data.all_exposures
 
@@ -205,7 +205,7 @@ def profile_pipeline_stages(
         )
 
         # 3f-iii: Join + haircuts + allocation
-        haircut_calc = HaircutCalculator(is_basel_3_1=config.is_basel_3_1)
+        haircut_calc = HaircutCalculator()
 
         cp_ead_totals = cp_lookup.select(
             pl.col("_ben_ref_cp").alias("counterparty_reference"),
@@ -242,7 +242,6 @@ def profile_pipeline_stages(
                 adjusted_collateral,
                 config,
                 cp_ead_totals,
-                config.is_basel_3_1,
             ),
             "CRM: collateral allocation (lazy)",
             results,
@@ -250,7 +249,7 @@ def profile_pipeline_stages(
     else:
         exposures = _time(
             lambda: collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-                exposures, config.is_basel_3_1
+                exposures, config=config
             ),
             "CRM: firb_lgd_no_collateral",
             results,

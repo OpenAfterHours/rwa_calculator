@@ -57,7 +57,7 @@ disqualifier — the worktree merge surfaces conflicts cleanly):
    `engine/irb/`, `engine/crm/`, `engine/slotting/`, `engine/equity/`,
    `engine/stages/re_split/`, `engine/stages/hierarchy/`,
    `engine/stages/classify/`).
-2. Distinct file in `src/rwa_calc/data/tables/`.
+2. Distinct file in `src/rwa_calc/rulebook/packs/` or `src/rwa_calc/data/tables/`.
 3. Distinct new test path under `tests/`.
 
 If two candidates clearly target the same shared helper or the same
@@ -293,7 +293,8 @@ C1.3 — Hand-calc shows every regulatory term on its own line. Each
        scalar (risk weight, CCF, LGD floor, supervisory haircut,
        slotting band, supporting factor, output floor percentage) is
        attributed either to the relevant Skill (`basel31` / `crr`)
-       OR to a specific file under `src/rwa_calc/data/tables/`.
+       OR to a specific rulepack pack entry (`rulebook/packs/*.py`) or
+       `data/tables/` shim.
 C1.4 — Expected outputs include exact RWA, EAD, risk weight, and K
        (or the subset the test will assert on, with the unused
        fields explicitly listed as out-of-scope under C1.5).

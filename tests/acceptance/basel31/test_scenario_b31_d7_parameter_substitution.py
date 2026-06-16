@@ -109,7 +109,7 @@ def _create_crm_and_irb_result(
     substitution. This is the end-to-end critical path for parameter substitution.
     """
     # CRM processor: apply guarantees to get guarantor attributes on the exposure
-    processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+    processor = CRMProcessor()
 
     # Pre-CRM exposures (after CCF/collateral, before guarantee)
     # Includes ccf, nominal_amount, drawn_amount, ead_from_ccf required by

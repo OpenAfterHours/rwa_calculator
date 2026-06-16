@@ -11,30 +11,66 @@ Tests verify:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.crm_supervisory import (
-    BASEL31_SUPERVISORY_LGD,
-    CRR_SUPERVISORY_LGD,
-)
 from rwa_calc.engine.crm.expressions import (
     WATERFALL_ORDER,
     collateral_category_expr,
     collateral_lgd_expr,
     min_collateralisation_threshold_expr,
     overcollateralisation_ratio_expr,
+    supervisory_lgd_values,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import (
-    LIFE_INSURANCE_RW_MAP,
     _add_default_life_ins_columns,
     _map_insurer_rw_to_secured_rw_expr,
     compute_life_insurance_columns,
 )
 from rwa_calc.engine.sa.rw_adjustments import apply_life_insurance_rw_mapping
+from rwa_calc.rulebook.resolve import resolve
+
+# Resolved packs for the per-expression unit tests (the CRM collateral builders
+# now read their values + regime Features from the rulepack).
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
+
+def test_supervisory_lgd_values_crr_projection_byte_identical() -> None:
+    # Assert — the canonical DecisionTable projects to the exact CRR CRM-shape
+    # dict (literal pin of the former data/tables CRR_SUPERVISORY_LGD).
+    assert supervisory_lgd_values(_CRR_PACK) == {
+        "financial": 0.0,
+        "receivables": 0.35,
+        "real_estate": 0.35,
+        "other_physical": 0.40,
+        "unsecured": 0.45,
+        "covered_bond": 0.1125,
+        "life_insurance": 0.40,
+        "receivables_subordinated": 0.65,
+        "real_estate_subordinated": 0.65,
+        "other_physical_subordinated": 0.70,
+    }
+
+
+def test_supervisory_lgd_values_b31_projection_byte_identical() -> None:
+    # Assert — and to the exact Basel 3.1 CRM-shape dict (the flagged collapse;
+    # literal pin of the former data/tables BASEL31_SUPERVISORY_LGD).
+    assert supervisory_lgd_values(_B31_PACK) == {
+        "financial": 0.0,
+        "receivables": 0.20,
+        "real_estate": 0.20,
+        "other_physical": 0.25,
+        "unsecured": 0.40,
+        "unsecured_fse": 0.45,
+        "covered_bond": 0.1125,
+        "life_insurance": 0.40,
+    }
+
 
 # --- Art. 232: Risk Weight Mapping Table ---
 
@@ -83,10 +119,12 @@ class TestLifeInsuranceRWMapping:
         result = df.with_columns(_map_insurer_rw_to_secured_rw_expr().alias("mapped")).collect()
         assert result["mapped"][0] == pytest.approx(0.70)
 
-    def test_rw_map_dict_has_all_regulatory_values(self) -> None:
-        """The mapping dict covers all insurer RW values mentioned in Art. 232."""
-        expected_keys = {0.20, 0.30, 0.50, 0.65, 1.00, 1.35, 1.50}
-        assert set(LIFE_INSURANCE_RW_MAP.keys()) == expected_keys
+    def test_rw_map_pack_band_table_covers_art_232_bands(self) -> None:
+        """The Art. 232 pack band table holds the canonical insurer-RW -> secured-RW bands."""
+        bands = _CRR_PACK.banded("life_insurance_secured_rw_map").bands
+        assert [
+            (float(bound) if bound is not None else None, float(value)) for bound, value in bands
+        ] == [(0.20, 0.20), (0.50, 0.35), (1.35, 0.70), (None, 1.50)]
 
 
 # --- Art. 232: Compute Life Insurance Columns ---
@@ -200,24 +238,26 @@ class TestLifeInsuranceConstants:
         assert "li" in suffixes, "Life insurance missing from WATERFALL_ORDER"
 
     def test_life_insurance_lgds_crr_is_40pct(self) -> None:
-        assert CRR_SUPERVISORY_LGD["life_insurance"] == pytest.approx(0.40)
+        assert supervisory_lgd_values(_CRR_PACK)["life_insurance"] == pytest.approx(0.40)
 
     def test_life_insurance_lgds_b31_is_40pct(self) -> None:
-        assert BASEL31_SUPERVISORY_LGD["life_insurance"] == pytest.approx(0.40)
+        assert supervisory_lgd_values(_B31_PACK)["life_insurance"] == pytest.approx(0.40)
 
     def test_collateral_lgd_expr_maps_life_insurance(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(collateral_lgd_expr(False).alias("lgd")).collect()
+        result = df.with_columns(collateral_lgd_expr(_CRR_PACK).alias("lgd")).collect()
         assert result["lgd"][0] == pytest.approx(0.40)
 
     def test_overcollateralisation_ratio_is_1(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(overcollateralisation_ratio_expr().alias("oc")).collect()
+        result = df.with_columns(overcollateralisation_ratio_expr(_CRR_PACK).alias("oc")).collect()
         assert result["oc"][0] == pytest.approx(1.0)
 
     def test_min_collateralisation_threshold_is_0(self) -> None:
         df = pl.DataFrame({"collateral_type": ["life_insurance"]}).lazy()
-        result = df.with_columns(min_collateralisation_threshold_expr().alias("thresh")).collect()
+        result = df.with_columns(
+            min_collateralisation_threshold_expr(_CRR_PACK).alias("thresh")
+        ).collect()
         assert result["thresh"][0] == pytest.approx(0.0)
 
     def test_collateral_category_is_life_insurance(self) -> None:
@@ -234,8 +274,9 @@ class TestLifeInsuranceHaircut:
 
     def test_life_insurance_haircut_is_zero(self) -> None:
         """Life insurance collateral gets 0% haircut — surrender value is the effective value."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="life_insurance",
             market_value=Decimal("50000"),
             collateral_currency="GBP",
@@ -246,8 +287,9 @@ class TestLifeInsuranceHaircut:
 
     def test_life_insurance_fx_mismatch_still_applies(self) -> None:
         """FX mismatch haircut should still apply for life insurance (currency risk)."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="life_insurance",
             market_value=Decimal("50000"),
             collateral_currency="EUR",
@@ -267,8 +309,9 @@ class TestCreditLinkedNotes:
 
     def test_cln_normalized_to_cash(self) -> None:
         """CLN type normalizes to 'cash' in haircut lookup -> 0% haircut."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="credit_linked_note",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -286,7 +329,7 @@ class TestCreditLinkedNotes:
     def test_cln_lgds_is_zero(self) -> None:
         """CLN treated as financial -> LGDS = 0%."""
         df = pl.DataFrame({"collateral_type": ["credit_linked_note"]}).lazy()
-        result = df.with_columns(collateral_lgd_expr(False).alias("lgd")).collect()
+        result = df.with_columns(collateral_lgd_expr(_CRR_PACK).alias("lgd")).collect()
         assert result["lgd"][0] == pytest.approx(0.0)
 
     def test_cln_in_valid_collateral_types(self) -> None:

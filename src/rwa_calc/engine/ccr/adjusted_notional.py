@@ -36,13 +36,18 @@ from datetime import date
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.sa_ccr_factors import (
-    SA_CCR_BUSINESS_DAYS_PER_YEAR,
-    SA_CCR_START_FLOOR_YEARS,
-    SA_CCR_SUPERVISORY_DURATION_RATE,
-)
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR supervisory-duration parameters (CRR Art. 279b(1)(a)) resolved from the
+# rulepack once at module load. The start-date floor is pre-computed
+# (10 BD / 250 BD-year = 0.04 year fraction); the 250-BD-year basis lives with
+# the maturity-factor module.
+_PACK = resolve("crr", date(2026, 1, 1))
+_SUPERVISORY_DURATION_RATE = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_duration_rate"))
+_START_FLOOR_YEARS = scalar_value(_PACK.scalar_param("sa_ccr_start_floor_years"))
 
 
 # Watchfire's bundled CRR index does not yet contain Art. 279b; collapse the
@@ -78,11 +83,8 @@ def compute_adjusted_notional_ir(
         - CRR Art. 279b(1)(a)
         - BCBS CRE52.40 (footnote: 250-business-day year for the start floor)
     """
-    rate = float(SA_CCR_SUPERVISORY_DURATION_RATE)
-    s_floor = float(SA_CCR_START_FLOOR_YEARS)
-    # SA_CCR_BUSINESS_DAYS_PER_YEAR is referenced as the basis of the derived
-    # ``s_floor`` constant; touching it here keeps the import meaningful.
-    _ = SA_CCR_BUSINESS_DAYS_PER_YEAR
+    rate = _SUPERVISORY_DURATION_RATE
+    s_floor = _START_FLOOR_YEARS
 
     # Calendar-day -> year fraction. 365.25 is the standard SA-CCR convention
     # for year fractions; the 250-business-day year applies only to the
@@ -252,11 +254,8 @@ def compute_adjusted_notional_credit(
         - CRR Art. 279b(1)(a)
         - BCBS CRE52.41-43 (supervisory duration shared with IR)
     """
-    rate = float(SA_CCR_SUPERVISORY_DURATION_RATE)
-    s_floor = float(SA_CCR_START_FLOOR_YEARS)
-    # SA_CCR_BUSINESS_DAYS_PER_YEAR is the basis of the derived ``s_floor``
-    # constant; touching it here keeps the import meaningful.
-    _ = SA_CCR_BUSINESS_DAYS_PER_YEAR
+    rate = _SUPERVISORY_DURATION_RATE
+    s_floor = _START_FLOOR_YEARS
 
     # Calendar-day -> year fraction. 365.25 is the standard SA-CCR convention
     # for year fractions; the 250-business-day year applies only to the

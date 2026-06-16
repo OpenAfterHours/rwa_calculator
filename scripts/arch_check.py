@@ -6,7 +6,9 @@ Checks machine-verifiable invariants from CLAUDE.md:
 2. No ABC imports (Protocol only)
 3. No raw .collect().lazy() outside materialise.py (use materialise_edge)
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
-5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
+5. No regulatory scalar literals OR float-rate collection literals (e.g. a
+   {float: float} RW map) declared in engine/** — regulatory values live in a
+   rulepack pack, read back via rwa_calc.rulebook.resolve
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
 7. No inline `"col" not in schema.names()` defaulting in engine/** (use
    ensure_columns against a ColumnSpec schema in data/schemas.py instead)
@@ -38,6 +40,12 @@ Checks machine-verifiable invariants from CLAUDE.md:
     Known legacy inversions are allowlisted in
     ``IMPORT_DIRECTION_ALLOWLIST`` and retired by the architecture
     migration phases (docs/plans/target-architecture-migration.md).
+    Engine/** additionally must NOT import ``rwa_calc.data.tables`` at all
+    (hard ban, no allowlist — ``check_no_engine_data_tables_imports``): the
+    Phase 5 migration relocated every regulatory table module into engine/
+    with values sourced from the rulepack packs, so the former shrink-only
+    ``engine_data_tables_import_edges`` ratchet reached zero (S13-k) and is
+    now zero-tolerance.
 13. No bare ``pl.LazyFrame()`` / ``pl.DataFrame().lazy()`` sentinels in
     engine/** — optional frames are ``None`` (migration Phase 2).
 14. No Polars namespace registrations anywhere under src/ —
@@ -97,11 +105,9 @@ _PATH_COLLAPSE = "engine/aggregator/_collapse.py"
 # explicit regulatory justification — regulatory values otherwise belong in
 # src/rwa_calc/data/tables/.
 REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
-    # float alias of imported Decimal (PR #248)
-    "engine/aggregator/_floor.py": {"GCRA_CAP_RATE"},
     # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
     _PATH_AGGREGATOR_SCHEMAS: {"T2_CREDIT_CAP_RATE"},
-    # float alias of imported CRR_K_SCALING_FACTOR Decimal (PR #248)
+    # float alias of resolve(...).scalar("irb_scaling_factor") Decimal (PR #248)
     _PATH_COMPARISON: {"_CRR_SCALING_FACTOR"},
     "engine/equity/calculator.py": {
         "_CIU_THIRD_PARTY_MULTIPLIER",  # Art. 132b(2) 20% uplift multiplier
@@ -109,13 +115,18 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     },
     # Inverse standard-normal at 0.999 used by IRB formulas (mathematical, not reg)
     "engine/irb/formulas.py": {"G_999"},
-    # CRR Art. 153(5) short-maturity threshold — candidate for relocation
-    "engine/slotting/transforms.py": {"_SHORT_MATURITY_THRESHOLD_YEARS"},
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
     "engine/reconciliation.py": {"_EXACT_EPSILON", "_ZERO_GUARD"},
 }
+
+# Module-level float-rate COLLECTION literals (e.g. a ``{float: float}`` RW map)
+# that are genuinely engine-internal and NOT regulatory tables. Empty by default
+# — regulatory rate tables belong in a rulepack pack (read back via
+# ``rwa_calc.rulebook.resolve``); adding an entry here is a deliberate, reviewed
+# decision (mirrors REGULATORY_SCALAR_ALLOWLIST for the scalar case).
+NUMERIC_TABLE_ALLOWLIST: dict[str, set[str]] = {}
 
 # Existing engine-side string collections that are internal approach/column/driver
 # identifiers, not input-domain validation enums. Adding a new entry should be a
@@ -154,6 +165,66 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     "engine/aggregator/_securitisation.py": {"MONEY_COLS"},
 }
 
+# Engine modules permitted a direct regime-boolean read — ``config.is_crr`` /
+# ``config.is_basel_3_1`` as an attribute or the ``getattr`` form. Regime-
+# specific behaviour should read a cited rulepack Feature (``pack.feature(...)``)
+# so the regime seam stays in the rulebook; these are the sanctioned exceptions
+# (check 17). New entries require explicit justification.
+REGIME_BOOL_ALLOWLIST: dict[str, str] = {
+    # Dual-run config-type validation — asserts each framework config carries
+    # the expected regime before a parallel CRR-vs-B31 run, not a calc branch.
+    "engine/comparison.py": "dual-run config-type validation, not a calculation branch",
+    # CRR-only EUR->GBP threshold sync: CRR thresholds are EUR-denominated and
+    # converted via eur_gbp_rate; Basel 3.1 thresholds are GBP-native (PS1/26).
+    # A genuine regime asymmetry with no rulepack Feature analogue.
+    "engine/pipeline.py": "CRR-only EUR/GBP threshold-sync regime asymmetry",
+    # No-pack bootstrap fallback (unit-test path); production always threads the
+    # resolved rulepack and reads its Features. Retired when the pack becomes a
+    # mandatory argument on these entry points.
+    "engine/crm/haircuts.py": "no-pack bootstrap fallback (pack-mandatory pending)",
+    "engine/stages/hierarchy/facility_undrawn.py": (
+        "no-pack bootstrap fallback (pack-mandatory pending)"
+    ),
+}
+
+_REGIME_BOOL_ATTRS = frozenset({"is_crr", "is_basel_3_1"})
+
+# Pack Citations whose article is legitimately outside watchfire's bundled
+# credit-risk index — a documented soft-warn (not a fatal gap), keyed by
+# (instrument, article). Mirrors the PS / PRA pending-index soft policy of
+# check 9. New entries require explicit regulatory justification.
+PACK_CITATION_SOFT_ALLOWLIST: dict[tuple[str, str], str] = {
+    ("CRR", "128"): (
+        "high-risk exposure class omitted from UK CRR by SI 2021/1078; "
+        "Basel 3.1 re-introduces it via PS1/26 (the b31 pack carries the PS citation)"
+    ),
+    ("CRR", "274"): "SA-CCR alpha — outside watchfire's bundled credit-risk index",
+    ("CRR", "378"): (
+        "CRR Title V (Settlement Risk) Art. 378 DvP multiplier ladder — not in "
+        "watchfire's bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "379"): (
+        "CRR Title V (Settlement Risk) Art. 379 non-DvP free-delivery RW — not in "
+        "watchfire's bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "158"): (
+        "Art. 158 (IRB expected-loss amounts) omitted from UK CRR by SI 2021/1078; "
+        "the slotting EL rates follow EU CRR / PRA PS1/26 Art. 158(6) Table B"
+    ),
+    ("CRR", "279b"): (
+        "SA-CCR supervisory duration (Art. 279b) — not in watchfire's bundled "
+        "credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "279c"): (
+        "SA-CCR maturity-factor formulae (Art. 279c) — not in watchfire's bundled "
+        "credit-risk index (UK CRR retains it unchanged)"
+    ),
+    ("CRR", "277a"): (
+        "SA-CCR IR cross-bucket correlations (Art. 277a) — not in watchfire's "
+        "bundled credit-risk index (UK CRR retains it unchanged)"
+    ),
+}
+
 # Engine modules exempt from the check-8 "must declare a module logger" rule.
 # These are utility / helper modules (not stage implementations) — they do not
 # need their own logger. New stage implementations (loader, classifier,
@@ -169,6 +240,21 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     "engine/crm/life_insurance.py",
     "engine/crm/provisions.py",
     "engine/crm/simple_method.py",
+    # Pure parameter module: derives the RE-split secured-LTV cap records from
+    # the rulepack. No pipeline-stage telemetry (the stage is stage.py).
+    "engine/stages/re_split/params.py",
+    # Pure expression-builder module: compiles the guarantor / entity SA-RW
+    # when/then chains from the rulepack. No pipeline-stage telemetry.
+    "engine/sa/guarantor_rw.py",
+    # Pure pack-bound CRR / B31 SA risk-weight table/builder modules (relocated
+    # from data/tables in Phase 5 / S13-i + S13-j). DataFrame + expression
+    # builders, no pipeline-stage telemetry.
+    "engine/sa/crr_risk_weight_tables.py",
+    "engine/sa/b31_risk_weight_tables.py",
+    # Pure pack-bound CRM supervisory-haircut table/function module (relocated
+    # from data/tables in Phase 5 / S13-k). FCCM lookups + DataFrame builders,
+    # no pipeline-stage telemetry.
+    "engine/crm/haircut_tables.py",
     "engine/supporting_factors.py",
     "engine/irb/adjustments.py",
     "engine/irb/formulas.py",
@@ -327,10 +413,15 @@ IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
     # TYPE_CHECKING-only: CalculationResponse return type on ResultExporter /
     # report-generator protocols; CollateralLinkAllocation on the CRM
     # protocol. Retired by Phase 4 (protocol diet) / Phase 7 (reporting input
-    # = sealed aggregator exit contract).
+    # = sealed aggregator exit contract). ResolvedRulepack is the Phase 5
+    # ``pack`` argument on CRMProcessorProtocol.get_crm_unified_bundle — the
+    # rulepack type is genuinely part of the stage contract; revisited when the
+    # rulebook data subtree (model/resolve, which never import contracts) is
+    # re-layered below contracts (Phase 5 / S11 config split).
     "contracts/protocols.py": {
         "rwa_calc.api.models",
         "rwa_calc.engine.crm.link_allocation",
+        "rwa_calc.rulebook.resolve",
     },
     # TYPE_CHECKING-only CalculationResponse on the generator entry points.
     # Retired by Phase 7 (reporting consumes the sealed aggregator exit).
@@ -540,6 +631,52 @@ def _rhs_is_str_collection(node: ast.AST) -> bool:
     return False
 
 
+def _node_is_reg_float_literal(node: ast.AST) -> bool:
+    """True when an AST node is a non-trivial float literal (a rate/RW/LGD value).
+
+    Restricted to floats (the rate-table signal); integer literals are excluded
+    because module-level int tuples in engine are CQS orderings / counts, not
+    regulatory values. 0.0 / 1.0 / -1.0 are trivial and ignored.
+    """
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, float) and node.value not in (0.0, 1.0, -1.0)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
+        val = node.operand.value
+        return isinstance(val, float) and val not in (0.0, 1.0, -1.0)
+    return False
+
+
+def _rhs_is_numeric_collection(node: ast.AST) -> bool:
+    """True when the RHS is a non-trivial collection LITERAL holding raw float
+    rate values as keys / values / elements (e.g. a ``{float: float}`` RW map).
+
+    This catches the regulatory-table class that checks 5/6 miss (scalars /
+    string collections). Pack-derived collections (``dict(pack.lookup(...))``),
+    dataclass-valued maps (values are ``Call`` nodes), dtype schemas (values are
+    attributes) and string/enum maps are NOT matched — none hold raw float
+    literals directly. Such tables belong in a rulepack pack, read back via
+    ``rwa_calc.rulebook.resolve``.
+    """
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        if len(node.elts) < 2:
+            return False
+        return any(_node_is_reg_float_literal(e) for e in node.elts)
+    if isinstance(node, ast.Dict):
+        if len(node.keys) < 2:
+            return False
+        in_keys = any(k is not None and _node_is_reg_float_literal(k) for k in node.keys)
+        in_vals = any(_node_is_reg_float_literal(v) for v in node.values)
+        return in_keys or in_vals
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"frozenset", "set", "tuple", "list"}
+        and len(node.args) == 1
+    ):
+        return _rhs_is_numeric_collection(node.args[0])
+    return False
+
+
 def _iter_engine_files(path: Path) -> Iterator[Path]:
     """Yield every .py file under `<path>/engine/`, skipping __init__.py."""
     engine_root = path / "engine"
@@ -569,7 +706,38 @@ def check_no_regulatory_scalars_in_engine(path: Path) -> list[str]:
             if _rhs_is_regulatory_scalar(value):
                 violations.append(
                     f"  {py_file}:{lineno}: {name} -- regulatory scalar in engine/ "
-                    "(move to src/rwa_calc/data/tables/ or allowlist in arch_check.py)"
+                    "(move to a rulepack pack or allowlist in arch_check.py)"
+                )
+    return violations
+
+
+def check_no_numeric_tables_in_engine(path: Path) -> list[str]:
+    """Module-level float-rate COLLECTION literals belong in a rulepack pack.
+
+    Sibling of check 5 (scalars) / check 6 (string collections) for the
+    regulatory-table class those miss: a module-level ``{float: float}`` /
+    list-of-floats literal (e.g. the former ``LIFE_INSURANCE_RW_MAP`` Art. 232
+    map). Regulatory rate tables live in ``rulebook/packs`` and are read back via
+    ``rwa_calc.rulebook.resolve``; pack-derived / dataclass-valued / dtype /
+    string collections are not matched (they hold no raw float literals).
+    """
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        allowed = NUMERIC_TABLE_ALLOWLIST.get(rel, set())
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for lineno, name, value in _iter_module_assignments(tree):
+            if not _is_upper_const_name(name):
+                continue
+            if name in allowed:
+                continue
+            if _rhs_is_numeric_collection(value):
+                violations.append(
+                    f"  {py_file}:{lineno}: {name} -- regulatory float-rate table in engine/ "
+                    "(move to a rulepack pack and read it back via resolve, or allowlist)"
                 )
     return violations
 
@@ -641,6 +809,56 @@ def check_no_validation_enums_in_engine(path: Path) -> list[str]:
                 violations.append(
                     f"  {py_file}:{lineno}: {name} -- string-literal collection in engine/ "
                     "(move to src/rwa_calc/data/schemas.py or allowlist in arch_check.py)"
+                )
+    return violations
+
+
+def _regime_bool_violation(node: ast.AST) -> str | None:
+    """Return the offending regime-bool attr for an AST node, else None.
+
+    Catches ``<expr>.is_crr`` / ``<expr>.is_basel_3_1`` attribute reads and the
+    ``getattr(<expr>, "is_crr"|"is_basel_3_1"[, ...])`` form.
+    """
+    if isinstance(node, ast.Attribute) and node.attr in _REGIME_BOOL_ATTRS:
+        return node.attr
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+        and node.args[1].value in _REGIME_BOOL_ATTRS
+    ):
+        return f"getattr(..., {node.args[1].value!r})"
+    return None
+
+
+def check_no_regime_bool_in_engine(path: Path) -> list[str]:
+    """engine/** must not branch on ``config.is_crr`` / ``config.is_basel_3_1``.
+
+    Regime-specific behaviour reads a cited rulepack Feature
+    (``pack.feature(...)``), keeping the regime seam in the rulebook rather than
+    scattering ``is_crr`` / ``is_basel_3_1`` checks through the engine. Catches
+    both attribute reads and the ``getattr`` form; sanctioned exceptions
+    (dual-run validation, genuine regime asymmetries, no-pack bootstrap
+    fallbacks) are listed in REGIME_BOOL_ALLOWLIST.
+    """
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        if rel in REGIME_BOOL_ALLOWLIST:
+            continue
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            offending = _regime_bool_violation(node)
+            if offending is not None:
+                violations.append(
+                    f"  {py_file}:{getattr(node, 'lineno', '?')}: reads {offending} -- "
+                    "regime branching belongs in a rulepack Feature (pack.feature(...)); "
+                    "allowlist in arch_check.py only for a genuine asymmetry / bootstrap"
                 )
     return violations
 
@@ -808,6 +1026,43 @@ def _code_line_numbers(text: str) -> set[int] | None:
     except (tokenize.TokenError, IndentationError, SyntaxError):
         return None
     return code_lines
+
+
+def check_no_engine_data_tables_imports(path: Path) -> list[str]:
+    """Check 12 (hard ban) — engine/** must not import ``rwa_calc.data.tables``.
+
+    The Phase 5 migration relocated every regulatory table module out of
+    ``data/tables`` into ``engine/`` (values sourced from the rulepack packs via
+    ``rwa_calc.rulebook.resolve``), so ``data/tables`` holds no engine-facing
+    code. This was a shrink-only ratchet (``engine_data_tables_import_edges``)
+    until the count reached zero in S13-k; it is now a zero-tolerance ban with
+    no allowlist. A new ``from rwa_calc.data.tables[...] import ...`` in
+    engine/** is a regression — read the cited rulepack pack instead.
+
+    Module-level AND inline (in-function) imports both count (``ast.walk`` sees
+    every node).
+    """
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and (
+                    node.module == "rwa_calc.data.tables"
+                    or node.module.startswith("rwa_calc.data.tables.")
+                )
+            ):
+                violations.append(
+                    f"  {py_file}:{node.lineno}: engine/ imports {node.module} — "
+                    "data/tables is retired; read the rulepack pack via "
+                    "rwa_calc.rulebook.resolve instead (check 12 hard ban)"
+                )
+    return violations
 
 
 def _measure_ratchet_metrics(path: Path) -> dict[str, int]:
@@ -1303,6 +1558,61 @@ def check_watchfire_citations() -> tuple[list[str], list[str]]:
     return fatal, warnings
 
 
+def check_pack_citations() -> tuple[list[str], list[str]]:
+    """Validate every resolved-rulepack Citation via watchfire (parse + index).
+
+    The pack-data analogue of :func:`check_watchfire_citations` (which sees only
+    ``@cites`` decorators). Every rulepack entry carries a ``Citation``; after
+    the Phase 5 table-move the pack is the regulatory value-home, so its
+    citations must be as well-formed and index-covered as the engine's
+    decorators. Returns ``(fatal, warnings)``: parse failures, unknown
+    instruments and uncovered articles are fatal — except the documented
+    ``PACK_CITATION_SOFT_ALLOWLIST`` (articles legitimately outside watchfire's
+    bundled credit-risk index), which degrade to soft warnings.
+    """
+    from datetime import date
+
+    try:
+        from watchfire import parse_citation
+        from watchfire.config import load_config
+        from watchfire.index import covers, load_index
+    except ImportError as exc:
+        return ([f"  watchfire not importable: {exc}"], [])
+
+    try:
+        from rwa_calc.rulebook.audit import pack_citation_index
+    except ImportError as exc:
+        return ([f"  rwa_calc.rulebook.audit not importable: {exc}"], [])
+
+    index = load_index()
+    instruments = set(load_config(Path.cwd()).instruments)
+    # Citations are date-invariant; any valid date resolves the same entry set.
+    citations = pack_citation_index(date(2026, 1, 1))
+
+    fatal: list[str] = []
+    warnings: list[str] = []
+    for citation_str, entries in citations.items():
+        location = f"  rulepack {citation_str!r} (entries: {', '.join(entries)})"
+        try:
+            citation = parse_citation(citation_str)
+        except Exception as exc:  # noqa: BLE001 — watchfire raises CitationParseError
+            fatal.append(f"{location}: parse_failure: {exc}")
+            continue
+        if citation.instrument not in instruments:
+            fatal.append(f"{location}: unknown_instrument: {citation.instrument!r}")
+            continue
+        if not covers(index, citation):
+            reason = PACK_CITATION_SOFT_ALLOWLIST.get((citation.instrument, citation.article or ""))
+            if reason is None:
+                fatal.append(
+                    f"{location}: unknown_article: {citation.instrument} "
+                    f"{citation.article} not in the bundled index"
+                )
+            else:
+                warnings.append(f"{location}: unknown_article (soft): {reason}")
+    return fatal, warnings
+
+
 def _run_checks(
     target: Path,
     checks: list[tuple[str, Callable[[Path], list[str]]]],
@@ -1351,12 +1661,20 @@ def main() -> int:
         ("No .collect().lazy() (use materialise_edge)", check_no_collect_lazy),
         ("No engine= in collect (use materialise.py)", check_no_engine_arg),
         (
-            "No regulatory scalars in engine/ (use data/tables/)",
+            "No regulatory scalars in engine/ (use a rulepack pack)",
             check_no_regulatory_scalars_in_engine,
+        ),
+        (
+            "No regulatory float-rate tables in engine/ (use a rulepack pack)",
+            check_no_numeric_tables_in_engine,
         ),
         (
             "No validation string-enums in engine/ (use data/schemas.py)",
             check_no_validation_enums_in_engine,
+        ),
+        (
+            "No config.is_crr/is_basel_3_1 in engine/ (use a rulepack Feature)",
+            check_no_regime_bool_in_engine,
         ),
         (
             "No inline `not in schema.names()` in engine/ (use ensure_columns)",
@@ -1373,6 +1691,10 @@ def main() -> int:
         (
             "Architecture-debt ratchet vs scripts/arch_metrics.json",
             check_ratchet_metrics,
+        ),
+        (
+            "Engine does not import rwa_calc.data.tables (hard ban; read the pack)",
+            check_no_engine_data_tables_imports,
         ),
         (
             "Import direction points downward (contracts/engine/reporting/data/domain)",
@@ -1407,9 +1729,19 @@ def main() -> int:
             )
         )
 
+    pack_fatal, pack_warnings = check_pack_citations()
+    if pack_fatal:
+        all_violations.append(
+            (
+                "rulepack: malformed or unknown pack citations",
+                pack_fatal,
+            )
+        )
+    soft_warnings = watchfire_warnings + pack_warnings
+
     if not all_violations:
         print("arch_check: all checks passed")
-        _print_watchfire_warnings(watchfire_warnings, leading_blank=True)
+        _print_watchfire_warnings(soft_warnings, leading_blank=True)
         return 0
 
     print("arch_check: VIOLATIONS FOUND\n")
@@ -1419,8 +1751,8 @@ def main() -> int:
             print(v)
         print()
 
-    _print_watchfire_warnings(watchfire_warnings, leading_blank=False)
-    if watchfire_warnings:
+    _print_watchfire_warnings(soft_warnings, leading_blank=False)
+    if soft_warnings:
         print()
 
     total = sum(len(v) for _, v in all_violations)

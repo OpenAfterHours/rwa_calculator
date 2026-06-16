@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.data.tables.haircuts import lookup_collateral_haircut
+from rwa_calc.engine.crm.haircut_tables import lookup_collateral_haircut
 
 # =============================================================================
 # CRR — null maturity must fall into the longest band (5y+)

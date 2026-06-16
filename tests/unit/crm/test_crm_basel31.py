@@ -35,19 +35,14 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.firb_lgd import (
-    BASEL31_FIRB_SUPERVISORY_LGD,
-    FIRB_SUPERVISORY_LGD,
-    lookup_firb_lgd,
-)
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.domain.enums import ApproachType, PermissionMode
+from rwa_calc.engine.crm.haircut_tables import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     get_haircut_table,
     get_maturity_band,
     lookup_collateral_haircut,
 )
-from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -77,13 +72,13 @@ def b31_config() -> CalculationConfig:
 @pytest.fixture
 def crr_processor() -> CRMProcessor:
     """CRM processor for CRR framework."""
-    return CRMProcessor(is_basel_3_1=False)
+    return CRMProcessor()
 
 
 @pytest.fixture
 def b31_processor() -> CRMProcessor:
     """CRM processor for Basel 3.1 framework."""
-    return CRMProcessor(is_basel_3_1=True)
+    return CRMProcessor()
 
 
 # =============================================================================
@@ -239,8 +234,9 @@ class TestBasel31ReceivablesHaircut:
 
     def test_b31_single_haircut_receivables_40pct(self) -> None:
         """HaircutCalculator.calculate_single_haircut applies 40% for B31 receivables."""
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="receivables",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -255,8 +251,9 @@ class TestBasel31ReceivablesHaircut:
         Art. 224 has no receivables row; the Art. 230 LGD* / OC mechanism
         downstream is the only applicable reduction.
         """
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="receivables",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -267,8 +264,9 @@ class TestBasel31ReceivablesHaircut:
 
     def test_b31_receivables_with_fx_mismatch(self) -> None:
         """B31 receivables: 40% HC + 8% FX = 48% total, adjusted = 520,000."""
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="receivables",
             market_value=Decimal("1000000"),
             collateral_currency="USD",
@@ -341,58 +339,6 @@ class TestBasel31BondHaircuts:
 
 
 # =============================================================================
-# Test: Basel 3.1 F-IRB supervisory LGD (CRE32.9-12)
-# =============================================================================
-
-
-class TestBasel31FIRBSupervisoryLGD:
-    """F-IRB supervisory LGD values change under Basel 3.1."""
-
-    def test_crr_senior_unsecured_45pct(self) -> None:
-        assert FIRB_SUPERVISORY_LGD["unsecured_senior"] == Decimal("0.45")
-
-    def test_b31_senior_unsecured_40pct(self) -> None:
-        """Basel 3.1 reduces senior unsecured from 45% to 40%."""
-        assert BASEL31_FIRB_SUPERVISORY_LGD["unsecured_senior"] == Decimal("0.40")
-
-    def test_subordinated_unchanged(self) -> None:
-        """Subordinated LGD stays at 75% under both frameworks."""
-        assert FIRB_SUPERVISORY_LGD["subordinated"] == Decimal("0.75")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["subordinated"] == Decimal("0.75")
-
-    def test_b31_receivables_20pct(self) -> None:
-        """Basel 3.1 reduces receivables from 35% to 20%."""
-        assert FIRB_SUPERVISORY_LGD["receivables"] == Decimal("0.35")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["receivables"] == Decimal("0.20")
-
-    def test_b31_real_estate_20pct(self) -> None:
-        """Basel 3.1 reduces RE from 35% to 20%."""
-        assert FIRB_SUPERVISORY_LGD["residential_re"] == Decimal("0.35")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["residential_re"] == Decimal("0.20")
-        assert FIRB_SUPERVISORY_LGD["commercial_re"] == Decimal("0.35")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["commercial_re"] == Decimal("0.20")
-
-    def test_b31_other_physical_25pct(self) -> None:
-        """Basel 3.1 reduces other physical from 40% to 25%."""
-        assert FIRB_SUPERVISORY_LGD["other_physical"] == Decimal("0.40")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["other_physical"] == Decimal("0.25")
-
-    def test_financial_collateral_unchanged(self) -> None:
-        """Financial collateral LGD stays at 0% under both frameworks."""
-        assert FIRB_SUPERVISORY_LGD["financial_collateral"] == Decimal("0.00")
-        assert BASEL31_FIRB_SUPERVISORY_LGD["financial_collateral"] == Decimal("0.00")
-
-    def test_lookup_firb_lgd_framework_dispatch(self) -> None:
-        """lookup_firb_lgd dispatches correctly between frameworks."""
-        # CRR
-        assert lookup_firb_lgd(collateral_type=None, is_basel_3_1=False) == Decimal("0.45")
-        assert lookup_firb_lgd(collateral_type="receivables", is_basel_3_1=False) == Decimal("0.35")
-        # Basel 3.1
-        assert lookup_firb_lgd(collateral_type=None, is_basel_3_1=True) == Decimal("0.40")
-        assert lookup_firb_lgd(collateral_type="receivables", is_basel_3_1=True) == Decimal("0.20")
-
-
-# =============================================================================
 # Test: HaircutCalculator framework branching
 # =============================================================================
 
@@ -402,8 +348,9 @@ class TestHaircutCalculatorFrameworkBranching:
 
     def test_crr_calculator_uses_crr_haircuts(self) -> None:
         """CRR calculator returns 15% for main index equity."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="equity",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -415,8 +362,9 @@ class TestHaircutCalculatorFrameworkBranching:
 
     def test_b31_calculator_uses_b31_haircuts(self) -> None:
         """Basel 3.1 calculator returns 20% for main index equity (PRA PS1/26 Art. 224 Table 3)."""
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="equity",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -434,8 +382,9 @@ class TestHaircutCalculatorFrameworkBranching:
         appears only at 10y+ (20%). An earlier draft of the B31 table had 15%
         here (stale value, now corrected).
         """
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="corp_bond",
             market_value=Decimal("500000"),
             collateral_currency="GBP",
@@ -470,10 +419,10 @@ class TestHaircutCalculatorFrameworkBranching:
             }
         )
 
-        crr_calc = HaircutCalculator(is_basel_3_1=False)
+        crr_calc = HaircutCalculator()
         crr_result = crr_calc.apply_haircuts(collateral, crr_config).collect()
 
-        b31_calc = HaircutCalculator(is_basel_3_1=True)
+        b31_calc = HaircutCalculator()
         b31_result = b31_calc.apply_haircuts(collateral, b31_config).collect()
 
         # CRR: 5y+ band = 6%
@@ -495,7 +444,7 @@ class TestCRMProcessorFIRBLGDBranching:
 
     def test_crr_processor_uses_45pct_senior_unsecured(self, crr_config: CalculationConfig) -> None:
         """CRR processor applies 45% LGD for senior unsecured F-IRB."""
-        processor = CRMProcessor(is_basel_3_1=False)
+        processor = CRMProcessor()
         exposures = pl.LazyFrame(
             {
                 "exposure_reference": ["E1"],
@@ -509,12 +458,14 @@ class TestCRMProcessorFIRBLGDBranching:
             }
         )
 
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
+        result = processor._apply_firb_supervisory_lgd_no_collateral(
+            exposures, crr_config
+        ).collect()
         assert result["lgd_post_crm"][0] == pytest.approx(0.45)
 
     def test_b31_processor_uses_40pct_senior_unsecured(self, b31_config: CalculationConfig) -> None:
         """Basel 3.1 processor applies 40% LGD for senior unsecured F-IRB."""
-        processor = CRMProcessor(is_basel_3_1=True)
+        processor = CRMProcessor()
         exposures = pl.LazyFrame(
             {
                 "exposure_reference": ["E1"],
@@ -528,13 +479,18 @@ class TestCRMProcessorFIRBLGDBranching:
             }
         )
 
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
+        result = processor._apply_firb_supervisory_lgd_no_collateral(
+            exposures, b31_config
+        ).collect()
         assert result["lgd_post_crm"][0] == pytest.approx(0.40)
 
-    def test_subordinated_75pct_both_frameworks(self) -> None:
+    def test_subordinated_75pct_both_frameworks(
+        self, crr_config: CalculationConfig, b31_config: CalculationConfig
+    ) -> None:
         """Subordinated LGD = 75% under both CRR and Basel 3.1."""
         for is_b31 in [False, True]:
-            processor = CRMProcessor(is_basel_3_1=is_b31)
+            processor = CRMProcessor()
+            config = b31_config if is_b31 else crr_config
             exposures = pl.LazyFrame(
                 {
                     "exposure_reference": ["E1"],
@@ -548,15 +504,20 @@ class TestCRMProcessorFIRBLGDBranching:
                 }
             )
 
-            result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
+            result = processor._apply_firb_supervisory_lgd_no_collateral(
+                exposures, config
+            ).collect()
             assert result["lgd_post_crm"][0] == pytest.approx(0.75), (
                 f"Subordinated LGD should be 75% for {'B31' if is_b31 else 'CRR'}"
             )
 
-    def test_airb_preserves_modelled_lgd(self) -> None:
+    def test_airb_preserves_modelled_lgd(
+        self, crr_config: CalculationConfig, b31_config: CalculationConfig
+    ) -> None:
         """A-IRB exposures keep their modelled LGD under both frameworks."""
         for is_b31 in [False, True]:
-            processor = CRMProcessor(is_basel_3_1=is_b31)
+            processor = CRMProcessor()
+            config = b31_config if is_b31 else crr_config
             exposures = pl.LazyFrame(
                 {
                     "exposure_reference": ["E1"],
@@ -570,13 +531,17 @@ class TestCRMProcessorFIRBLGDBranching:
                 }
             )
 
-            result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
+            result = processor._apply_firb_supervisory_lgd_no_collateral(
+                exposures, config
+            ).collect()
             assert result["lgd_post_crm"][0] == pytest.approx(0.32)
 
-    def test_no_seniority_column_uses_senior_default(self) -> None:
+    def test_no_seniority_column_uses_senior_default(
+        self, crr_config: CalculationConfig, b31_config: CalculationConfig
+    ) -> None:
         """Without seniority column, F-IRB defaults to senior unsecured LGD."""
         # CRR: 45%
-        crr = CRMProcessor(is_basel_3_1=False)
+        crr = CRMProcessor()
         exp_crr = pl.LazyFrame(
             {
                 "exposure_reference": ["E1"],
@@ -588,11 +553,11 @@ class TestCRMProcessorFIRBLGDBranching:
                 "currency": ["GBP"],
             }
         )
-        result_crr = crr._apply_firb_supervisory_lgd_no_collateral(exp_crr).collect()
+        result_crr = crr._apply_firb_supervisory_lgd_no_collateral(exp_crr, crr_config).collect()
         assert result_crr["lgd_post_crm"][0] == pytest.approx(0.45)
 
         # Basel 3.1: 40%
-        b31 = CRMProcessor(is_basel_3_1=True)
+        b31 = CRMProcessor()
         exp_b31 = pl.LazyFrame(
             {
                 "exposure_reference": ["E1"],
@@ -604,248 +569,5 @@ class TestCRMProcessorFIRBLGDBranching:
                 "currency": ["GBP"],
             }
         )
-        result_b31 = b31._apply_firb_supervisory_lgd_no_collateral(exp_b31).collect()
+        result_b31 = b31._apply_firb_supervisory_lgd_no_collateral(exp_b31, b31_config).collect()
         assert result_b31["lgd_post_crm"][0] == pytest.approx(0.40)
-
-
-# =============================================================================
-# Test: FSE vs non-FSE supervisory LGD (Art. 161(1)(a) vs (aa))
-# =============================================================================
-
-
-class TestFSESupervisoryLGD:
-    """Under Basel 3.1, FSE senior unsecured LGD = 45%, non-FSE = 40%.
-
-    PRA PS1/26 Art. 161(1)(a): senior claims on financial sector entities = 45%
-    PRA PS1/26 Art. 161(1)(aa): senior claims on non-FSE corporates = 40%
-    Under CRR, all senior unsecured = 45% (no FSE distinction).
-
-    Why this matters: a 5pp LGD difference (45% vs 40%) is material for
-    FIRB financial sector entity exposures. Without this distinction,
-    FSE exposures get 40% LGD under B31 instead of the correct 45%,
-    understating capital requirements.
-    """
-
-    def test_b31_fse_gets_45pct_no_collateral(self) -> None:
-        """FSE senior unsecured gets 45% LGD under Basel 3.1 (Art. 161(1)(a))."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.40],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-                "cp_is_financial_sector_entity": [True],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.45)
-
-    def test_b31_non_fse_gets_40pct_no_collateral(self) -> None:
-        """Non-FSE senior unsecured gets 40% LGD under Basel 3.1 (Art. 161(1)(aa))."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.40],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-                "cp_is_financial_sector_entity": [False],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.40)
-
-    def test_b31_null_fse_defaults_to_non_fse(self) -> None:
-        """Null FSE flag defaults to non-FSE treatment (40% under B31)."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.40],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-                "cp_is_financial_sector_entity": [None],
-            },
-            schema_overrides={"cp_is_financial_sector_entity": pl.Boolean},
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.40)
-
-    def test_crr_fse_still_45pct(self) -> None:
-        """Under CRR, FSE flag is irrelevant — all senior unsecured = 45%."""
-        processor = CRMProcessor(is_basel_3_1=False)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.45],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-                "cp_is_financial_sector_entity": [True],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.45)
-
-    def test_b31_fse_subordinated_still_75pct(self) -> None:
-        """FSE subordinated remains 75% (FSE distinction only applies to senior)."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.75],
-                "seniority": ["subordinated"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-                "cp_is_financial_sector_entity": [True],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.75)
-
-    def test_b31_without_fse_column_uses_default_40pct(self) -> None:
-        """Without cp_is_financial_sector_entity column, defaults to non-FSE (40%)."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1"],
-                "counterparty_reference": ["CP1"],
-                "approach": [ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0],
-                "lgd_pre_crm": [0.40],
-                "seniority": ["senior"],
-                "parent_facility_reference": [None],
-                "currency": ["GBP"],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.40)
-
-    def test_b31_mixed_fse_and_non_fse(self) -> None:
-        """Mixed portfolio: FSE gets 45%, non-FSE gets 40%."""
-        processor = CRMProcessor(is_basel_3_1=True)
-        exposures = pl.LazyFrame(
-            {
-                "exposure_reference": ["E1", "E2"],
-                "counterparty_reference": ["CP1", "CP2"],
-                "approach": [ApproachType.FIRB.value, ApproachType.FIRB.value],
-                "ead_gross": [1_000_000.0, 2_000_000.0],
-                "lgd_pre_crm": [0.40, 0.40],
-                "seniority": ["senior", "senior"],
-                "parent_facility_reference": [None, None],
-                "currency": ["GBP", "GBP"],
-                "cp_is_financial_sector_entity": [True, False],
-            }
-        )
-        result = processor._apply_firb_supervisory_lgd_no_collateral(exposures).collect()
-        assert result["lgd_post_crm"][0] == pytest.approx(0.45)  # FSE
-        assert result["lgd_post_crm"][1] == pytest.approx(0.40)  # non-FSE
-
-
-# =============================================================================
-# Test: Covered bond LGD (Art. 161(1)(d))
-# =============================================================================
-
-
-class TestCoveredBondLGD:
-    """Covered bonds have a dedicated 11.25% LGD per Art. 161(1)(d).
-
-    Why: covered bonds have a dual-recourse structure (claim on issuer +
-    priority claim on cover pool) justifying a lower supervisory LGD.
-    """
-
-    def test_b31_covered_bond_lgd_1125pct(self) -> None:
-        """Basel 3.1 covered bond lookup returns 11.25%."""
-        assert BASEL31_FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
-
-    def test_crr_covered_bond_lgd_1125pct(self) -> None:
-        """CRR covered bond lookup returns 11.25%."""
-        assert FIRB_SUPERVISORY_LGD["covered_bond"] == Decimal("0.1125")
-
-    def test_lookup_covered_bond(self) -> None:
-        """lookup_firb_lgd returns 11.25% for covered bonds."""
-        assert lookup_firb_lgd(collateral_type="covered_bond", is_basel_3_1=False) == Decimal(
-            "0.1125"
-        )
-        assert lookup_firb_lgd(collateral_type="covered_bond", is_basel_3_1=True) == Decimal(
-            "0.1125"
-        )
-
-    def test_lookup_covered_bonds_plural(self) -> None:
-        """Plural form 'covered_bonds' also resolves correctly."""
-        assert lookup_firb_lgd(collateral_type="covered_bonds", is_basel_3_1=True) == Decimal(
-            "0.1125"
-        )
-
-
-# =============================================================================
-# Test: lookup_firb_lgd FSE dispatch
-# =============================================================================
-
-
-class TestLookupFIRBLGDFSE:
-    """lookup_firb_lgd correctly routes FSE vs non-FSE under Basel 3.1."""
-
-    def test_b31_fse_unsecured_45pct(self) -> None:
-        """FSE unsecured under B31 returns 45%."""
-        result = lookup_firb_lgd(
-            collateral_type=None,
-            is_basel_3_1=True,
-            is_financial_sector_entity=True,
-        )
-        assert result == Decimal("0.45")
-
-    def test_b31_non_fse_unsecured_40pct(self) -> None:
-        """Non-FSE unsecured under B31 returns 40%."""
-        result = lookup_firb_lgd(
-            collateral_type=None,
-            is_basel_3_1=True,
-            is_financial_sector_entity=False,
-        )
-        assert result == Decimal("0.40")
-
-    def test_crr_fse_flag_ignored(self) -> None:
-        """Under CRR, FSE flag is ignored — always 45%."""
-        result = lookup_firb_lgd(
-            collateral_type=None,
-            is_basel_3_1=False,
-            is_financial_sector_entity=True,
-        )
-        assert result == Decimal("0.45")
-
-    def test_b31_fse_with_collateral_uses_collateral_lgd(self) -> None:
-        """FSE with financial collateral still gets 0% (collateral takes priority)."""
-        result = lookup_firb_lgd(
-            collateral_type="financial_collateral",
-            is_basel_3_1=True,
-            is_financial_sector_entity=True,
-        )
-        assert result == Decimal("0.00")
-
-    def test_b31_fse_unknown_type_falls_back_to_fse_unsecured(self) -> None:
-        """Unknown collateral type for FSE falls back to 45% under B31."""
-        result = lookup_firb_lgd(
-            collateral_type="unknown_type",
-            is_basel_3_1=True,
-            is_financial_sector_entity=True,
-        )
-        assert result == Decimal("0.45")

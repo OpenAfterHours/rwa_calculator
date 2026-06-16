@@ -24,12 +24,6 @@ from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
-from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
-from rwa_calc.data.tables.eu_sovereign import (
-    build_domestic_cgcb_guarantor_expr,
-    denomination_currency_expr,
-)
-from rwa_calc.data.tables.haircuts import FX_HAIRCUT, RESTRUCTURING_EXCLUSION_HAIRCUT
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
@@ -37,16 +31,24 @@ from rwa_calc.engine.ccf import (
     on_balance_ead,
     sa_ccf_expression,
 )
+from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
+from rwa_calc.engine.eu_sovereign import (
+    build_domestic_cgcb_guarantor_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
     explode_facility_membership,
 )
 from rwa_calc.engine.utils import exact_fractional_years_expr
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from polars._typing import PolarsDataType
 
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 def _stock_split_cols() -> tuple[str, ...]:
@@ -93,6 +95,8 @@ def apply_guarantees(
     counterparty_lookup: pl.LazyFrame,
     config: CalculationConfig,
     rating_inheritance: pl.LazyFrame | None = None,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Apply guarantee substitution.
@@ -109,7 +113,7 @@ def apply_guarantees(
     Returns:
         Exposures with guarantee effects applied
     """
-    guarantees = _prepare_guarantees(guarantees, exposures, config)
+    guarantees = _prepare_guarantees(guarantees, exposures, config, pack=pack)
 
     exposures = exposures.with_columns(
         pl.col("exposure_reference").alias("parent_exposure_reference"),
@@ -166,8 +170,14 @@ def _prepare_guarantees(
     guarantees: pl.LazyFrame,
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Normalise, filter, expand, and haircut guarantees before the split."""
+    # Art. 233 H_fx and Art. 233(2) restructuring-exclusion haircuts are
+    # regime-invariant scalars sourced from the rulepack. Production threads the
+    # run's pack; direct callers resolve an identical one from config.
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # Default protection_type to "guarantee" when absent, then fill nulls with
     # the same default (backward compatibility for legacy data).
     guarantees = ensure_columns(
@@ -195,8 +205,8 @@ def _prepare_guarantees(
     # Haircuts reduce the nominal credit protection value G, then capping
     # at EAD happens inside the split. This ensures large cross-currency
     # guarantees still fully cover smaller exposures after the haircut.
-    guarantees = _apply_fx_haircut_to_guarantees(guarantees, exposures)
-    guarantees = _apply_restructuring_haircut_to_guarantees(guarantees)
+    guarantees = _apply_fx_haircut_to_guarantees(guarantees, exposures, pack=resolved_pack)
+    guarantees = _apply_restructuring_haircut_to_guarantees(guarantees, pack=resolved_pack)
 
     # CRR Art. 239(3) / PS1/26 Art. 239(3): maturity mismatch adjustment for
     # unfunded credit protection. When the protection's residual maturity t is
@@ -939,6 +949,8 @@ def _allocate_guarantees_pro_rata(
 def _apply_fx_haircut_to_guarantees(
     guarantees: pl.LazyFrame,
     exposures: pl.LazyFrame,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """
     Apply FX mismatch haircut to guarantee amounts BEFORE splitting.
@@ -991,7 +1003,7 @@ def _apply_fx_haircut_to_guarantees(
         how="left",
     )
 
-    h_fx = float(FX_HAIRCUT)
+    h_fx = scalar_value(pack.scalar_param("fx_haircut"))
     has_pct = "percentage_covered" in guar_cols
 
     # Guarantee provides coverage via amount or percentage
@@ -1035,6 +1047,8 @@ def _apply_fx_haircut_to_guarantees(
 
 def _apply_restructuring_haircut_to_guarantees(
     guarantees: pl.LazyFrame,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """
     Apply CDS restructuring exclusion haircut to guarantee amounts BEFORE splitting.
@@ -1062,7 +1076,7 @@ def _apply_restructuring_haircut_to_guarantees(
             pl.lit(0.0).alias("guarantee_restructuring_haircut"),
         )
 
-    h_restructuring = float(RESTRUCTURING_EXCLUSION_HAIRCUT)
+    h_restructuring = scalar_value(pack.scalar_param("restructuring_exclusion_haircut"))
 
     applies = (
         (pl.col("protection_type") == "credit_derivative")
@@ -1248,117 +1262,6 @@ def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
         "_new_guaranteed",
     ]
     return _drop_columns_if_present(exposures, transient)
-
-
-def _apply_guarantee_fx_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
-    """
-    Apply FX mismatch haircut to guarantee amounts.
-
-    When a guarantee or credit derivative is denominated in a different currency
-    from the exposure, the effective protection is reduced by H_fx (8%):
-
-        G* = G × (1 − H_fx)
-
-    This reduces ``guaranteed_portion`` and correspondingly increases
-    ``unguaranteed_portion`` for cross-currency guarantees.
-
-    References:
-        CRR Art. 233(3-4), PRA PS1/26 Art. 233(3-4)
-        H_fx = 8% (Art. 224 Table 4, 10-day liquidation period)
-    """
-    schema = exposures.collect_schema()
-    cols = schema.names()
-
-    # Need both guarantee_currency and exposure currency to detect mismatch
-    has_guarantee_ccy = "guarantee_currency" in cols
-    has_exposure_ccy = "original_currency" in cols or "currency" in cols
-
-    if not has_guarantee_ccy or not has_exposure_ccy:
-        return exposures.with_columns(pl.lit(0.0).alias("guarantee_fx_haircut"))
-
-    # Use original_currency (pre-FX-conversion) if available, else currency
-    exposure_ccy = (
-        pl.col("original_currency") if "original_currency" in cols else pl.col("currency")
-    )
-    h_fx = float(FX_HAIRCUT)
-
-    fx_mismatch = (
-        pl.col("guarantee_currency").is_not_null()
-        & (pl.col("guarantee_currency") != exposure_ccy)
-        & (pl.col("guaranteed_portion") > 0)
-    )
-
-    exposures = exposures.with_columns(
-        pl.when(fx_mismatch)
-        .then(pl.col("guaranteed_portion") * (1.0 - h_fx))
-        .otherwise(pl.col("guaranteed_portion"))
-        .alias("guaranteed_portion"),
-        pl.when(fx_mismatch)
-        .then(pl.lit(h_fx))
-        .otherwise(pl.lit(0.0))
-        .alias("guarantee_fx_haircut"),
-    ).with_columns(
-        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion"))
-        .clip(lower_bound=0.0)
-        .alias("unguaranteed_portion"),
-    )
-
-    return exposures
-
-
-def _apply_restructuring_exclusion_haircut(exposures: pl.LazyFrame) -> pl.LazyFrame:
-    """
-    Apply CDS restructuring exclusion haircut to credit derivative amounts.
-
-    When a credit derivative does not include restructuring as a credit event,
-    the effective protection is reduced by 40%:
-
-        G* = G × (1 − H_restructuring) = G × 0.60
-
-    This only applies to credit derivatives (``protection_type == "credit_derivative"``),
-    not to regular guarantees. Null ``includes_restructuring`` defaults to ``True``
-    (no haircut) for backward compatibility.
-
-    References:
-        CRR Art. 233(2), PRA PS1/26 Art. 233(2)
-        Art. 216(1): Credit events for credit derivatives
-    """
-    schema = exposures.collect_schema()
-    cols = schema.names()
-
-    has_protection_type = "protection_type" in cols
-    has_includes_restructuring = "includes_restructuring" in cols
-
-    if not has_protection_type or not has_includes_restructuring:
-        return exposures.with_columns(
-            pl.lit(0.0).alias("guarantee_restructuring_haircut"),
-        )
-
-    h_restructuring = float(RESTRUCTURING_EXCLUSION_HAIRCUT)
-
-    # Condition: credit derivative without restructuring as a credit event
-    applies = (
-        (pl.col("protection_type") == "credit_derivative")
-        & (pl.col("includes_restructuring").fill_null(True).not_())
-        & (pl.col("guaranteed_portion") > 0)
-    )
-
-    exposures = exposures.with_columns(
-        pl.when(applies)
-        .then(pl.col("guaranteed_portion") * (1.0 - h_restructuring))
-        .otherwise(pl.col("guaranteed_portion"))
-        .alias("guaranteed_portion"),
-        pl.when(applies)
-        .then(pl.lit(h_restructuring))
-        .otherwise(pl.lit(0.0))
-        .alias("guarantee_restructuring_haircut"),
-    ).with_columns(
-        (pl.col("ead_after_collateral") - pl.col("guaranteed_portion"))
-        .clip(lower_bound=0.0)
-        .alias("unguaranteed_portion"),
-    )
-
-    return exposures
 
 
 @cites("CRR Art. 217")

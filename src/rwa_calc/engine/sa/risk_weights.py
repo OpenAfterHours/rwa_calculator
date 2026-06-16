@@ -37,6 +37,7 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -49,8 +50,12 @@ from rwa_calc.data.schemas import (
     CRM_OUTPUT_SCHEMA,
     HIERARCHY_OUTPUT_SCHEMA,
 )
-from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
-from rwa_calc.data.tables.b31_risk_weights import (
+from rwa_calc.domain.enums import CQS, EquityType
+from rwa_calc.engine.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS,
@@ -65,7 +70,6 @@ from rwa_calc.data.tables.b31_risk_weights import (
     B31_DEFAULTED_RW_LOW_PROVISION,
     B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS,
     B31_ECRA_SHORT_TERM_RISK_WEIGHTS,
-    B31_HIGH_RISK_RW,
     B31_RETAIL_NON_REGULATORY_RW,
     B31_RETAIL_PAYROLL_LOAN_RW,
     B31_RETAIL_TRANSACTOR_RW,
@@ -79,20 +83,17 @@ from rwa_calc.data.tables.b31_risk_weights import (
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.crr_equity_rw import SA_EQUITY_RISK_WEIGHTS as CRR_SA_EQUITY_RW
-from rwa_calc.data.tables.crr_risk_weights import (
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     COMMERCIAL_RE_PARAMS,
     CORPORATE_RISK_WEIGHTS,
-    COVERED_BOND_UNRATED_DERIVATION,
+    COVERED_BOND_UNRATED_DERIVATION_B31,
     COVERED_BOND_UNRATED_DERIVATION_CRR,
     CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
     CRR_NON_REGULATORY_RETAIL_RW,
-    ECA_MEIP_RISK_WEIGHTS,
-    HIGH_RISK_RW,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
@@ -101,33 +102,26 @@ from rwa_calc.data.tables.crr_risk_weights import (
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
-    OTHER_ITEMS_CASH_RW,
-    OTHER_ITEMS_COLLECTION_RW,
-    OTHER_ITEMS_DEFAULT_RW,
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
-    QCCP_CLIENT_CLEARED_RW,
-    QCCP_PROPRIETARY_RW,
     RESIDENTIAL_MORTGAGE_PARAMS,
-    RETAIL_RISK_WEIGHT,
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     RGLA_UK_DEVOLVED_RW,
     RGLA_UNRATED_DEFAULT_RW,
-    build_institution_guarantor_rw_expr,
     get_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.eu_sovereign import (
-    build_eu_domestic_currency_expr,
-    denomination_currency_expr,
-)
-from rwa_calc.domain.enums import CQS, EquityType
+from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from polars.expr.whenthen import ChainedThen, Then
 
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -184,11 +178,16 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
 # check (scripts/arch_check.py) does not flag individual ``float(X)`` aliases.
 # =============================================================================
 
+# Rulepack overlays resolved once at module load. Common scalars are inherited
+# into both regime overlays; regime-specific values read from the matching pack.
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
 # Framework-shared scalars — used under both CRR and Basel 3.1.
 _SA_SHARED_RW: dict[str, float] = {
     # QCCP trade exposures (CRR Art. 306, CRE54.14-15)
-    "qccp_client_cleared": float(QCCP_CLIENT_CLEARED_RW),
-    "qccp_proprietary": float(QCCP_PROPRIETARY_RW),
+    "qccp_client_cleared": scalar_value(_CRR_PACK.scalar_param("qccp_client_cleared_rw")),
+    "qccp_proprietary": scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw")),
     # PSE short-term & unrated (Art. 116)
     "pse_short_term": float(PSE_SHORT_TERM_RW),
     "pse_unrated": float(PSE_UNRATED_DEFAULT_RW),
@@ -201,16 +200,23 @@ _SA_SHARED_RW: dict[str, float] = {
     "mdb_unrated": float(MDB_UNRATED_RW),
     "io": float(IO_ZERO_RW),
     # Other Items (Art. 134)
-    "other_cash": float(OTHER_ITEMS_CASH_RW),
-    "other_collection": float(OTHER_ITEMS_COLLECTION_RW),
-    "other_default": float(OTHER_ITEMS_DEFAULT_RW),
+    "other_cash": scalar_value(_CRR_PACK.scalar_param("other_items_cash_rw")),
+    "other_collection": scalar_value(_CRR_PACK.scalar_param("other_items_collection_rw")),
+    "other_default": scalar_value(_CRR_PACK.scalar_param("other_items_default_rw")),
     # Regulatory retail — 75% flat (Art. 123 / CRE20.65)
-    "retail": float(RETAIL_RISK_WEIGHT),
+    "retail": scalar_value(_CRR_PACK.scalar_param("retail_risk_weight")),
 }
+
+# Representative equity SA RW (LISTED) from the rulepack for the SA-equivalent maps.
+_CRR_EQ_RW = lookup_float_map(_CRR_PACK.lookup("equity_sa_risk_weights"))
+_B31_EQ_RW = lookup_float_map(_B31_PACK.lookup("equity_sa_risk_weights"))
+
+# ECA / MEIP direct sovereign RW table (CRR Art. 137 Table 9), int score -> float.
+_ECA_MEIP_RW = lookup_float_map(_CRR_PACK.lookup("eca_meip_risk_weights"))
 
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
-    "high_risk": float(HIGH_RISK_RW),
+    "high_risk": scalar_value(_CRR_PACK.scalar_param("high_risk_rw")),
     # Residential mortgage loan-splitting (Art. 125)
     "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
     "resi_rw_low": float(RESIDENTIAL_MORTGAGE_PARAMS["rw_low_ltv"]),
@@ -231,12 +237,12 @@ _SA_CRR_RW: dict[str, float] = {
     # Corporate / retail / equity tail (Art. 122 / 123 / 133(2))
     "corporate_sme": float(CRR_CORPORATE_SME_RW),
     "non_reg_retail": float(CRR_NON_REGULATORY_RETAIL_RW),
-    "equity": float(CRR_SA_EQUITY_RW[EquityType.LISTED]),
+    "equity": _CRR_EQ_RW[EquityType.LISTED],
 }
 
 # Basel 3.1 specific scalars (PRA PS1/26, CRE20).
 _SA_B31_RW: dict[str, float] = {
-    "high_risk": float(B31_HIGH_RISK_RW),
+    "high_risk": scalar_value(_B31_PACK.scalar_param("high_risk_rw")),
     # ECRA short-term institution weights (Table 4) — three-way split
     # CQS 1-3 = 20%, CQS 4-5 = 50%, CQS 6 = 150% (PRA PS1/26 Art. 120(2)).
     "ecra_st_low": float(B31_ECRA_SHORT_TERM_RISK_WEIGHTS[1]),
@@ -277,7 +283,7 @@ _SA_B31_RW: dict[str, float] = {
     "qrre_transactor": float(B31_RETAIL_TRANSACTOR_RW),
     "payroll": float(B31_RETAIL_PAYROLL_LOAN_RW),
     "non_reg_retail": float(B31_RETAIL_NON_REGULATORY_RW),
-    "equity": float(B31_SA_EQUITY_RISK_WEIGHTS[EquityType.LISTED]),
+    "equity": _B31_EQ_RW[EquityType.LISTED],
     # Currency mismatch (PRA PS1/26 Art. 123B / CRE20.93)
     "currency_mismatch_multiplier": float(B31_CURRENCY_MISMATCH_MULTIPLIER),
     "currency_mismatch_cap": float(B31_CURRENCY_MISMATCH_RW_CAP),
@@ -294,7 +300,12 @@ _SA_B31_RW: dict[str, float] = {
 
 
 @cites("CRR Art. 112")
-def apply_risk_weights(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_risk_weights(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """Look up and apply risk weights based on exposure class.
 
     Orchestrates the three-phase SA risk weight assignment:
@@ -306,9 +317,10 @@ def apply_risk_weights(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     the framework override helpers apply them in the sequence prescribed
     by the regulation.
     """
-    exposures, uc, is_domestic_currency = _prepare_risk_weight_lookup(lf, config)
+    exposures, uc, is_domestic_currency = _prepare_risk_weight_lookup(lf, config, pack=pack)
 
-    if config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if resolved_pack.feature("sa_revised_risk_weight_overrides"):
         exposures = _apply_b31_risk_weight_overrides(exposures, uc, is_domestic_currency, config)
     else:
         exposures = _apply_crr_risk_weight_overrides(exposures, uc, is_domestic_currency)
@@ -321,7 +333,7 @@ def apply_risk_weights(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     # Art. 127 defaulted risk weight (secured/unsecured split). Runs after
     # the base RW when-chain so defaulted exposures have their non-defaulted
     # base RW available for blending with collateral coverage.
-    exposures = _apply_defaulted_risk_weight(exposures, config)
+    exposures = _apply_defaulted_risk_weight(exposures, config, pack=resolved_pack)
 
     # Drop temporary columns used only during risk-weight application.
     schema_names = exposures.collect_schema().names()
@@ -400,15 +412,16 @@ def _cqs_table_lookup_expr(
 def _eca_meip_rw_expr() -> pl.Expr:
     """Build Polars expression mapping ``cp_eca_score`` (0-7) to sovereign RW.
 
-    Maps directly to ``ECA_MEIP_RISK_WEIGHTS`` per CRR Art. 137(2) Table 9 —
+    Maps directly to the rulepack ``eca_meip_risk_weights`` table per CRR
+    Art. 137(2) Table 9 —
     no intermediate CQS step. When ``cp_eca_score`` is null or out of range
     the expression returns null so callers can defer to the standard
     Art. 114 unrated fallback.
     """
     col = pl.col("cp_eca_score")
-    expr = pl.when(col == 0).then(pl.lit(float(ECA_MEIP_RISK_WEIGHTS[0])))
+    expr = pl.when(col == 0).then(pl.lit(_ECA_MEIP_RW[0]))
     for score in range(1, 8):
-        expr = expr.when(col == score).then(pl.lit(float(ECA_MEIP_RISK_WEIGHTS[score])))
+        expr = expr.when(col == score).then(pl.lit(_ECA_MEIP_RW[score]))
     return expr.otherwise(pl.lit(None, dtype=pl.Float64))
 
 
@@ -480,7 +493,7 @@ def _b31_unrated_cb_rw_expr() -> pl.Expr:
     cqs_to_cb_rw: dict[int, float] = {}
     for cqs_val in [CQS.CQS1, CQS.CQS2, CQS.CQS3, CQS.CQS4, CQS.CQS5, CQS.CQS6]:
         inst_rw = inst_table[cqs_val]
-        cb_rw = COVERED_BOND_UNRATED_DERIVATION[inst_rw]
+        cb_rw = COVERED_BOND_UNRATED_DERIVATION_B31[inst_rw]
         cqs_to_cb_rw[int(cqs_val)] = float(cb_rw)
 
     # Build when/then: ECRA first (cp_institution_cqs)
@@ -829,6 +842,8 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
 def _prepare_risk_weight_lookup(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> tuple[pl.LazyFrame, pl.Expr, pl.Expr]:
     """Ensure required columns, classify for join, and attach CQS risk weights.
 
@@ -837,8 +852,10 @@ def _prepare_risk_weight_lookup(
     expression reused by override chains, and the domestic-currency flag
     used for CGCB zero-weight treatment and sovereign-derived fallbacks.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
     # CQS-based risk weight table — Basel 3.1 uses revised corporate weights
-    if config.is_basel_3_1:
+    if resolved_pack.feature("sa_revised_risk_weight_tables"):
         rw_table = get_b31_combined_cqs_risk_weights().lazy()
     else:
         rw_table = get_combined_cqs_risk_weights().lazy()
@@ -913,7 +930,7 @@ def _prepare_risk_weight_lookup(
     # (``b31_sa_sl_rw_expr``) instead of the rated-corporate CQS table. Scoped
     # to Basel 3.1 SL exposures only — ordinary rated corporates (Art. 122(2))
     # are untouched.
-    if config.is_basel_3_1:
+    if resolved_pack.feature("sa_sl_inferred_rating_disapplied"):
         is_sl_exposure = pl.col("sl_type").fill_null("").str.len_chars() > 0
         rating_not_issue_specific = (
             pl.col("external_rating_is_issue_specific").fill_null(True) == False  # noqa: E712
@@ -1298,8 +1315,7 @@ def _apply_crr_risk_weight_overrides(
     # Covered bond / high risk / other items / equity tail.
     exposures = exposures.with_columns(
         chain
-        # Unrated covered bonds: derive from issuer institution RW
-        # (CRR Art. 129(5)) via COVERED_BOND_UNRATED_DERIVATION table.
+        # Unrated covered bonds: derive from issuer institution RW (CRR Art. 129(5)).
         .when(
             uc.str.contains("COVERED_BOND", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
@@ -1417,6 +1433,8 @@ def _apply_sovereign_floor_for_institutions(
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Apply Art. 127 defaulted risk weight to the full post-CRM exposure.
 
@@ -1444,10 +1462,11 @@ def _apply_defaulted_risk_weight(
     - PS1/26 Art. 127(3) / CRE20.88: RESI RE non-income flat 100%
     - CRR Art. 127(1)-(2): CRR predecessor (pre-provision denominator)
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
     ead = pl.col("ead_final")
 
-    if config.is_basel_3_1:
+    if resolved_pack.feature("sa_revised_defaulted_treatment"):
         # B31 RESI RE non-income-dependent: 100% flat (Art. 127(3) / CRE20.88).
         is_resi_re_non_income = (
             _is_residential_re_class(_uc)

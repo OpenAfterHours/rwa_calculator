@@ -66,8 +66,8 @@ References:
     - BCBS CRE54.15 — 4% supervisory factor (client-cleared trade exposures)
     - src/rwa_calc/data/schemas.py — COUNTERPARTY_SCHEMA, TRADE_SCHEMA,
       NETTING_SET_SCHEMA, CCR_COLLATERAL_SCHEMA
-    - src/rwa_calc/data/tables/crr_risk_weights.py — QCCP_PROPRIETARY_RW,
-      QCCP_CLIENT_CLEARED_RW (reuse — do NOT redefine here)
+    - rulepack common pack — qccp_proprietary_rw, qccp_client_cleared_rw
+      (single source of truth for the QCCP scalars — do NOT redefine here)
 """
 
 from __future__ import annotations

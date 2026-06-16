@@ -72,12 +72,14 @@ from rwa_calc.engine.stages.classify.subtypes import (
 from rwa_calc.engine.stages.re_split.flagging import (
     flag_property_reclassification_candidates,
 )
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     import polars as pl
 
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +107,8 @@ class ExposureClassifier:
         self,
         data: ResolvedHierarchyBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ClassifiedExposuresBundle:
         """
         Classify exposures and split by approach.
@@ -116,6 +120,8 @@ class ExposureClassifier:
         Returns:
             ClassifiedExposuresBundle with exposures split by approach
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
         # Reads top-to-bottom as a recipe; each helper owns one regulatory
         # concept. See the sibling sub-modules for per-step regulatory
         # references.
@@ -132,12 +138,16 @@ class ExposureClassifier:
         # presence gate — sealed inputs always carry them.
         schema_names = set(exposures.collect_schema().names())
 
-        classification_errors = collect_input_warnings(data, config)
+        classification_errors = collect_input_warnings(data, config, pack=resolved_pack)
 
-        classified = derive_independent_flags(exposures, config, schema_names)
-        classified = classify_exposure_subtypes(classified, config)
-        classified = reclassify_corporate_to_retail(classified, config, schema_names)
-        classified = flag_property_reclassification_candidates(classified, config, schema_names)
+        classified = derive_independent_flags(exposures, config, schema_names, pack=resolved_pack)
+        classified = classify_exposure_subtypes(classified, config, pack=resolved_pack)
+        classified = reclassify_corporate_to_retail(
+            classified, config, schema_names, pack=resolved_pack
+        )
+        classified = flag_property_reclassification_candidates(
+            classified, config, schema_names, pack=resolved_pack
+        )
         classified = sync_irb_exposure_class(classified)
 
         has_model_permissions = data.model_permissions is not None
@@ -149,8 +159,9 @@ class ExposureClassifier:
             config,
             schema_names,
             has_model_permissions=has_model_permissions,
+            pack=resolved_pack,
         )
-        classified = derive_exposure_subclass(classified, config)
+        classified = derive_exposure_subclass(classified, config, pack=resolved_pack)
 
         # Stage-exit edge (producer-side): the diagnostic emits below run
         # against in-memory data instead of re-executing the upstream lazy

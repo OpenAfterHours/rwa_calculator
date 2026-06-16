@@ -52,9 +52,11 @@ from rwa_calc.engine.slotting.transforms import (
     prepare_columns,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,7 @@ class SlottingCalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA and Expected Loss on pre-filtered slotting-only rows.
@@ -110,14 +113,14 @@ class SlottingCalculator:
         """
         exposures = (
             exposures.pipe(prepare_columns, config)
-            .pipe(apply_slotting_weights, config)
+            .pipe(apply_slotting_weights, config, pack=pack)
             .pipe(calculate_rwa)
         )
 
         # Apply supporting factors (CRR Art. 501/501a) — same pattern as IRB
-        exposures = self._apply_supporting_factors(exposures, config, errors=errors)
+        exposures = self._apply_supporting_factors(exposures, config, errors=errors, pack=pack)
 
-        exposures = exposures.pipe(apply_el_rates, config).pipe(
+        exposures = exposures.pipe(apply_el_rates, config, pack=pack).pipe(
             compute_el_shortfall_excess, errors=errors
         )
 
@@ -135,6 +138,7 @@ class SlottingCalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors (CRR Art. 501/501a).
@@ -151,14 +155,15 @@ class SlottingCalculator:
         Returns:
             Exposures with supporting factors applied
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             return exposures.with_columns(pl.lit(1.0).alias("supporting_factor"))
 
         # Rename rwa to rwa_pre_factor for the SupportingFactorCalculator
         exposures = exposures.with_columns(pl.col("rwa").alias("rwa_pre_factor"))
 
         sf_calc = SupportingFactorCalculator()
-        exposures = sf_calc.apply_factors(exposures, config, errors=errors)
+        exposures = sf_calc.apply_factors(exposures, config, errors=errors, pack=resolved_pack)
 
         # Update rwa and rwa_final with post-factor values
         if "rwa_post_factor" in exposures.collect_schema().names():

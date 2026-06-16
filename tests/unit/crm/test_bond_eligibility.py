@@ -24,7 +24,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     get_haircut_table,
     is_bond_eligible_as_financial_collateral,
     lookup_collateral_haircut,
@@ -225,15 +225,16 @@ class TestSingleHaircutIneligibility:
 
     @pytest.fixture()
     def calculator(self) -> HaircutCalculator:
-        return HaircutCalculator(is_basel_3_1=False)
+        return HaircutCalculator()
 
     @pytest.fixture()
     def b31_calculator(self) -> HaircutCalculator:
-        return HaircutCalculator(is_basel_3_1=True)
+        return HaircutCalculator()
 
     def test_corp_bond_cqs4_zero_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """CQS 4 corp bond: ineligible, adjusted value = 0."""
         result = calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="corp_bond",
             market_value=Decimal("500000"),
             collateral_currency="GBP",
@@ -247,6 +248,7 @@ class TestSingleHaircutIneligibility:
     def test_govt_bond_cqs5_zero_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """CQS 5 govt bond: ineligible, adjusted value = 0."""
         result = calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -260,6 +262,7 @@ class TestSingleHaircutIneligibility:
     def test_govt_bond_cqs4_eligible_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """CQS 4 govt bond: eligible, adjusted value = MV * (1 - 0.15)."""
         result = calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -275,6 +278,7 @@ class TestSingleHaircutIneligibility:
     ) -> None:
         """CQS 5 corp bond under Basel 3.1: ineligible, adjusted value = 0."""
         result = b31_calculator.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="corp_bond",
             market_value=Decimal("200000"),
             collateral_currency="GBP",
@@ -287,6 +291,7 @@ class TestSingleHaircutIneligibility:
     def test_unrated_corp_bond_zero_adjusted_value(self, calculator: HaircutCalculator) -> None:
         """Unrated corp bond: ineligible, adjusted value = 0."""
         result = calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="corp_bond",
             market_value=Decimal("300000"),
             collateral_currency="GBP",
@@ -372,28 +377,28 @@ class TestPipelineEligibility:
 
     def test_pipeline_corp_bond_cqs4_zeroed(self, crr_config) -> None:
         """Pipeline: CQS 4 corp bond gets value_after_haircut = 0."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=4)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
 
     def test_pipeline_corp_bond_cqs5_zeroed(self, crr_config) -> None:
         """Pipeline: CQS 5 corp bond gets value_after_haircut = 0."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=5)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
 
     def test_pipeline_govt_bond_cqs5_zeroed(self, crr_config) -> None:
         """Pipeline: CQS 5 govt bond gets value_after_haircut = 0."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("govt_bond", issuer_cqs=5)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
 
     def test_pipeline_govt_bond_cqs6_zeroed(self, crr_config) -> None:
         """Pipeline: CQS 6 govt bond gets value_after_haircut = 0."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("govt_bond", issuer_cqs=6)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
@@ -406,7 +411,7 @@ class TestPipelineEligibility:
         would scale to 15% × sqrt(2) ≈ 21.21%. This test exercises eligibility
         and lookup correctness, not liquidation-period scaling.
         """
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("govt_bond", issuer_cqs=4).with_columns(
             pl.lit(10).alias("liquidation_period_days")  # P1.186: explicit 10-day
         )
@@ -416,21 +421,21 @@ class TestPipelineEligibility:
 
     def test_pipeline_corp_bond_cqs3_eligible(self, crr_config) -> None:
         """Pipeline: CQS 3 corp bond is still eligible."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=3)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["value_after_haircut"][0] > 0.0
 
     def test_pipeline_corp_bond_cqs4_b31_zeroed(self, b31_config) -> None:
         """Pipeline under Basel 3.1: CQS 4 corp bond zeroed."""
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=4)
         result = calc.apply_haircuts(lf, b31_config).collect()
         assert result["value_after_haircut"][0] == pytest.approx(0.0)
 
     def test_pipeline_unrated_corp_bond_zeroed(self, crr_config) -> None:
         """Pipeline: Unrated corp bond gets value_after_haircut = 0."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         # Null CQS for unrated
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=None)
         result = calc.apply_haircuts(lf, crr_config).collect()
@@ -438,14 +443,14 @@ class TestPipelineEligibility:
 
     def test_pipeline_eligible_flag_updated_for_ineligible(self, crr_config) -> None:
         """Pipeline: is_eligible_financial_collateral set to False for ineligible bonds."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf("corp_bond", issuer_cqs=5)
         result = calc.apply_haircuts(lf, crr_config).collect()
         assert result["is_eligible_financial_collateral"][0] is False
 
     def test_pipeline_cash_unaffected(self, crr_config) -> None:
         """Pipeline: Cash collateral is unaffected by bond eligibility rules."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         lf = self._make_collateral_lf(
             "cash",
             issuer_cqs=None,

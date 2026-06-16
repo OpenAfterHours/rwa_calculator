@@ -20,24 +20,33 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.sa_ccr_factors import (
-    MF_MARGINED_DISPUTE_MULTIPLIER,
-    MF_MARGINED_DISPUTE_THRESHOLD,
-    MF_MARGINED_FLOOR_DAYS_LARGE_OR_ILLIQUID,
-    MF_MARGINED_FLOOR_DAYS_OTC,
-    MF_MARGINED_FLOOR_DAYS_REPO_SFT,
-    MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT,
-    MF_MARGINED_SCALAR,
-    MF_UNMARGINED_CAP_YEARS,
-    MF_UNMARGINED_DENOM_YEARS,
-    SA_CCR_BUSINESS_DAYS_PER_YEAR,
-)
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR maturity-factor parameters resolved from the rulepack once at module
+# load: the margined-MF float scalars (CRR Art. 279c) plus the integer MPOR
+# cascade counts (Art. 285 floor business-days, large-netting-set trade count,
+# dispute threshold/multiplier) and the 250-business-day-year divisor basis.
+_PACK = resolve("crr", date(2026, 1, 1))
+_MF_MARGINED_SCALAR = scalar_value(_PACK.scalar_param("mf_margined_scalar"))
+_MF_UNMARGINED_CAP_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_cap_years"))
+_MF_UNMARGINED_DENOM_YEARS = scalar_value(_PACK.scalar_param("mf_unmargined_denom_years"))
+_MF_FLOOR_DAYS_REPO_SFT = _PACK.int_param("mf_margined_floor_days_repo_sft").value
+_MF_FLOOR_DAYS_OTC = _PACK.int_param("mf_margined_floor_days_otc").value
+_MF_FLOOR_DAYS_LARGE_OR_ILLIQUID = _PACK.int_param("mf_margined_floor_days_large_or_illiquid").value
+_MF_LARGE_NETTING_SET_TRADE_COUNT = _PACK.int_param(
+    "mf_margined_large_netting_set_trade_count"
+).value
+_MF_DISPUTE_THRESHOLD = _PACK.int_param("mf_margined_dispute_threshold").value
+_MF_DISPUTE_MULTIPLIER = _PACK.int_param("mf_margined_dispute_multiplier").value
+_SA_CCR_BUSINESS_DAYS_PER_YEAR = _PACK.int_param("sa_ccr_business_days_per_year").value
 
 
 # Watchfire's bundled CRR index does not yet contain Art. 279c; collapse the
@@ -63,9 +72,9 @@ def compute_maturity_factor_unmargined(trades: pl.LazyFrame) -> pl.LazyFrame:
         (
             pl.min_horizontal(
                 pl.col("years_to_maturity"),
-                pl.lit(float(MF_UNMARGINED_CAP_YEARS)),
+                pl.lit(_MF_UNMARGINED_CAP_YEARS),
             )
-            / float(MF_UNMARGINED_DENOM_YEARS)
+            / _MF_UNMARGINED_DENOM_YEARS
         )
         .sqrt()
         .alias("maturity_factor")
@@ -124,21 +133,19 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     base_post_step1 = (
         pl.when(all_sft_in_ns)
-        .then(pl.lit(MF_MARGINED_FLOOR_DAYS_REPO_SFT))
-        .otherwise(pl.lit(MF_MARGINED_FLOOR_DAYS_OTC))
+        .then(pl.lit(_MF_FLOOR_DAYS_REPO_SFT))
+        .otherwise(pl.lit(_MF_FLOOR_DAYS_OTC))
     )
 
     # Step 2 — upgrade to 20 BD when the netting set is large
     # (Art. 285(3)(a)) or contains illiquid collateral / hard-to-replace
     # OTC trades (Art. 285(3)(b)).
-    is_large_or_illiquid = pl.col("number_of_trades") > pl.lit(
-        MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT
-    )
+    is_large_or_illiquid = pl.col("number_of_trades") > pl.lit(_MF_LARGE_NETTING_SET_TRADE_COUNT)
     is_large_or_illiquid = is_large_or_illiquid | pl.col("has_illiquid")
 
     base_post_step2 = (
         pl.when(is_large_or_illiquid)
-        .then(pl.lit(MF_MARGINED_FLOOR_DAYS_LARGE_OR_ILLIQUID))
+        .then(pl.lit(_MF_FLOOR_DAYS_LARGE_OR_ILLIQUID))
         .otherwise(base_post_step1)
     )
 
@@ -146,8 +153,8 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
     # exceeds the regulatory threshold (more than two), the MPOR base
     # is doubled.
     base_post_step3 = (
-        pl.when(pl.col("dispute_count_qtr") > pl.lit(MF_MARGINED_DISPUTE_THRESHOLD))
-        .then(base_post_step2 * pl.lit(MF_MARGINED_DISPUTE_MULTIPLIER))
+        pl.when(pl.col("dispute_count_qtr") > pl.lit(_MF_DISPUTE_THRESHOLD))
+        .then(base_post_step2 * pl.lit(_MF_DISPUTE_MULTIPLIER))
         .otherwise(base_post_step2)
     )
 
@@ -160,8 +167,8 @@ def compute_maturity_factor_margined(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     # MF = 1.5 * sqrt(MPOR_eff / 250) per Art. 279c(2).
     maturity_factor = (
-        pl.lit(float(MF_MARGINED_SCALAR))
-        * (mpor_eff.cast(pl.Float64) / pl.lit(float(SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
+        pl.lit(_MF_MARGINED_SCALAR)
+        * (mpor_eff.cast(pl.Float64) / pl.lit(float(_SA_CCR_BUSINESS_DAYS_PER_YEAR))).sqrt()
     ).cast(pl.Float64)
 
     return trades.with_columns(maturity_factor.alias("maturity_factor"))

@@ -50,10 +50,15 @@ from rwa_calc.engine.aggregator._summaries import (
     generate_summary_by_class,
 )
 from rwa_calc.engine.aggregator._supporting_factors import generate_supporting_factor_impact
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from datetime import date
+    from decimal import Decimal
+
     from rwa_calc.contracts.bundles import EquityResultBundle
-    from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.contracts.config import CalculationConfig, OutputFloorConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +81,8 @@ class OutputAggregator:
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
         securitisation_audit: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.
@@ -90,6 +97,10 @@ class OutputAggregator:
                 allocator stage (one row per securitised exposure carrying
                 residual_pct + pool_allocations + audit_status). None when
                 no allocations were supplied.
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — sources
+                the ``output_floor`` / ``supporting_factors`` regime gates).
+                Production threads the orchestrator's pack; direct callers may
+                omit it, in which case one is resolved from ``config``.
 
         Returns:
             AggregatedResultBundle with all summaries and adjustments. Every
@@ -98,6 +109,8 @@ class OutputAggregator:
             wrapped back with ``.lazy()``, so a downstream collect call is a
             near-free shallow collect rather than a plan re-execution.
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
         # Combine for summaries (data already materialised — cheap concat).
         # ``combined_unmultiplied`` retains the full ead_final / rwa_final
         # values so the per-pool securitisation summary can multiply by each
@@ -190,8 +203,10 @@ class OutputAggregator:
         # combinations — exempt entities use U-TREA with no floor add-on.
         floor_impact = None
         output_floor_summary = None
-        if config.output_floor.is_floor_applicable():
-            floor_pct = float(config.output_floor.get_floor_percentage(config.reporting_date))
+        if resolved_pack.feature("output_floor") and config.output_floor.is_entity_in_scope():
+            floor_pct = float(
+                _output_floor_pct(resolved_pack, config.output_floor, config.reporting_date)
+            )
 
             # Compute OF-ADJ from EL summary + capital-tier config inputs
             # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
@@ -223,7 +238,9 @@ class OutputAggregator:
             else:
                 s_trea_pre = 0.0
 
-            of_adj_val, gcra_capped = compute_of_adj(irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre)
+            of_adj_val, gcra_capped = compute_of_adj(
+                irb_t2, irb_cet1, gcra, sa_t2, s_trea_pre, pack=resolved_pack
+            )
 
             combined, floor_impact, output_floor_summary = apply_floor_with_impact(
                 combined,
@@ -248,9 +265,11 @@ class OutputAggregator:
         summary_by_class = generate_summary_by_class(post_crm_detailed)
         summary_by_approach = generate_summary_by_approach(post_crm_detailed)
 
-        # Supporting factor impact
+        # Supporting factor impact. The regime gate is pack Feature-sourced; the
+        # pack is threaded into aggregate() (S11d), so this reads the run's
+        # resolved pack directly rather than re-deriving one from config.
         supporting_factor_impact = None
-        if config.supporting_factors.enabled:
+        if resolved_pack.feature("supporting_factors"):
             supporting_factor_impact = generate_supporting_factor_impact(combined)
 
         # Materialise the post-floor views ONCE (same single-collect pattern
@@ -324,3 +343,19 @@ def _collect_views(views: dict[str, pl.LazyFrame]) -> dict[str, pl.DataFrame]:
     """
     collected = pl.collect_all(list(views.values()))
     return dict(zip(views, collected, strict=True))
+
+
+def _output_floor_pct(pack: ResolvedRulepack, output_floor: OutputFloorConfig, on: date) -> Decimal:
+    """Output-floor percentage for ``on`` from the rulepack (Phase 5 S11e-v1).
+
+    Pack twin of the value computation in
+    ``OutputFloorConfig.get_floor_percentage``: the Art. 92(5) transitional
+    phase-in (``output_floor_pct`` Schedule) and the fully-phased-in 72.5%
+    (``output_floor_pct_full`` scalar) are pack data; the ``skip_transitional``
+    ELECTION stays on the config. Called only when the ``output_floor`` Feature
+    is on (the caller gates), so the disabled / before-start cases reduce to the
+    Schedule's ``before_first`` (0.0) — byte-identical with the config method.
+    """
+    if output_floor.skip_transitional:
+        return pack.scalar("output_floor_pct_full")
+    return pack.schedule("output_floor_pct").resolve(on)

@@ -52,7 +52,7 @@ def crr_config() -> CalculationConfig:
 
 @pytest.fixture
 def crr_processor() -> CRMProcessor:
-    return CRMProcessor(is_basel_3_1=False)
+    return CRMProcessor()
 
 
 def _bundle(

@@ -37,15 +37,19 @@ from decimal import Decimal
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_risk_weights import B31_HIGH_RISK_RW
-from rwa_calc.data.tables.crr_risk_weights import HIGH_RISK_RW
-from rwa_calc.data.tables.entity_class_mapping import (
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
-from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.sa import SACalculator
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
+
+# High-risk-item RW (Art. 128, 150% flat) is identical under CRR and Basel 3.1,
+# single-sourced into the common rulepack pack (was HIGH_RISK_RW + B31_HIGH_RISK_RW).
+HIGH_RISK_RW = resolve("crr", date(2026, 1, 1)).scalar_param("high_risk_rw").value
+B31_HIGH_RISK_RW = HIGH_RISK_RW
 
 # =============================================================================
 # FIXTURES

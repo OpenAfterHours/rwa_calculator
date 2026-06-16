@@ -11,9 +11,10 @@ fill in collateral.py.
 Sibling modules providing the data this module consumes:
 - data/schemas.py: input-domain collateral type-set lists and the
   canonical collateral_type -> category mapping
-- data/tables/crm_supervisory.py: regulatory values (supervisory LGD,
-  overcollateralisation ratios, minimum thresholds, zero-haircut
-  sovereign CQS cap)
+- rulebook/packs/{common,b31}.py: regulatory values (supervisory LGD,
+  overcollateralisation ratios, minimum collateralisation thresholds,
+  zero-haircut sovereign CQS cap) carrying citations, read per-run via
+  rulebook.resolve
 
 References:
     CRR Art. 161, 224, 230, 231: Supervisory LGD, haircuts,
@@ -22,6 +23,8 @@ References:
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
@@ -34,15 +37,13 @@ from rwa_calc.data.schemas import (
     REAL_ESTATE_COLLATERAL_TYPES,
     RECEIVABLE_COLLATERAL_TYPES,
 )
-from rwa_calc.data.tables.crm_supervisory import (
-    BASEL31_SUPERVISORY_LGD,
-    CRR_SUPERVISORY_LGD,
-    MIN_COLLATERALISATION_THRESHOLDS,
-    OVERCOLLATERALISATION_RATIOS,
-)
 from rwa_calc.engine.kernels.allocation import (
     beneficiary_level_expr as kernel_beneficiary_level_expr,
 )
+from rwa_calc.rulebook.compile import lookup_float_map
+
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 # ---------------------------------------------------------------------------
 # Polars expression builders
@@ -54,19 +55,61 @@ def _coll_type_lower() -> pl.Expr:
     return pl.col("collateral_type").str.to_lowercase()
 
 
-def supervisory_lgd_values(is_basel_3_1: bool) -> dict[str, float]:
-    """Return the appropriate supervisory LGD dict for the framework."""
-    return BASEL31_SUPERVISORY_LGD if is_basel_3_1 else CRR_SUPERVISORY_LGD
+def supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, float]:
+    """Project the canonical ``firb_supervisory_lgd`` table to CRM simple categories.
+
+    Reproduces the CRM-shape LGD dict (financial / receivables / real_estate /
+    other_physical / unsecured / covered_bond / life_insurance, plus
+    ``unsecured_fse`` under Basel 3.1 and the CRR Art. 230 Table 5
+    ``*_subordinated`` secured-portion LGDS) from the single FIRB-granularity
+    DecisionTable — one source of truth across the CRM and IRB-direct shapes.
+    """
+    rows = {keys: float(value) for keys, value in pack.decision("firb_supervisory_lgd").rows}
+    values = {
+        "financial": rows[("financial_collateral", "senior", False)],
+        "receivables": rows[("receivables", "senior", False)],
+        "real_estate": rows[("residential_re", "senior", False)],
+        "other_physical": rows[("other_physical", "senior", False)],
+        "unsecured": rows[("unsecured", "senior", False)],
+        "covered_bond": rows[("covered_bond", "senior", False)],
+        "life_insurance": rows[("life_insurance", "senior", False)],
+    }
+    # FSE senior unsecured exists only where the regime splits FSE (Basel 3.1).
+    unsecured_fse = rows.get(("unsecured", "senior", True))
+    if unsecured_fse is not None and unsecured_fse != values["unsecured"]:
+        values["unsecured_fse"] = unsecured_fse
+    # CRR Art. 230 Table 5 subordinated secured-portion LGDS (dropped under B31).
+    for crm_key, ct in (
+        ("receivables_subordinated", "receivables"),
+        ("real_estate_subordinated", "residential_re"),
+        ("other_physical_subordinated", "other_physical"),
+    ):
+        sub = rows.get((ct, "subordinated", False))
+        if sub is not None:
+            values[crm_key] = sub
+    return values
 
 
-def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:
+def subordinated_unsecured_lgd(pack: ResolvedRulepack) -> float:
+    """The F-IRB subordinated unsecured supervisory LGD (Art. 161(1)(b), 75%).
+
+    Sourced from the canonical ``firb_supervisory_lgd`` table's
+    ``(unsecured, subordinated, …)`` row; regime-invariant (75% under both CRR
+    and Basel 3.1). Replaces the historical hardcoded ``pl.lit(0.75)``
+    subordinated literals in the collateral / no-collateral LGD waterfall.
+    """
+    rows = {keys: float(value) for keys, value in pack.decision("firb_supervisory_lgd").rows}
+    return rows[("unsecured", "subordinated", False)]
+
+
+def collateral_lgd_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to supervisory LGD.
 
     Note: The "otherwise" (unsecured) value uses the non-FSE LGD under Basel 3.1.
     FSE-specific unsecured LGD (45%) is handled at the exposure level in
     collateral.py, not here — this expression is for per-collateral-type LGDS.
     """
-    lgd = supervisory_lgd_values(is_basel_3_1)
+    lgd = supervisory_lgd_values(pack)
     ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
@@ -86,7 +129,7 @@ def collateral_lgd_expr(is_basel_3_1: bool) -> pl.Expr:
 
 
 @cites("PS1/26 Art. 230(1)")
-def overcollateralisation_ratio_expr(is_basel_3_1: bool = False) -> pl.Expr:
+def overcollateralisation_ratio_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to overcollateralisation ratio.
 
     CRR Art. 230 (Table 5) requires explicit overcollateralisation divisors for
@@ -95,45 +138,52 @@ def overcollateralisation_ratio_expr(is_basel_3_1: bool = False) -> pl.Expr:
     PS1/26 Art. 230(1) replaces the CRR step-function with a continuous LGD*
     formula in which the haircut HC is applied multiplicatively at the haircut
     stage; no overcollateralisation divisor is applied for non-financial
-    collateral under Basel 3.1 — the OC ratio is 1.0 for real_estate /
-    other_physical / receivables. Financial and life-insurance ratios are
-    unchanged at 1.0 under both frameworks.
+    collateral under Basel 3.1. Whether the divisor applies is the regime
+    Feature ``firb_overcollateralisation_divisor_applies``; the ratios
+    themselves are the regime-invariant ``overcollateralisation_ratios`` lookup.
     """
-    ct = _coll_type_lower()
-    if is_basel_3_1:
-        # Under PS1/26 Art. 230(1) the FCM HC is applied multiplicatively and
-        # no overcollateralisation divisor is applied to non-financial
-        # collateral. Financial and life-insurance ratios remain 1.0.
+    if not pack.feature("firb_overcollateralisation_divisor_applies"):
+        # PS1/26 Art. 230(1): FCM HC is applied multiplicatively, no
+        # overcollateralisation divisor — the ratio is 1.0 for every type.
         return pl.lit(1.0)
+    ratios = lookup_float_map(pack.lookup("overcollateralisation_ratios"))
+    ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["life_insurance"]))
+        .then(pl.lit(ratios["life_insurance"]))
         .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["financial"]))
+        .then(pl.lit(ratios["financial"]))
         .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["receivables"]))
+        .then(pl.lit(ratios["receivables"]))
         .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["real_estate"]))
+        .then(pl.lit(ratios["real_estate"]))
         .when(ct.is_in(OTHER_PHYSICAL_COLLATERAL_TYPES))
-        .then(pl.lit(OVERCOLLATERALISATION_RATIOS["other_physical"]))
+        .then(pl.lit(ratios["other_physical"]))
         .otherwise(pl.lit(1.0))
     )
 
 
-def min_collateralisation_threshold_expr() -> pl.Expr:
-    """Build expression mapping collateral_type to minimum collateralisation threshold."""
+def min_collateralisation_threshold_expr(pack: ResolvedRulepack) -> pl.Expr:
+    """Build expression mapping collateral_type to minimum collateralisation threshold.
+
+    Values are the regime-invariant ``min_collateralisation_thresholds`` lookup
+    (CRR Art. 230). Whether the 30% C*/C** gate is *applied* is the regime
+    Feature ``firb_min_collateralisation_threshold_applies``, checked by the
+    caller in ``collateral.py`` (Basel 3.1 skips the gate per PS1/26 Art. 230(1)).
+    """
+    thresholds = lookup_float_map(pack.lookup("min_collateralisation_thresholds"))
     ct = _coll_type_lower()
     return (
         pl.when(ct.is_in(LIFE_INSURANCE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["life_insurance"]))
+        .then(pl.lit(thresholds["life_insurance"]))
         .when(ct.is_in(FINANCIAL_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["financial"]))
+        .then(pl.lit(thresholds["financial"]))
         .when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["receivables"]))
+        .then(pl.lit(thresholds["receivables"]))
         .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["real_estate"]))
+        .then(pl.lit(thresholds["real_estate"]))
         .when(ct.is_in(OTHER_PHYSICAL_COLLATERAL_TYPES))
-        .then(pl.lit(MIN_COLLATERALISATION_THRESHOLDS["other_physical"]))
+        .then(pl.lit(thresholds["other_physical"]))
         .otherwise(pl.lit(0.0))
     )
 

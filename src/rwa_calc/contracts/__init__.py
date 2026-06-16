@@ -41,13 +41,9 @@ from rwa_calc.contracts.config import (
     CalculationConfig,
     EquityTransitionalConfig,
     IRBPermissions,
-    LGDFloors,
     OutputFloorConfig,
-    PDFloors,
     Pillar3CapitalRatioOverrides,
     PostModelAdjustmentConfig,
-    RegulatoryThresholds,
-    SupportingFactors,
 )
 
 # Producer-sealed edge contracts (migration Phase 3)
@@ -133,13 +129,9 @@ __all__ = [
     "EquityTransitionalConfig",
     "IRBPermissions",
     "PermissionMode",
-    "LGDFloors",
     "OutputFloorConfig",
-    "PDFloors",
     "Pillar3CapitalRatioOverrides",
     "PostModelAdjustmentConfig",
-    "RegulatoryThresholds",
-    "SupportingFactors",
     # Errors
     "CalculationError",
     "business_rule_error",

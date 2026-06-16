@@ -63,7 +63,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(3 * 365.25))
         collateral = _make_collateral(5.0, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(1.0)
@@ -83,7 +83,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(3 * 365.25))
         collateral = _make_collateral(2.0, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         expected_factor = (2.0 - 0.25) / (3.0 - 0.25)  # 0.6364
@@ -98,7 +98,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(5 * 365.25))
         collateral = _make_collateral(2.0, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         expected_factor = (2.0 - 0.25) / (5.0 - 0.25)  # 0.3684
@@ -110,7 +110,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(7 * 365.25))
         collateral = _make_collateral(2.0, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         expected_factor = (2.0 - 0.25) / (5.0 - 0.25)  # Capped at T=5
@@ -122,7 +122,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(3 * 365.25))
         collateral = _make_collateral(0.1, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         assert result["maturity_adjustment_factor"][0] == pytest.approx(0.0)
@@ -145,7 +145,7 @@ class TestMaturityMismatchVectorized:
             },
         )
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         # 10yr collateral > 3yr exposure → no adjustment
@@ -166,7 +166,7 @@ class TestMaturityMismatchVectorized:
             },
         )
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         expected_factor = (2.0 - 0.25) / (5.0 - 0.25)  # T defaults to 5
@@ -190,7 +190,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(1 * 365.25))
         collateral = _make_collateral(0.5, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         expected_factor = (0.5 - 0.25) / (1.0 - 0.25)  # 0.3333
@@ -202,7 +202,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=int(3 * 365.25))
         collateral = _make_collateral(2.0, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, b31_config).collect()
 
         expected_factor = (2.0 - 0.25) / (3.0 - 0.25)
@@ -229,7 +229,7 @@ class TestMaturityMismatchVectorized:
             },
         )
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         factors = result["maturity_adjustment_factor"].to_list()
@@ -249,7 +249,7 @@ class TestMaturityMismatchVectorized:
         exposure_mat = reporting + timedelta(days=30)
         collateral = _make_collateral(0.5, exposure_mat)
 
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_maturity_mismatch(collateral, crr_config).collect()
 
         # T floored at 0.25, collateral 0.5yr >= 0.25yr → adjustment applies

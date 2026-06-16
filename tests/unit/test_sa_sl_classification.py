@@ -29,16 +29,16 @@ from rwa_calc.contracts.bundles import (
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.entity_class_mapping import (
-    ENTITY_TYPE_TO_IRB_CLASS,
-    ENTITY_TYPE_TO_SA_CLASS,
-)
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
     PermissionMode,
 )
 from rwa_calc.engine.classifier import ExposureClassifier
+from rwa_calc.engine.entity_class_maps import (
+    ENTITY_TYPE_TO_IRB_CLASS,
+    ENTITY_TYPE_TO_SA_CLASS,
+)
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.generator import COREPGenerator
 from tests.fixtures.resolved_bundle import make_counterparty_lookup, make_resolved_bundle

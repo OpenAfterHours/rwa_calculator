@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the SA-CCR pipeline adapter over the resolved hierarchy."""
@@ -91,9 +91,10 @@ def run(
         # supervisory alpha (1.0 carve-out vs 1.4 default).
         counterparties=data.counterparties,
         # PRA PS1/26 Art. 274(2A): the transitional alpha add-on is
-        # Basel 3.1 only — gate it on the framework so it never fires
-        # under CRR.
-        is_basel_3_1=run_config.is_basel_3_1,
+        # Basel 3.1 only — gate it on the cited pack Feature so it never
+        # fires under CRR. The add-on branch keeps its ``is_basel_3_1`` bool
+        # plumbing param; only this regime read moves to the pack (S9a).
+        is_basel_3_1=rulepack.pack.feature("ccr_transitional_alpha_addon_applicable"),
     )
     # Inherit the resolved counterparty rating columns onto each CCR
     # synthetic row so the downstream SA Institution lookup (CRR

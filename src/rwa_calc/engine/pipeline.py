@@ -77,6 +77,7 @@ from rwa_calc.engine.orchestrator import (
 from rwa_calc.engine.registry import PIPELINE_STAGES
 from rwa_calc.observability import clear_run_id, new_run_id, stage_timer
 from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.audit import serialize_pack
 
 if TYPE_CHECKING:
     import polars as pl
@@ -211,6 +212,8 @@ class PipelineOrchestrator:
         self,
         data: RawDataBundle,
         config: CalculationConfig,
+        *,
+        rulepack: RulepackV0 | None = None,
     ) -> AggregatedResultBundle:
         """
         Execute pipeline with pre-loaded data.
@@ -223,6 +226,11 @@ class PipelineOrchestrator:
         Args:
             data: Pre-loaded raw data bundle
             config: Calculation configuration
+            rulepack: Pre-resolved rulepack used verbatim instead of
+                ``RulepackV0.from_config(config)`` — for amendment overlays and
+                tests that substitute a custom resolved pack (e.g. an overridden
+                floor entry). The EUR/GBP FX-sync still runs on ``config``; an
+                injected pack is not re-derived from the synced config.
 
         Returns:
             AggregatedResultBundle with all results and audit trail
@@ -243,9 +251,10 @@ class PipelineOrchestrator:
                     "run_id": run_id,
                 },
             )
-            # Keep eur_gbp_rate in step with the loaded fx_rates table so
-            # IRB SME correlation and RegulatoryThresholds use the same rate
-            # as FX amount conversion. CRR-only: B3.1 thresholds are GBP-native.
+            # Keep eur_gbp_rate in step with the loaded fx_rates table so the IRB
+            # SME correlation and the pack-derived regulatory thresholds (EUR
+            # bases × eur_gbp_rate, engine/thresholds.py) use the same rate as FX
+            # amount conversion. CRR-only: B3.1 thresholds are GBP-native.
             # Runs BEFORE components/rulepack are built — the fold sees one
             # immutable effective config per run.
             if config.is_crr and config.sync_eur_gbp_rate_from_fx_table:
@@ -271,7 +280,7 @@ class PipelineOrchestrator:
                 equity_calculator=self._equity_calculator,
                 output_aggregator=self._output_aggregator,
             )
-            rulepack = RulepackV0.from_config(config)
+            rulepack = rulepack if rulepack is not None else RulepackV0.from_config(config)
 
             # IRB mode without model_permissions → all exposures fall back to
             # SA. The classifier forces all permission expressions to False
@@ -360,6 +369,7 @@ class PipelineOrchestrator:
             _persist_audit_artifacts(
                 result,
                 config,
+                rulepack,
                 run_id=run_id,
                 started_at=started_at,
                 elapsed_ms=total_ms,
@@ -440,6 +450,7 @@ def create_test_pipeline() -> PipelineOrchestrator:
 def _persist_audit_artifacts(
     result: AggregatedResultBundle,
     config: CalculationConfig,
+    rulepack: RulepackV0,
     *,
     run_id: str,
     started_at: datetime,
@@ -451,6 +462,10 @@ def _persist_audit_artifacts(
     Mirrors the per-stage ``sink_audit`` calls in ``CRMProcessor`` so the
     final on-disk layout under ``<audit_cache_dir>/<run_id>/`` contains both
     CRM intermediates and the aggregator's pre/post-CRM summary views.
+
+    The manifest records the run's resolved rulepack snapshot (id, content
+    hash, and every cited entry) under its ``rulepack`` key — the audit trail
+    of exactly which regime data produced the result.
 
     Failures are logged at WARNING and swallowed — audit caching must never
     break a real run.
@@ -521,6 +536,11 @@ def _persist_audit_artifacts(
             },
             "artifacts": artifacts,
             "error_count": len(result.errors),
+            # The run's resolved regime data: id, content hash, and every
+            # cited entry (Phase 5 S12 — audit the rulepack that produced this
+            # result). Serialised via ``rulebook/audit.py`` (Decimal-as-string;
+            # no float boundary crossed here).
+            "rulepack": serialize_pack(rulepack.pack),
             # Every stage-edge collect of this run: label, rows, columns,
             # estimated bytes, wall ms, spill mode (migration Phase 1).
             "materialisation_map": [e.as_dict() for e in current_edge_events()],

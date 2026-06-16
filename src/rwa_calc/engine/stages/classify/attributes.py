@@ -40,26 +40,37 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.b31_risk_weights import (
-    B31_RETAIL_GRANULARITY_LIMIT,
-    B31_RRE_THREE_PROPERTY_LIMIT,
-)
-from rwa_calc.data.tables.entity_class_mapping import (
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
+
+# PRA PS1/26 Art. 124E(1)(b) three-property limit resolved from the b31 pack once
+# at module load (Basel-3.1-only; the consumer is gated on the
+# ``b31_art_124e_three_property_limit_applies`` Feature). Integer count compared
+# int-to-int against ``cp_qualifying_property_count`` (no float coercion).
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+_RRE_THREE_PROPERTY_LIMIT = _B31_PACK.int_param("b31_rre_three_property_limit").value
+# PRA PS1/26 Art. 123A(1)(b)(ii) single-obligor 0.2% retail-granularity cap
+# (Decimal, float()-ed at the call site below) — read direct from the b31 pack.
+_RETAIL_GRANULARITY_LIMIT = _B31_PACK.scalar("b31_retail_granularity_limit")
 
 
 # =========================================================================
@@ -212,6 +223,8 @@ def derive_independent_flags(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
     schema_names: set[str],
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Compute all flags that depend only on raw input columns.
@@ -244,7 +257,10 @@ def derive_independent_flags(
       ``pl.coalesce`` so the derivation cannot override an explicit
       user-supplied flag.
     """
-    max_retail_exposure = float(config.thresholds.retail_max_exposure)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    max_retail_exposure = float(
+        regulatory_threshold(resolved_pack, "retail_max_exposure", config.eur_gbp_rate)
+    )
 
     # SL override: exposures with sl_type (from specialised_lending join) get
     # SPECIALISED_LENDING class regardless of counterparty entity_type.
@@ -272,7 +288,7 @@ def derive_independent_flags(
     # residual OTHER class. The 150% high-risk treatment is re-introduced
     # under PRA PS1/26 Basel 3.1 (Art. 128), so the SA-class label is
     # preserved as HIGH_RISK in that regime.
-    if not config.is_basel_3_1:
+    if not resolved_pack.feature("b31_high_risk_class_applicable"):
         exposures = exposures.with_columns(
             pl.when(pl.col("_sa_class") == ExposureClass.HIGH_RISK.value)
             .then(pl.lit(ExposureClass.OTHER.value))
@@ -341,7 +357,7 @@ def derive_independent_flags(
             # ``is_adc`` value so an explicit user-supplied flag wins.
             _build_is_adc_expr(schema_names),
             # --- Retail threshold check + Art. 123A conditions (B31) ---
-            _build_qualifies_as_retail_expr(config, max_retail_exposure),
+            _build_qualifies_as_retail_expr(config, max_retail_exposure, pack=resolved_pack),
             pl.when(pl.col("residential_collateral_value") > 0)
             .then(pl.lit(True))
             .otherwise(pl.lit(False))
@@ -353,7 +369,7 @@ def derive_independent_flags(
     # residential exposures to the income-producing whole-loan track (Art. 124G)
     # when the borrower breaches the three-property limit. An explicit upstream
     # income flag still wins (coalesce precedence). CRR routing is untouched.
-    if config.is_basel_3_1:
+    if resolved_pack.feature("b31_art_124e_three_property_limit_applies"):
         exposures = exposures.with_columns(
             _build_has_income_cover_expr(),
         )
@@ -366,7 +382,9 @@ def derive_independent_flags(
 # =========================================================================
 
 
-def is_sme_by_size_expr(config: CalculationConfig) -> pl.Expr:
+def is_sme_by_size_expr(
+    config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.Expr:
     """
     Return an expression that flags a counterparty as SME-sized.
 
@@ -380,8 +398,13 @@ def is_sme_by_size_expr(config: CalculationConfig) -> pl.Expr:
     CRR Art. 501 supporting factor (Art. 501(2)(c)) is keyed on annual
     turnover only and is gated separately in sa/supporting_factors.py.
     """
-    turnover_threshold = float(config.thresholds.sme_turnover_threshold)
-    balance_sheet_threshold = float(config.thresholds.sme_balance_sheet_threshold)
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    turnover_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate)
+    )
+    balance_sheet_threshold = float(
+        regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
+    )
     metric = pl.col("sme_size_metric_gbp")
     source = pl.col("sme_size_source")
     turnover_branch = (source == "turnover") & (metric > 0) & (metric < turnover_threshold)
@@ -438,7 +461,7 @@ def _build_has_income_cover_expr() -> pl.Expr:
     residential treatment (Art. 124F loan-split / Art. 124L) to natural-person
     borrowers whose total residential RE exposure is secured on no more than
     three residential properties. When the count strictly exceeds three
-    (``cp_qualifying_property_count > B31_RRE_THREE_PROPERTY_LIMIT``), the
+    (``cp_qualifying_property_count > _RRE_THREE_PROPERTY_LIMIT``), the
     exposure is materially dependent on property cash flows (Art. 124E(2))
     and routes to the income-producing whole-loan track (Art. 124G).
 
@@ -456,7 +479,7 @@ def _build_has_income_cover_expr() -> pl.Expr:
     """
     is_natural_person = pl.col("cp_is_natural_person").fill_null(False)
     # Strict > 3: count=3 stays owner-occupied; count=4 re-routes (Art. 124E(1)(b)).
-    breaches_limit = pl.col("cp_qualifying_property_count") > B31_RRE_THREE_PROPERTY_LIMIT
+    breaches_limit = pl.col("cp_qualifying_property_count") > _RRE_THREE_PROPERTY_LIMIT
     materially_dependent = is_natural_person & breaches_limit
 
     explicit = pl.col("has_income_cover").fill_null(False)
@@ -517,6 +540,8 @@ def _build_is_mortgage_expr() -> pl.Expr:
 def _build_qualifies_as_retail_expr(
     config: CalculationConfig,
     max_retail_exposure: float,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.Expr:
     """Build qualifies_as_retail expression with Art. 123A enforcement.
 
@@ -543,7 +568,8 @@ def _build_qualifies_as_retail_expr(
     # check is a single comparison across both cases.
     threshold_fail = pl.col("lending_group_adjusted_exposure") > max_retail_exposure
 
-    if not config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("retail_art_123a_two_path_applicable"):
         # CRR: threshold check only
         return (
             pl.when(threshold_fail)
@@ -556,7 +582,7 @@ def _build_qualifies_as_retail_expr(
     # Art. 123A(1)(a): SME auto-qualification — counterparty meets the
     # Art. 4(1)(128D) SME size test (turnover < EUR 50m OR balance-sheet
     # total < EUR 43m when turnover null).
-    is_sme_for_art_123a = is_sme_by_size_expr(config)
+    is_sme_for_art_123a = is_sme_by_size_expr(config, pack=resolved_pack)
 
     # Art. 123A(1)(b)(ii) granularity limb (BCBS CRE20.66): no single obligor's
     # aggregate exposure may exceed 0.2% of the total regulatory-retail
@@ -564,7 +590,7 @@ def _build_qualifies_as_retail_expr(
     # population (``_sa_class``); the denominator counts each obligor once by
     # dividing the per-obligor aggregate (``lending_group_adjusted_exposure``)
     # by the obligor's line-count, masking non-retail rows to 0, then summing.
-    granularity_limit = float(B31_RETAIL_GRANULARITY_LIMIT)
+    granularity_limit = float(_RETAIL_GRANULARITY_LIMIT)
     is_retail_candidate = pl.col("_sa_class") == ExposureClass.RETAIL_OTHER.value
     obligor_agg = pl.col("lending_group_adjusted_exposure")
     # Guard the nullable ``counterparty_reference`` partition: a null key would

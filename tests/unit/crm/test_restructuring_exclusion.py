@@ -356,14 +356,3 @@ class TestNoGuaranteeRestructuringColumn:
         df = result.exposures.collect()
 
         assert df["guarantee_restructuring_haircut"][0] == pytest.approx(0.0, rel=1e-6)
-
-
-class TestRestructuringHaircutConstant:
-    """Verify the RESTRUCTURING_EXCLUSION_HAIRCUT constant value."""
-
-    def test_constant_value(self) -> None:
-        from decimal import Decimal
-
-        from rwa_calc.data.tables.haircuts import RESTRUCTURING_EXCLUSION_HAIRCUT
-
-        assert Decimal("0.40") == RESTRUCTURING_EXCLUSION_HAIRCUT

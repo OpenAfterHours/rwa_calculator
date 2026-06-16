@@ -37,8 +37,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from rwa_calc.data.tables.guarantor_rw import build_entity_rw_expr
 from rwa_calc.engine.ccf import sa_ccf_expression
+from rwa_calc.engine.sa.guarantor_rw import build_entity_rw_expr
 from rwa_calc.engine.stages.hierarchy.graph import (
     filter_mappings_by_child_type,
     resolve_to_root_facility,
@@ -807,7 +807,7 @@ def _derive_facility_share_counterparty(
     even when nothing has been drawn yet (the all-undrawn case).
 
     The risk-weight preview uses the shared
-    :func:`rwa_calc.data.tables.guarantor_rw.build_entity_rw_expr` builder
+    :func:`rwa_calc.engine.sa.guarantor_rw.build_entity_rw_expr` builder
     and is non-binding: the chosen counterparty still flows through the
     full classifier and SA/IRB pipeline downstream.
 
@@ -820,7 +820,7 @@ def _derive_facility_share_counterparty(
             ``country_code`` (when present) per candidate counterparty.
         root_lookup: Output of :func:`graph.build_facility_root_lookup`.
         is_basel_3_1: Framework switch passed to
-            :func:`rwa_calc.data.tables.guarantor_rw.build_entity_rw_expr`.
+            :func:`rwa_calc.engine.sa.guarantor_rw.build_entity_rw_expr`.
 
     Returns:
         LazyFrame with columns:

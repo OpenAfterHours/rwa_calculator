@@ -90,6 +90,22 @@ The script invokes `uv run watchfire matrix --format json` once per indexed inst
 
 `tests/contracts/test_watchfire_coverage.py` pins the inventory: each whitelisted function is asserted to carry the expected canonical citation tuple. Adding a new `@cites(...)` decorator means adding a row to that test's `WHITELIST`. Removing a decorator means removing the matching row. The test guards against accidental decorator deletion during refactors — the failure surfaces as a named parameterised assertion rather than a silent matrix shrink.
 
+## Pack-data citations
+
+`@cites` covers regulatory citations on engine **functions**. The Phase 5 rulepack adds a second citation surface: every entry in `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` (`ScalarParam`, `LookupTable`, `DecisionTable`, `Feature`, …) carries a `Citation` as **data**, not a decorator. After the Phase 5 table-move the pack is the regulatory value-home, so these citations must be as well-formed and index-covered as the engine's decorators.
+
+watchfire cannot ingest external (non-decorator) citations, so the project bridges to it:
+
+- **`rwa_calc.rulebook.audit.pack_citation_index(reporting_date)`** resolves both regimes and maps each distinct `str(citation)` to the entry names citing it — the pack-data analogue of watchfire's article → function matrix.
+- **`scripts/arch_check.py::check_pack_citations`** validates every pack citation with watchfire's own grammar/index (`parse_citation` + `index.covers`), using the **same fatal/soft policy** as the `@cites` check (`check_watchfire_citations`): parse failures, unknown instruments, and uncovered articles are fatal — watchfire is the oracle, the project owns the harness.
+- **`tests/contracts/test_pack_citation_coverage.py`** runs the same validation in the pytest suite and pins a density ratchet (the distinct-citation count may grow but never shrink).
+
+Two deliberate non-changes: `rulebook/packs/` is **not** added to `[tool.watchfire].source_paths` (the packs hold no `@cites` decorators — only `Citation` data), and there is **no** new `[tool.watchfire]` key (watchfire's config rejects unknown keys).
+
+Pack citations must therefore follow the canonical forms above. In particular, PS1/26 entries cite at **instrument level** (`PS1/26, paragraph 153`) with any sub-article detail in the `Citation.note` — the parenthesised CRR-style sub-article form (`paragraph 153(1)`) is not a valid watchfire paragraph id and will fail the gate.
+
+A small set of articles is legitimately outside watchfire's bundled credit-risk index and is recorded as a documented soft-warn in `PACK_CITATION_SOFT_ALLOWLIST` (e.g. `CRR Art. 128`, omitted from UK CRR by SI 2021/1078; `CRR Art. 274`, SA-CCR). New soft-allowlist entries require explicit regulatory justification.
+
 ## Strict gate
 
 `scripts/arch_check.py` invokes `watchfire.checks.run_check` as the final gate step. Parse failures, unknown instruments, unknown articles (any instrument), and version mismatches are fatal; only AST `unresolved` findings degrade to soft warnings. There is no soft-warning escape hatch for PS / PRA Rulebook citations — the 0.3.0 index covers PS1/26 with 4,498 rows, so any unresolved PS citation indicates a real typo rather than upstream sparsity.

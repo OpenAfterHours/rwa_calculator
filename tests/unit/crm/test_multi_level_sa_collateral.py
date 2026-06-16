@@ -60,7 +60,7 @@ def firb_config() -> CalculationConfig:
 
 @pytest.fixture
 def b31_processor() -> CRMProcessor:
-    return CRMProcessor(is_basel_3_1=True)
+    return CRMProcessor()
 
 
 @pytest.fixture

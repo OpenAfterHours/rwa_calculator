@@ -20,23 +20,29 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.sa_ccr_factors import (
-    SA_CCR_CDO_TRANCHE_COEFFICIENT,
-    SA_CCR_CDO_TRANCHE_NUMERATOR,
-    SA_CCR_OPTION_VOLATILITY_CREDIT_IDX,
-    SA_CCR_OPTION_VOLATILITY_CREDIT_SN,
-    SA_CCR_OPTION_VOLATILITY_EQUITY_IDX,
-    SA_CCR_OPTION_VOLATILITY_EQUITY_SN,
-    SA_CCR_OPTION_VOLATILITY_FX,
-    SA_CCR_OPTION_VOLATILITY_IR,
-)
 from rwa_calc.engine.irb.stats_backend import normal_cdf
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR supervisory option volatilities (CRR Art. 279a(2) / BCBS CRE52.47
+# Table 3) and the CDO tranche supervisory-delta coefficients (Art. 279a(3) /
+# CRE52.43), resolved from the rulepack once at module load.
+_PACK = resolve("crr", date(2026, 1, 1))
+_OPT_VOL_IR = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_ir"))
+_OPT_VOL_FX = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_fx"))
+_OPT_VOL_CREDIT_SN = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_credit_sn"))
+_OPT_VOL_CREDIT_IDX = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_credit_idx"))
+_OPT_VOL_EQUITY_SN = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_equity_sn"))
+_OPT_VOL_EQUITY_IDX = scalar_value(_PACK.scalar_param("sa_ccr_option_volatility_equity_idx"))
+_CDO_TRANCHE_NUMERATOR = scalar_value(_PACK.scalar_param("sa_ccr_cdo_tranche_numerator"))
+_CDO_TRANCHE_COEFFICIENT = scalar_value(_PACK.scalar_param("sa_ccr_cdo_tranche_coefficient"))
 
 
 # Map TRADE_SCHEMA ``asset_class`` strings to the supervisory option volatility
@@ -44,14 +50,14 @@ logger = logging.getLogger(__name__)
 # class (no single-name / index distinction); equity and credit default to the
 # index volatility (lower, matches the P8.13 OPT_003 expected value).
 _OPTION_VOLATILITY_BY_ASSET_CLASS: dict[str, float] = {
-    "interest_rate": float(SA_CCR_OPTION_VOLATILITY_IR),
-    "fx": float(SA_CCR_OPTION_VOLATILITY_FX),
-    "credit": float(SA_CCR_OPTION_VOLATILITY_CREDIT_IDX),
-    "credit_sn": float(SA_CCR_OPTION_VOLATILITY_CREDIT_SN),
-    "credit_idx": float(SA_CCR_OPTION_VOLATILITY_CREDIT_IDX),
-    "equity": float(SA_CCR_OPTION_VOLATILITY_EQUITY_IDX),
-    "equity_sn": float(SA_CCR_OPTION_VOLATILITY_EQUITY_SN),
-    "equity_idx": float(SA_CCR_OPTION_VOLATILITY_EQUITY_IDX),
+    "interest_rate": _OPT_VOL_IR,
+    "fx": _OPT_VOL_FX,
+    "credit": _OPT_VOL_CREDIT_IDX,
+    "credit_sn": _OPT_VOL_CREDIT_SN,
+    "credit_idx": _OPT_VOL_CREDIT_IDX,
+    "equity": _OPT_VOL_EQUITY_IDX,
+    "equity_sn": _OPT_VOL_EQUITY_SN,
+    "equity_idx": _OPT_VOL_EQUITY_IDX,
 }
 
 
@@ -208,8 +214,8 @@ def compute_supervisory_delta_cdo_tranche(trades: pl.LazyFrame) -> pl.LazyFrame:
     a = pl.col("cdo_attachment")
     d = pl.col("cdo_detachment")
 
-    numerator = float(SA_CCR_CDO_TRANCHE_NUMERATOR)
-    coefficient = float(SA_CCR_CDO_TRANCHE_COEFFICIENT)
+    numerator = _CDO_TRANCHE_NUMERATOR
+    coefficient = _CDO_TRANCHE_COEFFICIENT
 
     magnitude = numerator / ((1.0 + coefficient * a) * (1.0 + coefficient * d))
 

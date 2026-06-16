@@ -30,7 +30,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_risk_weights import (
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_CRE_INCOME_JUNIOR_RW_HIGH,
     B31_CRE_INCOME_JUNIOR_RW_LOW,
     B31_CRE_INCOME_JUNIOR_RW_MID,

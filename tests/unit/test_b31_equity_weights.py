@@ -21,17 +21,19 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_equity_rw import (
-    B31_SA_EQUITY_RISK_WEIGHTS,
-    get_b31_equity_risk_weights,
-    get_b31_equity_rw_table,
-    lookup_b31_equity_rw,
-)
 from rwa_calc.domain.enums import EquityType, PermissionMode
 from rwa_calc.engine.equity import EquityCalculator
+from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.resolved_bundle import make_crm_bundle
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 from tests.unit._equity_test_helpers import apply_b31_equity_weight_sa
+
+# Basel 3.1 SA equity risk weights, sourced from the rulepack (the
+# data/tables/b31_equity_rw module was retired in Phase 5 S12-06b). Enum
+# (EquityType)-keyed Decimal map.
+B31_SA_EQUITY_RISK_WEIGHTS = (
+    resolve("b31", date(2027, 1, 1)).lookup("equity_sa_risk_weights").entries
+)
 
 # =============================================================================
 # Data Table Tests
@@ -77,35 +79,6 @@ class TestB31EquityRiskWeightTable:
         """All EquityType members should have a B31 weight."""
         for equity_type in EquityType:
             assert equity_type in B31_SA_EQUITY_RISK_WEIGHTS
-
-
-class TestB31EquityLookup:
-    """Tests for B31 equity risk weight lookup functions."""
-
-    def test_lookup_listed(self) -> None:
-        """Lookup by string should return correct B31 weight."""
-        assert lookup_b31_equity_rw("listed") == Decimal("2.50")
-
-    def test_lookup_speculative(self) -> None:
-        """Lookup speculative should return 400%."""
-        assert lookup_b31_equity_rw("speculative") == Decimal("4.00")
-
-    def test_lookup_unknown_defaults_to_other(self) -> None:
-        """Unknown equity type should default to OTHER = 250%."""
-        assert lookup_b31_equity_rw("unknown_type") == Decimal("2.50")
-
-    def test_get_b31_equity_risk_weights_returns_copy(self) -> None:
-        """get_b31_equity_risk_weights should return a copy, not original."""
-        weights = get_b31_equity_risk_weights()
-        weights[EquityType.LISTED] = Decimal("9.99")
-        assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.LISTED] == Decimal("2.50")
-
-    def test_dataframe_table_has_all_types(self) -> None:
-        """DataFrame table should have one row per equity type."""
-        df = get_b31_equity_rw_table()
-        assert len(df) == len(EquityType)
-        assert "equity_type" in df.columns
-        assert "risk_weight" in df.columns
 
 
 # =============================================================================

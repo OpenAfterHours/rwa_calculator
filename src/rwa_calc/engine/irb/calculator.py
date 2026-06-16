@@ -45,9 +45,11 @@ from rwa_calc.engine.irb.transforms import (
     prepare_columns,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,7 @@ class IRBCalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.
@@ -87,11 +90,15 @@ class IRBCalculator:
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
                 (SF001 SME aggregation, EL shortfall/excess diagnostics)
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — the
+                source of regulatory values, e.g. the IRB scaling factor).
+                Production threads the orchestrator's pack; direct callers may
+                omit it, in which case the chain resolves one from ``config``.
 
         Returns:
             LazyFrame with IRB RWA columns populated
         """
-        return self._run_irb_chain(exposures, config, sf_errors=errors)
+        return self._run_irb_chain(exposures, config, sf_errors=errors, pack=pack)
 
     def _run_irb_chain(
         self,
@@ -99,18 +106,22 @@ class IRBCalculator:
         config: CalculationConfig,
         *,
         sf_errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Run the full IRB transform chain plus supporting factors."""
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         exposures = (
             exposures.pipe(classify_approach, config)
-            .pipe(apply_firb_lgd, config)
-            .pipe(prepare_columns, config)
-            .pipe(apply_all_formulas, config)
-            .pipe(apply_post_model_adjustments, config)
+            .pipe(apply_firb_lgd, config, pack=resolved_pack)
+            .pipe(prepare_columns, config, pack=resolved_pack)
+            .pipe(apply_all_formulas, config, pack=resolved_pack)
+            .pipe(apply_post_model_adjustments, config, pack=resolved_pack)
             .pipe(compute_el_shortfall_excess, errors=sf_errors)
-            .pipe(apply_guarantee_substitution, config)
+            .pipe(apply_guarantee_substitution, config, pack=resolved_pack)
         )
-        exposures = self._apply_supporting_factors(exposures, config, errors=sf_errors)
+        exposures = self._apply_supporting_factors(
+            exposures, config, errors=sf_errors, pack=resolved_pack
+        )
 
         # Standardize output for aggregator
         return exposures.with_columns(
@@ -125,6 +136,7 @@ class IRBCalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SME and infrastructure supporting factors (CRR Art. 501).
@@ -135,7 +147,8 @@ class IRBCalculator:
 
         Under Basel 3.1, supporting factors are not available.
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             # Basel 3.1 or supporting factors disabled - no adjustment
             return exposures.with_columns(
                 [
@@ -153,7 +166,7 @@ class IRBCalculator:
 
         # Use the SA supporting factor calculator
         sf_calc = SupportingFactorCalculator()
-        exposures = sf_calc.apply_factors(exposures, config, errors=errors)
+        exposures = sf_calc.apply_factors(exposures, config, errors=errors, pack=resolved_pack)
 
         # Rename rwa_post_factor back to rwa for consistency
         if "rwa_post_factor" in exposures.collect_schema().names():

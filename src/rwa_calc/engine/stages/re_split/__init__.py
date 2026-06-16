@@ -17,9 +17,9 @@ Layout:
   splitter
 
 ``rwa_calc.engine.re_splitter`` remains as a thin back-compat shim
-re-exporting ``RealEstateSplitter`` from here. Split parameters stay in
-the data layer (``data/tables/re_split_parameters.py`` — arch_check
-check 5).
+re-exporting ``RealEstateSplitter`` from here. Split parameters live in
+``params.py``, resolving their LTV caps from the rulepack
+(``re_split_{rre,cre}_secured_ltv_cap`` in packs/{crr,b31}.py).
 
 References:
 - CRR Art. 124-126: RRE / CRE preferential treatment and partial security

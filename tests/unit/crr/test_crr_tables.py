@@ -8,42 +8,13 @@ Tests verify:
 - Edge cases are handled correctly
 """
 
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    CORPORATE_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
-    INSTITUTION_RISK_WEIGHTS_CRR,
-    RESIDENTIAL_MORTGAGE_PARAMS,
-    RETAIL_RISK_WEIGHT,
-    calculate_commercial_re_rw,
-    calculate_residential_mortgage_rw,
-    get_all_risk_weight_tables,
-    get_combined_cqs_risk_weights,
-    lookup_risk_weight,
-)
-from rwa_calc.data.tables.crr_slotting import (
-    SLOTTING_RISK_WEIGHTS,
-    SLOTTING_RISK_WEIGHTS_HVCRE,
-    SLOTTING_RISK_WEIGHTS_HVCRE_SHORT,
-    SLOTTING_RISK_WEIGHTS_SHORT,
-    calculate_slotting_rwa,
-    lookup_slotting_rw,
-)
-from rwa_calc.data.tables.firb_lgd import (
-    CRR_MATURITY_CAP,
-    CRR_MATURITY_FLOOR,
-    CRR_PD_FLOOR,
-    FIRB_SUPERVISORY_LGD,
-    apply_maturity_bounds,
-    apply_pd_floor,
-    get_firb_lgd_table,
-    lookup_firb_lgd,
-)
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.domain.enums import CQS, SlottingCategory
+from rwa_calc.engine.crm.haircut_tables import (
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
     calculate_adjusted_collateral_value,
@@ -51,7 +22,25 @@ from rwa_calc.data.tables.haircuts import (
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
-from rwa_calc.domain.enums import CQS, SlottingCategory
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
+    RESIDENTIAL_MORTGAGE_PARAMS,
+    calculate_commercial_re_rw,
+    calculate_residential_mortgage_rw,
+    get_all_risk_weight_tables,
+    get_combined_cqs_risk_weights,
+    lookup_risk_weight,
+)
+from rwa_calc.rulebook.resolve import resolve
+
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+SLOTTING_RISK_WEIGHTS = _CRR_PACK.lookup("slotting_rw_base").entries
+SLOTTING_RISK_WEIGHTS_HVCRE = _CRR_PACK.lookup("slotting_rw_hvcre").entries
+SLOTTING_RISK_WEIGHTS_HVCRE_SHORT = _CRR_PACK.lookup("slotting_rw_hvcre_short").entries
+SLOTTING_RISK_WEIGHTS_SHORT = _CRR_PACK.lookup("slotting_rw_short").entries
 
 # =============================================================================
 # RISK WEIGHT TABLE TESTS
@@ -146,7 +135,7 @@ class TestRetailRiskWeight:
 
     def test_retail_seventy_five_percent(self) -> None:
         """Retail exposures get 75% RW."""
-        assert Decimal("0.75") == RETAIL_RISK_WEIGHT
+        assert Decimal("0.75") == _CRR_PACK.scalar_param("retail_risk_weight").value
 
     def test_lookup_function(self) -> None:
         """Test lookup_risk_weight for retail."""
@@ -421,191 +410,3 @@ class TestSlottingShortMaturityWeights:
     def test_hvcre_short_satisfactory_one_forty(self) -> None:
         """Satisfactory <2.5yr HVCRE gets 140% RW."""
         assert SLOTTING_RISK_WEIGHTS_HVCRE_SHORT[SlottingCategory.SATISFACTORY] == Decimal("1.40")
-
-    def test_short_maturity_lookup(self) -> None:
-        """Test lookup function with short maturity flag.
-
-        P1.177 / CRR Art. 153(5): UK CRR ignores is_hvcre — all SL uses Table 1.
-        HVCRE Strong <2.5yr = Table 1 Short Strong = 50% (not EU Table 2's 70%).
-        """
-        assert lookup_slotting_rw("strong", is_short_maturity=True) == Decimal("0.50")
-        # UK CRR: is_hvcre=True still routes through Table 1 short-maturity
-        assert lookup_slotting_rw("strong", is_hvcre=True, is_short_maturity=True) == Decimal(
-            "0.50"
-        )
-
-
-class TestSlottingLookup:
-    """Tests for slotting lookup functions."""
-
-    def test_lookup_by_string(self) -> None:
-        """Test lookup with string category."""
-        assert lookup_slotting_rw("strong") == Decimal("0.70")
-        assert lookup_slotting_rw("weak") == Decimal("2.50")
-
-    def test_lookup_by_enum(self) -> None:
-        """Test lookup with enum category."""
-        assert lookup_slotting_rw(SlottingCategory.STRONG) == Decimal("0.70")
-
-    def test_rwa_calculation(self) -> None:
-        """Test slotting RWA calculation."""
-        rwa, rw, _ = calculate_slotting_rwa(Decimal("10000000"), "strong")
-        assert rw == Decimal("0.70")
-        assert rwa == Decimal("7000000")
-
-
-# =============================================================================
-# F-IRB LGD TABLE TESTS
-# =============================================================================
-
-
-class TestFIRBSupervisoryLGD:
-    """Tests for F-IRB supervisory LGD (CRR Art. 161)."""
-
-    def test_unsecured_senior_forty_five(self) -> None:
-        """Unsecured senior claims have 45% LGD."""
-        assert FIRB_SUPERVISORY_LGD["unsecured_senior"] == Decimal("0.45")
-
-    def test_subordinated_seventy_five(self) -> None:
-        """Subordinated claims have 75% LGD."""
-        assert FIRB_SUPERVISORY_LGD["subordinated"] == Decimal("0.75")
-
-    def test_financial_collateral_zero(self) -> None:
-        """Financial collateral has 0% LGD (after haircuts)."""
-        assert FIRB_SUPERVISORY_LGD["financial_collateral"] == Decimal("0.00")
-
-    def test_receivables_thirty_five(self) -> None:
-        """Receivables collateral has 35% LGD."""
-        assert FIRB_SUPERVISORY_LGD["receivables"] == Decimal("0.35")
-
-    def test_real_estate_thirty_five(self) -> None:
-        """Real estate collateral has 35% LGD."""
-        assert FIRB_SUPERVISORY_LGD["residential_re"] == Decimal("0.35")
-        assert FIRB_SUPERVISORY_LGD["commercial_re"] == Decimal("0.35")
-
-    def test_other_physical_forty(self) -> None:
-        """Other physical collateral has 40% LGD."""
-        assert FIRB_SUPERVISORY_LGD["other_physical"] == Decimal("0.40")
-
-
-class TestFIRBLGDLookup:
-    """Tests for F-IRB LGD lookup functions."""
-
-    def test_unsecured_lookup(self) -> None:
-        """Test unsecured LGD lookup."""
-        assert lookup_firb_lgd(None) == Decimal("0.45")
-
-    def test_subordinated_lookup(self) -> None:
-        """Test subordinated LGD lookup."""
-        assert lookup_firb_lgd(None, is_subordinated=True) == Decimal("0.75")
-
-    def test_cash_collateral_lookup(self) -> None:
-        """Test cash collateral LGD lookup."""
-        assert lookup_firb_lgd("cash") == Decimal("0.00")
-
-    def test_real_estate_lookup(self) -> None:
-        """Test real estate LGD lookup."""
-        assert lookup_firb_lgd("residential_re") == Decimal("0.35")
-
-
-class TestFIRBSubordinatedLGDS:
-    """Tests for CRR Art. 230 Table 5 subordinated LGDS values.
-
-    When a subordinated exposure is secured by eligible collateral, the secured
-    portion uses higher LGDS values per Art. 230 Table 5 subordinated column.
-    This is distinct from Art. 161(1)(b) subordinated unsecured LGD of 75%.
-    """
-
-    def test_subordinated_receivables_lgds_65pct(self) -> None:
-        """CRR Art. 230 Table 5: subordinated receivables LGDS = 65%."""
-        assert FIRB_SUPERVISORY_LGD["receivables_subordinated"] == Decimal("0.65")
-
-    def test_subordinated_residential_re_lgds_65pct(self) -> None:
-        """CRR Art. 230 Table 5: subordinated residential RE LGDS = 65%."""
-        assert FIRB_SUPERVISORY_LGD["residential_re_subordinated"] == Decimal("0.65")
-
-    def test_subordinated_commercial_re_lgds_65pct(self) -> None:
-        """CRR Art. 230 Table 5: subordinated commercial RE LGDS = 65%."""
-        assert FIRB_SUPERVISORY_LGD["commercial_re_subordinated"] == Decimal("0.65")
-
-    def test_subordinated_other_physical_lgds_70pct(self) -> None:
-        """CRR Art. 230 Table 5: subordinated other physical LGDS = 70%."""
-        assert FIRB_SUPERVISORY_LGD["other_physical_subordinated"] == Decimal("0.70")
-
-    def test_subordinated_financial_lgds_zero(self) -> None:
-        """CRR Art. 230 Table 5: subordinated financial collateral LGDS = 0%."""
-        assert FIRB_SUPERVISORY_LGD["financial_collateral_subordinated"] == Decimal("0.00")
-
-    def test_lookup_subordinated_receivables(self) -> None:
-        """lookup_firb_lgd returns 65% for subordinated receivables under CRR."""
-        result = lookup_firb_lgd("receivables", is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.65")
-
-    def test_lookup_subordinated_real_estate(self) -> None:
-        """lookup_firb_lgd returns 65% for subordinated RE under CRR."""
-        result = lookup_firb_lgd("residential_re", is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.65")
-
-    def test_lookup_subordinated_commercial_re(self) -> None:
-        """lookup_firb_lgd returns 65% for subordinated commercial RE under CRR."""
-        result = lookup_firb_lgd("commercial_re", is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.65")
-
-    def test_lookup_subordinated_other_physical(self) -> None:
-        """lookup_firb_lgd returns 70% for subordinated other physical under CRR."""
-        result = lookup_firb_lgd("other_physical", is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.70")
-
-    def test_lookup_subordinated_financial(self) -> None:
-        """lookup_firb_lgd returns 0% for subordinated financial under CRR."""
-        result = lookup_firb_lgd("cash", is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.00")
-
-    def test_lookup_subordinated_unsecured_still_75pct(self) -> None:
-        """lookup_firb_lgd returns 75% for subordinated unsecured (no collateral)."""
-        result = lookup_firb_lgd(None, is_subordinated=True, is_basel_3_1=False)
-        assert result == Decimal("0.75")
-
-    def test_b31_subordinated_collateral_ignores_sub_lgds(self) -> None:
-        """Basel 3.1 Art. 230(2) removes subordinated LGDS column — uses senior LGDS."""
-        result = lookup_firb_lgd("receivables", is_subordinated=True, is_basel_3_1=True)
-        # B31 receivables LGDS = 20% (no sub distinction)
-        assert result == Decimal("0.20")
-
-
-class TestIRBParameterFloors:
-    """Tests for IRB parameter floors and caps."""
-
-    def test_pd_floor(self) -> None:
-        """PD floor is 0.03%."""
-        assert Decimal("0.0003") == CRR_PD_FLOOR
-
-    def test_maturity_floor(self) -> None:
-        """Maturity floor is 1 year."""
-        assert Decimal("1.0") == CRR_MATURITY_FLOOR
-
-    def test_maturity_cap(self) -> None:
-        """Maturity cap is 5 years."""
-        assert Decimal("5.0") == CRR_MATURITY_CAP
-
-    def test_apply_pd_floor(self) -> None:
-        """Test PD floor application."""
-        assert apply_pd_floor(Decimal("0.0001")) == Decimal("0.0003")
-        assert apply_pd_floor(Decimal("0.01")) == Decimal("0.01")
-
-    def test_apply_maturity_bounds(self) -> None:
-        """Test maturity bounds application."""
-        assert apply_maturity_bounds(Decimal("0.5")) == Decimal("1.0")
-        assert apply_maturity_bounds(Decimal("3.0")) == Decimal("3.0")
-        assert apply_maturity_bounds(Decimal("7.0")) == Decimal("5.0")
-
-
-class TestFIRBDataFrame:
-    """Tests for F-IRB LGD DataFrame generation."""
-
-    def test_table_has_expected_columns(self) -> None:
-        """Table has expected schema."""
-        df = get_firb_lgd_table()
-        assert "collateral_type" in df.columns
-        assert "seniority" in df.columns
-        assert "lgd" in df.columns

@@ -45,12 +45,12 @@ from rwa_calc.engine.crm.processor import CRMProcessor
 
 @pytest.fixture
 def crr_processor() -> CRMProcessor:
-    return CRMProcessor(is_basel_3_1=False)
+    return CRMProcessor()
 
 
 @pytest.fixture
 def b31_processor() -> CRMProcessor:
-    return CRMProcessor(is_basel_3_1=True)
+    return CRMProcessor()
 
 
 @pytest.fixture

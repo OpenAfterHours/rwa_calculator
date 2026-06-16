@@ -172,7 +172,7 @@ def _build_p1160_crm_and_irb_result(
         Collected DataFrame with IRB guarantee substitution results.
     """
     config = _b31_config()
-    processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+    processor = CRMProcessor()
 
     exposures = pl.LazyFrame(
         {

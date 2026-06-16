@@ -112,11 +112,12 @@ from rwa_calc.contracts.errors import (
     CalculationError,
     re_split_warning,
 )
-from rwa_calc.data.tables.re_split_parameters import (
+from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.stages.re_split.params import (
     SplitParameters,
     re_split_parameters,
 )
-from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.rulebook import RulepackV0
 
 _SA_BOUND_APPROACHES: tuple[str, ...] = (ApproachType.SA.value, ApproachType.EQUITY.value)
 
@@ -155,6 +156,7 @@ _COMPONENT_META: dict[str, _ComponentMeta] = {
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -173,12 +175,21 @@ class RealEstateSplitter:
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """Apply RE loan-splitting to candidate rows.
 
         See module docstring for the regime-specific decision matrix.
         """
-        params = re_split_parameters(is_basel_3_1=config.is_basel_3_1)
+        # S9g: the RE-split regime gate reads the cited pack Feature; the split
+        # parameter VALUES (LTV caps / RW) stay in data/tables/re_split_parameters.py,
+        # and re_split_parameters / _split_unified_frame keep their is_basel_3_1 bool
+        # plumbing params (Option B). One read feeds both the params lookup and the
+        # allocation control flow.
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        is_b31 = resolved_pack.feature("sa_re_split_revised_parameters")
+        params = re_split_parameters(is_basel_3_1=is_b31)
         rrep = params["residential"]
         crep = params["commercial"]
 
@@ -186,7 +197,7 @@ class RealEstateSplitter:
             data.exposures,
             rrep=rrep,
             crep=crep,
-            is_basel_3_1=config.is_basel_3_1,
+            is_basel_3_1=is_b31,
         )
 
         # Producer seal (Phase 3): pure plan-level conform + brand — the

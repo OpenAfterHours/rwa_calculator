@@ -25,6 +25,14 @@ from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.contracts.errors import ERROR_SME_MISSING_COUNTERPARTY_REF, CalculationError
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
+from rwa_calc.engine.thresholds import regulatory_threshold
+from rwa_calc.rulebook import RulepackV0
+
+
+def _sme_exposure_threshold_gbp(config: CalculationConfig) -> float:
+    """CRR Art. 501 SME tiered-factor exposure threshold (GBP) from the rulepack."""
+    pack = RulepackV0.from_config(config).pack
+    return float(regulatory_threshold(pack, "sme_exposure_threshold", config.eur_gbp_rate))
 
 
 @pytest.fixture()
@@ -337,7 +345,7 @@ class TestDrawnOnlyTierWeighting:
         E2: 2m drawn, 2m ead (fully drawn)
         Total drawn = 4m → blended factor based on 4m, NOT 5m.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -398,7 +406,7 @@ class TestDrawnOnlyTierWeighting:
         drawn_amount + interest = on-balance-sheet total for tiering.
         2m drawn + 0.2m interest = 2.2m → near threshold.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -456,7 +464,7 @@ class TestDrawnOnlyTierWeighting:
         Edge case: drawn > ead (possible after collateral deductions).
         Tier should still be based on drawn amount.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -601,7 +609,7 @@ class TestMissingCounterpartyReferenceWarning:
         The per-exposure fallback produces an incorrectly low factor because
         it doesn't see the counterparty aggregate exceeding the threshold.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         # WITH counterparty reference — correct aggregation
         exposures_with_cp = _make_exposures(
@@ -683,7 +691,7 @@ class TestLendingGroupAggregation:
         and would get pure Tier 1. With Art. 501 group aggregation, E* = 3m
         and both rows get the blended factor.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -728,7 +736,7 @@ class TestLendingGroupAggregation:
         Lending group column present but null — fallback to counterparty
         aggregation preserves prior behaviour.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -760,7 +768,7 @@ class TestLendingGroupAggregation:
         Aggregate E* = 3m → blended factor on all three. Regression test for
         the gap where counterparty-only aggregation would give 0.7619 each.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -815,7 +823,7 @@ class TestLendingGroupAggregation:
         reading). The SF is then applied only to the SME-flagged row; the
         non-SME row gets factor=1.0.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -909,7 +917,7 @@ class TestLendingGroupAggregation:
         counterparty fallback path runs cleanly and no SF001 warning is
         emitted (because counterparty_reference IS present).
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [
@@ -1033,7 +1041,7 @@ class TestResidentialCollateralNettedFromEStar:
         the EUR 2.5m threshold (~£2.18m at 0.8732 FX). The group sum
         crosses the threshold despite either row being below it alone.
         """
-        threshold_gbp = float(crr_config.thresholds.sme_exposure_threshold)
+        threshold_gbp = _sme_exposure_threshold_gbp(crr_config)
 
         exposures = _make_exposures(
             [

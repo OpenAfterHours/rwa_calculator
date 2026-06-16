@@ -17,7 +17,7 @@ The authoritative dict for each DataFrame:
 | crr._create_rgla_df                       | RGLA_RISK_WEIGHTS_OWN_RATING                          |
 | crr._create_mdb_df                        | MDB_RISK_WEIGHTS_TABLE_2B                             |
 | crr._create_corporate_df                  | CORPORATE_RISK_WEIGHTS                                |
-| crr._create_retail_df                     | RETAIL_RISK_WEIGHT                                    |
+| crr._create_retail_df                     | common pack retail_risk_weight                       |
 | crr._create_residential_mortgage_df       | RESIDENTIAL_MORTGAGE_PARAMS                           |
 | crr._create_commercial_re_df              | COMMERCIAL_RE_PARAMS                                  |
 | crr._create_covered_bond_df               | COVERED_BOND_RISK_WEIGHTS                             |
@@ -25,20 +25,24 @@ The authoritative dict for each DataFrame:
 | b31._create_b31_covered_bond_df           | B31_COVERED_BOND_RISK_WEIGHTS                         |
 | haircuts._create_crr_haircut_df           | COLLATERAL_HAIRCUTS                                   |
 | haircuts._create_basel31_haircut_df       | BASEL31_COLLATERAL_HAIRCUTS                           |
-| firb_lgd._create_firb_lgd_df              | FIRB_SUPERVISORY_LGD + OC ratios + min thresholds     |
-| firb_lgd._create_b31_firb_lgd_df          | BASEL31_FIRB_SUPERVISORY_LGD + OC ratios + thresholds |
 """
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from rwa_calc.data.tables import b31_risk_weights as b31
-from rwa_calc.data.tables import crr_risk_weights as crr
-from rwa_calc.data.tables import firb_lgd, haircuts
 from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.crm import haircut_tables as haircuts
+from rwa_calc.engine.sa import b31_risk_weight_tables as b31
+from rwa_calc.engine.sa import crr_risk_weight_tables as crr
+from rwa_calc.rulebook.resolve import resolve
+
+# Retail RW (CRR Art. 123) now lives in the common rulepack pack; the retail-df
+# parity check reads it back to confirm _create_retail_df tracks the pack value.
+_RETAIL_RW = resolve("crr", date(2026, 1, 1)).scalar_param("retail_risk_weight").value
 
 # =============================================================================
 # CQS-based risk-weight DataFrames (crr_risk_weights.py)
@@ -91,7 +95,7 @@ def test_cqs_dataframe_matches_source_dict(name, df, source_dict, exposure_class
 def test_retail_df_matches_constant():
     df = crr._create_retail_df()
     assert df.shape == (1, 3)
-    assert df["risk_weight"][0] == pytest.approx(float(crr.RETAIL_RISK_WEIGHT))
+    assert df["risk_weight"][0] == pytest.approx(float(_RETAIL_RW))
 
 
 def test_residential_mortgage_df_matches_params():
@@ -173,63 +177,3 @@ def test_haircut_dataframe_matches_source_dict(name, df, specs, source_dict):
             f"{name}: row {spec} — DataFrame haircut {row['haircut']} != "
             f"source dict value {expected}"
         )
-
-
-# =============================================================================
-# F-IRB supervisory LGD DataFrames (firb_lgd.py)
-# =============================================================================
-
-
-def test_firb_lgd_df_matches_source_dicts():
-    """CRR F-IRB rows draw LGD, OC ratio, and min threshold from dicts."""
-    df = firb_lgd._create_firb_lgd_df()
-    specs = firb_lgd._CRR_FIRB_ROW_SPECS
-    rows = df.to_dicts()
-    assert len(rows) == len(specs)
-    for row, spec in zip(rows, specs, strict=True):
-        coll_type, seniority, lgd_key, oc_key, description = spec
-        assert row["collateral_type"] == coll_type
-        assert row["seniority"] == seniority
-        assert row["description"] == description
-        assert row["lgd"] == pytest.approx(float(firb_lgd.FIRB_SUPERVISORY_LGD[lgd_key]))
-        assert row["overcollateralisation_ratio"] == pytest.approx(
-            firb_lgd.FIRB_OVERCOLLATERALISATION_RATIOS[oc_key]
-        )
-        assert row["min_threshold"] == pytest.approx(
-            firb_lgd.FIRB_MIN_COLLATERALISATION_THRESHOLDS[oc_key]
-        )
-
-
-def test_b31_firb_lgd_df_matches_source_dicts():
-    """Basel 3.1 F-IRB rows draw LGD, OC ratio, and min threshold from dicts."""
-    df = firb_lgd._create_b31_firb_lgd_df()
-    specs = firb_lgd._B31_FIRB_ROW_SPECS
-    rows = df.to_dicts()
-    assert len(rows) == len(specs)
-    for row, spec in zip(rows, specs, strict=True):
-        coll_type, seniority, is_fse, lgd_key, oc_key, description = spec
-        assert row["collateral_type"] == coll_type
-        assert row["seniority"] == seniority
-        assert row["is_fse"] == is_fse
-        assert row["description"] == description
-        assert row["lgd"] == pytest.approx(float(firb_lgd.BASEL31_FIRB_SUPERVISORY_LGD[lgd_key]))
-        assert row["overcollateralisation_ratio"] == pytest.approx(
-            firb_lgd.FIRB_OVERCOLLATERALISATION_RATIOS[oc_key]
-        )
-        assert row["min_threshold"] == pytest.approx(
-            firb_lgd.FIRB_MIN_COLLATERALISATION_THRESHOLDS[oc_key]
-        )
-
-
-def test_b31_firb_scalar_aliases_match_dict():
-    """B31_FIRB_LGD_* scalars must equal their corresponding dict entry."""
-    d = firb_lgd.BASEL31_FIRB_SUPERVISORY_LGD
-    assert d["unsecured_senior"] == firb_lgd.B31_FIRB_LGD_UNSECURED_SENIOR
-    assert d["unsecured_senior_fse"] == firb_lgd.B31_FIRB_LGD_UNSECURED_SENIOR_FSE
-    assert d["subordinated"] == firb_lgd.B31_FIRB_LGD_SUBORDINATED
-    assert d["covered_bond"] == firb_lgd.B31_FIRB_LGD_COVERED_BOND
-    assert d["financial_collateral"] == firb_lgd.B31_FIRB_LGD_FINANCIAL_COLLATERAL
-    assert d["receivables"] == firb_lgd.B31_FIRB_LGD_RECEIVABLES
-    assert d["residential_re"] == firb_lgd.B31_FIRB_LGD_RESIDENTIAL_RE
-    assert d["commercial_re"] == firb_lgd.B31_FIRB_LGD_COMMERCIAL_RE
-    assert d["other_physical"] == firb_lgd.B31_FIRB_LGD_OTHER_PHYSICAL

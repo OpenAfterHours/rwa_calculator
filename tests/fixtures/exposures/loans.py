@@ -20,16 +20,17 @@ Usage:
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
 
-from rwa_calc.contracts.config import RegulatoryThresholds
 from rwa_calc.data.column_spec import dtypes_of
 from rwa_calc.data.schemas import LOAN_SCHEMA
 
-# SME exposure threshold in GBP (derived from EUR 2.5m using FX rate)
-SME_EXPOSURE_THRESHOLD_GBP = float(RegulatoryThresholds.crr().sme_exposure_threshold)
+# SME exposure threshold in GBP (CRR Art. 501: EUR 2.5m × the default 0.8732 FX
+# rate; the engine's source of truth is the rulepack regulatory_thresholds bundle).
+SME_EXPOSURE_THRESHOLD_GBP = float(Decimal("2500000") * Decimal("0.8732"))
 
 
 def main() -> None:

@@ -38,8 +38,14 @@ import polars as pl
 import pytest
 
 from rwa_calc.data.schemas import ZERO_HAIRCUT_ELIGIBLE_TYPES
-from rwa_calc.data.tables.crm_supervisory import ZERO_HAIRCUT_MAX_SOVEREIGN_CQS
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.rulebook.resolve import resolve
+
+# Art. 227(2)(a) zero-haircut sovereign-CQS cap — resolved from the rulepack
+# (relocated from data/tables in S13-c). Regime-invariant (CRR -> PS1/26).
+ZERO_HAIRCUT_MAX_SOVEREIGN_CQS = (
+    resolve("crr", date(2026, 1, 1)).int_param("zero_haircut_max_sovereign_cqs").value
+)
 
 # =============================================================================
 # Constants
@@ -81,15 +87,16 @@ class TestSingleItemArt227:
 
     @pytest.fixture
     def crr_calc(self) -> HaircutCalculator:
-        return HaircutCalculator(is_basel_3_1=False)
+        return HaircutCalculator()
 
     @pytest.fixture
     def b31_calc(self) -> HaircutCalculator:
-        return HaircutCalculator(is_basel_3_1=True)
+        return HaircutCalculator()
 
     def test_cash_zero_haircut(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: cash in qualifying repo gets 0% haircut + 0% FX."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -104,6 +111,7 @@ class TestSingleItemArt227:
     def test_deposit_zero_haircut(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: deposit in qualifying repo gets 0% haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="deposit",
             market_value=Decimal("500000"),
             collateral_currency="GBP",
@@ -116,6 +124,7 @@ class TestSingleItemArt227:
     def test_sovereign_bond_cqs1_zero_haircut(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: CQS 1 sovereign bond in qualifying repo gets 0% haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -132,6 +141,7 @@ class TestSingleItemArt227:
     def test_sovereign_bond_cqs1_standard_without_flag(self, crr_calc: HaircutCalculator) -> None:
         """Without Art. 227 flag, CQS 1 sovereign bond gets standard haircut (>0%)."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -146,6 +156,7 @@ class TestSingleItemArt227:
     def test_sovereign_bond_cqs2_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227(2)(a): CQS 2 sovereign bonds are NOT 0%-RW → standard haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -161,6 +172,7 @@ class TestSingleItemArt227:
     def test_sovereign_bond_null_cqs_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: null CQS sovereign bond is not eligible (unrated ≠ CQS 1)."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -175,6 +187,7 @@ class TestSingleItemArt227:
     def test_corporate_bond_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227(2)(a): corporate bonds never qualify for zero haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="corp_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -188,6 +201,7 @@ class TestSingleItemArt227:
     def test_equity_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227(2)(a): equity never qualifies for zero haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="equity",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -204,6 +218,7 @@ class TestSingleItemArt227:
         But if they do, we trust the flag and set all haircuts to zero.
         """
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("1000000"),
             collateral_currency="EUR",
@@ -217,6 +232,7 @@ class TestSingleItemArt227:
     def test_b31_sovereign_bond_cqs1_zero_haircut(self, b31_calc: HaircutCalculator) -> None:
         """Art. 227 applies identically under Basel 3.1."""
         result = b31_calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="government_bond",
             market_value=Decimal("2000000"),
             collateral_currency="GBP",
@@ -233,6 +249,7 @@ class TestSingleItemArt227:
     ) -> None:
         """B31 CQS 1 sovereign 10yr bond without flag gets standard haircut (>0%)."""
         result = b31_calc.calculate_single_haircut(
+            is_basel_3_1=True,
             collateral_type="government_bond",
             market_value=Decimal("2000000"),
             collateral_currency="GBP",
@@ -247,6 +264,7 @@ class TestSingleItemArt227:
     def test_default_flag_is_false(self, crr_calc: HaircutCalculator) -> None:
         """Default qualifies_for_zero_haircut=False preserves existing behavior."""
         result_default = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -255,6 +273,7 @@ class TestSingleItemArt227:
             residual_maturity_years=3.0,
         )
         result_explicit = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -322,7 +341,7 @@ class TestPipelineArt227:
 
     def test_cash_zero_haircut_pipeline(self, crr_config) -> None:
         """Pipeline: cash with qualifies_for_zero_haircut=True → 0% Hc + 0% Hfx."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="cash",
             market_value=1_000_000.0,
@@ -335,7 +354,7 @@ class TestPipelineArt227:
 
     def test_sovereign_cqs1_zero_haircut_pipeline(self, crr_config) -> None:
         """Pipeline: CQS 1 sovereign bond with Art. 227 flag → 0% haircut."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="govt_bond",
             market_value=500_000.0,
@@ -350,7 +369,7 @@ class TestPipelineArt227:
 
     def test_sovereign_cqs1_standard_haircut_without_flag(self, crr_config) -> None:
         """Pipeline: CQS 1 sovereign bond WITHOUT flag → standard haircut (>0%)."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="govt_bond",
             market_value=500_000.0,
@@ -364,7 +383,7 @@ class TestPipelineArt227:
 
     def test_sovereign_cqs2_not_eligible_pipeline(self, crr_config) -> None:
         """Pipeline: CQS 2 sovereign bond with flag → standard haircut (not CQS 1)."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="govt_bond",
             market_value=500_000.0,
@@ -377,7 +396,7 @@ class TestPipelineArt227:
 
     def test_corporate_bond_not_eligible_pipeline(self, crr_config) -> None:
         """Pipeline: corporate bond with flag → standard haircut (not eligible type)."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="corp_bond",
             market_value=500_000.0,
@@ -390,7 +409,7 @@ class TestPipelineArt227:
 
     def test_fx_haircut_zeroed_for_art227_cross_currency(self, crr_config) -> None:
         """Pipeline: Art. 227 zero-haircut waives FX haircut even with currency mismatch."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="cash",
             market_value=1_000_000.0,
@@ -409,7 +428,7 @@ class TestPipelineArt227:
         test verifies the 10-day capital-market FX haircut lookup value (8%),
         not the secured-lending period scaling. The new default is 20-day (11.314%).
         """
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="cash",
             market_value=1_000_000.0,
@@ -424,7 +443,7 @@ class TestPipelineArt227:
 
     def test_absent_column_backward_compatible(self, crr_config) -> None:
         """Pipeline: absent qualifies_for_zero_haircut column → standard haircuts."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="govt_bond",
             market_value=500_000.0,
@@ -438,7 +457,7 @@ class TestPipelineArt227:
 
     def test_null_flag_treated_as_false(self, crr_config) -> None:
         """Pipeline: null qualifies_for_zero_haircut → treated as False (conservative)."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = pl.LazyFrame(
             {
                 "collateral_reference": ["COLL_001"],
@@ -457,7 +476,7 @@ class TestPipelineArt227:
 
     def test_b31_pipeline_sovereign_zero_haircut(self, b31_config) -> None:
         """Pipeline: B31 CQS 1 sovereign bond with Art. 227 → 0% haircut."""
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         coll = _make_collateral(
             collateral_type="govt_bond",
             market_value=1_000_000.0,
@@ -471,7 +490,7 @@ class TestPipelineArt227:
 
     def test_liquidation_period_irrelevant_for_art227(self, crr_config) -> None:
         """Art. 227 zero-haircut overrides liquidation period scaling."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         for period in [5, 10, 20]:
             coll = _make_collateral(
                 collateral_type="cash",
@@ -502,7 +521,7 @@ class TestArt227MixedBatch:
 
     def test_mixed_qualifying_and_non_qualifying(self, crr_config) -> None:
         """Batch: only qualifying items get zero haircut; others get standard."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         coll = pl.LazyFrame(
             {
                 "collateral_reference": [
@@ -541,7 +560,7 @@ class TestArt227MixedBatch:
 
     def test_capital_impact_comparison(self, crr_config) -> None:
         """Demonstrate capital impact: zero haircut vs standard for CQS 1 sovereign 5yr."""
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         mv = 10_000_000.0
 
         # With Art. 227
@@ -583,11 +602,12 @@ class TestArt227EdgeCases:
 
     @pytest.fixture
     def crr_calc(self) -> HaircutCalculator:
-        return HaircutCalculator(is_basel_3_1=False)
+        return HaircutCalculator()
 
     def test_gilt_alias_eligible(self, crr_calc: HaircutCalculator) -> None:
         """'gilt' collateral type alias should be eligible for zero haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="gilt",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -601,6 +621,7 @@ class TestArt227EdgeCases:
     def test_sovereign_bond_alias_eligible(self, crr_calc: HaircutCalculator) -> None:
         """'sovereign_bond' collateral type alias should be eligible for zero haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="sovereign_bond",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -614,6 +635,7 @@ class TestArt227EdgeCases:
     def test_gold_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227(2)(a): gold is NOT eligible — only cash and 0%-RW sovereign bonds."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="gold",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -625,6 +647,7 @@ class TestArt227EdgeCases:
     def test_other_physical_not_eligible(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: other_physical collateral is never eligible for zero haircut."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="other_physical",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
@@ -638,6 +661,7 @@ class TestArt227EdgeCases:
     def test_zero_market_value(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: zero market value → adjusted value is 0 regardless."""
         result = crr_calc.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("0"),
             collateral_currency="GBP",

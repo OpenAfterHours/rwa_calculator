@@ -14,8 +14,8 @@ consumed by the next agents in the chain.
 - The scenario ID and short description from `docs/plans/implementation-plan.md`
   (e.g. CRR-A7, B31-D3).
 - The relevant spec under `docs/specifications/{crr,basel31,common}/*.md`.
-- The regulatory tables in `src/rwa_calc/data/tables/*.py` for any scalar you
-  need to reference.
+- The rulepack packs `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` (and the
+  `data/tables/*.py` pack-binding shims) for any regulatory value you reference.
 - The bundle schemas in `src/rwa_calc/contracts/bundles.py`.
 
 ## Knowledge sourcing rules

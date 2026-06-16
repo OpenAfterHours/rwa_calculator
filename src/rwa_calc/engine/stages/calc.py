@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the split-once branch calculation with a shared collect."""
@@ -77,12 +77,14 @@ def run(
     # this, each branch's apply_factors would compute the window sum on
     # its own subset and under-count E* whenever a group spans multiple
     # approaches. No-op when supporting factors are disabled (Basel 3.1).
-    exposures = compute_e_star_group_drawn(exposures, run_config, errors=branch_errors)
+    exposures = compute_e_star_group_drawn(
+        exposures, run_config, errors=branch_errors, pack=rulepack.pack
+    )
 
     # For Basel 3.1 output floor: SA-equivalent RW needed on all rows
-    if run_config.output_floor.enabled:
+    if rulepack.pack.feature("output_floor"):
         exposures = components.sa_calculator.calculate_unified(
-            exposures, run_config, errors=branch_errors
+            exposures, run_config, errors=branch_errors, pack=rulepack.pack
         )
 
     # Split once by approach
@@ -96,7 +98,7 @@ def run(
     slotting_branch = exposures.filter(is_slotting)
 
     # Process each branch (all still lazy)
-    if run_config.output_floor.enabled:
+    if rulepack.pack.feature("output_floor"):
         # SA already calculated by calculate_unified above — add
         # aggregator columns that calculate_branch normally provides
         sa_result = sa_branch.with_columns(
@@ -105,14 +107,14 @@ def run(
         )
     else:
         sa_result = components.sa_calculator.calculate_branch(
-            sa_branch, run_config, errors=branch_errors
+            sa_branch, run_config, errors=branch_errors, pack=rulepack.pack
         )
 
     irb_result = components.irb_calculator.calculate_branch(
-        irb_branch, run_config, errors=branch_errors
+        irb_branch, run_config, errors=branch_errors, pack=rulepack.pack
     )
     slotting_result = components.slotting_calculator.calculate_branch(
-        slotting_branch, run_config, errors=branch_errors
+        slotting_branch, run_config, errors=branch_errors, pack=rulepack.pack
     )
 
     # Collect all branches. In cpu mode, uses collect_all with CSE so

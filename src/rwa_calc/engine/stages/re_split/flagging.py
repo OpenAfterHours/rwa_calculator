@@ -35,9 +35,11 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,8 @@ def flag_property_reclassification_candidates(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
     schema_names: set[str],
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Flag SA-bound exposures eligible for the RE loan-split.
@@ -110,8 +114,8 @@ def flag_property_reclassification_candidates(
     """
     primitives = _re_split_property_primitives(schema_names)
     gates = _re_split_candidate_gates(primitives)
-    eligibility = _re_split_per_component_eligibility(primitives, gates, config)
-    legacy_outputs = _re_split_legacy_outputs(primitives, gates, eligibility, config)
+    eligibility = _re_split_per_component_eligibility(primitives, gates, config, pack=pack)
+    legacy_outputs = _re_split_legacy_outputs(primitives, gates, eligibility, config, pack=pack)
     per_component_values = _re_split_per_component_values(primitives, eligibility)
 
     return exposures.with_columns(
@@ -228,6 +232,8 @@ def _re_split_per_component_eligibility(
     primitives: dict[str, pl.Expr],
     gates: dict[str, pl.Expr],
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> dict[str, pl.Expr]:
     """Build per-component eligibility flags for the RE loan splitter.
 
@@ -246,17 +252,22 @@ def _re_split_per_component_eligibility(
     (Other RE) — no partial preference. CRR has no Art. 124(4) limb, so
     the gate is suppressed on the CRR path.
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     rre_eligible = gates["is_candidate"] & primitives["has_rre"]
-    if config.is_basel_3_1:
-        cre_eligible = gates["is_candidate"] & primitives["has_cre"]
-    else:
+    if resolved_pack.feature("sa_re_split_cre_rental_coverage_required"):
+        # CRR Art. 126(2)(d): CRE eligibility additionally requires the
+        # rental-coverage test (>= 1.5x interest).
         cre_eligible = (
             gates["is_candidate"] & primitives["has_cre"] & primitives["cre_rental_coverage_met"]
         )
+    else:
+        # PS1/26 Art. 124H: Basel 3.1 removes the CRE rental-coverage requirement.
+        cre_eligible = gates["is_candidate"] & primitives["has_cre"]
     is_mixed = rre_eligible & cre_eligible
+    # PS1/26 Art. 124(4) all-or-nothing mixed-RE gate — no CRR equivalent.
     force_other_re = (
         is_mixed & primitives["re_collateral_non_qualifying"]
-        if config.is_basel_3_1
+        if resolved_pack.feature("sa_re_split_art_124_4_all_or_nothing")
         else pl.lit(False)
     )
     return {
@@ -272,6 +283,8 @@ def _re_split_legacy_outputs(
     gates: dict[str, pl.Expr],
     eligibility: dict[str, pl.Expr],
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> dict[str, pl.Expr]:
     """Build the legacy single-target output expressions.
 
@@ -293,7 +306,8 @@ def _re_split_legacy_outputs(
     rre_eligible = eligibility["rre_eligible"]
     cre_eligible = eligibility["cre_eligible"]
 
-    if config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if resolved_pack.feature("sa_re_split_whole_loan_path_applies"):
         cre_only_whole = (~rre_eligible) & cre_eligible & (~gates["is_npsme"])
         mode_expr = (
             pl.when(~is_candidate)

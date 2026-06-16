@@ -317,23 +317,25 @@ def get_default_config(
         Dictionary of default configuration values
     """
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook import RulepackV0
 
     if framework == "CRR":
         config = CalculationConfig.crr(reporting_date=reporting_date)
     else:
         config = CalculationConfig.basel_3_1(reporting_date=reporting_date)
+    pack = RulepackV0.from_config(config).pack
 
     return {
         "framework": config.framework.value,
         "reporting_date": config.reporting_date.isoformat(),
         "base_currency": config.base_currency,
-        "scaling_factor": str(config.scaling_factor),
+        "scaling_factor": str(pack.scalar("irb_scaling_factor")),
         "eur_gbp_rate": str(config.eur_gbp_rate),
         "pd_floors": {
-            "corporate": str(config.pd_floors.corporate),
-            "retail_mortgage": str(config.pd_floors.retail_mortgage),
+            "corporate": str(pack.formula("pd_floors").params["corporate"]),
+            "retail_mortgage": str(pack.formula("pd_floors").params["retail_mortgage"]),
         },
-        "supporting_factors_enabled": config.supporting_factors.enabled,
+        "supporting_factors_enabled": pack.feature("supporting_factors"),
         "output_floor_enabled": config.output_floor.enabled,
         "output_floor_percentage": str(config.output_floor.get_floor_percentage(reporting_date)),
     }

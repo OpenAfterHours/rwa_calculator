@@ -27,27 +27,51 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.b31_risk_weights import B31_CORPORATE_RISK_WEIGHTS
-from rwa_calc.data.tables.crr_risk_weights import (
+from rwa_calc.domain.enums import CQS, ApproachType
+from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
 )
-from rwa_calc.data.tables.crr_simple_method import (
-    ART_222_4_CMP_RW,
-    ART_222_4_NON_CMP_RW,
-    FCSM_EQUITY_COLLATERAL_RW,
-    FCSM_RW_FLOOR,
-    SOVEREIGN_BOND_DISCOUNT,
-)
-from rwa_calc.domain.enums import CQS, ApproachType
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
-def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
+@dataclass(frozen=True)
+class _FcsmFloors:
+    """Art. 222 FCSM floors and discount resolved from the rulepack.
+
+    The five regime-invariant Financial Collateral Simple Method scalars
+    (CRR Art. 222 / PRA PS1/26 Art. 222 — the common pack) read once per call
+    and threaded into the per-item expression builders (superseding the deleted
+    ``data/tables/crr_simple_method`` module-level constants).
+    """
+
+    rw_floor: float
+    sovereign_bond_discount: float
+    sft_cmp_floor: float
+    sft_non_cmp_floor: float
+    equity_collateral_rw: float
+
+    @classmethod
+    def from_pack(cls, pack: ResolvedRulepack) -> _FcsmFloors:
+        """Read the five Art. 222 scalars from the resolved rulepack."""
+        return cls(
+            rw_floor=scalar_value(pack.scalar_param("fcsm_rw_floor")),
+            sovereign_bond_discount=scalar_value(pack.scalar_param("fcsm_sovereign_bond_discount")),
+            sft_cmp_floor=scalar_value(pack.scalar_param("fcsm_sft_cmp_floor")),
+            sft_non_cmp_floor=scalar_value(pack.scalar_param("fcsm_sft_non_cmp_floor")),
+            equity_collateral_rw=scalar_value(pack.scalar_param("fcsm_equity_collateral_rw")),
+        )
+
+
+def _derive_collateral_rw_expr(is_basel_3_1: bool = False, *, equity_rw: float = 1.0) -> pl.Expr:
     """Derive the SA risk weight for financial collateral per Art. 222(1).
 
     "The risk weight prescribed under Chapter 2 of Title II for the type
@@ -57,6 +81,9 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     Args:
         is_basel_3_1: Whether Basel 3.1 tables apply (affects institution CQS 2
             ECRA divergence and corporate CQS 5).
+        equity_rw: SA risk weight for equity held as FCSM collateral
+            (``fcsm_equity_collateral_rw``, common pack). Defaults to 1.0 (100%)
+            for direct callers; production supplies the resolved pack value.
 
     Returns:
         Polars expression producing the collateral's own risk weight (float).
@@ -123,7 +150,8 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
     # Equity → FCSM Art. 222(1) prescribes 100% under both frameworks (collateral
     # is treated by financial-instrument character, not equity-exposure character
     # — so B31 Art. 133(3)'s 250% does NOT apply when equity is FCSM collateral).
-    # Single source of truth: FCSM_EQUITY_COLLATERAL_RW.
+    # Value comes from the rulepack (``fcsm_equity_collateral_rw``, common pack);
+    # the module constant is only the default for direct callers.
     is_equity = ctype.is_in(["equity", "equity_main_index", "equity_other"])
 
     # Corporate bonds → Art. 122 Table 5 (CRR) / Table 6 (B31). B31 diverges at
@@ -168,7 +196,7 @@ def _derive_collateral_rw_expr(is_basel_3_1: bool = False) -> pl.Expr:
         .when(is_institution)
         .then(institution_rw)
         .when(is_equity)
-        .then(pl.lit(float(FCSM_EQUITY_COLLATERAL_RW)))
+        .then(pl.lit(equity_rw))
         .otherwise(corporate_rw)  # default: treat as corporate bond
     )
 
@@ -204,7 +232,7 @@ def _is_art_222_6_carveout_expr() -> pl.Expr:
     return (is_cash_same_ccy | is_zero_rw_sovereign) & is_not_sft
 
 
-def _secured_floor_expr() -> pl.Expr:
+def _secured_floor_expr(floors: _FcsmFloors) -> pl.Expr:
     """Per-item secured-portion RW for FCSM, encoding Art. 222(3)/(4)/(6).
 
     Decision tree (per Art. 222 paragraph priority):
@@ -214,6 +242,8 @@ def _secured_floor_expr() -> pl.Expr:
       2. Non-SFT + same-currency cash / 0%-RW sovereign → Art. 222(6) → 0%
       3. Otherwise → max(item_rw, 20% Art. 222(3) general floor)
 
+    The 20% general floor and the SFT CMP / non-CMP floors come from ``floors``
+    (the common-pack Art. 222 scalars resolved by ``compute_fcsm_columns``).
     Reads ``_fcsm_exposure_is_sft``, ``_fcsm_cp_is_cmp``,
     ``_fcsm_qualifies_for_zero_haircut`` propagated by ``compute_fcsm_columns``.
     """
@@ -221,11 +251,11 @@ def _secured_floor_expr() -> pl.Expr:
     is_cmp = pl.col("_fcsm_cp_is_cmp").fill_null(False)
     qualifies_zero_hc = pl.col("_fcsm_qualifies_for_zero_haircut").fill_null(False)
     item_rw = pl.col("_fcsm_item_rw")
-    floor = pl.lit(float(FCSM_RW_FLOOR))
+    floor = pl.lit(floors.rw_floor)
 
     sft_carveout_active = is_sft & qualifies_zero_hc
-    cmp_floor = pl.lit(float(ART_222_4_CMP_RW))
-    non_cmp_floor = pl.lit(float(ART_222_4_NON_CMP_RW))
+    cmp_floor = pl.lit(floors.sft_cmp_floor)
+    non_cmp_floor = pl.lit(floors.sft_non_cmp_floor)
 
     return (
         pl.when(sft_carveout_active & is_cmp)
@@ -243,6 +273,8 @@ def compute_fcsm_columns(
     exposures: pl.LazyFrame,
     collateral: pl.LazyFrame | None,
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Compute FCSM columns on the exposure frame.
 
@@ -260,12 +292,18 @@ def compute_fcsm_columns(
         exposures: Exposure frame with ead_gross, exposure_reference, etc.
         collateral: Collateral frame (may be None if no collateral).
         config: Calculation configuration.
+        pack: Resolved rulepack supplying the Art. 222 floor scalars. Production
+            passes the run's pack; direct callers default to ``None``, which
+            resolves a pack from ``config`` (same regime/date).
 
     Returns:
         Exposure frame with fcsm_collateral_value and fcsm_collateral_rw columns.
     """
     if collateral is None:
         return _add_default_fcsm_columns(exposures)
+
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    floors = _FcsmFloors.from_pack(resolved_pack)
 
     schema = exposures.collect_schema()
     schema_names = schema.names()
@@ -284,8 +322,16 @@ def compute_fcsm_columns(
     )
 
     # 1. Filter to eligible financial collateral + ensure zero-haircut flag
-    # 2. Derive per-item RW
-    eligible = _prepare_eligible_collateral(collateral, config.is_basel_3_1)
+    # 2. Derive per-item RW. The institution (Art. 120 ECRA/SCRA) and corporate
+    #    (Art. 122 Table 6) SA RW tables selected here are the SAME regime concept
+    #    the SA calculator gates — reuse the cited `sa_revised_risk_weight_tables`
+    #    Feature (S9b dedupe) rather than reading config.is_basel_3_1. The helper
+    #    keeps its `is_b31` bool plumbing param (Option B).
+    eligible = _prepare_eligible_collateral(
+        collateral,
+        resolved_pack.feature("sa_revised_risk_weight_tables"),
+        floors.equity_collateral_rw,
+    )
 
     # 3. Multi-level join (direct + facility + counterparty) to bring exposure
     # currency, maturity, SFT and CMP flags onto each collateral row.
@@ -297,11 +343,11 @@ def compute_fcsm_columns(
     coll_with_exp = _resolve_exposure_levels(coll_with_exp)
 
     # 5. Same-currency check + Art. 222(6)(b) sovereign-bond discount.
-    coll_with_exp = _apply_currency_and_sovereign_discount(coll_with_exp)
+    coll_with_exp = _apply_currency_and_sovereign_discount(coll_with_exp, floors)
 
     # 6. Per-item secured-portion RW (Art. 222(3)/(4)/(6) decision tree).
     coll_with_exp = coll_with_exp.with_columns(
-        _secured_floor_expr().alias("_fcsm_effective_rw"),
+        _secured_floor_expr(floors).alias("_fcsm_effective_rw"),
     )
 
     # 6b. Art. 239(1) FCSM maturity-mismatch eligibility gate.
@@ -402,7 +448,9 @@ def _resolve_sft_column(schema_names: list[str]) -> str | None:
     return None
 
 
-def _prepare_eligible_collateral(collateral: pl.LazyFrame, is_b31: bool) -> pl.LazyFrame:
+def _prepare_eligible_collateral(
+    collateral: pl.LazyFrame, is_b31: bool, equity_rw: float
+) -> pl.LazyFrame:
     """Filter to eligible FC, normalise zero-haircut flag, derive per-item RW."""
     eligible = collateral.filter(pl.col("is_eligible_financial_collateral").fill_null(False))
 
@@ -416,7 +464,9 @@ def _prepare_eligible_collateral(collateral: pl.LazyFrame, is_b31: bool) -> pl.L
             pl.col("qualifies_for_zero_haircut").fill_null(False),
         )
 
-    return eligible.with_columns(_derive_collateral_rw_expr(is_b31).alias("_fcsm_item_rw"))
+    return eligible.with_columns(
+        _derive_collateral_rw_expr(is_b31, equity_rw=equity_rw).alias("_fcsm_item_rw")
+    )
 
 
 def _currency_expr(present: bool, alias: str) -> pl.Expr:
@@ -598,7 +648,9 @@ def _resolve_exposure_levels(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
-def _apply_currency_and_sovereign_discount(coll_with_exp: pl.LazyFrame) -> pl.LazyFrame:
+def _apply_currency_and_sovereign_discount(
+    coll_with_exp: pl.LazyFrame, floors: _FcsmFloors
+) -> pl.LazyFrame:
     """Set _fcsm_same_currency and apply the Art. 222(6)(b) 20% discount.
 
     The discount is waived when the collateral satisfies the Art. 227(2)
@@ -633,7 +685,7 @@ def _apply_currency_and_sovereign_discount(coll_with_exp: pl.LazyFrame) -> pl.La
     )
     return coll_with_exp.with_columns(
         pl.when(apply_sovereign_discount)
-        .then(pl.col("market_value") * (1.0 - float(SOVEREIGN_BOND_DISCOUNT)))
+        .then(pl.col("market_value") * (1.0 - floors.sovereign_bond_discount))
         .otherwise(pl.col("market_value"))
         .alias("_fcsm_effective_value"),
     )

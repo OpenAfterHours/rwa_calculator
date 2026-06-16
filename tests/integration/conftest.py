@@ -477,7 +477,9 @@ def crm_processor() -> CRMProcessor:
 
 @pytest.fixture
 def crm_processor_b31() -> CRMProcessor:
-    return CRMProcessor(is_basel_3_1=True)
+    # The processor carries no constructor regime-state; the Basel 3.1 framework
+    # comes from the b31 config the consuming test threads through each call.
+    return CRMProcessor()
 
 
 @pytest.fixture

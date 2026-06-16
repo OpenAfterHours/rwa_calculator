@@ -116,7 +116,7 @@ class TestApplyHaircutsHonoursOriginalCurrency:
             original_currency="USD",  # pre-conversion audit
             liquidation_period_days=10,  # explicit override — P1.186
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.08)
@@ -138,7 +138,7 @@ class TestApplyHaircutsHonoursOriginalCurrency:
             original_currency="GBP",
             liquidation_period_days=10,  # explicit override — P1.186
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.0)
@@ -161,7 +161,7 @@ class TestApplyHaircutsHonoursOriginalCurrency:
             original_currency=None,
             liquidation_period_days=10,  # explicit override — P1.186
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.08)
@@ -238,7 +238,7 @@ class TestP1186DefaultLiquidationPeriod:
         )
 
         # Act
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         # Assert — 20-day H_fx = 8% × sqrt(2) ≈ 0.113137
@@ -305,7 +305,7 @@ class TestP1186DefaultLiquidationPeriod:
         joined = _join_collateral_to_lookups(collateral, direct_lookup, facility_lookup, cp_lookup)
 
         # Now apply haircuts to the joined frame
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(joined, crr_config).collect()
 
         # Assert — 5-day H_fx = 8% × sqrt(0.5) ≈ 0.056569
@@ -469,7 +469,7 @@ class TestNonFinancialCollateralNoFxHaircut:
             original_currency="EUR",
             liquidation_period_days=10,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.0), (
@@ -496,7 +496,7 @@ class TestNonFinancialCollateralNoFxHaircut:
             original_currency="EUR",
             liquidation_period_days=10,
         )
-        calc = HaircutCalculator(is_basel_3_1=True)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, b31_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.0), (
@@ -532,7 +532,7 @@ class TestNonFinancialCollateralNoFxHaircut:
             original_currency="EUR",
             liquidation_period_days=10,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.0), (
@@ -554,7 +554,7 @@ class TestNonFinancialCollateralNoFxHaircut:
             original_currency="EUR",
             liquidation_period_days=10,
         )
-        calc = HaircutCalculator(is_basel_3_1=False)
+        calc = HaircutCalculator()
         result = calc.apply_haircuts(collateral, crr_config).collect()
 
         assert result["fx_haircut"][0] == pytest.approx(0.08), (

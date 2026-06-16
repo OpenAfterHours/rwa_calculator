@@ -99,9 +99,10 @@ you in the prompt which file is the target — `IMPLEMENTATION_PLAN.md` or
    - **Code plan**: search for `TODO`, `FIXME`, `HACK`,
      `NotImplementedError`, `pytest.mark.skip`, conditional fixture
      guards, and acceptance-test gaps versus `docs/specifications/`.
-     Cross-check regulatory scalars in `src/rwa_calc/data/tables/*.py`
-     against the PDFs (use the `basel31` / `crr` Skill to confirm
-     values; do not invent scalars).
+     Cross-check regulatory values in the rulepack packs
+     `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` (and any residual
+     `data/tables/*.py` shims) against the PDFs (use the `basel31` / `crr`
+     Skill to confirm values; do not invent scalars).
    - **Docs plan**: compare `docs/specifications/`,
      `docs/framework-comparison/`, `docs/user-guide/` against the PDFs
      in `docs/assets/` and against `src/rwa_calc/`. Flag missing

@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.errors import CalculationError
     from rwa_calc.contracts.results import ExportResult
     from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocation
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @runtime_checkable
@@ -176,6 +177,8 @@ class ClassifierProtocol(Protocol):
         self,
         data: ResolvedHierarchyBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> ClassifiedExposuresBundle:
         """
         Classify exposures and split by approach.
@@ -183,6 +186,8 @@ class ClassifierProtocol(Protocol):
         Args:
             data: Hierarchy-resolved data
             config: Calculation configuration
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             ClassifiedExposuresBundle with exposures split by approach
@@ -243,6 +248,8 @@ class CRMProcessorProtocol(Protocol):
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """
         Apply CRM and return a unified bundle without approach splitting.
@@ -254,6 +261,9 @@ class CRMProcessorProtocol(Protocol):
         Args:
             data: Classified exposures
             config: Calculation configuration
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — the
+                source of regulatory values). Optional; sub-steps resolve one
+                from ``config`` when omitted.
 
         Returns:
             CRMAdjustedBundle with all exposures in the unified frame
@@ -286,6 +296,8 @@ class RealEstateSplitterProtocol(Protocol):
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """Apply RE loan-splitting to candidate rows.
 
@@ -294,8 +306,10 @@ class RealEstateSplitterProtocol(Protocol):
                 must already carry the classifier-emitted columns
                 ``re_split_target_class``, ``re_split_mode``,
                 ``re_split_property_value``.
-            config: Calculation configuration. The regime (CRR vs B3.1)
-                is selected via ``config.is_basel_3_1``.
+            config: Calculation configuration.
+            pack: Resolved rulepack supplying the RE-split regime Feature.
+                Production threads the run's pack; direct callers default to
+                ``None``, which resolves a pack from ``config``.
 
         Returns:
             New ``CRMAdjustedBundle`` with the unified frame (and any
@@ -327,6 +341,7 @@ class SACalculatorProtocol(Protocol):
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA risk weights on unified frame (single-pass pipeline).
@@ -335,6 +350,8 @@ class SACalculatorProtocol(Protocol):
             exposures: Unified frame with all approaches
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             Unified frame with SA columns populated for SA rows
@@ -347,6 +364,7 @@ class SACalculatorProtocol(Protocol):
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate SA RWA on pre-filtered SA-only rows.
@@ -355,6 +373,8 @@ class SACalculatorProtocol(Protocol):
             exposures: Pre-filtered SA rows only
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             LazyFrame with SA RWA columns populated.
@@ -386,6 +406,7 @@ class IRBCalculatorProtocol(Protocol):
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate IRB RWA on pre-filtered IRB-only rows.
@@ -422,6 +443,7 @@ class SlottingCalculatorProtocol(Protocol):
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate Slotting RWA on pre-filtered slotting-only rows.
@@ -430,6 +452,8 @@ class SlottingCalculatorProtocol(Protocol):
             exposures: Pre-filtered slotting rows only
             config: Calculation configuration
             errors: Optional error accumulator for data quality warnings
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             LazyFrame with slotting RWA columns populated.
@@ -456,6 +480,8 @@ class EquityCalculatorProtocol(Protocol):
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> EquityResultBundle:
         """
         Calculate equity RWA and return as bundle.
@@ -463,6 +489,8 @@ class EquityCalculatorProtocol(Protocol):
         Args:
             data: CRM-adjusted exposures
             config: Calculation configuration
+            pack: Optional resolved rulepack; falls back to
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             EquityResultBundle with results and audit trail
@@ -495,6 +523,8 @@ class OutputAggregatorProtocol(Protocol):
         equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
         securitisation_audit: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.
@@ -505,6 +535,10 @@ class OutputAggregatorProtocol(Protocol):
             slotting_results: Slotting branch results.
             equity_bundle: Equity result bundle (optional, separate path).
             config: Calculation configuration.
+            securitisation_audit: Resolved securitisation lookup (optional).
+            pack: Resolved rulepack sourcing the output-floor / supporting-factor
+                regime gates; resolved from ``config`` via
+                ``RulepackV0.from_config(config).pack`` when ``None``.
 
         Returns:
             AggregatedResultBundle with all summaries and adjustments.

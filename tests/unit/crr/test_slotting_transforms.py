@@ -763,25 +763,6 @@ class TestBasel31SlottingWeightsPFPreOp:
 
 
 # =============================================================================
-# Scaling Factor Tests
-# =============================================================================
-
-
-class TestScalingFactor:
-    """Tests for scaling factor configuration."""
-
-    def test_crr_scaling_factor_106(self) -> None:
-        """CRR config should have scaling_factor = 1.06."""
-        config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-        assert float(config.scaling_factor) == pytest.approx(1.06)
-
-    def test_basel31_scaling_factor_10(self) -> None:
-        """Basel 3.1 config should have scaling_factor = 1.0 (removed)."""
-        config = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
-        assert float(config.scaling_factor) == pytest.approx(1.0)
-
-
-# =============================================================================
 # RWA Calculation Tests
 # =============================================================================
 

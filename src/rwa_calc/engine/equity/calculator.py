@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, cast
 
 import polars as pl
@@ -41,37 +42,35 @@ from watchfire import cites
 from rwa_calc.contracts.bundles import CRMAdjustedBundle, EquityResultBundle
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.tables.b31_equity_rw import B31_SA_EQUITY_RISK_WEIGHTS
-from rwa_calc.data.tables.crr_equity_pd_lgd import (
-    EQUITY_PD_FLOORS,
-    EQUITY_PD_LGD_LGD,
-    EQUITY_PD_LGD_MATURITY,
-    EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING,
-)
-from rwa_calc.data.tables.crr_equity_rw import (
-    IRB_SIMPLE_EQUITY_RISK_WEIGHTS,
-    SA_EQUITY_RISK_WEIGHTS,
-)
 from rwa_calc.domain.enums import ApproachType, EquityApproach, EquityType, ExposureClass
 from rwa_calc.engine.irb.formulas import (
     _capital_k_expr_from_params,
     _correlation_expr_from_pd,
     _maturity_adjustment_expr_from_pd,
 )
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import formula_float_map, lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from polars.expr.whenthen import ChainedThen, Then
 
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
-# Float-converted risk weight tables for Polars expressions.
-# Authoritative Decimal values live in data/tables/*_equity_rw.py;
-# these are derived once at module load for use with pl.lit().
-_CRR_SA_RW = {k: float(v) for k, v in SA_EQUITY_RISK_WEIGHTS.items()}
-_B31_SA_RW = {k: float(v) for k, v in B31_SA_EQUITY_RISK_WEIGHTS.items()}
-_IRB_RW = {k: float(v) for k, v in IRB_SIMPLE_EQUITY_RISK_WEIGHTS.items()}
+# Float-converted risk weight tables for Polars expressions. Authoritative
+# Decimal values live in the rulepack (packs/crr.py + packs/b31.py); resolved and
+# float-converted once at module load via compile.lookup_float_map for use with
+# pl.lit(). Enum (EquityType)-keyed.
+_CRR_SA_RW = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equity_sa_risk_weights"))
+_B31_SA_RW = lookup_float_map(resolve("b31", date(2027, 1, 1)).lookup("equity_sa_risk_weights"))
+_IRB_RW = lookup_float_map(
+    resolve("crr", date(2026, 1, 1)).lookup("equity_irb_simple_risk_weights")
+)
 
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
@@ -214,6 +213,8 @@ class EquityCalculator:
         self,
         data: CRMAdjustedBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> EquityResultBundle:
         """
         Calculate equity RWA and return as a bundle.
@@ -246,22 +247,22 @@ class EquityCalculator:
                 errors=[],
             )
 
-        approach = self._determine_approach(config)
+        approach = self._determine_approach(config, pack=pack)
 
         exposures = self._prepare_columns(exposures, config)
-        exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config)
+        exposures = self._resolve_look_through_rw(exposures, data.ciu_holdings, config, pack=pack)
 
         # Art. 155(3) PD/LGD computes RWEA inside the branch and bypasses both
         # the IRB Simple transitional floor and _calculate_rwa.
         if approach == EquityApproach.PD_LGD:
-            exposures = self._apply_equity_weights_pd_lgd(exposures, config)
+            exposures = self._apply_equity_weights_pd_lgd(exposures, config, pack=pack)
         else:
             if approach == EquityApproach.IRB_SIMPLE:
                 exposures = self._apply_equity_weights_irb_simple(exposures, config)
             else:
-                exposures = self._apply_equity_weights_sa(exposures, config)
+                exposures = self._apply_equity_weights_sa(exposures, config, pack=pack)
 
-            exposures = self._apply_transitional_floor(exposures, config)
+            exposures = self._apply_transitional_floor(exposures, config, pack=pack)
             exposures = self._calculate_rwa(exposures)
 
         audit = self._build_audit(exposures, approach)
@@ -274,7 +275,12 @@ class EquityCalculator:
         )
 
     @cites("CRR Art. 155(3)")
-    def _determine_approach(self, config: CalculationConfig) -> EquityApproach:
+    def _determine_approach(
+        self,
+        config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
+    ) -> EquityApproach:
         """
         Determine SA, IRB_SIMPLE, or PD_LGD based on config.
 
@@ -295,9 +301,10 @@ class EquityCalculator:
             EquityApproach.SA (Art. 133), EquityApproach.IRB_SIMPLE (Art. 155(2)),
             or EquityApproach.PD_LGD (Art. 155(3))
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         # Basel 3.1: IRB equity removed — all equity uses SA (CRE20.58-62).
         # The equity_pd_lgd flag is ignored under Basel 3.1.
-        if config.is_basel_3_1:
+        if not resolved_pack.feature("equity_irb_approaches_available"):
             return EquityApproach.SA
 
         # CRR: Check if firm has any IRB permissions beyond SA
@@ -357,6 +364,8 @@ class EquityCalculator:
         exposures: pl.LazyFrame,
         ciu_holdings: pl.LazyFrame | None,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Resolve look-through risk weights for CIU exposures (Art. 132a).
@@ -378,10 +387,11 @@ class EquityCalculator:
         fallback_rw = CIU_FALLBACK_RW
 
         # Get CQS-based risk weight table for holding-level RW lookup
-        from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
+        from rwa_calc.engine.sa.crr_risk_weight_tables import get_combined_cqs_risk_weights
 
-        if config.is_basel_3_1:
-            from rwa_calc.data.tables.b31_risk_weights import (
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if resolved_pack.feature("sa_revised_risk_weight_tables"):
+            from rwa_calc.engine.sa.b31_risk_weight_tables import (
                 get_b31_combined_cqs_risk_weights,
             )
 
@@ -397,7 +407,7 @@ class EquityCalculator:
         # RW) instead of the _DEFAULT_HOLDING_RW fallback (the transitional
         # regime only applies to firms that held IRB equity permission, so
         # equity_transitional.enabled is the correct proxy here).
-        equity_holding_fallback_rw = self._equity_holding_higher_of_rw(config)
+        equity_holding_fallback_rw = self._equity_holding_higher_of_rw(config, pack=resolved_pack)
         if equity_holding_fallback_rw is not None:
             holding_rw_expr = (
                 pl.when(
@@ -485,7 +495,9 @@ class EquityCalculator:
     @cites("CRR Art. 155(2)")
     @cites("PS1/26, paragraph 4.8")
     @cites("PS1/26, paragraph 4.9")
-    def _equity_holding_higher_of_rw(self, config: CalculationConfig) -> float | None:
+    def _equity_holding_higher_of_rw(
+        self, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+    ) -> float | None:
         """Rules 4.7-4.8 higher-of RW for EQUITY-class CIU look-through holdings.
 
         Returns ``max(legacy Art. 155(2) "other equity" simple RW, Rule 4.2/4.3
@@ -511,8 +523,9 @@ class EquityCalculator:
         if config.equity_transitional.opt_out:
             return None
 
-        transitional_rw = config.equity_transitional.get_transitional_rw(
-            config.reporting_date, is_higher_risk=False
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        transitional_rw = _equity_transitional_rw(
+            resolved_pack, config.reporting_date, is_higher_risk=False
         )
         if transitional_rw is None:
             return None
@@ -524,6 +537,8 @@ class EquityCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA equity risk weights, branching by framework.
@@ -532,7 +547,8 @@ class EquityCalculator:
             CIU via Art. 132 (1,250% fallback per Art. 132(2))
         Basel 3.1 Art. 133(3)-(5): 250% / 400% / 150% (sub debt)
         """
-        if config.is_basel_3_1:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if resolved_pack.feature("equity_revised_sa_risk_weights"):
             return self._apply_b31_equity_weights_sa(exposures, config)
         return self._apply_crr_equity_weights_sa(exposures, config)
 
@@ -791,6 +807,8 @@ class EquityCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply the Article 155(3) PD/LGD equity approach.
@@ -817,13 +835,18 @@ class EquityCalculator:
         The IRB Simple transitional floor (PRA Rules 4.1-4.10) does NOT apply —
         it is Simple-approach machinery.
         """
-        scaling_factor = float(config.scaling_factor)
-        maturity = float(EQUITY_PD_LGD_MATURITY)
-        lgd_diversified = float(EQUITY_PD_LGD_LGD["private_equity_diversified"])
-        lgd_other = float(EQUITY_PD_LGD_LGD["other"])
-        no_default_info_scaling = float(EQUITY_PD_LGD_NO_DEFAULT_INFO_SCALING)
-        pd_floor_exchange_traded = float(EQUITY_PD_FLOORS["exchange_traded"])
-        pd_floor_other = float(EQUITY_PD_FLOORS["other"])
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
+        maturity = scalar_value(resolved_pack.scalar_param("equity_pd_lgd_maturity"))
+        equity_lgd = formula_float_map(resolved_pack.formula("equity_pd_lgd_lgd"))
+        lgd_diversified = equity_lgd["private_equity_diversified"]
+        lgd_other = equity_lgd["other"]
+        no_default_info_scaling = scalar_value(
+            resolved_pack.scalar_param("equity_pd_lgd_no_default_info_scaling")
+        )
+        equity_pd_floors = formula_float_map(resolved_pack.formula("equity_pd_floors"))
+        pd_floor_exchange_traded = equity_pd_floors["exchange_traded"]
+        pd_floor_other = equity_pd_floors["other"]
 
         eq_type = pl.col("equity_type").str.to_lowercase()
         is_exchange_traded = pl.col("is_exchange_traded").fill_null(False)
@@ -859,7 +882,7 @@ class EquityCalculator:
         correlation = _correlation_expr_from_pd(
             pl.col("pd_floored"),
             eur_gbp_rate=float(config.eur_gbp_rate),
-            is_b31=config.is_basel_3_1,
+            is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
         )
         exposures = exposures.with_columns(correlation.alias("correlation"))
 
@@ -906,6 +929,8 @@ class EquityCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply equity transitional risk weight floor (PRA Rules 4.1-4.10).
@@ -922,12 +947,13 @@ class EquityCalculator:
         floor comparison is skipped. The opt-out applies jointly with the CIU
         underlying higher-of suppression (Rule 4.9).
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         eq_config = config.equity_transitional
-        if not eq_config.enabled or eq_config.opt_out:
+        if not resolved_pack.feature("equity_transitional") or eq_config.opt_out:
             return exposures
 
-        std_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=False)
-        hr_rw = eq_config.get_transitional_rw(config.reporting_date, is_higher_risk=True)
+        std_rw = _equity_transitional_rw(resolved_pack, config.reporting_date, is_higher_risk=False)
+        hr_rw = _equity_transitional_rw(resolved_pack, config.reporting_date, is_higher_risk=True)
 
         if std_rw is None or hr_rw is None:
             return exposures
@@ -989,7 +1015,7 @@ class EquityCalculator:
         # "irb_transitional"; all others use "sa_transitional".
         approach_label = (
             "irb_transitional"
-            if not config.is_basel_3_1
+            if resolved_pack.feature("equity_irb_approaches_available")
             and any(
                 ApproachType.FIRB in a or ApproachType.AIRB in a
                 for a in config.irb_permissions.permissions.values()  # ty: ignore[unresolved-attribute]
@@ -1074,3 +1100,27 @@ def create_equity_calculator() -> EquityCalculator:
         EquityCalculator ready for use
     """
     return EquityCalculator()
+
+
+def _equity_transitional_rw(
+    pack: ResolvedRulepack, on: date, *, is_higher_risk: bool
+) -> Decimal | None:
+    """Transitional equity RW for ``on``, or None outside the transition window.
+
+    Pack twin of ``EquityTransitionalConfig.get_transitional_rw`` (Phase 5
+    S11e): the VALUES live in the ``equity_transitional_std_rw`` /
+    ``equity_transitional_hr_rw`` rulepack Schedules, gated by the
+    ``equity_transitional`` Feature. Returns ``None`` when the regime is off
+    or ``on`` precedes the first scheduled step — the Schedule's
+    ``before_first`` (0.0) would otherwise read as a real 0% floor, so the
+    explicit ``None`` preserves the config method's "no transition → skip"
+    contract byte-identically.
+    """
+    if not pack.feature("equity_transitional"):
+        return None
+    sched = pack.schedule(
+        "equity_transitional_hr_rw" if is_higher_risk else "equity_transitional_std_rw"
+    )
+    if on < sched.steps[0][0]:
+        return None
+    return sched.resolve(on)

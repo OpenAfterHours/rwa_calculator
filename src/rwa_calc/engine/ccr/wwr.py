@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
@@ -46,8 +47,14 @@ from rwa_calc.contracts.bundles import (
 from rwa_calc.contracts.errors import CalculationError
 from rwa_calc.data.column_spec import ensure_columns
 from rwa_calc.data.schemas import NETTING_SET_SCHEMA, TRADE_SCHEMA
-from rwa_calc.data.tables.sa_ccr_factors import CCR_WWR_SPECIFIC_LGD_OVERRIDE
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
+
+# CRR Art. 291(5)(c) specific wrong-way-risk LGD = 100% override, resolved from
+# the rulepack once at module load.
+_PACK = resolve("crr", date(2026, 1, 1))
+_WWR_SPECIFIC_LGD_OVERRIDE = scalar_value(_PACK.scalar_param("ccr_wwr_specific_lgd_override"))
 
 #: Schema projection used by :func:`apply_wwr_gate` to backfill the WWR
 #: columns (``has_general_wwr_flag`` and ``wwr_lgd_override``) on the
@@ -206,7 +213,7 @@ def apply_wwr_gate(raw_ccr: RawCCRBundle) -> RawCCRBundle:
             pl.concat_str(
                 [pl.col("netting_set_id"), pl.lit(_WWR_NS_ID_SEPARATOR), pl.col("trade_id")]
             ).alias("netting_set_id"),
-            pl.lit(float(CCR_WWR_SPECIFIC_LGD_OVERRIDE)).alias("wwr_lgd_override"),
+            pl.lit(_WWR_SPECIFIC_LGD_OVERRIDE).alias("wwr_lgd_override"),
         )
         .drop("trade_id")
         .select(residual_rows_df.columns)

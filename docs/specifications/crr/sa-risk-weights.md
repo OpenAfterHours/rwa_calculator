@@ -768,15 +768,16 @@ If the issuing institution itself is unrated under CRR, the sovereign-derived ap
     [`basel31/sa-risk-weights.md` — Unrated Covered Bonds](../basel31/sa-risk-weights.md#unrated-covered-bonds-art-1295)
     for the full B31 narrative.
 
-!!! info "Implementation Note — Shared `covered_bond_unrated_derivation` Dict"
-    The shared regulatory-data dict `COVERED_BOND_UNRATED_DERIVATION` in
-    `src/rwa_calc/data/tables/crr_risk_weights.py` is sized to the **larger** B31
-    domain (7 entries) so that both CRR and B31 calculation paths can index it with
-    a single lookup. Under CRR-only configuration the calculator never queries the
-    `30%`, `40%`, or `75%` keys: the upstream institution-RW computation cannot
-    produce those values without the B31 ECRA Table 3 / SCRA grade tables. The dict
-    name's "CRR Art. 129(5), PRA PS1/26 Art. 129" comment reflects shared storage,
-    not framework equivalence — the four CRR-applicable rows are (a)/(b)/(c)/(d) only.
+!!! info "Implementation Note — Regime-Specific Derivation Dicts"
+    The derivation table is stored as **two regime-specific dicts** in
+    `src/rwa_calc/data/tables/crr_risk_weights.py`: `COVERED_BOND_UNRATED_DERIVATION_CRR`
+    (4 entries — CRR Art. 129(5)(a)/(b)/(c)/(d), where (b) maps `0.50 → 0.20`) and
+    `COVERED_BOND_UNRATED_DERIVATION_B31` (7 entries — PRA PS1/26 Art. 129(5), adding
+    the `30%`, `40%`, `75%` ECRA/SCRA keys and changing (b) to `0.50 → 0.25`). Each
+    calculation path indexes its own dict explicitly: the CRR path
+    (`_crr_unrated_cb_rw_expr`) uses `_CRR`, the B31 path (`_b31_unrated_cb_rw_expr`)
+    uses `_B31`. There is no unsuffixed alias — that removes the risk of a CRR path
+    silently picking up the B31 `(b)` value.
 
 ### Eligibility Conditions (Art. 129(1)–(3), (7))
 
@@ -876,7 +877,7 @@ exist under CRR: 30% (ECRA CQS 2), 40% (SCRA Grade A), 75% (SCRA Grade B).
 !!! note "Implementation Status"
     Covered bonds are implemented as a separate exposure class under Art. 112(m).
     Rated risk weights use CQS join tables; unrated uses the Art. 129(5) derivation chain.
-    CRR: institution CQS → institution RW → CB RW via `COVERED_BOND_UNRATED_DERIVATION`.
+    CRR: institution CQS → institution RW → CB RW via `COVERED_BOND_UNRATED_DERIVATION_CRR`.
     B31: SCRA grade → CB RW via `B31_COVERED_BOND_UNRATED_FROM_SCRA`.
 
 ## High-Risk Exposures (Art. 128)

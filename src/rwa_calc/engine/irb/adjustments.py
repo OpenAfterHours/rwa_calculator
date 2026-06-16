@@ -28,9 +28,11 @@ from rwa_calc.contracts.errors import (
     ErrorCategory,
     ErrorSeverity,
 )
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 # =============================================================================
@@ -117,7 +119,12 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
 # =============================================================================
 
 
-def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_post_model_adjustments(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """
     Apply post-model adjustments to IRB RWEA and EL (Basel 3.1 only).
 
@@ -153,13 +160,18 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
     Args:
         lf: LazyFrame with IRB formula results
         config: Calculation configuration
+        pack: Resolved rulepack for the run's regime/date (Phase 5 — sources the
+            ``post_model_adjustments`` regime gate). Production threads the
+            orchestrator's pack; direct callers may omit it, in which case one is
+            resolved from ``config``.
 
     Returns:
         LazyFrame with post-model adjustment columns
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     pma_config = config.post_model_adjustments
 
-    if not pma_config.enabled:
+    if not resolved_pack.feature("post_model_adjustments"):
         # CRR or disabled: add zero-valued columns for schema consistency
         return lf.with_columns(
             [
@@ -178,7 +190,9 @@ def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) ->
 
     pma_rwa_scalar = float(pma_config.pma_rwa_scalar)
     pma_el_scalar = float(pma_config.pma_el_scalar)
-    mortgage_rw_floor = float(pma_config.mortgage_rw_floor)
+    # Regulatory mortgage RW floor (Art. 154(4A)(b)) — pack scalar (Phase 5 S11e-v3),
+    # overridable via with_overrides. The PMA scalars above stay config ELECTIONS.
+    mortgage_rw_floor = float(resolved_pack.scalar("mortgage_rw_floor"))
     unrecognised_scalar = float(pma_config.unrecognised_exposure_scalar)
 
     # Mortgage RW floor: applies to residential mortgage IRB exposures

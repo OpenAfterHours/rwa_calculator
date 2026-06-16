@@ -39,11 +39,13 @@ Internal module — not part of the public API.
 
 from __future__ import annotations
 
+from datetime import date
+from typing import TYPE_CHECKING
+
 import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import OutputFloorSummary
-from rwa_calc.data.tables.output_floor import GCRA_CAP_RATE as _GCRA_CAP_RATE_DECIMAL
 from rwa_calc.engine.aggregator._schemas import (
     EQUITY_APPROACHES,
     FLOOR_ELIGIBLE_APPROACHES,
@@ -51,11 +53,11 @@ from rwa_calc.engine.aggregator._schemas import (
     SA_APPROACHES,
 )
 from rwa_calc.engine.aggregator._utils import col_or_default, empty_frame, resolve_rwa_col
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
-# GCRA cap: 1.25% of S-TREA per Art. 92 para 2A definition.
-# Stored as Decimal in data/tables/output_floor.py; the aggregator works in
-# float space, so it's converted once at import time.
-GCRA_CAP_RATE: float = float(_GCRA_CAP_RATE_DECIMAL)
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 def compute_of_adj(
@@ -64,6 +66,8 @@ def compute_of_adj(
     gcra_amount: float,
     sa_t2_credit: float,
     s_trea: float,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> tuple[float, float]:
     """Compute OF-ADJ per PRA PS1/26 Art. 92 para 2A.
 
@@ -77,16 +81,25 @@ def compute_of_adj(
         gcra_amount: General credit risk adjustments (gross of tax).
         sa_t2_credit: Art. 62(c) SA T2 credit.
         s_trea: Standardised total risk exposure amount (for GCRA cap).
+        pack: Resolved rulepack supplying the ``gcra_cap_rate`` scalar. The
+            output floor is Basel-3.1-only, so the no-pack fallback resolves the
+            b31 regime (used by direct unit tests that pass no pack).
 
     Returns:
         Tuple of (of_adj, gcra_capped) where gcra_capped is the GCRA after
         applying the 1.25% of S-TREA cap.
     """
+    # The GCRA cap rate (1.25% of S-TREA, Art. 92 para 2A) is a Basel-3.1 pack
+    # scalar; the output floor is b31-only, so the no-pack fallback resolves the
+    # b31 regime. scalar_value is the compile-boundary Decimal->float conversion.
+    resolved_pack = pack if pack is not None else resolve("b31", date(2027, 1, 1))
+    gcra_cap_rate = scalar_value(resolved_pack.scalar_param("gcra_cap_rate"))
+
     # Cap GCRA at 1.25% of S-TREA per Art. 92 para 2A. When S-TREA == 0 the
     # cap is 0.0, so gcra_capped collapses to 0.0 (GCRA is always >= 0, hence
     # min(x, 0.0) == 0.0). The cap is applied unconditionally — guarding on
     # `gcra_cap > 0` would leak the full uncapped GCRA at zero S-TREA.
-    gcra_cap = s_trea * GCRA_CAP_RATE
+    gcra_cap = s_trea * gcra_cap_rate
     gcra_capped = min(gcra_amount, gcra_cap)
     of_adj = 12.5 * (irb_t2_credit - irb_cet1_deduction - gcra_capped + sa_t2_credit)
     return of_adj, gcra_capped

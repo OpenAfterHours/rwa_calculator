@@ -293,7 +293,6 @@ class TestArt169BFallback:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         )
         df = result.collect()
         # Art. 169B(2): LGD* = LGDS_re × ES/E + own_LGDU × EU/E
@@ -331,7 +330,6 @@ class TestArt169BFallback:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         firb_result = _apply_collateral_unified(
@@ -339,7 +337,6 @@ class TestArt169BFallback:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         # Under PS1/26 Art. 230(1) OC=1.0 for non-financial collateral under
@@ -411,7 +408,6 @@ class TestFoundationElection:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         )
         df = result.collect()
         # Foundation under PS1/26 Art. 230(1): OC=1.0, so eff=700k (no divisor).
@@ -486,7 +482,6 @@ class TestCRRBackwardCompat:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=False,
         )
         df = result.collect()
         assert df["lgd_post_crm"][0] == pytest.approx(0.12)
@@ -622,7 +617,6 @@ class TestMixedBatch:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         # PS1/26 Art. 230(1): OC=1.0 under B31, so eff=700k. EAD=1M, EU=300k.
@@ -670,7 +664,6 @@ class TestCapitalImpact:
             collateral,
             config_169b,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         result_fcm = _apply_collateral_unified(
@@ -678,7 +671,6 @@ class TestCapitalImpact:
             collateral,
             config_fcm,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         # 169B: (0.20×500k + 0.25×500k)/1M = 0.225
@@ -743,7 +735,6 @@ class TestArt169BFinancialCollateral:
             collateral,
             config,
             _empty_cp_totals(),
-            is_basel_3_1=True,
         ).collect()
 
         # Financial: OC=1.0, ES=500k, EU=500k

@@ -24,23 +24,28 @@ References:
 - CRR Art. 272 Def (88) — qualified central counterparty
 - CRR Art. 107(2)(a) — non-QCCP exposures routed via SA institution path
 - BCBS CRE54.14, CRE54.15 — supervisory risk weights for trade exposures
-- ``src/rwa_calc/data/tables/crr_risk_weights.py`` — QCCP_PROPRIETARY_RW,
-  QCCP_CLIENT_CLEARED_RW (single source of truth for the scalars)
+- rulepack ``common`` pack — qccp_proprietary_rw, qccp_client_cleared_rw
+  (single source of truth for the scalars)
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    QCCP_CLIENT_CLEARED_RW,
-    QCCP_PROPRIETARY_RW,
-)
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# QCCP trade-exposure risk weights (CRR Art. 306 / CRE54.14-15), resolved from
+# the rulepack once at module load.
+_QCCP_PACK = resolve("crr", date(2026, 1, 1))
+_QCCP_PROPRIETARY_RW = scalar_value(_QCCP_PACK.scalar_param("qccp_proprietary_rw"))
+_QCCP_CLIENT_CLEARED_RW = scalar_value(_QCCP_PACK.scalar_param("qccp_client_cleared_rw"))
 
 
 @cites("CRR Art. 306")
@@ -97,8 +102,8 @@ def apply_ccp_risk_weight(
 
     joined = exposures.join(cp_flag, how="cross").join(trade_flag, how="cross")
 
-    proprietary_rw = float(QCCP_PROPRIETARY_RW)
-    client_cleared_rw = float(QCCP_CLIENT_CLEARED_RW)
+    proprietary_rw = _QCCP_PROPRIETARY_RW
+    client_cleared_rw = _QCCP_CLIENT_CLEARED_RW
 
     return joined.with_columns(
         pl.when(pl.col("is_qccp") & pl.col("is_client_cleared"))

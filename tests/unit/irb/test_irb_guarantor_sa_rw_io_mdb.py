@@ -47,9 +47,9 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_risk_weights import MDB_RISK_WEIGHTS_TABLE_2B
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.irb.guarantee import apply_guarantee_substitution
+from rwa_calc.engine.sa.crr_risk_weight_tables import MDB_RISK_WEIGHTS_TABLE_2B
 
 # ---------------------------------------------------------------------------
 # Frame constants

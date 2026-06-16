@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
+from decimal import Decimal
 
 import polars as pl
 import pytest
@@ -33,6 +34,7 @@ from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.engine.crm.expressions import subordinated_unsecured_lgd
 from rwa_calc.engine.irb.formulas import (
     G_999,
     calculate_correlation,
@@ -41,6 +43,7 @@ from rwa_calc.engine.irb.formulas import (
     calculate_irb_rwa,
     calculate_k,
     calculate_maturity_adjustment,
+    firb_supervisory_lgd_values,
     get_correlation_params,
 )
 from rwa_calc.engine.irb.formulas import apply_irb_formulas as _apply_irb_formulas_raw
@@ -48,12 +51,75 @@ from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.engine.irb.transforms import (
     apply_firb_lgd,
 )
+from rwa_calc.rulebook.resolve import resolve
 
 
 def apply_irb_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     """Test shim: pad hand frames with the crm_exit contract columns the
     sealed branch input guarantees, then invoke the real function."""
     return _apply_irb_formulas_raw(_pad(lf), config)
+
+
+# =============================================================================
+# F-IRB SUPERVISORY LGD PROJECTION PINS (canonical pack table -> FIRB dict)
+# =============================================================================
+
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
+
+def test_firb_supervisory_lgd_values_crr_projection_byte_identical() -> None:
+    # Act / Assert — the pack projection reproduces the canonical CRR FIRB dict
+    # exactly (literal pin of the former data/tables FIRB_SUPERVISORY_LGD).
+    assert firb_supervisory_lgd_values(_CRR_PACK) == {
+        "unsecured_senior": Decimal("0.45"),
+        "subordinated": Decimal("0.75"),
+        "covered_bond": Decimal("0.1125"),
+        "financial_collateral": Decimal("0.00"),
+        "receivables": Decimal("0.35"),
+        "residential_re": Decimal("0.35"),
+        "commercial_re": Decimal("0.35"),
+        "other_physical": Decimal("0.40"),
+        "financial_collateral_subordinated": Decimal("0.00"),
+        "receivables_subordinated": Decimal("0.65"),
+        "residential_re_subordinated": Decimal("0.65"),
+        "commercial_re_subordinated": Decimal("0.65"),
+        "other_physical_subordinated": Decimal("0.70"),
+        "purchased_receivables_senior": Decimal("0.45"),
+        "purchased_receivables_subordinated": Decimal("1.00"),
+        "dilution_risk": Decimal("0.75"),
+    }
+
+
+def test_firb_supervisory_lgd_values_b31_projection_byte_identical() -> None:
+    # Act / Assert — and the canonical Basel 3.1 FIRB dict exactly (literal pin
+    # of the former data/tables BASEL31_FIRB_SUPERVISORY_LGD).
+    assert firb_supervisory_lgd_values(_B31_PACK) == {
+        "unsecured_senior": Decimal("0.40"),
+        "unsecured_senior_fse": Decimal("0.45"),
+        "subordinated": Decimal("0.75"),
+        "covered_bond": Decimal("0.1125"),
+        "financial_collateral": Decimal("0.00"),
+        "receivables": Decimal("0.20"),
+        "residential_re": Decimal("0.20"),
+        "commercial_re": Decimal("0.20"),
+        "other_physical": Decimal("0.25"),
+        "purchased_receivables_senior": Decimal("0.40"),
+        "purchased_receivables_subordinated": Decimal("1.00"),
+        "dilution_risk": Decimal("1.00"),
+    }
+
+
+def test_subordinated_unsecured_lgd_is_regime_invariant_075() -> None:
+    # Act / Assert — Art. 161(1)(b) subordinated unsecured, 75% under both regimes
+    assert subordinated_unsecured_lgd(_CRR_PACK) == subordinated_unsecured_lgd(_B31_PACK) == 0.75
+
+
+def test_firb_fse_senior_lgd_split_feature_per_regime() -> None:
+    # Act / Assert — CRR has no FSE senior-unsecured split (flat 45%); B31 does
+    # (FSE 45% / non-FSE 40%), so apply_firb_lgd gates the per-row FSE selection.
+    assert _CRR_PACK.feature("firb_fse_senior_lgd_split") is False
+    assert _B31_PACK.feature("firb_fse_senior_lgd_split") is True
 
 
 # =============================================================================
@@ -1532,131 +1598,3 @@ class TestApplyIRBFormulas:
             result_no["correlation"][0] * 1.25, abs=1e-6
         )
         assert result_fi["rwa"][0] > result_no["rwa"][0]
-
-
-# =============================================================================
-# CONFIG FACTORY TESTS (PDFloors, LGDFloors)
-# =============================================================================
-
-
-class TestPDFloorsConfig:
-    """Tests for PDFloors dataclass factory methods and get_floor()."""
-
-    def test_crr_all_003pct(self) -> None:
-        from rwa_calc.contracts.config import PDFloors
-
-        floors = PDFloors.crr()
-        from decimal import Decimal
-
-        assert floors.corporate == Decimal("0.0003")
-        assert floors.retail_mortgage == Decimal("0.0003")
-        assert floors.retail_qrre_transactor == Decimal("0.0003")
-        assert floors.retail_qrre_revolver == Decimal("0.0003")
-
-    def test_b31_differentiated(self) -> None:
-        from decimal import Decimal
-
-        from rwa_calc.contracts.config import PDFloors
-
-        floors = PDFloors.basel_3_1()
-        assert floors.corporate == Decimal("0.0005")
-        assert floors.retail_mortgage == Decimal("0.0010")
-        assert floors.retail_qrre_transactor == Decimal("0.0005")
-        assert floors.retail_qrre_revolver == Decimal("0.0010")
-        assert floors.retail_other == Decimal("0.0005")
-
-    def test_get_floor_qrre_transactor_vs_revolver(self) -> None:
-        from rwa_calc.contracts.config import PDFloors
-        from rwa_calc.domain.enums import ExposureClass
-
-        floors = PDFloors.basel_3_1()
-        trans = floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=True)
-        rev = floors.get_floor(ExposureClass.RETAIL_QRRE, is_qrre_transactor=False)
-        assert trans < rev  # Transactor floor (0.05%) < Revolver floor (0.10%)
-
-    def test_get_floor_unknown_class_defaults_to_corporate(self) -> None:
-        from rwa_calc.contracts.config import PDFloors
-        from rwa_calc.domain.enums import ExposureClass
-
-        floors = PDFloors.basel_3_1()
-        # PSE doesn't have a specific floor → defaults to corporate
-        floor = floors.get_floor(ExposureClass.PSE)
-        assert floor == floors.corporate
-
-
-class TestLGDFloorsConfig:
-    """Tests for LGDFloors dataclass factory methods and get_floor()."""
-
-    def test_crr_all_zero(self) -> None:
-        from decimal import Decimal
-
-        from rwa_calc.contracts.config import LGDFloors
-
-        floors = LGDFloors.crr()
-        assert floors.unsecured == Decimal("0.0")
-        assert floors.financial_collateral == Decimal("0.0")
-        assert floors.retail_rre == Decimal("0.0")
-
-    def test_b31_corporate_floors(self) -> None:
-        from decimal import Decimal
-
-        from rwa_calc.contracts.config import LGDFloors
-
-        floors = LGDFloors.basel_3_1()
-        assert floors.unsecured == Decimal("0.25")
-        assert floors.financial_collateral == Decimal("0.0")
-        assert floors.receivables == Decimal("0.10")
-        assert floors.commercial_real_estate == Decimal("0.10")
-        assert floors.residential_real_estate == Decimal("0.10")
-        assert floors.other_physical == Decimal("0.15")
-
-    def test_b31_retail_floors(self) -> None:
-        from decimal import Decimal
-
-        from rwa_calc.contracts.config import LGDFloors
-
-        floors = LGDFloors.basel_3_1()
-        assert floors.retail_rre == Decimal("0.05")
-        assert floors.retail_qrre_unsecured == Decimal("0.50")
-        assert floors.retail_other_unsecured == Decimal("0.30")
-        assert floors.retail_lgdu == Decimal("0.30")
-
-    def test_get_floor_retail_mortgage_immovable(self) -> None:
-        from rwa_calc.contracts.config import LGDFloors
-        from rwa_calc.domain.enums import CollateralType
-
-        floors = LGDFloors.basel_3_1()
-        floor = floors.get_floor(CollateralType.IMMOVABLE, exposure_class="retail_mortgage")
-        from decimal import Decimal
-
-        assert floor == Decimal("0.05")  # Art. 164(4)(a)
-
-    def test_get_floor_corporate_immovable(self) -> None:
-        from rwa_calc.contracts.config import LGDFloors
-        from rwa_calc.domain.enums import CollateralType
-
-        floors = LGDFloors.basel_3_1()
-        floor = floors.get_floor(CollateralType.IMMOVABLE, exposure_class="corporate")
-        from decimal import Decimal
-
-        assert floor == Decimal("0.10")  # Art. 161(5)
-
-    def test_get_floor_qrre_unsecured(self) -> None:
-        from rwa_calc.contracts.config import LGDFloors
-        from rwa_calc.domain.enums import CollateralType
-
-        floors = LGDFloors.basel_3_1()
-        floor = floors.get_floor(CollateralType.OTHER, exposure_class="retail_qrre")
-        from decimal import Decimal
-
-        assert floor == Decimal("0.50")  # Art. 164(4)(b)(i)
-
-    def test_get_floor_retail_other_unsecured(self) -> None:
-        from rwa_calc.contracts.config import LGDFloors
-        from rwa_calc.domain.enums import CollateralType
-
-        floors = LGDFloors.basel_3_1()
-        floor = floors.get_floor(CollateralType.OTHER, exposure_class="retail_other")
-        from decimal import Decimal
-
-        assert floor == Decimal("0.30")  # Art. 164(4)(b)(ii)

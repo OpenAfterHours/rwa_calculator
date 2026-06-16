@@ -1,0 +1,990 @@
+"""
+Basel 3.1 SA risk weight tables (PRA PS1/26 / BCBS CRE20).
+
+Provides LTV-band based risk weight tables for real estate exposures,
+ADC treatment, revised CQS-based risk weights, SCRA institution weights,
+investment-grade corporate treatment, and subordinated debt treatment
+under the Basel 3.1 framework.
+
+Pipeline position:
+    Used by SACalculator._apply_risk_weights() when config.is_basel_3_1
+
+Key responsibilities:
+- LTV-band risk weight lookup for residential RE (general + income-producing)
+- LTV-band risk weight lookup for commercial RE (general + income-producing)
+- ADC exposure risk weight (150% / 100% pre-sold)
+- Revised CQS-based corporate risk weights (CQS3: 75%, CQS5: 150%)
+- SCRA-based institution risk weights for unrated exposures (Grade A/B/C)
+- Investment-grade corporate treatment (65%)
+- SME corporate treatment (85%)
+- Subordinated debt treatment (150% flat)
+- Polars expression builders for vectorized lookups
+
+References:
+    - CRE20.7-15: Sovereign risk weights (unchanged from CRR)
+    - CRE20.16-21: Institution risk weights (ECRA rated + SCRA unrated)
+    - CRE20.22-26: Corporate risk weights (revised CQS, investment-grade, SME)
+    - CRE20.47: Subordinated debt (150% flat)
+    - CRE20.73: Residential RE (general) whole-loan approach
+    - CRE20.82: Residential RE (income-producing) whole-loan approach
+    - CRE20.85: Commercial RE (general) preferential treatment
+    - CRE20.86: Commercial RE (income-producing) LTV bands
+    - CRE20.87-88: ADC exposures
+    - PRA PS1/26 Chapter 4: UK adoption of BCBS SA risk weights
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from datetime import date
+from decimal import Decimal
+from typing import cast
+
+import polars as pl
+import polars.selectors as cs
+from watchfire import cites
+
+from rwa_calc.domain.enums import PropertyType
+from rwa_calc.rulebook.resolve import resolve
+
+# Basel 3.1 SA risk-weight values now live in packs/b31.py; the int-keyed CQS
+# dicts below are read back from the pack so it is the single source of truth.
+_RW_PACK_B31 = resolve("b31", date(2027, 1, 1))
+
+
+def _int_cqs_rw_from_pack(name: str) -> dict[int | None, Decimal]:
+    """Read a raw-int-keyed (1-6, None=unrated) B31 RW LookupTable from the pack.
+
+    Returns the exact ``dict[int | None, Decimal]`` the former module-level
+    literal held, so ``_build_int_cqs_rw_df`` and every other consumer stay
+    byte-identical.
+    """
+    return cast("dict[int | None, Decimal]", dict(_RW_PACK_B31.lookup(name).entries))
+
+
+def _str_rw_from_pack(name: str) -> dict[str, Decimal]:
+    """Read a string-keyed B31 RW LookupTable (e.g. SCRA grade -> RW) from the pack."""
+    return cast("dict[str, Decimal]", dict(_RW_PACK_B31.lookup(name).entries))
+
+
+def _int_rw_from_pack(name: str) -> dict[int, Decimal]:
+    """Read a strictly-int-keyed (CQS 1-6, no unrated) B31 RW LookupTable from the pack."""
+    return cast("dict[int, Decimal]", dict(_RW_PACK_B31.lookup(name).entries))
+
+
+def _scalar_dec(name: str) -> Decimal:
+    """Read a cited Basel-3.1 SA risk-weight scalar's Decimal value from the pack."""
+    return _RW_PACK_B31.scalar_param(name).value
+
+
+def _ltv_bands_from_pack(name: str) -> list[dict[str, Decimal]]:
+    """Render a pack income-RE ``BandedTable`` to the historical list[dict] shape.
+
+    Returns ``[{ltv_lower, ltv_upper, risk_weight}, ...]`` byte-identical to the
+    former module-level literal: the first band's lower bound is 0.00, each
+    subsequent lower bound is the previous upper bound, and the open-ended
+    None-bound catch-all renders its ltv_upper as the 999.0 sentinel. Consumed
+    by ``lookup_b31_*_rw`` and the test pins, which stay unchanged.
+    """
+    # Top-of-table sentinel for the open-ended (None-bound) income-RE band — the
+    # historical data-layer list[dict] used 999.0 as the final ltv_upper. Local
+    # to this renderer (not a module-level constant): a pure implementation
+    # artifact, not a regulatory value.
+    ltv_band_top_sentinel = Decimal("999.0")
+    bands: list[dict[str, Decimal]] = []
+    lower = Decimal("0.00")
+    for bound, risk_weight in _RW_PACK_B31.banded(name).bands:
+        upper = bound if bound is not None else ltv_band_top_sentinel
+        bands.append({"ltv_lower": lower, "ltv_upper": upper, "risk_weight": risk_weight})
+        lower = upper
+    return bands
+
+
+def _income_band_chain(ltv_expr: pl.Expr, name: str) -> pl.Expr:
+    """Compile a pack income-RE ``BandedTable`` to a cumulative LTV when/then chain.
+
+    Mirrors ``rulebook.compile.banded_expr`` but operates on a caller-supplied
+    (already ``fill_null``-ed) ``ltv`` expression rather than a column name, so
+    the null handling is preserved. Byte-identical to the former inline
+    ``pl.when(ltv <= ...).then(...)...otherwise(...)`` chain.
+    """
+    chain: pl.Expr | None = None
+    catch_all = 0.0
+    for bound, risk_weight in _RW_PACK_B31.banded(name).bands:
+        if bound is None:
+            catch_all = float(risk_weight)
+            continue
+        predicate = ltv_expr <= float(bound)
+        chain = (
+            pl.when(predicate).then(pl.lit(float(risk_weight)))
+            if chain is None
+            else chain.when(predicate).then(pl.lit(float(risk_weight)))
+        )
+    if chain is None:
+        return pl.lit(catch_all)
+    return chain.otherwise(pl.lit(catch_all))
+
+
+# =============================================================================
+# RESIDENTIAL REAL ESTATE — GENERAL (PRA PS1/26 Art. 124F)
+# Not materially dependent on cash flows generated by the property
+# Loan-splitting approach: 20% on secured portion (up to 55% of property value),
+# counterparty risk weight on the residual (per Art. 124L)
+#
+# NOTE: The PRA adopted loan-splitting, NOT the BCBS CRE20.73 whole-loan table.
+# Junior charges (Art. 124F(2)) reduce the 55% threshold by prior charge amount.
+# Art. 124L defines counterparty-type-dependent residual risk weights.
+# =============================================================================
+
+B31_RESIDENTIAL_GENERAL_SECURED_RW = _scalar_dec("b31_residential_general_secured_rw")
+B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO = _scalar_dec(
+    "b31_residential_general_max_secured_ratio"
+)  # 55% of property value
+
+# Art. 124L — Counterparty type table for RRE residual risk weight
+B31_RRE_RESIDUAL_RW_NATURAL_PERSON = _scalar_dec(
+    "b31_rre_residual_rw_natural_person"
+)  # Art. 124L(a): natural person
+B31_RRE_RESIDUAL_RW_RETAIL_SME = _scalar_dec(
+    "b31_rre_residual_rw_retail_sme"
+)  # Art. 124L(a): retail-qualifying SME
+B31_RRE_RESIDUAL_RW_OTHER_SME = _scalar_dec(
+    "b31_rre_residual_rw_other_sme"
+)  # Art. 124L(b): other SME (unrated)
+B31_RRE_RESIDUAL_RW_SOCIAL_HOUSING_FLOOR = _scalar_dec(
+    "b31_rre_residual_rw_social_housing_floor"
+)  # Art. 124L(c): floor for social housing
+
+# =============================================================================
+# RESIDENTIAL REAL ESTATE — INCOME-PRODUCING (PRA PS1/26 Art. 124G, Table 6B)
+# Materially dependent on cash flows generated by the property
+# Whole-loan approach — risk weight applies to the entirety of the exposure
+# Art. 124G(2): 1.25x multiplier when junior lien AND LTV > 50%
+# =============================================================================
+
+B31_RESI_INCOME_JUNIOR_MULTIPLIER = _scalar_dec(
+    "b31_residential_income_junior_multiplier"
+)  # Art. 124G(2)
+B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD = _scalar_dec(
+    "b31_residential_income_junior_ltv_threshold"
+)  # Multiplier applies only above 50% LTV
+
+B31_RESIDENTIAL_INCOME_LTV_BANDS: list[dict[str, Decimal]] = _ltv_bands_from_pack(
+    "b31_residential_income_ltv_bands"
+)
+
+# =============================================================================
+# COMMERCIAL REAL ESTATE — INCOME-PRODUCING (PRA PS1/26 Art. 124I)
+# Materially dependent on cash flows generated by the property
+# PRA uses 2 bands (≤80%/100%, >80%/110%), NOT the BCBS CRE20.86 3-band table.
+# Art. 124I(3): Junior charge absolute RWs (not multipliers on Art. 124I(1)/(2)):
+#   ≤ 60% → 100% (Art. 124I(3)(a))
+#   60-80% → 125% (Art. 124I(3)(b))
+#   > 80% → 137.5% (Art. 124I(3)(c))
+# =============================================================================
+
+# Art. 124I(3) junior-charge risk weights — absolute overrides, NOT multipliers.
+# Applying as multipliers on the 110% >80% base would produce 151.25% (= 110% × 1.375),
+# a +13.75pp over-capital error. PRA PS1/26 ps126app1.pdf p.57 specifies absolute values.
+B31_CRE_INCOME_JUNIOR_RW_LOW = _scalar_dec(
+    "b31_cre_income_junior_rw_low"
+)  # Art. 124I(3)(a): LTV ≤ 60%
+B31_CRE_INCOME_JUNIOR_RW_MID = _scalar_dec(
+    "b31_cre_income_junior_rw_mid"
+)  # Art. 124I(3)(b): 60% < LTV ≤ 80%
+B31_CRE_INCOME_JUNIOR_RW_HIGH = _scalar_dec(
+    "b31_cre_income_junior_rw_high"
+)  # Art. 124I(3)(c): LTV > 80%
+
+B31_COMMERCIAL_INCOME_LTV_BANDS: list[dict[str, Decimal]] = _ltv_bands_from_pack(
+    "b31_commercial_income_ltv_bands"
+)
+
+# =============================================================================
+# COMMERCIAL REAL ESTATE — GENERAL (PRA PS1/26 Art. 124H)
+# Not materially dependent on cash flows.
+# Two treatments by counterparty type:
+#   (1-2) Natural person / SME: Loan-splitting — 60% on portion up to 55% of
+#         property value, counterparty RW on the residual.
+#   (3)   Other counterparties: max(60%, min(counterparty RW, Art. 124I RW))
+#         where Art. 124I RW is 100% (LTV ≤ 80%) or 110% (LTV > 80%).
+#
+# NOTE: The PRA adopted loan-splitting for CRE (Art. 124H), NOT the BCBS
+# CRE20.85 preferential min(60%, counterparty RW) approach.
+# =============================================================================
+
+B31_COMMERCIAL_GENERAL_SECURED_RW = _scalar_dec("b31_commercial_general_secured_rw")
+B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO = _scalar_dec(
+    "b31_commercial_general_max_secured_ratio"
+)  # 55% of property value
+
+# =============================================================================
+# ADC EXPOSURES (CRE20.87-88)
+# =============================================================================
+
+B31_ADC_RISK_WEIGHT = _scalar_dec("b31_adc_risk_weight")
+B31_ADC_PRESOLD_RISK_WEIGHT = _scalar_dec("b31_adc_presold_risk_weight")
+
+# =============================================================================
+# OTHER REAL ESTATE — NON-QUALIFYING RE (PRA PS1/26 Art. 124J)
+# RE that doesn't meet Art. 124A qualifying criteria (valuation, lien, etc.)
+# Three sub-treatments based on property type and income dependence:
+#   - Income-dependent: 150% flat
+#   - RESI non-dependent: counterparty RW (no floor)
+#   - CRE non-dependent: max(60%, counterparty RW)
+# =============================================================================
+
+B31_OTHER_RE_INCOME_DEPENDENT_RW = _scalar_dec("b31_other_re_income_dependent_rw")
+B31_OTHER_RE_CRE_FLOOR_RW = _scalar_dec("b31_other_re_cre_floor_rw")
+
+# =============================================================================
+# CORPORATE CQS-BASED RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 122(2) Table 6)
+# Differs from CRR: CQS3 = 75% (was 100%). PRA retains CQS5 = 150% (BCBS: 100%).
+# =============================================================================
+
+B31_CORPORATE_RISK_WEIGHTS: dict[int | None, Decimal] = _int_cqs_rw_from_pack(
+    "b31_corporate_risk_weights"
+)
+
+# Investment-grade corporate: 65% (PRA PS1/26 Art. 122(6)(a))
+# Qualifying: publicly traded + investment grade external rating
+# Only applies when institution has PRA permission to use IG assessment
+B31_CORPORATE_INVESTMENT_GRADE_RW = _scalar_dec("b31_corporate_investment_grade_rw")
+
+# Non-investment-grade corporate: 135% (PRA PS1/26 Art. 122(6)(b))
+# Applies to unrated corporates that do NOT qualify as investment-grade
+# when the institution has elected to use the IG assessment permission.
+# Without IG assessment permission, all unrated corporates get 100%.
+B31_CORPORATE_NON_INVESTMENT_GRADE_RW = _scalar_dec("b31_corporate_non_investment_grade_rw")
+
+# SME corporate: 85% (CRE20.47)
+# Qualifying: turnover <= EUR 50m, unrated
+B31_CORPORATE_SME_RW = _scalar_dec("b31_corporate_sme_rw")
+
+# =============================================================================
+# SCRA-BASED INSTITUTION RISK WEIGHTS — BASEL 3.1 (CRE20.16-21)
+# Standardised Credit Risk Assessment Approach for unrated institutions.
+# Replaces CRR due-diligence assessment for unrated.
+# Rated institutions use ECRA (same as CRR Art. 120-121).
+# =============================================================================
+
+# Long-term (>3m residual maturity) SCRA risk weights
+B31_SCRA_RISK_WEIGHTS: dict[str, Decimal] = _str_rw_from_pack("b31_scra_risk_weights")
+
+# Short-term (≤3m residual maturity) SCRA risk weights (PRA PS1/26 Art. 120A)
+B31_SCRA_SHORT_TERM_RISK_WEIGHTS: dict[str, Decimal] = _str_rw_from_pack(
+    "b31_scra_short_term_risk_weights"
+)
+
+# =============================================================================
+# ECRA SHORT-TERM INSTITUTION RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 120)
+# For RATED institutions with residual maturity ≤ 3 months (Table 4).
+# Long-term ECAI applied to short-term exposure: CQS 1-3 receive 20%;
+# CQS 4-5 receive 50%; CQS 6 receives 150%.
+# Trade finance ≤ 6 months also qualifies for short-term treatment (Art. 121(5)).
+#
+# Table 4A (PRA PS1/26 Art. 120(2B)) is the dedicated short-term ECAI
+# assessment table — used when the institution carries a short-term-specific
+# ECAI rating (signalled by `has_short_term_ecai=True` on the exposure).
+# =============================================================================
+
+B31_ECRA_SHORT_TERM_RISK_WEIGHTS: dict[int, Decimal] = _int_rw_from_pack(
+    "b31_ecra_short_term_risk_weights"
+)
+
+# PRA PS1/26 Art. 120(2B) Table 4A: short-term ECAI assessment risk weights.
+# Applies when the institution exposure carries a dedicated short-term ECAI
+# rating (`has_short_term_ecai=True`), not a long-term rating mapped onto a
+# short-term exposure (Table 4). Mapping has only 5 CQS bands — bands 4-5
+# both attract 150%.
+B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS: dict[int, Decimal] = _int_rw_from_pack(
+    "b31_ecra_short_term_ecai_risk_weights"
+)
+
+# PRA PS1/26 Art. 122(3) Table 6A: short-term corporate ECAI assessment risk
+# weights. Applies when a corporate exposure carries a dedicated short-term
+# ECAI rating (`has_short_term_ecai=True`) AND original maturity ≤ 3 months,
+# instead of mapping the long-term Table 6 weights onto the short-term
+# exposure. Corporate analogue of Table 4A (institutions). The CRR has no
+# short-term corporate ECAI table, so this is Basel-3.1-only. Note: unlike
+# Art. 121(5) for institutions, Art. 122(3) does NOT extend the gate to
+# trade-finance ≤ 6 months — the short-term gate is original maturity
+# ≤ 3 months only. CQS 4-6 / Others all attract 150%.
+B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS: dict[int, Decimal] = _int_rw_from_pack(
+    "b31_corporate_short_term_ecai_risk_weights"
+)
+
+# =============================================================================
+# RETAIL TRANSACTOR RISK WEIGHT — BASEL 3.1 (PRA PS1/26 Art. 123)
+# Qualifying revolving retail exposures where obligor repays in full each period
+# =============================================================================
+
+B31_RETAIL_TRANSACTOR_RW = _scalar_dec("b31_retail_transactor_rw")  # 45% for QRRE transactors
+B31_RETAIL_PAYROLL_LOAN_RW = _scalar_dec(
+    "b31_retail_payroll_loan_rw"
+)  # 35% for payroll/pension loans (Art. 123(4))
+B31_RETAIL_NON_REGULATORY_RW = _scalar_dec(
+    "b31_retail_non_regulatory_rw"
+)  # 100% for non-regulatory retail (Art. 123(3)(c))
+
+# =============================================================================
+# CURRENCY MISMATCH MULTIPLIER — BASEL 3.1 (PRA PS1/26 Art. 123B / CRE20.93)
+# Retail / RE exposures denominated in a different currency to the borrower's
+# income source receive a 1.5x RW multiplier, capped at 150% absolute RW.
+# =============================================================================
+
+B31_CURRENCY_MISMATCH_MULTIPLIER: Decimal = _scalar_dec("b31_currency_mismatch_multiplier")
+B31_CURRENCY_MISMATCH_RW_CAP: Decimal = _scalar_dec("b31_currency_mismatch_rw_cap")
+B31_CURRENCY_MISMATCH_HEDGE_COVERAGE_FLOOR: Decimal = _scalar_dec(
+    "b31_currency_mismatch_hedge_coverage_floor"
+)
+"""PRA PS1/26 Art. 123B(2) — currency-mismatch multiplier waived when hedge coverage >= 90%."""
+
+# =============================================================================
+# SA SPECIALISED LENDING — BASEL 3.1 (PRA PS1/26 Art. 122A-122B)
+# New SA exposure class with risk weights distinct from general corporates.
+# Rated SL exposures use the corporate CQS table (Art. 122A(3)).
+# =============================================================================
+
+B31_SA_SL_RISK_WEIGHTS: dict[str, Decimal] = _str_rw_from_pack("b31_sa_sl_risk_weights")
+
+# =============================================================================
+# SUBORDINATED DEBT RISK WEIGHT — BASEL 3.1 (CRE20.49)
+# Flat 150% for all subordinated debt (institution + corporate)
+# =============================================================================
+
+B31_SUBORDINATED_DEBT_RW = _scalar_dec("b31_subordinated_debt_rw")
+
+# =============================================================================
+# DEFAULTED EXPOSURE RISK WEIGHTS — BASEL 3.1 (CRE20.88-90)
+# =============================================================================
+
+# High-risk exposure RW — Basel 3.1 (Art. 128): 150% flat, identical to the CRR
+# value, single-sourced into the common rulepack pack (high_risk_rw).
+
+B31_DEFAULTED_RW_HIGH_PROVISION = _scalar_dec(
+    "b31_defaulted_rw_high_provision"
+)  # Art. 127: provisions >= 20%
+B31_DEFAULTED_RW_LOW_PROVISION = _scalar_dec(
+    "b31_defaulted_rw_low_provision"
+)  # Art. 127: provisions < 20%
+B31_DEFAULTED_PROVISION_THRESHOLD = _scalar_dec(
+    "b31_defaulted_provision_threshold"
+)  # PRA PS1/26 Art. 127: 20% threshold
+# Defaulted general RESI RE (non-income-dependent): 100% flat regardless of provisions
+# PRA PS1/26 Art. 127 / CRE20.88 — Basel 3.1 simplification for owner-occupied housing
+B31_DEFAULTED_RESI_RE_NON_INCOME_RW = _scalar_dec("b31_defaulted_resi_re_non_income_rw")
+
+# =============================================================================
+# COVERED BOND RISK WEIGHTS — BASEL 3.1 (PRA PS1/26 Art. 129(4) Table 7)
+# PRA retained CRR Table 6A values unchanged (did NOT adopt BCBS CRE20.28
+# reductions for CQS 2/4/5/6).
+# =============================================================================
+
+B31_COVERED_BOND_RISK_WEIGHTS: dict[int | None, Decimal] = _int_cqs_rw_from_pack(
+    "b31_covered_bond_risk_weights"
+)
+
+# Unrated covered bond derivation from issuer SCRA grade via institution RW.
+# Art. 129(5): unrated CB RW is derived from the issuing institution's own RW.
+# Under B31, unrated institutions use SCRA grades which map to institution RWs.
+# The derivation chain is: SCRA grade → institution RW → CB RW
+# using the COVERED_BOND_UNRATED_DERIVATION_B31 table in crr_risk_weights.py.
+#
+# SCRA A_ENHANCED → institution 30% → CB 15% (derivation table: 0.30 → 0.15)
+# SCRA A          → institution 40% → CB 20% (derivation table: 0.40 → 0.20)
+# SCRA B          → institution 75% → CB 35% (derivation table: 0.75 → 0.35)
+# SCRA C          → institution 150% → CB 100% (derivation table: 1.50 → 1.00)
+B31_COVERED_BOND_UNRATED_FROM_SCRA: dict[str, Decimal] = _str_rw_from_pack(
+    "b31_covered_bond_unrated_from_scra"
+)
+
+
+def _build_int_cqs_rw_df(
+    weights: Mapping[int | None, Decimal],
+    exposure_class: str,
+    order: tuple[int | None, ...],
+) -> pl.DataFrame:
+    """Build a CQS risk-weight lookup DataFrame from an int-keyed dict.
+
+    Used for Basel 3.1 tables whose constant dicts are keyed by the raw
+    CQS integer (1..6, or None for unrated) rather than the CQS enum.
+    """
+    return pl.DataFrame(
+        {
+            "cqs": list(order),
+            "risk_weight": [float(weights[k]) for k in order],
+            "exposure_class": [exposure_class] * len(order),
+        }
+    ).with_columns(
+        [
+            pl.col("cqs").cast(pl.Int8),
+            pl.col("risk_weight").cast(pl.Float64),
+        ]
+    )
+
+
+_B31_CQS_RATED_ORDER: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
+_B31_CQS_ORDER_WITH_UNRATED: tuple[int | None, ...] = (1, 2, 3, 4, 5, 6, None)
+
+
+@cites("PS1/26, paragraph 129")
+def _create_b31_covered_bond_df() -> pl.DataFrame:
+    """Create Basel 3.1 covered bond risk weight lookup DataFrame.
+
+    PRA PS1/26 Art. 129(4) Table 7 — identical to CRR Table 6A.
+    """
+    return _build_int_cqs_rw_df(
+        B31_COVERED_BOND_RISK_WEIGHTS,
+        "COVERED_BOND",
+        order=_B31_CQS_RATED_ORDER,
+    )
+
+
+def _create_b31_corporate_df() -> pl.DataFrame:
+    """Create Basel 3.1 corporate risk weight lookup DataFrame."""
+    return _build_int_cqs_rw_df(
+        B31_CORPORATE_RISK_WEIGHTS,
+        "CORPORATE",
+        order=_B31_CQS_ORDER_WITH_UNRATED,
+    )
+
+
+@cites("PS1/26, paragraph 122")
+def get_b31_combined_cqs_risk_weights() -> pl.DataFrame:
+    """
+    Get combined CQS-based risk weight table for Basel 3.1 joins.
+
+    Uses Basel 3.1 corporate weights (CQS3=75%, CQS5=150%) and PRA PS1/26
+    Art. 120 ECRA institution weights (CQS 2 = 30%).
+
+    Returns:
+        Combined DataFrame with columns: exposure_class, cqs, risk_weight
+    """
+    from rwa_calc.engine.sa.crr_risk_weight_tables import (
+        _create_cgcb_df,
+        _create_institution_df,
+        _create_mdb_df,
+        _create_pse_df,
+        _create_rgla_df,
+    )
+
+    return pl.concat(
+        [
+            _create_cgcb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_rgla_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_pse_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_mdb_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_institution_df(is_basel_3_1=True).select(
+                ["exposure_class", "cqs", "risk_weight"]
+            ),
+            _create_b31_corporate_df().select(["exposure_class", "cqs", "risk_weight"]),
+            _create_b31_covered_bond_df().select(["exposure_class", "cqs", "risk_weight"]),
+        ]
+    )
+
+
+# =============================================================================
+# POLARS EXPRESSION BUILDERS
+# =============================================================================
+
+
+def b31_residential_rw_expr(
+    counterparty_rw_col: str = "_cqs_risk_weight",
+) -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 residential RE risk weights.
+
+    General residential (Art. 124F): Loan-splitting approach — 20% on the
+    secured portion (up to 55% of property value minus prior charges),
+    counterparty RW on the residual per Art. 124L counterparty type table.
+    Art. 124F(2): Junior charges reduce the 55% threshold.
+
+    Income-producing residential (Art. 124G, Table 6B): Whole-loan approach
+    with LTV-band risk weights applied to the entire exposure.
+    Art. 124G(2): 1.25x multiplier when junior lien AND LTV > 50%.
+
+    Art. 124L counterparty type table for RRE residual risk weight:
+      - Natural person / retail-qualifying SME: 75%
+      - Other SME (non-retail): 85%
+      - Social housing: max(75%, unsecured counterparty RW)
+      - Other (corporate, institution, etc.): full unsecured counterparty RW
+
+    Requires columns: ltv (Float64), has_income_cover (Boolean),
+        prior_charge_ltv (Float64), cp_is_natural_person (Boolean),
+        is_sme (Boolean), qualifies_as_retail (Boolean),
+        cp_is_social_housing (Boolean), and the counterparty RW column
+
+    Args:
+        counterparty_rw_col: Column containing the counterparty risk weight
+
+    Returns:
+        Expression resolving to the risk weight
+    """
+    ltv = pl.col("ltv").fill_null(1.0)
+    is_income = pl.col("has_income_cover").fill_null(False)
+    cp_rw = pl.col(counterparty_rw_col).fill_null(0.75)
+    prior_charge = pl.col("prior_charge_ltv").fill_null(0.0)
+    is_junior = prior_charge > 0.0
+
+    # Art. 124L — Counterparty type routing for RRE residual risk weight
+    cp_rw_for_rre = _b31_art_124l_cp_rw_expr(cp_rw)
+
+    # General residential (PRA PS1/26 Art. 124F) — loan-splitting
+    # Art. 124F(2): Junior charges reduce the 55% threshold
+    effective_threshold = pl.max_horizontal(
+        pl.lit(0.0), pl.lit(float(B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO)) - prior_charge
+    )
+    secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
+    general = pl.lit(float(B31_RESIDENTIAL_GENERAL_SECURED_RW)) * secured_share + cp_rw_for_rre * (
+        pl.lit(1.0) - secured_share
+    )
+
+    # Income-producing residential (PRA PS1/26 Art. 124G, Table 6B)
+    base_income = _income_band_chain(ltv, "b31_residential_income_ltv_bands")
+    # Art. 124G(2): 1.25x multiplier for junior positions when LTV > 50%.
+    # The multiplied RW is NOT capped at the 105% table maximum — e.g.
+    # LTV > 100% gives 105% × 1.25 = 131.25%. (Contrast with Art. 124I(3)
+    # CRE, which uses absolute RWs rather than multipliers.)
+    junior_multiplier = (
+        pl.when(is_junior & (ltv > float(B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD)))
+        .then(pl.lit(float(B31_RESI_INCOME_JUNIOR_MULTIPLIER)))
+        .otherwise(pl.lit(1.0))
+    )
+    income = base_income * junior_multiplier
+
+    return pl.when(is_income).then(income).otherwise(general)
+
+
+def b31_commercial_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 commercial RE risk weights.
+
+    General CRE routes by counterparty type (PRA Art. 124H):
+      - Natural person / SME (Art. 124H(1-2)): Loan-splitting — 60% on portion
+        up to 55% of property value (reduced by prior charges per Art. 124F(2)),
+        counterparty RW on the residual.
+      - Other counterparties (Art. 124H(3)): max(60%, min(counterparty_RW,
+        Art. 124I income-producing RW)). This prevents large corporates from
+        getting the favourable loan-splitting treatment.
+
+    Income-producing CRE (PRA Art. 124I): 100% (LTV ≤ 80%), 110% (LTV > 80%).
+    Art. 124I(3): Junior-charge absolute RWs (replace base): ≤60%→100%, 60-80%→125%, >80%→137.5%.
+
+    Requires columns: ltv, has_income_cover, cp_is_natural_person, is_sme,
+        prior_charge_ltv, and the counterparty RW column
+
+    Args:
+        counterparty_rw_col: Column containing the CQS-based counterparty risk weight
+
+    Returns:
+        Expression resolving to the risk weight
+    """
+    ltv = pl.col("ltv").fill_null(1.0)
+    is_income = pl.col("has_income_cover").fill_null(False)
+    cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
+    prior_charge = pl.col("prior_charge_ltv").fill_null(0.0)
+    is_junior = prior_charge > 0.0
+
+    # Counterparty type for Art. 124H routing:
+    # Natural person or SME → loan-splitting (Art. 124H(1-2))
+    # Other counterparties → max/min formula (Art. 124H(3))
+    # Default: False (other counterparty) — conservative, gives higher RW
+    is_natural = pl.col("cp_is_natural_person").fill_null(False)
+    is_sme = pl.col("is_sme").fill_null(False)
+    is_person_or_sme = is_natural | is_sme
+
+    # Art. 124L — counterparty-type residual RW for the Art. 124H(1) loan-split
+    # leg. Only used on the ``is_person_or_sme`` branch (line below), so only the
+    # natural-person/retail-SME (75%) and other-SME (85%) limbs of the shared
+    # Art. 124L helper are reachable; the social-housing and "other" limbs are
+    # inert here (those counterparties route to Art. 124H(3) instead).
+    cp_rw_for_cre = _b31_art_124l_cp_rw_expr(cp_rw)
+
+    # Income-producing CRE (PRA Art. 124I): 100% ≤80% LTV, 110% >80% LTV
+    base_income_rw = _income_band_chain(ltv, "b31_commercial_income_ltv_bands")
+    # Art. 124I(3): Junior charges replace the base with absolute RWs (not multipliers)
+    junior_income_rw = (
+        pl.when(ltv <= 0.60)
+        .then(pl.lit(float(B31_CRE_INCOME_JUNIOR_RW_LOW)))
+        .when(ltv <= 0.80)
+        .then(pl.lit(float(B31_CRE_INCOME_JUNIOR_RW_MID)))
+        .otherwise(pl.lit(float(B31_CRE_INCOME_JUNIOR_RW_HIGH)))
+    )
+    income_rw = pl.when(is_junior).then(junior_income_rw).otherwise(base_income_rw)
+
+    # General CRE — natural person/SME (Art. 124H(1-2)): loan-splitting
+    # Art. 124F(2): Junior charges reduce the 55% threshold
+    effective_threshold = pl.max_horizontal(
+        pl.lit(0.0), pl.lit(float(B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO)) - prior_charge
+    )
+    secured_share = pl.min_horizontal(pl.lit(1.0), effective_threshold / ltv)
+    loan_split_rw = pl.lit(
+        float(B31_COMMERCIAL_GENERAL_SECURED_RW)
+    ) * secured_share + cp_rw_for_cre * (pl.lit(1.0) - secured_share)
+
+    # General CRE — other counterparties (Art. 124H(3)):
+    # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
+    # Art. 124H(3) references Art. 124I(1)/(2) base table (not the Art. 124I(3)
+    # junior override), so we reuse base_income_rw as the cap.
+    other_cp_rw = pl.max_horizontal(
+        pl.lit(float(B31_COMMERCIAL_GENERAL_SECURED_RW)),
+        pl.min_horizontal(cp_rw, base_income_rw),
+    )
+
+    # Route general CRE based on counterparty type
+    general = pl.when(is_person_or_sme).then(loan_split_rw).otherwise(other_cp_rw)
+
+    return pl.when(is_income).then(income_rw).otherwise(general)
+
+
+def b31_adc_rw_expr() -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 ADC risk weights (Art. 124K).
+
+    - 150% for all ADC exposures (Art. 124K(1))
+    - 100% for qualifying **residential** ADC only (Art. 124K(2))
+    - Commercial ADC always receives 150% — no pre-sold concession
+
+    Requires columns: is_presold (Boolean), property_type (String)
+
+    Returns:
+        Expression resolving to 1.50 or 1.00
+    """
+    is_residential = (
+        pl.col("property_type").fill_null("").str.to_lowercase() == PropertyType.RESIDENTIAL
+    )
+    is_qualifying = is_residential & pl.col("is_presold").fill_null(False)
+    return (
+        pl.when(is_qualifying)
+        .then(pl.lit(float(B31_ADC_PRESOLD_RISK_WEIGHT)))
+        .otherwise(pl.lit(float(B31_ADC_RISK_WEIGHT)))
+    )
+
+
+def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 Other RE risk weights (Art. 124J).
+
+    Applies to non-qualifying RE — real estate that fails Art. 124A criteria
+    (e.g., incomplete property, no independent valuation, no first charge).
+
+    Three sub-treatments:
+    - Income-dependent: 150% flat
+    - RESI non-dependent: Art. 124L counterparty-type RW (no floor)
+    - CRE non-dependent: max(60%, Art. 124L counterparty-type RW)
+
+    The non-income residual resolves the counterparty RW through the full
+    Art. 124L type table via the shared ``_b31_art_124l_cp_rw_expr`` helper —
+    Art. 124J has no counterparty gate, so all four limbs are reachable,
+    including social housing and the "other" full unsecured fallback:
+      - Natural person / retail-qualifying SME: 75% (Art. 124L(a))
+      - Other SME (non-retail): 85% (Art. 124L(b))
+      - Social housing: max(75%, unsecured counterparty RW) (Art. 124L(c))
+      - Other (corporate, institution, etc.): full unsecured RW (Art. 124L(d/e))
+
+    Requires columns: has_income_cover (Boolean), property_type (String),
+                      cp_is_natural_person (Boolean), is_sme (Boolean),
+                      qualifies_as_retail (Boolean), cp_is_social_housing
+                      (Boolean), counterparty_rw_col (Float64)
+
+    Returns:
+        Expression resolving to Art. 124J risk weight
+    """
+    is_income = pl.col("has_income_cover").fill_null(False)
+    cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
+    is_resi = pl.col("property_type").fill_null("").str.to_lowercase() == "residential"
+
+    # Art. 124L — Counterparty type routing for the Art. 124J non-income residual.
+    # Art. 124J has no counterparty gate, so all four limbs of the shared
+    # Art. 124L helper are reachable (incl. social housing and the "other"
+    # full-unsecured fallback).
+    cp_rw_for_re = _b31_art_124l_cp_rw_expr(cp_rw)
+
+    # Income-dependent: 150% regardless of property type (Art. 124J(1))
+    # Non-dependent RESI: Art. 124L counterparty-type RW, no floor (Art. 124J(2))
+    # Non-dependent CRE: max(60%, Art. 124L counterparty-type RW) (Art. 124J(3)(b))
+    return (
+        pl.when(is_income)
+        .then(pl.lit(float(B31_OTHER_RE_INCOME_DEPENDENT_RW)))
+        .when(is_resi)
+        .then(cp_rw_for_re)
+        .otherwise(pl.max_horizontal(pl.lit(float(B31_OTHER_RE_CRE_FLOOR_RW)), cp_rw_for_re))
+    )
+
+
+def b31_sa_sl_rw_expr() -> pl.Expr:
+    """
+    Polars expression for Basel 3.1 SA specialised lending risk weights.
+
+    PRA PS1/26 Art. 122A-122B. Unrated SL exposures get type-specific risk
+    weights rather than falling through to corporate 100%.
+
+    Requires columns: sl_type (String), sl_project_phase (String, optional)
+
+    Returns:
+        Expression resolving to the SL-specific risk weight
+    """
+    sl = pl.col("sl_type").fill_null("").str.to_lowercase()
+    phase = pl.col("sl_project_phase").fill_null("").str.to_lowercase()
+
+    return (
+        pl.when(sl.str.contains("object"))
+        .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["object_finance"])))
+        .when(sl.str.contains("commodit"))
+        .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["commodities_finance"])))
+        .when(sl.str.contains("project"))
+        .then(
+            pl.when(phase.str.contains("pre"))
+            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_pre_operational"])))
+            .when(phase.str.contains("high"))
+            .then(pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_high_quality"])))
+            .otherwise(
+                pl.lit(float(B31_SA_SL_RISK_WEIGHTS["project_finance_operational"]))
+            )  # operational default
+        )
+        .otherwise(pl.lit(1.00))  # fallback for unknown SL types
+    )
+
+
+def _b31_art_124l_cp_rw_expr(cp_rw: pl.Expr) -> pl.Expr:
+    """
+    Art. 124L counterparty-type residual risk weight.
+
+    Shared by the Art. 124F RRE, Art. 124H CRE and Art. 124J Other-RE routers —
+    resolves the unsecured/residual leg RW from the counterparty type:
+      - Natural person / retail-qualifying SME: 75% (Art. 124L(a))
+      - Other SME (non-retail): 85% (Art. 124L(b))
+      - Social housing: max(75%, unsecured counterparty RW) (Art. 124L(c))
+      - Other (corporate, institution, etc.): full unsecured RW (Art. 124L(d/e))
+
+    The four type flags are optional pipeline columns (HIERARCHY_OUTPUT_SCHEMA /
+    CLASSIFIER_OUTPUT_SCHEMA). They are resolved via coalesce against the schema
+    default (False) so the expression is safe to evaluate against a frame that
+    omits them — routing then falls back to the "other"/``cp_rw`` limb rather
+    than raising ColumnNotFound. Callers that gate on counterparty type before
+    using the result (e.g. the Art. 124H(1) loan-split leg, reachable only for
+    natural-person/SME rows) get identical values from the unreachable limbs.
+
+    Args:
+        cp_rw: Expression for the unsecured counterparty risk weight (already
+            ``fill_null``-ed by the caller to its framework default).
+
+    Returns:
+        Expression resolving to the Art. 124L counterparty-type risk weight.
+    """
+    is_natural = pl.coalesce(
+        cs.by_name("cp_is_natural_person", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_sme = pl.coalesce(cs.by_name("is_sme", require_all=False), pl.lit(False)).fill_null(False)
+    qualifies_as_retail = pl.coalesce(
+        cs.by_name("qualifies_as_retail", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    is_retail_sme = is_sme & qualifies_as_retail
+    is_social = pl.coalesce(
+        cs.by_name("cp_is_social_housing", require_all=False), pl.lit(False)
+    ).fill_null(False)
+    return (
+        pl.when(is_natural | is_retail_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_NATURAL_PERSON)))  # Art. 124L(a)
+        .when(is_sme)
+        .then(pl.lit(float(B31_RRE_RESIDUAL_RW_OTHER_SME)))  # Art. 124L(b): other SME
+        .when(is_social)
+        .then(  # Art. 124L(c): social housing floor
+            pl.max_horizontal(pl.lit(float(B31_RRE_RESIDUAL_RW_SOCIAL_HOUSING_FLOOR)), cp_rw)
+        )
+        .otherwise(cp_rw)  # Art. 124L(d/e): full unsecured counterparty RW
+    )
+
+
+# =============================================================================
+# SCALAR LOOKUP FUNCTIONS (for single-exposure convenience)
+# =============================================================================
+
+
+def lookup_b31_residential_rw(
+    ltv: Decimal,
+    is_income_producing: bool = False,
+    counterparty_rw: Decimal = Decimal("0.75"),
+    prior_charge_ltv: Decimal = Decimal("0"),
+    is_junior: bool = False,
+) -> tuple[Decimal, str]:
+    """
+    Look up Basel 3.1 residential RE risk weight for a single exposure.
+
+    General residential uses loan-splitting (Art. 124F): 20% on portion up to
+    55% of property value (reduced by prior charges per Art. 124F(2)),
+    counterparty RW on the residual per Art. 124L.
+
+    Income-producing uses Table 6B LTV bands (Art. 124G).
+    Art. 124G(2): 1.25x multiplier when junior lien AND LTV > 50%.
+
+    Args:
+        ltv: Loan-to-value ratio
+        is_income_producing: Whether materially dependent on property cash flows
+        counterparty_rw: Counterparty risk weight for general residential
+            loan-splitting per Art. 124L counterparty type table
+        prior_charge_ltv: LTV occupied by prior/pari passu charges (Art. 124F(2))
+        is_junior: Whether the exposure is in a junior lien position
+
+    Returns:
+        Tuple of (risk_weight, description)
+    """
+    _is_junior = is_junior or prior_charge_ltv > 0
+
+    if is_income_producing:
+        for band in B31_RESIDENTIAL_INCOME_LTV_BANDS:
+            if ltv <= band["ltv_upper"]:
+                base_rw = band["risk_weight"]
+                break
+        else:
+            base_rw = B31_RESIDENTIAL_INCOME_LTV_BANDS[-1]["risk_weight"]
+
+        # Art. 124G(2): 1.25x multiplier for junior when LTV > 50%.
+        # Uncapped: 105% × 1.25 = 131.25% at LTV > 100%.
+        if _is_junior and ltv > Decimal("0.50"):
+            rw = base_rw * B31_RESI_INCOME_JUNIOR_MULTIPLIER
+            return rw, (
+                f"B31 RRE (income-producing, junior 1.25x): {float(rw):.0%} (LTV {float(ltv):.0%})"
+            )
+        return base_rw, f"B31 RRE (income-producing): {float(base_rw):.0%} (LTV {float(ltv):.0%})"
+
+    # General residential — loan-splitting (PRA PS1/26 Art. 124F)
+    # Art. 124F(2): Junior charges reduce the 55% threshold
+    effective_threshold = max(
+        Decimal("0"), B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO - prior_charge_ltv
+    )
+    secured_ratio = min(Decimal("1.0"), effective_threshold / ltv) if ltv > 0 else Decimal("1.0")
+    rw = B31_RESIDENTIAL_GENERAL_SECURED_RW * secured_ratio + counterparty_rw * (
+        Decimal("1.0") - secured_ratio
+    )
+    threshold_desc = f"{float(effective_threshold):.0%}" if _is_junior else "55%"
+    return rw, (
+        f"B31 RRE (general, loan-split): {float(rw):.1%} "
+        f"(LTV {float(ltv):.0%}, threshold {threshold_desc}, "
+        f"secured {float(secured_ratio):.0%} @ 20%, "
+        f"residual @ {float(counterparty_rw):.0%})"
+    )
+
+
+def lookup_b31_commercial_rw(
+    ltv: Decimal,
+    counterparty_rw: Decimal = Decimal("1.00"),
+    is_income_producing: bool = False,
+    is_natural_person_or_sme: bool = True,
+    prior_charge_ltv: Decimal = Decimal("0"),
+    is_junior: bool = False,
+) -> tuple[Decimal, str]:
+    """
+    Look up Basel 3.1 commercial RE risk weight for a single exposure.
+
+    General CRE routes by counterparty type (PRA Art. 124H):
+      - Natural person / SME (Art. 124H(1-2)): loan-splitting
+      - Other counterparties (Art. 124H(3)): max(60%, min(cp_rw, income_rw))
+
+    Art. 124F(2): Junior charges reduce the 55% threshold for loan-splitting.
+    Art. 124I(3): Junior-charge absolute RWs for income-producing CRE
+        (100% / 125% / 137.5% — replace Art. 124I(1)/(2), not multiplied).
+
+    Args:
+        ltv: Loan-to-value ratio
+        counterparty_rw: CQS-based risk weight of the counterparty (for general CRE)
+        is_income_producing: Whether materially dependent on property cash flows
+        is_natural_person_or_sme: Whether the counterparty is a natural person
+            or SME. True = loan-splitting (Art. 124H(1-2)); False = max/min
+            formula (Art. 124H(3)). Default True for backward compatibility.
+        prior_charge_ltv: LTV occupied by prior/pari passu charges (Art. 124F(2))
+        is_junior: Whether the exposure is in a junior lien position
+
+    Returns:
+        Tuple of (risk_weight, description)
+    """
+    _is_junior = is_junior or prior_charge_ltv > 0
+
+    if is_income_producing:
+        for band in B31_COMMERCIAL_INCOME_LTV_BANDS:
+            if ltv <= band["ltv_upper"]:
+                base_rw = band["risk_weight"]
+                break
+        else:
+            base_rw = B31_COMMERCIAL_INCOME_LTV_BANDS[-1]["risk_weight"]
+
+        # Art. 124I(3): Junior charges replace base_rw with absolute LTV-band RWs
+        if _is_junior:
+            if ltv <= Decimal("0.60"):
+                rw = B31_CRE_INCOME_JUNIOR_RW_LOW
+            elif ltv <= Decimal("0.80"):
+                rw = B31_CRE_INCOME_JUNIOR_RW_MID
+            else:
+                rw = B31_CRE_INCOME_JUNIOR_RW_HIGH
+            return rw, (
+                f"B31 CRE (income-producing, junior Art. 124I(3)): "
+                f"{float(rw):.1%} (LTV {float(ltv):.0%})"
+            )
+        return base_rw, f"B31 CRE (income-producing): {float(base_rw):.0%} (LTV {float(ltv):.0%})"
+
+    if is_natural_person_or_sme:
+        # General CRE — natural person/SME (PRA Art. 124H(1-2)): loan-splitting
+        # Art. 124F(2): Junior charges reduce the 55% threshold
+        effective_threshold = max(
+            Decimal("0"), B31_COMMERCIAL_GENERAL_MAX_SECURED_RATIO - prior_charge_ltv
+        )
+        secured_ratio = (
+            min(Decimal("1.0"), effective_threshold / ltv) if ltv > 0 else Decimal("1.0")
+        )
+        rw = B31_COMMERCIAL_GENERAL_SECURED_RW * secured_ratio + counterparty_rw * (
+            Decimal("1.0") - secured_ratio
+        )
+        threshold_desc = f"{float(effective_threshold):.0%}" if _is_junior else "55%"
+        return rw, (
+            f"B31 CRE (general, loan-split): {float(rw):.1%} "
+            f"(LTV {float(ltv):.0%}, threshold {threshold_desc}, "
+            f"secured {float(secured_ratio):.0%} @ 60%, "
+            f"residual @ {float(counterparty_rw):.0%})"
+        )
+
+    # General CRE — other counterparties (PRA Art. 124H(3)):
+    # max(60%, min(counterparty_RW, Art. 124I income-producing RW))
+    income_rw = Decimal("1.00") if ltv <= Decimal("0.80") else Decimal("1.10")
+    rw = max(Decimal("0.60"), min(counterparty_rw, income_rw))
+    return rw, (
+        f"B31 CRE (general, Art. 124H(3)): {float(rw):.0%} "
+        f"(max(60%, min({float(counterparty_rw):.0%}, {float(income_rw):.0%})))"
+    )
+
+
+def lookup_b31_other_re_rw(
+    property_type: str = "commercial",
+    is_income_producing: bool = False,
+    counterparty_rw: Decimal = Decimal("1.00"),
+) -> tuple[Decimal, str]:
+    """
+    Look up Basel 3.1 Other RE risk weight for a single exposure.
+
+    PRA PS1/26 Art. 124J: non-qualifying RE that fails Art. 124A criteria.
+
+    Args:
+        property_type: "residential" or "commercial"
+        is_income_producing: Whether materially dependent on property cash flows
+        counterparty_rw: Counterparty's unsecured risk weight
+
+    Returns:
+        Tuple of (risk_weight, description)
+    """
+    if is_income_producing:
+        return (
+            B31_OTHER_RE_INCOME_DEPENDENT_RW,
+            "B31 Other RE (income-dependent, Art. 124J): 150%",
+        )
+    if property_type.lower() == "residential":
+        return (
+            counterparty_rw,
+            f"B31 Other RE (RESI non-dependent, Art. 124J): {float(counterparty_rw):.0%}",
+        )
+    # CRE non-dependent: max(60%, counterparty RW)
+    rw = max(B31_OTHER_RE_CRE_FLOOR_RW, counterparty_rw)
+    return (
+        rw,
+        f"B31 Other RE (CRE non-dependent, Art. 124J): {float(rw):.0%} "
+        f"(max(60%, {float(counterparty_rw):.0%}))",
+    )

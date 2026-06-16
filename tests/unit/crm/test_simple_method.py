@@ -33,10 +33,6 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_simple_method import (
-    FCSM_RW_FLOOR,
-    SOVEREIGN_BOND_DISCOUNT,
-)
 from rwa_calc.domain.enums import (
     CRMCollateralMethod,
 )
@@ -47,6 +43,7 @@ from rwa_calc.engine.crm.simple_method import (
     undo_sa_ead_reduction,
 )
 from rwa_calc.engine.sa.rw_adjustments import apply_fcsm_rw_substitution
+from rwa_calc.rulebook.resolve import resolve
 
 # =============================================================================
 # Fixtures
@@ -136,13 +133,15 @@ def _make_collateral(
 
 
 class TestFCSMConstants:
-    """Test FCSM module constants."""
+    """Test the Art. 222 FCSM scalars (resolved from the common rulepack)."""
 
     def test_rw_floor_is_20_pct(self):
-        assert Decimal("0.20") == FCSM_RW_FLOOR
+        assert resolve("crr", date(2026, 1, 1)).scalar("fcsm_rw_floor") == Decimal("0.20")
 
     def test_sovereign_bond_discount_is_20_pct(self):
-        assert Decimal("0.20") == SOVEREIGN_BOND_DISCOUNT
+        assert resolve("crr", date(2026, 1, 1)).scalar("fcsm_sovereign_bond_discount") == Decimal(
+            "0.20"
+        )
 
 
 # =============================================================================

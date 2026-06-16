@@ -22,8 +22,11 @@ gate green before you return.
   - Bundles are `@dataclass(frozen=True)`.
   - Interfaces are `Protocol`, never `ABC`.
   - LazyFrame-first; `.collect()` only at output boundaries.
-  - No regulatory scalars in `engine/` — they live in `data/tables/*.py` and
-    `data/schemas.py`.
+  - No regulatory scalars in `engine/` — regulatory values live in the rulepack
+    packs (`rulebook/packs/{common,crr,b31}.py`, read via `resolve(...)`);
+    validation enums live in `data/schemas.py`. Engine must not grow its
+    `data.tables` import surface (check 12 ratchet) or branch on
+    `config.is_crr`/`config.is_basel_3_1` (check 17 — read a pack `Feature`).
   - Every `engine/` module has `logger = logging.getLogger(__name__)`.
   - No `print()` (ruff T20). No `logging.basicConfig()`.
   - Never register a Polars namespace (`@pl.api.register_*_namespace`) —
@@ -43,10 +46,11 @@ gate green before you return.
 1. Reproduce the failing test locally.
 2. Read the surrounding engine module(s) to find the right insertion point.
    Prefer extending an existing function over adding a new one. Prefer
-   adding a row to an existing data table over a new module.
-3. If the change requires a regulatory scalar that does not yet exist in
-   `data/tables/`, add it there first (with the citation as a comment), then
-   reference it from the engine. Never inline the scalar.
+   adding an entry to an existing rulepack pack over a new module.
+3. If the change requires a regulatory value that does not yet exist, add it
+   to the relevant rulepack pack (`rulebook/packs/{common,crr,b31}.py`) first
+   as a cited entry (`ScalarParam` / `LookupTable` / `BandedTable` / …), then
+   read it from the engine via the resolved pack. Never inline the value.
 4. Make the smallest change that turns the failing test green.
 5. Run the validation gate, in this order, fixing issues as they appear:
    ```

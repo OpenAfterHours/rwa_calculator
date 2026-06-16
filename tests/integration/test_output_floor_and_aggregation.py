@@ -437,7 +437,6 @@ class TestSummaries:
         )
 
         # CRR with SME should have supporting factor impact
-        assert crr_config.supporting_factors.enabled is True
         if result.supporting_factor_impact is not None:
             sf_df = result.supporting_factor_impact.collect()
             assert sf_df.height >= 1

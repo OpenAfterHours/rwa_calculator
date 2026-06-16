@@ -6,13 +6,11 @@ guarantees, and provisions.
 """
 
 from datetime import date
-from decimal import Decimal
 
 import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import RegulatoryFramework
 from rwa_calc.engine.fx_converter import FXConverter, create_fx_converter
 
 # =============================================================================
@@ -42,7 +40,7 @@ def fx_rates() -> pl.LazyFrame:
 def config() -> CalculationConfig:
     """Create calculation config with FX conversion enabled."""
     return CalculationConfig(
-        framework=RegulatoryFramework.CRR,
+        regime_id="crr",
         reporting_date=date(2026, 1, 1),
         base_currency="GBP",
         apply_fx_conversion=True,
@@ -53,7 +51,7 @@ def config() -> CalculationConfig:
 def config_fx_disabled() -> CalculationConfig:
     """Create calculation config with FX conversion disabled."""
     return CalculationConfig(
-        framework=RegulatoryFramework.CRR,
+        regime_id="crr",
         reporting_date=date(2026, 1, 1),
         base_currency="GBP",
         apply_fx_conversion=False,
@@ -490,7 +488,7 @@ class TestFXConverterIntegration:
         )
 
         config_eur = CalculationConfig(
-            framework=RegulatoryFramework.CRR,
+            regime_id="crr",
             reporting_date=date(2026, 1, 1),
             base_currency="EUR",
             apply_fx_conversion=True,
@@ -727,45 +725,3 @@ class TestConvertEquityExposures:
         df = result.collect()
 
         assert df["carrying_value"][0] == 500000.0
-
-
-# =============================================================================
-# RETAIL THRESHOLD DYNAMIC RATE TESTS
-# =============================================================================
-
-
-class TestRegulatoryThresholdsDynamicRate:
-    """Tests for dynamic EUR/GBP rate in RegulatoryThresholds."""
-
-    def test_crr_thresholds_use_dynamic_rate(self) -> None:
-        """Test RegulatoryThresholds.crr() uses the provided eur_gbp_rate."""
-        from rwa_calc.contracts.config import RegulatoryThresholds
-
-        rate = Decimal("0.90")
-        thresholds = RegulatoryThresholds.crr(eur_gbp_rate=rate)
-
-        # EUR 1m * 0.90 = GBP 900k
-        assert thresholds.retail_max_exposure == Decimal("1000000") * rate
-        # EUR 100k * 0.90 = GBP 90k
-        assert thresholds.qrre_max_limit == Decimal("100000") * rate
-
-    def test_crr_thresholds_default_rate(self) -> None:
-        """Test RegulatoryThresholds.crr() with default rate."""
-        from rwa_calc.contracts.config import RegulatoryThresholds
-
-        thresholds = RegulatoryThresholds.crr()
-
-        # Default rate is 0.8732
-        assert thresholds.retail_max_exposure == Decimal("1000000") * Decimal("0.8732")
-        assert thresholds.qrre_max_limit == Decimal("100000") * Decimal("0.8732")
-
-    def test_crr_config_passes_rate_to_thresholds(self) -> None:
-        """Test CalculationConfig.crr() passes eur_gbp_rate to RegulatoryThresholds."""
-        rate = Decimal("0.85")
-        config = CalculationConfig.crr(
-            reporting_date=date(2026, 1, 1),
-            eur_gbp_rate=rate,
-        )
-
-        assert config.thresholds.retail_max_exposure == Decimal("1000000") * rate
-        assert config.thresholds.qrre_max_limit == Decimal("100000") * rate

@@ -147,6 +147,7 @@ class TestHaircutCalculator:
     ) -> None:
         """Cash collateral should have 0% haircut."""
         result = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("500000"),
             collateral_currency="GBP",
@@ -162,6 +163,7 @@ class TestHaircutCalculator:
     ) -> None:
         """Gold should have 15% haircut."""
         result = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="gold",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -178,6 +180,7 @@ class TestHaircutCalculator:
         """Government bonds CQS1 should have maturity-based haircuts."""
         # 0-1 year maturity: 0.5%
         result_short = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -189,6 +192,7 @@ class TestHaircutCalculator:
 
         # 1-5 year maturity: 2%
         result_medium = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -200,6 +204,7 @@ class TestHaircutCalculator:
 
         # 5+ year maturity: 4%
         result_long = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="govt_bond",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -216,6 +221,7 @@ class TestHaircutCalculator:
         """FX mismatch should add 8% haircut."""
         # Same currency - no FX haircut
         result_same = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("100000"),
             collateral_currency="GBP",
@@ -225,6 +231,7 @@ class TestHaircutCalculator:
 
         # Different currency - 8% FX haircut
         result_diff = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="cash",
             market_value=Decimal("100000"),
             collateral_currency="EUR",
@@ -240,6 +247,7 @@ class TestHaircutCalculator:
     ) -> None:
         """Main index equity should have 15% haircut."""
         result = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="equity",
             market_value=Decimal("200000"),
             collateral_currency="GBP",
@@ -257,6 +265,7 @@ class TestHaircutCalculator:
     ) -> None:
         """Non-index equity should have 25% haircut."""
         result = haircut_calculator.calculate_single_haircut(
+            is_basel_3_1=False,
             collateral_type="equity",
             market_value=Decimal("200000"),
             collateral_currency="GBP",

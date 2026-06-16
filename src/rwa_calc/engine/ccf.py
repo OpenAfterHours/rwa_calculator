@@ -60,27 +60,91 @@ Usage:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.airb_floors import (
-    AIRB_OBS_FLOOR_B_MULTIPLIER,
-    AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER,
-)
-from rwa_calc.data.tables.ccf import (
-    OC_SHORT_MATURITY_CCF,
-    OC_SHORT_MATURITY_THRESHOLD_DAYS,
-    SA_CCF_B31,
-    build_firb_ccf_expr,
-    build_product_to_risk_type_expr,
-    build_sa_ccf_expr,
-)
+from rwa_calc.data.schemas import OBS_PRODUCT_SYNONYMS, RISK_TYPE_SYNONYMS
 from rwa_calc.domain.enums import ApproachType
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+# SA / F-IRB CCF schedules resolved from the rulepack once at module load
+# (mirrors the comparison.py / slotting module-level pattern). The Decimal ->
+# float boundary is lookup_float_map / scalar_value, matching the historical
+# float(Decimal(...)) conversion in the retired data/tables/ccf.py builders.
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+_SA_CCF_CRR_MAP = lookup_float_map(_CRR_PACK.lookup("sa_ccf"))
+_SA_CCF_B31_MAP = lookup_float_map(_B31_PACK.lookup("sa_ccf"))
+_FIRB_OBS_FALLBACK_MAP = lookup_float_map(_CRR_PACK.lookup("firb_obs_fallback_ccf"))
+_SA_CCF_DEFAULT = scalar_value(_CRR_PACK.scalar_param("sa_ccf_default"))
+_FIRB_TRADE_LC_CCF = scalar_value(_CRR_PACK.scalar_param("firb_trade_lc_ccf"))
+_FIRB_CREDIT_LINE_CCF = scalar_value(_CRR_PACK.scalar_param("firb_credit_line_ccf"))
+_OC_SHORT_MATURITY_CCF = scalar_value(_CRR_PACK.scalar_param("oc_short_maturity_ccf"))
+# CRR Art. 111(1): "other commitments" remap to the 20% MLR CCF at/below this
+# remaining-maturity day boundary. Integer day count compared int-to-int against
+# ``.dt.total_days()`` (no float coercion) — sourced via IntParam (S13-c).
+_OC_SHORT_MATURITY_THRESHOLD_DAYS = _CRR_PACK.int_param("oc_short_maturity_threshold_days").value
+# CRR Annex I / Art. 111(1) concrete OBS product -> abstract risk_type bucket,
+# rebound from the common pack at module load (framework-invariant — CRR Annex I
+# == PRA PS1/26 Table A1). Consumed by build_product_to_risk_type_expr below.
+_ANNEX1_PRODUCT_RISK_TYPE: dict[str, str] = dict(
+    _CRR_PACK.category_map("obs_product_to_risk_type").entries
+)
+
+
+def _normalize_risk_type(risk_type_col: str) -> pl.Expr:
+    """Lowercase and canonicalise a risk_type column to the uppercase keys.
+
+    Maps every spelling accepted on input (short code or full name) to its
+    canonical uppercase form via RISK_TYPE_SYNONYMS. Unrecognised values pass
+    through uppercased so the consumers' ``otherwise()`` branch picks them up.
+    The cast to ``pl.Utf8`` accommodates frames where the column is null-typed.
+    """
+    casted = pl.col(risk_type_col).cast(pl.Utf8, strict=False).fill_null("")
+    lowered = casted.str.to_lowercase()
+    return lowered.replace_strict(RISK_TYPE_SYNONYMS, default=casted.str.to_uppercase())
+
+
+# CRR Annex I product bands are given regulatory effect by Art. 111(1); the
+# watchfire parser only accepts an article-based citation, so the Annex I mapping
+# is attributed to Art. 111.
+@cites("CRR Art. 111")
+def build_product_to_risk_type_expr(
+    product_col: str = "obs_product",
+) -> pl.Expr:
+    """Build a Polars expression mapping a concrete OBS product to its risk_type.
+
+    Resolves the abstract Annex I ``risk_type`` bucket (FR / MLR / ...) from a
+    normalised concrete product key via the ``obs_product_to_risk_type`` rulepack
+    CategoryMap (rebound to ``_ANNEX1_PRODUCT_RISK_TYPE`` at module load). The
+    mapping is framework-invariant (CRR Annex I == PRA PS1/26 Table A1 for every
+    product in scope). Unknown / unmapped products and nulls produce a null
+    result, so the caller can leave the existing ``risk_type`` resolution
+    untouched.
+
+    Args:
+        product_col: Name of the obs_product column on the frame.
+
+    Returns:
+        String Polars expression evaluating to the resolved risk_type (or null
+        when the product is null / unmapped).
+    """
+    casted = pl.col(product_col).cast(pl.Utf8, strict=False).fill_null("")
+    lowered = casted.str.to_lowercase()
+    canonical = lowered.replace_strict(OBS_PRODUCT_SYNONYMS, default=casted.str.to_uppercase())
+    return canonical.replace_strict(
+        _ANNEX1_PRODUCT_RISK_TYPE,
+        default=pl.lit(None, dtype=pl.Utf8),
+    )
 
 
 def drawn_for_ead() -> pl.Expr:
@@ -116,21 +180,82 @@ def sa_ccf_expression(
 ) -> pl.Expr:
     """Polars expression mapping risk_type to SA CCFs.
 
-    Thin wrapper over ``data.tables.ccf.build_sa_ccf_expr``. The values
-    themselves (CRR Art. 111 and PRA PS1/26 Table A1) live in the data
-    layer; this wrapper preserves the historical engine-side import path
-    and citation attribution.
+    CRR Art. 111 (Annex I categories) when ``is_basel_3_1`` is False, PRA
+    PS1/26 Table A1 when True. The CCF values come from the rulepack
+    (``sa_ccf`` lookup); unrecognised risk_type falls back to the
+    MR-equivalent ``sa_ccf_default`` (50%).
     """
-    return build_sa_ccf_expr(risk_type_col, is_basel_3_1)
+    table = _SA_CCF_B31_MAP if is_basel_3_1 else _SA_CCF_CRR_MAP
+    canonical = _normalize_risk_type(risk_type_col)
+    return (
+        pl.when(canonical == "FR")
+        .then(pl.lit(table["FR"]))
+        .when(canonical == "FRC")
+        .then(pl.lit(table["FRC"]))
+        .when(canonical == "MR")
+        .then(pl.lit(table["MR"]))
+        # CRR Annex I Row 3 issued medium-risk OBS items — explicit 50%
+        # (mirrors MR / Row 4) so EAD is provably equal, not a default fallback.
+        .when(canonical == "MR_ISSUED")
+        .then(pl.lit(table["MR_ISSUED"]))
+        .when(canonical == "OC")
+        .then(pl.lit(table["OC"]))
+        .when(canonical == "MLR")
+        .then(pl.lit(table["MLR"]))
+        .when(canonical == "LR")
+        .then(pl.lit(table["LR"]))
+        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+    )
 
 
 @cites("CRR Art. 166")
 def _firb_ccf_for_col(risk_type_col: str = "risk_type") -> pl.Expr:
     """Polars expression for CRR F-IRB CCFs (Art. 166(8) + (10)).
 
-    Thin wrapper over ``data.tables.ccf.build_firb_ccf_expr``.
+    Implements both F-IRB CCF clauses of CRR Article 166:
+
+    Art. 166(8) bespoke CCFs (is_obs_commitment=True, matching commitment):
+        (a) UCC credit lines (LR) -> 0%; (b) short-term trade LCs
+        (MLR + is_short_term_trade_lc) -> 20%; (d) other credit lines /
+        NIFs / RUFs (MR/MLR/OC commitments) -> 75%.
+    Art. 166(10) residual fallback (is_obs_commitment=False):
+        (a) full risk -> 100%; (b) medium -> 50%; (c) medium/low -> 20%;
+        (d) low -> 0%.
+
+    FR/FRC and LR converge under either path; the Art. 166(8)(b) trade-LC
+    carve-out wins over the issued/commitment split. Values come from the
+    rulepack (``firb_obs_fallback_ccf`` lookup + the bespoke scalars).
     """
-    return build_firb_ccf_expr(risk_type_col)
+    canonical = _normalize_risk_type(risk_type_col)
+    is_commitment = pl.col("is_obs_commitment").fill_null(True)
+    is_trade_lc = pl.col("is_short_term_trade_lc").fill_null(False)
+    is_mlr = canonical == "MLR"
+    # MR_ISSUED (CRR Annex I Row 3 issued OBS items) mirrors MR exactly: it
+    # rides the same Art. 166(8)(d) commitment / Art. 166(10)(b) issued split,
+    # so it never diverges to the otherwise default (P2.30).
+    is_mr_or_oc = canonical.is_in(["MR", "MR_ISSUED", "OC"])
+    return (
+        # FR/FRC -> 100% under both Art. 166(8) general and Art. 166(10)(a)
+        pl.when(canonical.is_in(["FR", "FRC"]))
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["FR"]))
+        # LR -> 0% under both Art. 166(8)(a) and Art. 166(10)(d)
+        .when(canonical == "LR")
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["LR"]))
+        # Art. 166(8)(b): short-term trade LC carve-out wins over both buckets
+        .when(is_mlr & is_trade_lc)
+        .then(pl.lit(_FIRB_TRADE_LC_CCF))
+        # Art. 166(8)(d): credit lines / NIFs / RUFs -> 75%
+        .when(is_commitment & (is_mr_or_oc | is_mlr))
+        .then(pl.lit(_FIRB_CREDIT_LINE_CCF))
+        # Art. 166(10)(b): MR / OC issued items -> 50%
+        .when(is_mr_or_oc)
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["MR"]))
+        # Art. 166(10)(c): MLR issued items -> 20%
+        .when(is_mlr)
+        .then(pl.lit(_FIRB_OBS_FALLBACK_MAP["MLR"]))
+        # Conservative MR-equivalent fallback for unrecognised risk_type values
+        .otherwise(pl.lit(_SA_CCF_DEFAULT))
+    )
 
 
 class CCFCalculator:
@@ -164,6 +289,8 @@ class CCFCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply CCF to calculate EAD for off-balance sheet exposures.
@@ -195,8 +322,8 @@ class CCFCalculator:
         has_provision_cols = "nominal_after_provision" in names and "provision_on_drawn" in names
 
         exposures, added_cols = self._ensure_columns(exposures, names, has_provision_cols)
-        exposures = self._compute_ccf(exposures, config)
-        exposures = self._compute_ead(exposures, has_provision_cols, config)
+        exposures = self._compute_ccf(exposures, config, pack=pack)
+        exposures = self._compute_ead(exposures, has_provision_cols, config, pack=pack)
         exposures = self._build_audit_trail(
             exposures, original_has_risk_type, original_has_underlying, original_has_interest
         )
@@ -294,6 +421,8 @@ class CCFCalculator:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Compute CCF based on risk type and approach.
 
@@ -326,7 +455,11 @@ class CCFCalculator:
             .alias("risk_type"),
         )
 
-        is_b31 = config.is_basel_3_1
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        # S9c: the F-IRB-uses-SA-CCF routing gate (Art. 166C) reads the cited pack
+        # Feature; sa_ccf_expression / _firb_ccf_for_col keep their is_basel_3_1 bool
+        # plumbing params (Option B). All CCF VALUES stay static data-layer tables.
+        is_b31 = resolved_pack.feature("firb_uses_sa_ccf")
 
         if is_b31:
             # Basel 3.1 Art. 166C: F-IRB uses SA CCFs (PRA PS1/26 Art. 111 Table A1)
@@ -358,11 +491,11 @@ class CCFCalculator:
                     (
                         pl.col("maturity_date").cast(pl.Date) - pl.lit(config.reporting_date)
                     ).dt.total_days()
-                    <= OC_SHORT_MATURITY_THRESHOLD_DAYS
+                    <= _OC_SHORT_MATURITY_THRESHOLD_DAYS
                 )
                 exposures = exposures.with_columns(
                     pl.when(is_oc & is_short_maturity)
-                    .then(pl.lit(float(OC_SHORT_MATURITY_CCF)))
+                    .then(pl.lit(_OC_SHORT_MATURITY_CCF))
                     .otherwise(pl.col("_sa_ccf_from_risk_type"))
                     .alias("_sa_ccf_from_risk_type"),
                 )
@@ -375,8 +508,8 @@ class CCFCalculator:
         # UCC) or 100% (Row 2), in which case the carve-out leaves it untouched.
         # No effect under CRR (Table A1 is Basel 3.1 only) — see the gate below.
         if is_b31:
-            row_4b_ccf = float(SA_CCF_B31["MR"])
-            carve_out_ccfs = (float(SA_CCF_B31["LR"]), float(SA_CCF_B31["FR"]))
+            row_4b_ccf = _SA_CCF_B31_MAP["MR"]
+            carve_out_ccfs = (_SA_CCF_B31_MAP["LR"], _SA_CCF_B31_MAP["FR"])
             is_resi_commitment = pl.col("is_uk_residential_mortgage_commitment").fill_null(False)
             sa_not_in_carve_out = ~pl.col("_sa_ccf_from_risk_type").is_in(carve_out_ccfs)
             exposures = exposures.with_columns(
@@ -421,7 +554,8 @@ class CCFCalculator:
             # Revolving with SA CCF < 100%: own CCF with 50% SA floor (CRE32.27).
             airb_revolving_ccf = pl.max_horizontal(
                 ccf_modelled_expr.fill_null(pl.col("_sa_ccf_from_risk_type")),
-                pl.col("_sa_ccf_from_risk_type") * float(AIRB_REVOLVING_CCF_FLOOR_MULTIPLIER),
+                pl.col("_sa_ccf_from_risk_type")
+                * scalar_value(resolved_pack.scalar_param("airb_revolving_ccf_floor_multiplier")),
             )
             is_eligible_for_own_ccf = pl.col("is_revolving").fill_null(False) & (
                 pl.col("_sa_ccf_from_risk_type") < 1.0
@@ -471,12 +605,12 @@ class CCFCalculator:
         overridden to this rate regardless of the row's generic risk_type bucket
         (e.g. a flagged MR row routes to 40%, not the generic 50%).
 
-        Basel-3.1-only: callers gate this on ``config.is_basel_3_1``; there is no
-        equivalent CRR purchased-receivables undrawn-commitment CCF, so the flag
-        is a no-op under CRR.
+        Basel-3.1-only: callers gate this on the ``firb_uses_sa_ccf`` pack Feature
+        (S9c); there is no equivalent CRR purchased-receivables undrawn-commitment
+        CCF, so the flag is a no-op under CRR.
         """
-        oc_ccf = float(SA_CCF_B31["OC"])
-        ucc_ccf = float(SA_CCF_B31["LR"])
+        oc_ccf = _SA_CCF_B31_MAP["OC"]
+        ucc_ccf = _SA_CCF_B31_MAP["LR"]
 
         is_pr_commitment = pl.col("is_purchased_receivable_commitment").fill_null(False) & pl.col(
             "is_revolving"
@@ -502,6 +636,8 @@ class CCFCalculator:
         exposures: pl.LazyFrame,
         has_provision_cols: bool,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Calculate EAD from CCF-adjusted undrawn and on-balance-sheet components.
 
@@ -531,8 +667,10 @@ class CCFCalculator:
             (pl.col("on_bs_for_ead") + pl.col("ead_from_ccf")).alias("ead_pre_crm"),
         )
 
-        # Art. 166D(5) EAD floors — Basel 3.1 A-IRB only
-        if config.is_basel_3_1:
+        # Art. 166D(5) EAD floors — Basel 3.1 A-IRB only (S9c: gated on the cited
+        # pack Feature; the 0.5 floor multiplier stays a static data-layer constant).
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if resolved_pack.feature("airb_ead_floor_applies"):
             is_airb = pl.col("approach") == ApproachType.AIRB.value
             has_modelled_ead = pl.col("ead_modelled").is_not_null()
 
@@ -541,7 +679,7 @@ class CCFCalculator:
             # Under B31, F-IRB CCFs = SA CCFs (Art. 166C)
             floor_b = pl.col("on_bs_for_ead") + pl.col("nominal_after_provision") * pl.col(
                 "_sa_ccf_from_risk_type"
-            ) * float(AIRB_OBS_FLOOR_B_MULTIPLIER)
+            ) * scalar_value(resolved_pack.scalar_param("airb_obs_floor_b_multiplier"))
 
             # Floor (c): fully-drawn EAD floor — Art. 166D(5)(c)
             # EAD >= on-balance-sheet EAD (ignoring Art. 166D)

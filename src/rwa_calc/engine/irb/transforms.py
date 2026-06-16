@@ -47,7 +47,6 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
 from rwa_calc.domain.enums import ApproachType
 from rwa_calc.engine.irb.adjustments import (
     apply_defaulted_treatment as _apply_defaulted_treatment,
@@ -66,17 +65,22 @@ from rwa_calc.engine.irb.formulas import (
     _polars_capital_k_expr,
     _polars_correlation_expr,
     _polars_maturity_adjustment_expr,
+    firb_supervisory_lgd_values,
 )
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as _apply_guarantee_substitution,  # noqa: E501
 )
+from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import (
     exact_fractional_years_expr as _exact_fractional_years_expr,
 )
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +127,9 @@ def classify_approach(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFra
     )
 
 
-def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_firb_lgd(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply F-IRB supervisory LGD for Foundation IRB exposures.
 
@@ -143,8 +149,9 @@ def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     Returns:
         LazyFrame with F-IRB LGD applied
     """
-    # Use framework-appropriate supervisory LGD values
-    lgd_table = get_firb_lgd_table_for_framework(config.is_basel_3_1)
+    # Use framework-appropriate supervisory LGD values (rulepack-sourced).
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    lgd_table = firb_supervisory_lgd_values(resolved_pack)
     default_lgd = float(lgd_table["unsecured_senior"])
     sub_lgd = float(lgd_table["subordinated"])
 
@@ -155,8 +162,8 @@ def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     pr_dilution_lgd = float(lgd_table["dilution_risk"])
 
     # Under Basel 3.1, FSE senior unsecured = 45% (Art. 161(1)(a));
-    # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45%.
-    if config.is_basel_3_1:
+    # non-FSE = 40% (Art. 161(1)(aa)). Under CRR, all = 45% (no FSE split).
+    if resolved_pack.feature("firb_fse_senior_lgd_split"):
         fse_lgd = float(lgd_table["unsecured_senior_fse"])
         default_lgd_expr = (
             pl.when(pl.col("cp_is_financial_sector_entity").fill_null(False))
@@ -215,7 +222,9 @@ def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     return lf.with_columns([lgd_input_expr.alias("lgd_input")])
 
 
-def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def prepare_columns(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Ensure all required columns exist with defaults.
 
@@ -224,6 +233,8 @@ def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted) — supplies
+            the maturity-treatment regime Features.
 
     Returns:
         LazyFrame with all required columns
@@ -237,8 +248,9 @@ def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
     #   5. Fallback default 2.5y
     # CRR F-IRB SFT supervisory M = 0.5y (Art. 162(1)) is applied to the base
     # chain (4/3) but is superseded by the two explicit overrides above.
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     names = set(lf.collect_schema().names())
-    exprs = _prepare_columns_exprs(config, names)
+    exprs = _prepare_columns_exprs(config, names, pack=resolved_pack)
     if exprs:
         return lf.with_columns(exprs)
     return lf
@@ -251,7 +263,9 @@ def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
 
 @cites("CRR Art. 163")
 @cites("PS1/26, paragraph 163")
-def apply_pd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_pd_floor(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply PD floor based on configuration.
 
@@ -265,17 +279,20 @@ def apply_pd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with pd_floored column
     """
-    pd_floor_expr = _pd_floor_expression(config)
+    pd_floor_expr = _pd_floor_expression(config, pack=pack)
     return lf.with_columns(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
 
 @cites("CRR Art. 164")
 @cites("PS1/26, paragraph 164")
-def apply_lgd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_lgd_floor(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply LGD floor for Basel 3.1 A-IRB exposures.
 
@@ -295,6 +312,7 @@ def apply_lgd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with lgd_floored column
@@ -302,25 +320,28 @@ def apply_lgd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
     schema = lf.collect_schema()
     schema_names = schema.names()
     lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
 
-    if config.is_basel_3_1:
+    if resolved_pack.feature("airb_lgd_floor"):
         if "collateral_type" in schema_names:
             lgd_floor_expr = _lgd_floor_expression_with_collateral(
                 config,
                 has_seniority=True,
                 has_exposure_class=True,
+                pack=resolved_pack,
             )
         else:
             lgd_floor_expr = _lgd_floor_expression(
                 config,
                 has_seniority=True,
                 has_exposure_class=True,
+                pack=resolved_pack,
             )
 
         # Art. 164(4)(c) blended floor for retail with mixed collateral
         # Use blended floor where applicable (retail_other/qrre with collateral),
         # fall back to single-type floor otherwise
-        blended_expr = _lgd_floor_blended_expression(config)
+        blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
         lgd_floor_expr = (
             pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
         )
@@ -335,7 +356,12 @@ def apply_lgd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame
 
 
 @cites("CRR Art. 153(1)")
-def calculate_correlation(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def calculate_correlation(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """
     Calculate asset correlation using pure Polars expressions.
 
@@ -354,13 +380,17 @@ def calculate_correlation(lf: pl.LazyFrame, config: CalculationConfig) -> pl.Laz
     Returns:
         LazyFrame with correlation column
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
+        / 1_000_000
+    )
     return lf.with_columns(
         _polars_correlation_expr(
             eur_gbp_rate=eur_gbp_rate,
-            is_b31=config.is_basel_3_1,
+            is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
             sme_turnover_threshold_m=sme_turnover_m,
         ).alias("correlation")
     )
@@ -419,23 +449,28 @@ def calculate_maturity_adjustment(lf: pl.LazyFrame, config: CalculationConfig) -
     )
 
 
-def calculate_rwa(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def calculate_rwa(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Calculate RWA and related metrics.
 
     RWA = K × 12.5 × [1.06] × EAD × MA
     Risk weight = K × 12.5 × [1.06] × MA
 
-    The 1.06 scaling factor applies only under CRR.
+    The 1.06 scaling factor applies only under CRR (sourced from the rulepack's
+    ``irb_scaling_factor``: 1.06 CRR / 1.0 Basel 3.1).
 
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with rwa, risk_weight, scaling_factor columns
     """
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
 
     return lf.with_columns(
         [
@@ -490,12 +525,17 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
 # =============================================================================
 
 
-def apply_post_model_adjustments(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_post_model_adjustments(
+    lf: pl.LazyFrame,
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.LazyFrame:
     """Apply post-model adjustments to IRB RWEA and EL (Basel 3.1 only).
 
     Delegates to ``adjustments.apply_post_model_adjustments``.
     """
-    return _apply_post_model_adjustments(lf, config)
+    return _apply_post_model_adjustments(lf, config, pack=pack)
 
 
 # =============================================================================
@@ -525,12 +565,14 @@ def compute_el_shortfall_excess(
 # =============================================================================
 
 
-def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """Apply guarantee substitution for IRB exposures.
 
     Delegates to ``guarantee.apply_guarantee_substitution``.
     """
-    return _apply_guarantee_substitution(lf, config)
+    return _apply_guarantee_substitution(lf, config, pack=pack)
 
 
 # =============================================================================
@@ -538,7 +580,9 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 # =============================================================================
 
 
-def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_all_formulas(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply full IRB formula pipeline in 4 batched with_columns.
 
@@ -551,10 +595,12 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     Args:
         lf: IRB exposures frame
         config: Calculation configuration
+        pack: Resolved rulepack (falls back to ``config`` when omitted)
 
     Returns:
         LazyFrame with all IRB calculations
     """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     schema = lf.collect_schema()
     schema_names = set(schema.names())
 
@@ -562,20 +608,23 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     batch1: list[pl.Expr] = []
 
     # Per-exposure-class PD floor (CRR: uniform, Basel 3.1: differentiated)
-    pd_floor_expr = _pd_floor_expression(config)
+    pd_floor_expr = _pd_floor_expression(config, pack=resolved_pack)
     batch1.append(pl.max_horizontal(pl.col("pd"), pd_floor_expr).alias("pd_floored"))
 
     # LGD floor (CRR: none, Basel 3.1: per-collateral-type for A-IRB only)
     # F-IRB supervisory LGDs are regulatory values — don't floor them (CRE30.41)
     lgd_col = "lgd_input" if "lgd_input" in schema_names else "lgd"
-    batch1.append(_lgd_floored_expr(config, schema_names, lgd_col))
+    batch1.append(_lgd_floored_expr(config, schema_names, lgd_col, pack=resolved_pack))
 
     lf = lf.with_columns(batch1)
 
     # --- Batch 2: Correlation + maturity adjustment (read pd_floored) ---
     # B31 uses GBP-native thresholds (Art. 153(4)); CRR converts GBP→EUR via rate
     eur_gbp_rate = float(config.eur_gbp_rate)
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(resolved_pack, "sme_turnover_threshold", config.eur_gbp_rate))
+        / 1_000_000
+    )
     is_retail = (
         pl.col("exposure_class")
         .cast(pl.String)
@@ -587,7 +636,7 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
         [
             _polars_correlation_expr(
                 eur_gbp_rate=eur_gbp_rate,
-                is_b31=config.is_basel_3_1,
+                is_b31=resolved_pack.feature("irb_correlation_sme_gbp_native"),
                 sme_turnover_threshold_m=sme_turnover_m,
             ).alias("correlation"),
             pl.when(is_retail)
@@ -601,7 +650,7 @@ def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFr
     lf = lf.with_columns(_polars_capital_k_expr().alias("k"))
 
     # --- Batch 4: RWA + risk weight + expected loss ---
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    scaling_factor = scalar_value(resolved_pack.scalar_param("irb_scaling_factor"))
     lf = lf.with_columns(
         [
             pl.lit(scaling_factor).alias("scaling_factor"),
@@ -815,7 +864,7 @@ def clip_maturity(expr: pl.Expr, floor: float = 1.0, cap: float = 5.0) -> pl.Exp
 # =============================================================================
 
 
-def _maturity_base_expr(config: CalculationConfig) -> pl.Expr:
+def _maturity_base_expr(config: CalculationConfig, *, pack: ResolvedRulepack) -> pl.Expr:
     """Build the base maturity expression from maturity_date/termination/default."""
     maturity_from_date = (
         pl.when(pl.col("maturity_date").is_not_null())
@@ -823,7 +872,7 @@ def _maturity_base_expr(config: CalculationConfig) -> pl.Expr:
         .otherwise(pl.lit(2.5))
     )
 
-    if config.is_basel_3_1:
+    if pack.feature("revolving_uses_termination_maturity"):
         # B31 Art. 162(2A)(k): revolving + non-null termination date → use termination date
         maturity_from_termination = (
             pl.when(pl.col("facility_termination_date").is_not_null())
@@ -844,13 +893,13 @@ def _maturity_base_expr(config: CalculationConfig) -> pl.Expr:
 
 
 def _apply_firb_sft_supervisory_maturity(
-    maturity_expr: pl.Expr, config: CalculationConfig
+    maturity_expr: pl.Expr, *, pack: ResolvedRulepack
 ) -> pl.Expr:
     """CRR Art. 162(1): F-IRB fixed supervisory maturity for repo-style SFTs (0.5y).
 
     B31 deleted Art. 162(1); under B31 all IRB firms calculate M per Art. 162(2A).
     """
-    if not config.is_crr:
+    if not pack.feature("firb_sft_supervisory_maturity"):
         return maturity_expr
     return (
         pl.when((pl.col("approach") == ApproachType.FIRB.value) & pl.col("is_sft").fill_null(False))
@@ -859,7 +908,7 @@ def _apply_firb_sft_supervisory_maturity(
     )
 
 
-def _effective_one_day_floor_flag(config: CalculationConfig) -> pl.Expr:
+def _effective_one_day_floor_flag(config: CalculationConfig, *, pack: ResolvedRulepack) -> pl.Expr:
     """Compose the Art. 162(3) one-day maturity floor flag.
 
     Per CRR Art. 162(3) second sub-paragraph point (b), self-liquidating short-term
@@ -869,7 +918,7 @@ def _effective_one_day_floor_flag(config: CalculationConfig) -> pl.Expr:
     True is preserved by ORing the derived flag onto the input column.
     """
     input_floor_flag = pl.col("has_one_day_maturity_floor").fill_null(False)
-    if not config.is_crr:
+    if not pack.feature("one_day_maturity_floor"):
         return input_floor_flag
 
     residual_years = (
@@ -885,16 +934,16 @@ def _effective_one_day_floor_flag(config: CalculationConfig) -> pl.Expr:
     return input_floor_flag | derived_floor_flag
 
 
-def _build_maturity_exprs(config: CalculationConfig) -> list[pl.Expr]:
+def _build_maturity_exprs(config: CalculationConfig, *, pack: ResolvedRulepack) -> list[pl.Expr]:
     """Build the full maturity priority chain as a list of aliased expressions.
 
     Returns two expressions: ``maturity`` and ``has_one_day_maturity_floor``.
     See ``prepare_columns`` for the priority chain documentation.
     """
-    maturity_expr = _maturity_base_expr(config)
-    maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, config)
+    maturity_expr = _maturity_base_expr(config, pack=pack)
+    maturity_expr = _apply_firb_sft_supervisory_maturity(maturity_expr, pack=pack)
 
-    effective_floor_flag = _effective_one_day_floor_flag(config)
+    effective_floor_flag = _effective_one_day_floor_flag(config, pack=pack)
     maturity_expr = (
         pl.when(effective_floor_flag).then(pl.lit(_ONE_DAY_YEARS)).otherwise(maturity_expr)
     )
@@ -915,7 +964,9 @@ def _build_maturity_exprs(config: CalculationConfig) -> list[pl.Expr]:
     ]
 
 
-def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[pl.Expr]:
+def _prepare_columns_exprs(
+    config: CalculationConfig, names: set[str], *, pack: ResolvedRulepack
+) -> list[pl.Expr]:
     """Build the default-column expressions for ``prepare_columns``.
 
     Extracted as a module-level helper to keep the public function's cognitive
@@ -926,7 +977,7 @@ def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[p
 
     # Maturity priority chain — see ``prepare_columns`` docstring for details.
     if "maturity" not in names:
-        exprs.extend(_build_maturity_exprs(config))
+        exprs.extend(_build_maturity_exprs(config, pack=pack))
 
     if "turnover_m" not in names:
         # CRR Art. 153(4) third subparagraph: substitute total assets of the
@@ -955,14 +1006,21 @@ def _prepare_columns_exprs(config: CalculationConfig, names: set[str]) -> list[p
 # =============================================================================
 
 
-def _lgd_floored_expr(config: CalculationConfig, schema_names: set[str], lgd_col: str) -> pl.Expr:
+def _lgd_floored_expr(
+    config: CalculationConfig,
+    schema_names: set[str],
+    lgd_col: str,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> pl.Expr:
     """Build the ``lgd_floored`` expression for ``apply_all_formulas``.
 
-    CRR has no LGD floor. Basel 3.1 applies per-collateral-type floors to
-    A-IRB only (F-IRB supervisory LGDs are regulatory values — not floored,
-    per CRE30.41).
+    CRR has no LGD floor (the ``airb_lgd_floor`` Feature is off). Basel 3.1
+    applies per-collateral-type floors to A-IRB only (F-IRB supervisory LGDs are
+    regulatory values — not floored, per CRE30.41).
     """
-    if not config.is_basel_3_1:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("airb_lgd_floor"):
         return pl.col(lgd_col).alias("lgd_floored")
 
     if "collateral_type" in schema_names:
@@ -970,15 +1028,17 @@ def _lgd_floored_expr(config: CalculationConfig, schema_names: set[str], lgd_col
             config,
             has_seniority=True,
             has_exposure_class=True,
+            pack=resolved_pack,
         )
     else:
         lgd_floor_expr = _lgd_floor_expression(
             config,
             has_seniority=True,
             has_exposure_class=True,
+            pack=resolved_pack,
         )
     # Art. 164(4)(c) blended floor for retail with mixed collateral
-    blended_expr = _lgd_floor_blended_expression(config)
+    blended_expr = _lgd_floor_blended_expression(config, pack=resolved_pack)
     lgd_floor_expr = (
         pl.when(blended_expr.is_not_null()).then(blended_expr).otherwise(lgd_floor_expr)
     )

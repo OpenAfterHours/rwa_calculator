@@ -67,12 +67,12 @@ from tests.fixtures.p1_165.p1_165 import (
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.engine.crm.haircut_tables import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     lookup_collateral_haircut,
 )
-from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ class TestP1165HaircutsTablePins:
         haircut.  The CRR treatment is entirely via Art. 230 Foundation Collateral
         Method (LGDS 35%, OC 1.25x).
 
-        Arrange: import COLLATERAL_HAIRCUTS from rwa_calc.data.tables.haircuts.
+        Arrange: import COLLATERAL_HAIRCUTS from rwa_calc.engine.crm.haircut_tables.
         Act:     read COLLATERAL_HAIRCUTS["receivables"].
         Assert:  value == Decimal("0").
 
@@ -213,7 +213,7 @@ class TestP1165HaircutsTablePins:
         LGD* formula (different from CRR Art. 230 which has no HC).  This scenario
         does NOT change the Basel 3.1 behaviour — this test locks it.
 
-        Arrange: import BASEL31_COLLATERAL_HAIRCUTS from rwa_calc.data.tables.haircuts.
+        Arrange: import BASEL31_COLLATERAL_HAIRCUTS from rwa_calc.engine.crm.haircut_tables.
         Act:     read BASEL31_COLLATERAL_HAIRCUTS["receivables"] and
                  call lookup_collateral_haircut("receivables", is_basel_3_1=True).
         Assert:  both values == Decimal("0.40").

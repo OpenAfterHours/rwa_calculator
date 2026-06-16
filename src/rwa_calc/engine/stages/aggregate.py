@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Aggregate the collected branch results into the final bundle."""
@@ -59,6 +59,7 @@ def run(
         equity_bundle=ctx.get(EQUITY_RESULT),
         config=run_config,
         securitisation_audit=crm_adjusted.securitisation_audit,
+        pack=rulepack.pack,
     )
 
     # Merge branch-path calculator warnings, codes preserved.

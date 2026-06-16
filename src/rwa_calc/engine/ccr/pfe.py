@@ -24,6 +24,7 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 from watchfire import cites
@@ -31,28 +32,32 @@ from watchfire import cites
 from rwa_calc.contracts.config import CCRConfig
 from rwa_calc.data.column_spec import ensure_columns
 from rwa_calc.data.schemas import TRADE_SCHEMA
-from rwa_calc.data.tables.sa_ccr_factors import (
-    PFE_AGGREGATE_DENOM_COEFF,
-    PFE_MULTIPLIER_FLOOR_F,
-    SA_CCR_CORRELATION_COMMODITY,
-    SA_CCR_CORRELATION_CREDIT_IDX,
-    SA_CCR_CORRELATION_CREDIT_SN,
-    SA_CCR_CORRELATION_EQUITY_IDX,
-    SA_CCR_CORRELATION_EQUITY_SN,
-    SA_CCR_IR_BUCKET_CORRELATION_12,
-    SA_CCR_IR_BUCKET_CORRELATION_13,
-    SA_CCR_IR_BUCKET_CORRELATION_23,
-    SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX,
-    SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN,
-    SA_CCR_SUPERVISORY_FACTOR_FX,
-    SA_CCR_SUPERVISORY_FACTOR_IR,
-    SA_CCR_SUPERVISORY_FACTORS_COMMODITY,
-    SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX,
-    SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN,
-)
 from rwa_calc.engine.ccr.rc import compute_rc_unmargined
+from rwa_calc.rulebook.compile import lookup_float_map, scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# SA-CCR supervisory factors, correlations, and PFE-multiplier constants
+# (CRR Art. 277a / 278 / 280) resolved from the rulepack once at module load.
+_PACK = resolve("crr", date(2026, 1, 1))
+_PFE_MULTIPLIER_FLOOR_F = scalar_value(_PACK.scalar_param("pfe_multiplier_floor_f"))
+_PFE_AGGREGATE_DENOM_COEFF = scalar_value(_PACK.scalar_param("pfe_aggregate_denom_coeff"))
+_SF_IR = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_factor_ir"))
+_SF_FX = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_factor_fx"))
+_SF_EQUITY_SN = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_factor_equity_sn"))
+_SF_EQUITY_IDX = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_factor_equity_idx"))
+_RHO_CREDIT_SN = scalar_value(_PACK.scalar_param("sa_ccr_correlation_credit_sn"))
+_RHO_CREDIT_IDX = scalar_value(_PACK.scalar_param("sa_ccr_correlation_credit_idx"))
+_RHO_EQUITY_SN = scalar_value(_PACK.scalar_param("sa_ccr_correlation_equity_sn"))
+_RHO_EQUITY_IDX = scalar_value(_PACK.scalar_param("sa_ccr_correlation_equity_idx"))
+_RHO_COMMODITY = scalar_value(_PACK.scalar_param("sa_ccr_correlation_commodity"))
+_RHO_IR_BUCKET_12 = scalar_value(_PACK.scalar_param("sa_ccr_ir_bucket_correlation_12"))
+_RHO_IR_BUCKET_23 = scalar_value(_PACK.scalar_param("sa_ccr_ir_bucket_correlation_23"))
+_RHO_IR_BUCKET_13 = scalar_value(_PACK.scalar_param("sa_ccr_ir_bucket_correlation_13"))
+_SF_CREDIT_SN_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_credit_sn"))
+_SF_CREDIT_IDX_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_credit_idx"))
+_SF_COMMODITY_MAP = lookup_float_map(_PACK.lookup("sa_ccr_supervisory_factors_commodity"))
 
 
 @cites("CRR Art. 278")
@@ -105,8 +110,8 @@ def compute_pfe(
     # to the scalar α for backward compatibility.
     has_alpha_col = "alpha_applied" in netting_sets.collect_schema().names()
     alpha_expr = pl.col("alpha_applied") if has_alpha_col else pl.lit(alpha_value)
-    floor_f = float(PFE_MULTIPLIER_FLOOR_F)
-    denom_coeff = float(PFE_AGGREGATE_DENOM_COEFF)
+    floor_f = _PFE_MULTIPLIER_FLOOR_F
+    denom_coeff = _PFE_AGGREGATE_DENOM_COEFF
     one_minus_f = 1.0 - floor_f
 
     v_minus_c = pl.col("v_net") - pl.col("c_net")
@@ -229,10 +234,10 @@ def _compute_addon_ir(trades: pl.LazyFrame) -> pl.LazyFrame:
         LazyFrame keyed on (``netting_set_id``, ``asset_class="interest_rate"``)
         with ``asset_class_addon: Float64``. Non-IR rows are filtered out.
     """
-    rho_12 = float(SA_CCR_IR_BUCKET_CORRELATION_12)
-    rho_23 = float(SA_CCR_IR_BUCKET_CORRELATION_23)
-    rho_13 = float(SA_CCR_IR_BUCKET_CORRELATION_13)
-    sf_ir = float(SA_CCR_SUPERVISORY_FACTOR_IR)
+    rho_12 = _RHO_IR_BUCKET_12
+    rho_23 = _RHO_IR_BUCKET_23
+    rho_13 = _RHO_IR_BUCKET_13
+    sf_ir = _SF_IR
 
     ir_trades = trades.filter(pl.col("asset_class") == "interest_rate")
 
@@ -305,7 +310,7 @@ def _compute_addon_fx(trades: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 277(3)(a) (FX hedging set = currency pair); CRR Art. 277a(2);
         BCBS CRE52.55 (FX asset-class aggregation is a simple sum).
     """
-    sf_fx = float(SA_CCR_SUPERVISORY_FACTOR_FX)
+    sf_fx = _SF_FX
 
     fx_trades = trades.filter(pl.col("asset_class") == "fx")
 
@@ -360,13 +365,13 @@ def _compute_addon_credit(trades: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 280 Table 2 (SF_CR by quality / index);
         CRR Art. 280a (rho_CR = 0.50 SN / 0.80 IDX).
     """
-    rho_sn = float(SA_CCR_CORRELATION_CREDIT_SN)
-    rho_idx = float(SA_CCR_CORRELATION_CREDIT_IDX)
-    sf_sn_ig = float(SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN["IG"])
-    sf_sn_hy = float(SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN["HY"])
-    sf_sn_nr = float(SA_CCR_SUPERVISORY_FACTORS_CREDIT_SN["NON_RATED"])
-    sf_idx_ig = float(SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX["IG"])
-    sf_idx_hy = float(SA_CCR_SUPERVISORY_FACTORS_CREDIT_IDX["HY"])
+    rho_sn = _RHO_CREDIT_SN
+    rho_idx = _RHO_CREDIT_IDX
+    sf_sn_ig = _SF_CREDIT_SN_MAP["IG"]
+    sf_sn_hy = _SF_CREDIT_SN_MAP["HY"]
+    sf_sn_nr = _SF_CREDIT_SN_MAP["NON_RATED"]
+    sf_idx_ig = _SF_CREDIT_IDX_MAP["IG"]
+    sf_idx_hy = _SF_CREDIT_IDX_MAP["HY"]
 
     # Defensive: upstream IR / FX call-sites pre-date the credit branch and
     # may pass frames without the credit-specific discriminator columns. Inject
@@ -469,7 +474,7 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 280c (within-bucket ρ=0.40, no cross-bucket); CRR Art. 280
         Table 2 (SF_CM per bucket); BCBS CRE52.67-69.
     """
-    rho = float(SA_CCR_CORRELATION_COMMODITY)
+    rho = _RHO_COMMODITY
     rho2 = rho * rho
     one_minus_rho2 = 1.0 - rho2
 
@@ -477,8 +482,8 @@ def _compute_addon_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
     # bucket names) so we can join rather than chain when/then ladders.
     sf_cm_lookup = pl.LazyFrame(
         {
-            "commodity_type": list(SA_CCR_SUPERVISORY_FACTORS_COMMODITY.keys()),
-            "_sf_cm": [float(v) for v in SA_CCR_SUPERVISORY_FACTORS_COMMODITY.values()],
+            "commodity_type": list(_SF_COMMODITY_MAP.keys()),
+            "_sf_cm": list(_SF_COMMODITY_MAP.values()),
         },
         schema={"commodity_type": pl.Utf8, "_sf_cm": pl.Float64},
     )
@@ -563,10 +568,10 @@ def _compute_addon_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
         CRR Art. 277(2)(d); CRR Art. 277a; CRR Art. 280 Table 2;
         CRR Art. 280b; BCBS CRE52.65-66.
     """
-    sf_sn = float(SA_CCR_SUPERVISORY_FACTOR_EQUITY_SN)
-    sf_idx = float(SA_CCR_SUPERVISORY_FACTOR_EQUITY_IDX)
-    rho_sn = float(SA_CCR_CORRELATION_EQUITY_SN)
-    rho_idx = float(SA_CCR_CORRELATION_EQUITY_IDX)
+    sf_sn = _SF_EQUITY_SN
+    sf_idx = _SF_EQUITY_IDX
+    rho_sn = _RHO_EQUITY_SN
+    rho_idx = _RHO_EQUITY_IDX
 
     # Defensive: upstream frames that pre-date the equity branch (e.g. FX/IR-
     # only acceptance tests) may not carry ``is_index`` / ``reference_entity``.

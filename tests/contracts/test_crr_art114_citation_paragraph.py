@@ -39,7 +39,7 @@ _STANDARD_IDS = [label for label, _ in _STANDARD_SCOPE]
 
 # eu_sovereign.py uses the *split* form ("114(4)" + "114(7)") rather than the
 # combined slash notation, so it gets its own parametrized set.
-_EU_SOV_PATH = _ROOT / "data" / "tables" / "eu_sovereign.py"
+_EU_SOV_PATH = _ROOT / "engine" / "eu_sovereign.py"
 
 
 @pytest.mark.parametrize("label,path", _STANDARD_SCOPE, ids=_STANDARD_IDS)
@@ -90,7 +90,7 @@ def test_eu_sovereign_stale_art114_compound_absent() -> None:
 
     # Act / Assert
     assert "114(3)/(4)" not in text, (
-        "data/tables/eu_sovereign.py: found stale citation '114(3)/(4)' — "
+        "engine/eu_sovereign.py: found stale citation '114(3)/(4)' — "
         "replace with split '114(4)' and '114(7)' forms "
         f"(full path: {_EU_SOV_PATH})"
     )
@@ -108,7 +108,7 @@ def test_eu_sovereign_art114_4_present() -> None:
 
     # Act / Assert
     assert "114(4)" in text, (
-        "data/tables/eu_sovereign.py: expected citation '114(4)' to be present but it was not found "
+        "engine/eu_sovereign.py: expected citation '114(4)' to be present but it was not found "
         f"(full path: {_EU_SOV_PATH})"
     )
 
@@ -125,6 +125,6 @@ def test_eu_sovereign_art114_7_present() -> None:
 
     # Act / Assert
     assert "114(7)" in text, (
-        "data/tables/eu_sovereign.py: expected citation '114(7)' to be present but it was not found "
+        "engine/eu_sovereign.py: expected citation '114(7)' to be present but it was not found "
         f"(full path: {_EU_SOV_PATH})"
     )

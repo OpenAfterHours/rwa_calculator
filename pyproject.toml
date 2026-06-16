@@ -40,6 +40,7 @@ dependencies = [
 
 [project.scripts]
 rwa-ui = "rwa_calc.ui.app.main:main"
+rulepack-diff = "rwa_calc.rulebook.audit:main"
 
 [project.urls]
 Homepage = "https://github.com/OpenAfterHours/rwa_calculator"

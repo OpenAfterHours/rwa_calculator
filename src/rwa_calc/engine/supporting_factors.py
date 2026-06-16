@@ -58,9 +58,13 @@ from rwa_calc.contracts.errors import (
     CalculationError,
 )
 from rwa_calc.domain.enums import ErrorCategory, ErrorSeverity
+from rwa_calc.engine.thresholds import regulatory_threshold
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import formula_float_map
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @dataclass
@@ -88,6 +92,8 @@ class SupportingFactorCalculator:
         self,
         total_exposure: Decimal,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> Decimal:
         """
         Calculate SME supporting factor based on total drawn exposure.
@@ -99,17 +105,22 @@ class SupportingFactorCalculator:
         Returns:
             Effective supporting factor (0.7619 to 0.85)
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             return Decimal("1.0")
 
         if total_exposure <= 0:
             return Decimal("1.0")
 
-        # Get thresholds and factors from config
-        threshold_gbp = config.thresholds.sme_exposure_threshold
+        # FX-derived SME exposure threshold stays config (RegulatoryThresholds → S11c);
+        # the factor multipliers are pack-sourced (Decimal, exact).
+        threshold_gbp = regulatory_threshold(
+            resolved_pack, "sme_exposure_threshold", config.eur_gbp_rate
+        )
 
-        factor_tier1 = config.supporting_factors.sme_factor_under_threshold
-        factor_tier2 = config.supporting_factors.sme_factor_above_threshold
+        sf_values = resolved_pack.formula("supporting_factors_values").params
+        factor_tier1 = sf_values["sme_factor_under_threshold"]
+        factor_tier2 = sf_values["sme_factor_above_threshold"]
 
         # Use GBP threshold for GBP currency (default)
         threshold = threshold_gbp
@@ -126,6 +137,8 @@ class SupportingFactorCalculator:
     def calculate_infrastructure_factor(
         self,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> Decimal:
         """
         Get infrastructure supporting factor.
@@ -136,10 +149,11 @@ class SupportingFactorCalculator:
         Returns:
             Infrastructure factor (0.75 for CRR, 1.0 for Basel 3.1)
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             return Decimal("1.0")
 
-        return config.supporting_factors.infrastructure_factor
+        return resolved_pack.formula("supporting_factors_values").params["infrastructure_factor"]
 
     def get_effective_factor(
         self,
@@ -147,6 +161,8 @@ class SupportingFactorCalculator:
         is_infrastructure: bool,
         total_exposure: Decimal,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> Decimal:
         """
         Get the most beneficial supporting factor.
@@ -163,16 +179,17 @@ class SupportingFactorCalculator:
         Returns:
             Most beneficial factor (lowest value)
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             return Decimal("1.0")
 
         factors = [Decimal("1.0")]
 
         if is_sme:
-            factors.append(self.calculate_sme_factor(total_exposure, config))
+            factors.append(self.calculate_sme_factor(total_exposure, config, pack=resolved_pack))
 
         if is_infrastructure:
-            factors.append(self.calculate_infrastructure_factor(config))
+            factors.append(self.calculate_infrastructure_factor(config, pack=resolved_pack))
 
         # Return lowest factor (most beneficial)
         return min(factors)
@@ -184,6 +201,7 @@ class SupportingFactorCalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply supporting factors to exposures LazyFrame.
@@ -240,7 +258,8 @@ class SupportingFactorCalculator:
         Returns:
             Exposures with supporting factors applied
         """
-        if not config.supporting_factors.enabled:
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+        if not resolved_pack.feature("supporting_factors"):
             # Basel 3.1: No supporting factors
             return exposures.with_columns(
                 [
@@ -250,11 +269,15 @@ class SupportingFactorCalculator:
                 ]
             )
 
-        # Get threshold in GBP
-        threshold_gbp = float(config.thresholds.sme_exposure_threshold)
-        factor_tier1 = float(config.supporting_factors.sme_factor_under_threshold)
-        factor_tier2 = float(config.supporting_factors.sme_factor_above_threshold)
-        infra_factor = float(config.supporting_factors.infrastructure_factor)
+        # FX-derived threshold stays config (RegulatoryThresholds → S11c); the factor
+        # multipliers are pack-sourced (float boundary via formula_float_map).
+        threshold_gbp = float(
+            regulatory_threshold(resolved_pack, "sme_exposure_threshold", config.eur_gbp_rate)
+        )
+        sf_values = formula_float_map(resolved_pack.formula("supporting_factors_values"))
+        factor_tier1 = sf_values["sme_factor_under_threshold"]
+        factor_tier2 = sf_values["sme_factor_above_threshold"]
+        infra_factor = sf_values["infrastructure_factor"]
 
         # Check for optional columns (is_sme / is_infrastructure /
         # lending_group_reference are crm_exit contract columns and read
@@ -435,6 +458,7 @@ def compute_e_star_group_drawn(
     config: CalculationConfig,
     *,
     errors: list[CalculationError] | None = None,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """
     Compute Art. 501 E* across the unified frame before the approach split.
@@ -475,7 +499,8 @@ def compute_e_star_group_drawn(
     Returns:
         LazyFrame with ``e_star_group_drawn`` column added
     """
-    if not config.supporting_factors.enabled:
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("supporting_factors"):
         return exposures
 
     schema = exposures.collect_schema()

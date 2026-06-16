@@ -33,6 +33,7 @@ from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ def apply_supporting_factors(
     config: CalculationConfig,
     *,
     errors: list[CalculationError] | None = None,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Apply SME / infrastructure supporting factors (CRR Art. 501 / 501a).
 
@@ -78,7 +80,7 @@ def apply_supporting_factors(
         errors: Optional accumulator for data-quality warnings.
     """
     lf = ensure_columns(lf, _SUPPORTING_FACTOR_COLUMNS)
-    return SupportingFactorCalculator().apply_factors(lf, config, errors=errors)
+    return SupportingFactorCalculator().apply_factors(lf, config, errors=errors, pack=pack)
 
 
 def build_audit(lf: pl.LazyFrame) -> pl.LazyFrame:

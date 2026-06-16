@@ -13,9 +13,10 @@ Key responsibilities:
 - Compute the FCCM E* formula at netting-set grain:
       E* = max(0, E·(1+HE) − CVA·(1−HC−HFX))    (Art. 223(5))
   using the standardised supervisory haircuts in
-  ``rwa_calc.data.tables.haircuts``. Haircut scalars and the 5-business-day
-  liquidation period for SFTs (Art. 224(2)(c)) are sourced from that table —
-  no regulatory scalars are declared here per the engine/data separation rule.
+  ``rwa_calc.engine.crm.haircut_tables`` (pack-bound). Haircut scalars and the
+  5-business-day liquidation period for SFTs (Art. 224(2)(c)) are sourced from
+  the rulepack via that module — no regulatory scalars are declared here per the
+  engine/data separation rule.
 - Emit one synthetic exposure row per SFT netting set with
   ``ccr_method == "fccm_sft"`` and ``risk_type == "CCR_SFT"`` so downstream
   Classifier / CRM / SA routing treats the row as a vanilla unsecured
@@ -48,14 +49,20 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import RawCCRBundle
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
-    LIQUIDATION_PERIOD_REPO,
     lookup_collateral_haircut,
     scale_haircut_for_liquidation_period,
 )
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
+
+# CRR Art. 224(2) repo/SFT liquidation period (5 BD), resolved from the common
+# pack at module load — feeds the Art. 226(2) sqrt(T_m/10) haircut scaling below.
+# Kept int (passed to scale_haircut_for_liquidation_period). (S13-h)
+_PACK = resolve("crr", date(2026, 1, 1))
+_LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
 
 # ``"sft"`` is the canonical TRADE_SCHEMA.transaction_type discriminator for
 # securities financing transactions per Art. 220(1)(a). Defined once so the
@@ -307,7 +314,7 @@ def _compute_exposure_haircut(
     base = _lookup_haircut_unscaled(collateral_type, cqs, residual_maturity_years)
     if base is None or base == 0.0:
         return 0.0
-    return scale_haircut_for_liquidation_period(base, LIQUIDATION_PERIOD_REPO)
+    return scale_haircut_for_liquidation_period(base, _LIQUIDATION_PERIOD_REPO)
 
 
 def _compute_collateral_cva_contribution(
@@ -333,7 +340,7 @@ def _compute_collateral_cva_contribution(
     if base is None:
         # Ineligible collateral per Art. 197 — zero recognition.
         return 0.0
-    hc = scale_haircut_for_liquidation_period(base, LIQUIDATION_PERIOD_REPO)
+    hc = scale_haircut_for_liquidation_period(base, _LIQUIDATION_PERIOD_REPO)
     same_currency = (
         collateral_currency is not None
         and exposure_currency is not None
@@ -342,5 +349,5 @@ def _compute_collateral_cva_contribution(
     if same_currency:
         hfx = 0.0
     else:
-        hfx = scale_haircut_for_liquidation_period(float(FX_HAIRCUT), LIQUIDATION_PERIOD_REPO)
+        hfx = scale_haircut_for_liquidation_period(float(FX_HAIRCUT), _LIQUIDATION_PERIOD_REPO)
     return float(market_value) * (1.0 - hc - hfx)

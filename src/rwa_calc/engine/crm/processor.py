@@ -79,6 +79,7 @@ from rwa_calc.observability.audit_cache import sink_audit
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -477,21 +478,24 @@ class CRMProcessor:
     GUARANTEE_REQUIRED_COLUMNS = {"beneficiary_reference", "amount_covered", "guarantor"}
     PROVISION_REQUIRED_COLUMNS = {"beneficiary_reference", "amount"}
 
-    def __init__(self, is_basel_3_1: bool = False) -> None:
+    def __init__(self) -> None:
         """Initialize CRM processor with sub-calculators.
 
-        Args:
-            is_basel_3_1: True for Basel 3.1 framework (affects haircuts and supervisory LGD)
+        The processor carries no constructor regime-state: the framework
+        (CRR vs Basel 3.1) is read per-method from the effective
+        ``CalculationConfig`` each public entry point already receives, so a
+        single processor instance computes correctly under either framework.
         """
         self._ccf_calculator = CCFCalculator()
-        self._haircut_calculator = HaircutCalculator(is_basel_3_1=is_basel_3_1)
-        self._is_basel_3_1 = is_basel_3_1
+        self._haircut_calculator = HaircutCalculator()
 
     @cites("CRR Art. 194")
     def get_crm_unified_bundle(
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> CRMAdjustedBundle:
         """
         Apply CRM on the unified exposure frame (single-pass pipeline).
@@ -507,6 +511,10 @@ class CRMProcessor:
         Args:
             data: Classified exposures from classifier
             config: Calculation configuration
+            pack: Resolved rulepack for the run's regime/date (Phase 5 — the
+                source of regulatory values, e.g. the Art. 222 FCSM floors).
+                Production passes the orchestrator's pack; direct callers may
+                omit it, in which case sub-steps resolve one from ``config``.
 
         Returns:
             CRMAdjustedBundle with all exposures in the unified frame
@@ -525,7 +533,7 @@ class CRMProcessor:
         errors.extend(look_through_errors)
 
         # Steps 1-3: provisions -> CCF -> init EAD -> crm_post_ead checkpoint
-        exposures = self._run_ead_pipeline(data, config)
+        exposures = self._run_ead_pipeline(data, config, pack=pack)
 
         # Generate synthetic collateral from netting (CRR Art. 195)
         exposures, collateral = self._merge_netting_collateral(exposures, collateral_lf, errors)
@@ -543,7 +551,7 @@ class CRMProcessor:
         use_simple_method = config.crm_collateral_method == CRMCollateralMethod.SIMPLE
         if use_simple_method:
             if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
-                exposures = compute_fcsm_columns(exposures, collateral, config)
+                exposures = compute_fcsm_columns(exposures, collateral, config, pack=pack)
             else:
                 # Add default (zero) FCSM columns when no valid collateral
                 from rwa_calc.engine.crm.simple_method import _add_default_fcsm_columns
@@ -552,7 +560,7 @@ class CRMProcessor:
 
         # Step 4: Apply collateral (if available and valid)
         exposures, collateral_applied = self._apply_collateral_unified_step(
-            exposures, collateral, config, errors
+            exposures, collateral, config, errors, pack=pack
         )
 
         # Step 4b: Under Simple Method, undo SA financial collateral EAD reduction.
@@ -577,7 +585,9 @@ class CRMProcessor:
             and data.counterparty_lookup is not None
         ):
             exposures = materialise_edge(exposures, config, "crm_pre_guarantee_unified")
-            exposures = self._apply_guarantees_step(exposures, guarantees_lf, data, config, errors)
+            exposures = self._apply_guarantees_step(
+                exposures, guarantees_lf, data, config, errors, pack=pack
+            )
         else:
             self._collect_guarantee_skip_errors(guarantees_lf, data, errors)
 
@@ -630,6 +640,8 @@ class CRMProcessor:
         self,
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Run provisions -> CCF -> init_ead and materialise the checkpoint.
 
@@ -647,10 +659,10 @@ class CRMProcessor:
         # This adds provision_on_drawn, provision_on_nominal, nominal_after_provision
         # so CCF can use the provision-adjusted nominal amount
         if has_required_columns(data.provisions, self.PROVISION_REQUIRED_COLUMNS):
-            exposures = self.resolve_provisions(exposures, data.provisions, config)
+            exposures = self.resolve_provisions(exposures, data.provisions, config, pack=pack)
         # Step 2: Apply CCF to calculate EAD for contingents
         # Uses nominal_after_provision when available
-        exposures = self._apply_ccf(exposures, config)
+        exposures = self._apply_ccf(exposures, config, pack=pack)
         # Step 3: Initialize EAD columns
         return materialise_edge(self._initialize_ead(exposures), config, "crm_post_ead")
 
@@ -768,14 +780,16 @@ class CRMProcessor:
         collateral: pl.LazyFrame | None,
         config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> tuple[pl.LazyFrame, bool]:
         """Apply collateral with misdirected-AIRB diagnostics."""
         if has_required_columns(collateral, self.COLLATERAL_REQUIRED_COLUMNS):
             assert collateral is not None  # narrowed by has_required_columns
             # Cheap no-op unless the collateral table actually carries the
             # is_airb_model_collateral flag (early-return inside the finder).
-            self._record_misdirected_airb_errors(exposures, collateral, config, errors)
-            exposures = self.apply_collateral(exposures, collateral, config)
+            self._record_misdirected_airb_errors(exposures, collateral, config, errors, pack=pack)
+            exposures = self.apply_collateral(exposures, collateral, config, pack=pack)
             return exposures, True
         # No (valid) collateral path
         self._record_missing_collateral_columns(collateral, errors)
@@ -791,14 +805,14 @@ class CRMProcessor:
             from rwa_calc.contracts.edges import RAW_TABLE_EDGES
 
             exposures = self.apply_collateral(
-                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config
+                exposures, RAW_TABLE_EDGES["collateral"].empty_frame(), config, pack=pack
             )
             return exposures, False
         # No collateral: still need to set F-IRB supervisory LGD based on
         # seniority. Under B31, AIRB Foundation/169B exposures also get
         # formula-based LGD.
         exposures = collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-            exposures, self._is_basel_3_1, config=config
+            exposures, config=config, pack=pack
         )
         return exposures, False
 
@@ -808,10 +822,12 @@ class CRMProcessor:
         collateral: pl.LazyFrame,
         config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> None:
         """Append warnings for AIRB-model-collateral pledged to non-AIRB exposures."""
         misdirected = collateral_mod.find_misdirected_airb_model_collateral(
-            exposures, collateral, config, self._is_basel_3_1
+            exposures, collateral, config, pack=pack
         )
         for coll_ref, exp_ref in misdirected:
             errors.append(
@@ -871,6 +887,8 @@ class CRMProcessor:
         data: ClassifiedExposuresBundle,
         config: CalculationConfig,
         errors: list[CalculationError],
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply guarantees or record skip warnings if not applicable."""
         if (
@@ -892,6 +910,7 @@ class CRMProcessor:
                 cp_lookup_df.lazy(),
                 config,
                 ri_df.lazy(),
+                pack=pack,
             )
         self._collect_guarantee_skip_errors(guarantees_lf, data, errors)
         return exposures
@@ -931,18 +950,22 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         provisions: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Resolve provisions with multi-level beneficiary and drawn-first deduction."""
-        return provisions_mod.resolve_provisions(exposures, provisions, config)
+        return provisions_mod.resolve_provisions(exposures, provisions, config, pack=pack)
 
     def _apply_firb_supervisory_lgd_no_collateral(
         self,
         exposures: pl.LazyFrame,
-        config: CalculationConfig | None = None,
+        config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply F-IRB supervisory LGD when no collateral is available."""
         return collateral_mod.apply_firb_supervisory_lgd_no_collateral(
-            exposures, self._is_basel_3_1, config=config
+            exposures, config=config, pack=pack
         )
 
     def _generate_netting_collateral(
@@ -957,6 +980,8 @@ class CRMProcessor:
         exposures: pl.LazyFrame,
         collateral: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply collateral to reduce EAD (SA) or LGD (IRB)."""
         return collateral_mod.apply_collateral(
@@ -964,10 +989,10 @@ class CRMProcessor:
             collateral,
             config,
             haircut_calculator=self._haircut_calculator,
-            is_basel_3_1=self._is_basel_3_1,
             build_exposure_lookups_fn=_build_exposure_lookups,
             join_collateral_to_lookups_fn=_join_collateral_to_lookups,
             resolve_pledge_from_joined_fn=_resolve_pledge_from_joined,
+            pack=pack,
         )
 
     def apply_guarantees(
@@ -977,6 +1002,8 @@ class CRMProcessor:
         counterparty_lookup: pl.LazyFrame,
         config: CalculationConfig,
         rating_inheritance: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply guarantee substitution."""
         return guarantees_mod.apply_guarantees(
@@ -985,6 +1012,7 @@ class CRMProcessor:
             counterparty_lookup,
             config,
             rating_inheritance,
+            pack=pack,
         )
 
     # --- Internal methods ---
@@ -993,9 +1021,11 @@ class CRMProcessor:
         self,
         exposures: pl.LazyFrame,
         config: CalculationConfig,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """Apply CCF to off-balance sheet exposures."""
-        return self._ccf_calculator.apply_ccf(exposures, config)
+        return self._ccf_calculator.apply_ccf(exposures, config, pack=pack)
 
     def _initialize_ead(
         self,
@@ -1245,14 +1275,14 @@ class CRMProcessor:
         )
 
 
-def create_crm_processor(is_basel_3_1: bool = False) -> CRMProcessor:
+def create_crm_processor() -> CRMProcessor:
     """
     Create a CRM processor instance.
 
-    Args:
-        is_basel_3_1: True for Basel 3.1 framework (affects haircuts and supervisory LGD)
+    The processor carries no constructor regime-state — the framework is read
+    per-method from the effective ``CalculationConfig`` at call time.
 
     Returns:
         CRMProcessor ready for use
     """
-    return CRMProcessor(is_basel_3_1=is_basel_3_1)
+    return CRMProcessor()

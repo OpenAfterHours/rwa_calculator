@@ -52,14 +52,14 @@ logger = logging.getLogger(__name__)
 
 def run(
     ctx: PipelineContext,
-    rulepack: RulepackV0,  # noqa: ARG001 — uniform stage signature (Phase 4)
+    rulepack: RulepackV0,
     run_config: CalculationConfig,
 ) -> PipelineContext:
     """Run the real estate loan-splitter stage."""
     crm_adjusted = ctx.get(CRM_ADJUSTED)
     components = ctx.get(COMPONENTS)
 
-    result = components.re_splitter.split(crm_adjusted, run_config)
+    result = components.re_splitter.split(crm_adjusted, run_config, pack=rulepack.pack)
 
     # Stage-exit edge: the calculators' branch split forks the plan three
     # ways, so their input must be eager-backed. The splitter's pure-plan

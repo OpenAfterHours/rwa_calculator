@@ -10,13 +10,14 @@ Key responsibilities:
   for amount conversion.
 
 The scalar ``config.eur_gbp_rate`` feeds the IRB SME correlation expression
-(CRR Art. 153) and the GBP equivalents of EUR regulatory thresholds
-(``RegulatoryThresholds.crr``). Keeping it aligned with the ``fx_rates`` table
-avoids silent divergence between amount conversion and threshold derivation.
+(CRR Art. 153) and the GBP equivalents of the EUR regulatory thresholds (the
+rulepack ``regulatory_thresholds`` bundle × the rate, engine/thresholds.py).
+Keeping it aligned with the ``fx_rates`` table avoids silent divergence between
+amount conversion and threshold derivation.
 
 References:
 - CRR Art. 153(4): SME correlation adjustment (EUR-denominated thresholds)
-- RegulatoryThresholds.crr(): threshold derivation at contracts/config.py
+- engine/thresholds.py::regulatory_threshold: pack EUR base × eur_gbp_rate
 """
 
 from __future__ import annotations

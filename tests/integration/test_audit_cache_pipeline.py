@@ -128,6 +128,7 @@ def test_manifest_has_documented_keys(cached_run_dir: Path) -> None:
         "config",
         "artifacts",
         "error_count",
+        "rulepack",
     }
     assert required_keys.issubset(manifest.keys()), (
         f"manifest missing keys: {required_keys - set(manifest.keys())}"
@@ -143,6 +144,27 @@ def test_manifest_has_documented_keys(cached_run_dir: Path) -> None:
     assert {"permission_mode", "base_currency", "collect_engine"}.issubset(
         manifest["config"].keys()
     )
+
+
+def test_manifest_records_rulepack_snapshot(cached_run_dir: Path) -> None:
+    """``manifest.json['rulepack']`` records the run's resolved-pack snapshot.
+
+    The content hash must equal the pack resolved from the same (regime,
+    reporting date) — the audit trail of exactly which regime data ran.
+    """
+    from rwa_calc.rulebook.resolve import resolve
+
+    manifest = json.loads((cached_run_dir / "manifest.json").read_text(encoding="utf-8"))
+    rulepack = manifest["rulepack"]
+
+    assert {"id", "regime_id", "reporting_date", "content_hash", "entries"}.issubset(
+        rulepack.keys()
+    )
+    assert rulepack["regime_id"] == "crr"
+    assert rulepack["reporting_date"] == "2024-12-31"
+    assert rulepack["content_hash"] == resolve("crr", date(2024, 12, 31)).content_hash
+    assert len(rulepack["entries"]) >= 1
+    assert all({"name", "kind", "citation", "value"}.issubset(e) for e in rulepack["entries"])
 
 
 def test_classification_audit_carries_per_exposure_reason(cached_run_dir: Path) -> None:

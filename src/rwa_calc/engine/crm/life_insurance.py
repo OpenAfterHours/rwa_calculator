@@ -19,52 +19,58 @@ References:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.schemas import LIFE_INSURANCE_COLLATERAL_TYPES
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
 
-# Art. 232(1): Mapped risk weight table for SA secured portion.
-# Insurer SA risk weight -> Secured portion risk weight.
-# The mapping compresses the insurer's RW into fewer bands.
-LIFE_INSURANCE_RW_MAP: dict[float, float] = {
-    0.20: 0.20,
-    0.30: 0.35,
-    0.50: 0.35,
-    0.65: 0.70,
-    1.00: 0.70,
-    1.35: 0.70,
-    1.50: 1.50,
-}
+# Art. 232(1) mapped risk-weight table (insurer SA RW -> secured-portion RW)
+# lives in the common rulepack pack as the ``life_insurance_secured_rw_map``
+# BandedTable; read it back here so the pack is the single source of truth and
+# the mapping expression below derives from it (no inline duplicate).
+_LIFE_INS_PACK = resolve("crr", date(2026, 1, 1))
+_LIFE_INS_SECURED_RW_BANDS = _LIFE_INS_PACK.banded("life_insurance_secured_rw_map").bands
 
 
 def _map_insurer_rw_to_secured_rw_expr() -> pl.Expr:
     """Build expression mapping insurer_risk_weight to Art. 232 secured portion RW.
 
-    The mapping is:
+    The mapping (CRR Art. 232(1), ``life_insurance_secured_rw_map`` pack band
+    table) is:
         20%            -> 20%
         30% or 50%     -> 35%
         65%, 100%, 135% -> 70%
         150%           -> 150%
 
+    A band applies when the insurer RW is <= its upper bound; the open-ended top
+    band is the catch-all. Built from the pack so the values have one home.
+
     Returns:
         Polars expression producing the mapped secured portion risk weight.
     """
     rw = pl.col("insurer_risk_weight").fill_null(1.00)
-    return (
-        pl.when(rw <= 0.20)
-        .then(pl.lit(0.20))
-        .when(rw <= 0.50)
-        .then(pl.lit(0.35))
-        .when(rw <= 1.35)
-        .then(pl.lit(0.70))
-        .otherwise(pl.lit(1.50))
-    )
+    chain: pl.Expr | None = None
+    catch_all = 0.0
+    for bound, value in _LIFE_INS_SECURED_RW_BANDS:
+        if bound is None:
+            catch_all = float(value)
+            continue
+        predicate = rw <= float(bound)
+        chain = (
+            pl.when(predicate).then(pl.lit(float(value)))
+            if chain is None
+            else chain.when(predicate).then(pl.lit(float(value)))
+        )
+    if chain is None:
+        return pl.lit(catch_all)
+    return chain.otherwise(pl.lit(catch_all))
 
 
 @cites("CRR Art. 232")

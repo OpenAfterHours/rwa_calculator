@@ -124,7 +124,7 @@ def inspect_plans(dataset: dict[str, pl.LazyFrame]) -> None:
         exposures = crm.apply_collateral(exposures, data.collateral, config)
         measure_plan("4. After apply_collateral", exposures)
     else:
-        exposures = crm._apply_firb_supervisory_lgd_no_collateral(exposures)
+        exposures = crm._apply_firb_supervisory_lgd_no_collateral(exposures, config)
         measure_plan("4. After firb_lgd_no_collateral", exposures)
 
     # Step 5: Guarantees

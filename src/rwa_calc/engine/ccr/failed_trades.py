@@ -43,29 +43,38 @@ References:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 import polars as pl
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.failed_trades_multipliers import (
-    FAILED_TRADE_DVP_BAND_5_15_LOWER_DAYS,
-    FAILED_TRADE_DVP_BAND_16_30_LOWER_DAYS,
-    FAILED_TRADE_DVP_BAND_31_45_LOWER_DAYS,
-    FAILED_TRADE_DVP_BAND_46_PLUS_LOWER_DAYS,
-    FAILED_TRADE_DVP_MULT_5_15,
-    FAILED_TRADE_DVP_MULT_16_30,
-    FAILED_TRADE_DVP_MULT_31_45,
-    FAILED_TRADE_DVP_MULT_46_PLUS,
-    FAILED_TRADE_NON_DVP_COL4_LOWER_DAYS,
-    FAILED_TRADE_NON_DVP_COL4_RW_MULTIPLIER,
-    OWN_FUNDS_TO_RWA_FACTOR,
-)
+from rwa_calc.rulebook.compile import scalar_value
+from rwa_calc.rulebook.resolve import resolve
 
 logger = logging.getLogger(__name__)
 
 # Settlement-type discriminators (mirror ``FAILED_TRADE_SCHEMA``).
 _SETTLEMENT_TYPE_DVP: str = "dvp"
 _SETTLEMENT_TYPE_NON_DVP: str = "non_dvp_free_delivery"
+
+# Failed-trade regulatory multipliers / conversion factor + working-days-past-due
+# band lower bounds resolved from the rulepack once at module load (CRR Art. 378 /
+# 379 / 92(3)(ca); regime-invariant, resolved against "crr"). The integer band
+# bounds feed both this ladder and the regulatory_band strings below.
+_PACK = resolve("crr", date(2026, 1, 1))
+_DVP_MULT_5_15 = scalar_value(_PACK.scalar_param("failed_trade_dvp_mult_5_15"))
+_DVP_MULT_16_30 = scalar_value(_PACK.scalar_param("failed_trade_dvp_mult_16_30"))
+_DVP_MULT_31_45 = scalar_value(_PACK.scalar_param("failed_trade_dvp_mult_31_45"))
+_DVP_MULT_46_PLUS = scalar_value(_PACK.scalar_param("failed_trade_dvp_mult_46_plus"))
+_NON_DVP_COL4_RW_MULTIPLIER = scalar_value(
+    _PACK.scalar_param("failed_trade_non_dvp_col4_rw_multiplier")
+)
+_OWN_FUNDS_TO_RWA_FACTOR = scalar_value(_PACK.scalar_param("own_funds_to_rwa_factor"))
+_DVP_BAND_5_15_LOWER = _PACK.int_param("failed_trade_dvp_band_5_15_lower_days").value
+_DVP_BAND_16_30_LOWER = _PACK.int_param("failed_trade_dvp_band_16_30_lower_days").value
+_DVP_BAND_31_45_LOWER = _PACK.int_param("failed_trade_dvp_band_31_45_lower_days").value
+_DVP_BAND_46_PLUS_LOWER = _PACK.int_param("failed_trade_dvp_band_46_plus_lower_days").value
+_NON_DVP_COL4_LOWER = _PACK.int_param("failed_trade_non_dvp_col4_lower_days").value
 
 
 # NOTE: No ``@cites("CRR Art. 378")`` / ``@cites("CRR Art. 379")`` —
@@ -133,21 +142,18 @@ def compute_failed_trade_rwa(
         .alias("exposure_amount")
     )
 
-    # DvP Art. 378 Table 1 multiplier ladder (highest band wins). The
-    # ``float(...)`` coercion of each ``Decimal`` regulatory constant is
-    # inlined here (rather than cached at module scope) to keep the engine
-    # module free of module-level UPPER_SNAKE_CASE numeric assignments —
-    # arch_check check 5 treats a single-arg ``float(...)`` call as a
-    # regulatory scalar declaration when it appears at module scope.
+    # DvP Art. 378 Table 1 multiplier ladder (highest band wins). The band
+    # BOUNDS are int counts from data/tables; the multipliers come from the
+    # rulepack (module-level _DVP_MULT_* above).
     dvp_multiplier = (
-        pl.when(days >= FAILED_TRADE_DVP_BAND_46_PLUS_LOWER_DAYS)
-        .then(pl.lit(float(FAILED_TRADE_DVP_MULT_46_PLUS)))
-        .when(days >= FAILED_TRADE_DVP_BAND_31_45_LOWER_DAYS)
-        .then(pl.lit(float(FAILED_TRADE_DVP_MULT_31_45)))
-        .when(days >= FAILED_TRADE_DVP_BAND_16_30_LOWER_DAYS)
-        .then(pl.lit(float(FAILED_TRADE_DVP_MULT_16_30)))
-        .when(days >= FAILED_TRADE_DVP_BAND_5_15_LOWER_DAYS)
-        .then(pl.lit(float(FAILED_TRADE_DVP_MULT_5_15)))
+        pl.when(days >= _DVP_BAND_46_PLUS_LOWER)
+        .then(pl.lit(_DVP_MULT_46_PLUS))
+        .when(days >= _DVP_BAND_31_45_LOWER)
+        .then(pl.lit(_DVP_MULT_31_45))
+        .when(days >= _DVP_BAND_16_30_LOWER)
+        .then(pl.lit(_DVP_MULT_16_30))
+        .when(days >= _DVP_BAND_5_15_LOWER)
+        .then(pl.lit(_DVP_MULT_5_15))
         .otherwise(pl.lit(0.0))
     )
 
@@ -158,23 +164,23 @@ def compute_failed_trade_rwa(
     multiplier_or_rw = (
         pl.when(is_dvp)
         .then(dvp_multiplier)
-        .when(is_non_dvp & (days >= FAILED_TRADE_NON_DVP_COL4_LOWER_DAYS))
-        .then(pl.lit(float(FAILED_TRADE_NON_DVP_COL4_RW_MULTIPLIER)))
+        .when(is_non_dvp & (days >= _NON_DVP_COL4_LOWER))
+        .then(pl.lit(_NON_DVP_COL4_RW_MULTIPLIER))
         .otherwise(pl.lit(0.0))
         .alias("multiplier_or_rw")
     )
 
     # Regulatory band string (audit / aggregation key).
     regulatory_band = (
-        pl.when(is_dvp & (days >= FAILED_TRADE_DVP_BAND_46_PLUS_LOWER_DAYS))
+        pl.when(is_dvp & (days >= _DVP_BAND_46_PLUS_LOWER))
         .then(pl.lit("dvp_46_plus"))
-        .when(is_dvp & (days >= FAILED_TRADE_DVP_BAND_31_45_LOWER_DAYS))
+        .when(is_dvp & (days >= _DVP_BAND_31_45_LOWER))
         .then(pl.lit("dvp_31_45"))
-        .when(is_dvp & (days >= FAILED_TRADE_DVP_BAND_16_30_LOWER_DAYS))
+        .when(is_dvp & (days >= _DVP_BAND_16_30_LOWER))
         .then(pl.lit("dvp_16_30"))
-        .when(is_dvp & (days >= FAILED_TRADE_DVP_BAND_5_15_LOWER_DAYS))
+        .when(is_dvp & (days >= _DVP_BAND_5_15_LOWER))
         .then(pl.lit("dvp_5_15"))
-        .when(is_non_dvp & (days >= FAILED_TRADE_NON_DVP_COL4_LOWER_DAYS))
+        .when(is_non_dvp & (days >= _NON_DVP_COL4_LOWER))
         .then(pl.lit("non_dvp_col4_t5_plus"))
         .otherwise(pl.lit("dvp_pre_t5"))
         .alias("regulatory_band")
@@ -185,14 +191,14 @@ def compute_failed_trade_rwa(
     own_funds = (
         pl.when(is_dvp)
         .then(pl.col("price_difference") * dvp_multiplier)
-        .when(is_non_dvp & (days >= FAILED_TRADE_NON_DVP_COL4_LOWER_DAYS))
+        .when(is_non_dvp & (days >= _NON_DVP_COL4_LOWER))
         .then(pl.col("exposure_amount"))
         .otherwise(pl.lit(0.0))
         .alias("own_funds_requirement")
     )
 
     # RWA: own_funds * 12.5 (CRR Art. 92(3)(ca)).
-    failed_trade_rwa = (pl.col("own_funds_requirement") * float(OWN_FUNDS_TO_RWA_FACTOR)).alias(
+    failed_trade_rwa = (pl.col("own_funds_requirement") * _OWN_FUNDS_TO_RWA_FACTOR).alias(
         "failed_trade_rwa"
     )
 

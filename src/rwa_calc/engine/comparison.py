@@ -55,9 +55,9 @@ from rwa_calc.contracts.bundles import (
     ComparisonBundle,
     TransitionalScheduleBundle,
 )
-from rwa_calc.data.tables.firb_lgd import CRR_K_SCALING_FACTOR as _CRR_K_SCALING_FACTOR_DECIMAL
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
+from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
@@ -89,9 +89,11 @@ class DualFrameworkRunner:
     """
     Run the same portfolio through CRR and Basel 3.1 pipelines and compare.
 
-    Uses two separate PipelineOrchestrator instances (one per framework)
-    to avoid CRM processor caching issues — each orchestrator initializes
-    its own CRMProcessor with the correct is_basel_3_1 flag.
+    Uses two separate PipelineOrchestrator instances (one per framework) so
+    each run is driven by its own ``CalculationConfig``. CRM components no
+    longer carry constructor regime-state — ``CRMProcessor`` reads the framework
+    per-method from the effective config — so the split is now purely a matter
+    of running each config end-to-end rather than a caching workaround.
 
     The comparison join is on exposure_reference, producing per-exposure
     delta columns: delta_rwa, delta_risk_weight, delta_ead, delta_pct.
@@ -157,9 +159,9 @@ class DualFrameworkRunner:
 _IRB_APPROACHES = ["foundation_irb", "advanced_irb", "FIRB"]
 
 # CRR scaling factor for IRB RWA (CRR Art. 153(1)). The Decimal value is the
-# canonical regulatory constant in data/tables/; comparison math runs in float
-# space, so it's converted once at import time.
-_CRR_SCALING_FACTOR: float = float(_CRR_K_SCALING_FACTOR_DECIMAL)
+# canonical regulatory constant in the rulepack; comparison math runs in float
+# space, so it's resolved and converted once at import time.
+_CRR_SCALING_FACTOR: float = float(resolve("crr", date(2026, 1, 1)).scalar("irb_scaling_factor"))
 
 # Attribution driver labels for the portfolio waterfall
 _DRIVER_SCALING = "Scaling factor removal (1.06x)"

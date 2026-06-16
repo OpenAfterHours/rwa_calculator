@@ -25,12 +25,6 @@ References:
 from decimal import Decimal
 from typing import TypedDict
 
-from src.rwa_calc.contracts.config import (
-    _CRR_SME_EXPOSURE_EUR,
-    _CRR_SME_TURNOVER_EUR,
-    RegulatoryThresholds,
-)
-
 # =============================================================================
 # STANDARDISED APPROACH RISK WEIGHTS
 # =============================================================================
@@ -138,10 +132,11 @@ CRR_SME_SUPPORTING_FACTOR_TIER1: Decimal = Decimal("0.7619")
 # Tier 2: Portion of exposures above threshold
 CRR_SME_SUPPORTING_FACTOR_TIER2: Decimal = Decimal("0.85")
 
-# Exposure threshold for tiered treatment
-# EUR is canonical regulatory value; GBP derived via RegulatoryThresholds
-CRR_SME_EXPOSURE_THRESHOLD_EUR: Decimal = _CRR_SME_EXPOSURE_EUR
-CRR_SME_EXPOSURE_THRESHOLD_GBP: Decimal = RegulatoryThresholds.crr().sme_exposure_threshold
+# Exposure threshold for tiered treatment. CRR Art. 501: EUR is the canonical
+# regulatory value (now the rulepack regulatory_thresholds bundle); GBP is
+# EUR × the default 0.8732 FX rate.
+CRR_SME_EXPOSURE_THRESHOLD_EUR: Decimal = Decimal("2500000")
+CRR_SME_EXPOSURE_THRESHOLD_GBP: Decimal = Decimal("2500000") * Decimal("0.8732")
 
 # Legacy constant for backwards compatibility (use calculate_sme_supporting_factor instead)
 CRR_SME_SUPPORTING_FACTOR: Decimal = Decimal("0.7619")
@@ -149,10 +144,10 @@ CRR_SME_SUPPORTING_FACTOR: Decimal = Decimal("0.7619")
 # Infrastructure supporting factor (CRR Art. 501a)
 CRR_INFRASTRUCTURE_SUPPORTING_FACTOR: Decimal = Decimal("0.75")
 
-# SME turnover threshold (for eligibility, not the exposure threshold)
-# EUR is canonical regulatory value; GBP derived via RegulatoryThresholds
-CRR_SME_TURNOVER_THRESHOLD_EUR: Decimal = _CRR_SME_TURNOVER_EUR
-CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = RegulatoryThresholds.crr().sme_turnover_threshold
+# SME turnover threshold (for eligibility, not the exposure threshold). CRR
+# Art. 501: EUR canonical (rulepack regulatory_thresholds); GBP = EUR × 0.8732.
+CRR_SME_TURNOVER_THRESHOLD_EUR: Decimal = Decimal("50000000")
+CRR_SME_TURNOVER_THRESHOLD_GBP: Decimal = Decimal("50000000") * Decimal("0.8732")
 
 
 # =============================================================================

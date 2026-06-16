@@ -50,9 +50,11 @@ from rwa_calc.engine.sa.rw_adjustments import (
     apply_guarantee_substitution,
     apply_life_insurance_rw_mapping,
 )
+from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ class SACalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Apply SA risk weights to SA rows on a unified frame.
@@ -96,6 +99,8 @@ class SACalculator:
         Returns:
             Unified frame with SA columns populated for SA rows
         """
+        resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
         is_sa = pl.col("approach") == ApproachType.SA.value
 
         if errors is not None:
@@ -105,19 +110,19 @@ class SACalculator:
         # Runs unconditionally — also provides SA-equivalent RW for the
         # IRB output floor.
         exposures = (
-            exposures.pipe(apply_risk_weights, config)
+            exposures.pipe(apply_risk_weights, config, pack=pack)
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
-            .pipe(apply_guarantee_substitution, config)
-            .pipe(apply_currency_mismatch_multiplier, config)
-            .pipe(apply_due_diligence_override, config, errors=errors)
+            .pipe(apply_guarantee_substitution, config, pack=pack)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
         )
 
         # Store SA-equivalent RWA for ALL rows before the IRB calculator
         # overwrites risk_weight. The output floor needs: floor_rwa = floor_pct × sa_rwa.
         schema = exposures.collect_schema()
         ead_col = "ead_final" if "ead_final" in schema.names() else "ead"
-        if config.output_floor.enabled:
+        if resolved_pack.feature("output_floor"):
             exposures = exposures.with_columns(
                 (pl.col(ead_col) * pl.col("risk_weight")).alias("sa_rwa"),
             )
@@ -138,7 +143,7 @@ class SACalculator:
         )
 
         # Supporting factors (SA rows only).
-        exposures = exposures.pipe(apply_supporting_factors, config, errors=errors)
+        exposures = exposures.pipe(apply_supporting_factors, config, errors=errors, pack=pack)
 
         return exposures
 
@@ -148,6 +153,7 @@ class SACalculator:
         config: CalculationConfig,
         *,
         errors: list[CalculationError] | None = None,
+        pack: ResolvedRulepack | None = None,
     ) -> pl.LazyFrame:
         """
         Calculate SA RWA on pre-filtered SA-only rows.
@@ -169,14 +175,14 @@ class SACalculator:
             self._warn_equity_in_main_table(exposures, errors)
 
         exposures = (
-            exposures.pipe(apply_risk_weights, config)
+            exposures.pipe(apply_risk_weights, config, pack=pack)
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
-            .pipe(apply_guarantee_substitution, config)
-            .pipe(apply_currency_mismatch_multiplier, config)
-            .pipe(apply_due_diligence_override, config, errors=errors)
+            .pipe(apply_guarantee_substitution, config, pack=pack)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
             .pipe(calculate_rwa)
-            .pipe(apply_supporting_factors, config, errors=errors)
+            .pipe(apply_supporting_factors, config, errors=errors, pack=pack)
         )
 
         # Standardise output for aggregator.

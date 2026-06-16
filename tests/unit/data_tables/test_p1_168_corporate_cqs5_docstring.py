@@ -19,8 +19,8 @@ from __future__ import annotations
 import inspect
 from decimal import Decimal
 
-from rwa_calc.data.tables import b31_risk_weights
-from rwa_calc.data.tables.b31_risk_weights import (
+from rwa_calc.engine.sa import b31_risk_weight_tables as b31_risk_weights
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_CORPORATE_RISK_WEIGHTS,
     get_b31_combined_cqs_risk_weights,
 )

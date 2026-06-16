@@ -29,23 +29,30 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.eu_sovereign import (
+from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
 )
-from rwa_calc.data.tables.guarantor_rw import build_guarantor_rw_expr
 from rwa_calc.engine.irb.formulas import (
     _double_default_multiplier_expr,
     _parametric_irb_risk_weight_expr,
     _pd_floor_expression,
+    firb_supervisory_lgd_values,
 )
+from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
+from rwa_calc.engine.thresholds import regulatory_threshold
+from rwa_calc.rulebook import RulepackV0
+from rwa_calc.rulebook.compile import scalar_value
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 
 @cites("CRR Art. 161(3)")
-def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+def apply_guarantee_substitution(
+    lf: pl.LazyFrame, config: CalculationConfig, *, pack: ResolvedRulepack | None = None
+) -> pl.LazyFrame:
     """
     Apply guarantee substitution for IRB exposures with unfunded credit protection.
 
@@ -107,14 +114,18 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 
     lf = lf.with_columns(store_originals)
 
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
     # --- Compute SA risk weight for guarantor (used for SA guarantors) ---
-    lf = _compute_guarantor_rw_sa(lf, cols, config)
+    lf = _compute_guarantor_rw_sa(lf, cols, config, pack=resolved_pack)
 
     # --- Basel 3.1 parameter substitution for IRB guarantors (CRE22.70-85) ---
-    lf = _apply_parameter_substitution(lf, cols, config, use_parameter_substitution)
+    lf = _apply_parameter_substitution(
+        lf, cols, config, use_parameter_substitution, pack=resolved_pack
+    )
 
     # --- Double default treatment (CRR Art. 153(3), 202-203) ---
-    lf = _apply_double_default(lf, cols, config, has_guarantor_pd)
+    lf = _apply_double_default(lf, cols, config, has_guarantor_pd, pack=resolved_pack)
 
     # --- Blend RWA and adjust expected loss ---
     ead_col = "ead_final" if "ead_final" in cols else "ead"
@@ -168,7 +179,9 @@ def apply_guarantee_substitution(lf: pl.LazyFrame, config: CalculationConfig) ->
 
     # Adjust expected loss for guaranteed portion
     if has_expected_loss:
-        lf = _adjust_expected_loss(lf, config, ead_col, use_parameter_substitution)
+        lf = _adjust_expected_loss(
+            lf, config, ead_col, use_parameter_substitution, pack=resolved_pack
+        )
 
     # Track guarantee status and method for reporting
     lf = _add_guarantee_status_columns(lf)
@@ -190,6 +203,8 @@ def _compute_guarantor_rw_sa(
     lf: pl.LazyFrame,
     cols: list[str],
     config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
     """Compute the guarantor's SA risk weight via the shared builder.
 
@@ -200,10 +215,12 @@ def _compute_guarantor_rw_sa(
     Phase 4 fix) plus the IO 0%, named-MDB 0% and MDB Table 2B closures.
     """
 
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+
     # Ensure guarantor_exposure_class is available (set by CRM processor;
     # fallback for unit tests that construct LazyFrames directly)
     if "guarantor_exposure_class" not in cols:
-        from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
+        from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 
         lf = lf.with_columns(
             pl.col("guarantor_entity_type")
@@ -273,7 +290,7 @@ def _compute_guarantor_rw_sa(
             country_code_col="guarantor_country_code",
             ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
             scra_grade_col="guarantor_scra_grade",
-            is_basel_3_1=config.is_basel_3_1,
+            is_basel_3_1=resolved_pack.feature("sa_revised_risk_weight_tables"),
             domestic_cgcb_expr=_is_domestic_guarantor,
             # No borrower-maturity short-term flag is threaded on the IRB
             # path today (the SA twin derives one from its own stage
@@ -289,6 +306,8 @@ def _apply_parameter_substitution(
     cols: list[str],
     config: CalculationConfig,
     use_parameter_substitution: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply parameter substitution for IRB guarantors (CRR Art. 161(3) /
     Basel 3.1 CRE22.70-85). The F-IRB supervisory LGD is selected per row
@@ -314,7 +333,7 @@ def _apply_parameter_substitution(
             ]
         )
 
-    firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated = _firb_lgd_tuple(config)
+    firb_lgd_senior, firb_lgd_senior_fse, firb_lgd_subordinated = _firb_lgd_tuple(pack)
 
     lf = _ensure_parameter_substitution_columns(lf, cols)
 
@@ -329,10 +348,11 @@ def _apply_parameter_substitution(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        pack=pack,
     )
     guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 
-    scaling_factor = 1.06 if config.is_crr else 1.0
+    scaling_factor = scalar_value(pack.scalar_param("irb_scaling_factor"))
     eur_gbp_rate = float(config.eur_gbp_rate)
 
     # Per-row F-IRB supervisory LGD selection (Art. 161(1)(a)/(aa)/(b)).
@@ -358,7 +378,9 @@ def _apply_parameter_substitution(
     # inside a single swap-restore window where those columns hold the
     # guarantor's values. The NBD floor always uses the option_ii
     # supervisory LGD so the comparison stays meaningful for option_i rows.
-    sme_turnover_m = float(config.thresholds.sme_turnover_threshold) / 1_000_000
+    sme_turnover_m = (
+        float(regulatory_threshold(pack, "sme_turnover_threshold", config.eur_gbp_rate)) / 1_000_000
+    )
     lf = _apply_no_better_than_direct_floor(
         lf,
         guarantor_pd_floored=guarantor_pd_floored,
@@ -366,7 +388,7 @@ def _apply_parameter_substitution(
         direct_lgd_expr=guarantor_supervisory_lgd_expr,
         scaling_factor=scaling_factor,
         eur_gbp_rate=eur_gbp_rate,
-        is_b31=config.is_basel_3_1,
+        is_b31=pack.feature("irb_correlation_sme_gbp_native"),
         sme_turnover_threshold_m=sme_turnover_m,
     )
 
@@ -392,15 +414,13 @@ def _apply_parameter_substitution(
     )
 
 
-def _firb_lgd_tuple(config: CalculationConfig) -> tuple[float, float, float]:
+def _firb_lgd_tuple(pack: ResolvedRulepack) -> tuple[float, float, float]:
     """Return (senior, senior_fse, subordinated) F-IRB supervisory LGDs.
 
     The FSE-specific senior key only exists in the Basel 3.1 table; CRR has
     no FSE split (Art. 161(1)(a) covers all senior unsecured at 45%).
     """
-    from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
-
-    firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+    firb_lgd_table = firb_supervisory_lgd_values(pack)
     firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
     firb_lgd_senior_fse = float(
         firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])
@@ -589,9 +609,15 @@ def _apply_double_default(
     cols: list[str],
     config: CalculationConfig,
     has_guarantor_pd: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Apply double default treatment (CRR Art. 153(3), 202-203)."""
-    use_double_default = config.is_crr and config.enable_double_default and has_guarantor_pd
+    use_double_default = (
+        pack.feature("double_default_treatment")
+        and config.enable_double_default
+        and has_guarantor_pd
+    )
     if not use_double_default:
         return lf.with_columns(
             [
@@ -636,6 +662,7 @@ def _apply_double_default(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        pack=pack,
     )
     guarantor_pd_floored_dd = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr_dd)
 
@@ -681,6 +708,8 @@ def _adjust_expected_loss(
     config: CalculationConfig,
     ead_col: str,
     use_parameter_substitution: bool,
+    *,
+    pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
     """Adjust expected loss for guaranteed portion.
 
@@ -701,9 +730,7 @@ def _adjust_expected_loss(
     ).fill_null(1.0)
 
     if use_parameter_substitution:
-        from rwa_calc.data.tables.firb_lgd import get_firb_lgd_table_for_framework
-
-        firb_lgd_table = get_firb_lgd_table_for_framework(is_basel_3_1=config.is_basel_3_1)
+        firb_lgd_table = firb_supervisory_lgd_values(pack)
         firb_lgd_senior = float(firb_lgd_table["unsecured_senior"])
         firb_lgd_senior_fse = float(
             firb_lgd_table.get("unsecured_senior_fse", firb_lgd_table["unsecured_senior"])
@@ -716,6 +743,7 @@ def _adjust_expected_loss(
             config,
             has_transactor_col=False,
             exposure_class_col="guarantor_exposure_class",
+            pack=pack,
         )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
 

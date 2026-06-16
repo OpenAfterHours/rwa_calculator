@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.data.tables.haircuts import BASEL31_COLLATERAL_HAIRCUTS, COLLATERAL_HAIRCUTS
+from rwa_calc.engine.crm.haircut_tables import BASEL31_COLLATERAL_HAIRCUTS, COLLATERAL_HAIRCUTS
 
 
 class TestP1190B31RealEstateHaircutPin:

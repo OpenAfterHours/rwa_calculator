@@ -50,7 +50,7 @@ def _run_to_crm(bundle, config: CalculationConfig):
     """Drive a RawDataBundle through hierarchy → classifier → CRM (unified)."""
     resolved = HierarchyResolver().resolve(bundle, config)
     classified = ExposureClassifier().classify(resolved, config)
-    return CRMProcessor(is_basel_3_1=config.is_basel_3_1).get_crm_unified_bundle(classified, config)
+    return CRMProcessor().get_crm_unified_bundle(classified, config)
 
 
 def _nested_bundle(collateral: pl.LazyFrame):

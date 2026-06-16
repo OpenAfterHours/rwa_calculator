@@ -6,7 +6,9 @@ Checks machine-verifiable invariants from CLAUDE.md:
 2. No ABC imports (Protocol only)
 3. No raw .collect().lazy() outside materialise.py (use materialise_edge)
 4. No engine= passed to collect/collect_all (engine choice is config-driven)
-5. No regulatory scalar literals declared in engine/** (must live in data/tables/)
+5. No regulatory scalar literals OR float-rate collection literals (e.g. a
+   {float: float} RW map) declared in engine/** — regulatory values live in a
+   rulepack pack, read back via rwa_calc.rulebook.resolve
 6. No input-domain string-enum collections declared in engine/** (must live in data/schemas.py)
 7. No inline `"col" not in schema.names()` defaulting in engine/** (use
    ensure_columns against a ColumnSpec schema in data/schemas.py instead)
@@ -118,6 +120,13 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
     "engine/reconciliation.py": {"_EXACT_EPSILON", "_ZERO_GUARD"},
 }
+
+# Module-level float-rate COLLECTION literals (e.g. a ``{float: float}`` RW map)
+# that are genuinely engine-internal and NOT regulatory tables. Empty by default
+# — regulatory rate tables belong in a rulepack pack (read back via
+# ``rwa_calc.rulebook.resolve``); adding an entry here is a deliberate, reviewed
+# decision (mirrors REGULATORY_SCALAR_ALLOWLIST for the scalar case).
+NUMERIC_TABLE_ALLOWLIST: dict[str, set[str]] = {}
 
 # Existing engine-side string collections that are internal approach/column/driver
 # identifiers, not input-domain validation enums. Adding a new entry should be a
@@ -622,6 +631,52 @@ def _rhs_is_str_collection(node: ast.AST) -> bool:
     return False
 
 
+def _node_is_reg_float_literal(node: ast.AST) -> bool:
+    """True when an AST node is a non-trivial float literal (a rate/RW/LGD value).
+
+    Restricted to floats (the rate-table signal); integer literals are excluded
+    because module-level int tuples in engine are CQS orderings / counts, not
+    regulatory values. 0.0 / 1.0 / -1.0 are trivial and ignored.
+    """
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, float) and node.value not in (0.0, 1.0, -1.0)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
+        val = node.operand.value
+        return isinstance(val, float) and val not in (0.0, 1.0, -1.0)
+    return False
+
+
+def _rhs_is_numeric_collection(node: ast.AST) -> bool:
+    """True when the RHS is a non-trivial collection LITERAL holding raw float
+    rate values as keys / values / elements (e.g. a ``{float: float}`` RW map).
+
+    This catches the regulatory-table class that checks 5/6 miss (scalars /
+    string collections). Pack-derived collections (``dict(pack.lookup(...))``),
+    dataclass-valued maps (values are ``Call`` nodes), dtype schemas (values are
+    attributes) and string/enum maps are NOT matched — none hold raw float
+    literals directly. Such tables belong in a rulepack pack, read back via
+    ``rwa_calc.rulebook.resolve``.
+    """
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        if len(node.elts) < 2:
+            return False
+        return any(_node_is_reg_float_literal(e) for e in node.elts)
+    if isinstance(node, ast.Dict):
+        if len(node.keys) < 2:
+            return False
+        in_keys = any(k is not None and _node_is_reg_float_literal(k) for k in node.keys)
+        in_vals = any(_node_is_reg_float_literal(v) for v in node.values)
+        return in_keys or in_vals
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"frozenset", "set", "tuple", "list"}
+        and len(node.args) == 1
+    ):
+        return _rhs_is_numeric_collection(node.args[0])
+    return False
+
+
 def _iter_engine_files(path: Path) -> Iterator[Path]:
     """Yield every .py file under `<path>/engine/`, skipping __init__.py."""
     engine_root = path / "engine"
@@ -651,7 +706,38 @@ def check_no_regulatory_scalars_in_engine(path: Path) -> list[str]:
             if _rhs_is_regulatory_scalar(value):
                 violations.append(
                     f"  {py_file}:{lineno}: {name} -- regulatory scalar in engine/ "
-                    "(move to src/rwa_calc/data/tables/ or allowlist in arch_check.py)"
+                    "(move to a rulepack pack or allowlist in arch_check.py)"
+                )
+    return violations
+
+
+def check_no_numeric_tables_in_engine(path: Path) -> list[str]:
+    """Module-level float-rate COLLECTION literals belong in a rulepack pack.
+
+    Sibling of check 5 (scalars) / check 6 (string collections) for the
+    regulatory-table class those miss: a module-level ``{float: float}`` /
+    list-of-floats literal (e.g. the former ``LIFE_INSURANCE_RW_MAP`` Art. 232
+    map). Regulatory rate tables live in ``rulebook/packs`` and are read back via
+    ``rwa_calc.rulebook.resolve``; pack-derived / dataclass-valued / dtype /
+    string collections are not matched (they hold no raw float literals).
+    """
+    violations: list[str] = []
+    for py_file in _iter_engine_files(path):
+        rel = py_file.relative_to(path).as_posix()
+        allowed = NUMERIC_TABLE_ALLOWLIST.get(rel, set())
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue
+        for lineno, name, value in _iter_module_assignments(tree):
+            if not _is_upper_const_name(name):
+                continue
+            if name in allowed:
+                continue
+            if _rhs_is_numeric_collection(value):
+                violations.append(
+                    f"  {py_file}:{lineno}: {name} -- regulatory float-rate table in engine/ "
+                    "(move to a rulepack pack and read it back via resolve, or allowlist)"
                 )
     return violations
 
@@ -1575,8 +1661,12 @@ def main() -> int:
         ("No .collect().lazy() (use materialise_edge)", check_no_collect_lazy),
         ("No engine= in collect (use materialise.py)", check_no_engine_arg),
         (
-            "No regulatory scalars in engine/ (use data/tables/)",
+            "No regulatory scalars in engine/ (use a rulepack pack)",
             check_no_regulatory_scalars_in_engine,
+        ),
+        (
+            "No regulatory float-rate tables in engine/ (use a rulepack pack)",
+            check_no_numeric_tables_in_engine,
         ),
         (
             "No validation string-enums in engine/ (use data/schemas.py)",

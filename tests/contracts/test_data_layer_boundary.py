@@ -49,6 +49,23 @@ def test_no_regulatory_scalars_in_engine() -> None:
     )
 
 
+def test_no_numeric_tables_in_engine() -> None:
+    """Module-level float-rate collection literals must live in a rulepack pack.
+
+    Sibling of the scalar check for the regulatory-table class checks 5/6 miss
+    (a ``{float: float}`` RW map, e.g. the former LIFE_INSURANCE_RW_MAP). Such
+    tables go in rulebook/packs and are read back via rwa_calc.rulebook.resolve.
+    """
+    arch_check = _load_arch_check()
+    violations = arch_check.check_no_numeric_tables_in_engine(SRC_ROOT)
+    assert not violations, (
+        "Regulatory float-rate table declared in engine/** — move it to a "
+        "rulepack pack and read it back via resolve (or add to "
+        "NUMERIC_TABLE_ALLOWLIST in scripts/arch_check.py with justification):\n"
+        + "\n".join(violations)
+    )
+
+
 def test_no_validation_enums_in_engine() -> None:
     """Input-domain string-enum collections must live in src/rwa_calc/data/schemas.py."""
     arch_check = _load_arch_check()

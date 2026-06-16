@@ -28,7 +28,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.analysis.comparison import (
+from rwa_calc.analysis.transition import (
     _TRANSITIONAL_REPORTING_DATES,
     TransitionalScheduleRunner,
     _build_timeline_lazyframe,

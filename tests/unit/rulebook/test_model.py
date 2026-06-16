@@ -9,6 +9,7 @@ import pytest
 
 from rwa_calc.rulebook.model import (
     BandedTable,
+    CategoryMap,
     Citation,
     DecisionTable,
     Feature,
@@ -89,6 +90,20 @@ def test_int_param_constructs_and_holds_int() -> None:
     # Assert — the int sibling of ScalarParam keeps an integer value end-to-end
     assert param.value == 5
     assert isinstance(param.value, int)
+
+
+def test_category_map_constructs_and_holds_str_entries() -> None:
+    # Arrange / Act
+    cmap = CategoryMap(
+        name="entity_type_to_sa_class",
+        entries={"sovereign": "central_govt_central_bank", "corporate": "corporate"},
+        key="entity_type",
+        citation=Citation("CRR", "112"),
+    )
+
+    # Assert — the string-valued sibling of LookupTable: category labels, no default
+    assert cmap.entries["sovereign"] == "central_govt_central_bank"
+    assert cmap.default is None
 
 
 # ---------------------------------------------------------------------------

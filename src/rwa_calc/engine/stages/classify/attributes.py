@@ -47,11 +47,11 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.tables.b31_risk_weights import B31_RETAIL_GRANULARITY_LIMIT
-from rwa_calc.data.tables.entity_class_mapping import (
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
-from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import partition_by_nullable
 from rwa_calc.rulebook import RulepackV0

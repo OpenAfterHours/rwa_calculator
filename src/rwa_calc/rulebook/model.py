@@ -12,8 +12,9 @@ Pipeline position:
 Key responsibilities:
 - Define the small fixed vocabulary of rule shapes (migration Phase 5
   principle 2): ``ScalarParam``, ``IntParam``, ``LookupTable``,
-  ``BandedTable``, ``Schedule``, ``DecisionTable``, ``FormulaParams``,
-  ``Feature``. All are Decimal-valued except ``IntParam`` (integer counts).
+  ``CategoryMap``, ``BandedTable``, ``Schedule``, ``DecisionTable``,
+  ``FormulaParams``, ``Feature``. All are Decimal-valued except ``IntParam``
+  (integer counts) and ``CategoryMap`` (string category labels).
 - Define ``Citation``, the framework + article provenance carried by every
   entry, with a string form matching the watchfire citation grammar.
 - Stay free of Polars and of any ``float(...)`` of a regulatory value —
@@ -115,6 +116,28 @@ class LookupTable:
     key: str
     citation: Citation
     default: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class CategoryMap:
+    """A cited exact-match mapping from one category label to another.
+
+    The string-valued sibling of :class:`LookupTable`: regulatory
+    *classification* mappings (entity_type -> exposure class, OBS product ->
+    Annex I risk type) where both key and value are category labels, not Decimal
+    rates. Consumed in Python — rebuilt into a plain ``dict`` for
+    ``Expr.replace_strict`` — never compiled to a Polars float. ``key`` names the
+    intended input column. The fallback for keys absent from ``entries`` is a
+    consumer-side ``replace_strict`` default that may differ per call site (e.g.
+    the residual ``OTHER`` class vs an empty "no-class" sentinel), so ``default``
+    here is an optional documentation aid, not an authoritative single fallback.
+    """
+
+    name: str
+    entries: Mapping[str, str]
+    key: str
+    citation: Citation
+    default: str | None = None
 
 
 @dataclass(frozen=True)
@@ -239,6 +262,7 @@ type RuleEntry = (
     ScalarParam
     | IntParam
     | LookupTable
+    | CategoryMap
     | BandedTable
     | Schedule
     | DecisionTable

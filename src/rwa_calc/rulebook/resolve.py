@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from rwa_calc.rulebook.model import (
     BandedTable,
+    CategoryMap,
     DecisionTable,
     Feature,
     FormulaParams,
@@ -107,6 +108,14 @@ class ResolvedRulepack:
     def lookup(self, name: str) -> LookupTable:
         """Return a ``LookupTable`` (raises ``TypeError`` if wrong shape)."""
         return self._typed(name, LookupTable)
+
+    def category_map(self, name: str) -> CategoryMap:
+        """Return a ``CategoryMap`` (raises ``TypeError`` if wrong shape).
+
+        The string-valued sibling of :meth:`lookup`; consumers rebuild a plain
+        ``dict`` from ``.entries`` for ``Expr.replace_strict``.
+        """
+        return self._typed(name, CategoryMap)
 
     def banded(self, name: str) -> BandedTable:
         """Return a ``BandedTable`` (raises ``TypeError`` if wrong shape)."""
@@ -247,6 +256,9 @@ def _value_repr(entry: RuleEntry) -> str:
         return str(entry.enabled)
     if isinstance(entry, LookupTable):
         items = ",".join(f"{key!r}:{entry.entries[key]}" for key in _sorted_keys(entry.entries))
+        return f"key={entry.key};default={entry.default};{{{items}}}"
+    if isinstance(entry, CategoryMap):
+        items = ",".join(f"{key!r}:{entry.entries[key]}" for key in sorted(entry.entries))
         return f"key={entry.key};default={entry.default};{{{items}}}"
     if isinstance(entry, BandedTable):
         bands = ",".join(f"{bound}<={value}" for bound, value in entry.bands)

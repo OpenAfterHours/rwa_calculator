@@ -503,7 +503,7 @@ def _ensure_guarantee_substitution_columns(exposures: pl.LazyFrame) -> pl.LazyFr
     to_add: list[pl.Expr] = []
 
     if "guarantor_exposure_class" not in schema_names:
-        from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
+        from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 
         to_add.append(
             pl.col("guarantor_entity_type")

@@ -23,7 +23,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.rulebook.model import Citation, IntParam, LookupTable, RuleEntry, ScalarParam
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.rulebook.model import (
+    CategoryMap,
+    Citation,
+    IntParam,
+    LookupTable,
+    RuleEntry,
+    ScalarParam,
+)
 
 ENTRIES: dict[str, RuleEntry] = {
     "fx_haircut": ScalarParam(
@@ -571,5 +579,93 @@ ENTRIES: dict[str, RuleEntry] = {
         name="zero_haircut_max_sovereign_cqs",
         value=1,
         citation=Citation("CRR", "227", "(2)(a) max sovereign CQS for zero-haircut repo"),
+    ),
+    # Entity-type -> exposure-class classification maps (CRR Art. 112 SA / Art.
+    # 147 IRB), relocated from data/tables (S13-d). Category labels, not rates —
+    # consumed in Python via Expr.replace_strict (engine/entity_class_maps.py
+    # rebinds them; each call site keeps its own replace_strict default). The
+    # SA/IRB split diverges for RGLA/PSE/MDB/international_org (Art. 147(3)/(4)(b))
+    # and specialised_lending (Art. 147(8)). Regime-invariant base — the Basel
+    # 3.1 high-risk demotion is a classifier Feature, not a map change.
+    "entity_type_to_sa_class": CategoryMap(
+        name="entity_type_to_sa_class",
+        key="entity_type",
+        citation=Citation("CRR", "112", "Table A2 SA exposure-class mapping by entity type"),
+        entries={
+            "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "rgla_sovereign": ExposureClass.RGLA.value,
+            "rgla_institution": ExposureClass.RGLA.value,
+            "pse_sovereign": ExposureClass.PSE.value,
+            "pse_institution": ExposureClass.PSE.value,
+            "mdb": ExposureClass.MDB.value,
+            "mdb_named": ExposureClass.MDB.value,
+            "international_org": ExposureClass.INTERNATIONAL_ORGANISATION.value,
+            "institution": ExposureClass.INSTITUTION.value,
+            "bank": ExposureClass.INSTITUTION.value,
+            "ccp": ExposureClass.INSTITUTION.value,
+            "financial_institution": ExposureClass.INSTITUTION.value,
+            "corporate": ExposureClass.CORPORATE.value,
+            "company": ExposureClass.CORPORATE.value,
+            "individual": ExposureClass.RETAIL_OTHER.value,
+            "retail": ExposureClass.RETAIL_OTHER.value,
+            # Art. 112(1)(h) natural-person non-SME obligors (alias of individual/retail).
+            "natural_person": ExposureClass.RETAIL_OTHER.value,
+            # Art. 112(1)(g): SL is a corporate sub-type under SA, not a separate class.
+            "specialised_lending": ExposureClass.CORPORATE.value,
+            "equity": ExposureClass.EQUITY.value,
+            "covered_bond": ExposureClass.COVERED_BOND.value,
+            "other_cash": ExposureClass.OTHER.value,
+            "other_gold": ExposureClass.OTHER.value,
+            "other_items_in_collection": ExposureClass.OTHER.value,
+            "other_tangible": ExposureClass.OTHER.value,
+            "other_residual_lease": ExposureClass.OTHER.value,
+            # High-risk items (Art. 128): 150% unconditional (SA-only).
+            "high_risk": ExposureClass.HIGH_RISK.value,
+            "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+            "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+            "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
+        },
+    ),
+    "entity_type_to_irb_class": CategoryMap(
+        name="entity_type_to_irb_class",
+        key="entity_type",
+        citation=Citation("CRR", "147", "IRB exposure-class mapping by entity type"),
+        entries={
+            "sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "central_bank": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            # Art. 147(3): RGLA/PSE sovereign-equivalence under IRB.
+            "rgla_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            # Art. 147(4)(b): RGLA/PSE institution treatment under IRB.
+            "rgla_institution": ExposureClass.INSTITUTION.value,
+            "pse_sovereign": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "pse_institution": ExposureClass.INSTITUTION.value,
+            "mdb": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "mdb_named": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "international_org": ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+            "institution": ExposureClass.INSTITUTION.value,
+            "bank": ExposureClass.INSTITUTION.value,
+            "ccp": ExposureClass.INSTITUTION.value,
+            "financial_institution": ExposureClass.INSTITUTION.value,
+            "corporate": ExposureClass.CORPORATE.value,
+            "company": ExposureClass.CORPORATE.value,
+            "individual": ExposureClass.RETAIL_OTHER.value,
+            "retail": ExposureClass.RETAIL_OTHER.value,
+            "natural_person": ExposureClass.RETAIL_OTHER.value,
+            # Art. 147(8): SL is a legitimate IRB sub-class (unlike SA).
+            "specialised_lending": ExposureClass.SPECIALISED_LENDING.value,
+            "equity": ExposureClass.EQUITY.value,
+            "covered_bond": ExposureClass.COVERED_BOND.value,
+            "other_cash": ExposureClass.OTHER.value,
+            "other_gold": ExposureClass.OTHER.value,
+            "other_items_in_collection": ExposureClass.OTHER.value,
+            "other_tangible": ExposureClass.OTHER.value,
+            "other_residual_lease": ExposureClass.OTHER.value,
+            # High-risk items are SA-only — kept as HIGH_RISK label (no IRB treatment).
+            "high_risk": ExposureClass.HIGH_RISK.value,
+            "high_risk_venture_capital": ExposureClass.HIGH_RISK.value,
+            "high_risk_private_equity": ExposureClass.HIGH_RISK.value,
+            "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
+        },
     ),
 }

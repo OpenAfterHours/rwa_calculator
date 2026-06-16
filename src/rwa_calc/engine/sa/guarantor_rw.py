@@ -53,8 +53,8 @@ from typing import TYPE_CHECKING, cast
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.domain.enums import CQS, ExposureClass
+from rwa_calc.engine.entity_class_maps import ENTITY_TYPES_BY_SA_CLASS
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 

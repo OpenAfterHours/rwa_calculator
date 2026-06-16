@@ -38,11 +38,11 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_all_risk_weight_tables,
     get_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.entity_class_mapping import (
+from rwa_calc.domain.enums import CQS, ApproachType, ExposureClass
+from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
-from rwa_calc.domain.enums import CQS, ApproachType, ExposureClass
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.reporting.corep.templates import SA_EXPOSURE_CLASS_ROWS
 from tests.fixtures.single_exposure import calculate_single_sa_exposure

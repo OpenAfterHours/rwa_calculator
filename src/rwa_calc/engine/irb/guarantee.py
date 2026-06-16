@@ -220,7 +220,7 @@ def _compute_guarantor_rw_sa(
     # Ensure guarantor_exposure_class is available (set by CRM processor;
     # fallback for unit tests that construct LazyFrames directly)
     if "guarantor_exposure_class" not in cols:
-        from rwa_calc.data.tables.entity_class_mapping import ENTITY_TYPE_TO_SA_CLASS
+        from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
 
         lf = lf.with_columns(
             pl.col("guarantor_entity_type")

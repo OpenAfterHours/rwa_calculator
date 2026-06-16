@@ -101,8 +101,8 @@ def _make_comparison(
     """Build a minimal ComparisonBundle for testing attribution."""
     # We only need crr_results and b31_results for attribution
     return ComparisonBundle(
-        crr_results=crr,
-        b31_results=b31,
+        baseline_results=crr,
+        variant_results=b31,
         exposure_deltas=pl.LazyFrame(),  # Not used by attribution
         summary_by_class=pl.LazyFrame(),
         summary_by_approach=pl.LazyFrame(),
@@ -880,8 +880,8 @@ class TestCapitalImpactAnalyzer:
         )
         b31 = _make_b31_results(["EXP001"], rwa_finals=[85_000.0])
         comparison = ComparisonBundle(
-            crr_results=crr,
-            b31_results=b31,
+            baseline_results=crr,
+            variant_results=b31,
             exposure_deltas=pl.LazyFrame(),
             summary_by_class=pl.LazyFrame(),
             summary_by_approach=pl.LazyFrame(),

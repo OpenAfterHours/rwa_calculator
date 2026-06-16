@@ -45,6 +45,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -62,6 +63,7 @@ from rwa_calc.rulebook.resolve import resolve
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook import RulepackV0
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,25 @@ _OPTIONAL_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class RunSpec:
+    """One labelled run in a comparison.
+
+    Attributes:
+        config: The per-run configuration (regime, elections, reporting date).
+        label: Column-suffix + display name for this run (e.g. "crr", "b31",
+            "baseline", "amended"). Must be distinct from the other run's label.
+        rulepack: Optional resolved-rulepack override (an amendment or election
+            overlay built via ``RulepackV0.from_resolved`` /
+            ``ResolvedRulepack.with_overrides``). When None, the pipeline resolves
+            the pack from ``config`` as usual.
+    """
+
+    config: CalculationConfig
+    label: str
+    rulepack: RulepackV0 | None = None
+
+
 class DualFrameworkRunner:
     """
     Run the same portfolio through CRR and Basel 3.1 pipelines and compare.
@@ -102,50 +123,66 @@ class DualFrameworkRunner:
     def compare(
         self,
         data: RawDataBundle,
-        crr_config: CalculationConfig,
-        b31_config: CalculationConfig,
+        baseline: RunSpec | CalculationConfig,
+        variant: RunSpec | CalculationConfig,
     ) -> ComparisonBundle:
         """
-        Run both frameworks on the same data and produce comparison.
+        Run two labelled configurations on the same data and compare.
+
+        ``baseline`` and ``variant`` may each be a bare ``CalculationConfig`` (its
+        ``regime_id`` becomes the label) or a ``RunSpec`` carrying an explicit
+        label and optional rulepack overlay. The classic CRR-vs-Basel-3.1
+        comparison is ``compare(data, crr_config, b31_config)``; same-regime
+        pairings (election-vs-election, regime-vs-amended) pass ``RunSpec`` with
+        distinct labels and, optionally, a ``rulepack`` overlay.
 
         Args:
-            data: Pre-loaded raw data bundle (shared between frameworks)
-            crr_config: CRR configuration (must have framework=CRR)
-            b31_config: Basel 3.1 configuration (must have framework=BASEL_3_1)
+            data: Pre-loaded raw data bundle (shared between the two runs)
+            baseline: The baseline run (config or RunSpec)
+            variant: The variant run (config or RunSpec)
 
         Returns:
             ComparisonBundle with per-exposure deltas and summaries
+            (delta = variant - baseline)
 
         Raises:
-            ValueError: If configs have wrong framework types
+            ValueError: If the two runs resolve to the same / an empty label
         """
-        _validate_configs(crr_config, b31_config)
+        base = _as_run_spec(baseline)
+        var = _as_run_spec(variant)
+        _validate_run_specs(base, var)
 
-        logger.info("Running CRR pipeline...")
-        crr_pipeline = PipelineOrchestrator()
-        crr_results = crr_pipeline.run_with_data(data, crr_config)
+        logger.info("Running baseline pipeline (%s)...", base.label)
+        baseline_results = PipelineOrchestrator().run_with_data(
+            data, base.config, rulepack=base.rulepack
+        )
 
-        logger.info("Running Basel 3.1 pipeline...")
-        b31_pipeline = PipelineOrchestrator()
-        b31_results = b31_pipeline.run_with_data(data, b31_config)
+        logger.info("Running variant pipeline (%s)...", var.label)
+        variant_results = PipelineOrchestrator().run_with_data(
+            data, var.config, rulepack=var.rulepack
+        )
 
         logger.info("Computing exposure-level deltas...")
-        exposure_deltas = _compute_exposure_deltas(crr_results, b31_results)
+        exposure_deltas = _compute_exposure_deltas(
+            baseline_results, variant_results, base.label, var.label
+        )
 
         logger.info("Generating summary by exposure class...")
-        summary_by_class = _compute_summary_by_class(exposure_deltas)
+        summary_by_class = _compute_summary_by_class(exposure_deltas, base.label, var.label)
 
         logger.info("Generating summary by approach...")
-        summary_by_approach = _compute_summary_by_approach(exposure_deltas)
+        summary_by_approach = _compute_summary_by_approach(exposure_deltas, base.label, var.label)
 
-        errors = list(crr_results.errors) + list(b31_results.errors)
+        errors = list(baseline_results.errors) + list(variant_results.errors)
 
         return ComparisonBundle(
-            crr_results=crr_results,
-            b31_results=b31_results,
+            baseline_results=baseline_results,
+            variant_results=variant_results,
             exposure_deltas=exposure_deltas,
             summary_by_class=summary_by_class,
             summary_by_approach=summary_by_approach,
+            baseline_label=base.label,
+            variant_label=var.label,
             errors=errors,
         )
 
@@ -419,12 +456,22 @@ def _build_timeline_lazyframe(rows: list[dict]) -> pl.LazyFrame:
 # =============================================================================
 
 
-def _validate_configs(crr_config: CalculationConfig, b31_config: CalculationConfig) -> None:
-    """Validate that configs have correct framework types."""
-    if not crr_config.is_crr:
-        raise ValueError(f"crr_config must use CRR framework, got {crr_config.framework}")
-    if not b31_config.is_basel_3_1:
-        raise ValueError(f"b31_config must use Basel 3.1 framework, got {b31_config.framework}")
+def _as_run_spec(run: RunSpec | CalculationConfig) -> RunSpec:
+    """Coerce a bare config to a RunSpec, defaulting the label to its regime id."""
+    if isinstance(run, RunSpec):
+        return run
+    return RunSpec(config=run, label=run.regime_id)
+
+
+def _validate_run_specs(baseline: RunSpec, variant: RunSpec) -> None:
+    """A labelled two-run needs two non-empty, distinct labels (column suffixes)."""
+    if not baseline.label or not variant.label:
+        raise ValueError("run labels must be non-empty")
+    if baseline.label == variant.label:
+        raise ValueError(
+            f"baseline and variant labels must differ (both {baseline.label!r}); "
+            "pass RunSpec(config, label=...) with distinct labels for same-regime runs"
+        )
 
 
 def _select_result_columns(results: AggregatedResultBundle, suffix: str) -> pl.LazyFrame:
@@ -458,52 +505,58 @@ def _select_result_columns(results: AggregatedResultBundle, suffix: str) -> pl.L
 
 
 def _compute_exposure_deltas(
-    crr_results: AggregatedResultBundle,
-    b31_results: AggregatedResultBundle,
+    baseline_results: AggregatedResultBundle,
+    variant_results: AggregatedResultBundle,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
 ) -> pl.LazyFrame:
-    """Join CRR and B31 results on exposure_reference and compute deltas.
+    """Join two runs on exposure_reference and compute deltas.
 
-    Delta convention: positive delta means B31 is higher than CRR (increased capital).
-    delta_pct is the percentage change relative to CRR (delta_rwa / crr_rwa * 100).
+    Delta convention: positive delta means the variant is higher than the baseline
+    (increased capital). delta_pct is the change relative to the baseline
+    (delta_rwa / baseline_rwa * 100).
     """
-    crr_lf = _select_result_columns(crr_results, "crr")
-    b31_lf = _select_result_columns(b31_results, "b31")
+    b = baseline_suffix
+    v = variant_suffix
+    base_lf = _select_result_columns(baseline_results, b)
+    var_lf = _select_result_columns(variant_results, v)
 
-    joined = crr_lf.join(b31_lf, on="exposure_reference", how="full", coalesce=True)
+    joined = base_lf.join(var_lf, on="exposure_reference", how="full", coalesce=True)
 
-    # Use CRR exposure class/approach as the primary context; fall back to B31
+    # Use the baseline exposure class/approach as the primary context; fall back to variant
     joined = joined.with_columns(
         [
-            pl.coalesce(pl.col("exposure_class_crr"), pl.col("exposure_class_b31")).alias(
+            pl.coalesce(pl.col(f"exposure_class_{b}"), pl.col(f"exposure_class_{v}")).alias(
                 "exposure_class"
             ),
-            pl.coalesce(pl.col("approach_applied_crr"), pl.col("approach_applied_b31")).alias(
+            pl.coalesce(pl.col(f"approach_applied_{b}"), pl.col(f"approach_applied_{v}")).alias(
                 "approach_applied"
             ),
         ]
     )
 
-    # Compute deltas: B31 - CRR (positive = increased capital requirement)
+    # Compute deltas: variant - baseline (positive = increased capital requirement)
     joined = joined.with_columns(
         [
-            (pl.col("rwa_final_b31").fill_null(0.0) - pl.col("rwa_final_crr").fill_null(0.0)).alias(
-                "delta_rwa"
-            ),
             (
-                pl.col("risk_weight_b31").fill_null(0.0) - pl.col("risk_weight_crr").fill_null(0.0)
+                pl.col(f"rwa_final_{v}").fill_null(0.0) - pl.col(f"rwa_final_{b}").fill_null(0.0)
+            ).alias("delta_rwa"),
+            (
+                pl.col(f"risk_weight_{v}").fill_null(0.0)
+                - pl.col(f"risk_weight_{b}").fill_null(0.0)
             ).alias("delta_risk_weight"),
-            (pl.col("ead_final_b31").fill_null(0.0) - pl.col("ead_final_crr").fill_null(0.0)).alias(
-                "delta_ead"
-            ),
+            (
+                pl.col(f"ead_final_{v}").fill_null(0.0) - pl.col(f"ead_final_{b}").fill_null(0.0)
+            ).alias("delta_ead"),
         ]
     )
 
-    # Percentage change relative to CRR
+    # Percentage change relative to the baseline
     joined = joined.with_columns(
-        pl.when(pl.col("rwa_final_crr").abs() > 1e-10)
-        .then(pl.col("delta_rwa") / pl.col("rwa_final_crr") * 100.0)
+        pl.when(pl.col(f"rwa_final_{b}").abs() > 1e-10)
+        .then(pl.col("delta_rwa") / pl.col(f"rwa_final_{b}") * 100.0)
         .otherwise(
-            pl.when(pl.col("rwa_final_b31").abs() > 1e-10)
+            pl.when(pl.col(f"rwa_final_{v}").abs() > 1e-10)
             .then(pl.lit(float("inf")))
             .otherwise(pl.lit(0.0))
         )
@@ -513,52 +566,53 @@ def _compute_exposure_deltas(
     return joined
 
 
-def _compute_summary_by_class(exposure_deltas: pl.LazyFrame) -> pl.LazyFrame:
+def _compute_summary(
+    exposure_deltas: pl.LazyFrame,
+    group_col: str,
+    baseline_suffix: str,
+    variant_suffix: str,
+) -> pl.LazyFrame:
+    """Aggregate RWA/EAD totals and delta RWA by ``group_col`` (class or approach)."""
+    b = baseline_suffix
+    v = variant_suffix
+    return (
+        exposure_deltas.group_by(group_col)
+        .agg(
+            [
+                pl.col(f"rwa_final_{b}").sum().alias(f"total_rwa_{b}"),
+                pl.col(f"rwa_final_{v}").sum().alias(f"total_rwa_{v}"),
+                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
+                pl.col(f"ead_final_{b}").sum().alias(f"total_ead_{b}"),
+                pl.col(f"ead_final_{v}").sum().alias(f"total_ead_{v}"),
+                pl.len().alias("exposure_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col(f"total_rwa_{b}").abs() > 1e-10)
+            .then(pl.col("total_delta_rwa") / pl.col(f"total_rwa_{b}") * 100.0)
+            .otherwise(pl.lit(0.0))
+            .alias("delta_rwa_pct")
+        )
+        .sort(group_col)
+    )
+
+
+def _compute_summary_by_class(
+    exposure_deltas: pl.LazyFrame,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
+) -> pl.LazyFrame:
     """Aggregate delta RWA by exposure class."""
-    return (
-        exposure_deltas.group_by("exposure_class")
-        .agg(
-            [
-                pl.col("rwa_final_crr").sum().alias("total_rwa_crr"),
-                pl.col("rwa_final_b31").sum().alias("total_rwa_b31"),
-                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
-                pl.col("ead_final_crr").sum().alias("total_ead_crr"),
-                pl.col("ead_final_b31").sum().alias("total_ead_b31"),
-                pl.len().alias("exposure_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("total_rwa_crr").abs() > 1e-10)
-            .then(pl.col("total_delta_rwa") / pl.col("total_rwa_crr") * 100.0)
-            .otherwise(pl.lit(0.0))
-            .alias("delta_rwa_pct")
-        )
-        .sort("exposure_class")
-    )
+    return _compute_summary(exposure_deltas, "exposure_class", baseline_suffix, variant_suffix)
 
 
-def _compute_summary_by_approach(exposure_deltas: pl.LazyFrame) -> pl.LazyFrame:
+def _compute_summary_by_approach(
+    exposure_deltas: pl.LazyFrame,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
+) -> pl.LazyFrame:
     """Aggregate delta RWA by calculation approach."""
-    return (
-        exposure_deltas.group_by("approach_applied")
-        .agg(
-            [
-                pl.col("rwa_final_crr").sum().alias("total_rwa_crr"),
-                pl.col("rwa_final_b31").sum().alias("total_rwa_b31"),
-                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
-                pl.col("ead_final_crr").sum().alias("total_ead_crr"),
-                pl.col("ead_final_b31").sum().alias("total_ead_b31"),
-                pl.len().alias("exposure_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("total_rwa_crr").abs() > 1e-10)
-            .then(pl.col("total_delta_rwa") / pl.col("total_rwa_crr") * 100.0)
-            .otherwise(pl.lit(0.0))
-            .alias("delta_rwa_pct")
-        )
-        .sort("approach_applied")
-    )
+    return _compute_summary(exposure_deltas, "approach_applied", baseline_suffix, variant_suffix)
 
 
 # =============================================================================
@@ -594,8 +648,8 @@ def _compute_exposure_attribution(comparison: ComparisonBundle) -> pl.LazyFrame:
 
     The four drivers sum to delta_rwa for every exposure.
     """
-    crr = comparison.crr_results
-    b31 = comparison.b31_results
+    crr = comparison.baseline_results
+    b31 = comparison.variant_results
 
     # Select columns from CRR results
     crr_schema = crr.results.collect_schema()

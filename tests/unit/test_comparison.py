@@ -24,10 +24,12 @@ import pytest
 
 from rwa_calc.analysis.comparison import (
     DualFrameworkRunner,
+    RunSpec,
+    _as_run_spec,
     _compute_exposure_deltas,
     _compute_summary_by_approach,
     _compute_summary_by_class,
-    _validate_configs,
+    _validate_run_specs,
 )
 from rwa_calc.contracts.bundles import AggregatedResultBundle, ComparisonBundle
 from rwa_calc.contracts.config import CalculationConfig
@@ -92,27 +94,31 @@ def mock_b31_results() -> AggregatedResultBundle:
 # =============================================================================
 
 
-class TestConfigValidation:
-    """Tests for config type validation."""
+class TestRunSpecValidation:
+    """Labelled two-run validation (Phase 6 — replaces the old framework-pair gate)."""
 
-    def test_valid_configs_pass(self, crr_config, b31_config):
-        """Valid CRR + B31 configs should not raise."""
-        _validate_configs(crr_config, b31_config)
+    def test_distinct_labels_pass(self, crr_config, b31_config):
+        """Two runs with distinct labels should not raise."""
+        _validate_run_specs(_as_run_spec(crr_config), _as_run_spec(b31_config))
 
-    def test_swapped_configs_raises(self, crr_config, b31_config):
-        """Swapping CRR/B31 configs should raise ValueError."""
-        with pytest.raises(ValueError, match="crr_config must use CRR"):
-            _validate_configs(b31_config, crr_config)
+    def test_bare_config_label_is_regime_id(self, crr_config, b31_config):
+        """A bare config coerces to a RunSpec labelled with its regime id."""
+        assert _as_run_spec(crr_config).label == crr_config.regime_id
+        assert _as_run_spec(b31_config).label == b31_config.regime_id
 
-    def test_both_crr_raises(self, crr_config):
-        """Two CRR configs should raise ValueError."""
-        with pytest.raises(ValueError, match="b31_config must use Basel 3.1"):
-            _validate_configs(crr_config, crr_config)
+    def test_reversed_regimes_now_allowed(self, crr_config, b31_config):
+        """B31-as-baseline / CRR-as-variant is now a valid labelled two-run."""
+        _validate_run_specs(_as_run_spec(b31_config), _as_run_spec(crr_config))
 
-    def test_both_b31_raises(self, b31_config):
-        """Two B31 configs should raise ValueError."""
-        with pytest.raises(ValueError, match="crr_config must use CRR"):
-            _validate_configs(b31_config, b31_config)
+    def test_same_label_raises(self, crr_config):
+        """Two runs with the same label (e.g. same-regime bare configs) must raise."""
+        with pytest.raises(ValueError, match="labels must differ"):
+            _validate_run_specs(_as_run_spec(crr_config), _as_run_spec(crr_config))
+
+    def test_empty_label_raises(self, crr_config):
+        """An empty label must raise."""
+        with pytest.raises(ValueError, match="must be non-empty"):
+            _validate_run_specs(RunSpec(crr_config, ""), _as_run_spec(crr_config))
 
 
 # =============================================================================
@@ -318,8 +324,8 @@ class TestComparisonBundle:
         """ComparisonBundle should be immutable (frozen dataclass)."""
         deltas = _compute_exposure_deltas(mock_crr_results, mock_b31_results)
         bundle = ComparisonBundle(
-            crr_results=mock_crr_results,
-            b31_results=mock_b31_results,
+            baseline_results=mock_crr_results,
+            variant_results=mock_b31_results,
             exposure_deltas=deltas,
             summary_by_class=_compute_summary_by_class(deltas),
             summary_by_approach=_compute_summary_by_approach(deltas),
@@ -358,8 +364,8 @@ class TestComparisonBundle:
         )
         deltas = _compute_exposure_deltas(crr, b31)
         bundle = ComparisonBundle(
-            crr_results=crr,
-            b31_results=b31,
+            baseline_results=crr,
+            variant_results=b31,
             exposure_deltas=deltas,
             summary_by_class=_compute_summary_by_class(deltas),
             summary_by_approach=_compute_summary_by_approach(deltas),
@@ -376,28 +382,27 @@ class TestComparisonBundle:
 class TestDualFrameworkRunner:
     """Integration tests for DualFrameworkRunner.compare()."""
 
-    def test_runner_validates_configs(self, crr_config, b31_config):
-        """Runner should reject swapped configs."""
+    def test_runner_rejects_same_label(self, crr_config):
+        """Runner should reject two runs that resolve to the same label.
+
+        (Swapped regimes are now valid — that's the Phase 6 labelled-two-run
+        unlock; what stays rejected is an ambiguous duplicate label.)
+        """
         runner = DualFrameworkRunner()
-        # Swapped configs should raise
-        with pytest.raises(ValueError, match="crr_config must use CRR"):
-            runner.compare(
-                data=make_minimal_raw_data(),
-                crr_config=b31_config,
-                b31_config=crr_config,
-            )
+        with pytest.raises(ValueError, match="labels must differ"):
+            runner.compare(make_minimal_raw_data(), crr_config, crr_config)
 
     def test_runner_returns_comparison_bundle(self, crr_config, b31_config):
         """Runner should return a ComparisonBundle with all fields populated."""
         runner = DualFrameworkRunner()
         result = runner.compare(
-            data=make_minimal_raw_data(),
-            crr_config=crr_config,
-            b31_config=b31_config,
+            make_minimal_raw_data(),
+            crr_config,
+            b31_config,
         )
         assert isinstance(result, ComparisonBundle)
-        assert isinstance(result.crr_results, AggregatedResultBundle)
-        assert isinstance(result.b31_results, AggregatedResultBundle)
+        assert isinstance(result.baseline_results, AggregatedResultBundle)
+        assert isinstance(result.variant_results, AggregatedResultBundle)
         assert isinstance(result.exposure_deltas, pl.LazyFrame)
         assert isinstance(result.summary_by_class, pl.LazyFrame)
         assert isinstance(result.summary_by_approach, pl.LazyFrame)
@@ -406,9 +411,9 @@ class TestDualFrameworkRunner:
         """Exposure deltas should be a valid LazyFrame that can be collected."""
         runner = DualFrameworkRunner()
         result = runner.compare(
-            data=make_minimal_raw_data(),
-            crr_config=crr_config,
-            b31_config=b31_config,
+            make_minimal_raw_data(),
+            crr_config,
+            b31_config,
         )
         df = result.exposure_deltas.collect()
         assert "delta_rwa" in df.columns
@@ -428,9 +433,9 @@ class TestDualFrameworkRunner:
 
         runner = DualFrameworkRunner()
         result = runner.compare(
-            data=make_minimal_raw_data(),
-            crr_config=crr_config,
-            b31_config=b31_config,
+            make_minimal_raw_data(),
+            crr_config,
+            b31_config,
         )
         df = result.exposure_deltas.collect()
         assert isinstance(df, pl.DataFrame)

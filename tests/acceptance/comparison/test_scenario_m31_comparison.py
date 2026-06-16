@@ -45,14 +45,14 @@ class TestM31_SA_Comparison:
 
     def test_crr_results_populated(self, sa_comparison):
         """CRR results should be a valid AggregatedResultBundle."""
-        assert isinstance(sa_comparison.crr_results, AggregatedResultBundle)
-        crr_df = sa_comparison.crr_results.results.collect()
+        assert isinstance(sa_comparison.baseline_results, AggregatedResultBundle)
+        crr_df = sa_comparison.baseline_results.results.collect()
         assert crr_df.height > 0
 
     def test_b31_results_populated(self, sa_comparison):
         """B31 results should be a valid AggregatedResultBundle."""
-        assert isinstance(sa_comparison.b31_results, AggregatedResultBundle)
-        b31_df = sa_comparison.b31_results.results.collect()
+        assert isinstance(sa_comparison.variant_results, AggregatedResultBundle)
+        b31_df = sa_comparison.variant_results.results.collect()
         assert b31_df.height > 0
 
     def test_exposure_deltas_populated(self, sa_comparison_deltas_df):
@@ -74,8 +74,8 @@ class TestM31_SA_Comparison:
 
     def test_same_exposure_count_both_frameworks(self, sa_comparison):
         """Both frameworks should process the same set of exposures."""
-        crr_count = sa_comparison.crr_results.results.collect().height
-        b31_count = sa_comparison.b31_results.results.collect().height
+        crr_count = sa_comparison.baseline_results.results.collect().height
+        b31_count = sa_comparison.variant_results.results.collect().height
         deltas_count = sa_comparison.exposure_deltas.collect().height
         # Full outer join should cover all exposures from both sides
         assert deltas_count >= max(crr_count, b31_count)

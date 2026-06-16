@@ -55,6 +55,20 @@ class TransitionalScheduleRunner:
     may become floor-constrained as the percentage rises. Modelling this
     trajectory is essential for forward-looking capital management.
 
+    Implementation note (Phase 6 S5b — floor-tail partial re-run assessed, NOT
+    adopted): each transitional year runs the FULL pipeline rather than re-applying
+    only the output floor over a cached pre-floor RWA. The floor-tail short-cut would
+    be valid only if the pre-floor IRB RWA were date-invariant across the schedule —
+    it is not. Effective maturity (CRR Art. 162) shortens as the reporting date
+    advances toward each loan's maturity, so IRB RWA (and hence the pre-floor total)
+    genuinely changes year-over-year; only the SA-equivalent floor benchmark is
+    date-stable. The acceptance suite encodes exactly this — see
+    ``test_scenario_m33_transitional.py::test_floor_percentage_times_sa_rwa_non_decreasing``,
+    whose docstring notes that "total post-floor RWA can decrease year-over-year
+    because effective maturity shortens". A correct per-year result therefore
+    requires the full re-run; the partial re-run is infeasible here, not merely
+    unimplemented.
+
     Usage:
         from rwa_calc.analysis.transition import TransitionalScheduleRunner
 

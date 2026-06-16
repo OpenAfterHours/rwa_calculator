@@ -14,9 +14,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.api import CreditRiskCalc
 from rwa_calc.api.reconciliation import ReconciliationSettings
-from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
 from tests.fixtures.api_validation.build_mandatory_only import write_mandatory_minimum
 
 

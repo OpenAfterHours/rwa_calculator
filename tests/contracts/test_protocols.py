@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 
 from rwa_calc.analysis.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
-from rwa_calc.analysis.reconciliation import ReconciliationRunner
+from rwa_calc.analysis.reconciliation import ReconciliationRunner, ReconciliationRunnerProtocol
 from rwa_calc.api.export import ResultExporter
 from rwa_calc.contracts.protocols import (
     CapitalImpactAnalyzerProtocol,
@@ -33,7 +33,6 @@ from rwa_calc.contracts.protocols import (
     OutputAggregatorProtocol,
     PipelineProtocol,
     RealEstateSplitterProtocol,
-    ReconciliationRunnerProtocol,
     ResultExporterProtocol,
     SACalculatorProtocol,
     SecuritisationAllocatorProtocol,

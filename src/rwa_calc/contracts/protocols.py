@@ -32,12 +32,10 @@ if TYPE_CHECKING:
         CRMAdjustedBundle,
         EquityResultBundle,
         RawDataBundle,
-        ReconciliationBundle,
         ResolvedHierarchyBundle,
     )
     from rwa_calc.contracts.config import (
         CalculationConfig,
-        LegacyColumnMapping,
         OutputFloorConfig,
     )
     from rwa_calc.contracts.errors import CalculationError
@@ -646,45 +644,6 @@ class CapitalImpactAnalyzerProtocol(Protocol):
 
         Returns:
             CapitalImpactBundle with per-exposure and portfolio attribution
-        """
-        ...
-
-
-@runtime_checkable
-class ReconciliationRunnerProtocol(Protocol):
-    """
-    Protocol for parallel-run reconciliation execution.
-
-    Reconciles our per-exposure results against an external legacy calculator's
-    output (already mapped onto our canonical components and a composite/custom
-    join key) and produces a ReconciliationBundle with per-component buckets,
-    summaries, a break worklist, and a totals tie-out.
-
-    Why: firms migrating to this calculator run it in parallel with their
-    existing engine and must demonstrate, component by component, where the two
-    agree and where (and why) they diverge. This protocol defines the interface
-    for that reconciliation, independent of how the legacy file was loaded or
-    how the result is surfaced (API / export / UI).
-    """
-
-    def reconcile(
-        self,
-        our_results: pl.LazyFrame,
-        legacy_results: pl.LazyFrame,
-        mapping: LegacyColumnMapping,
-    ) -> ReconciliationBundle:
-        """
-        Reconcile our results against a mapped legacy output.
-
-        Args:
-            our_results: Our per-exposure results LazyFrame (e.g. from
-                ``CalculationResponse.scan_results()``).
-            legacy_results: The legacy output already mapped to canonical
-                ``legacy_<component>`` columns and key columns.
-            mapping: The column/key mapping and per-component tolerances.
-
-        Returns:
-            ReconciliationBundle with per-component reconciliation and summaries.
         """
         ...
 

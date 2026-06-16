@@ -31,10 +31,11 @@ References:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import polars as pl
 
+from rwa_calc.analysis.recon_registry import RECONCILABLE_COMPONENTS
 from rwa_calc.contracts.bundles import (
     ReconciliationBundle,
     create_empty_reconciliation_bundle,
@@ -46,13 +47,11 @@ from rwa_calc.contracts.errors import (
     ERROR_RECON_LEGACY_COLUMN_MISSING,
     reconciliation_warning,
 )
-from rwa_calc.data.schemas import RECONCILABLE_COMPONENTS
 from rwa_calc.engine.aggregator._collapse import HETEROGENEITY_FLAG, aggregate_to_key_grain
 
 if TYPE_CHECKING:
-    from rwa_calc.contracts.config import LegacyColumnMapping
+    from rwa_calc.analysis.recon_registry import LegacyColumnMapping, ReconcilableComponent
     from rwa_calc.contracts.errors import CalculationError
-    from rwa_calc.data.schemas import ReconcilableComponent
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +70,39 @@ _ZERO_GUARD = 1e-10
 # Internal join key built by concatenating the mapped key columns.
 _RECON_KEY = "_recon_key"
 _KEY_SEP = "||"
+
+
+@runtime_checkable
+class ReconciliationRunnerProtocol(Protocol):
+    """Protocol for parallel-run reconciliation execution.
+
+    Reconciles our per-exposure results against an external legacy calculator's
+    output (already mapped onto our canonical components and a composite/custom
+    join key) and produces a ``ReconciliationBundle`` with per-component buckets,
+    summaries, a break worklist, and a totals tie-out. Implemented by
+    ``ReconciliationRunner``; lives here in ``analysis/`` (migration Phase 6)
+    because it references ``LegacyColumnMapping`` (also analysis-layer) and
+    ``contracts/`` may not import ``analysis/``.
+    """
+
+    def reconcile(
+        self,
+        our_results: pl.LazyFrame,
+        legacy_results: pl.LazyFrame,
+        mapping: LegacyColumnMapping,
+    ) -> ReconciliationBundle:
+        """Reconcile our results against a mapped legacy output.
+
+        Args:
+            our_results: Our per-exposure results LazyFrame.
+            legacy_results: The legacy output already mapped to canonical
+                ``legacy_<component>`` columns and key columns.
+            mapping: The column/key mapping and per-component tolerances.
+
+        Returns:
+            ReconciliationBundle with per-component reconciliation and summaries.
+        """
+        ...
 
 
 class ReconciliationRunner:

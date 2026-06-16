@@ -24,6 +24,10 @@ Usage:
         results_df = response.collect_results()
 """
 
+from rwa_calc.analysis.recon_registry import (
+    ComponentMapping,
+    LegacyColumnMapping,
+)
 from rwa_calc.api.export import (
     ExportResult,
     ResultExporter,
@@ -63,10 +67,6 @@ from rwa_calc.api.validation import (
     DataPathValidator,
     get_required_files,
     validate_data_path,
-)
-from rwa_calc.contracts.config import (
-    ComponentMapping,
-    LegacyColumnMapping,
 )
 
 __all__ = [

@@ -28,8 +28,11 @@ from typing import Any, Literal
 
 import polars as pl
 
-from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
-from rwa_calc.data.schemas import RECONCILABLE_COMPONENTS_BY_NAME
+from rwa_calc.analysis.recon_registry import (
+    RECONCILABLE_COMPONENTS_BY_NAME,
+    ComponentMapping,
+    LegacyColumnMapping,
+)
 
 logger = logging.getLogger(__name__)
 

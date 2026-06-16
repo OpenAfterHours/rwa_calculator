@@ -37,8 +37,6 @@ from rwa_calc.data.schemas import (
     RECEIVABLE_COLLATERAL_TYPES,
 )
 from rwa_calc.data.tables.haircuts import (
-    LIQUIDATION_PERIOD_REPO,
-    LIQUIDATION_PERIOD_SECURED_LENDING,
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     lookup_collateral_haircut,
@@ -52,13 +50,15 @@ if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
-# Art. 227(2)(a) zero-haircut sovereign-CQS cap resolved from the common pack once
-# at module load. Regime-invariant (CRR carries Art. 227 unchanged into PS1/26);
-# integer CQS compared int-to-int (Polars ``.le`` / Python ``<=``), no float
-# coercion. (S13-c)
-_ZERO_HAIRCUT_MAX_SOVEREIGN_CQS = (
-    resolve("crr", date(2026, 1, 1)).int_param("zero_haircut_max_sovereign_cqs").value
-)
+# CRM regulatory int counts resolved from the common pack once at module load:
+# the Art. 227(2)(a) zero-haircut sovereign-CQS cap and the Art. 224(2)
+# liquidation periods (feeding the Art. 226(2) sqrt(T_m/10) scaling). All kept
+# int end-to-end (Polars ``.le`` / ``pl.lit`` / Python ``<=``), no float
+# coercion. (S13-c / S13-h)
+_PACK = resolve("crr", date(2026, 1, 1))
+_ZERO_HAIRCUT_MAX_SOVEREIGN_CQS = _PACK.int_param("zero_haircut_max_sovereign_cqs").value
+_LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
+_LIQUIDATION_PERIOD_SECURED_LENDING = _PACK.int_param("liquidation_period_secured_lending").value
 
 
 @dataclass
@@ -173,11 +173,11 @@ class HaircutCalculator:
         if has_sft_col:
             sft_default = (
                 pl.when(pl.col("exposure_is_sft").fill_null(False))
-                .then(pl.lit(LIQUIDATION_PERIOD_REPO))
-                .otherwise(pl.lit(LIQUIDATION_PERIOD_SECURED_LENDING))
+                .then(pl.lit(_LIQUIDATION_PERIOD_REPO))
+                .otherwise(pl.lit(_LIQUIDATION_PERIOD_SECURED_LENDING))
             )
         else:
-            sft_default = pl.lit(LIQUIDATION_PERIOD_SECURED_LENDING)
+            sft_default = pl.lit(_LIQUIDATION_PERIOD_SECURED_LENDING)
 
         if has_liq_period:
             liq = pl.col("liquidation_period_days").fill_null(sft_default).cast(pl.Float64)
@@ -434,8 +434,8 @@ class HaircutCalculator:
         sft_flag = pl.col("is_sft").fill_null(False) if "is_sft" in names else pl.lit(False)
         liq = (
             pl.when(sft_flag)
-            .then(pl.lit(float(LIQUIDATION_PERIOD_REPO)))
-            .otherwise(pl.lit(float(LIQUIDATION_PERIOD_SECURED_LENDING)))
+            .then(pl.lit(float(_LIQUIDATION_PERIOD_REPO)))
+            .otherwise(pl.lit(float(_LIQUIDATION_PERIOD_SECURED_LENDING)))
         )
         scaling_factor = (liq / 10.0).sqrt()
 

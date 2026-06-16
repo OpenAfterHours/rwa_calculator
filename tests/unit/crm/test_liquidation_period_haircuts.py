@@ -16,6 +16,7 @@ Reference:
 from __future__ import annotations
 
 import math
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
@@ -25,14 +26,19 @@ from rwa_calc.data.tables.haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
-    LIQUIDATION_PERIOD_CAPITAL_MARKET,
-    LIQUIDATION_PERIOD_REPO,
-    LIQUIDATION_PERIOD_SECURED_LENDING,
     lookup_collateral_haircut,
     lookup_fx_haircut,
     scale_haircut_for_liquidation_period,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
+from rwa_calc.rulebook.resolve import resolve
+
+# Liquidation periods relocated to the common pack (S13-h); read here for the
+# documentation-as-test value assertions below.
+_PACK = resolve("crr", date(2026, 1, 1))
+LIQUIDATION_PERIOD_REPO = _PACK.int_param("liquidation_period_repo").value
+LIQUIDATION_PERIOD_CAPITAL_MARKET = _PACK.int_param("liquidation_period_capital_market").value
+LIQUIDATION_PERIOD_SECURED_LENDING = _PACK.int_param("liquidation_period_secured_lending").value
 
 # =============================================================================
 # B31 Haircut Value Corrections (PRA PS1/26 Art. 224 Table 3)

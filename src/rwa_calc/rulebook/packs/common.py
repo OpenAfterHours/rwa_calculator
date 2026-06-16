@@ -580,6 +580,24 @@ ENTRIES: dict[str, RuleEntry] = {
         value=1,
         citation=Citation("CRR", "227", "(2)(a) max sovereign CQS for zero-haircut repo"),
     ),
+    # CRM supervisory-haircut liquidation periods in business days (CRR Art.
+    # 224(2)), relocated from data/tables (S13-h). Integer day counts feeding the
+    # Art. 226(2) sqrt(T_m/10) scaling; kept int end-to-end.
+    "liquidation_period_repo": IntParam(
+        name="liquidation_period_repo",
+        value=5,
+        citation=Citation("CRR", "224", "(2) repo-style transaction liquidation period = 5 BD"),
+    ),
+    "liquidation_period_capital_market": IntParam(
+        name="liquidation_period_capital_market",
+        value=10,
+        citation=Citation("CRR", "224", "(2) other capital-market liquidation period = 10 BD"),
+    ),
+    "liquidation_period_secured_lending": IntParam(
+        name="liquidation_period_secured_lending",
+        value=20,
+        citation=Citation("CRR", "224", "(2) secured-lending liquidation period = 20 BD"),
+    ),
     # Entity-type -> exposure-class classification maps (CRR Art. 112 SA / Art.
     # 147 IRB), relocated from data/tables (S13-d). Category labels, not rates —
     # consumed in Python via Expr.replace_strict (engine/entity_class_maps.py

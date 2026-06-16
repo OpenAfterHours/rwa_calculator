@@ -143,12 +143,6 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
 FX_HAIRCUT: Decimal = Decimal("0.08")
 
 
-# Standard liquidation periods per Art. 224(2)
-LIQUIDATION_PERIOD_REPO: int = 5  # (a) Repo-style transactions
-LIQUIDATION_PERIOD_CAPITAL_MARKET: int = 10  # (b) Other capital market transactions
-LIQUIDATION_PERIOD_SECURED_LENDING: int = 20  # (c) Secured lending
-
-
 def scale_haircut_for_liquidation_period(
     base_haircut_10day: float,
     liquidation_period_days: int = 10,

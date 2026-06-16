@@ -1045,9 +1045,9 @@ Last generated: 2026-06-16.
 
 ### PS1/26, paragraph 122 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/data/tables/b31_risk_weights.py:453"
+??? quote "`get_b31_combined_cqs_risk_weights` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:453"
     ```python
-    --8<-- "src/rwa_calc/data/tables/b31_risk_weights.py:453:484"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:453:484"
     ```
 
 ??? quote "`_prepare_risk_weight_lookup` — src/rwa_calc/engine/sa/risk_weights.py:841"
@@ -1138,9 +1138,9 @@ Last generated: 2026-06-16.
 
 ### PS1/26, paragraph 129 — PRA Rulebook: CRR Firms: (CRR) Instrument 2026
 
-??? quote "`_create_b31_covered_bond_df` — src/rwa_calc/data/tables/b31_risk_weights.py:431"
+??? quote "`_create_b31_covered_bond_df` — src/rwa_calc/engine/sa/b31_risk_weight_tables.py:431"
     ```python
-    --8<-- "src/rwa_calc/data/tables/b31_risk_weights.py:431:441"
+    --8<-- "src/rwa_calc/engine/sa/b31_risk_weight_tables.py:431:441"
     ```
 
 ??? quote "`_b31_unrated_cb_rw_expr` — src/rwa_calc/engine/sa/risk_weights.py:474"

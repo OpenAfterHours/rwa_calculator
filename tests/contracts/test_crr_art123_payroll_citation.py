@@ -27,7 +27,10 @@ _ROOT = Path(rwa_calc.__file__).resolve().parent
 # Art. 123(4) payroll citation (formerly engine/sa/namespace.py).
 _IN_SCOPE: list[tuple[str, Path]] = [
     ("data/schemas.py", _ROOT / "data" / "schemas.py"),
-    ("data/tables/b31_risk_weights.py", _ROOT / "data" / "tables" / "b31_risk_weights.py"),
+    (
+        "engine/sa/b31_risk_weight_tables.py",
+        _ROOT / "engine" / "sa" / "b31_risk_weight_tables.py",
+    ),
     ("engine/sa/risk_weights.py", _ROOT / "engine" / "sa" / "risk_weights.py"),
 ]
 

@@ -27,8 +27,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.b31_risk_weights import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.domain.enums import CQS, ApproachType
+from rwa_calc.engine.sa.b31_risk_weight_tables import B31_CORPORATE_RISK_WEIGHTS
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,

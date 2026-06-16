@@ -391,7 +391,7 @@ class EquityCalculator:
 
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         if resolved_pack.feature("sa_revised_risk_weight_tables"):
-            from rwa_calc.data.tables.b31_risk_weights import (
+            from rwa_calc.engine.sa.b31_risk_weight_tables import (
                 get_b31_combined_cqs_risk_weights,
             )
 

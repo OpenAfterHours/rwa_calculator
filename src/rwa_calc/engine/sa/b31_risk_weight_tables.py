@@ -77,11 +77,6 @@ def _scalar_dec(name: str) -> Decimal:
     return _RW_PACK_B31.scalar_param(name).value
 
 
-# Top-of-table sentinel for the open-ended (None-bound) income-RE band — the
-# historical data-layer list[dict] used 999.0 as the final ltv_upper.
-_LTV_BAND_TOP_SENTINEL = Decimal("999.0")
-
-
 def _ltv_bands_from_pack(name: str) -> list[dict[str, Decimal]]:
     """Render a pack income-RE ``BandedTable`` to the historical list[dict] shape.
 
@@ -91,10 +86,15 @@ def _ltv_bands_from_pack(name: str) -> list[dict[str, Decimal]]:
     None-bound catch-all renders its ltv_upper as the 999.0 sentinel. Consumed
     by ``lookup_b31_*_rw`` and the test pins, which stay unchanged.
     """
+    # Top-of-table sentinel for the open-ended (None-bound) income-RE band — the
+    # historical data-layer list[dict] used 999.0 as the final ltv_upper. Local
+    # to this renderer (not a module-level constant): a pure implementation
+    # artifact, not a regulatory value.
+    ltv_band_top_sentinel = Decimal("999.0")
     bands: list[dict[str, Decimal]] = []
     lower = Decimal("0.00")
     for bound, risk_weight in _RW_PACK_B31.banded(name).bands:
-        upper = bound if bound is not None else _LTV_BAND_TOP_SENTINEL
+        upper = bound if bound is not None else ltv_band_top_sentinel
         bands.append({"ltv_lower": lower, "ltv_upper": upper, "risk_weight": risk_weight})
         lower = upper
     return bands

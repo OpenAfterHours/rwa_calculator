@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from rwa_calc.data.tables.b31_risk_weights import B31_SCRA_RISK_WEIGHTS
 from rwa_calc.domain.enums import SCRAGrade
+from rwa_calc.engine.sa.b31_risk_weight_tables import B31_SCRA_RISK_WEIGHTS
 
 
 class TestSCRAGradeBDocstring:

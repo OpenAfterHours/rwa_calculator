@@ -157,7 +157,8 @@ ENTRIES: dict[str, RuleEntry] = {
     # corporate Table 6, Art. 120 institution ECRA/SCRA). Overrides the CRR
     # Feature; gates the combined-CQS table selection in
     # engine/sa/risk_weights.py and (S6c) the shared guarantor-RW builder. The
-    # table VALUES live in data/tables/b31_risk_weights.py.
+    # table VALUES live in this pack; the pack-bound table builders that read
+    # them back live in engine/sa/b31_risk_weight_tables.py.
     "sa_revised_risk_weight_tables": Feature(
         name="sa_revised_risk_weight_tables",
         enabled=True,

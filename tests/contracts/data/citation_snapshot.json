@@ -1,10 +1,4 @@
 {
-  "rwa_calc.data.tables.b31_risk_weights::_create_b31_covered_bond_df": [
-    "PS1/26, paragraph 129"
-  ],
-  "rwa_calc.data.tables.b31_risk_weights::get_b31_combined_cqs_risk_weights": [
-    "PS1/26, paragraph 122"
-  ],
   "rwa_calc.data.tables.haircuts::get_haircut_table": [
     "CRR Art. 224"
   ],
@@ -247,6 +241,12 @@
   ],
   "rwa_calc.engine.irb.transforms::calculate_maturity_adjustment": [
     "CRR Art. 162"
+  ],
+  "rwa_calc.engine.sa.b31_risk_weight_tables::_create_b31_covered_bond_df": [
+    "PS1/26, paragraph 129"
+  ],
+  "rwa_calc.engine.sa.b31_risk_weight_tables::get_b31_combined_cqs_risk_weights": [
+    "PS1/26, paragraph 122"
   ],
   "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
     "CRR Art. 129"

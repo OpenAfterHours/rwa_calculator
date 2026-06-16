@@ -231,10 +231,11 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     # Pure expression-builder module: compiles the guarantor / entity SA-RW
     # when/then chains from the rulepack. No pipeline-stage telemetry.
     "engine/sa/guarantor_rw.py",
-    # Pure pack-bound CRR SA risk-weight table/builder module (relocated from
-    # data/tables in Phase 5 / S13-i). DataFrame builders, no pipeline-stage
-    # telemetry.
+    # Pure pack-bound CRR / B31 SA risk-weight table/builder modules (relocated
+    # from data/tables in Phase 5 / S13-i + S13-j). DataFrame + expression
+    # builders, no pipeline-stage telemetry.
     "engine/sa/crr_risk_weight_tables.py",
+    "engine/sa/b31_risk_weight_tables.py",
     "engine/supporting_factors.py",
     "engine/irb/adjustments.py",
     "engine/irb/formulas.py",
@@ -408,17 +409,6 @@ IMPORT_DIRECTION_ALLOWLIST: dict[str, set[str]] = {
     # Retired by Phase 7 (reporting consumes the sealed aggregator exit).
     "reporting/corep/generator.py": {"rwa_calc.api.models"},
     "reporting/pillar3/generator.py": {"rwa_calc.api.service"},
-    # Phase 5 / S12 maximalist migration (data/tables -> rulepack packs): this
-    # data/ module reads its regulatory values back from the rulepack via the
-    # dict/scalar-alias bindings so the pack is the single source of truth. The
-    # CRR CQS-RW table module relocated into engine/sa/crr_risk_weight_tables.py
-    # in S13-i; b31_risk_weights.py still reuses its private CQS-RW DataFrame
-    # builders (get_b31_combined_cqs_risk_weights) — a transient data -> engine
-    # edge retired in S13-j when b31_risk_weights.py also relocates to engine/.
-    "data/tables/b31_risk_weights.py": {
-        "rwa_calc.rulebook.resolve",
-        "rwa_calc.engine.sa.crr_risk_weight_tables",
-    },
 }
 
 

@@ -30,9 +30,9 @@ from decimal import Decimal
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa import SACalculator
+from rwa_calc.engine.sa.b31_risk_weight_tables import get_b31_combined_cqs_risk_weights
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_OWN_RATING,

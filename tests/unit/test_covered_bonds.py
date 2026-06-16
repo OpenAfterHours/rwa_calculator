@@ -26,16 +26,16 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
-from rwa_calc.data.tables.b31_risk_weights import (
-    B31_COVERED_BOND_RISK_WEIGHTS,
-    B31_COVERED_BOND_UNRATED_FROM_SCRA,
-    _create_b31_covered_bond_df,
-    get_b31_combined_cqs_risk_weights,
-)
 from rwa_calc.domain.enums import CQS, ApproachType, ExposureClass
 from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
+)
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
+    B31_COVERED_BOND_RISK_WEIGHTS,
+    B31_COVERED_BOND_UNRATED_FROM_SCRA,
+    _create_b31_covered_bond_df,
+    get_b31_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.sa.crr_risk_weight_tables import (

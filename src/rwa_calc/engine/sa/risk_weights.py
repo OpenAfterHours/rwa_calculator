@@ -50,7 +50,12 @@ from rwa_calc.data.schemas import (
     CRM_OUTPUT_SCHEMA,
     HIERARCHY_OUTPUT_SCHEMA,
 )
-from rwa_calc.data.tables.b31_risk_weights import (
+from rwa_calc.domain.enums import CQS, EquityType
+from rwa_calc.engine.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
+)
+from rwa_calc.engine.sa.b31_risk_weight_tables import (
     B31_CORPORATE_INVESTMENT_GRADE_RW,
     B31_CORPORATE_NON_INVESTMENT_GRADE_RW,
     B31_CORPORATE_SHORT_TERM_ECAI_RISK_WEIGHTS,
@@ -77,11 +82,6 @@ from rwa_calc.data.tables.b31_risk_weights import (
     b31_residential_rw_expr,
     b31_sa_sl_rw_expr,
     get_b31_combined_cqs_risk_weights,
-)
-from rwa_calc.domain.enums import CQS, EquityType
-from rwa_calc.engine.eu_sovereign import (
-    build_eu_domestic_currency_expr,
-    denomination_currency_expr,
 )
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,

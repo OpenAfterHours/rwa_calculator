@@ -49,7 +49,7 @@ def _get_b31_table() -> dict:
     # Check crr_risk_weights first (re-export location per scenario §2)
     tbl = getattr(_crr_mod, "COVERED_BOND_UNRATED_DERIVATION_B31", None)
     if tbl is None:
-        import rwa_calc.data.tables.b31_risk_weights as _b31_mod
+        import rwa_calc.engine.sa.b31_risk_weight_tables as _b31_mod
 
         tbl = getattr(_b31_mod, "COVERED_BOND_UNRATED_DERIVATION_B31", None)
     assert tbl is not None, (

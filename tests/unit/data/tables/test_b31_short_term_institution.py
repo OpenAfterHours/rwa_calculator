@@ -22,7 +22,7 @@ from decimal import Decimal
 
 import pytest
 
-from rwa_calc.data.tables.b31_risk_weights import B31_ECRA_SHORT_TERM_RISK_WEIGHTS
+from rwa_calc.engine.sa.b31_risk_weight_tables import B31_ECRA_SHORT_TERM_RISK_WEIGHTS
 
 # =============================================================================
 # CQS 4 AND CQS 5 — MUST BE 50% (the bug)

@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.analysis.attribution import AttributionResult, get_attributor, register_attributor
 from rwa_calc.contracts.bundles import (
     CapitalImpactBundle,
     ComparisonBundle,
@@ -248,16 +249,16 @@ class CapitalImpactAnalyzer:
         """
         logger.info("Computing capital impact attribution (M3.2)...")
 
-        attribution = _compute_exposure_attribution(comparison)
-        waterfall = _compute_portfolio_waterfall(attribution)
-        summary_by_class = _compute_attribution_summary(attribution, "exposure_class")
-        summary_by_approach = _compute_attribution_summary(attribution, "approach_applied")
+        # Dispatch to the registered delta-attributor for this run pairing; the
+        # CRR->B31 4-driver waterfall is registered under ('crr', 'b31'), and any
+        # other pairing falls back to the neutral delta-only attributor.
+        result = get_attributor(comparison.baseline_label, comparison.variant_label)(comparison)
 
         return CapitalImpactBundle(
-            exposure_attribution=attribution,
-            portfolio_waterfall=waterfall,
-            summary_by_class=summary_by_class,
-            summary_by_approach=summary_by_approach,
+            exposure_attribution=result.exposure_attribution,
+            portfolio_waterfall=result.portfolio_waterfall,
+            summary_by_class=result.summary_by_class,
+            summary_by_approach=result.summary_by_approach,
             errors=list(comparison.errors),
         )
 
@@ -896,3 +897,22 @@ def _compute_attribution_summary(
         )
         .sort(group_col)
     )
+
+
+def _crr_to_b31_attribution(comparison: ComparisonBundle) -> AttributionResult:
+    """The CRR->Basel-3.1 four-driver waterfall — the registered ('crr', 'b31') pairing.
+
+    Wraps the per-exposure attribution + portfolio waterfall + per-class/approach
+    summaries into one AttributionResult. ``CapitalImpactAnalyzer`` dispatches here
+    via the attribution registry when both runs carry the default crr / b31 labels.
+    """
+    attribution = _compute_exposure_attribution(comparison)
+    return AttributionResult(
+        exposure_attribution=attribution,
+        portfolio_waterfall=_compute_portfolio_waterfall(attribution),
+        summary_by_class=_compute_attribution_summary(attribution, "exposure_class"),
+        summary_by_approach=_compute_attribution_summary(attribution, "approach_applied"),
+    )
+
+
+register_attributor("crr", "b31", _crr_to_b31_attribution)

@@ -58,3 +58,19 @@ class TestLabelledTwoRun:
         """Two runs that resolve to the same label are rejected (distinct labels required)."""
         with pytest.raises(ValueError, match="labels must differ"):
             DualFrameworkRunner().compare(raw_data_bundle, b31_sa_config, b31_sa_config)
+
+    def test_capital_impact_neutral_for_non_crr_b31_pairing(self, raw_data_bundle, b31_sa_config):
+        """A non-('crr','b31') pairing gets the neutral delta-only attributor (one driver)."""
+        from rwa_calc.analysis.comparison import CapitalImpactAnalyzer
+
+        bundle = DualFrameworkRunner().compare(
+            raw_data_bundle,
+            RunSpec(b31_sa_config, "base"),
+            RunSpec(b31_sa_config, "variant"),
+        )
+        impact = CapitalImpactAnalyzer().analyze(bundle)
+
+        waterfall = impact.portfolio_waterfall.collect()
+        # Neutral attributor: a single "Total delta" driver, not the 4-driver waterfall.
+        assert waterfall.height == 1
+        assert waterfall["driver"][0] == "Total delta"

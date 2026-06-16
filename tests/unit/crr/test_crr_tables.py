@@ -20,7 +20,8 @@ from rwa_calc.data.tables.firb_lgd import (
     apply_maturity_bounds,
     apply_pd_floor,
 )
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.domain.enums import CQS, SlottingCategory
+from rwa_calc.engine.crm.haircut_tables import (
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,
     calculate_adjusted_collateral_value,
@@ -28,7 +29,6 @@ from rwa_calc.data.tables.haircuts import (
     lookup_collateral_haircut,
     lookup_fx_haircut,
 )
-from rwa_calc.domain.enums import CQS, SlottingCategory
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
     CORPORATE_RISK_WEIGHTS,

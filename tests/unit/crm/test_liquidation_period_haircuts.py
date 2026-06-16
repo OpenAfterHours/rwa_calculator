@@ -22,7 +22,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     FX_HAIRCUT,

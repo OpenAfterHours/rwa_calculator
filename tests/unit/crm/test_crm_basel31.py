@@ -35,14 +35,14 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.domain.enums import ApproachType, PermissionMode
+from rwa_calc.engine.crm.haircut_tables import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
     get_haircut_table,
     get_maturity_band,
     lookup_collateral_haircut,
 )
-from rwa_calc.domain.enums import ApproachType, PermissionMode
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.processor import CRMProcessor
 

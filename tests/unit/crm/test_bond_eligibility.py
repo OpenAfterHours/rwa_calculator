@@ -24,7 +24,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     get_haircut_table,
     is_bond_eligible_as_financial_collateral,
     lookup_collateral_haircut,

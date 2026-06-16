@@ -48,7 +48,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import RawCCRBundle
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     FX_HAIRCUT,
     lookup_collateral_haircut,
     scale_haircut_for_liquidation_period,

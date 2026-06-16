@@ -21,7 +21,7 @@ Key differences under Basel 3.1 (PRA PS1/26 Art. 224 Table 1):
 - Sovereign CQS 2-3 caps at 6% even at 10y+ (same as CRR 5y+) — 5-band split
   is not a penal re-scale for well-rated sovereigns.
 
-Reference:
+References:
     CRR Art. 224: Supervisory haircuts under the FCCM
     PRA PS1/26 Art. 224: Basel 3.1 supervisory haircuts (Tables 1-4)
     Art. 226: Scaling to different holding/liquidation periods
@@ -30,117 +30,67 @@ Reference:
 from __future__ import annotations
 
 import math
+from datetime import date
 from decimal import Decimal
 
 import polars as pl
 from watchfire import cites
 
-# =============================================================================
-# CRR SUPERVISORY HAIRCUTS (CRR Art. 224)
-# =============================================================================
-# CRR uses 3 maturity bands: 0-1y, 1-5y, 5y+
+from rwa_calc.rulebook.resolve import ResolvedRulepack, resolve
 
-COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
-    # Cash and equivalents
-    "cash": Decimal("0.00"),
-    "gold": Decimal("0.15"),
-    # Government bonds by CQS and maturity band
-    "govt_bond_cqs1_0_1y": Decimal("0.005"),
-    "govt_bond_cqs1_1_5y": Decimal("0.02"),
-    "govt_bond_cqs1_5y_plus": Decimal("0.04"),
-    "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
-    "govt_bond_cqs2_3_1_5y": Decimal("0.03"),
-    "govt_bond_cqs2_3_5y_plus": Decimal("0.06"),
-    # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, Art. 224 Table 1: 15%
-    "govt_bond_cqs4_0_1y": Decimal("0.15"),
-    "govt_bond_cqs4_1_5y": Decimal("0.15"),
-    "govt_bond_cqs4_5y_plus": Decimal("0.15"),
-    # Corporate bonds by CQS and maturity band (CRR Art. 224 Table 1)
-    # CQS 1 (AAA to AA-) — lower haircuts
-    "corp_bond_cqs1_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_1_5y": Decimal("0.04"),
-    "corp_bond_cqs1_5y_plus": Decimal("0.08"),
-    # CQS 2-3 (A+ to BBB-) — higher haircuts
-    "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs2_3_1_5y": Decimal("0.06"),
-    "corp_bond_cqs2_3_5y_plus": Decimal("0.12"),
-    # Note: Corp/institution bonds CQS 4-6 are ineligible per Art. 197(1)(d)
-    # Equity
-    "equity_main_index": Decimal("0.15"),
-    "equity_other": Decimal("0.25"),
-    # Non-financial collateral — Art. 224 has no receivables row (Art. 224 lists
-    # only financial collateral). Receivables are recognised under F-IRB through
-    # the Art. 230 LGD* / OC mechanism (LGDS = 35% senior, OC = 1.25x, no
-    # minimum threshold) — see firb_lgd.py.
-    "real_estate": Decimal("0.00"),
-    # No Art. 224 haircut for receivables; Art. 199(5) classes them as
-    # non-financial collateral and Art. 230 provides the entire CRR treatment
-    # via the LGD* / 1.25x OC mechanism — see firb_lgd.py.
-    "receivables": Decimal("0"),
-    "other_physical": Decimal("0.40"),
-}
+# Supervisory-haircut VALUES live in the rulepack: the ``collateral_haircuts``
+# DecisionTable (packs/crr.py + packs/b31.py) and the common ``fx_haircut``
+# scalar. They are read back here as the canonical module-level dicts/scalar so
+# this stays a thin pack-binding shim with one source of truth (the pack); every
+# function / DataFrame-builder consumer indexes the same names unchanged.
+_CRR_PACK = resolve("crr", date(2026, 1, 1))
+_B31_PACK = resolve("b31", date(2027, 1, 1))
+
+
+def _haircuts_dict_from_pack(pack: ResolvedRulepack) -> dict[str, Decimal]:
+    """Render a ``collateral_haircuts`` DecisionTable to the historical str->Decimal dict.
+
+    Reconstructs the compressed dict key from each row's (collateral_type, cqs,
+    maturity_band, is_main_index) tuple — byte-identical to the former
+    module-level literal. CRR/B31 store cqs 2 and 3 as separate rows carrying
+    identical Art. 224 Table 1 values; both collapse onto the shared ``cqs2_3``
+    key (the non-bond / equity rows key off the collateral type / index flag).
+    """
+    out: dict[str, Decimal] = {}
+    for key_tuple, value in pack.decision("collateral_haircuts").rows:
+        collateral_type, cqs, maturity_band, is_main_index = key_tuple
+        # collateral_type is always a str at runtime; str() narrows the loosely
+        # typed DecisionTable key tuple for the dict-key construction below.
+        collateral_type = str(collateral_type)
+        if collateral_type == "equity":
+            key = "equity_main_index" if is_main_index else "equity_other"
+        elif cqs is None:
+            key = collateral_type
+        elif cqs in (2, 3):
+            key = f"{collateral_type}_cqs2_3_{maturity_band}"
+        else:
+            key = f"{collateral_type}_cqs{cqs}_{maturity_band}"
+        out[key] = value
+    return out
+
 
 # =============================================================================
-# BASEL 3.1 SUPERVISORY HAIRCUTS (CRE22.52-53)
+# CRR SUPERVISORY HAIRCUTS (CRR Art. 224) — 3 maturity bands: 0-1y, 1-5y, 5y+
 # =============================================================================
-# Basel 3.1 uses 5 maturity bands: 0-1y, 1-3y, 3-5y, 5-10y, 10y+
 
-BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = {
-    # Cash and equivalents (unchanged)
-    "cash": Decimal("0.00"),
-    # Gold — PRA PS1/26 Art. 224 Table 3: 20% at 10-day (CRR: 15%)
-    "gold": Decimal("0.20"),
-    # Government bonds CQS 1 — same as CRR for short/medium, split long-dated
-    "govt_bond_cqs1_0_1y": Decimal("0.005"),
-    "govt_bond_cqs1_1_3y": Decimal("0.02"),
-    "govt_bond_cqs1_3_5y": Decimal("0.02"),
-    "govt_bond_cqs1_5_10y": Decimal("0.04"),
-    "govt_bond_cqs1_10y_plus": Decimal("0.04"),
-    # Government bonds CQS 2-3 — PRA PS1/26 Art. 224 Table 1 (entity type (b))
-    # CQS 2-3 sovereigns cap at 6% even at 10y+; the 5-band split is not a
-    # penal re-scale for well-rated sovereigns. Verified against ps126app1.pdf p.203.
-    "govt_bond_cqs2_3_0_1y": Decimal("0.01"),
-    "govt_bond_cqs2_3_1_3y": Decimal("0.03"),
-    "govt_bond_cqs2_3_3_5y": Decimal("0.03"),
-    "govt_bond_cqs2_3_5_10y": Decimal("0.06"),
-    "govt_bond_cqs2_3_10y_plus": Decimal("0.06"),
-    # Government bonds CQS 4 (BB+ to BB-) — Art. 197(1)(b): eligible, 15% flat
-    "govt_bond_cqs4_0_1y": Decimal("0.15"),
-    "govt_bond_cqs4_1_3y": Decimal("0.15"),
-    "govt_bond_cqs4_3_5y": Decimal("0.15"),
-    "govt_bond_cqs4_5_10y": Decimal("0.15"),
-    "govt_bond_cqs4_10y_plus": Decimal("0.15"),
-    # Corporate bonds CQS 1 (AAA to AA-) — PRA PS1/26 Art. 224 Table 1 (entity types (c)/(d))
-    # Verified against ps126app1.pdf p.203.
-    "corp_bond_cqs1_0_1y": Decimal("0.01"),
-    "corp_bond_cqs1_1_3y": Decimal("0.03"),
-    "corp_bond_cqs1_3_5y": Decimal("0.04"),
-    "corp_bond_cqs1_5_10y": Decimal("0.06"),
-    "corp_bond_cqs1_10y_plus": Decimal("0.12"),
-    # Corporate bonds CQS 2-3 (A+ to BBB-) — PRA PS1/26 Art. 224 Table 1 (entity types (c)/(d))
-    # 10y+ is 20% (not 15%, the prior flat value); intermediate bands step up
-    # 4% / 6% / 12% / 20% per Table 1.
-    "corp_bond_cqs2_3_0_1y": Decimal("0.02"),
-    "corp_bond_cqs2_3_1_3y": Decimal("0.04"),
-    "corp_bond_cqs2_3_3_5y": Decimal("0.06"),
-    "corp_bond_cqs2_3_5_10y": Decimal("0.12"),
-    "corp_bond_cqs2_3_10y_plus": Decimal("0.20"),
-    # Equity — PRA PS1/26 Art. 224 Table 3: 20%/30% at 10-day (CRR: 15%/25%)
-    "equity_main_index": Decimal("0.20"),  # CRR: 15%
-    "equity_other": Decimal("0.30"),  # CRR: 25%
-    # Non-financial collateral — Art. 230(2) HC values (PRA PS1/26)
-    # B31 Art. 230 uses HC in LGD* formula: ES = min(C(1-HC-Hfx), E(1+HE))
-    # HC=40% for all non-financial types; only LGDS differs (20% rec/RE, 25% other).
-    # Note: SA real-estate exposures use the Art. 124A-L LTV loan-splitting path,
-    # which is a separate mechanism from the F-IRB FCM HC term tabulated here.
-    "real_estate": Decimal("0.40"),  # PS1/26 Art. 230(2): FCM HC=40% immovable property
-    "receivables": Decimal("0.40"),  # Art. 230(2): HC=40% (not LGDS=20%)
-    "other_physical": Decimal("0.40"),
-}
+COLLATERAL_HAIRCUTS: dict[str, Decimal] = _haircuts_dict_from_pack(_CRR_PACK)
 
-# Currency mismatch haircut — 10-day base value (Art. 224 Table 4)
-# 5-day: 5.657%, 10-day: 8%, 20-day: 11.314%
-FX_HAIRCUT: Decimal = Decimal("0.08")
+# =============================================================================
+# BASEL 3.1 SUPERVISORY HAIRCUTS (CRE22.52-53) — 5 maturity bands
+# (0-1y, 1-3y, 3-5y, 5-10y, 10y+)
+# =============================================================================
+
+BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = _haircuts_dict_from_pack(_B31_PACK)
+
+# Currency mismatch haircut — 10-day base value (Art. 224 Table 4).
+# 5-day: 5.657%, 10-day: 8%, 20-day: 11.314%. Common across CRR/B31 — read back
+# from the shared ``fx_haircut`` pack scalar (common.py).
+FX_HAIRCUT: Decimal = _CRR_PACK.scalar_param("fx_haircut").value
 
 
 def scale_haircut_for_liquidation_period(

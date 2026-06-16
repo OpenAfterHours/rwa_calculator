@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from rwa_calc.data.tables.haircuts import get_haircut_table
+from rwa_calc.engine.crm.haircut_tables import get_haircut_table
 from rwa_calc.rulebook.compile import decision_table_df
 from rwa_calc.rulebook.model import LookupTable, ScalarParam
 from rwa_calc.rulebook.resolve import resolve

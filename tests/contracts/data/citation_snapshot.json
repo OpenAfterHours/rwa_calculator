@@ -1,10 +1,4 @@
 {
-  "rwa_calc.data.tables.haircuts::get_haircut_table": [
-    "CRR Art. 224"
-  ],
-  "rwa_calc.data.tables.haircuts::get_maturity_band": [
-    "CRR Art. 224"
-  ],
   "rwa_calc.engine.aggregator._floor::apply_floor_with_impact": [
     "PS1/26, paragraph 92"
   ],
@@ -112,6 +106,12 @@
   "rwa_calc.engine.crm.guarantees::apply_guarantees": [
     "CRR Art. 213",
     "CRR Art. 217"
+  ],
+  "rwa_calc.engine.crm.haircut_tables::get_haircut_table": [
+    "CRR Art. 224"
+  ],
+  "rwa_calc.engine.crm.haircut_tables::get_maturity_band": [
+    "CRR Art. 224"
   ],
   "rwa_calc.engine.crm.haircuts::HaircutCalculator.apply_haircuts": [
     "CRR Art. 224"

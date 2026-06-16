@@ -759,19 +759,19 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 224 — Supervisory volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`get_haircut_table` — src/rwa_calc/data/tables/haircuts.py:324"
-    ```python
-    --8<-- "src/rwa_calc/data/tables/haircuts.py:324:335"
-    ```
-
-??? quote "`get_maturity_band` — src/rwa_calc/data/tables/haircuts.py:338"
-    ```python
-    --8<-- "src/rwa_calc/data/tables/haircuts.py:338:370"
-    ```
-
 ??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:79"
     ```python
     --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    ```
+
+??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:271"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:271:282"
+    ```
+
+??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:285"
+    ```python
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:285:317"
     ```
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:121"

@@ -236,6 +236,10 @@ LOGGER_REQUIRED_EXEMPT: set[str] = {
     # builders, no pipeline-stage telemetry.
     "engine/sa/crr_risk_weight_tables.py",
     "engine/sa/b31_risk_weight_tables.py",
+    # Pure pack-bound CRM supervisory-haircut table/function module (relocated
+    # from data/tables in Phase 5 / S13-k). FCCM lookups + DataFrame builders,
+    # no pipeline-stage telemetry.
+    "engine/crm/haircut_tables.py",
     "engine/supporting_factors.py",
     "engine/irb/adjustments.py",
     "engine/irb/formulas.py",

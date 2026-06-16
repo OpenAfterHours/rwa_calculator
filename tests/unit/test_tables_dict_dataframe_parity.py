@@ -34,8 +34,8 @@ from decimal import Decimal
 
 import pytest
 
-from rwa_calc.data.tables import haircuts
 from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.crm import haircut_tables as haircuts
 from rwa_calc.engine.sa import b31_risk_weight_tables as b31
 from rwa_calc.engine.sa import crr_risk_weight_tables as crr
 from rwa_calc.rulebook.resolve import resolve

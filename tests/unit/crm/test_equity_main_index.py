@@ -27,7 +27,7 @@ import pytest
 from tests.fixtures.raw_bundle import make_raw_bundle
 
 from rwa_calc.contracts.config import CalculationConfig, PermissionMode
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     lookup_collateral_haircut,
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator

@@ -36,7 +36,7 @@ from rwa_calc.data.schemas import (
     REAL_ESTATE_COLLATERAL_TYPES,
     RECEIVABLE_COLLATERAL_TYPES,
 )
-from rwa_calc.data.tables.haircuts import (
+from rwa_calc.engine.crm.haircut_tables import (
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     lookup_collateral_haircut,

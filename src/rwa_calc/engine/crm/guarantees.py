@@ -24,10 +24,6 @@ from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import DIRECT_BENEFICIARY_TYPES
-from rwa_calc.data.tables.eu_sovereign import (
-    build_domestic_cgcb_guarantor_expr,
-    denomination_currency_expr,
-)
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.ccf import (
     drawn_for_ead,
@@ -36,6 +32,10 @@ from rwa_calc.engine.ccf import (
     sa_ccf_expression,
 )
 from rwa_calc.engine.entity_class_maps import ENTITY_TYPE_TO_SA_CLASS
+from rwa_calc.engine.eu_sovereign import (
+    build_domestic_cgcb_guarantor_expr,
+    denomination_currency_expr,
+)
 from rwa_calc.engine.kernels.allocation import (
     expand_items_pro_rata,
     explode_facility_membership,

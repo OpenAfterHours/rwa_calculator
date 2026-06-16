@@ -36,11 +36,6 @@ from .crr_risk_weights import (
     RESIDENTIAL_MORTGAGE_PARAMS,
     get_all_risk_weight_tables,
 )
-from .eu_sovereign import (
-    EU_COUNTRY_DOMESTIC_CURRENCY,
-    EU_MEMBER_STATES,
-    build_eu_domestic_currency_expr,
-)
 from .haircuts import (
     BASEL31_COLLATERAL_HAIRCUTS,
     COLLATERAL_HAIRCUTS,
@@ -76,8 +71,4 @@ __all__ = [
     "BASEL31_COLLATERAL_HAIRCUTS",
     "FX_HAIRCUT",
     "get_haircut_table",
-    # EU sovereign treatment
-    "EU_MEMBER_STATES",
-    "EU_COUNTRY_DOMESTIC_CURRENCY",
-    "build_eu_domestic_currency_expr",
 ]

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.tables.eu_sovereign import (
+from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
 )

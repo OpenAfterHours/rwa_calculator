@@ -36,14 +36,14 @@ from rwa_calc.data.schemas import (
     B31_SOVEREIGN_LIKE_ENTITY_TYPES,
     RGLA_PSE_ENTITY_TYPES,
 )
-from rwa_calc.data.tables.eu_sovereign import (
-    build_eu_domestic_currency_expr,
-    denomination_currency_expr,
-)
 from rwa_calc.domain.enums import (
     ApproachType,
     ExposureClass,
     SpecialisedLendingType,
+)
+from rwa_calc.engine.eu_sovereign import (
+    build_eu_domestic_currency_expr,
+    denomination_currency_expr,
 )
 from rwa_calc.engine.stages.classify.permissions import build_permission_exprs
 from rwa_calc.engine.thresholds import regulatory_threshold

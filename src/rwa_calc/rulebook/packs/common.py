@@ -668,4 +668,45 @@ ENTRIES: dict[str, RuleEntry] = {
             "high_risk_speculative_re": ExposureClass.HIGH_RISK.value,
         },
     ),
+    # EU member-state -> domestic currency (CRR Art. 114(4)/(7) 0% CGCB RW for
+    # exposures in a member state's domestic currency), relocated from
+    # data/tables (S13-e). Eurozone members map to EUR; non-euro members to their
+    # national currency. Consumed in Python via Expr.replace_strict (default=None)
+    # in engine/eu_sovereign.py. Regime-invariant (CRE20.9 preserves it).
+    "eu_country_domestic_currency": CategoryMap(
+        name="eu_country_domestic_currency",
+        key="country_code",
+        citation=Citation("CRR", "114", "(4)/(7) EU member-state domestic currency 0% CGCB RW"),
+        entries={
+            # Eurozone members (EUR)
+            "AT": "EUR",
+            "BE": "EUR",
+            "HR": "EUR",
+            "CY": "EUR",
+            "EE": "EUR",
+            "FI": "EUR",
+            "FR": "EUR",
+            "DE": "EUR",
+            "GR": "EUR",
+            "IE": "EUR",
+            "IT": "EUR",
+            "LV": "EUR",
+            "LT": "EUR",
+            "LU": "EUR",
+            "MT": "EUR",
+            "NL": "EUR",
+            "PT": "EUR",
+            "SK": "EUR",
+            "SI": "EUR",
+            "ES": "EUR",
+            # Non-euro EU members
+            "BG": "BGN",  # Bulgarian lev
+            "CZ": "CZK",  # Czech koruna
+            "DK": "DKK",  # Danish krone
+            "HU": "HUF",  # Hungarian forint
+            "PL": "PLN",  # Polish zloty
+            "RO": "RON",  # Romanian leu
+            "SE": "SEK",  # Swedish krona
+        },
+    ),
 }

@@ -35,9 +35,9 @@ from decimal import Decimal
 import pytest
 
 from rwa_calc.data.tables import b31_risk_weights as b31
-from rwa_calc.data.tables import crr_risk_weights as crr
 from rwa_calc.data.tables import haircuts
 from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.sa import crr_risk_weight_tables as crr
 from rwa_calc.rulebook.resolve import resolve
 
 # Retail RW (CRR Art. 123) now lives in the common rulepack pack; the retail-df

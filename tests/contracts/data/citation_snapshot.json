@@ -5,21 +5,6 @@
   "rwa_calc.data.tables.b31_risk_weights::get_b31_combined_cqs_risk_weights": [
     "PS1/26, paragraph 122"
   ],
-  "rwa_calc.data.tables.crr_risk_weights::_create_covered_bond_df": [
-    "CRR Art. 129"
-  ],
-  "rwa_calc.data.tables.crr_risk_weights::_create_io_df": [
-    "CRR Art. 118"
-  ],
-  "rwa_calc.data.tables.crr_risk_weights::_create_mdb_df": [
-    "CRR Art. 117"
-  ],
-  "rwa_calc.data.tables.crr_risk_weights::_create_pse_df": [
-    "CRR Art. 116"
-  ],
-  "rwa_calc.data.tables.crr_risk_weights::_create_rgla_df": [
-    "CRR Art. 115"
-  ],
   "rwa_calc.data.tables.haircuts::get_haircut_table": [
     "CRR Art. 224"
   ],
@@ -262,6 +247,21 @@
   ],
   "rwa_calc.engine.irb.transforms::calculate_maturity_adjustment": [
     "CRR Art. 162"
+  ],
+  "rwa_calc.engine.sa.crr_risk_weight_tables::_create_covered_bond_df": [
+    "CRR Art. 129"
+  ],
+  "rwa_calc.engine.sa.crr_risk_weight_tables::_create_io_df": [
+    "CRR Art. 118"
+  ],
+  "rwa_calc.engine.sa.crr_risk_weight_tables::_create_mdb_df": [
+    "CRR Art. 117"
+  ],
+  "rwa_calc.engine.sa.crr_risk_weight_tables::_create_pse_df": [
+    "CRR Art. 116"
+  ],
+  "rwa_calc.engine.sa.crr_risk_weight_tables::_create_rgla_df": [
+    "CRR Art. 115"
   ],
   "rwa_calc.engine.sa.factors_output::apply_supporting_factors": [
     "CRR Art. 501"

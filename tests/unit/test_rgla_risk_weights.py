@@ -31,7 +31,9 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
-from rwa_calc.data.tables.crr_risk_weights import (
+from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.sa import SACalculator
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_OWN_RATING,
     RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
@@ -41,8 +43,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
     lookup_risk_weight,
 )
-from rwa_calc.domain.enums import CQS
-from rwa_calc.engine.sa import SACalculator
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================

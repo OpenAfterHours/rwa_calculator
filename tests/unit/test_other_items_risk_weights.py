@@ -34,8 +34,8 @@ from decimal import Decimal
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_risk_weights import lookup_risk_weight
 from rwa_calc.engine.sa import SACalculator
+from rwa_calc.engine.sa.crr_risk_weight_tables import lookup_risk_weight
 from rwa_calc.rulebook.resolve import resolve
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 

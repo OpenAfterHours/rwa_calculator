@@ -13,18 +13,6 @@ from decimal import Decimal
 
 import polars as pl
 
-from rwa_calc.data.tables.crr_risk_weights import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    CORPORATE_RISK_WEIGHTS,
-    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
-    INSTITUTION_RISK_WEIGHTS_CRR,
-    RESIDENTIAL_MORTGAGE_PARAMS,
-    calculate_commercial_re_rw,
-    calculate_residential_mortgage_rw,
-    get_all_risk_weight_tables,
-    get_combined_cqs_risk_weights,
-    lookup_risk_weight,
-)
 from rwa_calc.data.tables.firb_lgd import (
     CRR_MATURITY_CAP,
     CRR_MATURITY_FLOOR,
@@ -41,6 +29,18 @@ from rwa_calc.data.tables.haircuts import (
     lookup_fx_haircut,
 )
 from rwa_calc.domain.enums import CQS, SlottingCategory
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
+    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
+    CORPORATE_RISK_WEIGHTS,
+    INSTITUTION_RISK_WEIGHTS_B31_ECRA,
+    INSTITUTION_RISK_WEIGHTS_CRR,
+    RESIDENTIAL_MORTGAGE_PARAMS,
+    calculate_commercial_re_rw,
+    calculate_residential_mortgage_rw,
+    get_all_risk_weight_tables,
+    get_combined_cqs_risk_weights,
+    lookup_risk_weight,
+)
 from rwa_calc.rulebook.resolve import resolve
 
 _CRR_PACK = resolve("crr", date(2026, 1, 1))

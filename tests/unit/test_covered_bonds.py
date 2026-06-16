@@ -32,18 +32,18 @@ from rwa_calc.data.tables.b31_risk_weights import (
     _create_b31_covered_bond_df,
     get_b31_combined_cqs_risk_weights,
 )
-from rwa_calc.data.tables.crr_risk_weights import (
-    COVERED_BOND_RISK_WEIGHTS,
-    COVERED_BOND_UNRATED_DERIVATION_B31,
-    get_all_risk_weight_tables,
-    get_combined_cqs_risk_weights,
-)
 from rwa_calc.domain.enums import CQS, ApproachType, ExposureClass
 from rwa_calc.engine.entity_class_maps import (
     ENTITY_TYPE_TO_IRB_CLASS,
     ENTITY_TYPE_TO_SA_CLASS,
 )
 from rwa_calc.engine.sa.calculator import SACalculator
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
+    COVERED_BOND_RISK_WEIGHTS,
+    COVERED_BOND_UNRATED_DERIVATION_B31,
+    get_all_risk_weight_tables,
+    get_combined_cqs_risk_weights,
+)
 from rwa_calc.reporting.corep.templates import SA_EXPOSURE_CLASS_ROWS
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
@@ -363,7 +363,7 @@ class TestCRRCoveredBondDerivationConsistency:
 
     def test_b31_ecra_derivation_matches_tables(self):
         """B31 ECRA CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_B31_ECRA × DERIVATION."""
-        from rwa_calc.data.tables.crr_risk_weights import (
+        from rwa_calc.engine.sa.crr_risk_weight_tables import (
             COVERED_BOND_UNRATED_DERIVATION_B31,
             INSTITUTION_RISK_WEIGHTS_B31_ECRA,
         )
@@ -378,7 +378,7 @@ class TestCRRCoveredBondDerivationConsistency:
 
     def test_crr_derivation_matches_tables(self):
         """CRR CQS → CB RW matches INSTITUTION_RISK_WEIGHTS_CRR × DERIVATION."""
-        from rwa_calc.data.tables.crr_risk_weights import (
+        from rwa_calc.engine.sa.crr_risk_weight_tables import (
             COVERED_BOND_UNRATED_DERIVATION_CRR,
             INSTITUTION_RISK_WEIGHTS_CRR,
         )
@@ -393,7 +393,7 @@ class TestCRRCoveredBondDerivationConsistency:
 
     def test_unrated_institution_rw_in_derivation_table(self):
         """Unrated institution RW (both CRR and B31 ECRA) must be in derivation table."""
-        from rwa_calc.data.tables.crr_risk_weights import (
+        from rwa_calc.engine.sa.crr_risk_weight_tables import (
             COVERED_BOND_UNRATED_DERIVATION_B31,
             INSTITUTION_RISK_WEIGHTS_B31_ECRA,
             INSTITUTION_RISK_WEIGHTS_CRR,

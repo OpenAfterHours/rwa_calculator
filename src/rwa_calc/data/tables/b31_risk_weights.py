@@ -461,7 +461,7 @@ def get_b31_combined_cqs_risk_weights() -> pl.DataFrame:
     Returns:
         Combined DataFrame with columns: exposure_class, cqs, risk_weight
     """
-    from rwa_calc.data.tables.crr_risk_weights import (
+    from rwa_calc.engine.sa.crr_risk_weight_tables import (
         _create_cgcb_df,
         _create_institution_df,
         _create_mdb_df,

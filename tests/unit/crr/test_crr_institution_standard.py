@@ -21,7 +21,9 @@ import pytest
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.data.tables.crr_risk_weights import (
+from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.sa.calculator import SACalculator
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
     INSTITUTION_RISK_WEIGHTS_B31_ECRA,
     INSTITUTION_RISK_WEIGHTS_CRR,
     INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
@@ -29,8 +31,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     _create_institution_df,
     lookup_risk_weight,
 )
-from rwa_calc.domain.enums import CQS
-from rwa_calc.engine.sa.calculator import SACalculator
 
 # =============================================================================
 # Fixtures

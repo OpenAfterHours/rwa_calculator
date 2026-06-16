@@ -31,7 +31,9 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.data.tables.b31_risk_weights import get_b31_combined_cqs_risk_weights
-from rwa_calc.data.tables.crr_risk_weights import (
+from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.sa import SACalculator
+from rwa_calc.engine.sa.crr_risk_weight_tables import (
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_RISK_WEIGHTS_TABLE_2B,
@@ -39,8 +41,6 @@ from rwa_calc.data.tables.crr_risk_weights import (
     get_combined_cqs_risk_weights,
     lookup_risk_weight,
 )
-from rwa_calc.domain.enums import CQS
-from rwa_calc.engine.sa import SACalculator
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 # =============================================================================

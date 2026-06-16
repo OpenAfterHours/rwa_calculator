@@ -8,6 +8,8 @@ Published 2026-05-26. Code references are pinned to commit [`cceaee4`](https://g
 
 This is post 3 in the series on building this UK Basel 3.1 RWA calculator. Post 2 ([The Pipeline: Why Regulation Forced an Immutable Design](2026-05-12-the-pipeline.md)) was about how the architecture is shaped by audit demands. This post is about the regulation: specifically, why the Standardised Approach to credit risk — the framework for institutions that do not run internal models — looks like a set of lookup tables and is not, in fact, a set of lookup tables.
 
+*Update (June 2026): the regulation in this post is unchanged, but a few code locations below were overtaken by the 2026-06 architecture migration. `engine/classifier.py` is now a thin back-compat shim — the classifier implementation (and `ENTITY_TYPE_TO_SA_CLASS`) was split into the `engine/stages/classify/` package. Polars namespaces were retired (banned by `arch_check`), so `engine/sa/namespace.py` no longer exists; the ECRA/SCRA expression chains now live in plain `lf.pipe(...)`-composed functions under `engine/sa/`. And `data/tables/` was removed: the `SplitParameters` records moved to `engine/stages/re_split/params.py` and now read their secured-LTV caps from the rulebook packs (`re_split_{rre,cre}_secured_ltv_cap` in `packs/{crr,b31}.py`, resolved via `rwa_calc.rulebook.resolve`). The `engine/re_splitter.py` link below still resolves as a back-compat shim.*
+
 ## The £1m loan that has at least six right answers
 
 Suppose a UK bank holds a £1,000,000 loan to a manufacturing SME, secured by a residential property valued at £1,250,000 (LTV 80%). What is the risk weight?

@@ -329,9 +329,10 @@ ahead of both the per-trade SA-CCR chain and the WWR gate:
 ```
 PipelineOrchestrator.run_with_data
   → Loader
-  → CCRCalculator stage (engine/pipeline.py:555-580)
+  → ccr_sa_ccr registry stage (engine/stages/ccr.py::run, wired in
+    engine/registry.py and folded by orchestrator.run_stages)
       → apply_legal_enforceability_gate    (Art. 272(4); this page)   ← FIRST
-      → apply_wwr_gate                     (Art. 291(5)(a))           ← optional, P8.19+
+      → apply_wwr_gate                     (Art. 291(5)(a))
       → ccr_rows_to_exposures              (engine/ccr/pipeline_adapter.py)
           ├─ 1. Adjusted notional           (Art. 279b)
           ├─ 2. Supervisory delta           (Art. 279a)
@@ -345,23 +346,28 @@ PipelineOrchestrator.run_with_data
   → Classifier / CRM / SA / IRB / OutputAggregator
 ```
 
-Source: [`src/rwa_calc/engine/pipeline.py:559-573`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py#L559-L573):
+Source: [`src/rwa_calc/engine/stages/ccr.py::run`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py). The
+`ccr_sa_ccr` stage is declared in `engine/registry.py`
+(`StageSpec('ccr_sa_ccr', ccr.run, error_type='ccr_error')`) and folded
+through `orchestrator.run_stages`, which wraps it in the standard
+`stage_timer` envelope. The stage applies the WWR gate after the
+legal-enforceability gate, then runs the EAD chain and seals its exit
+edge (`CCR_EXIT_EDGE`):
 
 ```python
-from rwa_calc.engine.ccr import apply_legal_enforceability_gate, ccr_rows_to_exposures
-
-try:
-    with stage_timer(logger, "ccr_sa_ccr"):
-        # Apply the Art. 272(4) legal-enforceability gate first so
-        # non-enforceable netting sets are split into single-trade
-        # synthetic NSes before the EAD chain runs.
-        raw_ccr_gated = apply_legal_enforceability_gate(data.ccr)
-        ccr_exposure_rows = ccr_rows_to_exposures(
-            raw_ccr_gated,
-            config.ccr,
-            config.reporting_date,
-            …,
-        )
+def run(ctx: PipelineContext, rulepack: RulepackV0, run_config: RunConfig) -> PipelineContext:
+    ...
+    # Apply the Art. 272(4) legal-enforceability gate first so
+    # non-enforceable netting sets are split into single-trade synthetic
+    # NSes, then the Art. 291(5)(a) WWR gate, before the EAD chain runs.
+    raw_ccr_gated = apply_wwr_gate(apply_legal_enforceability_gate(data.ccr))
+    ccr_exposure_rows = ccr_rows_to_exposures(
+        raw_ccr_gated,
+        run_config.ccr,
+        run_config.reporting_date,
+        ...,
+    )
+    ...  # seal the producer edge contract via CCR_EXIT_EDGE
 ```
 
 The "gate first, chain second" ordering is the **only** ordering
@@ -618,9 +624,10 @@ for forward visibility:
   contractual-netting recognition framework.
 - [`src/rwa_calc/engine/ccr/sa_ccr.py::apply_legal_enforceability_gate`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/sa_ccr.py#L83-L210) —
   engine implementation (lines 83–210) of the Art. 272(4) gate.
-- [`src/rwa_calc/engine/pipeline.py:559-573`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py#L559-L573) —
-  pipeline orchestrator wrapping the gate in a `stage_timer` and
-  feeding its output into `ccr_rows_to_exposures`.
+- [`src/rwa_calc/engine/stages/ccr.py::run`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py) —
+  the `ccr_sa_ccr` registry stage (declared in `engine/registry.py`,
+  folded by `orchestrator.run_stages` inside a `stage_timer`) that runs
+  the gate and feeds its output into `ccr_rows_to_exposures`.
 - [`src/rwa_calc/engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/pipeline_adapter.py) —
   downstream orchestrator that drives the per-trade SA-CCR chain over
   the post-gate netting-set partition.

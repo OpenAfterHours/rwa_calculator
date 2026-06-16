@@ -36,6 +36,8 @@ RawDataBundle
 
 Each stage takes an immutable bundle and returns a new immutable bundle. Errors flow through a `list[CalculationError]` rather than exceptions; data quality issues are accumulated, not raised. The whole thing is built on Polars `LazyFrame`, so the entire computation graph for a portfolio is a single logical plan that materialises only at the aggregator boundary.
 
+*Update (June 2026): a 2026-06 architecture migration replaced cross-stage laziness with a fold over a literal stage registry (`engine/registry.py` + `engine/orchestrator.py::run_stages`) that threads an immutable `PipelineContext` and exchanges eagerly-sealed frames at every stage exit — there is no longer a single logical plan deferred to the aggregator boundary. See the [Architecture: Pipeline](../architecture/pipeline.md) page for the current model.*
+
 That sounds tidy. It is not, in fact, tidy. By the time you have:
 
 - handled multi-level rating inheritance (own → parent → ultimate parent, internally and externally, separately, because internal PD and external CQS are not the same animal),

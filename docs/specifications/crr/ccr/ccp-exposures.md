@@ -139,18 +139,21 @@ Source: [`src/rwa_calc/engine/ccr/ccp.py::apply_ccp_risk_weight`](https://github
 | `risk_weight`  | `Float64` | `0.02` if `is_qccp & ¬is_client_cleared`; `0.04` if `is_qccp & is_client_cleared`; `NULL` otherwise | Art. 306(1)(a)–(c)  |
 | `ead_ccr`      | `Float64` | unchanged (load-bearing invariant — RW assignment never mutates EAD)                             | Art. 274(2)         |
 
-### Regulatory scalars — `data/tables/crr_risk_weights.py`
+### Regulatory scalars — rulebook common pack
 
-The two pinned QCCP risk weights are sourced from the canonical data
-table — the engine never literalises them:
+The two pinned QCCP risk weights are cited pack params
+(`qccp_proprietary_rw`, `qccp_client_cleared_rw`) in
+`src/rwa_calc/rulebook/packs/common.py`, resolved in
+`engine/ccr/ccp.py` via `_QCCP_PACK.scalar_param(...)` — the engine
+never literalises them:
 
 ```python
-QCCP_PROPRIETARY_RW: Decimal = Decimal("0.02")  # Art. 306(1)(a) / CRE54.14
-QCCP_CLIENT_CLEARED_RW: Decimal = Decimal("0.04")  # Art. 306(1)(c) / CRE54.15
+qccp_proprietary_rw    = 0.02  # Art. 306(1)(a) / CRE54.14
+qccp_client_cleared_rw = 0.04  # Art. 306(1)(c) / CRE54.15
 ```
 
 The 2% client-cleared leg under Art. 306(1)(b) re-uses the
-`QCCP_PROPRIETARY_RW = 0.02` scalar — Art. 305(2) compliance does not
+`qccp_proprietary_rw = 0.02` param — Art. 305(2) compliance does not
 discount the regulatory weight, it just routes the trade to the same
 weight as the proprietary leg.
 
@@ -203,7 +206,8 @@ legs, by construction).
     `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures`**. The
     `is_qccp` and `is_client_cleared` flags exist on the CCR
     counterparty and trade schemas (`data/schemas.py`), and the
-    regulatory scalars are in the data table, but the synthetic
+    regulatory scalars are cited pack params in the rulebook common
+    pack, but the synthetic
     exposure row currently flows from SA-CCR EAD straight to the
     Classifier without the QCCP gate. Wiring this through is the
     follow-up batch P8.30; until then, every QCCP trade is
@@ -460,9 +464,10 @@ is the follow-up.
   clearing condition list, and the default-fund-contribution stack.
 - [`src/rwa_calc/engine/ccr/ccp.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/ccp.py) —
   engine implementation of `apply_ccp_risk_weight` (Art. 306(1)(a)–(c)).
-- [`src/rwa_calc/data/tables/crr_risk_weights.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/crr_risk_weights.py) —
-  canonical regulatory scalars (`QCCP_PROPRIETARY_RW = 0.02`,
-  `QCCP_CLIENT_CLEARED_RW = 0.04`).
+- [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py) —
+  cited pack params (`qccp_proprietary_rw = 0.02`,
+  `qccp_client_cleared_rw = 0.04`), resolved in `engine/ccr/ccp.py` via
+  `_QCCP_PACK.scalar_param(...)`.
 - [`src/rwa_calc/data/schemas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py) —
   CCR schemas carrying the `is_qccp` (counterparty) and
   `is_client_cleared` (trade) Boolean flags.

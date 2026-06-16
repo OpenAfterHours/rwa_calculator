@@ -309,8 +309,9 @@ per-exposure `model_id` lookup against the `model_permissions` data source.
   [`contracts/config.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/contracts/config.py)
   — `IRBPermissions`, `PermissionMode`, `CalculationConfig.permission_mode`.
 - Per-exposure `model_id` lookup against the `model_permissions` data source happens
-  in [`engine/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py)
-  — fall-back to SA on missing/invalid `model_id` is documented at the file level.
+  in [`engine/stages/classify/permissions.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/permissions.py)
+  (the `engine/classifier.py` shim re-exports it for back-compat)
+  — fall-back to SA on missing/invalid `model_id` is documented there.
 - Schema for the `model_permissions` data source is in
   [`data/schemas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py)
   (constraints map entry `"model_permissions"`).

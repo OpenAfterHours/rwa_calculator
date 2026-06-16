@@ -46,7 +46,7 @@
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| PRA amends Basel 3.1 before go-live | Medium | Medium | Framework-configurable design; parameters in `data/tables/` |
+| PRA amends Basel 3.1 before go-live | Medium | Medium | Framework-configurable design; regulatory parameters are cited entries in the rulepack packs (`rwa_calc/rulebook/packs/`), resolved per (regime, reporting_date), so an amendment is a pack edit |
 | Performance degrades at 10M+ | Medium | Low | Polars LazyFrame scales linearly; benchmark suite includes 1M+ |
 | IRB formula precision | High | Low | `Decimal` for regulatory params; `polars-normal-stats` for stats |
 | Scope creep into market/op risk | Medium | Medium | Explicit out-of-scope; modular architecture |

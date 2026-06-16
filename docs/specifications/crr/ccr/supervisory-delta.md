@@ -267,6 +267,6 @@ matching `CCR-A` acceptance scenarios.
 - **BCBS CRE52.41–43** — underlying methodology for linear, option and tranche deltas.
 - **BCBS CRE52.47** — supervisory option volatility table (verbatim source of the σ values).
 - **`src/rwa_calc/engine/ccr/supervisory_delta.py`** — engine implementation of all three branches.
-- **`src/rwa_calc/data/tables/sa_ccr_factors.py`** — `SA_CCR_OPTION_VOLATILITY_*` and `SA_CCR_CDO_TRANCHE_*` constants.
+- **`src/rwa_calc/rulebook/packs/common.py`** — cited pack params `sa_ccr_option_volatility_*` and `sa_ccr_cdo_tranche_numerator` / `sa_ccr_cdo_tranche_coefficient`, read in `engine/ccr/supervisory_delta.py` via `_PACK.scalar_param(...)`.
 - **`tests/unit/ccr/test_supervisory_delta_options.py`** — pinned numeric examples for all six worked cases above.
 - **`tests/fixtures/ccr/option_delta_builder.py`** — fixture rows for OPT_001–OPT_004, LIN_001 and CDO_001–CDO_002.

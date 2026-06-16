@@ -189,9 +189,10 @@ rwa_calculator/
 │   └── rwa_calc/           # Main source code
 │       ├── config/         # Configuration (FX rates)
 │       ├── contracts/      # Interfaces and data contracts
-│       ├── data/           # Schemas and regulatory tables
+│       ├── data/           # Input-domain schemas & validation (column_spec.py, schemas.py)
 │       ├── domain/         # Core domain enums
-│       └── engine/         # Calculation engines
+│       ├── rulebook/       # Regulatory rulepack — cited values in packs/{common,crr,b31}.py
+│       └── engine/         # Calculation engines (incl. thin pack-binding RW/haircut shims)
 ├── tests/                  # Test suite
 ├── workbooks/              # Reference implementations
 ├── docs/assets/            # Regulatory documents (run scripts/download_docs.py)

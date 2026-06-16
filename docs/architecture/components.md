@@ -7,29 +7,30 @@ This document provides detailed documentation of each component in the RWA calcu
 | Component | Module | Purpose |
 |-----------|--------|---------|
 | **Loader** | `engine/loader.py` | Load data from files |
-| **Hierarchy Resolver** | `engine/hierarchy.py` | Resolve hierarchies |
-| **Classifier** | `engine/classifier.py` | Classify exposures |
+| **Hierarchy Resolver** | `engine/stages/hierarchy/` (package) | Resolve hierarchies |
+| **Classifier** | `engine/stages/classify/` (package) | Classify exposures |
 | **CRM Processor** | `engine/crm/processor.py` | Apply CRM |
 | **SA Calculator** | `engine/sa/calculator.py` | Standardised RWA |
 | **IRB Calculator** | `engine/irb/calculator.py` | IRB RWA |
 | **Slotting Calculator** | `engine/slotting/calculator.py` | Slotting RWA |
 | **Equity Calculator** | `engine/equity/calculator.py` | Equity RWA |
-| **Aggregator** | `engine/aggregator.py` | Combine results |
+| **Aggregator** | `engine/aggregator/aggregator.py` | Combine results |
 
-## Polars Namespace Extensions
+`engine/hierarchy.py` and `engine/classifier.py` survive only as ~24-28 line
+back-compat import shims re-exporting from the stage packages above.
 
-The calculator uses Polars namespace extensions to provide fluent, chainable APIs for calculations. Each namespace is registered when its module is imported.
+## Calculator / Domain Transforms
 
-| Namespace | Module | Description |
-|-----------|--------|-------------|
-| `lf.irb` | `engine/irb/namespace.py` | IRB formulas, K calculation, floors |
-| `lf.slotting` | `engine/slotting/namespace.py` | Slotting risk weights |
+Calculator and domain logic is written as plain module-level typed functions
+(`fn(lf: LazyFrame, config, ...) -> LazyFrame`) composed via
+`lf.pipe(fn, ...)` — for example `engine/sa/risk_weights.py`,
+`engine/sa/rw_adjustments.py`, `engine/irb/transforms.py`, and
+`engine/slotting/transforms.py`. Each calculator class is a thin orchestrator
+that pipes these transforms in regulatory order.
 
-All namespaces are automatically registered when importing from `rwa_calc.engine`:
-
-```python
-from rwa_calc.engine import IRBLazyFrame, SlottingLazyFrame
-```
+Polars namespace registrations (`@pl.api.register_*_namespace`) are extinct and
+banned by `scripts/arch_check.py` check 14 — there is no `lf.sa` / `lf.irb` /
+`lf.slotting` accessor and no `IRBLazyFrame` / `SlottingLazyFrame` export.
 
 ## Loader
 
@@ -397,23 +398,27 @@ class SACalculatorProtocol(Protocol):
 
 ```python
 class SACalculator:
-    """Calculate Standardised Approach RWA (thin orchestrator over lf.sa)."""
+    """Calculate Standardised Approach RWA (thin orchestrator over the plain typed SA transforms)."""
 
     def calculate_branch(self, exposures, config, *, errors=None):
         if errors is not None:
             self._warn_equity_in_main_table(exposures, errors)  # SA005
 
         return (
-            exposures.sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config, errors=errors)  # SA004
-            .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config, errors=errors)      # SF001
+            exposures.pipe(apply_risk_weights, config, pack=pack)
+            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_guarantee_substitution, config, pack=pack)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)  # SA004
+            .pipe(calculate_rwa)
+            .pipe(apply_supporting_factors, config, errors=errors, pack=pack)      # SF001
         )  # + approach_applied / rwa_final standardisation for the aggregator
 ```
+
+The transforms (`apply_risk_weights`, `apply_currency_mismatch_multiplier`,
+…) are plain typed functions imported from `engine/sa/risk_weights.py`,
+`engine/sa/rw_adjustments.py`, and `engine/sa/factors_output.py`.
 
 The optional `errors` accumulator is the branch-path error channel: the
 pipeline passes one list into every `calculate_branch` call and merges the
@@ -450,7 +455,8 @@ class IRBCalculatorProtocol(Protocol):
 
 ### Implementation
 
-The IRB Calculator uses a Polars namespace extension (`IRBLazyFrame`) for fluent, chainable calculations:
+The IRB Calculator is a thin orchestrator over plain typed transform functions
+(`engine/irb/transforms.py`) composed via `LazyFrame.pipe`:
 
 ```python
 class IRBCalculator:
@@ -458,40 +464,42 @@ class IRBCalculator:
 
     def calculate_branch(self, exposures, config, *, errors=None):
         exposures = (
-            exposures.irb.classify_approach(config)   # Determine F-IRB vs A-IRB
-            .irb.apply_firb_lgd(config)               # Supervisory LGD for F-IRB
-            .irb.prepare_columns(config)              # Ensure required columns
-            .irb.apply_all_formulas(config)           # Full IRB calculation
-            .irb.apply_post_model_adjustments(config)
-            .irb.compute_el_shortfall_excess(errors=errors)
-            .irb.apply_guarantee_substitution(config)
+            exposures.pipe(classify_approach, config)             # F-IRB vs A-IRB
+            .pipe(apply_firb_lgd, config, pack=resolved_pack)     # Supervisory LGD for F-IRB
+            .pipe(prepare_columns, config, pack=resolved_pack)    # Ensure required columns
+            .pipe(apply_all_formulas, config, pack=resolved_pack) # Full IRB calculation
+            .pipe(apply_post_model_adjustments, config, pack=resolved_pack)
+            .pipe(compute_el_shortfall_excess, errors=errors)
+            .pipe(apply_guarantee_substitution, config, pack=resolved_pack)
         )
         # Supporting factors (CRR only — Art. 501), then aggregator columns
         exposures = self._apply_supporting_factors(exposures, config, errors=errors)
         return exposures  # + approach_applied / rwa_final / irb_maturity_m
 ```
 
-### IRB Namespace
+### IRB Transforms
 
-The `.irb` namespace provides chainable methods for each calculation step:
+The plain transform functions in `engine/irb/transforms.py` cover each
+calculation step (composed via `lf.pipe(fn, config)`):
 
-| Method | Description |
+| Function | Description |
 |--------|-------------|
 | `classify_approach(config)` | Classify as F-IRB or A-IRB |
 | `apply_firb_lgd(config)` | Apply supervisory LGD for F-IRB |
 | `prepare_columns(config)` | Ensure required columns exist |
-| `apply_pd_floor(config)` | Apply PD floor (0.03% CRR, 0.05% Basel 3.1) |
-| `apply_lgd_floor(config)` | Apply LGD floor (Basel 3.1 A-IRB only) |
-| `calculate_correlation(config)` | Calculate asset correlation with SME adjustment |
-| `calculate_k(config)` | Calculate capital requirement K |
-| `calculate_maturity_adjustment(config)` | Calculate maturity adjustment |
-| `calculate_rwa(config)` | Calculate RWA |
-| `calculate_expected_loss(config)` | Calculate expected loss |
-| `apply_all_formulas(config)` | Run complete calculation pipeline |
+| (PD floor) | Apply PD floor (0.03% CRR, 0.05% Basel 3.1) |
+| (LGD floor) | Apply LGD floor (Basel 3.1 A-IRB only) |
+| (correlation) | Calculate asset correlation with SME adjustment |
+| (capital requirement K) | Calculate K |
+| (maturity adjustment) | Calculate maturity adjustment |
+| `apply_all_formulas(config)` | Run the complete calculation (floors, correlation, K, maturity adjustment, RWA, expected loss) |
+
+Polars namespace registrations are banned by `scripts/arch_check.py` check 14 —
+there is no `.irb` accessor or `IRBLazyFrame` class.
 
 ### Key Features
 
-- **Fluent API**: Namespace enables readable, chainable method calls
+- **Composable transforms**: plain typed functions piped in regulatory order
 - **Pure Polars expressions**: Full lazy evaluation with `polars-normal-stats` for statistical functions
 - **Streaming-capable**: No data materialization required, enabling large dataset processing
 - PD and LGD floor application
@@ -530,16 +538,21 @@ class SlottingCalculator:
 
     def calculate_branch(self, exposures, config, *, errors=None):
         exposures = (
-            exposures.slotting.prepare_columns(config)
-            .slotting.apply_slotting_weights(config)   # Art. 153(5) tables
-            .slotting.calculate_rwa()
+            exposures.pipe(prepare_columns, config)
+            .pipe(apply_slotting_weights, config, pack=pack)   # Art. 153(5) tables
+            .pipe(calculate_rwa)
         )
         # Supporting factors (CRR Art. 501/501a), EL rates + shortfall/excess
         exposures = self._apply_supporting_factors(exposures, config, errors=errors)
-        exposures = exposures.slotting.apply_el_rates(config)
-        exposures = exposures.slotting.compute_el_shortfall_excess(errors=errors)
+        exposures = exposures.pipe(apply_el_rates, config, pack=pack).pipe(
+            compute_el_shortfall_excess, errors=errors
+        )
         return exposures  # + approach_applied / rwa_final
 ```
+
+The slotting transforms (`prepare_columns`, `apply_slotting_weights`,
+`calculate_rwa`, `apply_el_rates`, `compute_el_shortfall_excess`) are plain
+typed functions in `engine/slotting/transforms.py`.
 
 ### Key Features
 
@@ -657,12 +670,12 @@ class OutputAggregator:
             *( [equity_bundle.results] if equity_bundle else [] ),
         ], how="diagonal_relaxed")
 
-        # Apply output floor (Basel 3.1)
-        if config.framework == RegulatoryFramework.BASEL_3_1:
-            combined = self._apply_output_floor(
-                combined,
-                config.output_floor_config
-            )
+        # Apply output floor — applicability resolves from the rulepack
+        # (a cited pack Feature read from the resolved pack), not an inline
+        # config.framework branch. The floor logic itself lives in
+        # engine/aggregator/_floor.py (apply_floor_with_impact).
+        if resolved_pack.feature("output_floor"):
+            combined = apply_floor_with_impact(combined, resolved_pack)
 
         # Calculate totals
         totals = self._calculate_totals(combined)

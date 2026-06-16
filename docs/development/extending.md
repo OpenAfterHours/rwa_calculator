@@ -26,8 +26,13 @@ class ExposureClass(str, Enum):
 
 ### Step 2: Add Classification Logic
 
+Classification logic lives in the `engine/stages/classify/` package
+(`engine/classifier.py` is now only a back-compat shim re-exporting
+`ExposureClassifier`). Add the class-determination rule in the relevant module,
+e.g. `attributes.py` / `subtypes.py`:
+
 ```python
-# src/rwa_calc/engine/classifier.py
+# src/rwa_calc/engine/stages/classify/subtypes.py
 
 def _determine_exposure_class(
     counterparty_type: str,
@@ -40,25 +45,34 @@ def _determine_exposure_class(
     # ... existing logic ...
 ```
 
-### Step 3: Add Risk Weight Table
+### Step 3: Add Risk Weights to the Rulepack
+
+Regulatory values live in the rulepack packs as **cited entries**, not in a
+`data/tables/` module (that package was removed). Add a `LookupTable` (or
+`BandedTable` / `ScalarParam`) keyed by CQS, each carrying a `Citation`, to the
+relevant pack:
 
 ```python
-# src/rwa_calc/data/tables/crr_risk_weights.py
+# src/rwa_calc/rulebook/packs/crr.py  (and/or b31.py)
 
-NEW_CLASS_RISK_WEIGHTS = {
-    CQS.CQS_1: Decimal("0.20"),
-    CQS.CQS_2: Decimal("0.50"),
-    # ... etc ...
-}
+NEW_CLASS_RISK_WEIGHTS = LookupTable(
+    name="new_class_risk_weights",
+    citation=Citation("CRR Art. 1xx"),
+    rows={
+        CQS.CQS_1: Decimal("0.20"),
+        CQS.CQS_2: Decimal("0.50"),
+        # ... etc ...
+    },
+)
+```
 
-def get_risk_weight(
-    exposure_class: ExposureClass,
-    cqs: CQS,
-    framework: RegulatoryFramework,
-) -> Decimal:
-    if exposure_class == ExposureClass.NEW_CLASS:
-        return NEW_CLASS_RISK_WEIGHTS.get(cqs, Decimal("1.00"))
-    # ... existing logic ...
+The engine reads the value back through the resolved pack — never a module-level
+scalar in `engine/**` (banned by `scripts/arch_check.py` checks 5, 6 and 12):
+
+```python
+# in an engine transform, with the resolved pack in hand
+pack = resolve(run_config.regime_id, run_config.reporting_date)
+rw = pack.lookup("new_class_risk_weights", cqs)
 ```
 
 ### Step 4: Add Tests
@@ -117,20 +131,38 @@ class CustomCalculator:
         return ead * custom_param * 0.08  # Example
 ```
 
-### Step 2: Register in Pipeline
+### Step 2: Register in the Stage Registry
+
+The pipeline is a **fold over a literal stage registry**, not a constructor that
+wires component objects. Add a stage adapter module under `engine/stages/`
+exposing `run(ctx, rulepack, run_config) -> PipelineContext`, then add an ordered
+`StageSpec` entry to `PIPELINE_STAGES` in `engine/registry.py`:
 
 ```python
-# src/rwa_calc/engine/pipeline.py
+# src/rwa_calc/engine/stages/custom.py
 
-def create_pipeline(
-    custom_calculator: CustomCalculator | None = None,
-) -> RWAPipeline:
-    """Create pipeline with optional custom calculator."""
-    return RWAPipeline(
-        # ... existing components ...
-        custom_calculator=custom_calculator or CustomCalculator(),
-    )
+from rwa_calc.contracts.context import PipelineContext
+
+def run(ctx: PipelineContext, rulepack, run_config) -> PipelineContext:
+    """Custom stage adapter — reads/writes typed ArtifactKey[T] entries."""
+    ...
 ```
+
+```python
+# src/rwa_calc/engine/registry.py
+
+from rwa_calc.engine.stages import custom
+
+PIPELINE_STAGES: tuple[StageSpec, ...] = (
+    # ... existing StageSpec entries ...
+    StageSpec("custom", custom.run, error_type=...),
+)
+```
+
+The registry is a single ordered **literal** list — no conditionals
+(`scripts/arch_check.py` check 15). Any regime- or election-dependent behaviour
+lives inside the stage function (reading a pack `Feature`), never as a registry
+branch.
 
 ### Step 3: Add Tests
 
@@ -197,92 +229,104 @@ class CollateralType(str, Enum):
     NEW_COLLATERAL = "NEW_COLLATERAL"
 ```
 
-### Step 2: Add Haircut Table
+### Step 2: Add Haircuts to the Rulepack
+
+Supervisory haircut values are cited rulepack entries, not a `data/tables/`
+module. Add a `BandedTable` (banded by residual maturity) with a `Citation` to
+the relevant pack:
 
 ```python
-# src/rwa_calc/data/tables/haircuts.py
+# src/rwa_calc/rulebook/packs/crr.py  (and/or b31.py)
 
-NEW_COLLATERAL_HAIRCUTS = {
-    "<=1yr": Decimal("0.05"),
-    "1-5yr": Decimal("0.10"),
-    ">5yr": Decimal("0.15"),
-}
+NEW_COLLATERAL_HAIRCUTS = BandedTable(
+    name="new_collateral_haircuts",
+    citation=Citation("CRR Art. 224"),
+    bands=[
+        # (upper_bound_years, haircut)
+        (1, Decimal("0.05")),
+        (5, Decimal("0.10")),
+        (None, Decimal("0.15")),
+    ],
+)
 ```
 
-### Step 3: Update CRM Processor
+`engine/crm/haircut_tables.py` is the thin pack-binding shim that reads these
+values back from the resolved pack.
+
+### Step 3: Update CRM Haircut Application
+
+Haircut application lives in `engine/crm/haircuts.py`; it reads the values from
+the resolved pack via `engine/crm/haircut_tables.py`, never from an inline
+`NEW_COLLATERAL_HAIRCUTS` dict:
 
 ```python
-# src/rwa_calc/engine/crm/processor.py
+# src/rwa_calc/engine/crm/haircuts.py
 
-def _get_haircut(
-    collateral_type: CollateralType,
-    residual_maturity: float,
-) -> Decimal:
-    if collateral_type == CollateralType.NEW_COLLATERAL:
-        if residual_maturity <= 1:
-            return NEW_COLLATERAL_HAIRCUTS["<=1yr"]
-        # ... etc ...
+# the supervisory-haircut values come from the resolved pack via
+# engine/crm/haircut_tables.py — apply them as a Polars expression keyed
+# on collateral_type + residual_maturity band.
 ```
 
 ## Adding Basel 3.1 Features
 
-### Step 1: Add Configuration
+Regime is **data**, not a config branch. The engine must not select behaviour by
+branching on the regime (`config.is_crr` / `config.is_basel_3_1` are banned in
+`engine/**` by `scripts/arch_check.py` check 17, and config carries no regulatory
+values). Regime-divergent behaviour reads a cited pack `Feature`.
+
+### Step 1: Add a Cited Feature to the Pack
 
 ```python
-# src/rwa_calc/contracts/config.py
+# src/rwa_calc/rulebook/packs/b31.py  (and/or crr.py for the CRR value)
 
-@dataclass(frozen=True)
-class Basel31SpecificConfig:
-    """Basel 3.1 specific configuration."""
-    new_feature_enabled: bool = True
-    new_feature_threshold: Decimal = Decimal("0.05")
+NEW_FEATURE = Feature(
+    name="new_feature_enabled",
+    citation=Citation("PS1/26, paragraph 4.xx"),
+    value=True,
+)
 ```
 
-### Step 2: Conditional Logic
+### Step 2: Read the Feature in the Engine
 
 ```python
-# In calculator
-def calculate(self, exposures: pl.LazyFrame, config: CalculationConfig):
-    result = exposures
-
-    if config.framework == RegulatoryFramework.BASEL_3_1:
-        result = self._apply_basel31_treatment(result, config)
-
-    return result
-
-def _apply_basel31_treatment(
-    self,
-    exposures: pl.LazyFrame,
-    config: CalculationConfig,
-) -> pl.LazyFrame:
-    """Apply Basel 3.1 specific treatment."""
-    return exposures.with_columns(
-        # Basel 3.1 specific logic
-    )
+# in an engine transform — branch on the resolved Feature, not the regime
+def apply_treatment(lf: pl.LazyFrame, run_config, *, pack) -> pl.LazyFrame:
+    if pack.feature("new_feature_enabled"):
+        return _apply_new_treatment(lf, pack)
+    return lf
 ```
 
-## Adding New Regulatory Table
+The regime is resolved once per run into the `ResolvedRulepack` from
+`(regime_id, reporting_date)`, so the same engine code path serves both CRR and
+Basel 3.1 — only the pack values differ.
 
-### Step 1: Create Table Module
+## Adding a New Regulatory Value
+
+Regulatory values are cited entries in the rulepack packs, read at runtime via
+`resolve(regime_id, reporting_date)`. There is no `data/tables/` module to add to
+— that package was removed (Phase 5 S13).
+
+### Step 1: Add a Cited Entry to the Pack
 
 ```python
-# src/rwa_calc/data/tables/new_table.py
+# src/rwa_calc/rulebook/packs/crr.py  (and/or b31.py)
 
-import polars as pl
-from decimal import Decimal
+from rwa_calc.rulebook.model import Citation, LookupTable
 
-NEW_TABLE = pl.DataFrame({
-    "category": ["A", "B", "C"],
-    "weight": [0.10, 0.20, 0.30],
-})
-
-def lookup_new_table(category: str) -> Decimal:
-    """Look up value from new table."""
-    result = NEW_TABLE.filter(pl.col("category") == category)
-    if len(result) == 0:
-        raise ValueError(f"Unknown category: {category}")
-    return Decimal(str(result["weight"][0]))
+NEW_TABLE = LookupTable(
+    name="new_table",
+    citation=Citation("CRR Art. 1xx"),
+    rows={
+        "A": Decimal("0.10"),
+        "B": Decimal("0.20"),
+        "C": Decimal("0.30"),
+    },
+)
 ```
+
+The engine reads it back through the resolved pack
+(`pack.lookup("new_table", category)`); `compile.py` is the only
+`Decimal` -> `float` boundary.
 
 ### Step 2: Add Tests
 
@@ -296,191 +340,62 @@ class TestNewTable:
         ("C", Decimal("0.30")),
     ])
     def test_lookup_returns_correct_value(self, category, expected):
-        result = lookup_new_table(category)
+        pack = resolve("crr", date(2026, 12, 31))
+        result = pack.lookup("new_table", category)
         assert result == expected
-
-    def test_unknown_category_raises(self):
-        with pytest.raises(ValueError):
-            lookup_new_table("UNKNOWN")
 ```
 
-## Using Polars Namespaces
+## Adding a Calculation Transform
 
-The calculator uses Polars namespace extensions to provide fluent, chainable APIs for complex calculations. There are 2 namespaces available:
-
-| Namespace | Purpose | Key Methods |
-|-----------|---------|-------------|
-| `lf.irb` | IRB calculations | `apply_all_formulas`, `calculate_k`, `calculate_correlation` |
-| `lf.slotting` | Slotting calculations | `apply_slotting_weights`, `calculate_rwa` |
-
-### Using Existing Namespaces
-
-All namespaces are registered when importing from `rwa_calc.engine`:
+Calculator and domain logic is written as **plain module-level typed functions**
+composed via `lf.pipe(fn, ...)` — Polars namespace registrations
+(`@pl.api.register_lazyframe_namespace` / `register_expr_namespace`) are extinct
+and banned by `scripts/arch_check.py` check 14. The canonical pattern is a
+function that takes a `LazyFrame` (or an `Expr`) and returns the same type:
 
 ```python
-import polars as pl
-from datetime import date
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine import IRBLazyFrame, SlottingLazyFrame
+# src/rwa_calc/engine/sa/risk_weights.py (pattern)
 
-config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-
-# IRB calculation pipeline
-irb_result = (
-    exposures
-    .irb.classify_approach(config)
-    .irb.apply_firb_lgd(config)
-    .irb.prepare_columns(config)
-    .irb.apply_all_formulas(config)
-)
-```
-
-### Creating a New Namespace
-
-To add a new calculation namespace (e.g., for a custom approach):
-
-#### Step 1: Create Namespace Module
-
-```python
-# src/rwa_calc/engine/custom/namespace.py
-
-from __future__ import annotations
-from typing import TYPE_CHECKING
-import polars as pl
-
-if TYPE_CHECKING:
-    from rwa_calc.contracts.config import CalculationConfig
-
-
-@pl.api.register_lazyframe_namespace("custom")
-class CustomLazyFrame:
-    """LazyFrame namespace for custom calculations."""
-
-    def __init__(self, lf: pl.LazyFrame) -> None:
-        self._lf = lf
-
-    def apply_custom_formula(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply custom calculation formula."""
-        return self._lf.with_columns(
-            (pl.col("ead") * pl.col("risk_weight")).alias("rwa")
-        )
-
-    def validate_inputs(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Validate required columns exist."""
-        schema = self._lf.collect_schema()
-        required = ["ead", "risk_weight"]
-        missing = [col for col in required if col not in schema.names()]
-        if missing:
-            raise ValueError(f"Missing columns: {missing}")
-        return self._lf
-
-
-@pl.api.register_expr_namespace("custom")
-class CustomExpr:
-    """Expression namespace for column-level custom operations."""
-
-    def __init__(self, expr: pl.Expr) -> None:
-        self._expr = expr
-
-    def apply_factor(self, factor: float) -> pl.Expr:
-        """Apply a multiplication factor."""
-        return self._expr * factor
-```
-
-#### Step 2: Register in `__init__.py`
-
-```python
-# src/rwa_calc/engine/custom/__init__.py
-
-# Import to register namespace on module load
-import rwa_calc.engine.custom.namespace  # noqa: F401
-
-from rwa_calc.engine.custom.namespace import CustomLazyFrame, CustomExpr
-
-__all__ = ["CustomLazyFrame", "CustomExpr"]
-```
-
-#### Step 3: Use Pure Polars Expressions for Performance
-
-For computationally intensive formulas, use pure Polars expressions with `polars-normal-stats`:
-
-```python
-from polars_normal_stats import normal_cdf, normal_ppf
-
-def _custom_formula_expr() -> pl.Expr:
-    """Pure Polars expression for custom calculation."""
-    # Example: normal CDF of input values
-    return normal_cdf(pl.col("input_value"))
-
-def apply_custom_formula(self, config: CalculationConfig) -> pl.LazyFrame:
-    """Apply custom calculation using pure Polars expressions."""
-    return self._lf.with_columns(
-        _custom_formula_expr().alias("output_value")
+def apply_risk_weights(lf: pl.LazyFrame, config, *, pack) -> pl.LazyFrame:
+    """Apply SA risk weights from the resolved pack."""
+    return lf.with_columns(
+        (pl.col("ead") * pl.col("sa_risk_weight")).alias("sa_rwa")
     )
 ```
 
-This approach:
-- Preserves full lazy evaluation (query optimization, streaming)
-- Enables processing of datasets larger than memory
-- Achieves 3M+ rows/second throughput
-
-#### Step 4: Add Tests
+Compose transforms by chaining `.pipe`:
 
 ```python
-# tests/unit/test_custom_namespace.py
-
-import polars as pl
-import pytest
-from datetime import date
-from rwa_calc.contracts.config import CalculationConfig
-import rwa_calc.engine.custom.namespace  # Register namespace
-
-
-class TestCustomNamespace:
-    @pytest.fixture
-    def config(self):
-        return CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-
-    def test_namespace_registered(self):
-        """Custom namespace is available on LazyFrame."""
-        lf = pl.LazyFrame({"a": [1]})
-        assert hasattr(lf, "custom")
-
-    def test_apply_custom_formula(self, config):
-        """Custom formula produces expected results."""
-        lf = pl.LazyFrame({"ead": [1000.0], "risk_weight": [0.5]})
-        result = lf.custom.apply_custom_formula(config).collect()
-        assert result["rwa"][0] == 500.0
-
-    def test_method_chaining(self, config):
-        """Methods can be chained fluently."""
-        lf = pl.LazyFrame({"ead": [1000.0], "risk_weight": [0.5]})
-        result = (
-            lf
-            .custom.validate_inputs(config)
-            .custom.apply_custom_formula(config)
-            .collect()
-        )
-        assert "rwa" in result.columns
+result = (
+    exposures
+    .pipe(apply_risk_weights, config, pack=pack)
+    .pipe(apply_supporting_factor, config, pack=pack)
+)
 ```
 
-### Namespace Design Guidelines
+For computationally intensive formulas, use pure Polars expressions with
+`polars-normal-stats` (`normal_cdf`, `normal_ppf`, `normal_pdf`) so the whole
+chain stays lazy:
 
-1. **Return `pl.LazyFrame`** from all LazyFrame namespace methods for chaining
-2. **Accept `CalculationConfig`** to handle framework-specific logic
-3. **Use pure Polars expressions** with `polars-normal-stats` for statistical functions
-4. **Preserve lazy evaluation** - avoid `.collect()` or `.to_numpy()` in formulas
-5. **Check column existence** before operations using `collect_schema()`
-6. **Provide sensible defaults** for optional columns
-7. **Document added columns** in method docstrings
+```python
+from polars_normal_stats import normal_cdf
+
+def _capital_requirement_expr() -> pl.Expr:
+    """Pure Polars expression — stays lazy, streams, scales past memory."""
+    return normal_cdf(pl.col("scaled_pd"))
+```
+
+See `engine/sa/risk_weights.py`, `engine/sa/rw_adjustments.py`,
+`engine/irb/transforms.py`, and `engine/slotting/transforms.py` for the
+canonical transform-function style.
 
 ## Best Practices
 
 ### 1. Follow Existing Patterns
 
 Look at existing implementations for guidance:
-- `sa/calculator.py` for calculator patterns
-- `data/tables/*.py` for lookup tables
+- `engine/sa/risk_weights.py` for calculation-transform patterns
+- `rulebook/packs/*.py` for regulatory values (cited entries); `engine/sa/*_risk_weight_tables.py` and `engine/crm/haircut_tables.py` for the pack-binding shims
 - `contracts/bundles.py` for data contracts
 
 ### 2. Write Tests First

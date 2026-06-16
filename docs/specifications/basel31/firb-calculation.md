@@ -270,7 +270,7 @@ to calculate effective maturity — the CRR F-IRB fixed-maturity option is delet
     Under CRR Art. 162(1), F-IRB firms assigned M = 0.5 years for repo-style transactions
     and M = 2.5 years for all other exposures. PRA PS1/26 blanks Art. 162(1) entirely —
     all IRB firms must now calculate M using Art. 162(2A). The 2.5-year fallback in the code
-    (`namespace.py:259`) should only apply when `maturity_date` is null, not as a general
+    (`engine/irb/transforms.py`) should only apply when `maturity_date` is null, not as a general
     F-IRB default.
 
 #### Art. 162(2A) Calculation Methods
@@ -322,7 +322,7 @@ Where:
     The code implements the Art. 162(2A)(k) revolving maturity change via the
     `facility_termination_date` input field (`schemas.py:83`). For Basel 3.1 revolving
     exposures with a non-null termination date, M is calculated from `facility_termination_date`
-    instead of `maturity_date` (`namespace.py:248-279`).
+    instead of `maturity_date` (`engine/irb/transforms.py`).
 
 ---
 

@@ -450,7 +450,7 @@ short-term branch as Art. 120(2), gated on the `is_short_term_trade_lc` input fi
 `is_short_term_trade_lc = True` *and* `original_maturity_years ≤ 0.5`, a rated
 institution exposure receives Table 4 weights even if the standard ≤ 0.25 window has
 been missed. The logic sits in the B31 ECRA maturity branch in
-`src/rwa_calc/engine/sa/namespace.py`:
+`src/rwa_calc/engine/sa/risk_weights.py`:
 
 ```python
 # ECRA short-term rated institutions — Art. 120(2) Table 4 extended by Art. 120(2A).
@@ -1697,7 +1697,7 @@ The calculator uses two input fields:
 | `is_adc` | Boolean | Flags the exposure as ADC — routes to Art. 124K treatment, bypassing all RE LTV-band logic |
 | `is_presold` | Boolean | Flags the ADC exposure as meeting Art. 124K(2) qualifying conditions — reduces RW from 150% to 100% |
 
-**Code:** `b31_adc_rw_expr()` in `data/tables/b31_risk_weights.py` dispatches on `is_presold`.
+**Code:** `b31_adc_rw_expr()` in `engine/sa/b31_risk_weight_tables.py` dispatches on `is_presold`.
 ADC sits at priority 4 in the Basel 3.1 SA when-chain (`engine/sa/calculator.py`), after
 subordinated debt but before all other RE branches — `is_adc=True` overrides any LTV-based
 or income-producing treatment.

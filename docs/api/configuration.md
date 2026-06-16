@@ -25,36 +25,52 @@ Use factory methods `.crr()` and `.basel_3_1()` instead of constructing directly
 class CalculationConfig:
     """
     Attributes:
-        framework: Regulatory framework (CRR or BASEL_3_1).
+        regime_id: Regime identifier ("crr" | "b31") — the regime carrier.
         reporting_date: As-of date for the calculation.
         base_currency: Currency for reporting (default "GBP").
         apply_fx_conversion: Whether to convert exposures to base_currency.
-        pd_floors: PD floor configuration.
-        lgd_floors: LGD floor configuration (A-IRB).
-        supporting_factors: SME/infrastructure factors.
         output_floor: Output floor configuration.
-        retail_thresholds: Retail classification thresholds.
+        post_model_adjustments: Post-model adjustments (Basel 3.1 only).
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing).
-        scaling_factor: 1.06 scaling for IRB K (CRR Art. 153), 1.0 for Basel 3.1.
-        eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
+        use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%.
+        eur_gbp_rate: EUR/GBP exchange rate for monetary-threshold conversion.
         collect_engine: Polars engine for .collect() — "cpu" (default).
     """
 
-    framework: RegulatoryFramework
+    regime_id: str  # "crr" | "b31" — the regime carrier
     reporting_date: date
     base_currency: str = "GBP"
     apply_fx_conversion: bool = True
-    pd_floors: PDFloors
-    lgd_floors: LGDFloors
-    supporting_factors: SupportingFactors
-    output_floor: OutputFloorConfig
-    retail_thresholds: RetailThresholds
+    output_floor: OutputFloorConfig = field(default_factory=OutputFloorConfig.crr)
+    post_model_adjustments: PostModelAdjustmentConfig = field(
+        default_factory=PostModelAdjustmentConfig.crr
+    )
+    ccr: CCRConfig = field(default_factory=CCRConfig)
     permission_mode: PermissionMode = PermissionMode.STANDARDISED
-    scaling_factor: Decimal = Decimal("1.06")
+    irb_permissions: IRBPermissions | None = None
+    equity_transitional: EquityTransitionalConfig = field(default_factory=EquityTransitionalConfig)
     eur_gbp_rate: Decimal = Decimal("0.8732")
+    enable_double_default: bool = False
+    use_investment_grade_assessment: bool = False
+    crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
+    airb_collateral_method: AIRBCollateralMethod | None = None
     collect_engine: PolarsEngine = "cpu"
+    spill_edges: bool = False
     spill_dir: Path | None = None
+    log_level: str = "INFO"
+    log_format: Literal["text", "json"] = "text"
+    audit_cache_dir: Path | None = None
+    audit_cache_max_runs: int | None = None
 ```
+
+!!! note "Regulatory values live in the rulepack, not in config"
+    `CalculationConfig` carries firm inputs and elections only. PD/LGD floors,
+    supporting factors, monetary thresholds and the 1.06 IRB scaling factor are
+    **not** config fields — they are cited entries in the rulepack packs
+    (`rwa_calc.rulebook.packs.{common,crr,b31}`) resolved via
+    `rwa_calc.rulebook.resolve.resolve(regime_id, reporting_date)`. `regime_id`
+    is the carrier; `framework` / `is_crr` / `is_basel_3_1` survive as derived
+    read-only properties.
 
 #### Properties
 
@@ -90,7 +106,8 @@ class CalculationConfig:
         """
         Create CRR (Basel 3.0) configuration.
 
-        CRR characteristics:
+        CRR characteristics (these regulatory values resolve from the CRR
+        rulepack pack, not from config fields):
         - Single PD floor (0.03%) for all classes
         - No LGD floors for A-IRB
         - SME supporting factor (0.7619/0.85)
@@ -235,157 +252,46 @@ See the per-knob sections for regulatory derivation:
 
 ##### Replace-based overrides
 
-A small number of fields are not exposed as factory keywords because they
-are derived from other config (`pd_floors`, `lgd_floors`, `thresholds`,
-`equity_transitional`, the raw `output_floor` dataclass, `scaling_factor`,
-`apply_fx_conversion`, `sync_eur_gbp_rate_from_fx_table`). For test
-harnesses or research workflows that need to swap one of these, build the
-config from the factory and use `dataclasses.replace`:
+A small number of genuine config fields are not exposed as factory keywords
+(e.g. `equity_transitional`, the raw `output_floor` dataclass,
+`apply_fx_conversion`, `sync_eur_gbp_rate_from_fx_table`). For test harnesses
+or research workflows that need to swap one of these, build the config from
+the factory and use `dataclasses.replace`:
 
 ```python
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
-from rwa_calc.contracts.config import CalculationConfig, PDFloors
+from rwa_calc.contracts.config import CalculationConfig
 
 config = CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30))
 
-# Tighten the corporate PD floor for a stress scenario without
+# Adjust the EUR/GBP rate used for monetary-threshold conversion without
 # disturbing any other framework defaults.
-stressed_floors = replace(config.pd_floors, corporate=Decimal("0.0010"))
-config = replace(config, pd_floors=stressed_floors)
+config = replace(config, eur_gbp_rate=Decimal("0.8800"))
 
-assert config.pd_floors.corporate == Decimal("0.0010")
+assert config.eur_gbp_rate == Decimal("0.8800")
 ```
 
 `replace(...)` returns a new frozen instance — the original config is
 untouched, preserving the immutability contract.
 
-### `PDFloors`
+!!! note "Regulatory values are not config fields"
+    To vary a regulatory value (PD/LGD floors, supporting factors, monetary
+    thresholds, the IRB scaling factor) you author or override a **rulepack
+    pack** entry, not a config field — these resolve from the resolved
+    rulepack (`rwa_calc.rulebook.resolve.resolve(regime_id, reporting_date)`),
+    not from `CalculationConfig`.
 
-PD floor values by exposure class. All values expressed as decimals (e.g., 0.0003 = 0.03%).
-
-```python
-@dataclass(frozen=True)
-class PDFloors:
-    """
-    Under CRR: Single floor of 0.03% for all exposures (Art. 163).
-    Under Basel 3.1: Differentiated floors (CRE30.55, PS1/26 Ch.5).
-    """
-
-    corporate: Decimal = Decimal("0.0003")          # 0.03%
-    corporate_sme: Decimal = Decimal("0.0003")       # 0.03%
-    retail_mortgage: Decimal = Decimal("0.0003")     # 0.03%
-    retail_other: Decimal = Decimal("0.0003")        # 0.03%
-    retail_qrre_transactor: Decimal = Decimal("0.0003")  # 0.03%
-    retail_qrre_revolver: Decimal = Decimal("0.0003")    # 0.03%
-
-    def get_floor(
-        self,
-        exposure_class: ExposureClass,
-        is_qrre_transactor: bool = False,
-    ) -> Decimal:
-        """Get the PD floor for a given exposure class.
-
-        For RETAIL_QRRE, distinguish transactors vs revolvers via is_qrre_transactor.
-        """
-
-    @classmethod
-    def crr(cls) -> PDFloors:
-        """CRR PD floors: single 0.03% floor for all classes."""
-
-    @classmethod
-    def basel_3_1(cls) -> PDFloors:
-        """Basel 3.1 PD floors: differentiated by class (CRE30.55).
-
-        - Corporate/Corporate SME: 0.05%
-        - Retail mortgage: 0.10%
-        - Retail other: 0.05%
-        - QRRE transactors: 0.05%
-        - QRRE revolvers: 0.10%
-        """
-```
-
-### `LGDFloors`
-
-LGD floor values by collateral type for A-IRB. Per-exposure input floors are only applicable
-under Basel 3.1 (CRE30.41, PS1/26 Ch.5). CRR Art. 164(4) has portfolio-level floors (10% RRE,
-15% CRE exposure-weighted average) but no per-exposure input floors — the calculator's
-`LGDFloors.crr()` returns all zeros (see D3.38).
-
-```python
-@dataclass(frozen=True)
-class LGDFloors:
-    unsecured: Decimal = Decimal("0.25")                  # 25% (Art. 161(5)(a))
-    subordinated_unsecured: Decimal = Decimal("0.50")      # WRONG: should be 0.25 (see warning)
-    financial_collateral: Decimal = Decimal("0.0")         # 0%
-    receivables: Decimal = Decimal("0.10")                 # 10%
-    commercial_real_estate: Decimal = Decimal("0.10")      # 10%
-    residential_real_estate: Decimal = Decimal("0.10")     # 10% (corporate, Art. 161(5))
-    other_physical: Decimal = Decimal("0.15")              # 15%
-
-    def get_floor(self, collateral_type: CollateralType) -> Decimal:
-        """Get the LGD floor for a given collateral type.
-        Defaults to unsecured floor for unknown types."""
-
-    @classmethod
-    def crr(cls) -> LGDFloors:
-        """CRR: No LGD floors (all zero)."""
-
-    @classmethod
-    def basel_3_1(cls) -> LGDFloors:
-        """Basel 3.1 LGD floors (CRE30.41).
-        Note: Values reflect PRA implementation."""
-```
-
-!!! warning "Code Divergence: subordinated_unsecured should be 0.25, not 0.50"
-    Art. 161(5)(a) sets a flat 25% for **all** corporate unsecured exposures — no
-    senior/subordinated distinction. The `subordinated_unsecured = 0.50` has **no regulatory
-    basis** and overstates the LGD floor for subordinated corporate exposures in the fallback
-    path (when `exposure_class` is unavailable but `seniority` is present). The correct value
-    is `Decimal("0.25")`, matching the `unsecured` field.
-
-    **Impact:** When input data includes a `seniority` column but no `exposure_class` column,
-    subordinated exposures receive a 50% LGD floor instead of the correct 25%
-    (`formulas.py:164,220`). When `exposure_class` IS present (the normal pipeline path),
-    the code correctly applies 25% regardless of seniority.
-
-    The 50% figure coincides with retail QRRE unsecured (Art. 164(4)(b)(i)) but that floor
-    applies only to qualifying revolving retail exposures, not corporate subordinated debt.
-    See [A-IRB LGD Floors](../specifications/crr/airb-calculation.md#lgd-floors-basel-31-only)
-    for the regulatory basis.
-
-### `SupportingFactors`
-
-Supporting factors for CRR (SME and infrastructure). Basel 3.1 removes these.
-
-```python
-@dataclass(frozen=True)
-class SupportingFactors:
-    """
-    SME Supporting Factor (CRR Art. 501):
-        Factor 1: 0.7619 for exposure up to EUR 2.5m
-        Factor 2: 0.85 for exposure above EUR 2.5m
-
-    Infrastructure Supporting Factor (CRR Art. 501a):
-        Factor: 0.75
-    """
-
-    sme_factor_under_threshold: Decimal = Decimal("0.7619")
-    sme_factor_above_threshold: Decimal = Decimal("0.85")
-    sme_exposure_threshold_eur: Decimal = Decimal("2500000")   # EUR 2.5m
-    sme_turnover_threshold_eur: Decimal = Decimal("50000000")  # EUR 50m
-    infrastructure_factor: Decimal = Decimal("0.75")
-    enabled: bool = True
-
-    @classmethod
-    def crr(cls) -> SupportingFactors:
-        """CRR supporting factors enabled."""
-
-    @classmethod
-    def basel_3_1(cls) -> SupportingFactors:
-        """Basel 3.1: Supporting factors disabled (all 1.0)."""
-```
+!!! note "PD floors, LGD floors and supporting factors live in the rulepack"
+    The former `PDFloors`, `LGDFloors` and `SupportingFactors` config
+    dataclasses were removed in Phase 5. PD floors (CRR Art. 163 single 0.03%;
+    Basel 3.1 differentiated, CRE30.55), A-IRB LGD floors (CRE30.41) and the
+    CRR SME/infrastructure supporting factors (Art. 501/501a) are now cited
+    entries in the rulepack packs
+    (`rwa_calc.rulebook.packs.{common,crr,b31}`) resolved via
+    `rwa_calc.rulebook.resolve.resolve(regime_id, reporting_date)`. To vary one
+    of these values, author or override a pack entry — not a config field.
 
 ### `OutputFloorConfig`
 
@@ -424,40 +330,13 @@ class OutputFloorConfig:
         """Basel 3.1 output floor with PRA transitional schedule."""
 ```
 
-### `RetailThresholds`
-
-Thresholds for retail exposure classification. Different thresholds apply under
-CRR vs Basel 3.1.
-
-```python
-@dataclass(frozen=True)
-class RetailThresholds:
-    # Maximum aggregated exposure to qualify as retail
-    max_exposure_threshold: Decimal = Decimal("1000000")  # GBP 1m (CRR)
-
-    # QRRE specific limits
-    qrre_max_limit: Decimal = Decimal("100000")  # GBP 100k
-
-    @classmethod
-    def crr(cls, eur_gbp_rate: Decimal = Decimal("0.8732")) -> RetailThresholds:
-        """CRR retail thresholds (converted from EUR dynamically).
-
-        Args:
-            eur_gbp_rate: EUR/GBP exchange rate for threshold conversion.
-
-        CRR thresholds (EUR):
-        - Max exposure: EUR 1m (converted to GBP)
-        - QRRE max limit: EUR 100k (converted to GBP)
-        """
-
-    @classmethod
-    def basel_3_1(cls) -> RetailThresholds:
-        """Basel 3.1 retail thresholds (GBP).
-
-        - Max exposure: GBP 880k
-        - QRRE max limit: GBP 100k
-        """
-```
+!!! note "Retail thresholds live in the rulepack"
+    The former `RetailThresholds` config dataclass was removed in Phase 5. The
+    retail-qualification monetary thresholds (CRR EUR 1m / EUR 100k QRRE,
+    converted to GBP; Basel 3.1 GBP-native) are now cited rulepack entries
+    (EUR base) resolved from the pack via
+    `rwa_calc.rulebook.resolve.resolve(regime_id, reporting_date)` and scaled by
+    `eur_gbp_rate` at read time (`engine/thresholds.py`).
 
 ### `PermissionMode`
 
@@ -559,8 +438,8 @@ SME carve-out (85%) overrides both branches regardless of the flag.
     Basel 3.1 additions that have no analogue in the CRR Art. 122 corporate
     table (CQS-only, with unrated = 100%). The field exists on the underlying
     `CalculationConfig` dataclass for both frameworks, but is silently inert
-    under the CRR SA path — only the Basel 3.1 SA namespace consumes it
-    (`engine/sa/namespace.py:907-920`).
+    under the CRR SA path — only the Basel 3.1 SA path consumes it
+    (`engine/sa/risk_weights.py`).
 
 !!! note "PRA permission and notification obligations"
     Branch (b) — i.e. setting this flag to `True` — requires **prior PRA
@@ -738,11 +617,16 @@ config = CalculationConfig.crr(
 )
 
 # Access configuration
-print(f"Framework: {config.framework}")          # RegulatoryFramework.CRR
-print(f"Is CRR: {config.is_crr}")                # True
-print(f"Scaling factor: {config.scaling_factor}") # 1.06
-print(f"SME enabled: {config.supporting_factors.enabled}")  # True
+print(f"Regime: {config.regime_id}")             # "crr"
+print(f"Framework: {config.framework}")          # RegulatoryFramework.CRR (derived property)
+print(f"Is CRR: {config.is_crr}")                # True (derived property)
 ```
+
+!!! note "Regulatory values resolve from the rulepack"
+    The 1.06 IRB scaling factor and the SME/infrastructure supporting factors
+    are no longer config attributes. They are cited rulepack entries — read
+    them via `rwa_calc.rulebook.resolve.resolve(config.regime_id,
+    config.reporting_date)`, not from `config`.
 
 ### Basel 3.1 Configuration
 
@@ -768,22 +652,20 @@ print(f"Output floor: {floor:.1%}")  # 72.5%
 
 ### Accessing Floors
 
+PD/LGD floors, the IRB scaling factor and supporting factors are no longer
+config attributes — they resolve from the rulepack pack. Resolve the pack for
+the run's regime and reporting date, then read the floor/factor entries from
+the resolved rulepack:
+
 ```python
-from rwa_calc.domain.enums import ExposureClass, CollateralType
+from rwa_calc.rulebook.resolve import resolve
 
-# PD floor lookup
-pd_floor = config.pd_floors.get_floor(ExposureClass.CORPORATE)
-print(f"Corporate PD floor: {pd_floor:.4%}")  # 0.0500% (Basel 3.1)
+# Resolve the frozen, content-hashed rulepack for this run.
+pack = resolve(config.regime_id, config.reporting_date)
 
-# PD floor for QRRE (distinguish transactor vs revolver)
-qrre_floor = config.pd_floors.get_floor(
-    ExposureClass.RETAIL_QRRE, is_qrre_transactor=True
-)
-print(f"QRRE transactor PD floor: {qrre_floor:.4%}")  # 0.0500%
-
-# LGD floor lookup
-lgd_floor = config.lgd_floors.get_floor(CollateralType.IMMOVABLE)
-print(f"CRE LGD floor: {lgd_floor:.0%}")  # 10%
+# PD/LGD floors, supporting factors and the IRB scaling factor are cited
+# entries on the resolved pack (read via the pack's entry accessors), not
+# attributes on `config`.
 ```
 
 ### Permission Mode

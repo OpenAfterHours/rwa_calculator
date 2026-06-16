@@ -376,13 +376,18 @@ non-applicable cells are `null`.
     `compute_failed_trade_rwa` is implemented end-to-end and pinned by
     a 6-test unit suite
     ([`tests/unit/ccr/test_failed_trades.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/tests/unit/ccr/test_failed_trades.py))
-    but is **not yet called** from
-    [`src/rwa_calc/engine/pipeline.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py)
+    but is **not yet wired** into the `ccr_sa_ccr` registry stage
+    ([`src/rwa_calc/engine/stages/ccr.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/ccr.py))
     or
     [`src/rwa_calc/engine/ccr/pipeline_adapter.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/pipeline_adapter.py).
-    The `FAILED_TRADE_SCHEMA` and the regulatory scalars in
-    [`src/rwa_calc/data/tables/failed_trades_multipliers.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/failed_trades_multipliers.py)
-    are in place, but the orchestrator does not yet read a
+    The `FAILED_TRADE_SCHEMA` and the regulatory scalars — now cited
+    pack params in
+    [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py)
+    (DvP multipliers `failed_trade_dvp_mult_*`, band lower-bound IntParams
+    `failed_trade_dvp_band_*_lower_days` / `failed_trade_non_dvp_col4_lower_days`,
+    non-DvP Col-4 RW multiplier `failed_trade_non_dvp_col4_rw_multiplier`,
+    `own_funds_to_rwa_factor`)
+    — are in place, but the orchestrator does not yet read a
     `failed_trades` leaf off the `RawCCRBundle` or aggregate the
     resulting `failed_trade_rwa` into the firm-level totals. Until the
     wiring lands, firms with failed settlements must compute the
@@ -413,7 +418,7 @@ for the engine-implementer follow-up.
 ```
 PipelineOrchestrator.run_with_data
   → Loader
-  → CCRCalculator stage (engine/pipeline.py)
+  → ccr_sa_ccr registry stage (engine/stages/ccr.py)
       ├─ apply_legal_enforceability_gate    (Art. 272(4))
       ├─ apply_wwr_gate                     (Art. 291(5)(a))
       ├─ ccr_rows_to_exposures              (SA-CCR EAD chain → CCR_DERIVATIVE rows)
@@ -655,10 +660,15 @@ direct illustration (50,000 vs 1,875,000 RWA on price differences of
   standard `× 12.5 = 1 / 0.08` conversion.
 - [`src/rwa_calc/engine/ccr/failed_trades.py::compute_failed_trade_rwa`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/failed_trades.py#L78-L217) —
   engine implementation (lines 78–217) of the Art. 378 / 379 calculator.
-- [`src/rwa_calc/data/tables/failed_trades_multipliers.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/failed_trades_multipliers.py) —
-  canonical regulatory scalars: DvP multipliers (`0.08 / 0.50 / 0.75
-  / 1.00`), band lower-bound thresholds (5 / 16 / 31 / 46 days),
-  non-DvP Col-4 RW multiplier (`12.5`), `OWN_FUNDS_TO_RWA_FACTOR` (`12.5`).
+- [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py) —
+  cited pack params: DvP multipliers (`failed_trade_dvp_mult_*` =
+  `0.08 / 0.50 / 0.75 / 1.00`), band lower-bound IntParams
+  (`failed_trade_dvp_band_*_lower_days`,
+  `failed_trade_non_dvp_col4_lower_days` = 5 / 16 / 31 / 46 days),
+  non-DvP Col-4 RW multiplier (`failed_trade_non_dvp_col4_rw_multiplier`
+  = `12.5`), `own_funds_to_rwa_factor` (`12.5`) — resolved in
+  `engine/ccr/failed_trades.py` via `_PACK.scalar_param(...)` /
+  `_PACK.int_param(...)`.
 - [`src/rwa_calc/data/schemas.py::FAILED_TRADE_SCHEMA`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py#L926) —
   failed-trade input schema; the four electives (`is_repo_or_sec_lending`,
   `is_immaterial`, `elect_cet1_deduction`, `system_wide_failure_waiver`)

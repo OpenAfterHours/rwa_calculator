@@ -923,11 +923,15 @@ config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 1, 1),
 )
 
-# Internally sets:
-# - scaling_factor: 1.0 (removed)
-# - output_floor: 72.5% (with transitional schedule)
-# - pd_floors: differentiated by class
-# - lgd_floors: by collateral type
+# The factory sets on the config:
+# - regime_id: "b31"
+# - output_floor: 72.5% election (with transitional schedule)
+#
+# Regulatory values are NOT stored on the config — they resolve from the b31
+# rulepack pack (rwa_calc.rulebook) via resolve(regime_id, reporting_date):
+# - scaling factor: 1.0 (removed under Basel 3.1)
+# - PD floors: differentiated by class
+# - LGD floors: by collateral type
 ```
 
 ## Implementation Timeline

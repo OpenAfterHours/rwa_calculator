@@ -645,8 +645,9 @@ from datetime import date
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Create processor
-processor = CRMProcessor(is_basel_3_1=config.is_basel_3_1)
+# Create processor (regime behaviour reads from the resolved rulepack
+# threaded through the pipeline, not a constructor flag)
+processor = CRMProcessor()
 
 # Process exposures through CRM pipeline — returns CRMAdjustedBundle
 result = processor.get_crm_unified_bundle(

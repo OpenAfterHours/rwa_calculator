@@ -205,7 +205,7 @@ requirements). Source: `engine/crm/life_insurance.py::compute_life_insurance_col
 | Column | Type | Description |
 |--------|------|-------------|
 | `life_ins_collateral_value` | `Float64` | Total surrender value (sum of `market_value` across eligible life-insurance policies pledged to the exposure), capped at `ead_gross`. Defaults to `0.0` when no life-insurance collateral is present. |
-| `life_ins_secured_rw` | `Float64` | Value-weighted Art. 232(3) mapped risk weight across the pledged policies. Defaults to `0.0` when no life-insurance collateral is present. Consumed by `lf.sa.apply_life_insurance_rw_mapping()` during SA risk-weight blending. |
+| `life_ins_secured_rw` | `Float64` | Value-weighted Art. 232(3) mapped risk weight across the pledged policies. Defaults to `0.0` when no life-insurance collateral is present. Consumed via `lf.pipe(apply_life_insurance_rw_mapping)` (`engine/sa/rw_adjustments.py`) during SA risk-weight blending. |
 
 !!! note "Single source of truth — CRM methodology"
     The Art. 232 derivation table, eligibility gates, and CRR vs PS1/26 differences

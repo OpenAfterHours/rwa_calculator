@@ -102,14 +102,14 @@ The EUR-to-GBP rate is configurable and defaults to 0.8732.
 
 `config.eur_gbp_rate` has two separate uses under CRR:
 
-1. Deriving GBP equivalents of EUR regulatory thresholds (`RegulatoryThresholds.crr`).
+1. Deriving GBP equivalents of EUR regulatory thresholds from the rulepack pack EUR bases at read time (`engine/thresholds.py`).
 2. Converting GBP turnover to EUR inside the IRB SME correlation formula (CRR Art. 153(4)).
 
 Exposure/collateral/guarantee/provision **amounts** are converted using the loaded `fx_rates` table (above). Historically, these two mechanisms did not talk to each other — a user could load an up-to-date `fx_rates.parquet` with `(EUR, GBP, 0.90)` and get all amounts converted at 0.90 while the SME correlation and derived GBP thresholds silently continued to use the default 0.8732.
 
 The pipeline now auto-syncs `config.eur_gbp_rate` with the loaded table:
 
-- If the `fx_rates` input contains exactly one `(currency_from="EUR", currency_to="GBP")` row, the orchestrator replaces `config.eur_gbp_rate` with that value and rebuilds `config.thresholds` (`RegulatoryThresholds.crr(eur_gbp_rate=...)`).
+- If the `fx_rates` input contains exactly one `(currency_from="EUR", currency_to="GBP")` row, the orchestrator replaces `config.eur_gbp_rate` via `config.with_fx_rate(derived_rate)` (which carries only the rate); GBP thresholds are then re-derived from the pack EUR bases × the new rate at read time (`engine/thresholds.py`).
 - If the passed-in rate and the table rate differ, a `WARNING` is logged on `rwa_calc.engine.pipeline` naming both values, so the mismatch is visible in the audit trail.
 - If the table contains more than one `(EUR, GBP)` row, a `WARNING` is logged on `rwa_calc.engine.fx_rate_sync` and the auto-sync is skipped — the caller's rate stands.
 - Under Basel 3.1, this is a no-op (thresholds are GBP-native per PRA PS1/26 Art. 153(4)).

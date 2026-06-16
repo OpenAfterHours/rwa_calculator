@@ -257,7 +257,7 @@ routed through the A-IRB approach (see
     whose A-IRB model pipelines emit a BEEL-style value alongside `lgd` for
     every advanced-IRB customer (not just defaulted ones) would otherwise see
     those rows silently mass-flagged as defaulted. The classifier's
-    `_build_is_defaulted_expr` (`engine/classifier.py`) derives `is_defaulted`
+    `_build_is_defaulted_expr` (`engine/stages/classify/attributes.py`) derives `is_defaulted`
     from two explicit signals only — `cp_default_status` and the row-level
     `is_defaulted` flag — and a non-zero `beel` on any non-defaulted row
     surfaces as a single aggregate `DQ008` warning carrying the total

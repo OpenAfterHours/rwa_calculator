@@ -178,7 +178,10 @@ One JSON document per run, written after all parquet artifacts commit:
 ```
 
 The `config` block is a deliberately narrow snapshot — it does not echo
-every regulatory scalar (those live in `data/tables/`) and it does not echo
+every regulatory scalar (those live in the rulepack —
+`rwa_calc/rulebook/packs/{common,crr,b31}.py` — and the full resolved,
+citation-carrying parameter set is recorded separately under the manifest's
+`rulepack` key) and it does not echo
 the cache fields themselves (avoid recursion). Note that `collect_engine`
 is a **deprecated** field: `"streaming"` is the legacy spelling of
 `spill_edges=True` (accept-and-warn for one release); the manifest still

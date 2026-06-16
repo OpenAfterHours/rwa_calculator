@@ -59,11 +59,14 @@ Art. 164(5)–(8) grant the PRA power to set higher minimum LGD values based on 
 of loss experience data, forward-looking market developments, and financial stability concerns.
 
 !!! warning "Code Divergence (D3.38)"
-    The calculator's `LGDFloors.crr()` factory returns all zeros — it does **not** implement the
-    CRR Art. 164(4) portfolio-level floors. This is because the calculator applies per-exposure
-    floors at the individual exposure level, while the CRR floors operate at the portfolio level
-    (exposure-weighted average across all qualifying retail exposures). Implementing portfolio-level
-    floors would require a post-aggregation validation step, which is not currently in the pipeline.
+    Under CRR the rulepack disables A-IRB LGD floors entirely — the cited `airb_lgd_floor`
+    Feature is `enabled=False` and the `lgd_floors` bundle is all-zero
+    (`src/rwa_calc/rulebook/packs/crr.py`), so the engine applies no own-estimate LGD floor
+    (CRR Art. 164 lets A-IRB firms model LGD freely). The CRR Art. 164(4) portfolio-level
+    (exposure-weighted-average across all qualifying retail exposures) floors are **not**
+    implemented; the engine's per-exposure floor branch (`engine/irb/formulas.py`, gated on the
+    `airb_lgd_floor` Feature) is the Basel-3.1 mechanism only. Implementing the CRR portfolio-level
+    test would require a post-aggregation validation step, which is not currently in the pipeline.
 
 !!! note "Distinction from Basel 3.1"
     Basel 3.1 Art. 164(4) **replaces** the CRR portfolio-level mechanism with **per-exposure input
@@ -126,7 +129,9 @@ to apply the relevant collateral-type LGDS directly (or LGDU=30% if unsecured).
 
 !!! note "Implementation Status"
     All four Art. 164(4) retail LGD floors are fully implemented (P1.87 complete). Floor values
-    are configured in `src/rwa_calc/contracts/config.py` (`LGDFloorConfig`, `basel_3_1()` factory).
+    are cited entries in the rulepack (`src/rwa_calc/rulebook/packs/b31.py`), resolved per run via
+    `resolve("b31", date)`; the Art. 164(4)(c) blended formula reads them in
+    `engine/irb/formulas.py` (`_lgd_floor_blended_expression`).
     The Art. 164(4)(c) blended formula uses `crm_alloc_*` columns from the Art. 231 waterfall
     to compute the weighted secured/unsecured floor. 27 dedicated tests in
     `tests/unit/test_lgd_floor_blended.py`.

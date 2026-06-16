@@ -184,7 +184,7 @@ Trade and Development Bank, Central American Bank for Economic Integration, and 
 Development Bank of Latin America.
 
 !!! warning "Code Divergence (D3.39)"
-    The code defines a separate `MDB_RISK_WEIGHTS_TABLE_2B` in `crr_risk_weights.py` with
+    The code defines a separate `MDB_RISK_WEIGHTS_TABLE_2B` in `engine/sa/crr_risk_weight_tables.py` with
     CQS 2 = 30% and unrated = 50%. This is incorrect for CRR — these are the **Basel 3.1
     Table 2B** values (PRA PS1/26 Art. 117(1)(a)). Under CRR, non-named MDBs should use the
     institution tables (Art. 120 Table 3: CQS 2 = **50%**, matching other institutions). The
@@ -433,7 +433,7 @@ result (100%) by a factor of five.
     unrated institution exposures through Art. 121(1) Table 5 with the
     Art. 121(3) 20% short-term override only. There is no `is_trade_finance`
     schema field, no Art. 162(3)(b) self-liquidating gate, and no flat 50%/20%
-    trade-finance constant in `data/tables/crr_risk_weights.py`. Firms with
+    trade-finance constant in `engine/sa/crr_risk_weight_tables.py`. Firms with
     material trade-finance books to unrated institutions in CQS 2–6 jurisdictions
     must apply the Art. 121(4) override outside the engine — the gap overstates
     RW versus the regulation in those cells. The CRR-only nature of the rule
@@ -570,7 +570,7 @@ most favourable applicable grade across the three.
     Art. 119(2)/(3). The calculator routes all short-term institution exposures through
     Art. 120(2) Table 4 (rated) or Art. 121(3) (unrated 20%), with no national-currency
     sovereign-derived channel. There is no `art_119_2` branch and no domestic-currency
-    short-term institution risk-weight constant in `data/tables/crr_risk_weights.py`.
+    short-term institution risk-weight constant in `engine/sa/crr_risk_weight_tables.py`.
 
     **Materiality.** For UK-domestic sterling-funded short-term claims the gap is
     immaterial — Art. 120(2) and Art. 121(3) already converge on 20%, matching the
@@ -770,7 +770,7 @@ If the issuing institution itself is unrated under CRR, the sovereign-derived ap
 
 !!! info "Implementation Note — Regime-Specific Derivation Dicts"
     The derivation table is stored as **two regime-specific dicts** in
-    `src/rwa_calc/data/tables/crr_risk_weights.py`: `COVERED_BOND_UNRATED_DERIVATION_CRR`
+    `src/rwa_calc/engine/sa/crr_risk_weight_tables.py`: `COVERED_BOND_UNRATED_DERIVATION_CRR`
     (4 entries — CRR Art. 129(5)(a)/(b)/(c)/(d), where (b) maps `0.50 → 0.20`) and
     `COVERED_BOND_UNRATED_DERIVATION_B31` (7 entries — PRA PS1/26 Art. 129(5), adding
     the `30%`, `40%`, `75%` ECRA/SCRA keys and changing (b) to `0.50 → 0.25`). Each
@@ -870,7 +870,7 @@ The new entries (aa), (ab), (ba) correspond to B31 institution risk weights that
 exist under CRR: 30% (ECRA CQS 2), 40% (SCRA Grade A), 75% (SCRA Grade B).
 
 !!! success "P1.113 Fixed — B31 Rated Covered Bond Risk Weights"
-    `B31_COVERED_BOND_RISK_WEIGHTS` in `b31_risk_weights.py` now uses the correct PRA
+    `B31_COVERED_BOND_RISK_WEIGHTS` in `engine/sa/b31_risk_weight_tables.py` now uses the correct PRA
     Table 7 values (identical to CRR). Previously used BCBS CRE20 values which
     understated capital for CQS 2 (15%→20%) and CQS 6 (50%→100%).
 
@@ -997,7 +997,8 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
       (or already classified as `RETAIL_OTHER`). This bucket consumes the
       Art. 125 split directly in the SA calculator.
     - **`RESIDENTIAL_MORTGAGE`** — assigned by the SA real-estate
-      loan-splitter (`engine/re_splitter.py`) for residential-property-
+      loan-splitter stage (`engine/stages/re_split/`, registered as
+      `re_splitter` in `engine/registry.py`) for residential-property-
       collateralised SA exposures whose `exposure_class` is **not** already
       RE-typed (e.g. `CORPORATE`, `INSTITUTION`). The split applies the
       same 35% secured / counterparty-RW residual decomposition — see
@@ -1391,8 +1392,10 @@ table.
        assessment where two or more apply, etc.) across both ECAI and ECA inputs.
 
     **Tracked as an open implementation gap.** This is a documentation-side flag only;
-    the corresponding engine work (input schema field for MEIP score, lookup table in
-    `data/tables/`, classifier wiring for Art. 114/121 sovereign-derived flow) has not
+    the corresponding engine work (input schema field for MEIP score, a cited
+    `LookupTable` entry in `rulebook/packs/crr.py` surfaced through
+    `engine/sa/crr_risk_weight_tables.py`, classifier wiring for Art. 114/121
+    sovereign-derived flow) has not
     been scheduled. Operator note: surface this to `IMPLEMENTATION_PLAN.md` so it can
     be triaged against P1 / P2 priority.
 
@@ -1454,8 +1457,9 @@ table.
 
 ## Real Estate Loan-Splitter (CRR Art. 125/126, PRA PS1/26 Art. 124F/H)
 
-A new pipeline stage (`engine/re_splitter.py`, between `CRMProcessor` and the
-SA calculator) physically partitions property-collateralised SA-bound
+The RE-split pipeline stage (`engine/stages/re_split/`, registered as
+`re_splitter` in `engine/registry.py`, between the CRM and calculators stages)
+physically partitions property-collateralised SA-bound
 exposures whose `exposure_class` is **not** already RE-typed. The secured row
 is reclassified to `RESIDENTIAL_MORTGAGE` / `COMMERCIAL_MORTGAGE` and capped
 at the regulatory secured-LTV cap; the residual row keeps the original

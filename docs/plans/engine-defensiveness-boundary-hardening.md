@@ -6,6 +6,12 @@ investigation (multi-agent audit, 2026-05-29) and its binding guardrails; commit
 the repo 2026-06-11 so the contract-debt baseline is tracked in-repo rather than in
 agent session memory.
 
+*Update (June 2026): post-Phase-5, `sa/namespace.py` and the Polars-namespace pattern no
+longer exist — namespaces are extinct and banned (arch_check check 14), and SA logic is now
+plain-function modules under `engine/sa/` (e.g. `risk_weights.py`). The contract-debt analysis
+below, including the `sa/namespace.py` reference, is preserved verbatim as point-in-time
+evidence.*
+
 ## Root cause
 
 The dominant defect behind the engine's defensive column-presence / `fill_null` /

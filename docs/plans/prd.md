@@ -125,7 +125,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
-| FR-3.1 | Six-stage immutable pipeline: Load → Hierarchy → Classify → CRM → Calculate → Aggregate | P0 | Done |
+| FR-3.1 | Pipeline as a fold over a literal stage registry (`engine/registry.py`): an immutable `PipelineContext` threaded through ordered `StageSpec` adapters (securitisation → hierarchy → CCR → classify → CRM → RE-split → calculators → equity → aggregate), each a `run(ctx, rulepack, run_config)` returning a new context; eager sealed frames at every stage edge | P0 | Done |
 | FR-3.2 | Support for multi-level counterparty hierarchies with rating inheritance (up to 10 levels) | P0 | Done |
 | FR-3.3 | Multi-level facility hierarchies with drawn aggregation and sub-facility exclusion | P0 | Done |
 | FR-3.4 | Automatic exposure classification by approach (SA/F-IRB/A-IRB/Slotting) based on config and exposure attributes | P0 | Done |
@@ -152,8 +152,8 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 | FR-5.1 | Framework toggle: CRR vs Basel 3.1 via factory methods (`CalculationConfig.crr()` / `.basel_3_1()`) | P0 | Done |
 | FR-5.2 | IRB approach configuration: F-IRB, A-IRB, or hybrid (per-exposure-class permissions) | P0 | Done |
 | FR-5.3 | Configurable reporting date (drives regulatory parameter selection) | P0 | Done |
-| FR-5.4 | Configurable PD floors, LGD floors, output floor percentage | P1 | Partial |
-| FR-5.5 | Configurable scaling factor (1.06 CRR, 1.0 Basel 3.1) | P0 | Done |
+| FR-5.4 | Regulatory floors (PD/LGD/output floor) resolved from the rulepack pack by regime/date; config carries only the regime choice and firm elections | P1 | Done |
+| FR-5.5 | IRB scaling factor (1.06 CRR / 1.0 Basel 3.1) resolved from the rulepack by regime, not a config field | P0 | Done |
 | FR-5.6 | Target currency for FX conversion | P1 | Done |
 
 ### FR-6: Interfaces
@@ -210,7 +210,7 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 |----|-------------|--------|--------|
 | NFR-5.1 | New calculation approaches addable via Protocol implementation | Pluggable | Met |
 | NFR-5.2 | New regulatory framework configurable via `CalculationConfig` factory | Addable | Met |
-| NFR-5.3 | Polars namespace extensions for domain-specific operations | 8 namespaces | Met |
+| NFR-5.3 | Domain logic as composable plain typed functions (`lf.pipe`), no Polars namespaces | All calculators | Met |
 
 ### NFR-6: Documentation
 
@@ -226,55 +226,44 @@ An open-source, framework-configurable RWA engine with full audit trails, regula
 
 ### Pipeline Architecture
 
+The pipeline is a **fold over a literal stage registry** (`engine/registry.py`): an
+ordered tuple of `StageSpec` entries, each backed by one `run(ctx, rulepack, run_config)
+-> PipelineContext` adapter under `engine/stages/`. `engine/orchestrator.py::run_stages`
+threads an immutable `PipelineContext` (a typed `ArtifactKey[T]` map, `contracts/context.py`)
+through the stages; `engine/pipeline.py` is the run-lifecycle facade. Stages exchange
+**eager sealed frames** — `materialise_edge` fires at every stage exit and producer-sealed
+edge contracts (`contracts/edges.py`) RAISE on schema violations, while data-quality
+issues accumulate in `list[CalculationError]`.
+
 ```
 Input Data (Parquet/CSV/DataFrames)
   │
-  ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 1: Loader                                    │
-│  Parse & validate raw input tables                  │
-│  → RawDataBundle                                    │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 2: Hierarchy Resolver                        │
-│  Resolve counterparty trees, facility trees,        │
-│  inherit ratings, unify drawn/undrawn exposures     │
-│  → ResolvedHierarchyBundle                          │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 3: Classifier                                │
-│  Assign exposure class + calculation approach        │
-│  (SA / F-IRB / A-IRB / Slotting / Equity)           │
-│  → ClassifiedExposuresBundle                        │
-└─────────────────────┬───────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 4: CRM Processor                             │
-│  Provisions → CCF → EAD → Collateral → Guarantees  │
-│  → CRMAdjustedBundle                                │
-└─────────────────────┬───────────────────────────────┘
-                      │
-           ┌──────────┼──────────┐
-           ▼          ▼          ▼
-┌────────────┐ ┌───────────┐ ┌──────────┐
-│ SA Calc    │ │ IRB Calc  │ │ Slotting │
-│            │ │ (F/A-IRB) │ │ Calc     │
-└─────┬──────┘ └─────┬─────┘ └────┬─────┘
-      │               │            │
-      └───────────────┼────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Stage 6: Aggregator                                │
-│  Combine results, apply output floor (Basel 3.1),   │
-│  produce summary views                              │
-│  → AggregatedResultBundle                           │
-└─────────────────────────────────────────────────────┘
+  ▼   loaded into the initial PipelineContext
+┌─────────────────────────────────────────────────────────────┐
+│  run_stages: fold over PIPELINE_STAGES (engine/registry.py)  │
+│  each StageSpec → run(ctx, rulepack, run_config) → ctx'       │
+│                                                              │
+│   securitisation_allocator                                   │
+│        ▼                                                     │
+│   hierarchy_resolver   (engine/stages/hierarchy/)            │
+│        ▼                                                     │
+│   ccr_sa_ccr                                                 │
+│        ▼                                                     │
+│   classifier           (engine/stages/classify/)            │
+│        ▼                                                     │
+│   crm_processor                                             │
+│        ▼                                                     │
+│   re_splitter                                               │
+│        ▼                                                     │
+│   calculators          (SA / F-IRB / A-IRB / Slotting)      │
+│        ▼                                                     │
+│   equity_calculator                                         │
+│        ▼                                                     │
+│   aggregator           (output floor, summary views)        │
+└─────────────────────────────────┬───────────────────────────┘
+                                  │
+                                  ▼
+                       AggregatedResultBundle
 ```
 
 ### Key Design Decisions
@@ -286,7 +275,7 @@ Input Data (Parquet/CSV/DataFrames)
 | **Protocol interfaces (not ABC)** | Structural typing allows loose coupling; components satisfy contracts without inheritance |
 | **Error accumulation (not exceptions)** | Data quality issues should be reported, not crash the pipeline; enables partial results |
 | **Single codebase, dual framework** | CRR→Basel 3.1 transition requires running both in parallel; avoids code duplication |
-| **Polars namespace extensions** | Domain-specific operations (`.sa.calculate()`, `.irb.calculate_k()`) read naturally and are discoverable |
+| **Plain typed transform functions** | Domain operations are module-level typed functions composed via `lf.pipe(fn, config)`; explicit, testable, no hidden namespace registration |
 
 ---
 
@@ -452,7 +441,7 @@ Input Data (Parquet/CSV/DataFrames)
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| **PRA amends Basel 3.1 rules before go-live** | Medium — may require parameter updates or new treatments | Medium | Framework-configurable design; regulatory parameters isolated in `data/tables/`; monitoring PRA consultation papers |
+| **PRA amends Basel 3.1 rules before go-live** | Medium — may require parameter updates or new treatments | Medium | Framework-configurable design; regulatory parameters isolated as cited entries in the rulepack packs (`src/rwa_calc/rulebook/packs/{common,crr,b31}.py`), resolved per regime/date; monitoring PRA consultation papers |
 | **Performance degrades at 10M+ scale** | Medium — some firms have very large portfolios | Low | Polars LazyFrame architecture scales linearly; benchmark suite includes 1M+ tests; streaming engine available for memory-constrained runs |
 | **IRB formula precision** | High — small rounding errors compound across millions of exposures | Low | `Decimal` type for regulatory parameters; hand-calculated reference values validated to 0.01%; `polars-normal-stats` for statistical functions (avoids scipy float issues) |
 | **Scope creep into market/op risk** | Medium — dilutes focus, increases maintenance burden | Medium | Explicit out-of-scope declaration; modular architecture allows separate products for other risk types |

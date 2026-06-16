@@ -202,7 +202,7 @@ counterparties = (
 **Input:** `RawDataBundle`
 **Output:** `ResolvedHierarchyBundle`
 
-See [`hierarchy.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py) for implementation.
+See the [`engine/stages/hierarchy/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/hierarchy) package (`resolver.py`, `graph.py`, `ratings.py`, …) for implementation. (`engine/hierarchy.py` is now a back-compat import shim.)
 
 Transformations:
 - Resolve parent-child relationships
@@ -223,17 +223,14 @@ resolved = (
 )
 ```
 
-??? example "Hierarchy Resolution (hierarchy.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:208:277"
-    ```
+See [`engine/stages/hierarchy/resolver.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/resolver.py) for the `HierarchyResolver` recipe and its delegators (`graph.py`, `ratings.py`, `facility_undrawn.py`, `unify.py`, `enrich.py`).
 
 ### Stage 3: Classification
 
 **Input:** `ResolvedHierarchyBundle`
 **Output:** `ClassifiedExposuresBundle`
 
-See [`classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py) for implementation.
+See the [`engine/stages/classify/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages/classify) package (`classifier.py`, `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`) for implementation. (`engine/classifier.py` is now a back-compat import shim.)
 
 Transformations:
 - Assign exposure class
@@ -255,10 +252,7 @@ classified = (
 )
 ```
 
-??? example "Classification Logic (classifier.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/classifier.py:195:244"
-    ```
+See [`engine/stages/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py) for the `ExposureClassifier` recipe (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
 
 ### Stage 4: CRM Processing
 
@@ -353,7 +347,7 @@ irb_result = (
 **Input:** Result bundles
 **Output:** `AggregatedResultBundle`
 
-See [`aggregator.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/aggregator.py) for implementation.
+See the [`engine/aggregator/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/aggregator) package (`aggregator.py`, with `_floor.py` for the output-floor logic, `_summaries.py`, `_el_summary.py`, …) for implementation.
 
 Transformations:
 - Combine results from all approaches
@@ -373,10 +367,7 @@ aggregated = (
 )
 ```
 
-??? example "Aggregation (aggregator.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/aggregator.py:1:80"
-    ```
+See [`engine/aggregator/aggregator.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/aggregator/aggregator.py) for the combine logic and [`engine/aggregator/_floor.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/aggregator/_floor.py) for the output-floor application.
 
 ## Data Validation
 

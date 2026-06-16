@@ -43,7 +43,7 @@
 |----|-------------|--------|--------|
 | NFR-5.1 | New approaches via Protocol | Pluggable | Met |
 | NFR-5.2 | New framework via config factory | Addable | Met |
-| NFR-5.3 | Polars namespace extensions | 8 namespaces | Met |
+| NFR-5.3 | Domain logic as composable typed functions (no Polars namespaces) | `.pipe(fn)` composition | Met |
 
 ## NFR-6: Documentation
 

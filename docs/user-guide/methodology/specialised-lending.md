@@ -261,27 +261,18 @@ Specialised lending can also be treated under SA when the slotting approach is n
 ### Slotting Calculator
 
 ```python
+import polars as pl
+from datetime import date
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.contracts.config import CalculationConfig
 
 calculator = SlottingCalculator()
-
-# calculate() takes a CRMAdjustedBundle and returns LazyFrameResult
-result = calculator.calculate(
-    data=crm_adjusted_bundle,
-    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-)
-
-# result.frame is a LazyFrame, result.errors is list[CalculationError]
-rwa_df = result.frame.collect()
 ```
 
-For single-exposure calculations, build a single-row LazyFrame and call
-`calculate_branch()`:
+`calculate_branch()` takes a pre-filtered slotting `LazyFrame` and returns a
+`LazyFrame`. Build a single-row frame for a single-exposure calculation:
 
 ```python
-import polars as pl
-
 df = pl.DataFrame({
     "exposure_reference": ["EX1"],
     "ead": [20_000_000.0],
@@ -299,22 +290,26 @@ result = calculator.calculate_branch(
 
 ### Risk Weight Lookup
 
+Slotting risk weights are cited entries in the rulepack packs
+(`src/rwa_calc/rulebook/packs/{crr,b31}.py`), read through the resolved pack
+rather than a standalone lookup table:
+
 ```python
-from rwa_calc.data.tables.crr_slotting import lookup_slotting_rw
-from rwa_calc.domain.enums import SlottingCategory
+from datetime import date
+from rwa_calc.rulebook.resolve import resolve
 
-# Non-HVCRE, standard maturity (>= 2.5yr)
-rw = lookup_slotting_rw(category=SlottingCategory.GOOD)
-# Returns: Decimal('0.90')
+# Resolve the frozen, content-hashed rulepack for the regime + reporting date
+pack = resolve("crr", date(2026, 12, 31))
 
-# HVCRE
-rw = lookup_slotting_rw(category=SlottingCategory.GOOD, is_hvcre=True)
-# Returns: Decimal('1.20')
-
-# Short maturity (< 2.5yr)
-rw = lookup_slotting_rw(category=SlottingCategory.STRONG, is_short_maturity=True)
-# Returns: Decimal('0.50')
+# Slotting risk weights are cited LookupTable entries on the pack, e.g.
+# the base, short-maturity, HVCRE, and HVCRE-short slotting RW tables keyed
+# by slotting category (read by engine/slotting/transforms.py).
+slotting_rw_base = pack.lookup("slotting_rw_base")
+# Non-HVCRE, standard maturity (>= 2.5yr), category GOOD -> 0.90
 ```
+
+The `SlottingCategory` enum (`rwa_calc.domain.enums`) is still the canonical
+category key used by the slotting transforms.
 
 ## Project Finance Detail
 

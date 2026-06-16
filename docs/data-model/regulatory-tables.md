@@ -3,7 +3,7 @@
 This page documents the lookup tables used for regulatory risk weight assignment, CCF,
 supervisory haircuts, LGD, and slotting.
 
-> **Source of truth**: All table implementations are in `src/rwa_calc/data/tables/`.
+> **Source of truth**: All regulatory table values live in the rulepack packs `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` as cited entries (ScalarParam / LookupTable / BandedTable / DecisionTable / Feature), read through `rwa_calc.rulebook.resolve.resolve(regime, date)`. The SA risk-weight and collateral-haircut builder shims (`engine/sa/crr_risk_weight_tables.py`, `engine/sa/b31_risk_weight_tables.py`, `engine/crm/haircut_tables.py`) bind those pack values for the engine.
 
 ## Risk Weight Tables
 
@@ -21,7 +21,7 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | 6 | 150% |
 | Unrated | 100% |
 
-**Source**: `CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS` in `data/tables/crr_risk_weights.py`
+**Source**: `CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS` in `engine/sa/crr_risk_weight_tables.py` (values cited in `rulebook/packs/crr.py` / `common.py`, read via the rulepack)
 
 ### Institution Risk Weights (CRR Art. 120–121)
 
@@ -43,7 +43,7 @@ Sovereign weights are identical under CRR and Basel 3.1.
 | B | 75% |
 | C | 150% |
 
-**Source**: `INSTITUTION_RISK_WEIGHTS_CRR`, `INSTITUTION_RISK_WEIGHTS_B31_ECRA`, `B31_SCRA_RISK_WEIGHTS` in `data/tables/`
+**Source**: `INSTITUTION_RISK_WEIGHTS_CRR` in `engine/sa/crr_risk_weight_tables.py`, `INSTITUTION_RISK_WEIGHTS_B31_ECRA` / `B31_SCRA_RISK_WEIGHTS` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/{crr,b31,common}.py`, read via the rulepack)
 
 ### Short-Term Institution ECAI (Basel 3.1 Art. 120(2)/(2B))
 
@@ -75,7 +75,7 @@ and the SA engine routes via Table 4A.
 
 **Source**: `B31_ECRA_SHORT_TERM_RISK_WEIGHTS` (Table 4) and
 `B31_ECRA_SHORT_TERM_ECAI_RISK_WEIGHTS` (Table 4A) in
-`data/tables/b31_risk_weights.py`.
+`engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/b31.py`, read via the rulepack).
 
 ### Corporate Risk Weights (CRR Art. 122)
 
@@ -108,8 +108,8 @@ and the SA engine routes via Table 4A.
     not the corporate class. It sits at priority 3 in the Art. 112 Table A2 waterfall, above
     corporates at priority 16. See the [equity section below](#sa-equity-code-constants).
 
-**Source**: `CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`,
-`B31_CORPORATE_NON_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW` in `data/tables/`
+**Source**: `CORPORATE_RISK_WEIGHTS` in `engine/sa/crr_risk_weight_tables.py`, `B31_CORPORATE_RISK_WEIGHTS`, `B31_CORPORATE_INVESTMENT_GRADE_RW`,
+`B31_CORPORATE_NON_INVESTMENT_GRADE_RW`, `B31_CORPORATE_SME_RW` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/{crr,b31}.py`, read via the rulepack)
 
 ### Short-Term Corporate ECAI (Basel 3.1 Art. 122(3), Table 6A)
 
@@ -141,7 +141,7 @@ schema field exists. See [B31 SA Risk Weights spec](../specifications/basel31/sa
     carried forward unchanged to PRA PS1/26 Art. 123(4). The CRR code path does not implement
     this treatment — see [CRR SA spec](../specifications/crr/sa-risk-weights.md#payroll--pension-loans-crr-art-123-crr2).
 
-**Source**: `RETAIL_RISK_WEIGHT` in `data/tables/crr_risk_weights.py`, `B31_RETAIL_PAYROLL_LOAN_RW` / `B31_RETAIL_TRANSACTOR_RW` in `data/tables/b31_risk_weights.py`
+**Source**: `RETAIL_RISK_WEIGHT` in `engine/sa/crr_risk_weight_tables.py`, `B31_RETAIL_PAYROLL_LOAN_RW` / `B31_RETAIL_TRANSACTOR_RW` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/{crr,b31}.py`, read via the rulepack)
 
 ### CRR Residential Mortgage (CRR Art. 125)
 
@@ -150,7 +150,7 @@ Under CRR, residential mortgages use a split treatment based on 80% LTV threshol
 - LTV ≤ 80%: 35% risk weight
 - LTV > 80%: 35% on the secured portion, 75% on the unsecured excess
 
-**Source**: `RESIDENTIAL_MORTGAGE_PARAMS` in `data/tables/crr_risk_weights.py`
+**Source**: `RESIDENTIAL_MORTGAGE_PARAMS` in `engine/sa/crr_risk_weight_tables.py` (values cited in `rulebook/packs/crr.py`, read via the rulepack)
 
 ### CRR Commercial Real Estate (CRR Art. 126)
 
@@ -165,7 +165,7 @@ Art. 126(2)(a)–(c) qualifying conditions must also be met (property value inde
 borrower credit quality, repayment not dependent on property cash flows, Art. 208/229
 compliance).
 
-**Source**: `COMMERCIAL_RE_PARAMS` in `data/tables/crr_risk_weights.py`
+**Source**: `COMMERCIAL_RE_PARAMS` in `engine/sa/crr_risk_weight_tables.py` (values cited in `rulebook/packs/crr.py`, read via the rulepack)
 
 !!! bug "Code Divergence (D3.36)"
     The calculator implements Art. 126 as a binary whole-loan treatment (50% if LTV ≤ 50%
@@ -180,7 +180,7 @@ The PRA adopted loan-splitting (not the BCBS whole-loan table) for general resid
 - Secured portion (up to **55% of property value**) → **20%** risk weight
 - Residual → **counterparty risk weight** (75% for individuals per Art. 124L)
 
-**Source**: `B31_RESIDENTIAL_GENERAL_SECURED_RW`, `B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO` in `data/tables/b31_risk_weights.py`
+**Source**: `B31_RESIDENTIAL_GENERAL_SECURED_RW`, `B31_RESIDENTIAL_GENERAL_MAX_SECURED_RATIO` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/b31.py`, read via the rulepack)
 
 #### Income-producing — Whole-Loan (Art. 124G, Table 6B)
 
@@ -209,7 +209,7 @@ The multiplied weight is **not capped** at the Table 6B ceiling — it may excee
     Art. 124G(2) has no express cap — LTV > 100% with a junior charge now correctly
     resolves to 131.25%. Regression guard: `test_multiplier_not_capped_at_105`.
 
-**Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `data/tables/b31_risk_weights.py`
+**Source**: `B31_RESI_INCOME_JUNIOR_MULTIPLIER`, `B31_RESI_INCOME_JUNIOR_LTV_THRESHOLD` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/b31.py`, read via the rulepack)
 
 ### Basel 3.1 Commercial Real Estate (PRA Art. 124H–124K)
 
@@ -263,7 +263,7 @@ Exposures failing the [Art. 124A qualifying criteria](../specifications/basel31/
 | Residential, non-income-dependent | Counterparty RW |
 | Commercial, non-income-dependent | max(60%, counterparty RW) |
 
-**Source**: `B31_COMMERCIAL_INCOME_LTV_BANDS`, `B31_ADC_RISK_WEIGHT`, `B31_ADC_PRESOLD_RISK_WEIGHT` in `data/tables/b31_risk_weights.py`
+**Source**: `B31_COMMERCIAL_INCOME_LTV_BANDS`, `B31_ADC_RISK_WEIGHT`, `B31_ADC_PRESOLD_RISK_WEIGHT` in `engine/sa/b31_risk_weight_tables.py` (values cited in `rulebook/packs/b31.py`, read via the rulepack)
 
 ---
 
@@ -326,7 +326,7 @@ movement of goods retain 20% CCF under F-IRB. Flag these with `is_short_term_tra
 |-----------|--------|
 | Currency mismatch | +8% |
 
-**Source**: `COLLATERAL_HAIRCUTS`, `BASEL31_COLLATERAL_HAIRCUTS`, `FX_HAIRCUT` in `data/tables/haircuts.py`
+**Source**: `COLLATERAL_HAIRCUTS`, `BASEL31_COLLATERAL_HAIRCUTS` in `engine/crm/haircut_tables.py` (values cited in the `collateral_haircuts` DecisionTable of `rulebook/packs/{crr,b31}.py`; `fx_haircut` scalar in `packs/common.py`).
 
 ---
 
@@ -407,9 +407,7 @@ Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational s
 | Weak | 250% | 8.0% |
 | Default | 0% | 50.0% |
 
-**Source (CRR)**: `SLOTTING_RISK_WEIGHTS`, `SLOTTING_RISK_WEIGHTS_SHORT`, `SLOTTING_RISK_WEIGHTS_HVCRE`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT` in `data/tables/crr_slotting.py`
-
-**Source (B31)**: `B31_SLOTTING_RISK_WEIGHTS`, `B31_SLOTTING_RISK_WEIGHTS_PREOP`, `B31_SLOTTING_RISK_WEIGHTS_HVCRE` in `data/tables/b31_slotting.py`
+**Source (CRR/B31)**: slotting risk-weight values are cited `LookupTable` entries in `rulebook/packs/crr.py` / `rulebook/packs/b31.py` (keys `slotting_rw_base`, `slotting_rw_short`, `slotting_rw_hvcre`, `slotting_rw_hvcre_short`, plus B31 `slotting_rw_preop`), bound for the engine in `engine/slotting/transforms.py` via `_CRR_PACK.lookup(...)` / `_B31_PACK.lookup(...)`. There is no standalone `lookup_slotting_rw` helper or `data/tables` module — read the resolved rulepack.
 
 ---
 
@@ -468,7 +466,7 @@ Applies to all non-HVCRE SL types (PF, IPRE, OF, CF) regardless of operational s
 | Real estate | 1.4x | 30% of EAD |
 | Other physical | 1.4x | 30% of EAD |
 
-**Source**: `FIRB_SUPERVISORY_LGD`, `BASEL31_FIRB_SUPERVISORY_LGD`, `FIRB_OVERCOLLATERALISATION_RATIOS` in `data/tables/firb_lgd.py`
+**Source**: F-IRB supervisory LGD and overcollateralisation values are cited rulepack entries in `rulebook/packs/{crr,b31}.py`, resolved per run via `resolve(regime, date)` and bound for the engine by `firb_supervisory_lgd_values(pack)` in `engine/irb/formulas.py` (consumed in `engine/irb/transforms.py`). The former `FIRB_SUPERVISORY_LGD` / `FIRB_OVERCOLLATERALISATION_RATIOS` constants and the `data/tables/firb_lgd.py` module no longer exist.
 
 ---
 
@@ -482,8 +480,8 @@ retail property-secured exposures: exposure-weighted average LGD ≥ **10%** (re
 portfolio level. Exposures benefiting from central government guarantees are excluded.
 
 !!! warning "Code Divergence (D3.38)"
-    The calculator does not implement CRR portfolio-level LGD floors. `LGDFloors.crr()` returns
-    all zeros. See [A-IRB Specification](../specifications/crr/airb-calculation.md#crr-portfolio-level-lgd-floors-art-1644) for details.
+    The calculator does not implement CRR portfolio-level LGD floors; the CRR rulepack carries
+    zero per-exposure LGD floors. See [A-IRB Specification](../specifications/crr/airb-calculation.md#crr-portfolio-level-lgd-floors-art-1644) for details.
 
 ### Basel 3.1 Per-Exposure Input Floors
 
@@ -548,7 +546,7 @@ above. Canonical source: [B31 A-IRB spec](../specifications/basel31/airb-calcula
     See [IRB Approach Restrictions](../framework-comparison/key-differences.md#irb-approach-restrictions)
     for the full Art. 147A(1) class mapping.
 
-**Source**: `CRR_PD_FLOOR` in `data/tables/firb_lgd.py`, `PDFloors` in `contracts/config.py`
+**Source**: PD-floor values are cited entries in the rulepack packs (`rulebook/packs/{crr,b31}.py`), resolved per run via `resolve(regime, date)`. They are no longer carried on `CalculationConfig` (the `PDFloors` sub-config was removed).
 
 ---
 
@@ -557,8 +555,10 @@ above. Canonical source: [B31 A-IRB spec](../specifications/basel31/airb-calcula
 ### SA Equity (Code Constants)
 
 !!! warning "Code Values vs Regulation"
-    This table reflects the **code constants** in `SA_EQUITY_RISK_WEIGHTS` and
-    `B31_SA_EQUITY_RISK_WEIGHTS`. Under CRR Art. 133(2), all equity receives a flat
+    This table reflects the SA equity risk-weight values bound in
+    `engine/equity/calculator.py` (the `_CRR_SA_RW` / `_B31_SA_RW` maps, resolved
+    from the `equity_sa_risk_weights` `LookupTable` in the rulepack packs). Under
+    CRR Art. 133(2), all equity receives a flat
     **100%** — the differentiated weights (250%/400%) apply only under **Basel 3.1**
     Art. 133. The CIU fallback (Art. 132(2)) is **1,250%** per regulation, but the
     code uses 150% (CRR) / 250% (B31). See [Equity Approach](../specifications/crr/equity-approach.md)
@@ -593,7 +593,7 @@ Art. 155(2) defines exactly three risk weight categories:
 | Private equity (diversified portfolios) | 190% | Art. 155(2)(b) |
 | All other equity | 370% | Art. 155(2)(c) |
 
-**Code mapping** (`IRB_SIMPLE_EQUITY_RISK_WEIGHTS` in `data/tables/crr_equity_rw.py`):
+**Code mapping** (`equity_irb_simple_risk_weights` `LookupTable` in `rulebook/packs/crr.py`, bound in `engine/equity/calculator.py` as the module-level `_IRB_RW` map):
 
 The code maps the `EquityType` enum to these three buckets:
 
@@ -610,7 +610,7 @@ The code maps the `EquityType` enum to these three buckets:
 
 **Note:** Under Basel 3.1, IRB equity approaches are withdrawn. All equity falls to SA.
 
-**Source**: `SA_EQUITY_RISK_WEIGHTS`, `IRB_SIMPLE_EQUITY_RISK_WEIGHTS` in `data/tables/crr_equity_rw.py`
+**Source**: equity risk-weight values are cited `LookupTable` entries in `rulebook/packs/{crr,b31}.py` (`equity_sa_risk_weights`, `equity_irb_simple_risk_weights`), resolved via `resolve(regime, date)` and bound in `engine/equity/calculator.py` (module-level `_CRR_SA_RW` / `_B31_SA_RW` / `_IRB_RW` maps built with `lookup_float_map`). The former `SA_EQUITY_RISK_WEIGHTS` / `IRB_SIMPLE_EQUITY_RISK_WEIGHTS` constants and `data/tables/crr_equity_rw.py` no longer exist.
 
 ---
 
@@ -624,7 +624,7 @@ The code maps the `EquityType` enum to these three buckets:
 | Maturity floor | 1 year |
 | Maturity cap | 5 years |
 
-**Source**: `CRR_PD_FLOOR`, `CRR_MATURITY_FLOOR`, `CRR_MATURITY_CAP` in `data/tables/firb_lgd.py`
+**Source**: PD floor, maturity floor and maturity cap are cited `ScalarParam` entries in the rulepack packs (`rulebook/packs/{crr,b31}.py`), read via the resolved rulepack (`resolve(regime, date)`).
 
 ---
 
@@ -633,7 +633,7 @@ The code maps the `EquityType` enum to these three buckets:
 ### Risk Weight Lookup
 
 ```python
-from rwa_calc.data.tables.crr_risk_weights import lookup_risk_weight
+from rwa_calc.engine.sa.crr_risk_weight_tables import lookup_risk_weight
 
 rw = lookup_risk_weight(
     exposure_class="corporate",
@@ -646,7 +646,7 @@ rw = lookup_risk_weight(
 ### Residential Mortgage RW (CRR)
 
 ```python
-from rwa_calc.data.tables.crr_risk_weights import calculate_residential_mortgage_rw
+from rwa_calc.engine.sa.crr_risk_weight_tables import calculate_residential_mortgage_rw
 from decimal import Decimal
 
 rw, description = calculate_residential_mortgage_rw(ltv=Decimal("0.85"))
@@ -656,7 +656,7 @@ rw, description = calculate_residential_mortgage_rw(ltv=Decimal("0.85"))
 ### Basel 3.1 Residential RW
 
 ```python
-from rwa_calc.data.tables.b31_risk_weights import lookup_b31_residential_rw
+from rwa_calc.engine.sa.b31_risk_weight_tables import lookup_b31_residential_rw
 from decimal import Decimal
 
 rw, band = lookup_b31_residential_rw(ltv=Decimal("0.65"), is_income_producing=False)
@@ -666,7 +666,7 @@ rw, band = lookup_b31_residential_rw(ltv=Decimal("0.65"), is_income_producing=Fa
 ### Haircut Lookup
 
 ```python
-from rwa_calc.data.tables.haircuts import lookup_collateral_haircut
+from rwa_calc.engine.crm.haircut_tables import lookup_collateral_haircut
 
 haircut = lookup_collateral_haircut(
     collateral_type="bond",
@@ -680,40 +680,47 @@ haircut = lookup_collateral_haircut(
 
 ### F-IRB LGD Lookup
 
-```python
-from rwa_calc.data.tables.firb_lgd import lookup_firb_lgd
+There is no standalone `lookup_firb_lgd` helper. F-IRB supervisory LGD values are read
+from the resolved rulepack via the engine binding:
 
-lgd = lookup_firb_lgd(
-    collateral_type="residential_re",
-    is_subordinated=False,
-    is_basel_3_1=False
-)
-# Returns: Decimal("0.35") (35% CRR) or Decimal("0.20") (20% Basel 3.1)
+```python
+from datetime import date
+from rwa_calc.engine.irb.formulas import firb_supervisory_lgd_values
+from rwa_calc.rulebook.resolve import resolve
+
+lgd_values = firb_supervisory_lgd_values(resolve("crr", date(2026, 1, 1)))
+# Maps collateral / seniority keys to supervisory LGDs
+# e.g. residential RE secured -> 0.35 (CRR) / 0.20 (Basel 3.1)
 ```
 
 ### Slotting Lookup
 
-```python
-from rwa_calc.data.tables.crr_slotting import lookup_slotting_rw
+There is no standalone `lookup_slotting_rw` helper. Slotting risk-weight values are
+`LookupTable` entries read from the resolved rulepack:
 
-rw = lookup_slotting_rw(
-    category="good",
-    is_hvcre=False,
-    is_short_maturity=False
-)
-# Returns: Decimal("0.90") (90%)
+```python
+from datetime import date
+from rwa_calc.rulebook.resolve import resolve
+
+slotting_rw = resolve("crr", date(2026, 1, 1)).lookup("slotting_rw_base")
+# Maps slotting category (e.g. "good") to its risk weight, e.g. 0.90 (90%)
+# Other keys: slotting_rw_short, slotting_rw_hvcre, slotting_rw_hvcre_short
+# (B31 adds slotting_rw_preop)
 ```
 
 ### Equity RW Lookup
 
+There is no standalone `lookup_equity_rw` helper. Equity risk-weight values are
+`LookupTable` entries read from the resolved rulepack (and bound in
+`engine/equity/calculator.py` as the module-level `_CRR_SA_RW` / `_IRB_RW` maps):
+
 ```python
-from rwa_calc.data.tables.crr_equity_rw import lookup_equity_rw
+from datetime import date
+from rwa_calc.rulebook.resolve import resolve
 
-rw = lookup_equity_rw(equity_type="listed", approach="sa")
-# Returns: Decimal("1.00") (100%)
-
-rw = lookup_equity_rw(equity_type="listed", approach="irb_simple")
-# Returns: Decimal("2.90") (290%)
+pack = resolve("crr", date(2026, 1, 1))
+sa_rw = pack.lookup("equity_sa_risk_weights")            # e.g. listed -> 1.00 (100%)
+irb_rw = pack.lookup("equity_irb_simple_risk_weights")   # e.g. listed -> 2.90 (290%)
 ```
 
 ## Next Steps

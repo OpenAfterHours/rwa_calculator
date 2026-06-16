@@ -246,7 +246,8 @@ validated = validate_ccf_modelled(lf=facilities, column="ccf_modelled")
     Input `risk_type` values are validated by the bundle-level value validation
     below (`COLUMN_VALUE_CONSTRAINTS` in `data/schemas.py` defines
     `VALID_RISK_TYPES_INPUT` and `RISK_TYPE_SYNONYMS`), and short codes are
-    normalised inside the CCF lookup (`data/tables/ccf.py`). The former
+    normalised inside the CCF lookup (`engine/ccf.py::_normalize_risk_type`,
+    using `RISK_TYPE_SYNONYMS` from `data/schemas.py`). The former
     standalone `validate_risk_type()` / `normalize_risk_type()` helpers were
     dead code and have been removed.
 

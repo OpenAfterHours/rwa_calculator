@@ -8,6 +8,11 @@ evidence** — they are why Phase 1 exists and why the do-not-do register forbid
 re-attempting a single-plan pipeline on Polars 1.37. Committed to the repo 2026-06-11
 (previously held only in agent session memory).
 
+*Update (June 2026): post-Phase-5, `sa/namespace.py` and `irb/namespace.py` no longer exist —
+Polars namespaces are extinct and banned (arch_check check 14); SA/IRB logic now lives in
+`engine/sa/risk_weights.py` and `engine/irb/transforms.py`. The file/line references below are
+historical and preserved as point-in-time evidence.*
+
 ## The finding
 
 A fully single-LazyFrame pipeline (zero mid-pipeline collects, one terminal collect)

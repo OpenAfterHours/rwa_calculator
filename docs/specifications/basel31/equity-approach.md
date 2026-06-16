@@ -94,11 +94,14 @@ on whether the risk profile substantially changed on transfer (Glossary p.5, con
     or higher-risk (400%, Art. 133(4)). The calculator's `is_speculative` flag maps to
     the Art. 133(4) higher-risk definition, not a BCBS CQS tier.
 
-!!! warning "Code Divergence: PE/VC Always Mapped to 400%"
-    The equity calculator (`calculator.py:570–574`) assigns 400% to **all** `private_equity`
-    and `private_equity_diversified` equity types regardless of business age. Under the PRA
-    definition, only PE/VC where the business has existed for less than five years qualifies
-    as higher-risk. Long-established PE holdings should receive standard 250%. See D3.37.
+!!! info "Business-Age-Aware Higher-Risk Routing"
+    The equity SA risk-weight logic (`engine/equity/calculator.py::_apply_equity_weights_sa`)
+    is business-age aware: unlisted PE/VC (`private_equity`, `private_equity_diversified`)
+    is routed to the higher-risk 400% weight only when the underlying business has existed
+    for less than five years — or when business age is unknown/unevidenced, which is treated
+    conservatively as < 5 years (a firm cannot claim the long-established carve-out without
+    evidence). Long-established PE/VC (`business_age_years` >= 5) falls through to the
+    standard **250%** weight. See D3.37.
 
 All other equity (not subordinated debt, not higher-risk) receives the standard **250%**
 weight under Art. 133(3), including listed equity, government-supported equity, and
@@ -118,8 +121,8 @@ CRR approaches are no longer available:
 The removal is implemented in the equity calculator's approach determination:
 
 ```python
-# Under Basel 3.1, always returns EquityApproach.SA
-if config.is_basel_3_1:
+# Basel 3.1: IRB equity removed — all equity uses SA
+if not resolved_pack.feature("equity_irb_approaches_available"):
     return EquityApproach.SA
 ```
 

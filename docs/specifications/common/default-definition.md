@@ -337,9 +337,9 @@ drives the following downstream treatments:
 
 | Consumer | Effect | Reference |
 |----------|--------|-----------|
-| **SA calculator** (`engine/sa/namespace.py`) | Exposure routed to Art. 127 defaulted branch (provision-coverage 100%/150% split; RESI RE non-income flat 100% under B31) | CRR/B31 Art. 127 |
-| **IRB F-IRB** (`engine/irb/namespace.py`) | `K = 0`; RW driven by `max(0, 12.5 × (LGD − BEEL))` | Art. 153(1)(ii) |
-| **IRB A-IRB** (`engine/irb/namespace.py`) | `K = max(0, LGD − BEEL)` using own LGD estimate | Art. 154(1)(i) |
+| **SA calculator** (`engine/sa/calculator.py`; Art. 127 defaulted branch in `engine/sa/risk_weights.py::_apply_defaulted_risk_weight`, composed via `apply_risk_weights`) | Exposure routed to Art. 127 defaulted branch (provision-coverage 100%/150% split; RESI RE non-income flat 100% under B31) | CRR/B31 Art. 127 |
+| **IRB F-IRB** (`engine/irb/calculator.py`; defaulted K in `engine/irb/adjustments.py::apply_defaulted_treatment`) | `K = 0`; RW driven by `max(0, 12.5 × (LGD − BEEL))` | Art. 153(1)(ii) |
+| **IRB A-IRB** (`engine/irb/calculator.py`; defaulted K in `engine/irb/adjustments.py::apply_defaulted_treatment`) | `K = max(0, LGD − BEEL)` using own LGD estimate | Art. 154(1)(i) |
 | **Supporting factors** (`engine/supporting_factors.py:295,300`) | Defaulted exposures **excluded** from SME supporting factor (0.7619) | CRR Art. 501 |
 | **EL vs provisions** (`engine/aggregator/_el_summary.py:90–96`) | `is_defaulted` partitions Pool A (non-defaulted) and Pool C/D (defaulted) for Art. 159(3) two-branch rule | CRR/B31 Art. 159 |
 | **COREP reporting** (`reporting/corep/generator.py`) | Defaulted rows in C 07.00 / C 08.01 / C 08.02 / C 09.01 | PS1/26 Annex II |

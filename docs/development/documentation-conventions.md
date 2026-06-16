@@ -21,12 +21,12 @@ Always include links to actual implementation when showing conceptual code:
 ```markdown
 !!! info "Conceptual Logic"
     The following illustrates the logic. For the actual implementation,
-    see [`classifier.py:285-392`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py#L285-L392).
+    see [`classify/classifier.py:87-150`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py#L87-L150).
 ```
 
 **Format for GitHub links:**
 ```
-https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py#L285-L392
+https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py#L87-L150
 ```
 
 ### 2. Embedded Code Snippets
@@ -48,7 +48,7 @@ Path is relative to repository root. See [pymdownx.snippets docs](https://facele
 
 ??? example "See retail.md for working example"
     ```python
-    --8<-- "src/rwa_calc/engine/classifier.py:285:310"
+    --8<-- "src/rwa_calc/engine/stages/classify/classifier.py:87:110"
     ```
 
 ### 3. Auto-generated API Documentation
@@ -85,9 +85,9 @@ def simplified_example():
 
 Use collapsible sections to show lengthy actual code without cluttering the page:
 
-??? example "See this working example from hierarchy.py"
+??? example "See this working example from hierarchy/resolver.py"
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:60:100"
+    --8<-- "src/rwa_calc/engine/stages/hierarchy/resolver.py:66:100"
     ```
 
 ### 6. Cross-Reference Convention

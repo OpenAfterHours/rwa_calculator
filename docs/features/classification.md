@@ -4,7 +4,7 @@ This document provides comprehensive documentation of the exposure classificatio
 
 ## Overview
 
-The classifier (`src/rwa_calc/engine/classifier.py`) is responsible for:
+The classifier (`src/rwa_calc/engine/stages/classify/`, with a back-compat shim at `engine/classifier.py`) is responsible for:
 
 1. Mapping counterparty entity types to regulatory exposure classes
 2. Determining the calculation approach (SA, F-IRB, A-IRB, Slotting)
@@ -286,12 +286,12 @@ is_sme=true; is_mortgage=false; is_defaulted=false; is_infrastructure=false;
 requires_fi_scalar=false; qualifies_as_retail=true
 ```
 
-### Step 7: Split by Approach
+### Step 7: Emit the Unified Frame
 
-Filters exposures into separate LazyFrames:
-- `sa_exposures` - Approach = SA
-- `irb_exposures` - Approach = FIRB or AIRB
-- `slotting_exposures` - Approach = SLOTTING
+The classifier returns a single `all_exposures` LazyFrame carrying the `approach`
+column on the `ClassifiedExposuresBundle`. Downstream stages (CRM, then the
+calculators) filter on the `approach` column; there are no separate
+`sa_exposures` / `irb_exposures` / `slotting_exposures` frames.
 
 ## Output Schema
 

@@ -1,14 +1,24 @@
 # Engine API
 
 The engine module contains all calculation components. Each component implements a
-structural `Protocol` (defined in `contracts/protocols.py`) and follows the immutable
-pipeline pattern: receive a frozen bundle, return a new frozen bundle.
+structural `Protocol` (defined in `contracts/protocols.py`).
 
-Pipeline order:
+The engine is wired as a **fold over a literal stage registry**: `engine/registry.py`
+holds the ordered `StageSpec` list, and `engine/orchestrator.py::run_stages` threads an
+immutable `PipelineContext` (a typed `ArtifactKey[T]` map, `contracts/context.py`)
+through one `run(ctx, rulepack, run_config)` adapter per stage under `engine/stages/`.
+`engine/pipeline.py` is the run-lifecycle facade. Stages exchange **eager sealed frames**
+(`materialise_edge` at every stage exit, with producer-sealed edge contracts in
+`contracts/edges.py`); schema violations **raise**, while data-quality issues accumulate
+in `list[CalculationError]`. The per-component classes described below are the stage
+implementations invoked by those adapters.
+
+Registered stage order (`engine/registry.py`):
 
 ```
-Loader → HierarchyResolver → ExposureClassifier → CRMProcessor
-    → SA/IRB/Slotting/Equity Calculators → OutputAggregator
+securitisation_allocator → hierarchy_resolver → ccr_sa_ccr → classifier
+    → crm_processor → re_splitter → calculators (SA/IRB/Slotting)
+    → equity_calculator → aggregator
 ```
 
 ## Loader
@@ -303,10 +313,12 @@ class CRMProcessor:
     GUARANTEE_REQUIRED_COLUMNS = {"beneficiary_reference", "amount_covered", "guarantor"}
     PROVISION_REQUIRED_COLUMNS = {"beneficiary_reference", "amount"}
 
-    def __init__(self, is_basel_3_1: bool = False) -> None:
-        """
-        Args:
-            is_basel_3_1: True for Basel 3.1 framework.
+    def __init__(self) -> None:
+        """Construct a CRM processor.
+
+        The processor holds no constructor regime-state — the regime is
+        read per-method from the effective CalculationConfig / resolved
+        pack at call time.
         """
 
     def get_crm_unified_bundle(
@@ -379,20 +391,38 @@ class CRMProcessor:
 **Factory:**
 
 ```python
-def create_crm_processor(is_basel_3_1: bool = False) -> CRMProcessor:
-    """Create a CRM processor instance."""
+def create_crm_processor() -> CRMProcessor:
+    """Create a CRM processor instance.
+
+    The processor carries no constructor regime-state — the regime is read
+    per-method from the effective CalculationConfig at call time.
+    """
 ```
 
 ### Module: `rwa_calc.engine.crm.haircuts`
 
 ```python
-def get_haircut(
-    collateral_type: CollateralType,
-    cqs: CQS | None,
-    residual_maturity_years: float,
-) -> float:
-    """Get supervisory haircut for collateral."""
+class HaircutCalculator:
+    """Apply CRR Art. 223-224 supervisory haircuts to financial collateral."""
+
+    def apply_haircuts(self, ...) -> pl.LazyFrame:
+        """Apply collateral, FX and maturity-mismatch haircuts across a frame."""
+
+    def apply_exposure_haircut(self, ...) -> pl.LazyFrame: ...
+    def apply_maturity_mismatch(self, ...) -> pl.LazyFrame: ...
+    def calculate_single_haircut(self, ...) -> float: ...
+
+
+def create_haircut_calculator() -> HaircutCalculator:
+    """Create a HaircutCalculator instance."""
 ```
+
+!!! note "Supervisory haircut values are pack-bound"
+    The supervisory-haircut table builders live in the thin pack-binding shim
+    `rwa_calc.engine.crm.haircut_tables` (e.g. `get_haircut_table(...)`), which
+    reads the haircut values back from the rulepack. There is no free
+    `get_haircut(...)` function — `HaircutCalculator` consumes the
+    pack-resolved tables.
 
 ## SA Calculator
 
@@ -512,95 +542,89 @@ def create_irb_calculator() -> IRBCalculator:
     """Create an IRB calculator instance."""
 ```
 
-### Module: `rwa_calc.engine.irb.namespace`
+### Module: `rwa_calc.engine.irb.transforms`
 
-Polars namespace extensions for fluent, chainable IRB calculations.
+Plain module-level typed functions for IRB calculations, composed via
+`lf.pipe(fn, config)`. (Polars namespaces are extinct and banned —
+`arch_check` check 14.)
 
-#### IRBLazyFrame Namespace
+#### LazyFrame transforms
 
 ```python
-@pl.api.register_lazyframe_namespace("irb")
-class IRBLazyFrame:
-    """LazyFrame namespace for IRB calculations."""
+def classify_approach(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Classify exposures as F-IRB or A-IRB. Adds: approach, is_airb."""
 
-    def classify_approach(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Classify exposures as F-IRB or A-IRB. Adds: approach, is_airb."""
+def apply_firb_lgd(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Apply supervisory LGD for F-IRB (45% senior, 75% sub, 0% financial, 35-40% secured)."""
 
-    def apply_firb_lgd(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply supervisory LGD for F-IRB (45% senior, 75% sub, 0% financial, 35-40% secured)."""
+def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Ensure required columns exist with defaults (pd=0.01, lgd=0.45, maturity=2.5)."""
 
-    def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Ensure required columns exist with defaults (pd=0.01, lgd=0.45, maturity=2.5)."""
+def apply_all_formulas(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Full chain: PD floor → LGD floor → correlation → K → maturity adj → RWA → EL."""
 
-    def apply_all_formulas(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Full chain: PD floor → LGD floor → correlation → K → maturity adj → RWA → EL."""
+def apply_pd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Apply PD floor (0.03% CRR, differentiated Basel 3.1)."""
 
-    def apply_pd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply PD floor (0.03% CRR, differentiated Basel 3.1)."""
+def apply_lgd_floor(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Apply LGD floor (Basel 3.1 A-IRB only)."""
 
-    def apply_lgd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply LGD floor (Basel 3.1 A-IRB only)."""
+def calculate_correlation(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Calculate asset correlation with SME firm-size adjustment."""
 
-    def calculate_correlation(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Calculate asset correlation with SME firm-size adjustment."""
+def calculate_k(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Calculate capital requirement K using IRB formula."""
 
-    def calculate_k(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Calculate capital requirement K using IRB formula."""
+def calculate_maturity_adjustment(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Calculate maturity adjustment (non-retail only)."""
 
-    def calculate_maturity_adjustment(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Calculate maturity adjustment (non-retail only)."""
+def calculate_rwa(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Calculate RWA = K x 12.5 x EAD x MA x [1.06]."""
 
-    def calculate_rwa(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Calculate RWA = K x 12.5 x EAD x MA x [1.06]."""
+def calculate_expected_loss(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Calculate expected loss = PD x LGD x EAD."""
 
-    def calculate_expected_loss(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Calculate expected loss = PD x LGD x EAD."""
+def select_expected_loss(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Select expected loss columns for output."""
 
-    def select_expected_loss(self) -> pl.LazyFrame:
-        """Select expected loss columns for output."""
-
-    def build_audit(self) -> pl.LazyFrame:
-        """Build audit trail with intermediate calculation values."""
+def build_audit(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Build audit trail with intermediate calculation values."""
 ```
 
-#### IRBExpr Namespace
+#### Expression helpers
 
 ```python
-@pl.api.register_expr_namespace("irb")
-class IRBExpr:
-    """Expression namespace for column-level IRB operations."""
+def floor_pd(expr: pl.Expr, floor_value: float) -> pl.Expr:
+    """Floor PD values to minimum."""
 
-    def floor_pd(self, floor_value: float) -> pl.Expr:
-        """Floor PD values to minimum."""
+def floor_lgd(expr: pl.Expr, floor_value: float) -> pl.Expr:
+    """Floor LGD values to minimum."""
 
-    def floor_lgd(self, floor_value: float) -> pl.Expr:
-        """Floor LGD values to minimum."""
-
-    def clip_maturity(self, floor: float = 1.0, cap: float = 5.0) -> pl.Expr:
-        """Clip maturity to regulatory bounds [1, 5] years."""
+def clip_maturity(expr: pl.Expr, floor: float = 1.0, cap: float = 5.0) -> pl.Expr:
+    """Clip maturity to regulatory bounds [1, 5] years."""
 ```
 
 **Usage Example:**
 
 ```python
-import rwa_calc.engine.irb.namespace  # Registers namespace
+from rwa_calc.engine.irb import transforms as irb
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Fluent IRB calculation pipeline
+# IRB calculation pipeline composed via .pipe(fn, config)
 result = (
     exposures
-    .irb.classify_approach(config)
-    .irb.apply_firb_lgd(config)
-    .irb.prepare_columns(config)
-    .irb.apply_all_formulas(config)
+    .pipe(irb.classify_approach, config)
+    .pipe(irb.apply_firb_lgd, config)
+    .pipe(irb.prepare_columns, config)
+    .pipe(irb.apply_all_formulas, config)
     .collect()
 )
 
-# Expression namespace
+# Expression helpers
 result = lf.with_columns(
-    pl.col("pd").irb.floor_pd(0.0003),
-    pl.col("maturity").irb.clip_maturity(1.0, 5.0),
+    irb.floor_pd(pl.col("pd"), 0.0003),
+    irb.clip_maturity(pl.col("maturity"), 1.0, 5.0),
 )
 ```
 
@@ -661,62 +685,56 @@ def create_slotting_calculator() -> SlottingCalculator:
     """Create a slotting calculator instance."""
 ```
 
-### Module: `rwa_calc.engine.slotting.namespace`
+### Module: `rwa_calc.engine.slotting.transforms`
 
-Polars namespace extensions for specialised lending calculations.
+Plain module-level typed functions for specialised lending (slotting)
+calculations, composed via `lf.pipe(fn, config)`. (Polars namespaces are
+extinct and banned — `arch_check` check 14.)
 
-#### SlottingLazyFrame Namespace
+#### LazyFrame transforms
 
 ```python
-@pl.api.register_lazyframe_namespace("slotting")
-class SlottingLazyFrame:
-    """LazyFrame namespace for slotting calculations."""
+def prepare_columns(lf: pl.LazyFrame, config: CalculationConfig | None = None) -> pl.LazyFrame:
+    """Ensure required columns exist with defaults."""
 
-    def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Ensure required columns exist with defaults."""
+def apply_slotting_weights(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """
+    Apply slotting risk weights based on category and HVCRE status.
 
-    def apply_slotting_weights(self, config: CalculationConfig) -> pl.LazyFrame:
-        """
-        Apply slotting risk weights based on category and HVCRE status.
+    CRR Art. 153(5) — with maturity differentiation:
+    | Category     | Non-HVCRE >=2.5yr | Non-HVCRE <2.5yr | HVCRE >=2.5yr | HVCRE <2.5yr |
+    |-------------|-------------------|------------------|---------------|--------------|
+    | Strong      | 70%               | 50%              | 95%           | 70%          |
+    | Good        | 90%               | 70%              | 120%          | 95%          |
+    | Satisfactory| 115%              | 115%             | 140%          | 140%         |
+    | Weak        | 250%              | 250%             | 250%          | 250%         |
+    | Default     | 0%                | 0%               | 0%            | 0%           |
 
-        CRR Art. 153(5) — with maturity differentiation:
-        | Category     | Non-HVCRE >=2.5yr | Non-HVCRE <2.5yr | HVCRE >=2.5yr | HVCRE <2.5yr |
-        |-------------|-------------------|------------------|---------------|--------------|
-        | Strong      | 70%               | 50%              | 95%           | 70%          |
-        | Good        | 90%               | 70%              | 120%          | 95%          |
-        | Satisfactory| 115%              | 115%             | 140%          | 140%         |
-        | Weak        | 250%              | 250%             | 250%          | 250%         |
-        | Default     | 0%                | 0%               | 0%            | 0%           |
+    Basel 3.1 — revised weights with HVCRE differentiation.
+    """
 
-        Basel 3.1 — revised weights with HVCRE differentiation.
-        """
+def calculate_rwa(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Calculate RWA = EAD x Risk Weight."""
 
-    def calculate_rwa(self) -> pl.LazyFrame:
-        """Calculate RWA = EAD x Risk Weight."""
-
-    def apply_all(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Apply complete slotting pipeline: prepare → weights → RWA."""
+def apply_all(lf: pl.LazyFrame, config: CalculationConfig) -> pl.LazyFrame:
+    """Apply complete slotting pipeline: prepare → weights → RWA."""
 ```
 
-#### SlottingExpr Namespace
+#### Expression helper
 
 ```python
-@pl.api.register_expr_namespace("slotting")
-class SlottingExpr:
-    """Expression namespace for column-level slotting operations."""
-
-    def lookup_rw(self, is_hvcre_col: str, config: CalculationConfig) -> pl.Expr:
-        """Look up slotting risk weight based on category and HVCRE status."""
+def lookup_rw(category_col: pl.Expr, is_hvcre_col: str, config: CalculationConfig) -> pl.Expr:
+    """Look up slotting risk weight based on category and HVCRE status."""
 ```
 
 **Usage Example:**
 
 ```python
-import rwa_calc.engine.slotting.namespace  # Registers namespace
+from rwa_calc.engine.slotting import transforms as slotting
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-result = specialised_lending.slotting.apply_all(config).collect()
+result = specialised_lending.pipe(slotting.apply_all, config).collect()
 ```
 
 ## Equity Calculator
@@ -760,69 +778,10 @@ def create_equity_calculator() -> EquityCalculator:
     """Create an equity calculator instance."""
 ```
 
-### Module: `rwa_calc.engine.equity.namespace`
-
-Polars namespace extensions for fluent equity calculations.
-
-#### EquityLazyFrame Namespace
-
-```python
-@pl.api.register_lazyframe_namespace("equity")
-class EquityLazyFrame:
-    """LazyFrame namespace for equity calculations."""
-
-    def prepare_columns(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Ensure all required columns exist with defaults."""
-
-    def apply_equity_weights_sa(self) -> pl.LazyFrame:
-        """Apply Article 133 (SA) equity risk weights (0%/100%/250%/400%)."""
-
-    def apply_equity_weights_irb_simple(self) -> pl.LazyFrame:
-        """Apply Article 155 (IRB Simple) equity risk weights (0%/190%/290%/370%)."""
-
-    def calculate_rwa(self) -> pl.LazyFrame:
-        """Calculate RWA = EAD x Risk Weight."""
-
-    def apply_all_sa(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Full SA pipeline: prepare → SA weights → RWA."""
-
-    def apply_all_irb_simple(self, config: CalculationConfig) -> pl.LazyFrame:
-        """Full IRB Simple pipeline: prepare → IRB weights → RWA."""
-
-    def build_audit(self, approach: str = "sa") -> pl.LazyFrame:
-        """Build equity calculation audit trail."""
-```
-
-#### EquityExpr Namespace
-
-```python
-@pl.api.register_expr_namespace("equity")
-class EquityExpr:
-    """Expression namespace for column-level equity operations."""
-
-    def lookup_rw(self, approach: str = "sa") -> pl.Expr:
-        """Look up risk weight based on equity type.
-        approach: "sa" for Article 133, "irb_simple" for Article 155."""
-```
-
-**Usage Example:**
-
-```python
-import rwa_calc.engine.equity.namespace  # Registers namespace
-
-config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
-
-# SA equity calculation
-result = equity_exposures.equity.apply_all_sa(config).collect()
-
-# IRB Simple equity calculation
-result = equity_exposures.equity.apply_all_irb_simple(config).collect()
-
-# Expression namespace for lookups
-df = df.with_columns(
-    pl.col("equity_type").equity.lookup_rw(approach="sa").alias("risk_weight"),
-)
-```
+Equity RWA is produced through `EquityCalculator.get_equity_result_bundle(...)`
+(documented above). There is no separate equity transforms module or
+expression accessor — the calculator owns the SA (Art. 133) and IRB-Simple
+(Art. 155) weight application internally.
 
 ## Aggregator
 
@@ -850,58 +809,40 @@ class OutputAggregator:
         self,
         sa_results: pl.LazyFrame,
         irb_results: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Aggregate SA and IRB results into final output.
-
-        Args:
-            sa_results: SA calculation results LazyFrame.
-            irb_results: IRB calculation results LazyFrame.
-            config: Calculation configuration.
-
-        Returns:
-            Combined LazyFrame with final RWA.
-        """
-
-    def aggregate_with_audit(
-        self,
-        sa_results: pl.LazyFrame,
-        irb_results: pl.LazyFrame,
         slotting_results: pl.LazyFrame,
+        equity_bundle: EquityResultBundle | None,
         config: CalculationConfig,
-        equity_bundle: EquityResultBundle | None = None,
+        securitisation_audit: pl.LazyFrame | None = None,
+        *,
+        pack: ResolvedRulepack | None = None,
     ) -> AggregatedResultBundle:
         """
-        Aggregate with full audit trail and summaries.
+        Aggregate all calculator outputs into the final result bundle.
 
-        Returns AggregatedResultBundle containing:
-        - results: Combined exposure-level results
-        - sa_results, irb_results, slotting_results, equity_results: Per-approach results
-        - floor_impact: Output floor impact analysis (Basel 3.1)
-        - supporting_factor_impact: Supporting factor savings (CRR)
-        - summary_by_class: RWA summary by exposure class
-        - summary_by_approach: RWA summary by calculation approach
-        - pre_crm_summary: Pre-CRM RWA summary
-        - post_crm_detailed: Post-CRM exposure-level detail
-        - post_crm_summary: Post-CRM aggregated summary
-        - el_summary: Expected loss portfolio summary (ELPortfolioSummary)
-        - errors: Accumulated errors
-        """
+        The single public entry point — it combines SA, IRB, slotting and
+        equity results, applies the output floor (Basel 3.1) and produces all
+        summaries. The output-floor logic now lives in internal helpers
+        (``engine/aggregator/_floor.py``); ``aggregate_with_audit`` and
+        ``apply_output_floor`` are no longer public methods.
 
-    def apply_output_floor(
-        self,
-        irb_rwa: pl.LazyFrame,
-        sa_equivalent_rwa: pl.LazyFrame,
-        config: CalculationConfig,
-    ) -> pl.LazyFrame:
-        """
-        Apply output floor to IRB RWA (Basel 3.1 only).
+        Args:
+            sa_results: SA branch results.
+            irb_results: IRB branch results.
+            slotting_results: Slotting branch results.
+            equity_bundle: Equity result bundle (optional, separate path).
+            config: Calculation configuration.
+            securitisation_audit: Resolved securitisation lookup from the
+                allocator stage (optional).
+            pack: Resolved rulepack for the run's regime/date (Phase 5 —
+                sources the output-floor / supporting-factor regime gates).
+                Production threads the orchestrator's pack; direct callers may
+                omit it, in which case one is resolved from ``config``.
 
-        Final RWA = max(IRB RWA, SA RWA x floor_percentage).
-
-        Transitional phase-in: 60% (2027) → 65% (2028) → 70% (2029)
-        → 72.5% (2030+). PRA 4-year schedule per Art. 92 para 5.
+        Returns:
+            AggregatedResultBundle containing the combined exposure-level
+            results, per-approach results, floor/supporting-factor impact,
+            summaries (by class, by approach, pre/post-CRM), the EL portfolio
+            summary, and accumulated errors.
         """
 ```
 
@@ -910,75 +851,6 @@ class OutputAggregator:
 ```python
 def create_output_aggregator() -> OutputAggregator:
     """Create an OutputAggregator instance."""
-```
-
-## Audit Namespace
-
-### Module: `rwa_calc.engine.audit_namespace`
-
-Shared formatting utilities and audit trail builders for all calculation approaches.
-
-#### AuditLazyFrame Namespace
-
-```python
-@pl.api.register_lazyframe_namespace("audit")
-class AuditLazyFrame:
-    """LazyFrame namespace for audit trail generation."""
-
-    def build_sa_calculation(self) -> pl.LazyFrame:
-        """SA audit: SA: EAD={ead} x RW={rw}% x SF={sf}% -> RWA={rwa}"""
-
-    def build_irb_calculation(self) -> pl.LazyFrame:
-        """IRB audit: IRB: PD={pd}%, LGD={lgd}%, R={corr}%, K={k}%, MA={ma} -> RWA={rwa}"""
-
-    def build_slotting_calculation(self) -> pl.LazyFrame:
-        """Slotting audit: Slotting: Category={cat} (HVCRE?), RW={rw}% -> RWA={rwa}"""
-
-    def build_crm_calculation(self) -> pl.LazyFrame:
-        """CRM audit: EAD: gross={gross}; coll={coll}; guar={guar}; prov={prov}; final={final}"""
-
-    def build_haircut_calculation(self) -> pl.LazyFrame:
-        """Haircut audit: MV={mv}; Hc={hc}%; Hfx={hfx}%; Adj={adj}"""
-
-    def build_floor_calculation(self) -> pl.LazyFrame:
-        """Floor audit: Floor: IRB RWA={irb}; Floor RWA={floor} ({pct}%); Final={final}"""
-```
-
-#### AuditExpr Namespace
-
-```python
-@pl.api.register_expr_namespace("audit")
-class AuditExpr:
-    """Expression namespace for audit formatting."""
-
-    def format_currency(self, decimals: int = 0) -> pl.Expr:
-        """Format value as currency string (no symbol)."""
-
-    def format_percent(self, decimals: int = 1) -> pl.Expr:
-        """Format value as percentage string (e.g., '20.0%')."""
-
-    def format_ratio(self, decimals: int = 3) -> pl.Expr:
-        """Format value as ratio/decimal string."""
-
-    def format_bps(self, decimals: int = 0) -> pl.Expr:
-        """Format value as basis points string (e.g., '150 bps')."""
-```
-
-**Usage Example:**
-
-```python
-import rwa_calc.engine.audit_namespace  # Registers namespace
-
-# Build audit trails
-audited_sa = sa_results.audit.build_sa_calculation()
-audited_irb = irb_results.audit.build_irb_calculation()
-
-# Format individual columns
-formatted = df.with_columns(
-    pl.col("ead").audit.format_currency().alias("ead_formatted"),
-    pl.col("risk_weight").audit.format_percent().alias("rw_formatted"),
-    pl.col("pd").audit.format_bps().alias("pd_bps"),
-)
 ```
 
 ## Comparison & Impact Analysis

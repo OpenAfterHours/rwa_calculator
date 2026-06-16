@@ -154,7 +154,8 @@ the five valid values at `data/schemas.py::COLUMN_VALUE_CONSTRAINTS`.
 Art. 277a composes the asset-class add-on from the per-hedging-set or
 per-bucket sub-pieces, using supervisory correlations that vary by asset
 class. The table below lists the parameters consumed by the engine
-(canonical constants in [`sa_ccr_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/sa_ccr_factors.py)):
+(canonical SA-CCR supervisory-factor and correlation params in the rulebook
+[`common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py) pack, read in `engine/ccr/pfe.py` via `_PACK.scalar_param(...)`):
 
 | Asset class | Within-piece correlation `ρ` | Cross-piece aggregation | PRA / BCBS reference |
 |-------------|------------------------------|--------------------------|----------------------|
@@ -431,9 +432,10 @@ and `sqrt(ρ² × e_1² + (1 − ρ²) × e_1²) = |e_1|`, so
   credit / equity / commodity formulas.
 - **`src/rwa_calc/engine/ccr/hedging_sets.py`** — engine implementation
   of `assign_ir_maturity_bucket` and `assign_hedging_set`.
-- **`src/rwa_calc/data/tables/sa_ccr_factors.py`** — canonical regulatory
-  scalars (`SA_CCR_IR_BUCKET_CORRELATION_*`, `SA_CCR_CORRELATION_*`,
-  `SA_CCR_SUPERVISORY_FACTOR*`).
+- **`src/rwa_calc/rulebook/packs/common.py`** — cited pack params for the
+  SA-CCR supervisory factors and correlations (`sa_ccr_ir_bucket_correlation_*`,
+  `sa_ccr_correlation_*`, `sa_ccr_supervisory_factor_*`), read in
+  `engine/ccr/pfe.py` via `_PACK.scalar_param(...)`.
 - **`src/rwa_calc/engine/ccr/pfe.py`** — `compute_addon_per_asset_class`
   consumes the partition and applies the Art. 277a aggregation.
 - **`tests/acceptance/ccr/test_ccr_a2_unmargined_fx_forward.py`** — FX

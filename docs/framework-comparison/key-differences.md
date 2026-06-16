@@ -1694,11 +1694,8 @@ Basel 3.1:
         reporting_date=date(2026, 12, 31),
     )
 
-    # Internally sets:
-    # - scaling_factor: 1.06
-    # - output_floor: None
-    # - pd_floor: 0.0003 (uniform)
-    # - lgd_floors: None
+    # .crr() sets regime_id="CRR"; the 1.06 scaling factor, uniform 0.03% PD floor,
+    # etc. resolve from the rulepack crr pack at run time — they are not config fields.
     ```
 
 === "Basel 3.1"
@@ -1711,11 +1708,9 @@ Basel 3.1:
         reporting_date=date(2027, 1, 1),
     )
 
-    # Internally sets:
-    # - scaling_factor: 1.0 (removed)
-    # - output_floor: 72.5%
-    # - pd_floors: differentiated by class
-    # - lgd_floors: by collateral type
+    # .basel_3_1() sets regime_id="B31"; the removed scaling factor, differentiated PD
+    # floors, output floor and collateral-type LGD floors resolve from the b31 pack —
+    # they are not config fields.
     ```
 
 ## Summary of Capital Impact

@@ -195,9 +195,11 @@ When `is_specific_wwr = True` on a trade, the SA-CCR engine performs a
    `NETTING_SET_SCHEMA.wwr_lgd_override` field. Downstream IRB
    consumption (Art. 153 K-formula) must use this override in place of
    the bank's own LGD estimate for the exposure carved out. The
-   override scalar is the regulatory constant
-   `CCR_WWR_SPECIFIC_LGD_OVERRIDE = Decimal("1.0")` in
-   [`src/rwa_calc/data/tables/sa_ccr_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/sa_ccr_factors.py).
+   override scalar is the cited pack param
+   `ccr_wwr_specific_lgd_override` in
+   [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py),
+   read in `engine/ccr/wwr.py` via
+   `_PACK.scalar_param('ccr_wwr_specific_lgd_override')`.
 
 The SA-CCR EAD calculation itself is **unchanged** by the carve-out —
 the synthetic single-trade netting set is processed through the same
@@ -387,17 +389,17 @@ RawCCRBundle (loader output)
                                                           per Art. 153 K-formula
 ```
 
-> **Engine status note.** The orchestrator at
-> `engine/ccr/pipeline_adapter.py::ccr_rows_to_exposures` does **not
-> yet wire `apply_wwr_gate` into the SA-CCR chain end-to-end** —
-> `apply_wwr_gate` is implemented and pinned by
-> `tests/unit/ccr/test_wwr.py` but the IRB-LGD-override consumer leg
-> remains pending engine batches P8.35–P8.38 alongside the credit /
-> equity / commodity add-on engines. Until those batches land, the
-> only acceptance scenario that exercises `apply_wwr_gate` end-to-end
-> is the unit test; the placeholder `CCR-A10` acceptance scenario in
-> `docs/specifications/crr/ccr/index.md` is reserved for the
-> end-to-end worked example.
+> **Engine status note.** `apply_wwr_gate` is now wired into the
+> `ccr_sa_ccr` registry stage (`engine/stages/ccr.py::run`), applied
+> immediately after the legal-enforceability gate and before the
+> SA-CCR EAD chain (`apply_wwr_gate(apply_legal_enforceability_gate(data.ccr))`).
+> `apply_wwr_gate` is also pinned by `tests/unit/ccr/test_wwr.py`. What
+> **remains pending** is the downstream IRB-LGD-override consumer leg —
+> the IRB Calculator does not yet substitute `wwr_lgd_override` into the
+> Art. 153 K-formula — alongside the credit / equity / commodity add-on
+> engines in engine batches P8.35–P8.38. The placeholder `CCR-A10`
+> acceptance scenario in `docs/specifications/crr/ccr/index.md` is
+> reserved for the end-to-end worked example.
 
 ---
 
@@ -511,10 +513,10 @@ or the LGD override.
 | Element | Status |
 |---------|--------|
 | Specific-WWR carve-out (Art. 291(5)(a))                              | **Live** — `apply_wwr_gate` implemented in `src/rwa_calc/engine/ccr/wwr.py`. |
-| LGD = 100% override constant (Art. 291(5)(c))                        | **Live** — `CCR_WWR_SPECIFIC_LGD_OVERRIDE = Decimal("1.0")` in `src/rwa_calc/data/tables/sa_ccr_factors.py`. |
+| LGD = 100% override param (Art. 291(5)(c))                          | **Live** — cited pack param `ccr_wwr_specific_lgd_override` in `src/rwa_calc/rulebook/packs/common.py`, read in `engine/ccr/wwr.py` via `_PACK.scalar_param(...)`. |
 | CCR010 / CCR011 diagnostic warnings                                  | **Live** — pinned by `tests/unit/ccr/test_wwr.py`. |
 | General-WWR diagnostic flag (Art. 291(1)(a), 291(6))                 | **Live** — `has_general_wwr_flag` consumed by `apply_wwr_gate`. |
-| Wiring `apply_wwr_gate` into `pipeline_adapter.ccr_rows_to_exposures` end-to-end | **Pending** — `apply_wwr_gate` is currently exercised only via its unit test; the SA-CCR orchestrator does not yet call the gate before the calculator chain. |
+| Wiring `apply_wwr_gate` into the `ccr_sa_ccr` registry stage | **Live** — `apply_wwr_gate` is called in `engine/stages/ccr.py::run`, after the legal-enforceability gate and before the EAD chain. |
 | IRB downstream consumer of `wwr_lgd_override` (Art. 153 LGD substitution) | **Pending engine batches P8.35–P8.38** alongside the credit / equity / commodity asset-class add-ons. |
 | Credit-derivative specific-WWR worked example (full numerics)        | **Pending engine batches P8.35–P8.38** — placeholder-flagged on the CCR-A10 acceptance scenario in [index.md](index.md). |
 | SA branch — Art. 291(5)(d) "risk weight of an unsecured transaction" | **Pending engine batches P8.35–P8.38**. |
@@ -547,9 +549,9 @@ or the LGD override.
   engine implementation of `apply_wwr_gate`, including the synthetic
   netting-set id format `<original>__wwr__<trade_id>` and the CCR010 /
   CCR011 warning emission.
-- [`src/rwa_calc/data/tables/sa_ccr_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/sa_ccr_factors.py) —
-  `CCR_WWR_SPECIFIC_LGD_OVERRIDE = Decimal("1.0")` regulatory scalar
-  (Art. 291(5)(c)).
+- [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py) —
+  cited pack param `ccr_wwr_specific_lgd_override` (Art. 291(5)(c)), read in
+  `engine/ccr/wwr.py` via `_PACK.scalar_param('ccr_wwr_specific_lgd_override')`.
 - [`src/rwa_calc/data/schemas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/schemas.py) —
   `TRADE_SCHEMA.is_specific_wwr`, `NETTING_SET_SCHEMA.has_general_wwr_flag`,
   `NETTING_SET_SCHEMA.wwr_lgd_override`.

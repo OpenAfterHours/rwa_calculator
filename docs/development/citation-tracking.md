@@ -20,7 +20,7 @@ When you implement or modify a function whose responsibility maps cleanly onto a
 
 ## Dual citations (CRR and PS1/26)
 
-The CRR and Basel 3.1 frameworks are co-located in the same engine modules and routed by `config.is_basel_3_1`. When a function implements both a CRR article AND its Basel 3.1 / PS1/26 equivalent, stack the decorators — CRR (primary) outer, PS1/26 (secondary) inner:
+The CRR and Basel 3.1 frameworks are co-located in the same engine modules; regime-divergent behaviour is selected by a cited rulepack `Feature` (`pack.feature(...)`) resolved from the run's `regime_id`, not by a config boolean. When a function implements both a CRR article AND its Basel 3.1 / PS1/26 equivalent, stack the decorators — CRR (primary) outer, PS1/26 (secondary) inner:
 
 ```python
 @cites("CRR Art. 163")
@@ -29,7 +29,7 @@ def apply_pd_floor(self, config: CalculationConfig) -> pl.LazyFrame:
     ...
 ```
 
-Today watchfire 0.2.0's `__watchfire__` attribute holds only the outer decorator (`CRR Art. 163` in the example), so `watchfire matrix` reports the CRR citation and ignores the inner one. Once upstream watchfire stacks citations into a tuple, both decorators will surface in the matrix with no source-code change here.
+Today watchfire 0.3.1's `__watchfire__` attribute holds only the outer decorator (`CRR Art. 163` in the example), so `watchfire matrix` reports the CRR citation and ignores the inner one. Once upstream watchfire stacks citations into a tuple, both decorators will surface in the matrix with no source-code change here.
 
 ## Canonical citation forms
 
@@ -67,10 +67,10 @@ The `[tool.watchfire]` table in `pyproject.toml` controls source paths, allowed 
 [tool.watchfire]
 rulebook_version = "2026-05-15"
 instruments = ["CRR", "PS", "PRA_RULEBOOK", "SS"]
-source_paths = ["src/rwa_calc/engine", "src/rwa_calc/data/tables"]
+source_paths = ["src/rwa_calc/engine"]
 ```
 
-Bump `rulebook_version` when upstream watchfire ships an updated index. Source paths are intentionally narrow: `engine/` (rule application) and `data/tables/` (regulatory scalars) — UI, IO, contracts, and tests hold no regulatory rules and would just add noise to the matrix.
+Bump `rulebook_version` when upstream watchfire ships an updated index. The `@cites` source surface is intentionally narrow: `engine/` (rule application) only — UI, IO, contracts, and tests hold no regulatory rules and would just add noise to the matrix. Regulatory **values** no longer live in `data/tables/` (that package was removed in Phase 5); they live in `src/rwa_calc/rulebook/packs/` as `Citation` **data**, validated separately and deliberately **not** added to `source_paths` (see [Pack-data citations](#pack-data-citations) below). The `source_paths` entry `"src/rwa_calc/data/tables"` still present in `pyproject.toml` is a stale dead path that should be removed.
 
 ## Coverage matrix
 

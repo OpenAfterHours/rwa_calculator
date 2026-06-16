@@ -30,14 +30,16 @@ config = CalculationConfig.crr(
     # Required
     reporting_date=date(2026, 12, 31),
 
-    # Optional - CRR-specific
-    apply_sme_supporting_factor=True,      # Default: True
-    apply_infrastructure_factor=True,       # Default: True
-
     # Optional - General
     eur_gbp_rate=Decimal("0.88"),          # Default: 0.88
 )
 ```
+
+!!! note "Supporting factors are pack-driven under CRR"
+    The CRR SME and infrastructure supporting factors are applied automatically
+    from the rulepack pack (`rwa_calc.rulebook`) when the regime is CRR — they are
+    not toggled via config flags. To compare with/without, run CRR vs Basel 3.1
+    (which withdraws them) rather than flipping a config flag.
 
 ### Basel 3.1 Configuration
 
@@ -135,10 +137,10 @@ response = CreditRiskCalc(
 
 ### CRR-Specific Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `apply_sme_supporting_factor` | `bool` | True | Apply SME factor (Art. 501) |
-| `apply_infrastructure_factor` | `bool` | True | Apply infrastructure factor |
+CRR has no config-set regulatory toggles. The SME supporting factor (Art. 501) and
+the infrastructure factor are applied automatically from the rulepack pack
+(`rwa_calc.rulebook`) when the regime is CRR — they are no longer `apply_*` config
+flags. Select the regime with `CalculationConfig.crr(...)`.
 
 ### Basel 3.1-Specific Parameters
 
@@ -149,18 +151,21 @@ response = CreditRiskCalc(
 
 ## Framework Differences
 
-The configuration factories automatically set framework-specific values:
+The config selects the regime via `regime_id` (set by `.crr()` / `.basel_3_1()`);
+`framework` is a derived read-only property. The regulatory parameters below are **not**
+carried on the config — they are resolved per regime from the rulepack pack
+(`rwa_calc.rulebook`, via `resolve(regime_id, reporting_date)`):
 
-### Automatic Settings
+### Regime Differences (resolved from the rulepack)
 
-| Setting | CRR | Basel 3.1 |
+| Parameter | CRR | Basel 3.1 |
 |---------|-----|-----------|
-| `framework` | `RegulatoryFramework.CRR` | `RegulatoryFramework.BASEL_3_1` |
-| `scaling_factor` | 1.06 | 1.00 |
-| `pd_floors` | Uniform 0.03% | Differentiated |
-| `lgd_floors` | None | By collateral type |
-| `output_floor` | None | 72.5% (or transitional) |
-| `supporting_factors` | Available | Not available |
+| `framework` (derived property) | `RegulatoryFramework.CRR` | `RegulatoryFramework.BASEL_3_1` |
+| IRB scaling factor | 1.06 | 1.00 |
+| PD floors | Uniform 0.03% | Differentiated |
+| A-IRB LGD floors | None | By collateral type |
+| Output floor | None | 72.5% (or transitional) |
+| Supporting factors | Available | Withdrawn |
 
 ### PD Floors
 
@@ -250,38 +255,20 @@ config = CalculationConfig.crr(
 )
 ```
 
-## Supporting Factors Configuration
+## Supporting Factors
 
-### SME Supporting Factor
-
-```python
-# Enable (default)
-config = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=True
-)
-
-# Disable for comparison
-config = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=False
-)
-```
-
-### Infrastructure Factor
+The SME supporting factor (Art. 501) and the infrastructure factor are applied
+automatically from the rulepack pack (`rwa_calc.rulebook`) when the regime is CRR.
+They are no longer toggled via `apply_*` config flags. Basel 3.1 withdraws both, so
+to compare with/without supporting factors run CRR vs Basel 3.1 rather than flipping
+a config flag:
 
 ```python
-# Enable (default)
-config = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_infrastructure_factor=True
-)
+# With supporting factors — CRR regime
+config_crr = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
-# Disable
-config = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_infrastructure_factor=False
-)
+# Without supporting factors — Basel 3.1 regime (withdrawn)
+config_b31 = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
 ```
 
 ## Advanced Configuration
@@ -293,28 +280,26 @@ from rwa_calc.contracts.config import CalculationConfig
 
 config = CalculationConfig.crr(date(2026, 12, 31))
 
-# Access sub-components
-print(config.framework)              # RegulatoryFramework.CRR
-print(config.pd_floors)              # PDFloors object
-print(config.lgd_floors)             # LGDFloors object (None for CRR)
-print(config.supporting_factors)     # SupportingFactors object
-print(config.output_floor_config)    # OutputFloorConfig object (None for CRR)
+# Access config-carried fields
+print(config.regime_id)              # "crr"
+print(config.framework)              # RegulatoryFramework.CRR (derived property)
+print(config.output_floor)           # output-floor election (None for CRR)
+
+# Regulatory parameters are NOT on the config — inspect them via the resolved
+# rulepack pack (read at the regime + reporting date):
+from rwa_calc.rulebook.resolve import resolve
+
+pack = resolve(config.regime_id, config.reporting_date)
+print(pack.formula("pd_floors"))     # PD floors for the regime (cited pack entry)
 ```
 
-### Custom PD Floors
+### Custom Regulatory Values
 
-```python
-from rwa_calc.contracts.config import PDFloors
-
-# Custom floors
-custom_pd_floors = PDFloors(
-    corporate=0.0006,        # 0.06%
-    institution=0.0005,      # 0.05%
-    retail_mortgage=0.0010,  # 0.10%
-    retail_qrre=0.0003,      # 0.03%
-    retail_other=0.0005      # 0.05%
-)
-```
+PD floors (and all other regulatory values) are no longer user-overridable config
+objects — they are cited entries in the rulepack packs
+(`src/rwa_calc/rulebook/packs/{common,crr,b31}.py`). To change a regulatory value,
+edit or extend the relevant pack entry (with its `Citation`) rather than constructing
+a config override. The config only selects the regime via `regime_id`.
 
 ## Configuration Validation
 
@@ -368,24 +353,21 @@ print(f"Impact: {(result_b31.total_rwa / result_crr.total_rwa - 1) * 100:.1f}%")
 
 ### With/Without Supporting Factors
 
-```python
-# With factors
-config_with = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=True
-)
+Supporting factors are pack-driven, not a config flag. CRR applies them; Basel 3.1
+withdraws them. Compare the two regimes to see their effect:
 
-# Without factors
-config_without = CalculationConfig.crr(
-    reporting_date=date(2026, 12, 31),
-    apply_sme_supporting_factor=False
-)
+```python
+# With factors — CRR regime
+config_with = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+
+# Without factors — Basel 3.1 regime (supporting factors withdrawn)
+config_without = CalculationConfig.basel_3_1(reporting_date=date(2027, 1, 1))
 
 result_with = pipeline.run(config_with)
 result_without = pipeline.run(config_without)
 
-print(f"With SME factor: {result_with.total_rwa:,.0f}")
-print(f"Without: {result_without.total_rwa:,.0f}")
+print(f"With SME factor (CRR): {result_with.total_rwa:,.0f}")
+print(f"Without (Basel 3.1): {result_without.total_rwa:,.0f}")
 print(f"SME benefit: {result_without.total_rwa - result_with.total_rwa:,.0f}")
 ```
 
@@ -415,8 +397,9 @@ os.environ["RWA_DATA_PATH"] = "/path/to/data"
 config = CalculationConfig.crr(date(2026, 12, 31))
 
 # Avoid - manual construction
+# (regime is carried by regime_id; framework is a derived read-only property)
 config = CalculationConfig(
-    framework=RegulatoryFramework.CRR,
+    regime_id="crr",
     reporting_date=date(2026, 12, 31),
     # ... many more parameters
 )
@@ -430,8 +413,6 @@ config = CalculationConfig.crr(
     reporting_date=date(2026, 12, 31),
     # Using Q4 2026 rate per Treasury guidance
     eur_gbp_rate=Decimal("0.88"),
-    # SME factor enabled per policy
-    apply_sme_supporting_factor=True,
 )
 ```
 
@@ -441,9 +422,8 @@ config = CalculationConfig.crr(
 # Store configuration in version control
 CONFIG_Q4_2026 = {
     "reporting_date": "2026-12-31",
-    "framework": "CRR",
+    "regime_id": "crr",
     "eur_gbp_rate": "0.88",
-    "apply_sme_supporting_factor": True,
 }
 ```
 

@@ -72,8 +72,8 @@ by remaining maturity. All specialised lending types (PF, OF, CF, IPRE) use the 
     in Table A with separate, higher risk weights. See [Basel 3.1 section below](#hvcre--table-a).
 
     **Code divergence (D3.22):** The calculator applies EU CRR Table 2 HVCRE weights
-    (`SLOTTING_RISK_WEIGHTS_HVCRE`, `SLOTTING_RISK_WEIGHTS_HVCRE_SHORT`) for CRR exposures
-    with `is_hvcre=True`. This is more conservative than required by UK law (higher RWs)
+    (rulepack lookups `slotting_rw_hvcre` / `slotting_rw_hvcre_short`, read in
+    `engine/slotting/transforms.py`) for CRR exposures with `is_hvcre=True`. This is more conservative than required by UK law (higher RWs)
     but has no UK CRR legal basis. See acceptance tests CRR-E4, CRR-E7, CRR-E8.
 
 ## Basel 3.1 Slotting Risk Weights

@@ -14,13 +14,20 @@ This document explains the key architectural decisions and design principles und
 - Simplifies maintenance
 - Supports transition planning
 
-**Implementation:**
+**Implementation:** Regime is **data**. The user chooses a regime via the
+`.crr()` / `.basel_3_1()` config factories (which set `regime_id`); each run
+resolves a frozen, content-hashed `ResolvedRulepack` from
+`(regime_id, reporting_date)`, and regime-divergent values and behaviour are
+read from that pack — the engine never branches on a regime boolean.
+
 ```python
-# Framework-specific behavior controlled by configuration
-if config.framework == RegulatoryFramework.CRR:
-    rwa = rwa * config.scaling_factor  # 1.06
-else:
-    rwa = apply_output_floor(rwa, sa_rwa, config.output_floor)
+# Resolve the rulepack once per run from (regime_id, reporting_date)
+pack = resolve(config.regime_id, config.reporting_date)
+
+# Scaling factor and output-floor parameters come from the pack, not config
+rwa = rwa * pack.scalar("scaling_factor")          # 1.06 under CRR, 1.0 under Basel 3.1
+if pack.feature("output_floor"):
+    rwa = apply_output_floor(rwa, sa_rwa, pack)
 ```
 
 ### 2. Pure LazyFrame Operations
@@ -141,17 +148,20 @@ result = sa_calculator.calculate_branch(sa_rows, config, errors=errors)
 - Easier to use correctly
 
 **Implementation:**
+The factories set the `regime_id` (the carrier of regime choice) plus firm
+inputs / elections. They carry **no** regulatory values — the scaling factor,
+PD/LGD floors, supporting factors and monetary thresholds all resolve from the
+rulepack at read time.
+
 ```python
 class CalculationConfig:
     @classmethod
     def crr(cls, reporting_date: date, **kwargs) -> "CalculationConfig":
         """Create CRR configuration with appropriate defaults."""
         return cls(
-            framework=RegulatoryFramework.CRR,
+            regime_id="crr",
             reporting_date=reporting_date,
-            scaling_factor=Decimal("1.06"),
-            pd_floors=PDFloors.crr(),
-            # ... other CRR defaults
+            # firm inputs + elections only — regulatory values live in the pack
             **kwargs
         )
 
@@ -159,11 +169,9 @@ class CalculationConfig:
     def basel_3_1(cls, reporting_date: date, **kwargs) -> "CalculationConfig":
         """Create Basel 3.1 configuration with appropriate defaults."""
         return cls(
-            framework=RegulatoryFramework.BASEL_3_1,
+            regime_id="b31",
             reporting_date=reporting_date,
-            scaling_factor=Decimal("1.0"),
-            pd_floors=PDFloors.basel_3_1(),
-            # ... other Basel 3.1 defaults
+            # firm inputs + elections only — regulatory values live in the pack
             **kwargs
         )
 ```
@@ -256,13 +264,15 @@ from rwa_calc.engine.irb.formulas import calculate_k
 
 ### Validation Errors
 
-Collected and reported:
+Collected and reported (the PD floor is read from the resolved rulepack, not
+from config):
 ```python
 errors = []
-if pd < config.pd_floors.minimum:
+pd_floor = pack.formula("pd_floors")["minimum"]
+if pd < pd_floor:
     errors.append(ValidationError(
         field="pd",
-        message=f"PD {pd} below floor {config.pd_floors.minimum}"
+        message=f"PD {pd} below floor {pd_floor}"
     ))
 ```
 

@@ -203,9 +203,10 @@ maturity_factor = (
 ).cast(pl.Float64)
 ```
 
-Constants live in `src/rwa_calc/data/tables/sa_ccr_factors.py` — `engine/`
-modules never inline these regulatory scalars (project architectural
-rule, enforced by `scripts/arch_check.py` check 5).
+Constants resolve from the rulebook pack
+(`src/rwa_calc/rulebook/packs/common.py`) once at module load — `engine/`
+modules read the resolved pack and never inline these regulatory scalars
+(project architectural rule, enforced by `scripts/arch_check.py` check 5).
 
 ## Pipeline ordering
 
@@ -378,10 +379,12 @@ MF_unmargined = sqrt( min(10, 1.0) / 1.0 ) = sqrt(1.0) = 1.0
   Art. 285 cascade.
 - `src/rwa_calc/engine/ccr/maturity_factor.py` — engine implementation
   (both branches plus the full cascade).
-- `src/rwa_calc/data/tables/sa_ccr_factors.py` — regulatory constants
-  (`MF_MARGINED_SCALAR`, `MF_MARGINED_FLOOR_DAYS_*`,
-  `MF_MARGINED_LARGE_NETTING_SET_TRADE_COUNT`,
-  `MF_MARGINED_DISPUTE_THRESHOLD`, `MF_MARGINED_DISPUTE_MULTIPLIER`,
-  `SA_CCR_BUSINESS_DAYS_PER_YEAR`).
+- `src/rwa_calc/rulebook/packs/common.py` — cited pack params
+  (`mf_margined_scalar`, `mf_margined_floor_days_*`,
+  `mf_margined_large_netting_set_trade_count`,
+  `mf_margined_dispute_threshold`, `mf_margined_dispute_multiplier`,
+  `sa_ccr_business_days_per_year`), read in
+  `engine/ccr/maturity_factor.py` via `_PACK.scalar_param(...)` /
+  `_PACK.int_param(...)`.
 - `tests/acceptance/ccr/test_ccr_a1_unmargined_ir_swap.py` ..
   `test_ccr_a10_mixed_asset_class.py` — unmargined-branch golden values.

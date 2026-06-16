@@ -262,7 +262,7 @@ Institutions that have **not** received permission to use own LGDs and own conve
 !!! success "0.5-Year Repo Maturity — Implemented"
     F-IRB exposures flagged with `is_sft = True` on the Facility/Loan/Contingent input row
     receive M = 0.5 years under CRR, overriding any `maturity_date`-derived value
-    (`engine/irb/namespace.py` prepare_columns). The override is gated on the CRR framework
+    (`engine/irb/transforms.py` prepare_columns). The override is gated on the CRR framework
     only — Basel 3.1 deleted Art. 162(1), so B31 F-IRB calculates M per Art. 162(2A).
     Exposures without `is_sft` (or with `is_sft = False`) retain the existing 2.5-year
     default. Regression: `tests/unit/irb/test_firb_sft_maturity.py`.

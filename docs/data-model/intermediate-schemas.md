@@ -19,7 +19,7 @@ Each record gets an `exposure_reference` synthesised from the original entity ke
 - Contingents: `contingent_reference` → `exposure_reference`
 - Facility undrawn: `facility_reference` + `"_UNDRAWN"` → `exposure_reference`
 
-**Source**: `RAW_EXPOSURE_SCHEMA` in `data/schemas.py`, `HierarchyResolver._unify_exposures()` in `engine/hierarchy.py`
+**Source**: `RAW_EXPOSURE_SCHEMA` in `data/schemas.py`, `HierarchyResolver._unify_exposures()` in `engine/stages/hierarchy/` (resolver.py; `engine/hierarchy.py` remains a back-compat import shim)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -52,7 +52,7 @@ After hierarchy resolution, exposures gain counterparty hierarchy, facility hier
 rating inheritance, and lending group columns. This is the most column-rich intermediate
 stage, adding 14+ columns to each exposure record.
 
-**Source**: `RESOLVED_HIERARCHY_SCHEMA` in `data/schemas.py`, `HierarchyResolver.resolve()` in `engine/hierarchy.py`
+**Source**: `RESOLVED_HIERARCHY_SCHEMA` in `data/schemas.py`, `HierarchyResolver.resolve()` in `engine/stages/hierarchy/` (resolver.py; `engine/hierarchy.py` remains a back-compat import shim)
 
 ### Counterparty hierarchy columns
 
@@ -120,7 +120,7 @@ After classification, each exposure has a regulatory exposure class, approach as
 and entity flags. The classifier joins counterparty attributes (prefixed `cp_*`) and derives
 classification in five phases.
 
-**Source**: `CLASSIFIED_EXPOSURE_SCHEMA` in `data/schemas.py`, `ExposureClassifier.classify()` in `engine/classifier.py`
+**Source**: `CLASSIFIED_EXPOSURE_SCHEMA` in `data/schemas.py`, `ExposureClassifier.classify()` in `engine/stages/classify/` (classifier.py; `engine/classifier.py` remains a back-compat import shim)
 
 | Column | Type | Description |
 |--------|------|-------------|

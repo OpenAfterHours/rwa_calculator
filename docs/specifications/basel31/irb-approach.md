@@ -597,7 +597,7 @@ overlays) is summarised below:
 | **LGD-AM** unfunded credit protection | Art. 183 — guarantor grading (181/171–173), eligibility (1A), payout-structure analysis (3) | LGD adjustment via guarantor PD/LGD substitution — `engine/irb/guarantee.py` |
 | **CF / EAD** (A-IRB own-estimate) | Art. 182 — default-weighted, downturn under 182(1)(b), 12-month look-back under 182(1)(g), ≥ 5y ramping to 7y for non-retail | **CRE32.27** CCF floor: own CCF ≥ 50% of SA CCF; own CCFs only for revolving facilities — `engine/irb/adjustments.py` |
 | **Downturn period** | Art. 181A–C — relevant indicator set (181B), ≥ 20-year time-span (181C(1)) | None — downturn application is upstream of the calculator. |
-| **F-IRB LGD / CCF** | Not estimated by the institution — supervisory values apply | Art. 161 supervisory LGD; Art. 166C/D supervisory CCFs — `data/tables/firb_lgd.py` |
+| **F-IRB LGD / CCF** | Not estimated by the institution — supervisory values apply | Art. 161 supervisory LGD; Art. 166C/D supervisory CCFs — the supervisory-LGD entries in the rulepack packs (`src/rwa_calc/rulebook/packs/{crr,b31}.py`), resolved via `rwa_calc.rulebook.resolve` |
 
 !!! info "Why the calculator does not implement Arts. 179–184 directly"
     The estimation requirements in Arts. 179–184 are model-governance obligations

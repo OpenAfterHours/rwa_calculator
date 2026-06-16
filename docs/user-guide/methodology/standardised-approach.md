@@ -205,13 +205,17 @@ print(f"RWA: {result['rwa']}")
 
 ### Risk Weight Lookup
 
-Risk weights are defined in:
+The risk-weight lookup tables are built by thin pack-binding shims:
 
-- **CRR**: `data/tables/crr_risk_weights.py` — `get_combined_cqs_risk_weights()`
-- **Basel 3.1**: `data/tables/b31_risk_weights.py` — `get_b31_combined_cqs_risk_weights()`
+- **CRR**: `engine/sa/crr_risk_weight_tables.py` — `get_combined_cqs_risk_weights()`
+- **Basel 3.1**: `engine/sa/b31_risk_weight_tables.py` — `get_b31_combined_cqs_risk_weights()`
+
+These are shims only: the risk-weight **values** live as cited entries in the
+rulepack packs `src/rwa_calc/rulebook/packs/{crr,b31}.py`, and the shims read
+them back from the resolved pack.
 
 ```python
-from rwa_calc.data.tables.crr_risk_weights import get_combined_cqs_risk_weights
+from rwa_calc.engine.sa.crr_risk_weight_tables import get_combined_cqs_risk_weights
 
 # Get CRR risk weight lookup table (Art. 120 Table 3 for institutions)
 rw_table = get_combined_cqs_risk_weights()
@@ -220,9 +224,10 @@ rw_table = get_combined_cqs_risk_weights()
 # Example: CORPORATE, CQS 2 -> 50%
 ```
 
-??? example "Actual Risk Weight Application (calculator.py)"
-    See the `_apply_risk_weights` method in `src/rwa_calc/engine/sa/calculator.py` for the
-    full implementation of risk weight lookups by exposure class and CQS.
+??? example "Actual Risk Weight Application (risk_weights.py)"
+    See the plain typed functions in `src/rwa_calc/engine/sa/risk_weights.py` (notably
+    `apply_risk_weights`) for the full implementation of risk weight lookups by exposure
+    class and CQS, composed via `lf.pipe(...)` inside `SACalculator.calculate_branch`.
 
 ## Regulatory References
 

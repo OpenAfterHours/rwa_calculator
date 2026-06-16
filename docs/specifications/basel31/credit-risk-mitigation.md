@@ -477,7 +477,8 @@ RW_dd = RW_obligor * (0.15 + 160 * PD_g_floored)
 floored by `RW_g` (the substituted PSM RW from Steps 1–4). The Basel 3.1 rule
 instrument leaves Art. 153(3) "Provision left blank" — double default is not
 available under PS1/26. The CRR overlay is therefore gated in the engine on
-`config.is_crr and config.enable_double_default and has_guarantor_pd`
+the `double_default_treatment` pack Feature together with
+`config.enable_double_default and has_guarantor_pd`
 (`_apply_double_default`). See
 [Double Default Removal](airb-calculation.md#double-default-removal) on the
 Basel 3.1 A-IRB page for the framework-level rationale.
@@ -1011,7 +1012,7 @@ between regulatory mechanics and engine outputs is one-to-one:
 | Eligibility (assigned/pledged, notified, surrender value declared) | Art. 200(b), Art. 212(2) | (gating only — no column) | Ineligible policies are filtered out by `LIFE_INSURANCE_COLLATERAL_TYPES` and the `beneficiary_reference` join; non-matching rows do not contribute. |
 | Value of credit protection = current surrender value, reduced for currency mismatch per Art. 233(3) **and (4)** | Art. 232(2), 2nd sub-paragraph | `life_ins_collateral_value` (`Float64`) | Sum of `market_value` across eligible pledged policies per beneficiary, capped at `ead_gross`. The surrender value is taken from the collateral row's `market_value` field by convention (`compute_life_insurance_columns` lines 109, 121-122). Currency-mismatch reduction is applied upstream when the haircut pipeline runs. |
 | SA secured-portion RW per Art. 232(3) derivation table (20% / 35% / 70% / 150%) | Art. 232(3)(a)-(d) | `life_ins_secured_rw` (`Float64`) | Value-weighted average across pledged policies of the per-policy mapped RW from `LIFE_INSURANCE_RW_MAP` (`engine/crm/life_insurance.py` lines 34-42). Computed by `_map_insurer_rw_to_secured_rw_expr` from the per-policy `insurer_risk_weight`. |
-| Blended RW = secured share × mapped RW + unsecured share × exposure RW (no Art. 222 floor) | Art. 232(2)(a) read with Art. 232(3) | `risk_weight` (overwritten in place) | `lf.sa.apply_life_insurance_rw_mapping()` (`engine/sa/namespace.py` lines 1423-1458) consumes the two `life_ins_*` columns and overwrites the row's `risk_weight` with the blended value. EAD is **not** reduced (life insurance is an RW substitution, not an EAD substitution). |
+| Blended RW = secured share × mapped RW + unsecured share × exposure RW (no Art. 222 floor) | Art. 232(2)(a) read with Art. 232(3) | `risk_weight` (overwritten in place) | `apply_life_insurance_rw_mapping(...)` (composed via `lf.pipe(apply_life_insurance_rw_mapping, ...)`, `engine/sa/rw_adjustments.py`) consumes the two `life_ins_*` columns and overwrites the row's `risk_weight` with the blended value. EAD is **not** reduced (life insurance is an RW substitution, not an EAD substitution). |
 | F-IRB LGD<sub>S</sub> = 40% on secured portion | Art. 232(2)(b) | (handled in IRB LGD waterfall) | The two `life_ins_*` columns describe SA only. F-IRB consumption of life-insurance collateral runs through the LGD waterfall — see [F-IRB collateral LGDs](../crr/firb-calculation.md). A-IRB firms apply own-estimate LGDs (Art. 169A/169B) and ignore these columns. |
 
 Defaults: where no eligible life-insurance collateral is pledged to an
@@ -1097,7 +1098,7 @@ vs. an unmitigated RWA of GBP 1,000,000 — a 39.0% RWA reduction driven
 entirely by the Art. 232(3)(b) 30% → 35% mapping on the secured 60% of
 the exposure. No Art. 222 20% floor applies (Art. 232 does not import
 the FCSM floor) — see `apply_life_insurance_rw_mapping`,
-`engine/sa/namespace.py` line 1450.
+`engine/sa/rw_adjustments.py`.
 
 !!! note "Why the worked example uses a 30% insurer RW"
     The 30% input tier is one of the three new B31 tiers (30%, 65%,

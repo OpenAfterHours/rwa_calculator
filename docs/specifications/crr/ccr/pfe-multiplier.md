@@ -114,8 +114,9 @@ multiplier = min(
 
 where:
 
-- `F = 0.05` is the regulatory floor (Art. 278(3) — constant
-  `PFE_MULTIPLIER_FLOOR_F` in `src/rwa_calc/data/tables/sa_ccr_factors.py`).
+- `F = 0.05` is the regulatory floor (Art. 278(3) — cited pack param
+  `pfe_multiplier_floor_f` in `src/rwa_calc/rulebook/packs/common.py`, read
+  in `engine/ccr/pfe.py` via `_PACK.scalar_param('pfe_multiplier_floor_f')`).
   No matter how heavily a netting set is over-collateralised relative to
   its add-on, the multiplier never falls below `F`; some PFE always
   remains because no collateral arrangement perfectly hedges future market
@@ -126,8 +127,8 @@ where:
 - `C` is the **sum of collateral values** held against the netting set
   (`c_net` in the engine — sum of `collateral_value` from the CCR
   collateral table for that netting set).
-- `2` is the canonical exponent coefficient (Art. 278(3); constant
-  `PFE_AGGREGATE_DENOM_COEFF`).
+- `2` is the canonical exponent coefficient (Art. 278(3); cited pack param
+  `pfe_aggregate_denom_coeff`).
 - `AddOn_aggregate` is the per-netting-set add-on sum above.
 
 The exponent `(V − C) / (2 × (1 − F) × AddOn_aggregate)` carries three
@@ -398,9 +399,10 @@ places — see `tests/expected_outputs/ccr/CCR-A1.json`.
 - [`src/rwa_calc/engine/ccr/pipeline_adapter.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/ccr/pipeline_adapter.py) —
   orchestrator that builds the netting-set-grain `v_net`, `c_net`, and
   `addon_aggregate` columns before invoking `compute_pfe`.
-- [`src/rwa_calc/data/tables/sa_ccr_factors.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/data/tables/sa_ccr_factors.py) —
-  canonical regulatory scalars (`PFE_MULTIPLIER_FLOOR_F = 0.05`,
-  `PFE_AGGREGATE_DENOM_COEFF = 2`).
+- [`src/rwa_calc/rulebook/packs/common.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/rulebook/packs/common.py) —
+  cited pack params (`pfe_multiplier_floor_f = 0.05`,
+  `pfe_aggregate_denom_coeff = 2`), read in `engine/ccr/pfe.py` via
+  `_PACK.scalar_param(...)`.
 - `tests/acceptance/ccr/test_ccr_a1_unmargined_ir_swap.py`,
   `test_ccr_a2_unmargined_fx_forward.py` — golden multiplier-at-the-cap
   values (`pfe_multiplier = 1.0`) pinned by `CCR-A1.json` / `CCR-A2.json`.

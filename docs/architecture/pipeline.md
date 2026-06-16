@@ -31,13 +31,13 @@ flowchart TD
     end
 
     subgraph Stage5[Stage 5: Split-Once + Parallel Calculate]
-        M["Materialise barrier<br/>(collect → lazy)"]
+        M["re_split_exit edge<br/>(eager sealed frame)"]
         U["SA calculate_unified<br/>(Basel 3.1 floor only)"]
         SP[Split once by approach]
         F["SA branch<br/>calculate_branch()"]
         G["IRB branch<br/>calculate_branch()"]
         H["Slotting branch<br/>calculate_branch()"]
-        CA["pl.collect_all()<br/>(parallel collection)"]
+        CA["materialise_sealed_branches<br/>(parallel branch collection)"]
     end
 
     subgraph Equity[Equity — Separate Path]
@@ -61,9 +61,17 @@ flowchart TD
     CA & L1 --> I --> I1
 ```
 
-## Pipeline Orchestration
+## Fold over a literal stage registry
 
-The pipeline is orchestrated by `PipelineOrchestrator` (see [`pipeline.py:80-594`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py#L80-L594)):
+The pipeline is a **fold over a literal stage registry**:
+
+- [`engine/registry.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/registry.py) is the single ordered, literal `StageSpec` list (`PIPELINE_STAGES`) — no conditionals. Stages: securitisation allocator, hierarchy resolver, SA-CCR, classifier, CRM processor, RE splitter, calculators, equity calculator, aggregator.
+- [`engine/orchestrator.py::run_stages`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/orchestrator.py) is a pure fold: it threads one immutable `PipelineContext` (a typed `ArtifactKey[T]` map defined in [`contracts/context.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/contracts/context.py)) through the registered stages.
+- Each stage under [`engine/stages/`](https://github.com/OpenAfterHours/rwa_calculator/tree/master/src/rwa_calc/engine/stages) is a `run(ctx, rulepack, run_config) -> PipelineContext` adapter. Stages exchange **eager sealed frames** (`materialise_edge` at every stage exit; producer-sealed edge contracts in [`contracts/edges.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/contracts/edges.py)).
+- [`engine/pipeline.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/pipeline.py) remains the run-lifecycle facade (run_id, edge capture, FX-rate sync, error merge, audit persistence).
+
+`rulepack` is the frozen `ResolvedRulepack` built once per run from
+`(regime_id, reporting_date)`.
 
 ```python
 from rwa_calc.engine.pipeline import create_pipeline
@@ -78,14 +86,7 @@ result = pipeline.run(config)
 result = pipeline.run_with_data(raw_data, config)
 ```
 
-### Pipeline Implementation
-
 For full API documentation, see [Pipeline API Reference](../api/pipeline.md#pipelineorchestrator).
-
-??? example "Full Implementation (pipeline.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/pipeline.py:80:261"
-    ```
 
 ## Stage 1: Data Loading
 
@@ -180,35 +181,25 @@ Step 5: Add lending group totals to exposures
 
 ### Counterparty Hierarchy
 
-The hierarchy resolution uses iterative Polars LazyFrame joins for performance. See [`hierarchy.py:258-327`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py#L258-L327) for the full implementation.
+The hierarchy resolution uses iterative Polars LazyFrame joins for performance. See [`engine/stages/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/graph.py) (`_build_ultimate_parent_lazy` and the facility-root traversal) for the full implementation.
 
-::: rwa_calc.engine.hierarchy.HierarchyResolver._build_ultimate_parent_lazy
+::: rwa_calc.engine.stages.hierarchy.graph.build_ultimate_parent_lazy
     options:
       show_root_heading: false
       show_source: false
 
-??? example "Actual Implementation (hierarchy.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:258:327"
-    ```
-
 ### Rating Inheritance
 
-Ratings are inherited from parent entities when not directly available. See [`hierarchy.py:329-431`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py#L329-L431).
+Ratings are inherited from parent entities when not directly available. See [`engine/stages/hierarchy/ratings.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/ratings.py) (`build_rating_inheritance_lazy`).
 
 The inheritance priority is:
 1. Entity's own rating
 2. Ultimate parent's rating
 3. Mark as unrated
 
-??? example "Actual Implementation (hierarchy.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:329:431"
-    ```
-
 ### Facility Hierarchy
 
-Facilities can form multi-level hierarchies (e.g., master facility → sub-facilities). The resolver traverses these using the same iterative join pattern as counterparty hierarchies. See [`hierarchy.py:433-537`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py#L433-L537).
+Facilities can form multi-level hierarchies (e.g., master facility → sub-facilities). The resolver traverses these using the same iterative join pattern as counterparty hierarchies. See [`engine/stages/hierarchy/graph.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/graph.py) (`build_facility_root_lookup`) and [`facility_undrawn.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/facility_undrawn.py).
 
 Key behaviour:
 - Facility-to-facility edges identified from `facility_mappings` where `child_type = "facility"`
@@ -216,11 +207,6 @@ Key behaviour:
 - Drawn amounts from all descendant loans are aggregated to the root facility
 - Sub-facilities are excluded from producing their own undrawn exposure records
 - Only root/standalone facilities with `undrawn_amount > 0` generate `facility_undrawn` exposures
-
-??? example "Actual Implementation (hierarchy.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:433:537"
-    ```
 
 ## Stage 3: Classification
 
@@ -241,9 +227,9 @@ Assign exposure classes and determine calculation approach.
 
 ### Classification Logic
 
-The classifier assigns exposure classes and calculation approaches. See [`classifier.py:195-244`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py#L195-L244) for the core classification logic.
+The classifier assigns exposure classes and calculation approaches. See [`engine/stages/classify/classifier.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/classifier.py) for the core classification logic (with `attributes.py`, `subtypes.py`, `permissions.py`, `approach.py`, `audit.py`).
 
-::: rwa_calc.engine.classifier.ExposureClassifier
+::: rwa_calc.engine.stages.classify.classifier.ExposureClassifier
     options:
       show_root_heading: true
       members:
@@ -276,10 +262,7 @@ Exposures without a `model_id` receive all permission flags as `False` and fall 
 !!! info "Art. 147A Hard Constraints Override Model Permissions"
     Regulatory restrictions always take priority over model permissions. For example, institutions are limited to F-IRB (Art. 147A(1)(c)) even if a model has A-IRB approval, and equity exposures are SA-only (Art. 147A(1)(a)) regardless of any model permission. See the [Model Permissions Specification](../specifications/basel31/model-permissions.md) for the full restriction table and precedence rules.
 
-??? example "Actual Implementation (classifier.py)"
-    ```python
-    --8<-- "src/rwa_calc/engine/classifier.py:195:244"
-    ```
+See [`engine/stages/classify/approach.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/approach.py) for `assign_approach` (Art. 147A hard constraints) and [`permissions.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/permissions.py) for `resolve_model_permissions`.
 
 ## Stage 4: CRM Processing
 
@@ -354,6 +337,12 @@ class CRMProcessor:
 
 Calculate RWA using appropriate approach for each exposure.
 
+The frame arrives as an eager sealed `re_split_exit` edge before the calculators
+fork the plan three ways; the three per-approach branches are collected through
+`materialise_sealed_branches` (`engine/stages/calc.py`). See
+[Collect Barriers & Stage Edges](pipeline-collect-barriers.md) for the edge
+model that replaced the old ad-hoc materialise barrier.
+
 ### SA Calculator
 
 ```python
@@ -367,15 +356,16 @@ class SACalculator:
     ) -> pl.LazyFrame:
         """Calculate SA RWA on the SA branch."""
         return (
-            exposures.sa.apply_risk_weights(config)
-            .sa.apply_fcsm_rw_substitution(config)
-            .sa.apply_life_insurance_rw_mapping()
-            .sa.apply_guarantee_substitution(config)
-            .sa.apply_currency_mismatch_multiplier(config)
-            .sa.apply_due_diligence_override(config, errors=errors)
-            .sa.calculate_rwa()
-            .sa.apply_supporting_factors(config, errors=errors)  # CRR only
+            exposures.pipe(apply_risk_weights, config, pack=pack)
+            .pipe(apply_fcsm_rw_substitution, config)
+            .pipe(apply_life_insurance_rw_mapping)
+            .pipe(apply_guarantee_substitution, config, pack=pack)
+            .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
+            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            .pipe(calculate_rwa)
+            .pipe(apply_supporting_factors, config, errors=errors, pack=pack)  # CRR only
         )  # + approach_applied / rwa_final for the aggregator
+        # transforms live in engine/sa/risk_weights.py, rw_adjustments.py, factors_output.py
 ```
 
 ### IRB Calculator
@@ -393,10 +383,10 @@ class IRBCalculator:
         result = (
             exposures
             .with_columns(
-                # Apply PD floor
+                # Apply PD floor — read from the resolved rulepack, not config
                 pd_floored=pl.max_horizontal(
                     pl.col("pd"),
-                    pl.lit(config.pd_floors.get_floor(pl.col("exposure_class")))
+                    pl.lit(pack.formula("pd_floors")["minimum"])
                 )
             )
             .with_columns(
@@ -421,9 +411,9 @@ class IRBCalculator:
                 )
             )
             .with_columns(
-                # Calculate RWA
+                # Calculate RWA — scaling factor read from the resolved rulepack
                 rwa=pl.col("k") * 12.5 * pl.col("ead") * pl.col("ma") *
-                    config.scaling_factor
+                    pack.scalar("scaling_factor")
             )
         )
 
@@ -443,12 +433,13 @@ class SlottingCalculator:
     ) -> pl.LazyFrame:
         """Calculate Slotting RWA."""
         return (
-            exposures.slotting.prepare_columns(config)
-            .slotting.apply_slotting_weights(config)   # Art. 153(5) tables
-            .slotting.calculate_rwa()
-            .slotting.apply_el_rates(config)
-            .slotting.compute_el_shortfall_excess(errors=errors)
+            exposures.pipe(prepare_columns, config)
+            .pipe(apply_slotting_weights, config, pack=pack)   # Art. 153(5) tables
+            .pipe(calculate_rwa)
+            .pipe(apply_el_rates, config, pack=pack)
+            .pipe(compute_el_shortfall_excess, errors=errors)
         )  # + supporting factors (CRR) and aggregator columns
+        # transforms live in engine/slotting/transforms.py
 ```
 
 ## Stage 6: Aggregation

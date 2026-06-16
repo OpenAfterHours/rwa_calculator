@@ -20,11 +20,12 @@ graph TD
     E --> F[Results]
 ```
 
-Framework differences are isolated to:
-- Configuration factories
-- Parameter lookups
-- Supporting factor application
-- Output floor calculation
+Regime is **data**. The user chooses a regime via the `.crr()` / `.basel_3_1()`
+config factories (which set `regime_id`); each run resolves a frozen
+`ResolvedRulepack` from `(regime_id, reporting_date)`, and regime-divergent
+behaviour reads cited pack `Feature`s / values from that pack — the engine never
+branches on a regime boolean (`scripts/arch_check.py` check 17 bans engine reads
+of `config.is_crr` / `config.is_basel_3_1`).
 
 ### 2. Pipeline Architecture
 
@@ -131,27 +132,45 @@ src/rwa_calc/
 │   ├── errors.py          # Error handling
 │   ├── protocols.py       # Component interfaces
 │   └── validation.py      # Schema validation
-├── data/                   # Schemas and regulatory tables
-│   ├── schemas.py         # Polars schemas
-│   └── tables/            # Lookup tables (risk weights, CCFs, haircuts)
+├── data/                   # Input-domain schemas only
+│   ├── column_spec.py     # Column specifications
+│   └── schemas.py         # Polars schemas + validation constants
+├── rulebook/               # Cited regulatory values (the value home)
+│   ├── packs/             # common.py / crr.py / b31.py — cited entries
+│   ├── resolve.py         # resolve(regime, date) -> frozen ResolvedRulepack
+│   └── compile.py         # the only Decimal -> float boundary
 ├── domain/                 # Core domain
 │   └── enums.py           # Enumerations
 ├── ui/                     # User interface
 │   └── marimo/            # Marimo web applications
 └── engine/                 # Calculation engine
-    ├── pipeline.py        # Pipeline orchestration
+    ├── pipeline.py        # Run-lifecycle facade (run_id, edge capture, audit)
+    ├── registry.py        # Literal ordered StageSpec list
+    ├── orchestrator.py    # run_stages — the fold over the registry
     ├── loader.py          # Data loading
-    ├── hierarchy.py       # Hierarchy resolution
-    ├── classifier.py      # Exposure classification
+    ├── hierarchy.py       # Back-compat shim → stages/hierarchy/
+    ├── classifier.py      # Back-compat shim → stages/classify/
     ├── ccf.py             # Credit conversion factors
-    ├── aggregator.py      # Result aggregation
     ├── fx_converter.py    # FX conversion
+    ├── stages/            # Per-stage run(ctx, rulepack, run_config) adapters
+    │   ├── hierarchy/     # Hierarchy resolution (package)
+    │   ├── classify/      # Exposure classification (package)
+    │   ├── crm.py         # CRM stage adapter
+    │   └── calc.py        # Calculator stage adapter
+    ├── aggregator/        # Result aggregation (package)
     ├── crm/               # Credit risk mitigation
     ├── sa/                # Standardised approach
     ├── irb/               # IRB approach
     ├── slotting/          # Slotting approach
     └── equity/            # Equity approach
 ```
+
+The pipeline is a fold over a literal stage registry: `engine/registry.py`
+holds the ordered `StageSpec` list, `engine/orchestrator.py::run_stages`
+threads an immutable `PipelineContext` (typed `ArtifactKey[T]` map,
+`contracts/context.py`) through one `run(ctx, rulepack, run_config)` adapter per
+stage under `engine/stages/`, and stages exchange eager sealed frames (edge
+contracts in `contracts/edges.py`).
 
 ## Key Patterns
 

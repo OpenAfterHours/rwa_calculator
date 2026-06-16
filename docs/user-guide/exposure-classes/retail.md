@@ -15,10 +15,11 @@ Retail exposures must meet ALL of the following criteria:
 
 !!! info "Conceptual Logic"
     The following illustrates the retail classification decision logic. For the actual implementation,
-    see [`classifier.py:285-392`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/classifier.py#L285-L392).
+    see [`stages/classify/subtypes.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/classify/subtypes.py#L196-L254)
+    (`reclassify_corporate_to_retail`).
 
 ```python
-# Conceptual overview - actual implementation in ExposureClassifier._apply_retail_classification
+# Conceptual overview - actual implementation in subtypes.reclassify_corporate_to_retail
 def is_retail(exposure, counterparty, lending_group_adjusted_exposure):
     return (
         counterparty.type in ["individual", "retail", "small_business"] and
@@ -27,9 +28,9 @@ def is_retail(exposure, counterparty, lending_group_adjusted_exposure):
     )
 ```
 
-??? example "Actual Implementation (classifier.py)"
+??? example "Actual Implementation (stages/classify/subtypes.py)"
     ```python
-    --8<-- "src/rwa_calc/engine/classifier.py:285:343"
+    --8<-- "src/rwa_calc/engine/stages/classify/subtypes.py:196:254"
     ```
 
 ## Retail Sub-Classes
@@ -250,10 +251,11 @@ This exclusion applies because:
 
 !!! info "Conceptual Logic"
     The following illustrates the residential property exclusion logic. For the actual implementation,
-    see [`hierarchy.py:692-789`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/hierarchy.py#L692-L789).
+    see [`stages/hierarchy/enrich.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/stages/hierarchy/enrich.py#L243-L351)
+    (`enrich_with_property_coverage`).
 
 ```python
-# Conceptual overview - actual implementation in HierarchyResolver._calculate_residential_property_coverage
+# Conceptual overview - actual implementation in enrich.enrich_with_property_coverage
 def calculate_adjusted_exposure(exposures, residential_collateral):
     """
     Per CRR Art. 123(c), residential property secured exposures (SA)
@@ -272,11 +274,11 @@ def calculate_adjusted_exposure(exposures, residential_collateral):
     return exposures
 ```
 
-??? example "Actual Implementation (hierarchy.py)"
+??? example "Actual Implementation (stages/hierarchy/enrich.py)"
     The real implementation uses Polars LazyFrames for efficient processing:
 
     ```python
-    --8<-- "src/rwa_calc/engine/hierarchy.py:692:789"
+    --8<-- "src/rwa_calc/engine/stages/hierarchy/enrich.py:243:351"
     ```
 
 **Lending Group Threshold Check:**

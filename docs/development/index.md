@@ -101,18 +101,30 @@ src/rwa_calc/
 │   ├── errors.py    # Error types
 │   ├── protocols.py # Component interfaces
 │   └── validation.py
-├── data/            # Schemas and lookup tables
-│   ├── schemas.py   # Polars schemas
-│   └── tables/      # Regulatory tables
+├── data/            # Input-domain schemas / validation enums
+│   ├── schemas.py   # Polars schemas + categorical constraints
+│   └── column_spec.py
 ├── domain/          # Core domain
 │   └── enums.py     # Enumerations
+├── rulebook/        # Regulatory value-home (cited entries)
+│   ├── packs/       # common.py / crr.py / b31.py — regulatory values (cited)
+│   ├── resolve.py   # resolve(regime_id, date) -> frozen ResolvedRulepack
+│   ├── compile.py   # Decimal -> float boundary
+│   └── audit.py     # rulepack diff / citation index
 └── engine/          # Calculation engine
-    ├── pipeline.py  # Orchestration
+    ├── pipeline.py  # Run-lifecycle facade over the registry/orchestrator fold
+    ├── registry.py  # Literal StageSpec list (ordered stages)
+    ├── orchestrator.py # run_stages fold (threads PipelineContext)
+    ├── stages/      # One run(ctx, rulepack, run_config) adapter per stage
+    │   ├── hierarchy/  # Hierarchy resolution (impl)
+    │   ├── classify/   # Classification (impl)
+    │   ├── crm.py      # CRM adapter
+    │   └── calc.py     # SA/IRB/Slotting calculators adapter
     ├── loader.py    # Data loading
-    ├── hierarchy.py # Hierarchy resolution
-    ├── classifier.py # Classification
+    ├── hierarchy.py # Back-compat shim -> stages/hierarchy/
+    ├── classifier.py # Back-compat shim -> stages/classify/
     ├── ccf.py       # Credit conversion factors
-    ├── aggregator.py # Aggregation
+    ├── aggregator/  # Aggregation (package)
     ├── crm/         # Credit risk mitigation
     ├── sa/          # Standardised approach
     ├── irb/         # IRB approach

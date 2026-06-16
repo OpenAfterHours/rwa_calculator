@@ -156,7 +156,7 @@ exclude = [
 # written against; bump when upstream ships an updated PS / PRA Rulebook index.
 rulebook_version = "2026-05-15"
 instruments = ["CRR", "PS", "PRA_RULEBOOK", "SS"]
-source_paths = ["src/rwa_calc/engine", "src/rwa_calc/data/tables"]
+source_paths = ["src/rwa_calc/engine"]
 
 [dependency-groups]
 dev = [

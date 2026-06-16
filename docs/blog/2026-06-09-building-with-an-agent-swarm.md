@@ -10,6 +10,8 @@ This is post 4 in the series on building this UK Basel 3.1 RWA calculator. Posts
 
 If you have read enough breathless takes on AI coding to last a lifetime, this is not that. The honest version of "agents wrote the calculator" is closer to "I designed a pipeline of agents with strict role boundaries, wrote the prompts that constrain each one, designed the validation gates that refuse work that violates the architecture, and reviewed every diff." The agents do the typing. The interesting question is what scaffolding has to be in place before that division of labour produces regulatory-grade code, and what failure modes you have to defend against.
 
+*Update (June 2026): the agent workflow described here is accurate for the period, but the `data/tables/` value home it references (both the "prefer adding a row to an existing data table" implementer guidance and the collision rule keyed on "a different `data/tables/` file") was later replaced by the rulebook packs. A new regulatory value now goes into `src/rwa_calc/rulebook/packs/{common,crr,b31}.py` as a cited entry — see the "pack-as-value-home" guidance in `CLAUDE.md` — and the collision rules key on the relevant engine sub-package / pack instead.*
+
 ## What is actually running
 
 The orchestrator is 90 lines of bash. Here is the meaningful half of it:

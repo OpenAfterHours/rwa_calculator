@@ -33,7 +33,7 @@ This section provides an overview of all implemented features in the RWA calcula
 | **Supporting Factors** | CRR SME tiered factor (0.7619/0.85) and infrastructure factor (0.75) | [Methodology](../user-guide/methodology/supporting-factors.md), [Specification](../specifications/crr/supporting-factors.md) |
 | **Output Floor** | Basel 3.1 output floor (72.5% of SA) with transitional schedule | [Specification](../framework-comparison/technical-reference.md#output-floor), [API](../api/engine.md#aggregator) |
 | **Input Validation** | Categorical value validation with DQ006 error codes | [Data Model](../data-model/data-validation.md) |
-| **Audit Trail** | Full calculation transparency with formatted audit strings for every approach | [API](../api/engine.md#audit-namespace) |
+| **Audit Trail** | Full calculation transparency via audit transform functions producing formatted audit strings for every approach | [API](../api/engine.md#audit-namespace) |
 
 ## Reporting & Analysis Features
 
@@ -59,4 +59,4 @@ Key differences are documented in the [CRR vs Basel 3.1](../framework-comparison
 
 ## Performance
 
-All calculations use Polars LazyFrames for vectorized performance (50-100x improvement over row-by-row iteration). Eight custom Polars namespace extensions provide fluent, chainable APIs. See [Design Principles](../architecture/design-principles.md) for details.
+All calculations use Polars LazyFrames for vectorized performance. Calculator and domain logic are plain module-level typed functions composed via `lf.pipe(fn, ...)` — Polars namespace extensions were removed and are banned by `scripts/arch_check.py` check 14. See [Design Principles](../architecture/design-principles.md).

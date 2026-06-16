@@ -356,15 +356,23 @@ RWA_final = max(33,981,000, 36,250,000) = £36,250,000
 
 ## Implementation
 
-### Using the IRB Namespace (Recommended)
+### Using the IRB Transforms (Recommended)
 
-The IRB module provides a Polars namespace extension for fluent, chainable calculations:
+The IRB logic is plain module-level typed functions in
+[`irb/transforms.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/transforms.py)
+and [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py),
+composed over a `LazyFrame` via `lf.pipe(fn, config)`:
 
 ```python
 import polars as pl
 from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
-import rwa_calc.engine.irb.namespace  # Registers .irb namespace
+from rwa_calc.engine.irb.transforms import (
+    classify_approach,    # Determine F-IRB vs A-IRB
+    apply_firb_lgd,       # Apply supervisory LGD for F-IRB
+    prepare_columns,      # Ensure required columns exist
+    apply_all_formulas,   # Run full IRB calculation
+)
 
 config = CalculationConfig.crr(reporting_date=date(2026, 12, 31))
 
@@ -379,13 +387,13 @@ exposures = pl.LazyFrame({
     "turnover_m": [25.0],  # Annual turnover in millions
 })
 
-# Fluent IRB calculation pipeline
+# IRB calculation pipeline composed via lf.pipe(fn, config)
 result = (
     exposures
-    .irb.classify_approach(config)   # Determine F-IRB vs A-IRB
-    .irb.apply_firb_lgd(config)      # Apply supervisory LGD for F-IRB
-    .irb.prepare_columns(config)     # Ensure required columns exist
-    .irb.apply_all_formulas(config)  # Run full IRB calculation
+    .pipe(classify_approach, config)
+    .pipe(apply_firb_lgd, config)
+    .pipe(prepare_columns, config)
+    .pipe(apply_all_formulas, config)
     .collect()
 )
 
@@ -395,38 +403,34 @@ print(result.select([
 ]))
 ```
 
-**Individual formula steps** can also be chained:
-
-```python
-result = (
-    exposures
-    .irb.apply_pd_floor(config)
-    .irb.apply_lgd_floor(config)
-    .irb.calculate_correlation(config)
-    .irb.calculate_k(config)
-    .irb.calculate_maturity_adjustment(config)
-    .irb.calculate_rwa(config)
-    .irb.calculate_expected_loss(config)
-)
-```
-
 ### Using the IRB Calculator
 
 ```python
+import polars as pl
+from datetime import date
 from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.contracts.config import CalculationConfig
 
 # Create calculator
 calculator = IRBCalculator()
 
-# Calculate — takes a CRMAdjustedBundle, returns a LazyFrameResult
-result = calculator.calculate(
-    data=crm_adjusted_bundle,
-    config=CalculationConfig.crr(reporting_date=date(2026, 12, 31))
+# calculate_branch() takes a pre-filtered IRB LazyFrame and returns a LazyFrame
+irb_lf = pl.LazyFrame({
+    "exposure_reference": ["EXP001"],
+    "pd": [0.005],
+    "lgd": [0.45],
+    "ead_final": [50_000_000.0],
+    "maturity": [3.0],
+    "exposure_class": ["CORPORATE"],
+    "turnover_m": [25.0],
+})
+
+result_lf = calculator.calculate_branch(
+    irb_lf,
+    CalculationConfig.crr(reporting_date=date(2026, 12, 31)),
 )
 
-# Result is a LazyFrameResult containing the LazyFrame and any errors
-irb_rwa_df = result.data.collect()
+irb_rwa_df = result_lf.collect()
 print(irb_rwa_df.select("rwa", "expected_loss"))
 ```
 
@@ -435,7 +439,7 @@ print(irb_rwa_df.select("rwa", "expected_loss"))
 The IRB formulas are implemented in [`irb/formulas.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/formulas.py). Both scalar functions and pure Polars expression functions are available.
 
 !!! info "Implementation Architecture"
-    - **Vectorized expressions**: Pure Polars expressions for bulk processing (used by namespace and calculator)
+    - **Vectorized expressions**: Pure Polars expressions for bulk processing (used by the IRB transforms (`engine/irb/transforms.py`) and the calculator via `lf.pipe(...)`)
     - **Scalar wrappers**: Thin wrappers around vectorized expressions for single-value calculations
 
 ```python

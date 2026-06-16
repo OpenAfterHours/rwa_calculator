@@ -10,6 +10,8 @@ This is post 7 in the series on building this UK Basel 3.1 RWA calculator. Posts
 
 The thing I want to convince you of: the headline test count is irrelevant. What matters is that there are five layers in the test pyramid, each one designed to catch a class of failure that the others cannot. Removing any layer leaves a category of bugs invisible. The interesting layer is not the one with the most tests; it is the one with the fewest, and the one that took the most care to design.
 
+*Update (June 2026): two references below were overtaken by the 2026-06 architecture migration. `CalculationConfig` no longer carries regulatory scalars (scaling factor, PD/LGD floors, thresholds) — those were removed and now resolve from the rulebook packs keyed on `regime_id` + reporting date — so the `test_config.py` invariant now lives in the rulepack/regime-resolution layer rather than in the config object. And `data/tables/` was removed: the data-layer-boundary contract now directs regulatory values to the rulebook packs (`src/rwa_calc/rulebook/packs/*.py`, resolved via `rwa_calc.rulebook.resolve`) rather than to `data/tables/`. The remediation string in the quoted code block is reproduced verbatim from the contract test, whose message text still said `data/tables/` at the time and is itself pending an update.*
+
 ## The structural problem with golden-file testing
 
 A regulatory calculator's natural test shape is the golden file: pick a portfolio, run the engine, record the expected RWA per exposure as JSON, assert the engine reproduces it. Acceptance scenarios in this codebase look exactly like that. Two-hundred-and-thirteen JSON entries under `tests/expected_outputs/{crr,basel31}/` pin the output of approximately five hundred scenarios across both frameworks.
@@ -139,5 +141,5 @@ Post 8 closes the series with the honest retrospective: what I got wrong, what t
 
 - [`tests/oracle/README.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/cceaee4/tests/oracle/README.md) — the oracle suite's update protocol, including the four-file lockstep rule.
 - [`tests/oracle/ORACLE_DERIVATIONS.md`](https://github.com/OpenAfterHours/rwa_calculator/blob/cceaee4/tests/oracle/ORACLE_DERIVATIONS.md) — the current scaffold's three derivations with full citations.
-- [`tests/contracts/test_data_layer_boundary.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/cceaee4/tests/contracts/test_data_layer_boundary.py) — the contract enforcing that regulatory scalars stay in `data/tables/`.
+- [`tests/contracts/test_data_layer_boundary.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/cceaee4/tests/contracts/test_data_layer_boundary.py) — the contract enforcing that regulatory scalars stay out of `engine/**` (their home is the rulebook packs; see the *Update (June 2026)* note above).
 - [PRA SS1/23 — Model Risk Management Principles for Banks](https://www.bankofengland.co.uk/prudential-regulation/publication/2023/may/model-risk-management-principles-for-banks-ss) — the framework around the calculator that the test suite does not cover.

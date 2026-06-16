@@ -292,8 +292,9 @@ Set `entity_type = "mdb"` in the counterparty data for these institutions.
 !!! warning "Code Divergence (D3.39)"
     The code applies Table 2B values (CQS 2 = 30%) under **both** frameworks. Under CRR, non-named
     MDBs should use institution risk weight tables (Art. 120/121), giving CQS 2 = **50%**. The
-    separate `MDB_RISK_WEIGHTS_TABLE_2B` in `crr_risk_weights.py` is the Basel 3.1 table
-    misattributed to CRR. See D1.40.
+    separate `MDB_RISK_WEIGHTS_TABLE_2B` in `engine/sa/crr_risk_weight_tables.py` (a pack-binding
+    shim that now reads its value from the rulepack pack) is the Basel 3.1 table misattributed to
+    CRR. See D1.40.
 
 Art. 117(1) also names four MDBs that are **not** on the 0% list: Inter-American Investment
 Corporation, Black Sea Trade and Development Bank, Central American Bank for Economic Integration,

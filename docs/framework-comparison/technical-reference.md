@@ -294,8 +294,9 @@ H_m = H_n × sqrt(T_m / T_n)
 | Capital market | 10 days | × 1.000 (no scaling) |
 | Secured lending | 20 days | × 1.414 (`sqrt(2)`) |
 
-**Implementation:** `scale_haircut_for_liquidation_period()` in `data/tables/haircuts.py`;
-applied via `liquidation_period_days` column in `engine/crm/haircuts.py`.
+**Implementation:** `scale_haircut_for_liquidation_period()` in `engine/crm/haircut_tables.py`
+(the pack-binding shim that homes the relocated haircut table builders); applied via the
+`liquidation_period_days` column in `engine/crm/haircuts.py`.
 
 ### Art. 226(1) — Non-Daily Revaluation Adjustment
 
@@ -473,12 +474,13 @@ The 1.25x correlation multiplier applies to exposures to **financial institution
 This multiplier is already implemented via the `requires_fi_scalar` flag in the classifier and `_polars_correlation_expr()` in the IRB formulas. It applies under both CRR and Basel 3.1 frameworks.
 
 !!! warning "Code divergence: Basel 3.1 threshold not enforced in engine"
-    `src/rwa_calc/contracts/config.py` defines `RegulatoryThresholds.basel_3_1()` with
-    `lfse_total_assets_threshold = Decimal("0")` — the GBP 79 billion value is **not**
-    currently held in code. The Basel 3.1 calculator relies exclusively on the upstream
-    `apply_fi_scalar` flag on the counterparty record; firms are responsible for determining
-    LFSE status against the GBP 79 billion threshold prior to ingest. Tracked as code-side
-    finding (D3.58 / IMPLEMENTATION_PLAN.md).
+    The rulepack b31 pack sets `lfse_total_assets_threshold` to `Decimal("0")`
+    (`rulebook/packs/b31.py`) — the GBP 79 billion value is **not** currently held in code.
+    The Basel 3.1 calculator relies exclusively on the upstream `apply_fi_scalar` flag on the
+    counterparty record; firms are responsible for determining LFSE status against the GBP 79
+    billion threshold prior to ingest. (The former `RegulatoryThresholds` config dataclass was
+    removed in the Phase 5 migration; thresholds now resolve from the pack.) Tracked as
+    code-side finding (D3.58 / IMPLEMENTATION_PLAN.md).
 
 Note: There is no separate "large corporate" correlation multiplier for non-financial corporates in either the BCBS standard or PRA PS1/26. See [key-differences.md § Financial Sector Correlation Multiplier](key-differences.md#financial-sector-correlation-multiplier) for the parallel CRR/B31 comparison and the distinction from the Art. 147A(1)(e) GBP 440m revenue approach restriction.
 

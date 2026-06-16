@@ -114,32 +114,31 @@ Test individual components in isolation:
 ```python
 # tests/unit/test_ccf.py
 
-import pytest
-from rwa_calc.engine.ccf import get_ccf
-from rwa_calc.domain.enums import RegulatoryFramework
+import polars as pl
+from rwa_calc.engine.ccf import sa_ccf_expression
 
 class TestCCF:
     """Tests for credit conversion factor calculation."""
 
     def test_unconditionally_cancellable_crr_returns_zero(self):
         """Unconditionally cancellable commitments have 0% CCF under CRR."""
-        ccf = get_ccf(
-            item_type="UNDRAWN_COMMITMENT",
-            is_unconditionally_cancellable=True,
-            original_maturity_years=5,
-            framework=RegulatoryFramework.CRR,
+        lf = pl.LazyFrame(
+            {"item_type": ["UNDRAWN_COMMITMENT"], "is_unconditionally_cancellable": [True]}
         )
-        assert ccf == 0.0
+        result = lf.with_columns(
+            sa_ccf_expression(is_basel_3_1=False).alias("ccf")
+        ).collect()
+        assert result["ccf"][0] == 0.0
 
     def test_unconditionally_cancellable_basel31_returns_ten_percent(self):
         """Unconditionally cancellable has 10% CCF under Basel 3.1."""
-        ccf = get_ccf(
-            item_type="UNDRAWN_COMMITMENT",
-            is_unconditionally_cancellable=True,
-            original_maturity_years=5,
-            framework=RegulatoryFramework.BASEL_3_1,
+        lf = pl.LazyFrame(
+            {"item_type": ["UNDRAWN_COMMITMENT"], "is_unconditionally_cancellable": [True]}
         )
-        assert ccf == 0.10
+        result = lf.with_columns(
+            sa_ccf_expression(is_basel_3_1=True).alias("ccf")
+        ).collect()
+        assert result["ccf"][0] == 0.10
 ```
 
 ### Contract Tests

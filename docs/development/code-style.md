@@ -271,15 +271,22 @@ class ResultBundle:
 
 ```python
 @dataclass(frozen=True)
-class PDFloor:
-    """PD floor with validation."""
+class EurGbpRate:
+    """Firm-input FX rate with validation."""
 
     value: Decimal
 
     def __post_init__(self):
-        if self.value < 0 or self.value > 1:
-            raise ValueError(f"PD floor must be between 0 and 1, got {self.value}")
+        if self.value <= 0:
+            raise ValueError(f"FX rate must be positive, got {self.value}")
 ```
+
+!!! note
+    Regulatory floor values such as PD/LGD floors are **not** modelled as config
+    dataclasses — they are cited `ScalarParam` entries in the rulepack
+    (`src/rwa_calc/rulebook/packs/`), read via `resolve(regime_id, date)`. Use
+    frozen-dataclass validation like the above only for firm inputs and run
+    parameters.
 
 ## Error Handling
 

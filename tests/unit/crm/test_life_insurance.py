@@ -27,7 +27,6 @@ from rwa_calc.engine.crm.expressions import (
 )
 from rwa_calc.engine.crm.haircuts import HaircutCalculator
 from rwa_calc.engine.crm.life_insurance import (
-    LIFE_INSURANCE_RW_MAP,
     _add_default_life_ins_columns,
     _map_insurer_rw_to_secured_rw_expr,
     compute_life_insurance_columns,
@@ -120,10 +119,12 @@ class TestLifeInsuranceRWMapping:
         result = df.with_columns(_map_insurer_rw_to_secured_rw_expr().alias("mapped")).collect()
         assert result["mapped"][0] == pytest.approx(0.70)
 
-    def test_rw_map_dict_has_all_regulatory_values(self) -> None:
-        """The mapping dict covers all insurer RW values mentioned in Art. 232."""
-        expected_keys = {0.20, 0.30, 0.50, 0.65, 1.00, 1.35, 1.50}
-        assert set(LIFE_INSURANCE_RW_MAP.keys()) == expected_keys
+    def test_rw_map_pack_band_table_covers_art_232_bands(self) -> None:
+        """The Art. 232 pack band table holds the canonical insurer-RW -> secured-RW bands."""
+        bands = _CRR_PACK.banded("life_insurance_secured_rw_map").bands
+        assert [
+            (float(bound) if bound is not None else None, float(value)) for bound, value in bands
+        ] == [(0.20, 0.20), (0.50, 0.35), (1.35, 0.70), (None, 1.50)]
 
 
 # --- Art. 232: Compute Life Insurance Columns ---

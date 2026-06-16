@@ -25,6 +25,7 @@ from decimal import Decimal
 
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.rulebook.model import (
+    BandedTable,
     CategoryMap,
     Citation,
     IntParam,
@@ -46,6 +47,22 @@ ENTRIES: dict[str, RuleEntry] = {
         name="restructuring_exclusion_haircut",
         value=Decimal("0.40"),
         citation=Citation("CRR", "233(2)", "credit-derivative restructuring-exclusion 40% haircut"),
+    ),
+    # Art. 232(1) life-insurance funded-protection RW map: insurer SA risk weight
+    # -> secured-portion risk weight (banded; a band applies when the insurer RW
+    # is <= its upper bound). Regime-invariant (CRR Art. 232 retained unchanged
+    # under PS1/26). Consumed by
+    # engine/crm/life_insurance.py::_map_insurer_rw_to_secured_rw_expr.
+    "life_insurance_secured_rw_map": BandedTable(
+        name="life_insurance_secured_rw_map",
+        bands=(
+            (Decimal("0.20"), Decimal("0.20")),
+            (Decimal("0.50"), Decimal("0.35")),
+            (Decimal("1.35"), Decimal("0.70")),
+            (None, Decimal("1.50")),
+        ),
+        input="insurer_risk_weight",
+        citation=Citation("CRR", "232", "(1) life-insurance secured-portion RW map"),
     ),
     "sa_ccr_alpha": ScalarParam(
         name="sa_ccr_alpha",

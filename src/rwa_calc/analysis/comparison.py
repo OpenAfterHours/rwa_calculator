@@ -24,7 +24,7 @@ References:
 - CRR Art. 501/501a: SME and infrastructure supporting factors
 
 Usage:
-    from rwa_calc.engine.comparison import (
+    from rwa_calc.analysis.comparison import (
         CapitalImpactAnalyzer, DualFrameworkRunner, TransitionalScheduleRunner,
     )
 
@@ -253,7 +253,7 @@ class TransitionalScheduleRunner:
     trajectory is essential for forward-looking capital management.
 
     Usage:
-        from rwa_calc.engine.comparison import TransitionalScheduleRunner
+        from rwa_calc.analysis.comparison import TransitionalScheduleRunner
 
         runner = TransitionalScheduleRunner()
         schedule = runner.run(raw_data, permission_mode)

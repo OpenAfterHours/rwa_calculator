@@ -22,15 +22,15 @@ from datetime import date
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import AggregatedResultBundle, ComparisonBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.engine.comparison import (
+from rwa_calc.analysis.comparison import (
     DualFrameworkRunner,
     _compute_exposure_deltas,
     _compute_summary_by_approach,
     _compute_summary_by_class,
     _validate_configs,
 )
+from rwa_calc.contracts.bundles import AggregatedResultBundle, ComparisonBundle
+from rwa_calc.contracts.config import CalculationConfig
 from tests.fixtures.resolved_bundle import make_aggregated_bundle
 from tests.unit._minimal_raw_data import make_minimal_raw_data
 

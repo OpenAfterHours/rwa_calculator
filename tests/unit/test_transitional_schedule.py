@@ -28,15 +28,15 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import AggregatedResultBundle, TransitionalScheduleBundle
-from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
-from rwa_calc.engine.comparison import (
+from rwa_calc.analysis.comparison import (
     _TRANSITIONAL_REPORTING_DATES,
     TransitionalScheduleRunner,
     _build_timeline_lazyframe,
     _extract_floor_metrics,
 )
+from rwa_calc.contracts.bundles import AggregatedResultBundle, TransitionalScheduleBundle
+from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import PermissionMode
 from tests.fixtures.resolved_bundle import make_aggregated_bundle
 from tests.unit._minimal_raw_data import make_minimal_raw_data
 

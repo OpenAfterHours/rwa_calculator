@@ -20,10 +20,10 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from rwa_calc.analysis.reconciliation import ReconciliationRunner
 from rwa_calc.api.models import ReconciliationResponse
 from rwa_calc.api.reconciliation import loads_reconciliation_config
 from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
-from rwa_calc.engine.reconciliation import ReconciliationRunner
 from rwa_calc.ui.views import reconciliation as rv
 
 # =============================================================================

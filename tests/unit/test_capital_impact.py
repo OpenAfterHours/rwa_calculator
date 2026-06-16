@@ -23,16 +23,16 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.bundles import (
-    AggregatedResultBundle,
-    CapitalImpactBundle,
-    ComparisonBundle,
-)
-from rwa_calc.engine.comparison import (
+from rwa_calc.analysis.comparison import (
     CapitalImpactAnalyzer,
     _compute_attribution_summary,
     _compute_exposure_attribution,
     _compute_portfolio_waterfall,
+)
+from rwa_calc.contracts.bundles import (
+    AggregatedResultBundle,
+    CapitalImpactBundle,
+    ComparisonBundle,
 )
 from tests.fixtures.resolved_bundle import make_aggregated_bundle
 

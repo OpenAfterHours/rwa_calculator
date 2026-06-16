@@ -96,7 +96,6 @@ from pathlib import Path
 COLLECT_ALLOWLIST = {"materialise.py"}
 
 _PATH_AGGREGATOR_SCHEMAS = "engine/aggregator/_schemas.py"
-_PATH_COMPARISON = "engine/comparison.py"
 _PATH_UTILS = "engine/utils.py"
 _PATH_COLLAPSE = "engine/aggregator/_collapse.py"
 
@@ -107,8 +106,6 @@ _PATH_COLLAPSE = "engine/aggregator/_collapse.py"
 REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     # CRR Art. 62(d) 0.6% T2 credit cap — candidate for relocation to data/tables/
     _PATH_AGGREGATOR_SCHEMAS: {"T2_CREDIT_CAP_RATE"},
-    # float alias of resolve(...).scalar("irb_scaling_factor") Decimal (PR #248)
-    _PATH_COMPARISON: {"_CRR_SCALING_FACTOR"},
     "engine/equity/calculator.py": {
         "_CIU_THIRD_PARTY_MULTIPLIER",  # Art. 132b(2) 20% uplift multiplier
         "_RW_TO_PERCENT",  # audit formatting constant (not regulatory)
@@ -118,7 +115,6 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
-    "engine/reconciliation.py": {"_EXACT_EPSILON", "_ZERO_GUARD"},
 }
 
 # Module-level float-rate COLLECTION literals (e.g. a ``{float: float}`` RW map)
@@ -135,12 +131,6 @@ NUMERIC_TABLE_ALLOWLIST: dict[str, set[str]] = {}
 VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
     # ApproachType enum values + aggregator fallback labels (internal routing)
     _PATH_AGGREGATOR_SCHEMAS: {"IRB_APPROACHES", "SA_APPROACHES", "EQUITY_APPROACHES"},
-    _PATH_COMPARISON: {
-        "_COMPARISON_COLUMNS",  # output column names
-        "_OPTIONAL_COLUMNS",  # output column names
-        "_IRB_APPROACHES",  # approach IDs
-        "_ATTRIBUTION_DRIVERS",  # internal driver labels
-    },
     # Art. 231 allocation column mapping (PR #249 — retained as engine config)
     "engine/crm/expressions.py": {"CRM_ALLOC_COLUMNS"},
     # Nullable-partition-key registry for the partition_by_nullable helper.
@@ -171,9 +161,6 @@ VALIDATION_ENUM_ALLOWLIST: dict[str, set[str]] = {
 # so the regime seam stays in the rulebook; these are the sanctioned exceptions
 # (check 17). New entries require explicit justification.
 REGIME_BOOL_ALLOWLIST: dict[str, str] = {
-    # Dual-run config-type validation — asserts each framework config carries
-    # the expected regime before a parallel CRR-vs-B31 run, not a calc branch.
-    "engine/comparison.py": "dual-run config-type validation, not a calculation branch",
     # CRR-only EUR->GBP threshold sync: CRR thresholds are EUR-denominated and
     # converted via eur_gbp_rate; Basel 3.1 thresholds are GBP-native (PS1/26).
     # A genuine regime asymmetry with no rulepack Feature analogue.
@@ -297,8 +284,6 @@ REFERENCES_REQUIRED_EXEMPT: set[str] = {
 # combined warning+default emission). New entries require explicit justification
 # — schema-driven defaults otherwise belong in ensure_columns + ColumnSpec.
 SCHEMA_DEFAULTS_ALLOWLIST: set[str] = {
-    # Optional-output column detection for COREP comparison frame.
-    _PATH_COMPARISON,
     # Early-exit guards (netting / parent-facility detection, CRM output check)
     # — not defaulting.
     "engine/crm/collateral.py",

@@ -2,7 +2,7 @@
 API-layer glue for parallel-run reconciliation.
 
 Provides the analyst-facing entry points that surround the pure
-``engine.reconciliation.ReconciliationRunner``:
+``analysis.reconciliation.ReconciliationRunner``:
 
 - ``ReconciliationSettings``: legacy file + format + column mapping + top-N.
 - ``load_reconciliation_config`` / ``dump_reconciliation_config``: TOML <-> settings

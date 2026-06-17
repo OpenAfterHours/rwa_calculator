@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-06-16.
+Last generated: 2026-06-17.
 
 ## CRR (Capital Requirements Regulation)
 
@@ -720,9 +720,9 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 220 — Using the Supervisory Volatility Adjustments Approach or the Own Estimates Volatility Adjustments Approach for master netting agreements
 
-??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:77"
+??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:78"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:78:263"
     ```
 
 
@@ -741,9 +741,9 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 223 — Financial Collateral Comprehensive Method
 
-??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:78"
+??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:79"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:78:263"
     ```
 
 ??? quote "`generate_netting_collateral` — src/rwa_calc/engine/crm/collateral.py:154"
@@ -759,19 +759,19 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 224 — Supervisory volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:79"
+??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:80"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:78:263"
     ```
 
-??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:271"
+??? quote "`get_haircut_table` — src/rwa_calc/engine/crm/haircut_tables.py:274"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:271:282"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:274:285"
     ```
 
-??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:285"
+??? quote "`get_maturity_band` — src/rwa_calc/engine/crm/haircut_tables.py:288"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:285:317"
+    --8<-- "src/rwa_calc/engine/crm/haircut_tables.py:288:320"
     ```
 
 ??? quote "`apply_haircuts` — src/rwa_calc/engine/crm/haircuts.py:121"
@@ -782,9 +782,9 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 226 — Scaling up of volatility adjustment under the Financial Collateral Comprehensive Method
 
-??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:80"
+??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:81"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:78:263"
     ```
 
 
@@ -811,9 +811,9 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 232 — Other funded credit protection
 
-??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:70"
+??? quote "`compute_life_insurance_columns` — src/rwa_calc/engine/crm/life_insurance.py:76"
     ```python
-    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:70:154"
+    --8<-- "src/rwa_calc/engine/crm/life_insurance.py:76:160"
     ```
 
 ??? quote "`apply_life_insurance_rw_mapping` — src/rwa_calc/engine/sa/rw_adjustments.py:119"
@@ -861,9 +861,9 @@ Last generated: 2026-06-16.
 
 ### CRR Art. 271 — Determination of the exposure value
 
-??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:81"
+??? quote "`sft_rows_to_exposures` — src/rwa_calc/engine/ccr/sft_fccm.py:82"
     ```python
-    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:77:262"
+    --8<-- "src/rwa_calc/engine/ccr/sft_fccm.py:78:263"
     ```
 
 

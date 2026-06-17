@@ -22,8 +22,8 @@ import inspect
 import polars as pl
 import pytest
 
-from rwa_calc.engine import comparison as cmp_mod
-from rwa_calc.engine.comparison import (
+from rwa_calc.analysis import comparison as cmp_mod
+from rwa_calc.analysis.comparison import (
     _DRIVER_FLOOR,
     _DRIVER_METHODOLOGY,
     _DRIVER_SCALING,

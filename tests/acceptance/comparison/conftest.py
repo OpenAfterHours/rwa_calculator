@@ -126,7 +126,7 @@ def sa_comparison(raw_data_bundle, crr_sa_config, b31_sa_config):
     Session-scoped: runs both CRR and B31 pipelines once,
     joins results, computes deltas. Shared across all SA comparison tests.
     """
-    from rwa_calc.engine.comparison import DualFrameworkRunner
+    from rwa_calc.analysis.comparison import DualFrameworkRunner
 
     runner = DualFrameworkRunner()
     return runner.compare(raw_data_bundle, crr_sa_config, b31_sa_config)
@@ -158,7 +158,7 @@ def firb_comparison(irb_raw_data_bundle, crr_firb_config, b31_firb_config):
     Key differences: LGD 45% vs 40%, PD floor 0.03% vs 0.05%,
     scaling factor 1.06 vs 1.0, supporting factors on vs off.
     """
-    from rwa_calc.engine.comparison import DualFrameworkRunner
+    from rwa_calc.analysis.comparison import DualFrameworkRunner
 
     runner = DualFrameworkRunner()
     return runner.compare(irb_raw_data_bundle, crr_firb_config, b31_firb_config)
@@ -182,7 +182,7 @@ def sa_capital_impact(sa_comparison):
     Session-scoped: decomposes the SA comparison deltas into
     driver attribution (supporting factor removal, methodology changes).
     """
-    from rwa_calc.engine.comparison import CapitalImpactAnalyzer
+    from rwa_calc.analysis.comparison import CapitalImpactAnalyzer
 
     return CapitalImpactAnalyzer().analyze(sa_comparison)
 
@@ -212,7 +212,7 @@ def firb_capital_impact(firb_comparison):
     Session-scoped: decomposes the F-IRB comparison deltas into
     driver attribution (scaling factor, supporting factor, methodology, floor).
     """
-    from rwa_calc.engine.comparison import CapitalImpactAnalyzer
+    from rwa_calc.analysis.comparison import CapitalImpactAnalyzer
 
     return CapitalImpactAnalyzer().analyze(firb_comparison)
 

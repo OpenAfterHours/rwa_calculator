@@ -28,7 +28,6 @@ Polars Namespaces:
     - lf.slotting: Specialised lending slotting
 """
 
-from .comparison import CapitalImpactAnalyzer, DualFrameworkRunner, TransitionalScheduleRunner
 from .hierarchy import HierarchyResolver
 from .loader import CSVLoader, ParquetLoader
 from .pipeline import PipelineOrchestrator, create_pipeline, create_test_pipeline
@@ -37,9 +36,6 @@ __all__ = [
     "ParquetLoader",
     "CSVLoader",
     "HierarchyResolver",
-    "CapitalImpactAnalyzer",
-    "DualFrameworkRunner",
-    "TransitionalScheduleRunner",
     "PipelineOrchestrator",
     "create_pipeline",
     "create_test_pipeline",

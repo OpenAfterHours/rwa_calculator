@@ -2,7 +2,7 @@
 API-layer glue for parallel-run reconciliation.
 
 Provides the analyst-facing entry points that surround the pure
-``engine.reconciliation.ReconciliationRunner``:
+``analysis.reconciliation.ReconciliationRunner``:
 
 - ``ReconciliationSettings``: legacy file + format + column mapping + top-N.
 - ``load_reconciliation_config`` / ``dump_reconciliation_config``: TOML <-> settings
@@ -28,8 +28,11 @@ from typing import Any, Literal
 
 import polars as pl
 
-from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
-from rwa_calc.data.schemas import RECONCILABLE_COMPONENTS_BY_NAME
+from rwa_calc.analysis.recon_registry import (
+    RECONCILABLE_COMPONENTS_BY_NAME,
+    ComponentMapping,
+    LegacyColumnMapping,
+)
 
 logger = logging.getLogger(__name__)
 

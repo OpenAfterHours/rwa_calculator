@@ -193,6 +193,7 @@ class CreditRiskCalc:
             ReconciliationResponse with per-component buckets, summaries, a break
             worklist, and a totals tie-out.
         """
+        from rwa_calc.analysis.reconciliation import ReconciliationRunner
         from rwa_calc.api.models import ReconciliationResponse
         from rwa_calc.api.reconciliation import (
             LegacyOutputLoader,
@@ -201,7 +202,6 @@ class CreditRiskCalc:
         from rwa_calc.api.reconciliation import (
             ReconciliationSettings as _Settings,
         )
-        from rwa_calc.engine.reconciliation import ReconciliationRunner
 
         if not isinstance(settings, _Settings):
             settings = load_reconciliation_config(settings)

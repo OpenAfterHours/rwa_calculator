@@ -756,30 +756,38 @@ class AggregatedResultBundle:
 @dataclass(frozen=True)
 class ComparisonBundle:
     """
-    Output from dual-framework comparison (M3.1).
+    Output from a labelled two-run comparison (M3.1).
 
-    Holds CRR and Basel 3.1 pipeline results side by side, plus
-    pre-computed delta LazyFrames for impact analysis.
+    Holds two labelled runs' pipeline results side by side (the classic case is
+    CRR vs Basel 3.1, but any two rulepack-identified runs work — e.g.
+    election-vs-election or regime-vs-amended), plus pre-computed delta LazyFrames
+    for impact analysis.
 
-    Why: During the Basel 3.1 transition period, firms must run both
-    frameworks in parallel to understand capital impact. This bundle
-    provides the joined results needed for M3.2 capital impact analysis
-    and M3.3 transitional floor schedule modelling.
+    Why: During the Basel 3.1 transition period, firms must run frameworks in
+    parallel to understand capital impact; the same machinery also compares two
+    elections of one regime or a regime against an amended pack. This bundle
+    provides the joined results needed for M3.2 capital impact analysis and M3.3
+    transitional floor schedule modelling.
 
     Attributes:
-        crr_results: Full CRR pipeline output
-        b31_results: Full Basel 3.1 pipeline output
-        exposure_deltas: Per-exposure comparison (CRR vs B31 RWA, risk weights, EAD)
+        baseline_results: Full pipeline output for the baseline run
+        variant_results: Full pipeline output for the variant run
+        exposure_deltas: Per-exposure comparison (variant vs baseline RWA, risk
+            weights, EAD); numeric columns carry the run labels as suffixes
         summary_by_class: Delta RWA aggregated by exposure class
         summary_by_approach: Delta RWA aggregated by calculation approach
+        baseline_label: Label / column-suffix for the baseline run (e.g. "crr")
+        variant_label: Label / column-suffix for the variant run (e.g. "b31")
         errors: Combined errors from both pipeline runs
     """
 
-    crr_results: AggregatedResultBundle
-    b31_results: AggregatedResultBundle
+    baseline_results: AggregatedResultBundle
+    variant_results: AggregatedResultBundle
     exposure_deltas: pl.LazyFrame
     summary_by_class: pl.LazyFrame
     summary_by_approach: pl.LazyFrame
+    baseline_label: str = "baseline"
+    variant_label: str = "variant"
     errors: list[CalculationError] = field(default_factory=list)
 
 

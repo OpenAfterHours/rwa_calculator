@@ -31,8 +31,8 @@ def _comparison_bundle(
     empty = pl.LazyFrame()
     agg = make_aggregated_bundle(results=empty)
     return ComparisonBundle(
-        crr_results=agg,
-        b31_results=agg,
+        baseline_results=agg,
+        variant_results=agg,
         exposure_deltas=empty,
         summary_by_class=summary_by_class if summary_by_class is not None else empty,
         summary_by_approach=summary_by_approach if summary_by_approach is not None else empty,

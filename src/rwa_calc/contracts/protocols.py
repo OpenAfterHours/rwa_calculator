@@ -32,12 +32,10 @@ if TYPE_CHECKING:
         CRMAdjustedBundle,
         EquityResultBundle,
         RawDataBundle,
-        ReconciliationBundle,
         ResolvedHierarchyBundle,
     )
     from rwa_calc.contracts.config import (
         CalculationConfig,
-        LegacyColumnMapping,
         OutputFloorConfig,
     )
     from rwa_calc.contracts.errors import CalculationError
@@ -588,30 +586,32 @@ class PipelineProtocol(Protocol):
 @runtime_checkable
 class ComparisonRunnerProtocol(Protocol):
     """
-    Protocol for dual-framework comparison execution.
+    Protocol for labelled two-run comparison execution.
 
-    Runs the same portfolio through both CRR and Basel 3.1 pipelines
-    and produces a ComparisonBundle with per-exposure deltas and
-    summary impact analysis.
+    Runs the same portfolio through two labelled configurations (the classic case
+    is CRR vs Basel 3.1) and produces a ComparisonBundle with per-exposure deltas
+    and summary impact analysis.
 
-    Why: During Basel 3.1 transition, firms need to quantify the capital
-    impact of moving from CRR to Basel 3.1. This protocol defines the
-    interface for orchestrating that comparison.
+    Why: During Basel 3.1 transition, firms need to quantify the capital impact of
+    moving between regimes (or between elections / an amendment). This protocol
+    defines the interface for orchestrating that comparison. Implementations may
+    accept richer run specifications (e.g. a labelled RunSpec with a rulepack
+    overlay); the protocol's minimal contract is two configurations.
     """
 
     def compare(
         self,
         data: RawDataBundle,
-        crr_config: CalculationConfig,
-        b31_config: CalculationConfig,
+        baseline: CalculationConfig,
+        variant: CalculationConfig,
     ) -> ComparisonBundle:
         """
-        Run both frameworks on the same data and produce comparison.
+        Run two configurations on the same data and produce a comparison.
 
         Args:
-            data: Pre-loaded raw data bundle (shared between frameworks)
-            crr_config: CRR configuration
-            b31_config: Basel 3.1 configuration
+            data: Pre-loaded raw data bundle (shared between the two runs)
+            baseline: The baseline configuration
+            variant: The variant configuration
 
         Returns:
             ComparisonBundle with per-exposure deltas and summaries
@@ -646,45 +646,6 @@ class CapitalImpactAnalyzerProtocol(Protocol):
 
         Returns:
             CapitalImpactBundle with per-exposure and portfolio attribution
-        """
-        ...
-
-
-@runtime_checkable
-class ReconciliationRunnerProtocol(Protocol):
-    """
-    Protocol for parallel-run reconciliation execution.
-
-    Reconciles our per-exposure results against an external legacy calculator's
-    output (already mapped onto our canonical components and a composite/custom
-    join key) and produces a ReconciliationBundle with per-component buckets,
-    summaries, a break worklist, and a totals tie-out.
-
-    Why: firms migrating to this calculator run it in parallel with their
-    existing engine and must demonstrate, component by component, where the two
-    agree and where (and why) they diverge. This protocol defines the interface
-    for that reconciliation, independent of how the legacy file was loaded or
-    how the result is surfaced (API / export / UI).
-    """
-
-    def reconcile(
-        self,
-        our_results: pl.LazyFrame,
-        legacy_results: pl.LazyFrame,
-        mapping: LegacyColumnMapping,
-    ) -> ReconciliationBundle:
-        """
-        Reconcile our results against a mapped legacy output.
-
-        Args:
-            our_results: Our per-exposure results LazyFrame (e.g. from
-                ``CalculationResponse.scan_results()``).
-            legacy_results: The legacy output already mapped to canonical
-                ``legacy_<component>`` columns and key columns.
-            mapping: The column/key mapping and per-component tolerances.
-
-        Returns:
-            ReconciliationBundle with per-component reconciliation and summaries.
         """
         ...
 

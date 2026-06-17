@@ -356,9 +356,9 @@ def _compute_comparison(
     data_path: str, reporting_date: date, permission_mode: str, data_format: str
 ) -> dict:
     """Run both frameworks and build the comparison template context."""
+    from rwa_calc.analysis.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.domain.enums import PermissionMode
-    from rwa_calc.engine.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
     from rwa_calc.engine.loader import CSVLoader, ParquetLoader
 
     base = Path(data_path)

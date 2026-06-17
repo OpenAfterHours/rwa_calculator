@@ -1,0 +1,241 @@
+"""Parallel-run reconciliation registry + column-mapping configuration.
+
+The canonical component registry (which result components can be reconciled
+legacy-vs-ours, with their tolerances, additivity and derived-ratio rules) plus
+the ``LegacyColumnMapping`` / ``ComponentMapping`` configuration that maps an
+external (legacy) calculator's output columns onto those components.
+
+This is analysis-layer configuration — it describes how a *finished* run is
+reconciled, not how input data is validated — so it lives in ``analysis/``
+(migration Phase 6) rather than ``data/schemas.py`` / ``contracts/config.py``.
+The reconciliation engine (``rwa_calc.analysis.reconciliation``) and the API
+loader read it; ``LegacyColumnMapping`` validates its component names against the
+registry in-module (no cross-layer import).
+
+References:
+- CRR Part Three / PRA SS1/23: parallel-run validation and output reconciliation.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Literal
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcilableComponent:
+    """A single result component that can be reconciled legacy-vs-ours.
+
+    Attributes:
+        name: Canonical component name used in config and output columns (e.g. "pd").
+        kind: "numeric" (delta + tolerance) or "categorical" (normalised equality).
+        our_columns: Candidate column names on our results frame, in preference
+            order; the first present is used as our value.
+        explain_columns: Columns carrying OUR rationale (reason / source / which
+            floor bound) — surfaced on the reconciliation row to answer "why did we
+            get this value". Absent columns are silently dropped.
+        input_columns: Raw upstream drivers that FED our value — surfaced so an
+            analyst can attribute a break to bad input data vs engine logic.
+            Absent columns are silently dropped.
+        additive: True when the value sums across guarantee/RE sub-rows on collapse
+            (EAD, RWA, expected loss); False for rates/categoricals.
+        derived_ratio: When set, ``(numerator_component, denominator_component)`` —
+            the value is recomputed after a collapse as sum(num)/sum(den) rather
+            than summed or taken first (e.g. risk_weight = rwa/ead).
+        default_tol_kind: "rel" (relative) or "abs" (absolute) tolerance default.
+        default_tol: Default tolerance magnitude (overridable per-component in the
+            mapping config).
+    """
+
+    name: str
+    kind: Literal["numeric", "categorical"]
+    our_columns: tuple[str, ...]
+    explain_columns: tuple[str, ...] = ()
+    input_columns: tuple[str, ...] = ()
+    additive: bool = False
+    derived_ratio: tuple[str, str] | None = None
+    default_tol_kind: Literal["rel", "abs"] = "rel"
+    default_tol: float = 0.01
+
+
+RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
+    ReconcilableComponent(
+        "exposure_class",
+        "categorical",
+        our_columns=("exposure_class",),
+        explain_columns=("exposure_class_reason", "pre_crm_exposure_class"),
+    ),
+    ReconcilableComponent(
+        "approach",
+        "categorical",
+        our_columns=("approach_applied", "approach"),
+        explain_columns=("approach_selection_reason", "approach_permitted"),
+        input_columns=("model_id",),
+    ),
+    ReconcilableComponent(
+        "pd",
+        "numeric",
+        our_columns=("irb_pd_floored", "irb_pd"),
+        explain_columns=("irb_pd_original", "irb_pd_floor"),
+        input_columns=("internal_pd",),
+        default_tol_kind="abs",
+        default_tol=5e-5,
+    ),
+    ReconcilableComponent(
+        "lgd",
+        "numeric",
+        our_columns=("irb_lgd_floored", "irb_lgd"),
+        explain_columns=("irb_lgd_original", "irb_lgd_floor", "irb_lgd_type"),
+        default_tol_kind="abs",
+        default_tol=1e-3,
+    ),
+    ReconcilableComponent(
+        "maturity",
+        "numeric",
+        our_columns=("irb_maturity_m", "irb_m", "maturity"),
+        input_columns=("residual_maturity_years", "original_maturity_date"),
+        default_tol_kind="abs",
+        default_tol=1e-2,
+    ),
+    ReconcilableComponent(
+        "ccf",
+        "numeric",
+        our_columns=("ccf_applied", "ccf"),
+        explain_columns=("ccf_source",),
+        input_columns=("exposure_type", "undrawn_amount", "converted_undrawn"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "ead",
+        "numeric",
+        our_columns=("ead_final", "final_ead", "ead"),
+        explain_columns=("gross_ead", "converted_undrawn"),
+        input_columns=(
+            "drawn_amount",
+            "undrawn_amount",
+            "ccf_applied",
+            "collateral_adjusted_value",
+            "guarantee_benefit",
+        ),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
+        "risk_weight",
+        "numeric",
+        our_columns=("risk_weight", "risk_weight_effective"),
+        explain_columns=("sa_rw_regulatory_ref", "sa_rw_adjustment_reason"),
+        input_columns=("external_cqs", "sa_cqs", "property_ltv", "ltv_band"),
+        derived_ratio=("rwa", "ead"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "supporting_factor",
+        "numeric",
+        our_columns=("sme_supporting_factor", "supporting_factor"),
+        explain_columns=("infra_supporting_factor", "supporting_factor_benefit"),
+        default_tol_kind="abs",
+        default_tol=1e-4,
+    ),
+    ReconcilableComponent(
+        "expected_loss",
+        "numeric",
+        our_columns=("expected_loss", "irb_expected_loss"),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+    ReconcilableComponent(
+        "rwa",
+        "numeric",
+        our_columns=("rwa_final", "final_rwa", "rwa"),
+        additive=True,
+        default_tol_kind="rel",
+        default_tol=0.01,
+    ),
+)
+
+# Index by canonical name for O(1) lookup by config validators / the engine.
+RECONCILABLE_COMPONENTS_BY_NAME: dict[str, ReconcilableComponent] = {
+    c.name: c for c in RECONCILABLE_COMPONENTS
+}
+
+
+_RECON_UNITS = ("raw", "decimal", "percent")
+_RECON_TOL_KINDS = ("rel", "abs")
+
+
+@dataclass(frozen=True)
+class ComponentMapping:
+    """How one legacy column maps onto one of our canonical components.
+
+    Attributes:
+        legacy_column: Column name in the legacy output file (pre-normalisation;
+            the loader lowercases + underscores it before lookup).
+        scale: Multiplier applied to the legacy value to reach our units — e.g.
+            legacy RWA in millions uses ``scale=1_000_000``. Amount components only.
+        unit: ``"raw"`` (use as-is), ``"decimal"`` (already 0.20), or ``"percent"``
+            (20.0 → divided by 100). Use for ratio components (pd/lgd/ccf/rw/sf).
+        value_map: Optional legacy→canonical label synonyms for categorical
+            components, e.g. ``{"CORP": "corporate"}``. Keys are matched
+            case-insensitively after normalisation.
+        tol_kind: Optional override of the registry tolerance kind ("rel"|"abs").
+        tol: Optional override of the registry tolerance magnitude.
+    """
+
+    legacy_column: str
+    scale: float = 1.0
+    unit: Literal["raw", "decimal", "percent"] = "raw"
+    value_map: dict[str, str] = field(default_factory=dict)
+    tol_kind: Literal["rel", "abs"] | None = None
+    tol: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.unit not in _RECON_UNITS:
+            raise ValueError(f"unit must be one of {_RECON_UNITS}, got {self.unit!r}")
+        if self.tol_kind is not None and self.tol_kind not in _RECON_TOL_KINDS:
+            raise ValueError(f"tol_kind must be one of {_RECON_TOL_KINDS}, got {self.tol_kind!r}")
+        if self.tol is not None and self.tol < 0:
+            raise ValueError(f"tol must be non-negative, got {self.tol}")
+
+
+@dataclass(frozen=True)
+class LegacyColumnMapping:
+    """Declares how to join and compare a legacy output against our results.
+
+    Attributes:
+        legacy_keys: Ordered key columns in the legacy file forming the join key.
+        our_keys: Ordered key columns on our results frame, positionally aligned
+            with ``legacy_keys``. Defaults to a single ``exposure_reference`` key.
+        components: Canonical-component-name → ``ComponentMapping``. At least one
+            required; names must exist in ``RECONCILABLE_COMPONENTS``.
+    """
+
+    legacy_keys: tuple[str, ...]
+    our_keys: tuple[str, ...] = ("exposure_reference",)
+    components: dict[str, ComponentMapping] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # Coerce list inputs (e.g. from a TOML loader) to tuples for hashability.
+        object.__setattr__(self, "legacy_keys", tuple(self.legacy_keys))
+        object.__setattr__(self, "our_keys", tuple(self.our_keys))
+
+        if not self.legacy_keys:
+            raise ValueError("legacy_keys must not be empty")
+        if len(self.legacy_keys) != len(self.our_keys):
+            raise ValueError(
+                "legacy_keys and our_keys must be the same length "
+                f"({len(self.legacy_keys)} vs {len(self.our_keys)})"
+            )
+        if not self.components:
+            raise ValueError("at least one component mapping is required")
+
+        unknown = set(self.components) - set(RECONCILABLE_COMPONENTS_BY_NAME)
+        if unknown:
+            valid = sorted(RECONCILABLE_COMPONENTS_BY_NAME)
+            raise ValueError(
+                f"unknown reconciliation components: {sorted(unknown)} (valid: {valid})"
+            )

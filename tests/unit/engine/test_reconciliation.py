@@ -11,21 +11,21 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
-from rwa_calc.contracts.errors import (
-    ERROR_RECON_DUPLICATE_LEGACY_KEY,
-    ERROR_RECON_GRAIN_HETEROGENEOUS,
-    ERROR_RECON_KEY_COLUMN_MISSING,
-    ERROR_RECON_LEGACY_COLUMN_MISSING,
-)
-from rwa_calc.contracts.protocols import ReconciliationRunnerProtocol
-from rwa_calc.engine.reconciliation import (
+from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
+from rwa_calc.analysis.reconciliation import (
     BUCKET_BREAK,
     BUCKET_EXACT,
     BUCKET_MISSING_LEFT,
     BUCKET_MISSING_RIGHT,
     BUCKET_WITHIN,
     ReconciliationRunner,
+    ReconciliationRunnerProtocol,
+)
+from rwa_calc.contracts.errors import (
+    ERROR_RECON_DUPLICATE_LEGACY_KEY,
+    ERROR_RECON_GRAIN_HETEROGENEOUS,
+    ERROR_RECON_KEY_COLUMN_MISSING,
+    ERROR_RECON_LEGACY_COLUMN_MISSING,
 )
 
 

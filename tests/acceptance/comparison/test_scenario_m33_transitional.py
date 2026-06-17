@@ -40,8 +40,8 @@ def transitional_schedule_bundle(raw_data_bundle):
     Uses the default 2027-2030 mid-year dates. Session-scoped: runs
     the pipeline 4 times (once per year). Shared across all tests.
     """
+    from rwa_calc.analysis.transition import TransitionalScheduleRunner
     from rwa_calc.domain.enums import PermissionMode
-    from rwa_calc.engine.comparison import TransitionalScheduleRunner
 
     runner = TransitionalScheduleRunner()
     return runner.run(

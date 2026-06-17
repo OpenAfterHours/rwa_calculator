@@ -1,22 +1,23 @@
 """
-Dual-Framework Comparison, Capital Impact Analysis, and Transitional Schedule Runners.
+Dual-framework / labelled two-run Comparison and Capital Impact Analysis.
 
 Pipeline position:
-    Wraps PipelineOrchestrator -> produces ComparisonBundle / CapitalImpactBundle /
-    TransitionalScheduleBundle
+    Wraps PipelineOrchestrator -> produces ComparisonBundle / CapitalImpactBundle
 
 Key responsibilities:
-- Run the same portfolio through both CRR and Basel 3.1 pipelines (M3.1)
+- Run the same portfolio through two labelled, rulepack-identified configurations
+  (the classic case is CRR vs Basel 3.1) (M3.1)
 - Join per-exposure results on exposure_reference to compute deltas
 - Generate summary views by exposure class and approach
-- Decompose RWA deltas into attributable regulatory drivers (M3.2)
-- Model the transitional output floor schedule across 2027-2032 (M3.3)
-- Accumulate errors from all pipeline runs
+- Decompose RWA deltas into attributable regulatory drivers via the registered
+  delta-attributor for the run pairing (M3.2; see ``analysis/attribution.py``)
+- Accumulate errors from both pipeline runs
 
-Why: During the Basel 3.1 transition (PRA PS1/26, effective 1 Jan 2027),
-firms must quantify the capital impact of moving from CRR to Basel 3.1.
-The output floor phases in from 50% (2027) to 72.5% (2032+), so firms need
-year-by-year modelling to plan for the increasing floor bite.
+The transitional output-floor schedule (M3.3) lives in ``analysis/transition.py``.
+
+Why: During the Basel 3.1 transition (PRA PS1/26, effective 1 Jan 2027), firms
+must quantify the capital impact of moving from CRR to Basel 3.1 — and, more
+generally, between any two elections or against an amended pack.
 
 References:
 - PRA PS1/26 Ch.12: Output floor transitional period
@@ -24,9 +25,7 @@ References:
 - CRR Art. 501/501a: SME and infrastructure supporting factors
 
 Usage:
-    from rwa_calc.engine.comparison import (
-        CapitalImpactAnalyzer, DualFrameworkRunner, TransitionalScheduleRunner,
-    )
+    from rwa_calc.analysis.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
 
     # M3.1: Side-by-side comparison
     runner = DualFrameworkRunner()
@@ -35,33 +34,29 @@ Usage:
     # M3.2: Capital impact analysis
     analyzer = CapitalImpactAnalyzer()
     impact = analyzer.analyze(comparison)
-
-    # M3.3: Transitional floor schedule modelling
-    schedule_runner = TransitionalScheduleRunner()
-    schedule = schedule_runner.run(raw_data, permission_mode)
-    timeline_df = schedule.timeline.collect()
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 
+from rwa_calc.analysis.attribution import AttributionResult, get_attributor, register_attributor
 from rwa_calc.contracts.bundles import (
     CapitalImpactBundle,
     ComparisonBundle,
-    TransitionalScheduleBundle,
 )
-from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import AggregatedResultBundle, RawDataBundle
     from rwa_calc.contracts.config import CalculationConfig
+    from rwa_calc.rulebook import RulepackV0
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +80,25 @@ _OPTIONAL_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class RunSpec:
+    """One labelled run in a comparison.
+
+    Attributes:
+        config: The per-run configuration (regime, elections, reporting date).
+        label: Column-suffix + display name for this run (e.g. "crr", "b31",
+            "baseline", "amended"). Must be distinct from the other run's label.
+        rulepack: Optional resolved-rulepack override (an amendment or election
+            overlay built via ``RulepackV0.from_resolved`` /
+            ``ResolvedRulepack.with_overrides``). When None, the pipeline resolves
+            the pack from ``config`` as usual.
+    """
+
+    config: CalculationConfig
+    label: str
+    rulepack: RulepackV0 | None = None
+
+
 class DualFrameworkRunner:
     """
     Run the same portfolio through CRR and Basel 3.1 pipelines and compare.
@@ -102,50 +116,66 @@ class DualFrameworkRunner:
     def compare(
         self,
         data: RawDataBundle,
-        crr_config: CalculationConfig,
-        b31_config: CalculationConfig,
+        baseline: RunSpec | CalculationConfig,
+        variant: RunSpec | CalculationConfig,
     ) -> ComparisonBundle:
         """
-        Run both frameworks on the same data and produce comparison.
+        Run two labelled configurations on the same data and compare.
+
+        ``baseline`` and ``variant`` may each be a bare ``CalculationConfig`` (its
+        ``regime_id`` becomes the label) or a ``RunSpec`` carrying an explicit
+        label and optional rulepack overlay. The classic CRR-vs-Basel-3.1
+        comparison is ``compare(data, crr_config, b31_config)``; same-regime
+        pairings (election-vs-election, regime-vs-amended) pass ``RunSpec`` with
+        distinct labels and, optionally, a ``rulepack`` overlay.
 
         Args:
-            data: Pre-loaded raw data bundle (shared between frameworks)
-            crr_config: CRR configuration (must have framework=CRR)
-            b31_config: Basel 3.1 configuration (must have framework=BASEL_3_1)
+            data: Pre-loaded raw data bundle (shared between the two runs)
+            baseline: The baseline run (config or RunSpec)
+            variant: The variant run (config or RunSpec)
 
         Returns:
             ComparisonBundle with per-exposure deltas and summaries
+            (delta = variant - baseline)
 
         Raises:
-            ValueError: If configs have wrong framework types
+            ValueError: If the two runs resolve to the same / an empty label
         """
-        _validate_configs(crr_config, b31_config)
+        base = _as_run_spec(baseline)
+        var = _as_run_spec(variant)
+        _validate_run_specs(base, var)
 
-        logger.info("Running CRR pipeline...")
-        crr_pipeline = PipelineOrchestrator()
-        crr_results = crr_pipeline.run_with_data(data, crr_config)
+        logger.info("Running baseline pipeline (%s)...", base.label)
+        baseline_results = PipelineOrchestrator().run_with_data(
+            data, base.config, rulepack=base.rulepack
+        )
 
-        logger.info("Running Basel 3.1 pipeline...")
-        b31_pipeline = PipelineOrchestrator()
-        b31_results = b31_pipeline.run_with_data(data, b31_config)
+        logger.info("Running variant pipeline (%s)...", var.label)
+        variant_results = PipelineOrchestrator().run_with_data(
+            data, var.config, rulepack=var.rulepack
+        )
 
         logger.info("Computing exposure-level deltas...")
-        exposure_deltas = _compute_exposure_deltas(crr_results, b31_results)
+        exposure_deltas = _compute_exposure_deltas(
+            baseline_results, variant_results, base.label, var.label
+        )
 
         logger.info("Generating summary by exposure class...")
-        summary_by_class = _compute_summary_by_class(exposure_deltas)
+        summary_by_class = _compute_summary_by_class(exposure_deltas, base.label, var.label)
 
         logger.info("Generating summary by approach...")
-        summary_by_approach = _compute_summary_by_approach(exposure_deltas)
+        summary_by_approach = _compute_summary_by_approach(exposure_deltas, base.label, var.label)
 
-        errors = list(crr_results.errors) + list(b31_results.errors)
+        errors = list(baseline_results.errors) + list(variant_results.errors)
 
         return ComparisonBundle(
-            crr_results=crr_results,
-            b31_results=b31_results,
+            baseline_results=baseline_results,
+            variant_results=variant_results,
             exposure_deltas=exposure_deltas,
             summary_by_class=summary_by_class,
             summary_by_approach=summary_by_approach,
+            baseline_label=base.label,
+            variant_label=var.label,
             errors=errors,
         )
 
@@ -211,207 +241,18 @@ class CapitalImpactAnalyzer:
         """
         logger.info("Computing capital impact attribution (M3.2)...")
 
-        attribution = _compute_exposure_attribution(comparison)
-        waterfall = _compute_portfolio_waterfall(attribution)
-        summary_by_class = _compute_attribution_summary(attribution, "exposure_class")
-        summary_by_approach = _compute_attribution_summary(attribution, "approach_applied")
+        # Dispatch to the registered delta-attributor for this run pairing; the
+        # CRR->B31 4-driver waterfall is registered under ('crr', 'b31'), and any
+        # other pairing falls back to the neutral delta-only attributor.
+        result = get_attributor(comparison.baseline_label, comparison.variant_label)(comparison)
 
         return CapitalImpactBundle(
-            exposure_attribution=attribution,
-            portfolio_waterfall=waterfall,
-            summary_by_class=summary_by_class,
-            summary_by_approach=summary_by_approach,
+            exposure_attribution=result.exposure_attribution,
+            portfolio_waterfall=result.portfolio_waterfall,
+            summary_by_class=result.summary_by_class,
+            summary_by_approach=result.summary_by_approach,
             errors=list(comparison.errors),
         )
-
-
-# =============================================================================
-# Transitional Floor Schedule (M3.3)
-# =============================================================================
-
-# PRA PS1/26 transitional dates: 1 January of each year
-_TRANSITIONAL_REPORTING_DATES = [
-    date(2027, 1, 1),  # Year 1: 60% from 1 January (PRA PS1/26 Art. 92(5))
-    date(2028, 1, 1),  # Year 2: 65% from 1 January
-    date(2029, 1, 1),  # Year 3: 70% from 1 January
-    date(2030, 1, 1),  # Year 4: 72.5% from 1 January (steady-state, Art. 92(2A))
-]
-
-
-class TransitionalScheduleRunner:
-    """
-    Model the output floor phase-in across 2027-2030.
-
-    Runs the same portfolio through the Basel 3.1 pipeline for each
-    transitional year, collecting floor impact metrics to produce a
-    year-by-year timeline. This enables capital planning for the
-    increasing floor bite.
-
-    Why: PRA PS1/26 Art. 92(5) phases in the output floor (60% in 2027
-    to 72.5% in 2030+). A portfolio that is not floor-constrained in 2027
-    may become floor-constrained as the percentage rises. Modelling this
-    trajectory is essential for forward-looking capital management.
-
-    Usage:
-        from rwa_calc.engine.comparison import TransitionalScheduleRunner
-
-        runner = TransitionalScheduleRunner()
-        schedule = runner.run(raw_data, permission_mode)
-        timeline_df = schedule.timeline.collect()
-    """
-
-    def run(
-        self,
-        data: RawDataBundle,
-        permission_mode: PermissionMode = PermissionMode.IRB,
-        reporting_dates: list[date] | None = None,
-    ) -> TransitionalScheduleBundle:
-        """
-        Run the B31 pipeline for each transitional year and produce timeline.
-
-        Args:
-            data: Pre-loaded raw data bundle (shared across all years)
-            permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
-            reporting_dates: Optional custom reporting dates (default: 2027-2030, 1 Jan)
-
-        Returns:
-            TransitionalScheduleBundle with year-by-year floor impact timeline
-        """
-        from rwa_calc.contracts.config import CalculationConfig
-
-        dates = reporting_dates or _TRANSITIONAL_REPORTING_DATES
-        yearly_results: dict[int, AggregatedResultBundle] = {}
-        timeline_rows: list[dict] = []
-        all_errors: list = []
-
-        for reporting_date in dates:
-            year = reporting_date.year
-            logger.info(
-                "Running transitional schedule for %d (floor date %s)...", year, reporting_date
-            )
-
-            config = CalculationConfig.basel_3_1(
-                reporting_date=reporting_date,
-                permission_mode=permission_mode,
-            )
-
-            pipeline = PipelineOrchestrator()
-            result = pipeline.run_with_data(data, config)
-            yearly_results[year] = result
-            all_errors.extend(result.errors)
-
-            floor_pct = float(config.get_output_floor_percentage())
-            row = _extract_floor_metrics(result, reporting_date, floor_pct)
-            timeline_rows.append(row)
-
-        timeline = _build_timeline_lazyframe(timeline_rows)
-
-        return TransitionalScheduleBundle(
-            timeline=timeline,
-            yearly_results=yearly_results,
-            errors=all_errors,
-        )
-
-
-def _extract_floor_metrics(
-    result: AggregatedResultBundle,
-    reporting_date: date,
-    floor_pct: float,
-) -> dict:
-    """Extract floor impact summary metrics from a single pipeline run.
-
-    Collects the floor_impact LazyFrame (if present) and computes
-    aggregate metrics for the timeline row.
-    """
-    year = reporting_date.year
-    metrics: dict = {
-        "reporting_date": reporting_date,
-        "year": year,
-        "floor_percentage": floor_pct,
-        "total_rwa_pre_floor": 0.0,
-        "total_rwa_post_floor": 0.0,
-        "total_floor_impact": 0.0,
-        "floor_binding_count": 0,
-        "total_irb_exposure_count": 0,
-        "total_ead": 0.0,
-        "total_sa_rwa": 0.0,
-    }
-
-    # Get total RWA from summary_by_approach (covers all approaches)
-    if result.summary_by_approach is not None:
-        try:
-            approach_df: pl.DataFrame = result.summary_by_approach.collect()
-            if "total_rwa" in approach_df.columns:
-                metrics["total_rwa_post_floor"] = approach_df["total_rwa"].sum()
-            if "total_ead" in approach_df.columns:
-                metrics["total_ead"] = approach_df["total_ead"].sum()
-        except Exception:
-            logger.warning("Failed to collect summary_by_approach for year %d", year)
-
-    # Get floor-specific metrics from floor_impact
-    if result.floor_impact is not None:
-        try:
-            floor_df: pl.DataFrame = result.floor_impact.collect()
-            if floor_df.height > 0:
-                metrics["total_irb_exposure_count"] = floor_df.height
-                if "rwa_pre_floor" in floor_df.columns:
-                    metrics["total_rwa_pre_floor"] = floor_df["rwa_pre_floor"].sum()
-                if "floor_impact_rwa" in floor_df.columns:
-                    metrics["total_floor_impact"] = floor_df["floor_impact_rwa"].sum()
-                if "is_floor_binding" in floor_df.columns:
-                    metrics["floor_binding_count"] = int(floor_df["is_floor_binding"].sum())
-                if "floor_rwa" in floor_df.columns:
-                    metrics["total_sa_rwa"] = floor_df["floor_rwa"].sum() / max(floor_pct, 1e-10)
-        except Exception:
-            logger.warning("Failed to collect floor_impact for year %d", year)
-
-    return metrics
-
-
-def _build_timeline_lazyframe(rows: list[dict]) -> pl.LazyFrame:
-    """Build the timeline LazyFrame from collected metric rows."""
-    if not rows:
-        return pl.LazyFrame(
-            {
-                "reporting_date": pl.Series([], dtype=pl.Date),
-                "year": pl.Series([], dtype=pl.Int32),
-                "floor_percentage": pl.Series([], dtype=pl.Float64),
-                "total_rwa_pre_floor": pl.Series([], dtype=pl.Float64),
-                "total_rwa_post_floor": pl.Series([], dtype=pl.Float64),
-                "total_floor_impact": pl.Series([], dtype=pl.Float64),
-                "floor_binding_count": pl.Series([], dtype=pl.UInt32),
-                "total_irb_exposure_count": pl.Series([], dtype=pl.UInt32),
-                "total_ead": pl.Series([], dtype=pl.Float64),
-                "total_sa_rwa": pl.Series([], dtype=pl.Float64),
-            }
-        )
-
-    return pl.DataFrame(
-        {
-            "reporting_date": [r["reporting_date"] for r in rows],
-            "year": [r["year"] for r in rows],
-            "floor_percentage": [r["floor_percentage"] for r in rows],
-            "total_rwa_pre_floor": [r["total_rwa_pre_floor"] for r in rows],
-            "total_rwa_post_floor": [r["total_rwa_post_floor"] for r in rows],
-            "total_floor_impact": [r["total_floor_impact"] for r in rows],
-            "floor_binding_count": [r["floor_binding_count"] for r in rows],
-            "total_irb_exposure_count": [r["total_irb_exposure_count"] for r in rows],
-            "total_ead": [r["total_ead"] for r in rows],
-            "total_sa_rwa": [r["total_sa_rwa"] for r in rows],
-        },
-        schema={
-            "reporting_date": pl.Date,
-            "year": pl.Int32,
-            "floor_percentage": pl.Float64,
-            "total_rwa_pre_floor": pl.Float64,
-            "total_rwa_post_floor": pl.Float64,
-            "total_floor_impact": pl.Float64,
-            "floor_binding_count": pl.UInt32,
-            "total_irb_exposure_count": pl.UInt32,
-            "total_ead": pl.Float64,
-            "total_sa_rwa": pl.Float64,
-        },
-    ).lazy()
 
 
 # =============================================================================
@@ -419,12 +260,22 @@ def _build_timeline_lazyframe(rows: list[dict]) -> pl.LazyFrame:
 # =============================================================================
 
 
-def _validate_configs(crr_config: CalculationConfig, b31_config: CalculationConfig) -> None:
-    """Validate that configs have correct framework types."""
-    if not crr_config.is_crr:
-        raise ValueError(f"crr_config must use CRR framework, got {crr_config.framework}")
-    if not b31_config.is_basel_3_1:
-        raise ValueError(f"b31_config must use Basel 3.1 framework, got {b31_config.framework}")
+def _as_run_spec(run: RunSpec | CalculationConfig) -> RunSpec:
+    """Coerce a bare config to a RunSpec, defaulting the label to its regime id."""
+    if isinstance(run, RunSpec):
+        return run
+    return RunSpec(config=run, label=run.regime_id)
+
+
+def _validate_run_specs(baseline: RunSpec, variant: RunSpec) -> None:
+    """A labelled two-run needs two non-empty, distinct labels (column suffixes)."""
+    if not baseline.label or not variant.label:
+        raise ValueError("run labels must be non-empty")
+    if baseline.label == variant.label:
+        raise ValueError(
+            f"baseline and variant labels must differ (both {baseline.label!r}); "
+            "pass RunSpec(config, label=...) with distinct labels for same-regime runs"
+        )
 
 
 def _select_result_columns(results: AggregatedResultBundle, suffix: str) -> pl.LazyFrame:
@@ -458,52 +309,58 @@ def _select_result_columns(results: AggregatedResultBundle, suffix: str) -> pl.L
 
 
 def _compute_exposure_deltas(
-    crr_results: AggregatedResultBundle,
-    b31_results: AggregatedResultBundle,
+    baseline_results: AggregatedResultBundle,
+    variant_results: AggregatedResultBundle,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
 ) -> pl.LazyFrame:
-    """Join CRR and B31 results on exposure_reference and compute deltas.
+    """Join two runs on exposure_reference and compute deltas.
 
-    Delta convention: positive delta means B31 is higher than CRR (increased capital).
-    delta_pct is the percentage change relative to CRR (delta_rwa / crr_rwa * 100).
+    Delta convention: positive delta means the variant is higher than the baseline
+    (increased capital). delta_pct is the change relative to the baseline
+    (delta_rwa / baseline_rwa * 100).
     """
-    crr_lf = _select_result_columns(crr_results, "crr")
-    b31_lf = _select_result_columns(b31_results, "b31")
+    b = baseline_suffix
+    v = variant_suffix
+    base_lf = _select_result_columns(baseline_results, b)
+    var_lf = _select_result_columns(variant_results, v)
 
-    joined = crr_lf.join(b31_lf, on="exposure_reference", how="full", coalesce=True)
+    joined = base_lf.join(var_lf, on="exposure_reference", how="full", coalesce=True)
 
-    # Use CRR exposure class/approach as the primary context; fall back to B31
+    # Use the baseline exposure class/approach as the primary context; fall back to variant
     joined = joined.with_columns(
         [
-            pl.coalesce(pl.col("exposure_class_crr"), pl.col("exposure_class_b31")).alias(
+            pl.coalesce(pl.col(f"exposure_class_{b}"), pl.col(f"exposure_class_{v}")).alias(
                 "exposure_class"
             ),
-            pl.coalesce(pl.col("approach_applied_crr"), pl.col("approach_applied_b31")).alias(
+            pl.coalesce(pl.col(f"approach_applied_{b}"), pl.col(f"approach_applied_{v}")).alias(
                 "approach_applied"
             ),
         ]
     )
 
-    # Compute deltas: B31 - CRR (positive = increased capital requirement)
+    # Compute deltas: variant - baseline (positive = increased capital requirement)
     joined = joined.with_columns(
         [
-            (pl.col("rwa_final_b31").fill_null(0.0) - pl.col("rwa_final_crr").fill_null(0.0)).alias(
-                "delta_rwa"
-            ),
             (
-                pl.col("risk_weight_b31").fill_null(0.0) - pl.col("risk_weight_crr").fill_null(0.0)
+                pl.col(f"rwa_final_{v}").fill_null(0.0) - pl.col(f"rwa_final_{b}").fill_null(0.0)
+            ).alias("delta_rwa"),
+            (
+                pl.col(f"risk_weight_{v}").fill_null(0.0)
+                - pl.col(f"risk_weight_{b}").fill_null(0.0)
             ).alias("delta_risk_weight"),
-            (pl.col("ead_final_b31").fill_null(0.0) - pl.col("ead_final_crr").fill_null(0.0)).alias(
-                "delta_ead"
-            ),
+            (
+                pl.col(f"ead_final_{v}").fill_null(0.0) - pl.col(f"ead_final_{b}").fill_null(0.0)
+            ).alias("delta_ead"),
         ]
     )
 
-    # Percentage change relative to CRR
+    # Percentage change relative to the baseline
     joined = joined.with_columns(
-        pl.when(pl.col("rwa_final_crr").abs() > 1e-10)
-        .then(pl.col("delta_rwa") / pl.col("rwa_final_crr") * 100.0)
+        pl.when(pl.col(f"rwa_final_{b}").abs() > 1e-10)
+        .then(pl.col("delta_rwa") / pl.col(f"rwa_final_{b}") * 100.0)
         .otherwise(
-            pl.when(pl.col("rwa_final_b31").abs() > 1e-10)
+            pl.when(pl.col(f"rwa_final_{v}").abs() > 1e-10)
             .then(pl.lit(float("inf")))
             .otherwise(pl.lit(0.0))
         )
@@ -513,52 +370,53 @@ def _compute_exposure_deltas(
     return joined
 
 
-def _compute_summary_by_class(exposure_deltas: pl.LazyFrame) -> pl.LazyFrame:
+def _compute_summary(
+    exposure_deltas: pl.LazyFrame,
+    group_col: str,
+    baseline_suffix: str,
+    variant_suffix: str,
+) -> pl.LazyFrame:
+    """Aggregate RWA/EAD totals and delta RWA by ``group_col`` (class or approach)."""
+    b = baseline_suffix
+    v = variant_suffix
+    return (
+        exposure_deltas.group_by(group_col)
+        .agg(
+            [
+                pl.col(f"rwa_final_{b}").sum().alias(f"total_rwa_{b}"),
+                pl.col(f"rwa_final_{v}").sum().alias(f"total_rwa_{v}"),
+                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
+                pl.col(f"ead_final_{b}").sum().alias(f"total_ead_{b}"),
+                pl.col(f"ead_final_{v}").sum().alias(f"total_ead_{v}"),
+                pl.len().alias("exposure_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col(f"total_rwa_{b}").abs() > 1e-10)
+            .then(pl.col("total_delta_rwa") / pl.col(f"total_rwa_{b}") * 100.0)
+            .otherwise(pl.lit(0.0))
+            .alias("delta_rwa_pct")
+        )
+        .sort(group_col)
+    )
+
+
+def _compute_summary_by_class(
+    exposure_deltas: pl.LazyFrame,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
+) -> pl.LazyFrame:
     """Aggregate delta RWA by exposure class."""
-    return (
-        exposure_deltas.group_by("exposure_class")
-        .agg(
-            [
-                pl.col("rwa_final_crr").sum().alias("total_rwa_crr"),
-                pl.col("rwa_final_b31").sum().alias("total_rwa_b31"),
-                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
-                pl.col("ead_final_crr").sum().alias("total_ead_crr"),
-                pl.col("ead_final_b31").sum().alias("total_ead_b31"),
-                pl.len().alias("exposure_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("total_rwa_crr").abs() > 1e-10)
-            .then(pl.col("total_delta_rwa") / pl.col("total_rwa_crr") * 100.0)
-            .otherwise(pl.lit(0.0))
-            .alias("delta_rwa_pct")
-        )
-        .sort("exposure_class")
-    )
+    return _compute_summary(exposure_deltas, "exposure_class", baseline_suffix, variant_suffix)
 
 
-def _compute_summary_by_approach(exposure_deltas: pl.LazyFrame) -> pl.LazyFrame:
+def _compute_summary_by_approach(
+    exposure_deltas: pl.LazyFrame,
+    baseline_suffix: str = "crr",
+    variant_suffix: str = "b31",
+) -> pl.LazyFrame:
     """Aggregate delta RWA by calculation approach."""
-    return (
-        exposure_deltas.group_by("approach_applied")
-        .agg(
-            [
-                pl.col("rwa_final_crr").sum().alias("total_rwa_crr"),
-                pl.col("rwa_final_b31").sum().alias("total_rwa_b31"),
-                pl.col("delta_rwa").sum().alias("total_delta_rwa"),
-                pl.col("ead_final_crr").sum().alias("total_ead_crr"),
-                pl.col("ead_final_b31").sum().alias("total_ead_b31"),
-                pl.len().alias("exposure_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("total_rwa_crr").abs() > 1e-10)
-            .then(pl.col("total_delta_rwa") / pl.col("total_rwa_crr") * 100.0)
-            .otherwise(pl.lit(0.0))
-            .alias("delta_rwa_pct")
-        )
-        .sort("approach_applied")
-    )
+    return _compute_summary(exposure_deltas, "approach_applied", baseline_suffix, variant_suffix)
 
 
 # =============================================================================
@@ -594,8 +452,8 @@ def _compute_exposure_attribution(comparison: ComparisonBundle) -> pl.LazyFrame:
 
     The four drivers sum to delta_rwa for every exposure.
     """
-    crr = comparison.crr_results
-    b31 = comparison.b31_results
+    crr = comparison.baseline_results
+    b31 = comparison.variant_results
 
     # Select columns from CRR results
     crr_schema = crr.results.collect_schema()
@@ -842,3 +700,22 @@ def _compute_attribution_summary(
         )
         .sort(group_col)
     )
+
+
+def _crr_to_b31_attribution(comparison: ComparisonBundle) -> AttributionResult:
+    """The CRR->Basel-3.1 four-driver waterfall — the registered ('crr', 'b31') pairing.
+
+    Wraps the per-exposure attribution + portfolio waterfall + per-class/approach
+    summaries into one AttributionResult. ``CapitalImpactAnalyzer`` dispatches here
+    via the attribution registry when both runs carry the default crr / b31 labels.
+    """
+    attribution = _compute_exposure_attribution(comparison)
+    return AttributionResult(
+        exposure_attribution=attribution,
+        portfolio_waterfall=_compute_portfolio_waterfall(attribution),
+        summary_by_class=_compute_attribution_summary(attribution, "exposure_class"),
+        summary_by_approach=_compute_attribution_summary(attribution, "approach_applied"),
+    )
+
+
+register_attributor("crr", "b31", _crr_to_b31_attribution)

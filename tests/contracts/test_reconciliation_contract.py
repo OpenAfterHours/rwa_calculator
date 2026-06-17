@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from rwa_calc.analysis.recon_registry import ComponentMapping, LegacyColumnMapping
 from rwa_calc.api.reconciliation import (
     ReconciliationSettings,
     dump_reconciliation_config,
@@ -21,7 +22,6 @@ from rwa_calc.contracts.bundles import (
     ReconciliationBundle,
     create_empty_reconciliation_bundle,
 )
-from rwa_calc.contracts.config import ComponentMapping, LegacyColumnMapping
 from rwa_calc.contracts.errors import (
     ERROR_RECON_DUPLICATE_LEGACY_KEY,
     ERROR_RECON_GRAIN_HETEROGENEOUS,

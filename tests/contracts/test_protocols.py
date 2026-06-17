@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import pytest
 
+from rwa_calc.analysis.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
+from rwa_calc.analysis.reconciliation import ReconciliationRunner, ReconciliationRunnerProtocol
 from rwa_calc.api.export import ResultExporter
 from rwa_calc.contracts.protocols import (
     CapitalImpactAnalyzerProtocol,
@@ -31,7 +33,6 @@ from rwa_calc.contracts.protocols import (
     OutputAggregatorProtocol,
     PipelineProtocol,
     RealEstateSplitterProtocol,
-    ReconciliationRunnerProtocol,
     ResultExporterProtocol,
     SACalculatorProtocol,
     SecuritisationAllocatorProtocol,
@@ -39,7 +40,6 @@ from rwa_calc.contracts.protocols import (
 )
 from rwa_calc.engine.aggregator import OutputAggregator
 from rwa_calc.engine.classifier import ExposureClassifier
-from rwa_calc.engine.comparison import CapitalImpactAnalyzer, DualFrameworkRunner
 from rwa_calc.engine.crm.link_allocation import CollateralLinkAllocator
 from rwa_calc.engine.crm.processor import CRMProcessor
 from rwa_calc.engine.equity.calculator import EquityCalculator
@@ -48,7 +48,6 @@ from rwa_calc.engine.irb.calculator import IRBCalculator
 from rwa_calc.engine.loader import ParquetLoader
 from rwa_calc.engine.pipeline import PipelineOrchestrator
 from rwa_calc.engine.re_splitter import RealEstateSplitter
-from rwa_calc.engine.reconciliation import ReconciliationRunner
 from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.securitisation.allocator import SecuritisationAllocator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
